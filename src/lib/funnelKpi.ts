@@ -16,6 +16,7 @@
 //      the UI states it.
 
 import { isPeriod, periodOf, periodRange, type Period } from './meteringRules';
+import { ENDED_CHURNED } from './relationLifecycle';
 
 export interface Journey {
   /** The stage the relation started in. */
@@ -533,6 +534,19 @@ export function relationChains<T extends ChainLink>(links: T[]): T[][] {
   }
   for (const l of links) if (!visited.has(l.id)) chains.push(walk(l));
   return chains;
+}
+
+/**
+ * Cut every chain link that is a WIN-BACK, not a handover (#2845, decision
+ * #2572 Q4/Q6). A transfer chain is one journey; but a customer who was lost
+ * (the predecessor closed as ENDED_CHURNED, #2842) and came back starts a NEW
+ * journey — its return is a new entry and a new win, and the old journey's
+ * loss stays a churn. So before chaining, a link whose predecessor churned
+ * forgets that predecessor and becomes a root of its own.
+ */
+export function cutChurnLinks<T extends ChainLink & { lifecycleState?: string | null }>(links: T[]): T[] {
+  const churned = new Set(links.filter((l) => l.lifecycleState === ENDED_CHURNED).map((l) => l.id));
+  return links.map((l) => (l.previousRelationId && churned.has(l.previousRelationId) ? { ...l, previousRelationId: null } : l));
 }
 
 /**

@@ -75,6 +75,7 @@ checked per field: a value past its cap is a row-level `ERROR`, never a silent t
 | `trial_started_at` (`trial_start`, `trial start`, `testbeginn`, `test_beginn`, `deneme_baslangic`, `deneme başlangıç`) | no | ISO date — see [Dates](#dates-2554) | the funnel record's `trialStartedAt` |
 | `trial_ends_at` (`trial_end`, `trial end`, `testende`, `test_ende`, `deneme_bitis`, `deneme bitiş`) | no | ISO date; not before `trial_started_at` | the funnel record's `trialEndsAt` — what the trial reminders and the expiry sweep read |
 | `customer_since` (`customer since`, `kunde_seit`, `kunde seit`, `musteri_tarihi`, `müşteri tarihi`) | no | ISO date | the funnel record's `startDate` — what the cohort, retention and aging reports read |
+| `contract_ends_at` (`contract_end`, `contract end`, `vertragsende`, `vertrag_ende`, `sozlesme_bitis`, `sözleşme bitiş`) | no | ISO date; **only on a `DEAL_WON` row** (an `ERROR` otherwise) | the funnel record's `contractEndsAt` — a won customer who gave notice (#2844); shown as `cancellation_pending` until a human moves the record |
 
 ### Dates (#2554)
 

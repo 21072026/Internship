@@ -62,6 +62,7 @@ import { channelLabelList, channelsToAdd, resolveChannel } from './salesChannels
 import { parseMinorUnits } from './money';
 import { DEAL_VALUE_MAX_MINOR } from './dealValue';
 import { TEXT_LIMITS } from './textLimits';
+import { CONTRACT_STAGE_KEY } from './contractEndRule';
 import {
   DEFAULT_TRIAL_LENGTH_DAYS,
   TRIAL_ACTIVE_STAGE_KEY,
@@ -147,6 +148,15 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
     aliases: ['customer since', 'kunde_seit', 'kunde seit', 'musteri_tarihi', 'müşteri tarihi'],
     target: 'MentorshipRelation.startDate',
   },
+  // #2844 (decision #2572 Q7): a won customer who has already given notice
+  // carries the day the contract ends. Only on a DEAL_WON row.
+  {
+    field: 'contractEndsAt',
+    header: 'contract_ends_at',
+    required: false,
+    aliases: ['contract_end', 'contract end', 'vertragsende', 'vertrag_ende', 'sozlesme_bitis', 'sözleşme bitiş'],
+    target: 'MentorshipRelation.contractEndsAt',
+  },
 ];
 
 /**
@@ -226,6 +236,8 @@ export interface MarketingAccountRow {
   trialStartedAt: Date | null;
   trialEndsAt: Date | null;
   customerSince: Date | null;
+  /** `contract_ends_at` (#2844) — a won customer's notice period. */
+  contractEndsAt: Date | null;
 }
 
 export const IMPORT_LOCALES: readonly string[] = ['en', 'tr', 'de'];
@@ -286,6 +298,7 @@ export function accountMatchKey(row: { name: string; country: string; vatId: str
 export const IMPORT_DATE_YEARS = {
   trial: { min: 2000, max: 2100 },
   customerSince: { min: 1900, max: 2100 },
+  contract: { min: 2000, max: 2100 },
 } as const;
 
 export interface ImportDateYears {
@@ -538,15 +551,17 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
     const ownerEmail = rawOwner.toLowerCase();
     if (ownerEmail && !looksLikeEmail(ownerEmail)) return reject(`owner_email is not an address: "${rawOwner}"`);
 
-    const dates: Record<'trialStartedAt' | 'trialEndsAt' | 'customerSince', Date | null> = {
+    const dates: Record<'trialStartedAt' | 'trialEndsAt' | 'customerSince' | 'contractEndsAt', Date | null> = {
       trialStartedAt: null,
       trialEndsAt: null,
       customerSince: null,
+      contractEndsAt: null,
     };
     for (const [field, header, years] of [
       ['trialStartedAt', 'trial_started_at', IMPORT_DATE_YEARS.trial],
       ['trialEndsAt', 'trial_ends_at', IMPORT_DATE_YEARS.trial],
       ['customerSince', 'customer_since', IMPORT_DATE_YEARS.customerSince],
+      ['contractEndsAt', 'contract_ends_at', IMPORT_DATE_YEARS.contract],
     ] as const) {
       const raw = read(field);
       if (!raw) continue;
@@ -560,6 +575,10 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
     }
     if (dates.trialStartedAt && dates.trialEndsAt && dates.trialEndsAt < dates.trialStartedAt) {
       return reject('trial_ends_at is before trial_started_at');
+    }
+    // A notice period belongs to a won customer only (#2844, src/lib/contractEndRule.ts).
+    if (dates.contractEndsAt && stage !== CONTRACT_STAGE_KEY) {
+      return reject(`contract_ends_at is only for a ${CONTRACT_STAGE_KEY} row (got stage "${stage}")`);
     }
 
     const row: MarketingAccountRow = {
@@ -698,6 +717,8 @@ export interface MarketingRelationTarget {
   trialStartedAt?: Date | null;
   trialEndsAt?: Date | null;
   startDate?: Date | null;
+  /** A won customer's notice period (#2844). */
+  contractEndsAt?: Date | null;
   /**
    * The record's estimated monthly value today (`RelationValue.valueMinor`,
    * #2422), null/absent for "no estimate" — what the `mrr` column gap-fills.
@@ -733,6 +754,8 @@ export interface MarketingRelationWrite {
   trialEndsAt?: Date;
   /** `customer_since`. */
   startDate?: Date;
+  /** `contract_ends_at` (#2844). */
+  contractEndsAt?: Date;
 }
 
 export interface MarketingLeadWrite {
@@ -1264,6 +1287,7 @@ export function diffMarketingAccounts(
           ['trial_started_at', value.trialStartedAt],
           ['trial_ends_at', value.trialEndsAt],
           ['customer_since', value.customerSince],
+          ['contract_ends_at', value.contractEndsAt],
         ] as const
       )
         .filter(([, date]) => date !== null)
@@ -1447,6 +1471,7 @@ function planFunnel(
     ...(value.trialStartedAt ? { trialStartedAt: value.trialStartedAt } : {}),
     ...(value.trialEndsAt ? { trialEndsAt: value.trialEndsAt } : {}),
     ...(value.customerSince ? { startDate: value.customerSince } : {}),
+    ...(value.contractEndsAt ? { contractEndsAt: value.contractEndsAt } : {}),
   };
   let relationChanges: MarketingRelationWrite;
   let relationChanged: string[];
@@ -1457,6 +1482,7 @@ function planFunnel(
         trialStartedAt: relation.trialStartedAt ?? null,
         trialEndsAt: relation.trialEndsAt ?? null,
         startDate: relation.startDate ?? null,
+        contractEndsAt: relation.contractEndsAt ?? null,
       },
       incomingRelation,
       { authoritative: context.authoritative },

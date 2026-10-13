@@ -6,7 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { resolvePipelineStages, outcomeStageKeysFrom } from '@/lib/pipelineStages';
 import { onPathKeys } from '@/lib/pipeline';
-import { cohortMonths } from '@/lib/funnelKpi';
+import { cohortMonths, cutChurnLinks } from '@/lib/funnelKpi';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -62,6 +62,8 @@ export async function GET(request: Request) {
           select: {
             id: true,
             previousRelationId: true,
+            // A win-back link starts a new journey (#2845): see cutChurnLinks().
+            lifecycleState: true,
             pipelineStatus: true,
             startDate: true,
             value: { select: { valueMinor: true, currency: true } },
@@ -80,7 +82,7 @@ export async function GET(request: Request) {
         const order = onPathKeys(stages);
         const outcome = outcomeStageKeysFrom(stages);
 
-        const journeys: ValueJourney[] = relations.map((r) => ({
+        const journeys: ValueJourney[] = cutChurnLinks(relations).map((r) => ({
           id: r.id,
           previousRelationId: r.previousRelationId,
           startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,

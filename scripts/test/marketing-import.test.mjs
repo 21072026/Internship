@@ -1400,3 +1400,26 @@ test('cutover numbers: SKIP and ERROR rows count toward nothing; a trial with no
     trialEnd: { file: 0, kept: 0, default: 0, missing: 1 },
   });
 });
+
+// ── contract_ends_at (#2844, decision #2572 Q7) ──────────────────────────────
+
+const CONTRACT_HEADER = `${HEADER},contract_ends_at`;
+const contractFile = (stage, end) =>
+  `${CONTRACT_HEADER}\nOmega GmbH,,DE,Berlin,,,Retail,de,${stage},,,,,,,omega@omega.example,,${end}\n`;
+
+test('contract_ends_at lands on a won record as its notice period, and a re-run is UNCHANGED', async () => {
+  const store = memoryStore({ now: D_NOW });
+  const first = await runFile(contractFile('DEAL_WON', '2026-12-31'), store, { apply: true, stageKeys: TRIAL_STAGES });
+  assert.equal(first.counts.CREATE, 1);
+  assert.equal(store.relations[0].contractEndsAt.toISOString(), '2026-12-31T00:00:00.000Z');
+  const second = await runFile(contractFile('DEAL_WON', '2026-12-31'), store, { apply: true, stageKeys: TRIAL_STAGES });
+  assert.equal(second.counts.UNCHANGED, 1);
+});
+
+test('contract_ends_at on a row that is not DEAL_WON is an ERROR, never a silent drop', async () => {
+  const store = memoryStore({ now: D_NOW });
+  const report = await runFile(contractFile('TRIAL_ACTIVE', '2026-12-31'), store, { apply: true, stageKeys: TRIAL_STAGES });
+  assert.equal(report.counts.ERROR, 1);
+  assert.match(report.rows[0].reason, /contract_ends_at is only for a DEAL_WON row/);
+  assert.equal(store.relations.length, 0);
+});

@@ -11,6 +11,7 @@ import {
   cohortMonths,
   conversionByEntryMonth,
   DEFAULT_RETENTION_BUCKETS,
+  cutChurnLinks,
   mergeChainJourney,
   relationChains,
   retentionTriangle,
@@ -83,6 +84,8 @@ async function mentorCapacity(tenant: TenantWhere) {
 const RELATION_SELECT = {
   id: true,
   previousRelationId: true,
+  // A win-back link starts a new journey (#2845): see cutChurnLinks().
+  lifecycleState: true,
   pipelineStatus: true,
   startDate: true,
   trialStartedAt: true,
@@ -220,7 +223,7 @@ export async function GET(request: Request) {
     // opens a successor on the same stage, and counted separately it would be
     // a second entry and a second win in the transfer month. The chain's start
     // is its root's, its changes the union of every link's.
-    const chains = relationChains(relations);
+    const chains = relationChains(cutChurnLinks(relations));
     const trialJourneys: TrialJourney[] = chains.map((chain) => {
       const merged = mergeChainJourney(chain.map(relationJourney));
       const root = chain[0];

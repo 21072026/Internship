@@ -201,6 +201,7 @@ async function loadSnapshot(
           trialStartedAt: true,
           trialEndsAt: true,
           startDate: true,
+          contractEndsAt: true,
           // The estimate the `mrr` column may gap-fill (#2422).
           value: { select: { valueMinor: true, currency: true } },
         },
