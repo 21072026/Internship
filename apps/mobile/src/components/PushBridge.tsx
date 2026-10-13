@@ -5,7 +5,7 @@ import { nativeRouteFor } from '../lib/nativeRoutes';
 import { openNative } from '../lib/openNative';
 import { PRODUCTS } from '../lib/products';
 import { tapPlan, type TapPlan } from '../lib/push';
-import { registerPush, setActiveHost } from '../lib/pushDevice';
+import { onDeviceToken, registerPush, setActiveHost } from '../lib/pushDevice';
 import { APP_ENV, useSession } from '../lib/session';
 
 /**
@@ -33,8 +33,10 @@ export function PushBridge() {
   useEffect(() => {
     if (status !== 'signed-in' || !origin || !host) return;
     void registerPush(origin, host);
-    // FCM/APNs rotated the device token: the Expo token may follow.
-    const sub = Notifications.addPushTokenListener(() => void registerPush(origin, host));
+    // FCM/APNs rotated the device token: the Expo token may follow. Android
+    // also fires this on every token FETCH, ours included, so the handler
+    // re-registers only when the token actually changed (push.ts).
+    const sub = Notifications.addPushTokenListener((t) => onDeviceToken(origin, host, String(t.data)));
     return () => sub.remove();
   }, [status, origin, host]);
 

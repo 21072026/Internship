@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { productForHost, pushData, registrationKey, registrationReason, shouldAsk, shouldPresent, tapPlan } from './push.ts';
+import { deviceTokenEvent, productForHost, pushData, registrationKey, registrationReason, shouldAsk, shouldPresent, tapPlan } from './push.ts';
 import { PRODUCTS } from './products.ts';
 
 test('pushData keeps a same-site path and a hostname, nothing else', () => {
@@ -61,4 +61,19 @@ test('shouldAsk: once per install, never against a permanent refusal', () => {
   assert.equal(shouldAsk({ granted: false, canAskAgain: true }, false), 'ask');
   assert.equal(shouldAsk({ granted: false, canAskAgain: true }, true), 'skip');
   assert.equal(shouldAsk({ granted: false, canAskAgain: false }, false), 'skip');
+});
+
+test('deviceTokenEvent: the first token and every repeat are ignored; only a change registers', () => {
+  // Android re-emits on every fetch — the loop this rule exists to stop.
+  let seen: string | null = null;
+  const fire = (t: string) => {
+    const r = deviceTokenEvent(seen, t);
+    seen = r.seen;
+    return r.register;
+  };
+  assert.equal(fire('fcm-a'), false);
+  assert.equal(fire('fcm-a'), false);
+  assert.equal(fire('fcm-a'), false);
+  assert.equal(fire('fcm-b'), true);
+  assert.equal(fire('fcm-b'), false);
 });
