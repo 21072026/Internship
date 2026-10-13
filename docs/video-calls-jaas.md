@@ -169,6 +169,70 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
   `EMBEDDABLE_MEETING_HOSTS` without updating both leaves an empty box or a call with no
   camera.
 
+## Bring your own link (#2007)
+
+An organisation that already licenses Zoom, Meet or Teams — or whose IT forbids
+third-party rooms — does not have to use a room of ours at all. Three levels, one
+rule (`src/lib/conferencingRule.ts`, pure and unit-tested in
+`scripts/test/conferencing-rule.test.mjs`), applied inside `resolveMeetingLink()`
+so every creation path inherits it:
+
+| Precedence | Source | When |
+|---|---|---|
+| 1 | the link **pasted** into the form (`meetLink`) | always wins — nothing is generated or metered |
+| 2 | the organiser's **saved personal room** (`User.personalMeetingUrl`, set on `/account`) | when the tenant's `Organization.conferencingPolicy` is `PREFER_PERSONAL` or `REQUIRE_EXTERNAL` |
+| 3 | a room of ours (JaaS tenant, else the public instance — the routing above) | unless the policy is `REQUIRE_EXTERNAL`, which **refuses** (`422 external_link_required`) |
+
+- `BUILTIN` is the default and ignores a saved personal room on purpose: today's
+  behaviour must not change under anyone's feet. `REQUIRE_EXTERNAL` still uses the
+  saved room — that *is* a link the organiser supplied, and the instant-meeting and
+  accept-a-request paths have no paste box, so without it they would be dead ends.
+- Every link a person supplies goes through **one door**, `checkPastedMeetingLink()`
+  (`src/lib/meetingRoom.ts`): `https:` only, no credentials in the URL, never a host
+  this deployment serves (`servedHosts()` — a meeting link in an e-mail we send that
+  points back at us is a phishing shape), and at most 191 characters (the width of
+  `Meeting.meetLink` / `MeetingSeries.fixedLink` / `User.personalMeetingUrl`).
+  A refused link is a `400 invalid_link` with the rule's `reason`, never a P2000.
+  Deliberately *not* the SSRF guard: nobody fetches this URL server-side.
+- The policy lives on `Organization`, not on `Setting`: `Setting` is keyed by a
+  `String @id`, and giving it an `orgId` re-keys the table (a drop-and-recreate under
+  `db push`). It is set through `GET/PATCH /api/admin/organizations/[id]/conferencing`
+  — the org's own ADMIN or a super admin of its world (`orgAdminGate`) — from the
+  "Video conferencing" card on `/admin/organizations`.
+- The join surfaces do not change what they embed: `EMBEDDABLE_MEETING_HOSTS` and the
+  `frame-src` / `Permissions-Policy` allowlists in `next.config.js` are untouched. A
+  Meet/Zoom/Teams link renders the "Open in *provider*" button
+  (`meetingProviderName()` in `src/lib/meetingLink.ts`) instead of an empty iframe,
+  and the schedule forms say under the link box whether it will embed or open a tab.
+- Nothing here can take a working call away from a participant: a policy restricts
+  which rooms an organisation's own organisers hand out, and the one refusal it can
+  produce names what is missing and who can fix it. A provider-generated link from
+  the organiser's connected account (#2009) slots in between levels 2 and 3.
+
+### Slack Huddle link (#2879)
+
+Slack has **no public API** to start or join a huddle, but every channel and DM has a
+stable huddle link, `https://app.slack.com/huddle/<TEAM_ID>/<CHANNEL_ID>` (`T…` and
+`C…`/`D…`/`G…`). Opening it joins the huddle running in that channel, or starts one.
+That link is a bring-your-own link like any other — not a provider or room type of its
+own — and goes through the same door (`checkPastedMeetingLink()`, nothing relaxed).
+
+- **Copying it:** in Slack, open the channel (or DM) → the *headphones* / huddle control
+  in the channel header → **⋯** → *Copy huddle link*. Paste it as the personal room on
+  `/account`, or into a meeting's link box.
+- **What the app does with it:** `meetingProviderName()` labels it *Slack Huddle*, so
+  the panel's fallback button reads "Open in Slack Huddle" and the link-box hint says it
+  opens in a new tab. `EMBEDDABLE_MEETING_HOSTS` is untouched: Slack refuses to be
+  framed, so the panel never tries. The id grammar lives in `src/lib/slackHuddle.ts`
+  (`buildHuddleUrl` / `parseHuddleUrl`, dependency-free, `e2e/slack-huddle.unit.spec.ts`).
+- **Who can join:** only **members of that Slack workspace**. A mentee or an external
+  guest who is not in Slack cannot open the link, so for those calls keep a built-in
+  room (or a Zoom/Meet link) — a huddle is for the mentor-and-team side of the house.
+  Nothing from the huddle (recording, transcript, attendance) reaches the CRM.
+- **Not possible, and not attempted:** starting a huddle or placing a user into one
+  through the API. The follow-up (PR 2) posts the meeting to each invitee's Slack DM
+  with a *Join Huddle* button that opens this same link.
+
 ## Verifying after deployment
 
 1. Start a call from a mentee card. While the month's allowance has room, the stored link

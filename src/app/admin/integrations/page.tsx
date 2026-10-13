@@ -11,6 +11,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
+import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key {
@@ -23,6 +24,9 @@ interface Key {
   createdAt: string;
   createdBy: { name: string | null; email: string } | null;
   status: ApiKeyStatus;
+  quotaPeriod: 'day' | 'month' | null;
+  quotaLimit: number | null;
+  usage: { period: 'day' | 'month'; requests: number; resetAt: string } | null;
 }
 
 // The <input type="date"> bounds: no earlier than today, no later than the
@@ -69,6 +73,7 @@ const CONNECTOR_LABEL: Record<string, string> = {
   sso: 'connectorSso',
   inbound_jaas: 'connectorInboundJaas',
   inbound_email: 'connectorInboundEmail',
+  audit_drain: 'connectorAuditDrain',
 };
 
 export default function IntegrationsPage() {
@@ -83,6 +88,9 @@ export default function IntegrationsPage() {
   const [keyName, setKeyName] = useState('');
   const [keyScopes, setKeyScopes] = useState<string[]>([...DEFAULT_API_SCOPES]);
   const [keyExpiry, setKeyExpiry] = useState('');
+  const [keyQuotaPeriod, setKeyQuotaPeriod] = useState<'' | 'day' | 'month'>('');
+  const [keyQuotaLimit, setKeyQuotaLimit] = useState('');
+  const [quotaEdit, setQuotaEdit] = useState<{ id: string | null; period: '' | 'day' | 'month'; limit: string }>({ id: null, period: '', limit: '' });
   const [newKey, setNewKey] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [editUrl, setEditUrl] = useState('');
@@ -165,6 +173,7 @@ export default function IntegrationsPage() {
         scopes: keyScopes,
         // The picker yields a date; the API wants an instant — end of that day.
         expiresAt: keyExpiry ? new Date(`${keyExpiry}T23:59:59.000Z`).toISOString() : null,
+        ...(keyQuotaPeriod && keyQuotaLimit ? { quotaPeriod: keyQuotaPeriod, quotaLimit: Number(keyQuotaLimit) } : {}),
       }),
     });
     await noteLocked(res);
@@ -173,9 +182,25 @@ export default function IntegrationsPage() {
       setNewKey(d.key);
       setKeyName('');
       setKeyExpiry('');
+      setKeyQuotaPeriod('');
+      setKeyQuotaLimit('');
       setKeyScopes([...DEFAULT_API_SCOPES]);
       await load();
     }
+  };
+  // The period allowance (#2010): set or cleared in place, scopes stay as minted.
+  const saveQuota = async (id: string) => {
+    const body = quotaEdit.period && quotaEdit.limit ? { quotaPeriod: quotaEdit.period, quotaLimit: Number(quotaEdit.limit) } : { quotaPeriod: null, quotaLimit: null };
+    const res = await fetch(`/api/admin/api-keys?id=${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) { setQuotaEdit({ id: null, period: '', limit: '' }); await load(); }
+  };
+  const usageLine = (k: Key) => {
+    if (!k.usage) return null;
+    const period = k.usage.period === 'day' ? t.integrations.keyPeriodDay : t.integrations.keyPeriodMonth;
+    const n = k.usage.requests.toLocaleString(locale);
+    return k.quotaLimit !== null
+      ? t.integrations.keyUsageOf.replace('{n}', n).replace('{limit}', k.quotaLimit.toLocaleString(locale)).replace('{period}', period)
+      : t.integrations.keyUsage.replace('{n}', n).replace('{period}', period);
   };
   // Soft revoke: the row stays so the activity log keeps a target to point at.
   const delKey = async (id: string) => { await fetch(`/api/admin/api-keys?id=${id}`, { method: 'DELETE' }); await load(); };
@@ -343,6 +368,28 @@ export default function IntegrationsPage() {
               />
               <p className="text-xs text-gray-400 mt-1">{t.integrations.keyExpiryHint}</p>
             </div>
+            <div>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t.integrations.keyQuota}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label={t.integrations.keyQuota}
+                  value={keyQuotaPeriod}
+                  onChange={(e) => setKeyQuotaPeriod(e.target.value as '' | 'day' | 'month')}
+                  data-testid="api-key-quota-period"
+                  className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800"
+                >
+                  <option value="">{t.integrations.keyQuotaNone}</option>
+                  <option value="day">{t.integrations.keyQuotaDay}</option>
+                  <option value="month">{t.integrations.keyQuotaMonth}</option>
+                </select>
+                {keyQuotaPeriod && (
+                  <div className="w-32">
+                    <Input type="number" min={1} step={1} aria-label={t.integrations.keyQuotaLimit} placeholder={t.integrations.keyQuotaLimit} value={keyQuotaLimit} onChange={(e) => setKeyQuotaLimit(e.target.value)} data-testid="api-key-quota-limit" />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">{t.integrations.keyQuotaHint}</p>
+            </div>
             {!keyExpiry && (
               <p
                 data-testid="api-key-no-expiry-warning"
@@ -385,6 +432,30 @@ export default function IntegrationsPage() {
                     )}
                     <p className="text-xs text-gray-400"><code>{k.scopes.join(', ')}</code></p>
                     <p className="text-xs text-gray-400">{k.lastUsedAt ? <>{t.integrations.lastUsed}: <RelativeTime date={k.lastUsedAt} /></> : t.integrations.neverUsed}</p>
+                    {k.usage && <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-usage-${k.id}`}>{usageLine(k)}</p>}
+                    {!k.revokedAt && (quotaEdit.id === k.id ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-2" data-testid={`api-key-quota-edit-${k.id}`}>
+                        <select
+                          aria-label={t.integrations.keyQuota}
+                          value={quotaEdit.period}
+                          onChange={(e) => setQuotaEdit((q) => ({ ...q, period: e.target.value as '' | 'day' | 'month' }))}
+                          className="rounded border border-gray-300 bg-white px-1.5 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+                        >
+                          <option value="">{t.integrations.keyQuotaNone}</option>
+                          <option value="day">{t.integrations.keyQuotaDay}</option>
+                          <option value="month">{t.integrations.keyQuotaMonth}</option>
+                        </select>
+                        {quotaEdit.period && (
+                          <input type="number" min={1} step={1} aria-label={t.integrations.keyQuotaLimit} value={quotaEdit.limit} onChange={(e) => setQuotaEdit((q) => ({ ...q, limit: e.target.value }))} className="w-24 rounded border border-gray-300 bg-white px-1.5 py-1 text-xs dark:border-gray-600 dark:bg-gray-800" />
+                        )}
+                        <button type="button" onClick={() => void saveQuota(k.id)} className="text-xs text-blue-600 hover:underline">{t.integrations.keyQuotaSave}</button>
+                        <button type="button" onClick={() => setQuotaEdit({ id: null, period: '', limit: '' })} className="text-xs text-gray-500 hover:underline">{t.integrations.keyQuotaCancel}</button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setQuotaEdit({ id: k.id, period: k.quotaPeriod ?? '', limit: k.quotaLimit ? String(k.quotaLimit) : '' })} className="mt-0.5 text-xs text-blue-600 hover:underline" data-testid={`api-key-quota-edit-button-${k.id}`}>
+                        {t.integrations.keyQuotaEdit}
+                      </button>
+                    ))}
                   </div>
                   {!k.revokedAt && (
                     <button
@@ -473,6 +544,11 @@ export default function IntegrationsPage() {
             </>
           )}
         </Card>
+
+        {/* The audit stream (#2012): the tenant's AuditLog rows, signed and
+            POSTed to a SIEM. Own component — own fetch, own one-time secret
+            banner — so this page only mounts it. */}
+        <AuditDrainsCard onLocked={() => setApiLocked(true)} />
       </div>
     </div>
   );

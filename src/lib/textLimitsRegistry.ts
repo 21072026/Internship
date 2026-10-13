@@ -151,6 +151,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     relationId: ID,
     title: { limit: 'goalTitle', files: GOAL_WRITERS },
     description: { limit: 'goalDescription', files: GOAL_WRITERS },
+    createdById: ID,
+    successCriteria: { limit: 'goalSuccessCriteria', files: GOAL_WRITERS },
+    visibility: ENUMERATED,
   },
   MeetingRequest: {
     id: ID,
@@ -201,6 +204,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     linkedinUrl: { limit: 'profileUrl', files: PROFILE_WRITERS },
     githubUrl: { limit: 'profileUrl', files: PROFILE_WRITERS },
     portfolioUrl: { limit: 'profileUrl', files: PROFILE_WRITERS },
+    // The saved personal video room (#2007): the profile route is its only
+    // writer, and the same cap keeps it inside Meeting.meetLink's column.
+    personalMeetingUrl: { limit: 'profileUrl', files: ['src/app/api/profile/route.ts'] },
     bio: { limit: 'bio', files: PROFILE_WRITERS },
     interests: { exempt: '@db.Text, capped by the profile schema' },
     reEngageNote: { exempt: '@db.Text, written by an admin through its own route' },
@@ -243,6 +249,16 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     utmTerm: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
     utmContent: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
     referrer: { exempt: '@db.Text, origin + path capped at 500 (REFERRER_MAX) by readInquiryAttribution' },
+  },
+  // Where a tenant's audit trail is streamed to (#2012).
+  AuditDrain: {
+    id: ID,
+    orgId: ID,
+    cursorId: ID,
+    secret: SERVER_SET,
+    format: ENUMERATED,
+    url: { exempt: '@db.Text, capped at 2000 (AUDIT_DRAIN_URL_MAX) by src/app/api/admin/audit-drains/route.ts' },
+    lastError: { exempt: '@db.Text, written by the drain job through sanitizeError, never from a request' },
   },
   Organization: {
     id: ID,

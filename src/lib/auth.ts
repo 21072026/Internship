@@ -7,6 +7,7 @@ import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
 import { consumeRecoveryCode, looksLikeRecoveryCode, recoveryCodeStatus } from '@/lib/recoveryCodes';
 import { notifyEvent } from '@/lib/notifications/router';
+import { observeSignInDevice } from '@/lib/securityNotices';
 import { headerSource, clientIp } from '@/lib/clientIp';
 import { guardProviders } from '@/lib/authGuard';
 import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
@@ -19,6 +20,8 @@ import { worldForHeaderBag, worldForHeaders, type World } from '@/lib/hostWorld'
 import { findUsersByEmail, findUsersInWorld, worldOfOrg } from '@/lib/userWorld';
 import { toVerticalKey } from '@/lib/verticals';
 import { spendGrant } from '@/lib/grantSpend';
+import { findLoginLink, spendLoginLink } from '@/lib/magicLink';
+import { isLoginLinkLive } from '@/lib/magicLinkToken';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -112,6 +115,170 @@ async function requestWorld(): Promise<World | null> {
  * a ~38-bit code needs to stay out of reach.
  */
 const RECOVERY_FAIL_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 } as const;
+
+/**
+ * The second factor, shared by every door that has proven a FIRST factor and
+ * must still ask for the authenticator: the password (below) and a sign-in
+ * link (#1959, the `magic` provider). Once an account has 2FA enrolled, no
+ * door may mint a session without a live TOTP code or a recovery code — a
+ * passwordless door that skipped this would be a downgrade attack on the
+ * enrolment. One function, so a new door cannot forget a rule: the
+ * `2FA_REQUIRED` handshake, the durable lockouts (#1541), the two buckets of
+ * the recovery door (#1542) and the replay floor (#865). Throws exactly what
+ * the password door always threw; returns once a code is accepted and spent.
+ */
+async function requireSecondFactor(
+  user: { id: string; email: string; orgId: string | null; twoFactorSecret: string; lastTotpStep: number | null },
+  submitted: string | undefined,
+  ctx: { email: string; ip: string; origin: ReturnType<typeof headerSource> },
+): Promise<void> {
+  const { email, ip, origin } = ctx;
+  const code = (submitted || '').trim();
+  if (!code) throw new Error('2FA_REQUIRED');
+
+  // The TOTP stage has its own durable gate, deliberately placed AFTER
+  // the 2FA_REQUIRED throw above: a locked code bucket must still let
+  // the sign-in form learn that a code is wanted, or the field never
+  // renders and the user cannot see why they are stuck. Only an
+  // actually-submitted code is refused here.
+  const totpLocked = await getActiveLockout(email, 'totp');
+  if (totpLocked) {
+    await logActivity({
+      action: 'auth.login_locked',
+      level: 'warning',
+      actorEmail: user.email,
+      actorId: user.id,
+      detail: `totp locked until ${totpLocked.lockedUntil.toISOString()}`,
+      request: origin,
+    });
+    throw new Error('Too many attempts. Please try again later.');
+  }
+
+  // Its own bucket, separate from the password one: a legitimate user
+  // fumbling their code shouldn't consume the password allowance, and
+  // an attacker past the password shouldn't get a fresh one.
+  const totpKey = `totp-fail:${email}`;
+  const recoveryKey = `2fa-recovery-fail:${email}`;
+  const step = verifyTotpStep(user.twoFactorSecret, code);
+  const replayed = step !== null && user.lastTotpStep !== null && step <= user.lastTotpStep;
+
+  // The second door (#1542): a submission that is not a live TOTP code
+  // may still be a recovery code, for the person whose authenticator is
+  // gone. Only a submission SHAPED like one is tried — a 6-digit TOTP
+  // code can never normalise to eight alphabet characters — so a
+  // fumbled authenticator code is not charged to the recovery bucket,
+  // and a replayed TOTP code stays a replayed TOTP code.
+  const recoveryAttempt = step === null && !replayed && looksLikeRecoveryCode(code);
+  let recovered = false;
+
+  if (recoveryAttempt) {
+    // A SECOND bucket on top of the TOTP one, not instead of it.
+    //   - Sharing the TOTP bucket is what makes the recovery path
+    //     unable to brute-force AROUND the 5-per-15-minute limit: every
+    //     failure below is recorded there too.
+    //   - Having its own is what stops it INHERITING that allowance. A
+    //     recovery code is a second door to the account, and its window
+    //     is deliberately four times longer, so someone spreading
+    //     guesses out to stay under the TOTP limit still runs out here.
+    const recoveryLocked = await getActiveLockout(email, 'recovery');
+    if (recoveryLocked) {
+      await logActivity({
+        action: 'auth.login_locked',
+        level: 'warning',
+        actorEmail: user.email,
+        actorId: user.id,
+        detail: `recovery locked until ${recoveryLocked.lockedUntil.toISOString()}`,
+        request: origin,
+      });
+      throw new Error('Too many attempts. Please try again later.');
+    }
+    if (!rateLimit(recoveryKey, RECOVERY_FAIL_LIMIT).ok) {
+      throw new Error('Too many attempts. Please try again later.');
+    }
+    recovered = await consumeRecoveryCode(user.id, code);
+  }
+
+  if (!recovered && (step === null || replayed)) {
+    const within = rateLimit(totpKey, { limit: 5, windowMs: 15 * 60 * 1000 });
+    const locked = await recordFailedAttempt({
+      email,
+      userId: user.id,
+      orgId: user.orgId,
+      reason: 'totp',
+      limit: 5,
+      ip,
+    });
+    // A wrong recovery code burns an attempt in BOTH buckets: the
+    // shared TOTP one above (no bypass) and its own, longer one here.
+    const recoveryLocked = recoveryAttempt
+      ? await recordFailedAttempt({
+          email,
+          userId: user.id,
+          orgId: user.orgId,
+          reason: 'recovery',
+          limit: RECOVERY_FAIL_LIMIT.limit,
+          windowMs: RECOVERY_FAIL_LIMIT.windowMs,
+          ip,
+        })
+      : null;
+    await logActivity({
+      action: recoveryAttempt ? 'auth.recovery_failed' : 'auth.totp_failed',
+      level: 'warning',
+      actorEmail: user.email,
+      actorId: user.id,
+      detail: recoveryAttempt
+        ? 'unknown or spent recovery code'
+        : replayed
+          ? 'code already used'
+          : 'invalid code',
+      request: origin,
+    });
+    // Same message either way — which of the two it was is the
+    // attacker's business to guess, not ours to confirm. That includes
+    // not saying whether the submission was read as a recovery code:
+    // the form asks for one thing and refuses one thing.
+    throw new Error(
+      within.ok && !locked && !recoveryLocked
+        ? 'Invalid authenticator code'
+        : 'Too many attempts. Please try again later.'
+    );
+  }
+
+  if (recovered) {
+    // A recovery sign-in is a security event, not a routine one: it is
+    // exactly what an attacker holding a printed code would do. So it
+    // is audited at `warning` and the account holder is told, whatever
+    // their notification preferences say (the event sits in an
+    // essential e-mail group). `lastTotpStep` is deliberately left
+    // alone — no TOTP step was consumed, and writing one would move the
+    // replay floor the authenticator still relies on.
+    const { remaining } = await recoveryCodeStatus(user.id);
+    await logActivity({
+      action: '2fa.recovery_used',
+      level: 'warning',
+      actorEmail: user.email,
+      actorId: user.id,
+      detail: `${remaining} recovery code(s) left`,
+      request: origin,
+    });
+    await notifyEvent(user.id, 'security.recoveryCodeUsed', { remaining: String(remaining) });
+    clearRateLimit(recoveryKey);
+    clearRateLimit(totpKey);
+  } else {
+    // A live, unreplayed TOTP code — the ordinary path.
+    // Burn the step so the same code can't be used again inside the
+    // ±1-step acceptance window.
+    // `select` here is not cosmetic: an unqualified update() returns the
+    // whole row, which would re-introduce the Json-column read that
+    // AUTH_USER_SELECT exists to avoid.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastTotpStep: step },
+      select: { id: true },
+    });
+    clearRateLimit(totpKey);
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -276,151 +443,11 @@ export const authOptions: NextAuthOptions = {
 
         // Two-factor: when enabled, a valid TOTP code is required.
         if (user.twoFactorEnabled && user.twoFactorSecret) {
-          const code = (credentials.totp || '').trim();
-          if (!code) throw new Error('2FA_REQUIRED');
-
-          // The TOTP stage has its own durable gate, deliberately placed AFTER
-          // the 2FA_REQUIRED throw above: a locked code bucket must still let
-          // the sign-in form learn that a code is wanted, or the field never
-          // renders and the user cannot see why they are stuck. Only an
-          // actually-submitted code is refused here.
-          const totpLocked = await getActiveLockout(email, 'totp');
-          if (totpLocked) {
-            await logActivity({
-              action: 'auth.login_locked',
-              level: 'warning',
-              actorEmail: user.email,
-              actorId: user.id,
-              detail: `totp locked until ${totpLocked.lockedUntil.toISOString()}`,
-              request: origin,
-            });
-            throw new Error('Too many attempts. Please try again later.');
-          }
-
-          // Its own bucket, separate from the password one: a legitimate user
-          // fumbling their code shouldn't consume the password allowance, and
-          // an attacker past the password shouldn't get a fresh one.
-          const totpKey = `totp-fail:${email}`;
-          const recoveryKey = `2fa-recovery-fail:${email}`;
-          const step = verifyTotpStep(user.twoFactorSecret, code);
-          const replayed = step !== null && user.lastTotpStep !== null && step <= user.lastTotpStep;
-
-          // The second door (#1542): a submission that is not a live TOTP code
-          // may still be a recovery code, for the person whose authenticator is
-          // gone. Only a submission SHAPED like one is tried — a 6-digit TOTP
-          // code can never normalise to eight alphabet characters — so a
-          // fumbled authenticator code is not charged to the recovery bucket,
-          // and a replayed TOTP code stays a replayed TOTP code.
-          const recoveryAttempt = step === null && !replayed && looksLikeRecoveryCode(code);
-          let recovered = false;
-
-          if (recoveryAttempt) {
-            // A SECOND bucket on top of the TOTP one, not instead of it.
-            //   - Sharing the TOTP bucket is what makes the recovery path
-            //     unable to brute-force AROUND the 5-per-15-minute limit: every
-            //     failure below is recorded there too.
-            //   - Having its own is what stops it INHERITING that allowance. A
-            //     recovery code is a second door to the account, and its window
-            //     is deliberately four times longer, so someone spreading
-            //     guesses out to stay under the TOTP limit still runs out here.
-            const recoveryLocked = await getActiveLockout(email, 'recovery');
-            if (recoveryLocked) {
-              await logActivity({
-                action: 'auth.login_locked',
-                level: 'warning',
-                actorEmail: user.email,
-                actorId: user.id,
-                detail: `recovery locked until ${recoveryLocked.lockedUntil.toISOString()}`,
-                request: origin,
-              });
-              throw new Error('Too many attempts. Please try again later.');
-            }
-            if (!rateLimit(recoveryKey, RECOVERY_FAIL_LIMIT).ok) {
-              throw new Error('Too many attempts. Please try again later.');
-            }
-            recovered = await consumeRecoveryCode(user.id, code);
-          }
-
-          if (!recovered && (step === null || replayed)) {
-            const within = rateLimit(totpKey, { limit: 5, windowMs: 15 * 60 * 1000 });
-            const locked = await recordFailedAttempt({
-              email,
-              userId: user.id,
-              orgId: user.orgId,
-              reason: 'totp',
-              limit: 5,
-              ip,
-            });
-            // A wrong recovery code burns an attempt in BOTH buckets: the
-            // shared TOTP one above (no bypass) and its own, longer one here.
-            const recoveryLocked = recoveryAttempt
-              ? await recordFailedAttempt({
-                  email,
-                  userId: user.id,
-                  orgId: user.orgId,
-                  reason: 'recovery',
-                  limit: RECOVERY_FAIL_LIMIT.limit,
-                  windowMs: RECOVERY_FAIL_LIMIT.windowMs,
-                  ip,
-                })
-              : null;
-            await logActivity({
-              action: recoveryAttempt ? 'auth.recovery_failed' : 'auth.totp_failed',
-              level: 'warning',
-              actorEmail: user.email,
-              actorId: user.id,
-              detail: recoveryAttempt
-                ? 'unknown or spent recovery code'
-                : replayed
-                  ? 'code already used'
-                  : 'invalid code',
-              request: origin,
-            });
-            // Same message either way — which of the two it was is the
-            // attacker's business to guess, not ours to confirm. That includes
-            // not saying whether the submission was read as a recovery code:
-            // the form asks for one thing and refuses one thing.
-            throw new Error(
-              within.ok && !locked && !recoveryLocked
-                ? 'Invalid authenticator code'
-                : 'Too many attempts. Please try again later.'
-            );
-          }
-
-          if (recovered) {
-            // A recovery sign-in is a security event, not a routine one: it is
-            // exactly what an attacker holding a printed code would do. So it
-            // is audited at `warning` and the account holder is told, whatever
-            // their notification preferences say (the event sits in an
-            // essential e-mail group). `lastTotpStep` is deliberately left
-            // alone — no TOTP step was consumed, and writing one would move the
-            // replay floor the authenticator still relies on.
-            const { remaining } = await recoveryCodeStatus(user.id);
-            await logActivity({
-              action: '2fa.recovery_used',
-              level: 'warning',
-              actorEmail: user.email,
-              actorId: user.id,
-              detail: `${remaining} recovery code(s) left`,
-              request: origin,
-            });
-            await notifyEvent(user.id, 'security.recoveryCodeUsed', { remaining: String(remaining) });
-            clearRateLimit(recoveryKey);
-            clearRateLimit(totpKey);
-          } else {
-            // A live, unreplayed TOTP code — the ordinary path.
-            // Burn the step so the same code can't be used again inside the
-            // ±1-step acceptance window.
-            // `select` here is not cosmetic: an unqualified update() returns the
-            // whole row, which would re-introduce the Json-column read that
-            // AUTH_USER_SELECT exists to avoid.
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { lastTotpStep: step },
-              select: { id: true },
-            });
-            clearRateLimit(totpKey);
-          }
+          await requireSecondFactor(
+            { id: user.id, email: user.email, orgId: user.orgId, twoFactorSecret: user.twoFactorSecret, lastTotpStep: user.lastTotpStep },
+            credentials.totp,
+            { email, ip, origin },
+          );
         }
 
         // Fully authenticated — now the failure counter can be reset. Both
@@ -436,6 +463,10 @@ export const authOptions: NextAuthOptions = {
           actorEmail: user.email,
           request: origin,
         });
+        // A browser this account has not signed in from before earns a
+        // security notice (#1717). The row is written here; the mail is not
+        // waited for.
+        await observeSignInDevice(user.id, origin);
 
         return {
           id: user.id,
@@ -594,6 +625,94 @@ export const authOptions: NextAuthOptions = {
           throw new Error(AUTH_SSO_REQUIRED);
         }
         await assertAccountMatchesHost(user, req);
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.fullName,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          companyId: user.companyId,
+          orgId: user.orgId,
+        };
+      },
+    }),
+    // Magic-link sign-in (#1959): "e-mail me a sign-in link". The link is a
+    // password-equivalent credential — possession of the mailbox is the first
+    // factor — so it is treated exactly like a password that verified, minus the
+    // bcrypt compare: the same account-state refusals, the same enforced-SSO
+    // refusal (#1950), the same host check, and the SAME second factor.
+    //
+    // Two rules are load-bearing:
+    //   - The link is spent by ONE conditional UPDATE (spendLoginLink), the
+    //     same shape as the SSO grant (#2548) — two clicks on one mail cannot
+    //     both mint a session.
+    //   - An enrolled authenticator is NOT bypassed. The link's first visit
+    //     answers `2FA_REQUIRED` without spending it (the page then asks for
+    //     the code and sends the link again with it); the link is spent only
+    //     once requireSecondFactor() has accepted the code. A wrong code costs
+    //     the TOTP bucket, never the link — and the fifteen-minute expiry
+    //     bounds how long an unspent link can sit at the 2FA prompt.
+    CredentialsProvider({
+      id: 'magic',
+      name: 'magic',
+      credentials: {
+        grant: { label: 'grant', type: 'text' },
+        totp: { label: 'Authenticator code', type: 'text' },
+      },
+      async authorize(credentials, req) {
+        const raw = credentials?.grant;
+        if (!raw) throw new Error('grant is required');
+        const origin = headerSource(req?.headers as Record<string, string> | undefined);
+
+        // The read is for the row's fields; the admission is the UPDATE below.
+        const link = await findLoginLink(raw);
+        if (!link || !isLoginLinkLive(link)) throw new Error('Invalid or expired grant');
+
+        const user = await prisma.user.findUnique({
+          where: { id: link.userId },
+          select: AUTH_USER_SELECT,
+        });
+        if (!user) throw new Error('User not found');
+
+        // Re-checked here although the request route refused to mail any of
+        // these: the link is a bearer credential with a fifteen-minute life,
+        // and an account can be deactivated — or its tenant can start
+        // enforcing SSO — inside it. Same messages as the password door, so
+        // the completion page can explain each the same way.
+        if (!user.isActive) {
+          if (!user.emailVerified) throw new Error('EMAIL_NOT_VERIFIED');
+          if (user.pendingApproval) throw new Error('ACCOUNT_PENDING_APPROVAL');
+          throw new Error('This account has been deactivated. Please contact an administrator.');
+        }
+        if (await isPasswordLoginBlocked(user)) throw new Error(AUTH_SSO_REQUIRED);
+        await assertAccountMatchesHost(user, req);
+
+        if (user.twoFactorEnabled && user.twoFactorSecret) {
+          await requireSecondFactor(
+            { id: user.id, email: user.email, orgId: user.orgId, twoFactorSecret: user.twoFactorSecret, lastTotpStep: user.lastTotpStep },
+            credentials?.totp,
+            { email: user.email.toLowerCase(), ip: clientIp(origin), origin },
+          );
+        }
+
+        // Only now — every check above passed — is the link spent. The
+        // conditional UPDATE is the gate: a concurrent redemption that got this
+        // far too sees `false` here and is refused.
+        const spent = await spendLoginLink(link.id);
+        if (!spent) throw new Error('Invalid or expired grant');
+
+        // The row never carries the token — not the raw value, not its hash.
+        await logActivity({
+          action: 'auth.magic_link_used',
+          actorId: user.id,
+          actorEmail: user.email,
+          request: origin,
+        });
+        // Same new-device notice as the password door (#1717): a link is a
+        // credential too, and one read from a stolen mailbox arrives from a
+        // browser the account has never used.
+        await observeSignInDevice(user.id, origin);
 
         return {
           id: user.id,

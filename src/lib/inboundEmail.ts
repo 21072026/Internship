@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
+import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
-import { conversationForRelation } from '@/lib/conversations';
+import { conversationForRelation, mutedParticipants } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
 import { sendNewMessagePush } from '@/lib/messagePush';
@@ -119,10 +120,14 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   // was addressed to (#1156) — otherwise an emailed answer never shows up in the
   // chat the two of them are actually reading.
   const conversation = await conversationForRelation(rel);
+  let storedId: string;
   try {
-    await prisma.message.create({
-      data: { relationId, conversationId: conversation?.id ?? null, senderId, channel: 'EMAIL', body, inboundMessageId },
-    });
+    storedId = (
+      await prisma.message.create({
+        data: { relationId, conversationId: conversation?.id ?? null, senderId, channel: 'EMAIL', body, inboundMessageId },
+        select: { id: true },
+      })
+    ).id;
   } catch (e) {
     // Unique violation on inboundMessageId — another tick won the race.
     if (inboundMessageId && (e as { code?: string }).code === 'P2002') {
@@ -130,6 +135,10 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
     }
     throw e;
   }
+
+  // Safeguarding (#2056): an e-mailed reply is checked for watch keywords only —
+  // every mail carries a signature, so its contact details are not flagged.
+  await scanMessageForSafeguarding({ messageId: storedId, body, senderId, arrivedByEmail: true });
 
   // Answering IS reading (#1204). Without this the replier's own inbox kept
   // being told about messages they had already responded to: the reply landed
@@ -152,7 +161,9 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   // that goes for the background push as well (#1464), which is why it sits
   // inside the same gate. sendNewMessagePush re-checks the preference itself,
   // so this is about not doing the work, not about correctness.
-  if (notificationCategoryAllowed(recipientUser, 'messages')) {
+  // A thread the recipient muted (#1609) interrupts them through no door.
+  const muted = await mutedParticipants(conversation?.id, [recipientUser.id]);
+  if (notificationCategoryAllowed(recipientUser, 'messages') && !muted.has(recipientUser.id)) {
     await notify(recipientUser.id, 'message.newByEmail', {}, link);
     await sendNewMessagePush(recipientUser.id, { link, byEmail: true, preview: body });
   }

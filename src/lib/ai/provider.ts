@@ -1,4 +1,20 @@
-// Provider resilience for every AI call (#2024) — server-only.
+// The one provider module (#2022, #2024) — server-only, and the ONLY file in
+// the repo that imports `@anthropic-ai/sdk`. A feature module (src/lib/ai*.ts)
+// holds a prompt and a parser and calls `callModel()`; it never constructs a
+// client, picks a model or sets a timeout. `scripts/test/ai-tasks.test.mjs`
+// pins the single-importer rule.
+//
+//   • `callModel({ task, system, input, jsonSchema? })` sends ONE user message
+//     under the task's registry entry (src/lib/ai/tasks.ts): the model from
+//     `resolveModel()`, the task's input cap applied here, the task's output
+//     cap as `max_tokens`, the central AI_TIMEOUT_MS. It records what the
+//     provider answered with — model, token counts, latency — into the call
+//     tracking store, which `runAiGated` reads to write the `AiUsage` row.
+//   • `resolveModel(task)`: `AI_MODEL_<TASK_ID>` → `AI_MODEL_TIER_<TIER>` → the
+//     task's legacy env var (`ANTHROPIC_SUMMARY_MODEL`) → `ANTHROPIC_CV_MODEL`
+//     → DEFAULT_MODEL. Changing a model is an env change, never a deploy.
+//   • `isAiConfigured()` lives here because the credential is a provider
+//     concern; `src/lib/cvExtractAi.ts` re-exports it for one release.
 //
 // runAiGated (src/lib/aiGate.ts) runs each logical AI task through
 // `callProvider`, so ONE task is ONE metered call however many attempts it
@@ -17,12 +33,49 @@
 //     validates against the task's schema, and returns the task's fallback —
 //     marking the call `parse_error` — instead of throwing on a reply that is
 //     not the JSON asked for.
-//
-// #2022 adds `callModel()` (the registry and per-task routing) to this module;
-// these pieces are what it will call through.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
+import Anthropic from '@anthropic-ai/sdk';
 import type { z } from 'zod';
+import { AI_TASKS, type AiModelTier, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
+import { UNTRUSTED_DATA_RULE, mapUntrustedBlocks, untrustedBlocks } from '@/lib/ai/untrusted';
+import { redactForPrompt } from '@/lib/ai/redact';
+import { injectionSignals } from '@/lib/ai/injection';
+
+export const AI_PROVIDER = 'anthropic';
+/** The model every tier resolves to unless an env var says otherwise (the pre-#2022 default). */
+export const DEFAULT_MODEL = 'claude-opus-4-8';
+/**
+ * A generation that has not answered in a minute is not going to. The SDK's
+ * own default timeout is 10 minutes, long enough to hold a request handler
+ * open until the user gives up (#895); generation genuinely takes tens of
+ * seconds, so 60s — not the 5s webhooks get.
+ */
+export const AI_TIMEOUT_MS = 60_000;
+
+export function isAiConfigured(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
+/** `AI_MODEL_CV_EXTRACT`, `AI_MODEL_TIER_FAST`, … — the env var names, derived so docs and code cannot drift. */
+export function modelEnvVar(task: AiTaskId): string {
+  return `AI_MODEL_${task.toUpperCase()}`;
+}
+export function tierEnvVar(tier: AiModelTier): string {
+  return `AI_MODEL_TIER_${tier.toUpperCase()}`;
+}
+
+/** The model a task runs on (see the header for the order). An empty variable is unset. */
+export function resolveModel(task: AiTaskId, env: Record<string, string | undefined> = process.env): string {
+  const spec: AiTaskSpec = AI_TASKS[task];
+  return (
+    env[modelEnvVar(task)] ||
+    env[tierEnvVar(spec.tier)] ||
+    (spec.legacyModelEnv ? env[spec.legacyModelEnv] : undefined) ||
+    env.ANTHROPIC_CV_MODEL ||
+    DEFAULT_MODEL
+  );
+}
 
 export const MAX_RETRIES = 2;
 const BASE_BACKOFF_MS = 500;
@@ -129,6 +182,11 @@ export class CircuitBreaker {
 
 const providerBreaker = new CircuitBreaker();
 
+/** This container's breaker, for the operator console (#2030): per process, so it describes the replica that answered. */
+export function providerBreakerState(): 'closed' | 'open' | 'half-open' {
+  return providerBreaker.state();
+}
+
 /** One logical provider call: breaker first, then the retries. Throws when it finally fails. */
 export async function callProvider<T>(fn: () => Promise<T>, breaker: CircuitBreaker = providerBreaker): Promise<T> {
   if (!breaker.canCall()) throw new ProviderUnavailable();
@@ -142,16 +200,164 @@ export async function callProvider<T>(fn: () => Promise<T>, breaker: CircuitBrea
   }
 }
 
-// ── Parsing ──────────────────────────────────────────────────────────────────
+// ── The model call ───────────────────────────────────────────────────────────
 
-const parseTracking = new AsyncLocalStorage<{ parseError: boolean }>();
-
-/** Run `fn`, reporting whether any safeParseModelJson inside it fell back. */
-export async function trackParseErrors<T>(fn: () => Promise<T>): Promise<{ result: T; parseError: boolean }> {
-  const store = { parseError: false };
-  const result = await parseTracking.run(store, fn);
-  return { result, parseError: store.parseError };
+/** What one logical call spent, summed over its attempts (#2022). */
+export interface AiCallUsage {
+  provider: string;
+  /** The model the provider answered with; the resolved one until it answers. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** Time waiting on the provider, every attempt included. */
+  latencyMs: number;
+  /** How many provider requests completed. 0 means the usage is a resolved model and nothing else. */
+  completed: number;
+  /** Injection tripwire hits over the untrusted blocks (#2026) — flagged, never blocking. */
+  flags: string[];
 }
+
+interface CallTracking {
+  parseError: boolean;
+  usage: AiCallUsage | null;
+}
+
+const callTracking = new AsyncLocalStorage<CallTracking>();
+
+/**
+ * Run one logical AI call, collecting what its `callModel`s spent and whether
+ * any parser inside it fell back. runAiGated wraps every task in this.
+ */
+export async function trackAiCall<T>(fn: () => Promise<T>): Promise<{ result: T; parseError: boolean; usage: AiCallUsage | null }> {
+  const store: CallTracking = { parseError: false, usage: null };
+  try {
+    const result = await callTracking.run(store, fn);
+    return { result, parseError: store.parseError, usage: store.usage };
+  } catch (error) {
+    // The usage so far rides on the error, so a provider_error row can still
+    // say which model was asked (`usageOfFailure`).
+    (error as { aiUsage?: AiCallUsage | null }).aiUsage = store.usage;
+    throw error;
+  }
+}
+
+/** The usage a failed `trackAiCall` attached to its error, if any. */
+export function usageOfFailure(error: unknown): AiCallUsage | null {
+  const e = error as { aiUsage?: AiCallUsage | null } | null;
+  return e && typeof e === 'object' && e.aiUsage ? e.aiUsage : null;
+}
+
+/** @deprecated since #2022 — `trackAiCall` is the same call with the usage too. Kept for one release. */
+export async function trackParseErrors<T>(fn: () => Promise<T>): Promise<{ result: T; parseError: boolean }> {
+  const { result, parseError } = await trackAiCall(fn);
+  return { result, parseError };
+}
+
+export interface ModelCall {
+  task: AiTaskId;
+  system: string;
+  /**
+   * The one user message. Cut to the task's `maxInputChars` here. Everything a
+   * person wrote must sit inside a `wrapUntrusted()` block — an input without
+   * one is refused (#2026).
+   */
+  input: string;
+  /** A JSON schema pinned on the reply (structured tasks). */
+  jsonSchema?: Record<string, unknown>;
+  /** Lower than the task's `maxOutputTokens`; never higher. */
+  maxTokens?: number;
+}
+
+/** The provider request, injectable so a unit test can answer without a network. */
+export type ModelCreate = (params: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
+
+const defaultCreate: ModelCreate = (params) =>
+  // Constructed per call so the key is read when the call is made (an e2e
+  // spec sets it at runtime); retries are callProvider's, so the SDK's are off.
+  new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }).messages.create(params);
+
+/** Thrown when a feature module sends user text without fencing it — a programmer error, caught by the tests. */
+export class UnfencedInputError extends Error {
+  constructor(task: string) {
+    super(`callModel(${task}): the input carries no wrapUntrusted() block`);
+    this.name = 'UnfencedInputError';
+  }
+}
+
+/**
+ * Shorten the largest untrusted block until the input fits the task's cap, so
+ * the cut lands inside the data and never through a closing fence (a plain
+ * slice would leave the block open). The slice in callModel stays as the
+ * backstop.
+ */
+export function fitToBudget(input: string, max: number): string {
+  let out = input;
+  for (let i = 0; i < 4 && out.length > max; i++) {
+    const blocks = untrustedBlocks(out);
+    if (!blocks.length) break;
+    const largest = blocks.reduce((a, b) => (b.content.length > a.content.length ? b : a));
+    const keep = Math.max(0, largest.content.length - (out.length - max));
+    let done = false;
+    out = mapUntrustedBlocks(out, (content) => {
+      if (done || content !== largest.content) return content;
+      done = true;
+      return content.slice(0, keep);
+    });
+  }
+  return out;
+}
+
+/**
+ * What actually leaves for the provider (#2026): the system prompt with the
+ * untrusted-data rule appended, the input with contact details masked inside
+ * its untrusted blocks (unless the task declares `needsContactDetails`), and
+ * the tripwire's signals over those blocks. Exported for the unit test.
+ */
+export function preparePrompt(call: Pick<ModelCall, 'task' | 'system' | 'input'>): { system: string; input: string; flags: string[] } {
+  const spec: AiTaskSpec = AI_TASKS[call.task];
+  if (untrustedBlocks(call.input).length === 0) throw new UnfencedInputError(call.task);
+  const masked = spec.needsContactDetails ? call.input : mapUntrustedBlocks(call.input, (content) => redactForPrompt(content));
+  const input = fitToBudget(masked, spec.maxInputChars);
+  const flags = [...new Set(untrustedBlocks(call.input).flatMap((b) => injectionSignals(b.content)))];
+  if (flags.length) console.warn('[ai] injection tripwire', { task: call.task, flags });
+  return { system: `${call.system}\n\n${UNTRUSTED_DATA_RULE}`, input, flags };
+}
+
+/**
+ * One request to the model under the task's registry entry. Returns the text
+ * of the reply ('' when there is none — the caller's parser decides what that
+ * means). Throws what the SDK throws; `callProvider` decides about retries.
+ */
+export async function callModel(call: ModelCall, create: ModelCreate = defaultCreate): Promise<string> {
+  const spec: AiTaskSpec = AI_TASKS[call.task];
+  const model = resolveModel(call.task);
+  const { system, input, flags } = preparePrompt(call);
+  const store = callTracking.getStore();
+  const usage: AiCallUsage = store?.usage ?? { provider: AI_PROVIDER, model, inputTokens: 0, outputTokens: 0, latencyMs: 0, completed: 0, flags: [] };
+  usage.model = model;
+  usage.flags = [...new Set([...usage.flags, ...flags])];
+  if (store) store.usage = usage;
+
+  const maxTokens = Math.min(call.maxTokens ?? spec.maxOutputTokens, spec.maxOutputTokens);
+  const started = Date.now();
+  const res = await create({
+    model,
+    max_tokens: maxTokens,
+    system,
+    ...(call.jsonSchema ? { output_config: { format: { type: 'json_schema', schema: call.jsonSchema } } } : {}),
+    messages: [{ role: 'user', content: input.slice(0, spec.maxInputChars) }],
+  });
+  usage.latencyMs += Date.now() - started;
+  usage.model = res.model || model;
+  usage.inputTokens += res.usage?.input_tokens ?? 0;
+  usage.outputTokens += res.usage?.output_tokens ?? 0;
+  usage.completed += 1;
+
+  const block = res.content.find((b) => b.type === 'text');
+  return block && block.type === 'text' ? block.text : '';
+}
+
+// ── Parsing ──────────────────────────────────────────────────────────────────
 
 /**
  * Mark the running call parse_error from a parser that is not
@@ -159,7 +365,7 @@ export async function trackParseErrors<T>(fn: () => Promise<T>): Promise<{ resul
  * input). runAiGated then meters it as parse_error and keeps no artefact.
  */
 export function noteParseError(): void {
-  const store = parseTracking.getStore();
+  const store = callTracking.getStore();
   if (store) store.parseError = true;
 }
 
@@ -175,7 +381,7 @@ export function stripCodeFence(raw: string): string {
  */
 export function safeParseModelJson<T>(raw: string | null | undefined, schema: z.ZodType<T>, fallback: T): T {
   const fail = () => {
-    const store = parseTracking.getStore();
+    const store = callTracking.getStore();
     if (store) store.parseError = true;
     return fallback;
   };

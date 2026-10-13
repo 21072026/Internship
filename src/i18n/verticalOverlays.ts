@@ -50,6 +50,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The follow-up panel (#2563) in the rep's words (#2875): the sales
+      // example the base dictionary used to carry, and who reads the note.
+      followUp: {
+        notePlaceholder: 'e.g. Call about pricing',
+        visibility: 'Only the owner of this record and the admins see this note; the contact never does. On the day, the owner gets one reminder.',
+        aiHint: 'Three suggestions from the activity log and the stage (uses one AI credit). Pick one, edit it, save.',
+        aiEmpty: 'No activity logged yet — add one first.',
+      },
       // The ROI screen's donated-time inputs (#1895), in the rep wording.
       roi: {
         screen: {
@@ -72,6 +80,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Survey results (#1910): the breakdown labels name the roles, so they
       // take the same rep/lead words as everywhere else.
+      // Goal sharing scope (#1858): the option names the two seats.
+      goals: { visibilityPair: 'Sales rep and lead', visibilityProgram: 'Sales rep, lead and team' },
       surveyResults: {
         byMentor: 'By sales rep',
         noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
@@ -150,6 +160,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         convertToMentorConfirm: '{name} will be signed out of every device and becomes a rep at their next sign-in. Their existing records are kept.',
         convertToMenteeConfirm: '{name} will be signed out of every device and becomes a lead at their next sign-in. Their existing records are kept.',
         stateNoLoginHint: 'A record created by a rep or an import. It has no password, so nobody can sign in as it.',
+      },
+      // The SSO role-mapping card (#2839): its hints named the enum (MENTEE,
+      // ADMIN), which the leak ratchet strips as a code — so nobody dressed them.
+      organizations: {
+        ssoRoleMappingsHint: 'A user whose claim contains the value gets that role. The highest priority wins; a tie gives the lower role. No match: lead. Admin cannot be mapped yet.',
+        ssoRoleNone: 'No mappings yet — every SSO user starts as a lead.',
+        ssoRoleSyncHint: 'Off: an existing user keeps the role they have. On: their role follows the mapping at each sign-in (never for an admin, and a login that matches nothing changes nothing).',
       },
       candidateDetail: {
         mentorship: 'Owner',
@@ -657,6 +674,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
+      // taşıdığı satış örneği ve notu kimin okuduğu.
+      followUp: {
+        notePlaceholder: 'örn. Fiyat için ara',
+        visibility: 'Bu notu yalnızca kaydın sahibi ve yöneticiler görür; müşteri adayı asla görmez. Takip günü kaydın sahibine bir hatırlatma gider.',
+        aiHint: 'Aktivite kaydı ve aşamadan üç öneri (bir AI kredisi kullanır). Birini seç, düzenle, kaydet.',
+        aiEmpty: 'Henüz aktivite kaydı yok — önce bir aktivite ekle.',
+      },
       // ROI ekranının gönüllü zaman alanları (#1895), temsilci diliyle.
       roi: {
         screen: {
@@ -677,6 +702,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
+      goals: { visibilityPair: 'Satış temsilcisi ve müşteri adayı', visibilityProgram: 'Satış temsilcisi, müşteri adayı ve ekip' },
       surveyResults: {
         byMentor: 'Satış temsilcisine göre',
         noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
@@ -748,6 +774,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         convertToMentorConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde temsilci olur. Mevcut kayıtları korunur.',
         convertToMenteeConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde müşteri adayı olur. Mevcut kayıtları korunur.',
         stateNoLoginHint: 'Bir temsilci veya içe aktarma tarafından oluşturulmuş kayıt. Parolası yok, kimse bu hesapla giriş yapamaz.',
+      },
+      // The SSO role-mapping card (#2839), see the EN block.
+      organizations: {
+        ssoRoleMappingsHint: 'Claim\'i bu değeri içeren kullanıcı o rolü alır. En yüksek öncelik kazanır; eşitlikte düşük rol verilir. Eşleşme yoksa: müşteri adayı. Yönetici henüz eşlenemez.',
+        ssoRoleNone: 'Henüz eşleme yok — her SSO kullanıcısı müşteri adayı olarak başlar.',
+        ssoRoleSyncHint: 'Kapalı: mevcut kullanıcı rolünü korur. Açık: rolü her girişte eşlemeyi izler (yönetici için asla; hiçbir şeyle eşleşmeyen giriş bir şey değiştirmez).',
       },
       candidateDetail: {
         mentorship: 'Sorumlu',
@@ -1123,6 +1155,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
+      // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
+      // Notiz liest.
+      followUp: {
+        notePlaceholder: 'z. B. Wegen Preisen anrufen',
+        visibility: 'Diese Notiz sehen nur der Zuständige dieses Datensatzes und die Admins; der Kontakt nie. Am Tag der Wiedervorlage bekommt der Zuständige eine Erinnerung.',
+        aiHint: 'Drei Vorschläge aus dem Aktivitätsprotokoll und der Phase (verbraucht ein KI-Guthaben). Einen wählen, anpassen, speichern.',
+        aiEmpty: 'Noch keine Aktivität protokolliert — zuerst eine anlegen.',
+      },
       // Die Eingaben für gespendete Zeit auf der ROI-Seite (#1895), im Vertriebs-Wortlaut.
       roi: {
         screen: {
@@ -1141,6 +1182,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
       },
+      goals: { visibilityPair: 'Vertriebsmitarbeiter und Lead', visibilityProgram: 'Vertriebsmitarbeiter, Lead und Team' },
       surveyResults: {
         byMentor: 'Nach Vertriebsmitarbeiter',
         noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
@@ -1212,6 +1254,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         convertToMentorConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung Vertriebsmitarbeiter. Bestehende Datensätze bleiben erhalten.',
         convertToMenteeConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung ein Lead. Bestehende Datensätze bleiben erhalten.',
         stateNoLoginHint: 'Ein von einem Vertriebsmitarbeiter oder Import angelegter Datensatz. Ohne Passwort kann sich niemand damit anmelden.',
+      },
+      // The SSO role-mapping card (#2839), see the EN block.
+      organizations: {
+        ssoRoleMappingsHint: 'Wer den Wert im Claim hat, erhält die Rolle. Die höchste Priorität gewinnt; bei Gleichstand die niedrigere Rolle. Ohne Treffer: Lead. Admin kann noch nicht zugeordnet werden.',
+        ssoRoleNone: 'Noch keine Zuordnung — jeder SSO-Nutzer startet als Lead.',
+        ssoRoleSyncHint: 'Aus: Bestehende Nutzer behalten ihre Rolle. An: Die Rolle folgt bei jeder Anmeldung der Zuordnung (nie für einen Admin; eine Anmeldung ohne Treffer ändert nichts).',
       },
       candidateDetail: {
         mentorship: 'Zuständig',

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { gotoSettled } from './helpers/auth';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 
 test.afterAll(async () => {
@@ -25,10 +26,12 @@ test('global search finds a mentee and saved views can be created', async ({ pag
     expect((data.users ?? []).some((u: { id: string }) => u.id === mentee.id)).toBeTruthy();
 
     // Saved views: create one on the candidates page.
-    await page.goto('/admin/candidates');
-    page.once('dialog', (d) => d.accept('My View'));
-    await page.getByRole('button', { name: /Save view/i }).click();
-    await expect(page.getByText('My View')).toBeVisible({ timeout: 10_000 });
+    await gotoSettled(page, '/admin/candidates');
+    // Saving opens an inline name form (not window.prompt) since #1900.
+    await page.getByTestId('saved-views-save').click();
+    await page.getByTestId('saved-views-name').fill('My View');
+    await page.getByTestId('saved-views-confirm').click();
+    await expect(page.getByRole('button', { name: 'My View', exact: true })).toBeVisible({ timeout: 10_000 });
   } finally {
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);

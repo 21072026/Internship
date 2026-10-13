@@ -24,6 +24,7 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 import { scrollBehavior } from '@/lib/motion';
+import { MentorDraft, SuggestReply, ThreadCatchUp } from '@/components/ThreadAiTools';
 import { encodePageCursor, mergeNewestPage, prependOlderPage } from '@/lib/messagePage';
 import {
   resolveMessageTemplateText,
@@ -111,8 +112,13 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // the mentee (#1130). Answered for conversations too since the mentorship
   // thread hands over to one (#1156).
   const [mentorId, setMentorId] = useState<string | null>(null);
+  // The mentorship behind this 1:1 thread, for the mentor's grounded draft (#2048).
+  const [mentorshipId, setMentorshipId] = useState<string | null>(null);
   const [showParties, setShowParties] = useState(false);
   const [body, setBody] = useState('');
+  // The last AI-suggested reply put into the box (#2048). Marked ✨ while the
+  // box still holds exactly that text; any edit makes it the author's own.
+  const [aiDraft, setAiDraft] = useState<string | null>(null);
   // Pending attachments (picked files + pasted images), each with an object URL
   // for an instant thumbnail/preview. Uploaded with the message on send.
   const [attachments, setAttachments] = useState<PendingMessageAttachment[]>([]);
@@ -361,6 +367,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
     setMentorId(d.mentorId ?? d.mentor?.id ?? null);
+    setMentorshipId(d.mentorshipId ?? d.relationId ?? null);
     setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
     setCounterpartState(d.counterpartState ?? null);
@@ -452,6 +459,22 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [lastMessageId]);
+
+  // Opening the inline picker grows the bubble without adding a message.
+  // Keep its controls inside the scroll viewport, including on the last row.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !reactId) return;
+    const picker = scroller.querySelector<HTMLElement>('[data-reaction-picker]');
+    if (!picker) return;
+    const viewport = scroller.getBoundingClientRect();
+    const bounds = picker.getBoundingClientRect();
+    if (bounds.bottom > viewport.top + scroller.clientHeight) {
+      scroller.scrollTop += bounds.bottom - (viewport.top + scroller.clientHeight);
+    } else if (bounds.top < viewport.top) {
+      scroller.scrollTop -= viewport.top - bounds.top;
+    }
+  }, [reactId]);
 
   // Opened from a search hit (`?m=<id>`): page back until the message is on
   // screen — bounded, a hit from years ago is not worth an unbounded walk —
@@ -735,6 +758,10 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         </div>
       )}
 
+      {/* Thread catch-up (#2048): conversations only — a legacy relation URL
+          hands over to the conversation anyway. */}
+      {target.kind === 'conversation' && messages.length > 0 && <ThreadCatchUp conversationId={target.id} />}
+
       <Card className="mb-3 flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:mb-4 lg:block lg:p-6">
         {messages.length === 0 ? (
           <p className="text-center py-10 text-gray-400 text-sm">{t.messages.empty}</p>
@@ -849,7 +876,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                     {reactId === m.id && !m.deleted && (() => {
                       const myEmoji = m.reactions.find((r) => r.mine)?.emoji;
                       return (
-                        <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
+                        <div data-reaction-picker className="mt-1.5 flex flex-wrap gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit max-w-full">
                           {REACTIONS.map((emoji) => (
                             <button
                               key={emoji}
@@ -1034,6 +1061,11 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         </div>
       )}
       <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
+      {aiDraft !== null && body === aiDraft && (
+        <p className="mb-1 inline-flex items-center gap-1 text-xs text-violet-700" data-testid="ai-draft-badge">
+          ✨ {t.messages.ai.draftBadge}
+        </p>
+      )}
       <MessageComposer
         body={body}
         onBodyChange={(value) => { changeBody(value); if (value) notifyTyping(); }}
@@ -1064,6 +1096,22 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
           <MessageSquareQuote className="h-3.5 w-3.5" />
           {t.messages.canned}
         </button>
+        {/* A suggested reply only ever lands in the box as editable text —
+            sending it stays the author's own press of Send (#2048). */}
+        {target.kind === 'conversation' && messages.length > 0 && (
+          <SuggestReply
+            conversationId={target.id}
+            onDraft={(text) => { changeBody(text); setAiDraft(text); bodyRef.current?.focus(); }}
+          />
+        )}
+        {/* The mentor's grounded draft — first message, check-in or outcome
+            note, whichever the relation is at (#2048). Same rule: text only. */}
+        {mentorshipId && myId && myId === mentorId && (
+          <MentorDraft
+            relationId={mentorshipId}
+            onDraft={(text) => { changeBody(text); setAiDraft(text); bodyRef.current?.focus(); }}
+          />
+        )}
         {/* Keyboard-only hint — no room for it on a phone. */}
         <span className="hidden lg:inline text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button

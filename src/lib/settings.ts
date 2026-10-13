@@ -52,6 +52,20 @@ export const SETTING_DEFAULTS = {
   // 'admins' = required for ADMIN; 'admins_mentors' = required for ADMIN+MENTOR.
   // Users in scope are held at a 2FA-setup gate until they enable it.
   require2fa: 'off',
+  // Password policy (#1544, src/lib/passwordPolicyRule.ts): what a NEW password
+  // is judged by, per org, read by src/lib/password.ts for register, reset and
+  // account and handed to the forms by GET /api/auth/password-policy. These
+  // defaults ARE the rule the app always had; the minimum is clamped to >= 8
+  // on read, so no row can make the rule weaker than the code default.
+  passwordMinLength: '8',
+  passwordRequireUpper: 'true',
+  passwordRequireLower: 'true',
+  passwordRequireDigit: 'false',
+  passwordRequireSymbol: 'false',
+  // Screen new passwords against Have I Been Pwned (k-anonymity: five hex
+  // characters of the SHA-1 leave the box). Fails OPEN on an outage
+  // (src/lib/breachedPassword.ts); 'false' switches the lookup off.
+  breachedPasswordCheck: 'true',
   // Premium early-access window (#531): number of days a newly-hireable
   // (HIREABLE_600) candidate is visible in talent-pool search ONLY to companies
   // holding the EARLY_ACCESS entitlement, before opening to all subscribers.
@@ -67,6 +81,10 @@ export const SETTING_DEFAULTS = {
   // feature consumes from this pool via runAiGated; '0' disables AI calls
   // entirely. Metered in AiUsage; resets each calendar month.
   aiMonthlyQuota: '200',
+  // The org-wide AI kill switch (#2032): 'false' turns every task off with its
+  // own honest denial ('disabled'), distinct from a spent quota. Read only
+  // through src/lib/ai/policy.ts.
+  aiEnabled: 'true',
   // Negative-outcome communication (#830). 'false' (default) means reaching an
   // outcome stage notifies the mentor and prefills a draft — a human reads,
   // edits and sends it. 'true' lets the templated message go out to the mentee
@@ -151,6 +169,19 @@ export const SETTING_DEFAULTS = {
   // row is never deleted, and nothing younger than
   // NOTIFICATION_RETENTION_FLOOR_DAYS (30) is deleted whatever this says.
   notificationRetentionDays: '180',
+  // Message retention (#2056), per tenant. Message BODIES older than this many
+  // days are masked every night with the existing delete-for-everyone mechanism
+  // (`deletedForEveryoneAt`, body emptied, attachments dropped) — the row stays,
+  // so the other participant's thread stays coherent. `0` = keep forever, the
+  // default and the behaviour before #2056: how long a programme keeps private
+  // conversations is its own data-protection decision, not ours. Anything
+  // positive is raised to MESSAGE_RETENTION_FLOOR_DAYS (30), so a typo cannot
+  // mask yesterday's conversation. Edited on /admin/safeguarding.
+  messageRetentionDays: '0',
+  // The org's safeguarding watch list (#2056): one keyword or phrase per line,
+  // parsed by `parseWatchKeywords` (src/lib/safeguarding.ts). Empty by default —
+  // contact-detail detection works without it. Edited on /admin/safeguarding.
+  safeguardingKeywords: '',
   // Board work-in-progress limit (#1439): a pipeline column holding more than
   // this many candidates gets an amber count, so a bottleneck stands out.
   // Advisory only — it never blocks a move.
@@ -240,6 +271,15 @@ export const SETTING_DEFAULTS = {
   // The address's version: it is signed into the token, so bumping it (the
   // admin's "new address" button) makes the old address dead at once.
   crmBccVersion: '1',
+  // Usage signals on the attention queue (#2449, src/lib/usageRule.ts):
+  // `usage_drop` when the last half of the baseline is this many percent below
+  // the half before it; an account whose usage history is shorter than the
+  // baseline is left out and counted. `trial_inactive` when a trial has had no
+  // usage at all this many days in. Read only while a usage feed has written
+  // rows for the org; parsed by usageSignalSettings(), which falls back per field.
+  usageDropThresholdPct: '40',
+  usageBaselineDays: '60',
+  trialActivationDays: '7',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

@@ -15,11 +15,12 @@
 // summary (#1910) — the rows are the programme's own records, read by the
 // admin who can already open each one.
 
-import Anthropic from '@anthropic-ai/sdk';
 import { runAiGated, type AiDenialReason, type AiArtifactRef } from '@/lib/aiGate';
 import { findCachedArtifact, hashInput } from '@/lib/ai/artifacts';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { noteParseError } from '@/lib/ai/provider';
+import { callModel, noteParseError } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
+import type { AiTaskId } from '@/lib/ai/tasks';
 import type { Locale } from '@/i18n/config';
 import {
   belowFloor,
@@ -30,9 +31,6 @@ import {
   type OpenTextSummary,
   type PreparedItem,
 } from '@/lib/ai/openTextRules';
-
-const AI_TIMEOUT_MS = 60_000;
-const MODEL = process.env.ANTHROPIC_SUMMARY_MODEL || process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
 
 const LANGUAGE: Record<Locale, string> = { en: 'English', tr: 'Turkish', de: 'German' };
 
@@ -46,17 +44,10 @@ Rules:
 - Never name or identify a person, never guess who wrote a row. Text like [name], [e-mail], [phone] is masked on purpose; leave it masked.
 - Say nothing the rows do not contain: no advice, no causes, no conclusions of your own.`;
 
-async function callProviderForSummary(purpose: string, locale: Locale, prepared: PreparedItem[], carried: OpenTextCaveat[]): Promise<OpenTextSummary | null> {
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
+async function callProviderForSummary(task: AiTaskId, purpose: string, locale: Locale, prepared: PreparedItem[], carried: OpenTextCaveat[]): Promise<OpenTextSummary | null> {
   const rows = prepared.map((p) => `[${p.label}] ${p.text}`).join('\n');
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1500,
-    system: SYSTEM,
-    messages: [{ role: 'user', content: `What these rows are: ${purpose}\nWrite theme titles in ${LANGUAGE[locale]}.\n\n${rows}` }],
-  });
-  const block = res.content.find((b) => b.type === 'text');
-  const summary = parseOpenTextSummary(block && block.type === 'text' ? block.text : '', prepared, carried);
+  const reply = await callModel({ task, system: SYSTEM, input: `What these rows are: ${purpose}\nWrite theme titles in ${LANGUAGE[locale]}.\n\n${wrapUntrusted('rows', rows)}` });
+  const summary = parseOpenTextSummary(reply, prepared, carried);
   // Not the JSON asked for: metered as parse_error, and never kept — a stored
   // "unreadable" would answer every identical request for a day.
   if (!summary) noteParseError();
@@ -70,8 +61,8 @@ export type OpenTextOutcome =
   | { ok: false; reason: AiDenialReason | 'unreadable' };
 
 export interface OpenTextRequest {
-  /** The gate scope and artefact task, e.g. 'evaluation_insights'. */
-  scope: string;
+  /** The gate scope and artefact task, e.g. 'evaluation_insights' (a registry id, #2022). */
+  scope: AiTaskId;
   orgId: string | null;
   userId: string;
   items: OpenTextItem[];
@@ -100,7 +91,7 @@ export async function runOpenTextSummary(req: OpenTextRequest): Promise<OpenText
     scope: req.scope,
     orgId: req.orgId,
     userId: req.userId,
-    call: () => callProviderForSummary(req.purpose, req.locale, prepared, caveats),
+    call: () => callProviderForSummary(req.scope, req.purpose, req.locale, prepared, caveats),
     persist: {
       subjectUserId: null,
       createdById: req.userId,

@@ -16,22 +16,34 @@ import { Suspense } from 'react';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { browserTimeZone } from '@/lib/timezone';
 import { productNameFor } from '@/lib/verticals';
+import { useMemo } from 'react';
+import { PasswordRules } from '@/components/auth/PasswordRules';
+import { passwordPolicyError, passwordRefusalText, usePasswordPolicy, type PasswordPolicyDict } from '@/lib/passwordPolicyClient';
+import type { PasswordPolicy } from '@/lib/passwordPolicyRule';
 
-const registerSchema = z
-  .object({
-    token: z.string().optional(),
-    email: z.string().email('Invalid email address'),
-    fullName: z.string().min(1, 'Full name is required'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string(),
-    consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
+// The password rule is the org's policy (#1544), fetched once and applied with
+// the same pure check the server runs — so the form never accepts a password
+// the API will refuse (#1215). The schema is therefore built per policy.
+function registerSchemaFor(policy: PasswordPolicy, dict: PasswordPolicyDict) {
+  return z
+    .object({
+      token: z.string().optional(),
+      email: z.string().email('Invalid email address'),
+      fullName: z.string().min(1, 'Full name is required'),
+      password: z.string().superRefine((pw, ctx) => {
+        const message = passwordPolicyError(pw, policy, dict);
+        if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+      }),
+      confirmPassword: z.string(),
+      consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: 'Passwords do not match',
+      path: ['confirmPassword'],
+    });
+}
 
-type RegisterData = z.infer<typeof registerSchema>;
+type RegisterData = z.infer<ReturnType<typeof registerSchemaFor>>;
 
 function RegisterForm() {
   const t = useT();
@@ -54,6 +66,9 @@ function RegisterForm() {
   // Record that the invitation link was opened (once), so admins see the invite
   // progress from "sent" to "link opened" before the invitee finishes signing up.
   const inviteToken = searchParams.get('token');
+  // The invitation decides the account's org, and the org decides the policy.
+  const pw = usePasswordPolicy(inviteToken);
+  const registerSchema = useMemo(() => registerSchemaFor(pw.policy, t.passwordPolicy), [pw.policy, t.passwordPolicy]);
   useEffect(() => {
     if (!inviteToken) return;
     setShowToken(true);
@@ -67,6 +82,7 @@ function RegisterForm() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
@@ -74,6 +90,7 @@ function RegisterForm() {
       token: searchParams.get('token') || '',
     },
   });
+  const passwordValue = watch('password') ?? '';
 
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);
@@ -108,7 +125,9 @@ function RegisterForm() {
       const body = await res.json();
 
       if (!res.ok) {
-        throw new Error(body.error || 'Registration failed');
+        // A refused password comes back as a code (#1544) and is shown in the
+        // user's language; anything else keeps the server's sentence.
+        throw new Error(passwordRefusalText(body, pw.policy, t.passwordPolicy) ?? body.error ?? 'Registration failed');
       }
 
       // Open sign-up: the account opens itself when the emailed link is
@@ -200,6 +219,7 @@ function RegisterForm() {
               {...register('password')}
               error={errors.password?.message}
             />
+            <PasswordRules policy={pw.policy} rules={pw.rules} value={passwordValue} breachCheck={pw.breachCheck} />
             <Input
               label={t.auth.confirmPassword}
               type="password"

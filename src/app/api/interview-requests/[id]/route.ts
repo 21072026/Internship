@@ -5,9 +5,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
-import { decideInterviewRequestSchema } from '@/lib/interviewRequests';
+import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 import { notify, notifyIfAllowed } from '@/lib/notify';
+import { logActivity } from '@/lib/activity';
+import { advanceApplicationOnInterview } from '@/lib/applicationStage';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -23,11 +25,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
 
   return withTenantScope(session, async () => {
+    // The actor rule lives in the lib (#1844) and is shared with /schedule and /cancel.
+    const scope = interviewRequestActorWhere({ role: session.user.role, userId: session.user.id, orgId });
+    if (!scope) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const current = await prisma.interviewRequest.findFirst({
-      where: {
-        id, orgId,
-        ...(session.user.role === 'MENTOR' ? { mentee: { menteeRelations: { some: { mentorId: session.user.id, status: 'ACTIVE', orgId } } } } : {}),
-      },
+      where: { id, ...scope },
       select: { id: true, status: true, menteeId: true, requisitionId: true, companyId: true, mentee: { select: { preferredLanguage: true } } },
     });
     if (!current) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
@@ -53,18 +55,38 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           activeKey: null,
         },
       });
-      if (changed.count !== 1) return false;
+      if (changed.count !== 1) return null;
       await tx.auditLog.create({
         data: {
           actorId: session.user.id,
           action: 'INTERVIEW_REQUEST_DECIDED',
           targetId: current.id,
+          orgId: resolveOrgId(session),
           detail: `${nextStatus}; mentee=${current.menteeId}; requisition=${current.requisitionId}${declineReasonCode ? `; reason=${declineReasonCode}` : ''}`,
         },
       });
-      return true;
+      // Write-through (#1836): an approved interview moves the shortlisted
+      // application to INTERVIEW in the same transaction; a missing or
+      // differently-staged application never blocks the approval.
+      const advanced =
+        nextStatus === 'APPROVED'
+          ? await advanceApplicationOnInterview(tx, { requisitionId: current.requisitionId, menteeId: current.menteeId, actorId: session.user.id })
+          : null;
+      return { advanced };
     });
     if (!result) return NextResponse.json({ error: 'Request already decided', code: 'already_decided' }, { status: 409 });
+    if (result.advanced) {
+      await logActivity({
+        action: 'application.stage.set',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'application',
+        targetId: result.advanced.applicationId,
+        detail: `${result.advanced.fromStage} -> INTERVIEW; via=interview_request.approved`,
+        request,
+        orgId,
+      });
+    }
     if (nextStatus === 'APPROVED') {
       await notify(current.menteeId, 'interview_request.approved', {}, '/portal');
     } else {

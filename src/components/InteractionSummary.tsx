@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { useT } from '@/i18n/client';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
@@ -23,13 +24,21 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
   const [hidden, setHidden] = useState(false);
   const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
   const [cached, setCached] = useState(false);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let live = true;
     fetch(`/api/interactions/summary?relationId=${encodeURIComponent(relationId)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
-        if (!live || !body?.latest) return;
+        if (!live || !body) return;
+        // An admin on a pair that is not theirs, in an org without the AI
+        // pack (#1738): one line, no button. The pair's own mentor never sees it.
+        if (body.locked) {
+          setLocked(true);
+          return;
+        }
+        if (!body.latest) return;
         setSummary(body.latest.content);
         setArtifact(body.latest);
       })
@@ -56,8 +65,12 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
           setArtifact(body.artifact ?? null);
           setCached(!!body.cached);
         }
+      } else if (body.code === 'feature_locked') {
+        setLocked(true);
       } else if (body.code === 'consent_required') {
         setNotice(a.consentRequired);
+      } else if (body.code === 'disabled') {
+        setNotice(a.aiOff);
       } else if (body.code === 'quota_exceeded') {
         setNotice(a.quotaExceeded);
       } else if (body.code === 'provider_error') {
@@ -75,6 +88,13 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
   };
 
   if (hidden) return null;
+  if (locked) {
+    return (
+      <div className="mb-4" data-testid="interaction-summary">
+        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="interaction-summary-locked">{a.locked}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-4" data-testid="interaction-summary">
@@ -90,7 +110,7 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
           {/* A summary of someone else's mentee is exactly the text a reader
               would otherwise take for the mentor's own words (#2034). */}
           <AiBadge note className="mb-2" />
-          <div className="whitespace-pre-line">{summary}</div>
+          <AiText text={summary} testId="interaction-summary-text" />
           {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => run(true)} regenerating={loading} />}
         </div>
       )}

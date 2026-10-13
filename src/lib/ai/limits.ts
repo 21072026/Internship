@@ -60,6 +60,46 @@ export const AI_RATE_LIMITS = {
   // date range. An unchanged range is answered from the stored paragraph.
   analytics_narrative: { limit: 10, windowMs: 10 * 60 * 1000 },
 
+  // Thread catch-up (POST /api/conversations/[id]/summary, #2048).
+  // 10 calls / 10 minutes: a participant catching up on a few long threads in a
+  // row is the legitimate pattern; an unchanged thread (same last message) is
+  // answered from the stored summary without reaching the provider at all.
+  thread_summary: { limit: 10, windowMs: 10 * 60 * 1000 },
+
+  // Suggested reply (POST /api/conversations/[id]/suggest-reply, #2048).
+  // 15 calls / 10 minutes: trying the three tones on one message is three calls,
+  // so the allowance is a few messages' worth; the same tone on the same last
+  // message is answered from the stored draft.
+  suggested_reply: { limit: 15, windowMs: 10 * 60 * 1000 },
+
+  // Grounded outreach draft (POST /api/mentorship/[id]/ai-draft, #2048).
+  // 15 calls / 10 minutes: a mentor working through their quiet or newly
+  // assigned mentees drafts one message each; the same relation state is
+  // answered from the stored draft.
+  outreach_draft: { limit: 15, windowMs: 10 * 60 * 1000 },
+
+  // Next-step suggestions for the follow-up field (POST /api/mentorship/[id]/next-step, #2875).
+  // 10 calls / 10 minutes: a mentor planning the week asks once per mentee;
+  // the same log, stage and day is answered from the stored copy.
+  next_step_suggest: { limit: 10, windowMs: 10 * 60 * 1000 },
+  // Fill the empty locales of a tenant-authored text (POST /api/admin/ai/translate, #2055).
+  content_translate: { limit: 30, windowMs: 10 * 60 * 1000 },
+  // Authoring assist and enrichment (#2055, part 2).
+  content_draft: { limit: 20, windowMs: 10 * 60 * 1000 },
+  profile_enrich: { limit: 5, windowMs: 10 * 60 * 1000 },
+  company_enrich: { limit: 20, windowMs: 10 * 60 * 1000 },
+  // One practice interview is up to 7 calls (6 turns + the report), #2051.
+  practice_interview: { limit: 20, windowMs: 10 * 60 * 1000 },
+  // Personalised session agenda (POST /api/agendas/personalize, #1845).
+  // 10 calls / 10 minutes: one proposal per session, a regenerate or two; the
+  // same goals, lines, log and stage are answered from the stored copy.
+  agenda_personalize: { limit: 10, windowMs: 10 * 60 * 1000 },
+
+  // Bulk e-mail draft (POST /api/ai/bulk-draft, #2048).
+  // 6 calls / 10 minutes: one call drafts the mail for up to 200 recipients,
+  // so a handful of rewordings is the legitimate pattern.
+  bulk_draft: { limit: 6, windowMs: 10 * 60 * 1000 },
+
   // Coarse per-organization burst limit across all AI routes.
   // 120 calls / 10 minutes: Prevents a single tenant from starving shared capacity
   // or exhausting provider burst rates before fine-grained per-tenant quotas land (#1555).

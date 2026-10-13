@@ -245,6 +245,10 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // Attachments first: once the message row is masked there is no way back to
     // its bytes, and `MessageAttachment` is reached only through the message.
     prisma.messageAttachment.deleteMany({ where: { message: { senderId: userId } } }),
+    // Safeguarding flags on their messages (#2056): the flag points at text that
+    // is emptied on the next line, and it names the person as its subject. An
+    // escalated case belongs in the institution's own case file, not here.
+    prisma.safeguardingFlag.deleteMany({ where: { message: { senderId: userId } } }),
     // `Message.senderId` has NO foreign key to `User` (see prisma/schema.prisma
     // — the model declares `relation`, `conversation`, `attachments`,
     // `hiddenFor` and `reactions`, but no `sender`), so a hard delete does not
@@ -283,6 +287,10 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // ── Content written ABOUT the person → scrub, keep the row ──────────────
     prisma.interactionLog.updateMany({ where: asSubject, data: { notes: '', subject: null } }),
     prisma.relationNote.updateMany({ where: asSubject, data: { body: '' } }),
+    // The pair's shared minutes (#1847) are about the mentee as much as the
+    // mentor's private note is — body and every kept revision.
+    prisma.sessionNote.updateMany({ where: asSubject, data: { body: '' } }),
+    prisma.sessionNoteRevision.updateMany({ where: { note: asSubject }, data: { body: '' } }),
     prisma.personalNote.updateMany({
       where: { OR: [{ meeting: asSubject }, { meeting: directMeeting }] },
       data: { body: '' },
@@ -307,7 +315,7 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
       where: { OR: [asSubject, directMeeting] },
       data: { title: '', cancelReason: null },
     }),
-    prisma.goal.updateMany({ where: asSubject, data: { description: null } }),
+    prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
     prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),

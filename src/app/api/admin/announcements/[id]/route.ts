@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { normalizeMachineList } from '@/lib/machineTranslation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -40,6 +41,8 @@ const schema = z.object({
   // is present.
   text: z.string().max(TEXT_LIMITS.announcementText).optional(),
   translations: z.record(z.string(), z.string()).optional(),
+  // Locales a machine filled and nobody has reviewed yet (#2055).
+  machineTranslated: z.array(z.string()).max(3).optional(),
   link: z.string().max(TEXT_LIMITS.announcementLink).optional(),
   // 'keep' (default) leaves the attached image alone, 'remove' detaches it; a
   // new file on the multipart path replaces it.
@@ -69,6 +72,7 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
       fields: {
         ...(form.get('text') ? { text: form.get('text') } : {}),
         ...(form.get('translations') ? { translations: safeJson(form.get('translations')) } : {}),
+        ...(form.get('machineTranslated') ? { machineTranslated: safeJson(form.get('machineTranslated')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('imageAction') ? { imageAction: form.get('imageAction') } : {}),
       },
@@ -119,6 +123,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       data: {
         text,
         translations,
+        machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
         link: link || null,
         ...(imageData && image
           ? {

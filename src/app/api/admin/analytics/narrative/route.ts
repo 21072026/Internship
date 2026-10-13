@@ -5,7 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
-import { isAiConfigured } from '@/lib/cvExtractAi';
+import { isAiConfigured } from '@/lib/ai/provider';
+import { AI_PACK_FEATURE } from '@/lib/aiGate';
 import { getLocale } from '@/i18n/server';
 import { analyticsNarrative } from '@/lib/ai/analyticsNarrative';
 
@@ -17,6 +18,10 @@ import { analyticsNarrative } from '@/lib/ai/analyticsNarrative';
 //          paragraph citing any number that is not among them is discarded
 //          (`reason: 'unreadable'`), never shown.
 // With AI off every card still renders; only this paragraph is absent.
+// An operator task behind the AI pack (#1738): GET carries `locked` so the
+// card can say so without a call; a POST from an org without the pack is the
+// shared 403 `feature_locked` (the gate's 'not_entitled'), never a 200 with a
+// reason.
 
 const day = z.string().max(40).optional();
 const bodySchema = z.object({ from: day, to: day, regenerate: z.boolean().optional() }).strict();
@@ -46,6 +51,9 @@ export async function POST(request: Request) {
   const locale = await getLocale();
   return withTenantScope(session, async () => {
     const body = await analyticsNarrative(session, { from: parsed.data.from ?? null, to: parsed.data.to ?? null }, locale, { run: true, regenerate: parsed.data.regenerate });
+    if (body.reason === 'not_entitled') {
+      return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
+    }
     return NextResponse.json({ ...body, configured: isAiConfigured() });
   });
 }

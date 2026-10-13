@@ -115,6 +115,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         actorId: session.user.id,
         action: exempt ? 'SSO_EXEMPT_GRANTED' : 'SSO_EXEMPT_REVOKED',
         targetId: user.id,
+        orgId: callerOrgId,
       },
     });
     await logActivity({

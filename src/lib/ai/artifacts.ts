@@ -15,6 +15,7 @@ import type { AiArtifact } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getRetentionMonths } from '@/lib/retention';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import type { AiTaskId } from '@/lib/ai/tasks';
 
 export const ARTIFACT_VISIBILITIES = ['PRIVATE', 'SHARED_WITH_MENTOR', 'SHARED_WITH_ADMIN'] as const;
 export type ArtifactVisibility = (typeof ARTIFACT_VISIBILITIES)[number];
@@ -29,6 +30,8 @@ const DAY = 24 * 60 * 60 * 1000;
 export const TASK_TTL_MS: Record<string, number> = {
   cv_feedback: 7 * DAY,
   interview_prep: 7 * DAY,
+  // The practice-interview report (#2051) is written once per session; kept, never re-asked.
+  practice_interview: 365 * DAY,
   // Open-text insights (#2046): keyed on exactly the rows sent, so any new or
   // edited row is a fresh question anyway; the day bounds how long a page
   // view keeps re-reading one answer.
@@ -39,16 +42,30 @@ export const TASK_TTL_MS: Record<string, number> = {
   analytics_narrative: 1 * DAY,
   interaction_summary: 1 * DAY,
   mentor_match: 1 * DAY,
+  // Conversation catch-up and suggested replies (#2048): keyed on the thread's
+  // last message (and its last edit), so any new line is a new question; the
+  // day only bounds how long one answer is re-read.
+  thread_summary: 1 * DAY,
+  suggested_reply: 1 * DAY,
+  // Keyed on the relation's facts (#2048): a new message, goal or stage is a new question.
+  outreach_draft: 1 * DAY,
+  // Keyed on the log, the stage, the note and the day in stage (#2875).
+  next_step_suggest: 1 * DAY,
+  // Keyed on the agenda's lines, the guide, the open goals, the previous
+  // session and the newest log entries (#1845): any change is a new question.
+  agenda_personalize: 1 * DAY,
 };
 
 /**
  * Tasks whose artefacts quote MANY people at once and have no subject (#2046):
- * a summary of an org's evaluation comments or weekly-report blockers. Erasing
+ * a summary of an org's evaluation comments or weekly-report blockers — and a
+ * conversation's catch-up or suggested reply (#2048), which quote every
+ * participant of the thread. Erasing
  * any one of those people wipes the org's copies (src/lib/accountErasure.ts) —
  * they are a cache, regenerated on the next request, and a quote of an erased
  * person must not outlive them.
  */
-export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest', 'survey_summary'] as const;
+export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest', 'survey_summary', 'thread_summary', 'suggested_reply'] as const satisfies readonly AiTaskId[];
 
 /** sha256 over a stable JSON rendering — key order never changes the hash. */
 export function hashInput(value: unknown): string {

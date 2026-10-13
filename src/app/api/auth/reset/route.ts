@@ -3,8 +3,9 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { passwordSchema } from '@/lib/password';
+import { checkPassword, passwordRefusal, passwordSchema } from '@/lib/password';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { sendSecurityNotice } from '@/lib/securityNotices';
 import {
   isPasswordLoginBlockedForUserId,
   SSO_REQUIRED_CODE,
@@ -71,6 +72,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // The account's org decides the policy (#1544): the row this link was
+    // minted for, never the address's other world.
+    const owner = await prisma.user.findUnique({ where: { id: record.userId }, select: { orgId: true } });
+    const verdict = await checkPassword(password, owner?.orgId);
+    if (!verdict.ok) return passwordRefusal(verdict);
+
     const hashed = await bcrypt.hash(password, 12);
 
     // WORLDS (#2590): everything below is keyed by `record.userId` — the account
@@ -109,6 +116,9 @@ export async function POST(request: Request) {
     // "lock everyone out" action, and a long-lived device cookie that survived
     // it would hand the session straight back.
     await revokeAllTrustedDevices(record.userId);
+    // The owner's copy (#1717): a reset completed by somebody who got hold of
+    // the link is a password change the owner did not make.
+    await sendSecurityNotice('passwordChanged', { userId: record.userId, request });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

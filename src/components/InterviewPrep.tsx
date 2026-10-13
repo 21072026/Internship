@@ -5,6 +5,7 @@ import { GraduationCap, Sparkles } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { useT } from '@/i18n/client';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
@@ -55,6 +56,7 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
         setCached(!!body.cached);
       }
       else if (body.code === 'no_position') setNotice(c.noPosition);
+      else if (body.code === 'disabled') setNotice(c.aiOff);
       else setNotice(c.unavailable);
     } catch {
       setNotice(c.unavailable);
@@ -97,7 +99,7 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
           {/* Generated questions read like a checklist; the marker says who
               wrote them (#2034). */}
           <AiBadge note className="mb-2" />
-          <div className="whitespace-pre-line">{prep}</div>
+          <AiText text={prep} testId="interview-prep-text" />
           {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => run(true)} regenerating={loading} canShare />}
         </div>
       )}

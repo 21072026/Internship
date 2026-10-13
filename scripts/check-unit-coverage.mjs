@@ -180,6 +180,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'the only place a currency symbol is written (#1730)' },
   ],
   [
+    'src/lib/applications.ts',
+    { floor: 95, measured: 100.0, why: 'the application funnel\'s transition table and its one authorization rule (#1828)' },
+  ],
+  [
     'src/lib/menteeFilter.ts',
     {
       floor: 95,

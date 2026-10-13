@@ -6,11 +6,12 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { clearRememberCookies } from '@/lib/rememberCookie';
+import { sendSecurityNotice } from '@/lib/securityNotices';
 
 // POST — "Sign out of all devices". Stamps sessionsValidFrom = now so every
 // existing JWT (including the caller's own) is rejected on its next request.
 // The client should call signOut() right after to clear its local cookie.
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -40,6 +41,9 @@ export async function POST() {
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
   });
+  // The owner hears about it even when they pressed it themselves (#1717): if
+  // a hijacked session pressed it, this is how the owner learns.
+  await sendSecurityNotice('sessionsRevoked', { userId: session.user.id, request });
   const res = NextResponse.json({ ok: true });
   clearRememberCookies(res);
   return res;

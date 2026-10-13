@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 import { prepareOpenText } from '../src/lib/ai/openTextRules';
 import { openTextInputHash } from '../src/lib/ai/summarizeOpenText';
@@ -24,9 +24,14 @@ async function seedOrg(prefix: string) {
   await seedUser(emails.admin, PW, 'ADMIN', `${prefix} Admin`, org.id);
   const mentor = await seedUser(emails.mentor, PW, 'MENTOR', 'Deniz Kaya', org.id);
   const mentee = await seedUser(emails.mentee, PW, 'MENTEE', 'Elif Demir', org.id);
+  // The engines are operator tasks behind the AI pack (#1738); this spec is
+  // about the engine, so its org holds the pack. e2e/ai-entitlement.spec.ts
+  // covers the locked org.
+  await setOrgFeature(org.id, 'AI_PACKAGE', true);
   const cleanup = async () => {
     await prisma.aiArtifact.deleteMany({ where: { orgId: org.id } });
     for (const e of Object.values(emails)) await cleanupByEmail(e);
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
     await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   };
   return { org, emails, mentor, mentee, cleanup };

@@ -8,15 +8,23 @@
 //   POST — `run`: the summary through runOpenTextSummary (floor → cache →
 //          quota → provider), `regenerate` to skip the stored one.
 // Either way the numbers come back; only the summary can be missing.
+//
+// Both engines are operator tasks (#1738), so the AI pack decides whether a
+// summary can exist at all: `locked` is asked once per call, of the same org
+// the gate meters, before any provider work. A locked org gets every number,
+// no stored copy (the gate's own "before the cache" rule, mirrored here for
+// the peek that bypasses the gate) and, on a run, the gate's 'not_entitled'
+// — which the route turns into the shared 403 `feature_locked`.
 
 import type { Session } from 'next-auth';
 import { z } from 'zod';
-import { isAiConfigured } from '@/lib/cvExtractAi';
+import { isAiConfigured } from '@/lib/ai/provider';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import type { Locale } from '@/i18n/config';
 import { belowFloor, countUsable, type OpenTextCaveat, type OpenTextSummary } from '@/lib/ai/openTextRules';
 import { peekOpenTextSummary, runOpenTextSummary } from '@/lib/ai/summarizeOpenText';
-import type { AiArtifactRef } from '@/lib/aiGate';
+import { AI_PACK_FEATURE, type AiArtifactRef } from '@/lib/aiGate';
+import { entitled } from '@/lib/entitlements';
 import {
   INSIGHT_PURPOSE,
   INSIGHT_SCOPE,
@@ -71,6 +79,8 @@ export interface InsightsBody {
   available: number;
   floor: number;
   configured: boolean;
+  /** The org lacks the AI pack (#1738): no summary, stored or fresh; the numbers still render. */
+  locked: boolean;
   summary: (Omit<OpenTextSummary, 'themes'> & { themes: InsightTheme[] }) | null;
   cached: boolean;
   artifact: AiArtifactRef | null;
@@ -98,13 +108,17 @@ export async function insightsResponse(
   locale: Locale,
   mode: { run: false } | { run: true; regenerate?: boolean },
 ): Promise<InsightsBody> {
-  const [{ items, sources, names }, figures] = await Promise.all([
+  // The org the gate meters (`settingsOrgOf`, never null) is the org the
+  // add-on is asked of, so `locked` and the gate's 'not_entitled' agree.
+  const orgId = await settingsOrgOf(session);
+  const [{ items, sources, names }, figures, locked] = await Promise.all([
     loadInsightSources(session, kind, filters),
     kind === 'weekly-reports' ? weeklyDigestFigures(session, filters) : Promise.resolve(null),
+    entitled(orgId, AI_PACK_FEATURE).then((ok) => !ok),
   ]);
   const base = {
     scope: INSIGHT_SCOPE[kind],
-    orgId: await settingsOrgOf(session),
+    orgId,
     items,
     purpose: INSIGHT_PURPOSE[kind],
     locale,
@@ -118,6 +132,7 @@ export async function insightsResponse(
     available: countUsable(items),
     floor: NAMED_ROWS_FLOOR,
     configured: isAiConfigured(),
+    locked,
     summary: null,
     cached: false,
     artifact: null,
@@ -133,7 +148,7 @@ export async function insightsResponse(
     if (refusal) {
       body.reason = 'below_floor';
       body.caveats = [refusal];
-    } else {
+    } else if (!locked) {
       const hit = await peekOpenTextSummary(base);
       if (hit) {
         summary = hit.summary;
@@ -142,6 +157,8 @@ export async function insightsResponse(
       }
     }
   } else {
+    // The gate decides (a locked org gets 'not_entitled' before the cache);
+    // the route answers that one reason with the 403, every other as today.
     const outcome = await runOpenTextSummary({ ...base, userId: session.user.id, regenerate: mode.regenerate });
     if (outcome.ok) {
       summary = outcome.summary;

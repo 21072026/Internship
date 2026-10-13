@@ -120,7 +120,7 @@ export async function expireOffers(): Promise<{ checked: number; expired: number
   const now = new Date();
   const due = await prisma.offer.findMany({
     where: { status: 'SENT', expiresAt: { lt: now } },
-    select: { id: true },
+    select: { id: true, orgId: true },
   });
 
   let expired = 0;
@@ -132,7 +132,9 @@ export async function expireOffers(): Promise<{ checked: number; expired: number
     if (claim.count === 0) continue;
     expired++;
 
-    await prisma.auditLog.create({ data: { actorId: 'system', action: 'offer.expire', targetId: o.id } });
+    // A sweep binds no tenant scope, so the audit row's org is the offer's own
+    // (#2012) — otherwise it would never reach that tenant's drain.
+    await prisma.auditLog.create({ data: { actorId: 'system', action: 'offer.expire', targetId: o.id, orgId: o.orgId ?? null } });
     await notifyOfferDecided(o.id, 'EXPIRED');
   }
 

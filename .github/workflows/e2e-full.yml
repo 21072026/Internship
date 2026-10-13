@@ -151,6 +151,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Release dates come from git history; a shallow clone leaves every pending
+          # release undated and the release-notes specs find no date (#2829, #2750).
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -169,6 +173,9 @@ jobs:
 
       - name: Build app
         run: npm run build
+        # Keep the Next.js build worker above its default ~2 GiB heap limit.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -269,6 +276,9 @@ jobs:
 
       - name: Build app
         run: npm run build
+        # Keep the Next.js build worker above its default ~2 GiB heap limit.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6

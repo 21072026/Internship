@@ -141,6 +141,22 @@ export async function getConversationIfAllowed(user: SessionUser, conversationId
   return conversation;
 }
 
+/**
+ * Which of these users have muted this conversation right now (#1609,
+ * src/lib/conversationState.ts). A muted thread interrupts nobody: the message
+ * paths skip the push, the e-mail mirror and the bell for these ids, and the
+ * unread digest skips their lines. No conversation (a legacy relation-only
+ * thread) means nobody can have muted it.
+ */
+export async function mutedParticipants(conversationId: string | null | undefined, userIds: string[], now = new Date()): Promise<Set<string>> {
+  if (!conversationId || userIds.length === 0) return new Set();
+  const rows = await prisma.conversationParticipant.findMany({
+    where: { conversationId, userId: { in: userIds }, mutedUntil: { gt: now } },
+    select: { userId: true },
+  });
+  return new Set(rows.map((r) => r.userId));
+}
+
 // The participants to notify when someone posts to a conversation (everyone but
 // the sender). The conversation-layer counterpart of otherParticipant().
 export async function otherConversationParticipants(

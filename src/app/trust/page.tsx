@@ -59,6 +59,8 @@ export default async function TrustPage() {
     { href: `${DOC_BASE}/subprocessors.md`, label: p.docs.subprocessors, external: true },
     { href: `${DOC_BASE}/security-overview.md`, label: p.docs.security, external: true },
     { href: `${DOC_BASE}/hosting-and-residency.md`, label: p.docs.hosting, external: true },
+    // The conformance report (#2037) is rendered by the app, not read from docs/.
+    { href: '/accessibility/vpat', label: p.docs.vpat, external: false },
     { href: '/privacy', label: p.docs.privacy, external: false },
     { href: '/imprint', label: p.docs.imprint, external: false },
     // /status is #1604 and does not exist yet. The public liveness half of

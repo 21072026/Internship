@@ -65,6 +65,1429 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.355.0-beta',
+    date: '2026-10-12',
+    time: '16:14',
+    commit: '623af3d',
+    highlights: {
+      en: [
+        "Interview panels now produce a decision: once the scorecards are in and the panel is closed, record whether the candidate advances, goes to offer or is not selected (with a reason). The company sees the decision only, never the scores. Scheduling an interview can convene the scorecard panel at the same time.",
+      ],
+      tr: [
+        "Mülakat panelleri artık bir karar üretiyor: puan kartları girilip panel kapandığında adayın ilerlediğini, teklife geçtiğini ya da seçilmediğini (gerekçeyle) kaydedin. Şirket yalnızca kararı görür, puanları asla. Mülakat planlarken puan kartı paneli aynı anda kurulabilir.",
+      ],
+      de: [
+        "Interview-Panels liefern jetzt eine Entscheidung: Sind die Bewertungen da und das Panel geschlossen, halte fest, ob die Person weiterkommt, ein Angebot erhält oder nicht ausgewählt wurde (mit Grund). Das Unternehmen sieht nur die Entscheidung, nie die Bewertungen. Beim Terminieren eines Interviews kann das Bewertungs-Panel gleich mit einberufen werden.",
+      ],
+    },
+  },
+  {
+    version: '0.354.0-beta',
+    date: '2026-10-12',
+    time: '15:29',
+    commit: 'bb5e741',
+    highlights: {
+      en: [
+        "You now get an e-mail (and an in-app notice) when your account is signed in to from a new browser, when your password or e-mail address changes, when two-factor authentication is turned on or off, when your recovery codes are replaced, or when every device is signed out — even if you have switched all other notifications off.",
+      ],
+      tr: [
+        "Hesabına yeni bir tarayıcıdan giriş yapıldığında, parolan veya e-posta adresin değiştiğinde, iki adımlı doğrulama açılıp kapatıldığında, kurtarma kodların yenilendiğinde ya da tüm cihazlardan çıkış yapıldığında artık bir e-posta (ve uygulama içi bildirim) alıyorsun — diğer tüm bildirimleri kapatmış olsan bile.",
+      ],
+      de: [
+        "Du erhältst jetzt eine E-Mail (und eine Benachrichtigung in der App), wenn sich jemand aus einem neuen Browser an deinem Konto anmeldet, wenn sich dein Passwort oder deine E-Mail-Adresse ändert, wenn die Zwei-Faktor-Authentifizierung ein- oder ausgeschaltet wird, wenn deine Wiederherstellungscodes ersetzt werden oder wenn alle Geräte abgemeldet werden — auch wenn du alle anderen Benachrichtigungen ausgeschaltet hast.",
+      ],
+    },
+  },
+  {
+    version: '0.353.0-beta',
+    date: '2026-10-12',
+    time: '15:28',
+    commit: '4c4ccd9',
+    highlights: {
+      en: [
+        "Minutes you write for a session now become that meeting's entry in the interaction history, replacing the automatic one-liner. Any line that starts with \"- [ ]\" is an action item: tick it in the minutes or turn it into a to-do for either of you — the two stay in step.",
+      ],
+      tr: [
+        "Bir oturum için yazdığın tutanak artık o toplantının etkileşim geçmişindeki kaydı oluyor ve otomatik tek cümlenin yerine geçiyor. \"- [ ]\" ile başlayan her satır bir aksiyon maddesi: tutanakta işaretle ya da ikinizden biri için yapılacak yap — ikisi birlikte güncellenir.",
+      ],
+      de: [
+        "Das Protokoll, das ihr für eine Sitzung schreibt, wird jetzt zum Eintrag dieses Termins in der Interaktionshistorie und ersetzt den automatischen Einzeiler. Jede Zeile, die mit „- [ ]\" beginnt, ist ein Aktionspunkt: im Protokoll abhaken oder für eine von euch zur Aufgabe machen — beides bleibt im Gleichschritt.",
+      ],
+    },
+  },
+  {
+    version: '0.352.0-beta',
+    date: '2026-10-08',
+    time: '07:25',
+    commit: '30b913d',
+    highlights: {
+      en: [
+        "Teams that live in Slack can meet in a huddle: paste a channel's huddle link as your personal room or into a meeting, and the app recognises it — the meeting panel offers “Open in Slack Huddle” and the hint under the link box says where it opens. Only workspace members can join a huddle, so keep a built-in room for mentees and guests outside Slack.",
+      ],
+      tr: [
+        "Slack'te yaşayan ekipler huddle'da görüşebilir: bir kanalın huddle bağlantısını kişisel odan olarak ya da bir görüşmeye yapıştır, uygulama bunu tanır — toplantı paneli “Slack Huddle ile aç” der ve bağlantı kutusunun altındaki ipucu nerede açılacağını söyler. Huddle'a yalnızca çalışma alanı üyeleri katılabilir; Slack dışındaki mentee ve konuklar için yerleşik odayı kullan.",
+      ],
+      de: [
+        "Teams, die in Slack arbeiten, können sich im Huddle treffen: Füge den Huddle-Link eines Kanals als persönlichen Raum oder in eine Besprechung ein, und die App erkennt ihn — das Panel bietet „In Slack Huddle öffnen“ an, und der Hinweis unter dem Linkfeld sagt, wo er sich öffnet. Einem Huddle können nur Workspace-Mitglieder beitreten; für Mentees und Gäste außerhalb von Slack bleibt der eingebaute Raum.",
+      ],
+    },
+  },
+  {
+    version: '0.351.0-beta',
+    date: '2026-10-08',
+    time: '00:26',
+    commit: '2fc299e',
+    highlights: {
+      en: [
+        "Admins can now switch AI off for the whole organisation in one click, or turn single features off (for example CV parsing) while keeping others on, and give a feature its own monthly allowance. People see \"AI is turned off\" rather than a quota message when that is the reason.",
+      ],
+      tr: [
+        "Yöneticiler artık yapay zekâyı tüm kurum için tek tıkla kapatabilir, tek tek özellikleri (örneğin CV ayrıştırma) kapatıp diğerlerini açık tutabilir ve bir özelliğe kendi aylık hakkını verebilir. Sebep buysa kullanıcılar kota mesajı değil \"yapay zekâ kapalı\" görür.",
+      ],
+      de: [
+        "Admins können KI jetzt für die ganze Organisation mit einem Klick abschalten, einzelne Funktionen (etwa die Lebenslauf-Auswertung) deaktivieren und andere anlassen, und einer Funktion ein eigenes Monatskontingent geben. Ist das der Grund, sehen die Leute „KI ist abgeschaltet“ statt einer Kontingent-Meldung.",
+      ],
+    },
+  },
+  {
+    version: '0.350.0-beta',
+    date: '2026-10-08',
+    time: '00:18',
+    commit: '0ccbc28',
+    highlights: {
+      en: [
+        "Interview requests can now be scheduled in the app: pick one of the company's proposed times (or another one), name the time zone, invite the company's interviewers by e-mail, and everyone sees the confirmed time on their own clock. A scheduled interview can be cancelled with a reason, which also removes it from the calendars.",
+      ],
+      tr: [
+        "Mülakat talepleri artık uygulamada planlanıyor: şirketin önerdiği saatlerden birini (ya da başka bir saati) seç, saat dilimini belirt, şirketin mülakatçılarını e-postayla davet et; herkes kesinleşen saati kendi saatine göre görür. Planlanan bir mülakat gerekçeyle iptal edilebilir, iptal takvimlerden de düşer.",
+      ],
+      de: [
+        "Interviewanfragen lassen sich jetzt in der App terminieren: einen der vom Unternehmen vorgeschlagenen Termine (oder einen anderen) wählen, die Zeitzone angeben, die Interviewer des Unternehmens per E-Mail einladen – alle sehen die bestätigte Zeit auf ihrer eigenen Uhr. Ein geplantes Interview kann mit Begründung abgesagt werden, was es auch aus den Kalendern entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.348.0-beta',
+    date: '2026-10-07',
+    time: '23:29',
+    commit: '523546a',
+    highlights: {
+      en: [
+        "Organizations can now set their own password rules — minimum length, upper/lower case, digit, symbol — and the sign-up, reset and account forms show and check exactly those rules as you type. New passwords are also screened against known data breaches (Have I Been Pwned, privacy-preserving: only a five-character fingerprint leaves the server), and an outage of that service never blocks you.",
+      ],
+      tr: [
+        "Kuruluşlar artık kendi parola kurallarını belirleyebiliyor — en az uzunluk, büyük/küçük harf, rakam, sembol — ve kayıt, sıfırlama ve hesap formları siz yazarken tam olarak bu kuralları gösterip denetliyor. Yeni parolalar ayrıca bilinen veri sızıntılarına karşı taranıyor (Have I Been Pwned, gizliliği koruyarak: sunucudan yalnızca beş karakterlik bir parmak izi çıkıyor); bu servisin kesintisi sizi asla engellemiyor.",
+      ],
+      de: [
+        "Organisationen können jetzt eigene Passwortregeln festlegen — Mindestlänge, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen — und die Formulare für Registrierung, Zurücksetzen und Konto zeigen und prüfen beim Tippen genau diese Regeln. Neue Passwörter werden außerdem gegen bekannte Datenlecks geprüft (Have I Been Pwned, datenschutzfreundlich: nur ein fünfstelliger Fingerabdruck verlässt den Server); ein Ausfall dieses Dienstes blockiert nie.",
+      ],
+    },
+  },
+  {
+    version: '0.347.0-beta',
+    date: '2026-10-07',
+    time: '18:56',
+    commit: 'a7421ab',
+    highlights: {
+      en: [
+        "Safeguarding for programme admins: private messages that share a phone number or an e-mail address, or use one of your watch keywords, appear in a review queue — without ever being blocked.",
+        "Programmes can now choose how long message text is kept; older text is removed every night and the conversation stays intact.",
+      ],
+      tr: [
+        "Program yöneticileri için koruma: telefon numarası ya da e-posta adresi paylaşılan veya izleme listenizdeki bir kelimeyi içeren özel mesajlar bir inceleme listesinde görünür — hiçbir zaman engellenmeden.",
+        "Programlar artık mesaj metinlerinin ne kadar süre saklanacağını seçebiliyor; daha eski metinler her gece kaldırılır, konuşmanın kendisi bozulmaz.",
+      ],
+      de: [
+        "Safeguarding für Programmverantwortliche: Private Nachrichten, in denen eine Telefonnummer oder E-Mail-Adresse geteilt oder eines Ihrer Beobachtungswörter verwendet wird, erscheinen in einer Prüfliste — ohne jemals blockiert zu werden.",
+        "Programme können jetzt festlegen, wie lange Nachrichtentext aufbewahrt wird; älterer Text wird jede Nacht entfernt, die Unterhaltung bleibt erhalten.",
+      ],
+    },
+  },
+  {
+    version: '0.346.0-beta',
+    date: '2026-10-07',
+    time: '18:51',
+    commit: '5eda233',
+    highlights: {
+      en: [
+        "Session agendas can now be personalised with AI: one click proposes agenda lines adapted to the pair's open goals, the previous session and the latest notes. The proposal is a draft until you add it, and when AI is not available the guide is shown as written — never a paywall.",
+      ],
+      tr: [
+        "Oturum gündemleri artık yapay zekâ ile kişiselleştirilebiliyor: tek tıkla çiftin açık hedeflerine, önceki oturuma ve son notlara göre uyarlanmış gündem maddeleri önerilir. Öneri siz ekleyene kadar taslaktır; yapay zekâ kullanılamadığında rehber yazıldığı hâliyle gösterilir — asla ödeme duvarı yok.",
+      ],
+      de: [
+        "Sitzungsagenden lassen sich jetzt mit KI personalisieren: Ein Klick schlägt Agendapunkte vor, die auf die offenen Ziele des Paars, die vorherige Sitzung und die neuesten Notizen abgestimmt sind. Der Vorschlag bleibt ein Entwurf, bis du ihn hinzufügst; ist KI nicht verfügbar, wird der Leitfaden so gezeigt, wie er geschrieben ist — nie eine Bezahlschranke.",
+      ],
+    },
+  },
+  {
+    version: '0.345.0-beta',
+    date: '2026-10-07',
+    time: '18:43',
+    commit: '52e76df',
+    highlights: {
+      en: [
+        "After a session, either of you can write the minutes — what was said and agreed — and both of you read and edit the same text. Every save keeps a version with who saved it. Your private notes stay private; this is a new, shared record beside them.",
+      ],
+      tr: [
+        "Oturumdan sonra ikinizden biri tutanağı yazabilir — ne konuşuldu, nelerde anlaşıldı — ve ikiniz de aynı metni okuyup düzenlersiniz. Her kayıt, kimin kaydettiğiyle birlikte bir sürüm olarak saklanır. Özel notlarınız özel kalır; bu, onların yanında yeni ve ortak bir kayıttır.",
+      ],
+      de: [
+        "Nach einer Sitzung kann jede Seite das Protokoll schreiben — was besprochen und vereinbart wurde — und beide lesen und bearbeiten denselben Text. Jedes Speichern behält eine Version mit der Person, die gespeichert hat. Eure privaten Notizen bleiben privat; das hier ist eine neue, gemeinsame Aufzeichnung daneben.",
+      ],
+    },
+  },
+  {
+    version: '0.343.0-beta',
+    date: '2026-10-07',
+    time: '17:53',
+    commit: 'e8cc39b',
+    highlights: {
+      en: [
+        "The admin AI tools — the match rationale, survey summaries, open-text insights and the analytics narrative — are now part of the AI pack. Everything a mentee or mentor uses for themselves stays free, and organisations that already had the tools keep them.",
+      ],
+      tr: [
+        "Yönetici yapay zekâ araçları — eşleştirme gerekçesi, anket özetleri, açık metin içgörüleri ve analitik anlatısı — artık AI paketinin parçası. Mentee ve mentorların kendileri için kullandığı her şey ücretsiz kalıyor; bu araçlara zaten sahip olan kurumlar onları korumaya devam ediyor.",
+      ],
+      de: [
+        "Die KI-Werkzeuge für Administratoren — Matching-Begründung, Umfrage-Zusammenfassungen, Freitext-Insights und die Analytics-Erzählung — gehören jetzt zum KI-Paket. Alles, was Mentees und Mentoren für sich selbst nutzen, bleibt kostenlos, und Organisationen, die die Werkzeuge bereits hatten, behalten sie.",
+      ],
+    },
+  },
+  {
+    version: '0.342.0-beta',
+    date: '2026-10-07',
+    time: '17:40',
+    commit: 'b3cc5de',
+    highlights: {
+      en: [
+        "Procurement can now open our accessibility conformance report (VPAT 2.5): WCAG 2.2, EN 301 549 and Section 508, criterion by criterion, each row with the test or file behind it — from the accessibility statement and the trust page, no sign-in needed.",
+      ],
+      tr: [
+        "Satın alma ekipleri artık erişilebilirlik uygunluk raporumuzu (VPAT 2.5) açabilir: WCAG 2.2, EN 301 549 ve Section 508, kriter kriter, her satırda arkasındaki test ya da dosya ile — erişilebilirlik bildiriminden ve güven sayfasından, giriş gerekmeden.",
+      ],
+      de: [
+        "Die Beschaffung kann jetzt unseren Barrierefreiheits-Konformitätsbericht (VPAT 2.5) öffnen: WCAG 2.2, EN 301 549 und Section 508, Kriterium für Kriterium, jede Zeile mit dem Test oder der Datei dahinter – von der Barrierefreiheitserklärung und der Trust-Seite aus, ohne Anmeldung.",
+      ],
+    },
+  },
+  {
+    version: '0.341.0-beta',
+    date: '2026-10-07',
+    time: '17:28',
+    commit: 'b382502',
+    highlights: {
+      en: [
+        "Administrators can now manage the library of session guides under Session guides: write a conversation once in English, Turkish and German, with its prompts and a note for the mentor, reword it later and every session that used it follows, or retire it without touching sessions already held.",
+      ],
+      tr: [
+        "Yöneticiler artık oturum rehberleri kütüphanesini Oturum rehberleri altında yönetebilir: bir konuşmayı sorularıyla ve mentora notuyla İngilizce, Türkçe ve Almanca bir kez yaz, sonra düzelt — onu kullanan her oturum takip eder — ya da yapılmış oturumlara dokunmadan kaldır.",
+      ],
+      de: [
+        "Administratoren verwalten die Bibliothek der Gesprächsleitfäden jetzt unter Gesprächsleitfäden: ein Gespräch einmal auf Englisch, Türkisch und Deutsch schreiben, mit Fragen und einem Hinweis für die Mentor-Seite, später umformulieren — jede Sitzung, die es nutzt, folgt — oder zurückziehen, ohne bereits gehaltene Sitzungen anzurühren.",
+      ],
+    },
+  },
+  {
+    version: '0.340.0-beta',
+    date: '2026-10-07',
+    time: '17:25',
+    commit: 'cb89bd8',
+    highlights: {
+      en: [
+        "Stream your audit trail to your own SIEM: register a receiver under Integrations and every audit event — impersonation, password resets, account merges, cancellations — arrives as signed, newline-delimited JSON (or Elastic Common Schema). An outage is replayed from the last delivered row, never lost; a test button sends two synthetic rows so you can prove the signature first.",
+      ],
+      tr: [
+        "Denetim izinizi kendi SIEM'inize akıtın: Entegrasyonlar altında bir alıcı tanımlayın; her denetim olayı — taklit oturumlar, parola sıfırlamaları, hesap birleştirmeleri, iptaller — imzalı, satır-satır JSON (veya Elastic Common Schema) olarak ulaşsın. Kesintide akış son teslim edilen satırdan devam eder, hiçbir kayıt kaybolmaz; test düğmesi önce imzayı kanıtlamanız için iki sentetik satır gönderir.",
+      ],
+      de: [
+        "Streame dein Audit-Protokoll an dein eigenes SIEM: Registriere unter Integrationen einen Empfänger, und jedes Audit-Ereignis — Impersonation, Passwort-Resets, Kontozusammenführungen, Kündigungen — kommt als signiertes, zeilenweises JSON (oder Elastic Common Schema) an. Ein Ausfall wird ab der letzten zugestellten Zeile nachgeliefert, nichts geht verloren; ein Test-Button sendet zwei synthetische Zeilen, damit du zuerst die Signatur prüfen kannst.",
+      ],
+    },
+  },
+  {
+    version: '0.339.0-beta',
+    date: '2026-10-07',
+    time: '17:20',
+    commit: '79ecf1e',
+    highlights: {
+      en: [
+        "Practise a job interview for your target role by typing your answers, then get a private report on what went well and the two things to work on next — share it with your mentor if you like.",
+      ],
+      tr: [
+        "Hedef rolün için yanıtlarını yazarak bir iş mülakatı provası yap, ardından neyin iyi gittiğini ve sırada üzerinde çalışman gereken iki şeyi gösteren özel bir rapor al — istersen mentorunla paylaş.",
+      ],
+      de: [
+        "Übe ein Vorstellungsgespräch für deine Zielrolle, indem du deine Antworten tippst, und erhalte einen privaten Bericht, was gut lief und woran du als Nächstes arbeiten solltest — teile ihn, wenn du magst, mit deiner Mentorin oder deinem Mentor.",
+      ],
+    },
+  },
+  {
+    version: '0.338.0-beta',
+    date: '2026-10-07',
+    time: '15:04',
+    commit: '2abffa3',
+    highlights: {
+      en: [
+        "Every mentoring session can now have an agenda: pick one of the guided conversations or start an empty list, tick the points off together during the call — both of you see the same list update live — and carry whatever was not finished into the next session.",
+      ],
+      tr: [
+        "Her mentorluk oturumunun artık bir gündemi olabilir: rehberli konuşmalardan birini seç ya da boş bir listeyle başla, görüşme sırasında maddeleri birlikte işaretle — ikiniz de aynı listeyi anlık görürsünüz — ve bitmeyenleri bir sonraki oturuma devret.",
+      ],
+      de: [
+        "Jede Mentoring-Sitzung kann jetzt eine Agenda haben: wähle einen der Gesprächsleitfäden oder beginne mit einer leeren Liste, hakt die Punkte während des Gesprächs gemeinsam ab — beide sehen dieselbe Liste live — und übernimm, was nicht geschafft wurde, in die nächste Sitzung.",
+      ],
+    },
+  },
+  {
+    version: '0.337.0-beta',
+    date: '2026-10-07',
+    time: '14:59',
+    commit: 'fe970ff',
+    highlights: {
+      en: [
+        "Offers can now carry structured pay — currency, base amount and period, hours, contract type, bonuses — next to the free-text note. Candidates see it on their offer card; admins get a compensation benchmark on the Offers page (median and quartiles per position, hidden for fewer than five offers).",
+      ],
+      tr: [
+        "Teklifler artık serbest notun yanında yapılandırılmış ücret taşıyor: para birimi, temel ücret ve dönem, haftalık saat, sözleşme türü, primler. Adaylar bunu teklif kartında görüyor; yöneticiler Teklifler sayfasında pozisyon başına medyan ve çeyrekliklerle bir ücret kıyaslaması alıyor (beşten az teklif gizlenir).",
+      ],
+      de: [
+        "Angebote tragen jetzt neben der Freitextnotiz strukturierte Vergütung: Währung, Grundbetrag und Zeitraum, Wochenstunden, Vertragsart, Boni. Kandidaten sehen sie auf ihrer Angebotskarte; Admins erhalten auf der Angebotsseite einen Vergütungs-Benchmark (Median und Quartile je Position, bei weniger als fünf Angeboten ausgeblendet).",
+      ],
+    },
+  },
+  {
+    version: '0.336.0-beta',
+    date: '2026-10-07',
+    time: '14:54',
+    commit: 'a017f90',
+    highlights: {
+      en: [
+        "The follow-up field on a mentee's record now speaks your language: an internship example instead of a sales one, a line that says who sees the note (you and the admins — never the mentee), ready-made next steps for the current stage you can click into the field, and a one-click AI suggestion based on the interaction log.",
+      ],
+      tr: [
+        "Mentee kaydındaki takip alanı artık senin dilinde: satış değil staj örneği, notu kimin gördüğünü söyleyen bir satır (sen ve yöneticiler — mentee asla), bulunulan aşamaya göre tıklayınca alana dolan hazır adımlar ve etkileşim kaydına dayanan tek tıklık AI önerisi.",
+      ],
+      de: [
+        "Das Wiedervorlage-Feld auf dem Datensatz eines Mentees spricht jetzt deine Sprache: ein Praktikumsbeispiel statt eines Verkaufsbeispiels, eine Zeile, wer die Notiz sieht (du und die Admins — nie der Mentee), fertige nächste Schritte zur aktuellen Phase per Klick ins Feld und ein KI-Vorschlag auf Basis des Interaktionsprotokolls.",
+      ],
+    },
+  },
+  {
+    version: '0.335.0-beta',
+    date: '2026-10-07',
+    time: '14:43',
+    commit: '83a46e0',
+    highlights: {
+      en: [
+        "When someone unsubscribes, every bulk email they no longer receive is now on record — and admins can look up an address to show that the opt-out was respected.",
+      ],
+      tr: [
+        "Biri abonelikten çıktığında, artık almadığı her toplu e-posta kayda geçiyor — yöneticiler bir adresi arayıp tercihine uyulduğunu gösterebilir.",
+      ],
+      de: [
+        "Wenn sich jemand abmeldet, wird jede Sammel-E-Mail, die er nicht mehr bekommt, protokolliert — und Admins können eine Adresse nachschlagen und zeigen, dass die Abmeldung respektiert wurde.",
+      ],
+    },
+  },
+  {
+    version: '0.334.0-beta',
+    date: '2026-10-07',
+    time: '14:00',
+    commit: 'e0dc89e',
+    highlights: {
+      en: [
+        "Turn a one-line brief into an announcement or template in all three languages, and let mentors fill their profile from a pasted career summary — every suggestion is yours to accept or skip, and nothing is sent or saved without you.",
+      ],
+      tr: [
+        "Tek satırlık bir nottan üç dilde duyuru ya da şablon taslağı oluştur; mentorlar da yapıştırdıkları kariyer özetinden profillerini doldursun — her öneriyi sen kabul eder ya da geçersin, sen istemeden hiçbir şey gönderilmez ya da kaydedilmez.",
+      ],
+      de: [
+        "Mach aus einer Kurzinfo eine Ankündigung oder Vorlage in allen drei Sprachen, und Mentor:innen füllen ihr Profil aus einem eingefügten Karriereüberblick — jeden Vorschlag übernimmst oder überspringst du selbst, und ohne dich wird nichts gesendet oder gespeichert.",
+      ],
+    },
+  },
+  {
+    version: '0.333.0-beta',
+    date: '2026-10-07',
+    time: '13:44',
+    commit: '0178cb5',
+    highlights: {
+      en: [
+        "Write an announcement or template in one language and fill the other two with one click. Machine translations are marked until you review them, and a translation you wrote yourself is never overwritten.",
+      ],
+      tr: [
+        "Bir duyuruyu ya da şablonu tek dilde yaz, diğer iki dili tek tıkla doldur. Makine çevirileri sen gözden geçirene kadar işaretli kalır; kendi yazdığın bir çeviri asla üzerine yazılmaz.",
+      ],
+      de: [
+        "Schreib eine Ankündigung oder Vorlage in einer Sprache und fülle die anderen beiden mit einem Klick. Maschinelle Übersetzungen bleiben markiert, bis du sie prüfst, und eine selbst geschriebene Übersetzung wird nie überschrieben.",
+      ],
+    },
+  },
+  {
+    version: '0.332.0-beta',
+    date: '2026-10-07',
+    time: '13:20',
+    commit: '9d6db5c',
+    highlights: {
+      en: [
+        "CV feedback is now a score out of 100 with a checklist of what to fix, section by section — and it can be tailored to a role a company is considering you for. Re-review after an update and see how much you improved.",
+      ],
+      tr: [
+        "CV geri bildirimi artık 100 üzerinden bir puan ve bölüm bölüm neyin düzeltileceğini gösteren bir kontrol listesi — ve bir şirketin seni düşündüğü bir role göre uyarlanabiliyor. Güncellemeden sonra yeniden incelet, ne kadar geliştiğini gör.",
+      ],
+      de: [
+        "Das Lebenslauf-Feedback ist jetzt ein Score von 100 mit einer Checkliste, was Abschnitt für Abschnitt zu verbessern ist — und es lässt sich auf eine Stelle zuschneiden, für die ein Unternehmen dich in Betracht zieht. Nach einer Überarbeitung erneut prüfen und sehen, wie viel besser du geworden bist.",
+      ],
+    },
+  },
+  {
+    version: '0.331.0-beta',
+    date: '2026-10-07',
+    time: '12:57',
+    commit: 'b0e81ca',
+    highlights: {
+      en: [
+        "API keys can now have a daily or monthly request allowance, each key gets its own per-minute budget, and every API response tells the integration how many requests it has left.",
+      ],
+      tr: [
+        "API anahtarlarına artık günlük veya aylık istek hakkı tanımlanabiliyor, her anahtarın kendi dakikalık bütçesi var ve her API yanıtı entegrasyona kaç isteği kaldığını söylüyor.",
+      ],
+      de: [
+        "API-Schlüssel können jetzt ein Tages- oder Monatskontingent haben, jeder Schlüssel bekommt sein eigenes Minutenbudget, und jede API-Antwort sagt der Integration, wie viele Anfragen ihr noch bleiben.",
+      ],
+    },
+  },
+  {
+    version: '0.330.0-beta',
+    date: '2026-10-07',
+    time: '12:38',
+    commit: 'c9068dd',
+    highlights: {
+      en: [
+        "Admins get an AI usage screen: calls, failures and spend per AI feature for this and last month, the monthly AI budget you can change in place, and whether the AI provider is connected.",
+      ],
+      tr: [
+        "Yöneticiler için AI kullanım ekranı: bu ay ve geçen ay her AI özelliği için çağrılar, hatalar ve harcama, yerinde değiştirilebilen aylık AI bütçesi ve AI sağlayıcısının bağlı olup olmadığı.",
+      ],
+      de: [
+        "Admins erhalten eine Übersicht zur KI-Nutzung: Aufrufe, Fehler und Ausgaben je KI-Funktion für diesen und den letzten Monat, das monatliche KI-Budget zum direkten Ändern und ob der KI-Anbieter angebunden ist.",
+      ],
+    },
+  },
+  {
+    version: '0.329.0-beta',
+    date: '2026-10-07',
+    time: '12:18',
+    commit: '260935e',
+    highlights: {
+      en: [
+        "AI features are harder to manipulate: text you upload or write is always treated as data, contact details are removed before anything is sent where they are not needed, and AI answers are always shown as plain text.",
+      ],
+      tr: [
+        "AI özelliklerini yönlendirmek artık daha zor: yüklediğin ya da yazdığın metin her zaman veri olarak ele alınıyor, gerekmeyen yerlerde iletişim bilgileri gönderilmeden önce siliniyor ve AI yanıtları her zaman düz metin olarak gösteriliyor.",
+      ],
+      de: [
+        "KI-Funktionen lassen sich schwerer manipulieren: Hochgeladener oder geschriebener Text wird immer als Daten behandelt, Kontaktdaten werden vor dem Senden entfernt, wo sie nicht gebraucht werden, und KI-Antworten werden immer als reiner Text angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.328.0-beta',
+    date: '2026-10-07',
+    time: '11:47',
+    commit: 'fe81b17',
+    highlights: {
+      en: [
+        "Mentors can get an AI draft for a first message, a check-in to a quiet mentee or an outcome note — written in the mentee's language, based only on what the relation shows, and never sent until you press Send.",
+      ],
+      tr: [
+        "Mentorlar ilk mesaj, sessiz kalan bir mentee'ye hatırlatma veya sonuç notu için AI taslağı alabilir — mentee'nin dilinde, yalnızca ilişkide görünen bilgilere dayanarak ve sen Gönder'e basmadan asla gönderilmeden.",
+      ],
+      de: [
+        "Mentor:innen erhalten einen KI-Entwurf für die erste Nachricht, eine Nachfrage bei einer stillen Mentee oder eine Ergebnisnotiz — in der Sprache der Mentee, nur auf Basis dessen, was die Beziehung zeigt, und nie gesendet, bevor du auf Senden drückst.",
+      ],
+    },
+  },
+  {
+    version: '0.327.0-beta',
+    date: '2026-10-07',
+    time: '11:17',
+    commit: '8770914',
+    highlights: {
+      en: [
+        "Creating an organization is now a guided five-step setup: name and address, plan, branding, starter pack, and an invitation for its first administrator, all created in one go.",
+      ],
+      tr: [
+        "Organizasyon oluşturmak artık beş adımlı bir kurulum: ad ve adres, paket, marka, başlangıç paketi ve ilk yöneticinin daveti, hepsi tek seferde oluşturuluyor.",
+      ],
+      de: [
+        "Eine Organisation anzulegen ist jetzt eine geführte Einrichtung in fünf Schritten: Name und Adresse, Tarif, Branding, Startpaket und die Einladung der ersten Administration, alles in einem Zug.",
+      ],
+    },
+  },
+  {
+    version: '0.326.0-beta',
+    date: '2026-10-07',
+    time: '11:13',
+    commit: '98161d3',
+    highlights: {
+      en: [
+        "Catch up on a long conversation in a few lines, and get a suggested reply in three tones that you can edit before you send it. Nothing is ever sent for you.",
+      ],
+      tr: [
+        "Uzun bir sohbeti birkaç satırda özetle; göndermeden önce düzenleyebileceğin üç farklı tonda yanıt önerisi al. Senin yerine hiçbir şey gönderilmez.",
+      ],
+      de: [
+        "Lass dir eine lange Unterhaltung in wenigen Zeilen zusammenfassen und erhalte einen Antwortvorschlag in drei Tonarten, den du vor dem Senden bearbeiten kannst. Es wird nie etwas für dich gesendet.",
+      ],
+    },
+  },
+  {
+    version: '0.325.0-beta',
+    date: '2026-10-07',
+    time: '05:45',
+    commit: '56b0a4b',
+    highlights: {
+      en: [
+        "Sign in without a password: choose \"Email me a sign-in link\" on the sign-in page and we send you a link that works once and expires in 15 minutes. If you use an authenticator app, it still asks for your code.",
+      ],
+      tr: [
+        "Parolasız giriş: giriş sayfasında \"Bana giriş bağlantısı gönder\"i seçin, size bir kez çalışan ve 15 dakika içinde geçerliliğini yitiren bir bağlantı gönderelim. Doğrulama uygulaması kullanıyorsanız kodunuz yine sorulur.",
+      ],
+      de: [
+        "Anmelden ohne Passwort: Wähle auf der Anmeldeseite „Anmeldelink per E-Mail senden“ und wir schicken dir einen Link, der einmal funktioniert und nach 15 Minuten abläuft. Wer eine Authenticator-App nutzt, wird weiterhin nach dem Code gefragt.",
+      ],
+    },
+  },
+  {
+    version: '0.324.0-beta',
+    date: '2026-10-07',
+    time: '05:33',
+    commit: '0c0f9ff',
+    highlights: {
+      en: [
+        "A goal can now say how you will know it is achieved, carry a target date next to its deadline, show a progress bar, and be shared with the pair, with the programme, or kept private to you — a private goal is invisible to everyone else, including administrators.",
+      ],
+      tr: [
+        "Bir hedef artık başarıldığını nereden anlayacağını söyleyebilir, bitiş tarihinin yanında bir hedef tarih taşıyabilir, ilerleme çubuğu gösterebilir ve mentor–mentee ikilisiyle, programla paylaşılabilir ya da yalnızca sana özel kalabilir — özel bir hedefi yöneticiler dahil kimse göremez.",
+      ],
+      de: [
+        "Ein Ziel kann jetzt festhalten, woran du erkennst, dass es erreicht ist, neben der Frist ein Zieldatum tragen, einen Fortschrittsbalken zeigen und mit dem Tandem, mit dem Programm geteilt oder nur für dich privat gehalten werden — ein privates Ziel sieht sonst niemand, auch keine Administratoren.",
+      ],
+    },
+  },
+  {
+    version: '0.323.0-beta',
+    date: '2026-10-07',
+    time: '05:31',
+    commit: '5d4f45d',
+    highlights: {
+      en: [
+        "A lost customer who comes back starts a new journey with one click — a new trial or signed straight away — and the return counts as a new win.",
+      ],
+      tr: [
+        "Geri dönen kayıp bir müşteri tek tıkla yeni bir yolculuğa başlar — yeni deneme ya da doğrudan imza — ve dönüş yeni bir kazanım sayılır.",
+      ],
+      de: [
+        "Ein verlorener Kunde, der zurückkommt, startet mit einem Klick eine neue Customer Journey — neue Testphase oder direkt unterschrieben — und die Rückkehr zählt als neuer Gewinn.",
+      ],
+    },
+  },
+  {
+    version: '0.322.0-beta',
+    date: '2026-10-07',
+    time: '05:31',
+    commit: '5d4f45d',
+    highlights: {
+      en: [
+        "New sales workspaces follow the SaleVali journey: no proposal or negotiation stage — a deal is won straight out of the trial’s decision window.",
+      ],
+      tr: [
+        "Yeni satış alanları SaleVali yolculuğunu izler: teklif ve pazarlık aşaması yok — iş doğrudan denemenin karar penceresinden kazanılır.",
+      ],
+      de: [
+        "Neue Vertriebsbereiche folgen der SaleVali-Customer-Journey: keine Angebots- oder Verhandlungsphase — der Deal wird direkt aus dem Entscheidungsfenster der Testphase gewonnen.",
+      ],
+    },
+  },
+  {
+    version: '0.321.0-beta',
+    date: '2026-10-07',
+    time: '05:31',
+    commit: '5d4f45d',
+    highlights: {
+      en: [
+        "When a customer gives notice, record the day their contract ends: they stay a won customer, show up in your attention queue for the whole notice period, and you get a reminder on the last day.",
+      ],
+      tr: [
+        "Bir müşteri fesih bildirdiğinde sözleşmenin bittiği günü kaydedin: kazanılmış müşteri olarak kalır, ihbar süresi boyunca dikkat kuyruğunuzda görünür ve son gün size hatırlatma gelir.",
+      ],
+      de: [
+        "Kündigt ein Kunde, tragen Sie den Tag ein, an dem der Vertrag endet: Er bleibt ein gewonnener Kunde, erscheint während der gesamten Kündigungsfrist in Ihrer Aufmerksamkeitsliste, und am letzten Tag werden Sie erinnert.",
+      ],
+    },
+  },
+  {
+    version: '0.320.0-beta',
+    date: '2026-10-07',
+    time: '01:15',
+    commit: 'd4277a2',
+    highlights: {
+      en: [
+        "Once product usage flows in, accounts whose usage drops and trials nobody has started using show up in your attention queue, and each account page charts its last 90 days.",
+      ],
+      tr: [
+        "Ürün kullanım verisi gelmeye başladığında, kullanımı düşen hesaplar ve kimsenin kullanmaya başlamadığı denemeler dikkat kuyruğunuzda görünür; her hesap sayfası son 90 günü grafikle gösterir.",
+      ],
+      de: [
+        "Sobald Nutzungsdaten eintreffen, erscheinen Accounts mit sinkender Nutzung und ungenutzte Testphasen in Ihrer Aufmerksamkeitsliste, und jede Account-Seite zeigt die letzten 90 Tage als Diagramm.",
+      ],
+    },
+  },
+  {
+    version: '0.319.0-beta',
+    date: '2026-10-07',
+    time: '01:15',
+    commit: '5526b44',
+    highlights: {
+      en: [
+        "Meet in the tool your organization already uses: save your personal Zoom, Meet or Teams room on the account page, and an organization can ask that meetings always use its own conferencing tool. A pasted link still wins, and when a link cannot be shown inside the app the panel now says where it opens.",
+      ],
+      tr: [
+        "Kuruluşunun zaten kullandığı araçla görüş: kişisel Zoom, Meet veya Teams odanı hesap sayfasına kaydet; bir kuruluş görüşmelerin her zaman kendi konferans aracını kullanmasını isteyebilir. Yapıştırılan bağlantı yine kazanır ve bir bağlantı uygulama içinde gösterilemediğinde panel artık nerede açılacağını söylüyor.",
+      ],
+      de: [
+        "Triff dich in dem Tool, das deine Organisation ohnehin nutzt: Speichere deinen persönlichen Zoom-, Meet- oder Teams-Raum auf der Kontoseite, und eine Organisation kann verlangen, dass Besprechungen immer ihr eigenes Konferenz-Tool verwenden. Ein eingefügter Link gewinnt weiterhin, und wenn ein Link nicht in der App angezeigt werden kann, sagt das Panel jetzt, wo er sich öffnet.",
+      ],
+    },
+  },
+  {
+    version: '0.318.0-beta',
+    date: '2026-10-07',
+    time: '01:14',
+    commit: 'd293ec4',
+    highlights: {
+      en: [
+        "Groundwork for session agendas: the data model and a six-conversation starter library (kickoff, goal-setting, mid-point review, career, feedback, closing) in English, Turkish and German. The agenda panel itself follows.",
+      ],
+      tr: [
+        "Oturum gündemleri için altyapı: veri modeli ve İngilizce, Türkçe, Almanca altı başlangıç konuşması (tanışma, hedef belirleme, ara değerlendirme, kariyer, geri bildirim, kapanış). Gündem paneli bir sonraki adımda geliyor.",
+      ],
+      de: [
+        "Grundlage für Sitzungsagenden: das Datenmodell und eine Startbibliothek mit sechs Gesprächen (Auftakt, Ziele setzen, Zwischenbilanz, Karriere, Feedback, Abschluss) auf Englisch, Türkisch und Deutsch. Das Agenda-Panel selbst folgt.",
+      ],
+    },
+  },
+  {
+    version: '0.317.0-beta',
+    date: '2026-10-07',
+    time: '01:01',
+    commit: '4d93914',
+    highlights: {
+      en: [
+        "AI calls now record which model answered, the tokens used and what they cost, so an operator can answer \"what did AI cost us last month\" — and route each task to a different model from the environment, without a deploy.",
+      ],
+      tr: [
+        "Yapay zekâ çağrıları artık hangi modelin yanıt verdiğini, kullanılan token'ları ve maliyeti kaydediyor; operatör \"geçen ay yapay zekâ bize ne kadara mal oldu\" sorusunu yanıtlayabiliyor ve her görevi deploy olmadan, ortam değişkeniyle farklı bir modele yönlendirebiliyor.",
+      ],
+      de: [
+        "KI-Aufrufe halten jetzt fest, welches Modell geantwortet hat, wie viele Tokens verbraucht wurden und was das gekostet hat — der Betreiber kann „Was hat uns KI letzten Monat gekostet?“ beantworten und jede Aufgabe per Umgebungsvariable ohne Deploy auf ein anderes Modell leiten.",
+      ],
+    },
+  },
+  {
+    version: '0.316.1-beta',
+    date: '2026-10-07',
+    time: '00:59',
+    commit: '14569e3',
+    highlights: {
+      en: [
+        "The SSO role mapping now uses your product's own role names and offers only the roles your product has.",
+      ],
+      tr: [
+        "SSO rol eşleme artık ürününüzün kendi rol adlarını kullanıyor ve yalnızca ürününüzde bulunan rolleri sunuyor.",
+      ],
+      de: [
+        "Die SSO-Rollenzuordnung verwendet jetzt die Rollennamen Ihres Produkts und bietet nur die Rollen an, die es dort gibt.",
+      ],
+    },
+  },
+  {
+    version: '0.316.0-beta',
+    date: '2026-10-07',
+    time: '00:33',
+    commit: 'd7d0121',
+    highlights: {
+      en: [
+        "Pin important conversations to the top of your inbox, archive the ones you are done with, and mute a conversation for 8 hours, a week or until you turn it back on. Filter your inbox by Unread, Pinned or Archived.",
+      ],
+      tr: [
+        "Önemli sohbetleri gelen kutunun en üstüne sabitle, işin biten sohbetleri arşivle, bir sohbeti 8 saat, 1 hafta ya da sen açana kadar sessize al. Gelen kutunu Okunmamış, Sabitlenmiş veya Arşiv olarak filtrele.",
+      ],
+      de: [
+        "Hefte wichtige Unterhaltungen oben in deinem Posteingang an, archiviere erledigte und schalte eine Unterhaltung für 8 Stunden, eine Woche oder bis auf Weiteres stumm. Filtere deinen Posteingang nach Ungelesen, Angeheftet oder Archiviert.",
+      ],
+    },
+  },
+  {
+    version: '0.315.0-beta',
+    date: '2026-10-07',
+    time: '00:28',
+    commit: 'f419bba',
+    highlights: {
+      en: [
+        "Admins who also work leads can narrow the account list to “My accounts”.",
+      ],
+      tr: [
+        "Kendi lead'leriyle de çalışan adminler hesap listesini “Benim hesaplarım” ile daraltabilir.",
+      ],
+      de: [
+        "Admins, die selbst Leads betreuen, können die Account-Liste auf „Meine Accounts“ eingrenzen.",
+      ],
+    },
+  },
+  {
+    version: '0.314.0-beta',
+    date: '2026-10-07',
+    time: '00:19',
+    commit: 'fe0fb74',
+    highlights: {
+      en: [
+        "Forward a customer’s reply to your CRM address and it is logged on their account as an incoming contact — with the original date and subject, never the content.",
+      ],
+      tr: [
+        "Bir müşterinin yanıtını CRM adresinize yönlendirin; hesabına gelen bir temas olarak kaydedilir — asıl tarih ve konuyla, içerik asla.",
+      ],
+      de: [
+        "Leiten Sie die Antwort eines Kunden an Ihre CRM-Adresse weiter, und sie wird an seinem Account als eingehender Kontakt erfasst — mit Originaldatum und -betreff, nie mit dem Inhalt.",
+      ],
+    },
+  },
+  {
+    version: '0.313.0-beta',
+    date: '2026-10-07',
+    time: '00:19',
+    commit: '887266c',
+    highlights: {
+      en: [
+        "Long conversations open instantly: you see the newest messages first, and older ones load as you scroll up.",
+        "Search your messages from the inbox. A result opens the conversation at that exact message.",
+      ],
+      tr: [
+        "Uzun sohbetler anında açılıyor: önce en yeni mesajları görüyorsun, eskiler yukarı kaydırdıkça yükleniyor.",
+        "Gelen kutusundan mesajlarında arama yapabilirsin. Bir sonuç, sohbeti tam o mesajda açar.",
+      ],
+      de: [
+        "Lange Unterhaltungen öffnen sich sofort: Du siehst zuerst die neuesten Nachrichten, ältere werden beim Hochscrollen nachgeladen.",
+        "Durchsuche deine Nachrichten direkt im Posteingang. Ein Treffer öffnet die Unterhaltung genau bei dieser Nachricht.",
+      ],
+    },
+  },
+  {
+    version: '0.312.0-beta',
+    date: '2026-10-06',
+    time: '23:03',
+    commit: '84573b8',
+    highlights: {
+      en: [
+        "New Migrate a programme page: upload your old platform's export, check the proposed column and stage mapping, preview every row, then migrate — nobody is e-mailed.",
+      ],
+      tr: [
+        "Yeni Program taşıma sayfası: eski platformunun dışa aktarımını yükle, önerilen sütun ve aşama eşlemesini kontrol et, her satırı ön izle, sonra taşı — kimseye e-posta gitmez.",
+      ],
+      de: [
+        "Neue Seite „Programm übernehmen“: Export der bisherigen Plattform hochladen, vorgeschlagene Spalten- und Phasenzuordnung prüfen, jede Zeile in der Vorschau sehen, dann übernehmen — niemand bekommt eine E-Mail.",
+      ],
+    },
+  },
+  {
+    version: '0.311.0-beta',
+    date: '2026-10-06',
+    time: '23:01',
+    commit: '7234123',
+    highlights: {
+      en: [
+        "The starter pack can also add a labelled sample programme so a new organization's screens are not empty on day one — and remove it again in one click.",
+      ],
+      tr: [
+        "Başlangıç paketi, yeni bir kurumun ekranları ilk gün boş kalmasın diye etiketli bir örnek program da ekleyebiliyor — ve tek tıkla yeniden kaldırabiliyor.",
+      ],
+      de: [
+        "Das Startpaket kann zusätzlich ein gekennzeichnetes Beispielprogramm anlegen, damit die Seiten einer neuen Organisation am ersten Tag nicht leer sind — und es mit einem Klick wieder entfernen.",
+      ],
+    },
+  },
+  {
+    version: '0.310.0-beta',
+    date: '2026-10-06',
+    time: '22:51',
+    commit: '3671a05',
+    highlights: {
+      en: [
+        "Moving from another platform mid-programme: people, pairs, their stage history and session notes can now be migrated in one rehearsable run — with nothing e-mailed until you decide to invite.",
+      ],
+      tr: [
+        "Program ortasında başka bir platformdan geçiş: kişiler, eşleşmeler, aşama geçmişleri ve görüşme notları artık provası yapılabilen tek bir çalıştırmayla taşınabiliyor — siz davet etmeye karar verene kadar hiç e-posta gitmeden.",
+      ],
+      de: [
+        "Wechsel von einer anderen Plattform mitten im Programm: Personen, Paare, ihre Phasenhistorie und Gesprächsnotizen lassen sich jetzt in einem probefähigen Lauf übernehmen — ohne dass eine E-Mail rausgeht, bis Sie einladen.",
+      ],
+    },
+  },
+  {
+    version: '0.309.0-beta',
+    date: '2026-10-06',
+    time: '22:49',
+    commit: 'a998c74',
+    highlights: {
+      en: [
+        "New organizations can start from a ready-made setup: stages, service levels, required documents, an evaluation framework and goal templates in one click from Settings — and applying it again never changes what you edited.",
+      ],
+      tr: [
+        "Yeni kurumlar hazır bir kurulumla başlayabiliyor: aşamalar, hizmet süreleri, gerekli belgeler, bir değerlendirme çerçevesi ve hedef şablonları Ayarlar’dan tek tıkla — tekrar uygulamak düzenlediğin hiçbir şeyi değiştirmez.",
+      ],
+      de: [
+        "Neue Organisationen können mit einer fertigen Einrichtung starten: Phasen, Servicezeiten, erforderliche Dokumente, ein Bewertungsrahmen und Zielvorlagen mit einem Klick in den Einstellungen — erneutes Anwenden ändert nichts, was Sie bearbeitet haben.",
+      ],
+    },
+  },
+  {
+    version: '0.308.0-beta',
+    date: '2026-10-06',
+    time: '22:20',
+    commit: '7ecbb0d',
+    highlights: {
+      en: [
+        "Importing people from a spreadsheet now reads exports from German or Turkish Excel (with ; as the separator) and shows each row's result — and why — in a clearer table, before and after the import.",
+      ],
+      tr: [
+        "Elektronik tablodan kişi içe aktarma artık Almanca ya da Türkçe Excel dışa aktarımlarını (ayraç olarak ; ile) okuyor ve her satırın sonucunu — ve nedenini — içe aktarmadan önce ve sonra daha anlaşılır bir tabloda gösteriyor.",
+      ],
+      de: [
+        "Der Import von Personen aus einer Tabelle liest jetzt Exporte aus deutschem oder türkischem Excel (mit ; als Trennzeichen) und zeigt das Ergebnis jeder Zeile — samt Grund — vor und nach dem Import in einer übersichtlicheren Tabelle.",
+      ],
+    },
+  },
+  {
+    version: '0.307.0-beta',
+    date: '2026-10-06',
+    time: '22:12',
+    commit: '3fe9f7d',
+    highlights: {
+      en: [
+        "Relationship health now marks pairs whose evaluation comments or weekly-report blockers fall into a negative theme on the Insights page — as a note to read, without changing the score.",
+      ],
+      tr: [
+        "İlişki sağlığı artık değerlendirme yorumları ya da haftalık rapor engelleri İçgörüler sayfasında olumsuz bir temaya düşen eşleşmeleri işaretliyor — puanı değiştirmeden, okunacak bir not olarak.",
+      ],
+      de: [
+        "Die Beziehungsgesundheit markiert jetzt Paare, deren Bewertungskommentare oder Wochenbericht-Hindernisse auf der Seite „Einblicke“ in ein negatives Thema fallen — als Hinweis zum Lesen, ohne die Bewertung zu ändern.",
+      ],
+    },
+  },
+  {
+    version: '0.306.0-beta',
+    date: '2026-10-06',
+    time: '22:05',
+    commit: 'b15ed95',
+    highlights: {
+      en: [
+        "Times now read the quick way: \"5 min. ago\", \"8 days ago\" instead of a full date — on the release notes and across messages, notifications, activity and lists. Hover to see the exact date and time.",
+      ],
+      tr: [
+        "Zamanlar artık bir bakışta okunuyor: tam tarih yerine \"5 dk. önce\", \"8 gün önce\" — sürüm notlarında ve mesajlar, bildirimler, etkinlik ve listelerde. Tam tarih ve saati görmek için üzerine gelmen yeterli.",
+      ],
+      de: [
+        "Zeiten lesen sich jetzt auf einen Blick: \"vor 5 Min.\", \"vor 8 Tagen\" statt eines vollen Datums — in den Versionshinweisen sowie in Nachrichten, Benachrichtigungen, Aktivitäten und Listen. Mit der Maus darüber siehst du Datum und Uhrzeit genau.",
+      ],
+    },
+  },
+  {
+    version: '0.305.0-beta',
+    date: '2026-10-06',
+    time: '21:49',
+    commit: '04029f9',
+    highlights: {
+      en: [
+        "The AI summary of a survey question now shows how many answers each theme stands for and opens them on click.",
+        "The analytics page can write a short “what changed” paragraph from its own figures — and throws it away if it cites a number that is not on the page.",
+      ],
+      tr: [
+        "Bir anket sorusunun yapay zekâ özeti artık her temanın kaç yanıta dayandığını gösteriyor ve tıklayınca o yanıtları açıyor.",
+        "Analiz sayfası kendi rakamlarından kısa bir “ne değişti” paragrafı yazabiliyor — sayfada olmayan bir sayı anarsa paragrafı atıyor.",
+      ],
+      de: [
+        "Die KI-Zusammenfassung einer Umfragefrage zeigt jetzt, für wie viele Antworten jedes Thema steht, und öffnet sie per Klick.",
+        "Die Analyseseite kann aus ihren eigenen Zahlen einen kurzen Absatz „Was sich verändert hat“ schreiben — und verwirft ihn, wenn er eine Zahl nennt, die nicht auf der Seite steht.",
+      ],
+    },
+  },
+  {
+    version: '0.304.0-beta',
+    date: '2026-10-06',
+    time: '21:48',
+    commit: '90fe1df',
+    highlights: {
+      en: [
+        "The product tour on the home page now shows the screens in your language.",
+      ],
+      tr: [
+        "Ana sayfadaki ürün turu artık ekranları senin dilinde gösteriyor.",
+      ],
+      de: [
+        "Die Produkttour auf der Startseite zeigt die Bildschirme jetzt in deiner Sprache.",
+      ],
+    },
+  },
+  {
+    version: '0.303.0-beta',
+    date: '2026-10-06',
+    time: '21:47',
+    commit: '90b43b5',
+    highlights: {
+      en: [
+        "Put your organisation’s CRM address in BCC when you e-mail a customer, and the contact is logged on their account automatically — date, subject and recipients only, never the content.",
+      ],
+      tr: [
+        "Bir müşteriye e-posta yazarken kurumunuzun CRM adresini gizli kopyaya (BCC) ekleyin; temas hesabına kendiliğinden kaydedilir — yalnızca tarih, konu ve alıcılar, içerik asla.",
+      ],
+      de: [
+        "Setzen Sie die CRM-Adresse Ihrer Organisation in BCC, wenn Sie einem Kunden schreiben, und der Kontakt wird automatisch an seinem Account erfasst — nur Datum, Betreff und Empfänger, nie der Inhalt.",
+      ],
+    },
+  },
+  {
+    version: '0.302.0-beta',
+    date: '2026-10-06',
+    time: '21:20',
+    commit: '88eaefe',
+    highlights: {
+      en: [
+        "New Insights page for admins: see the recurring themes in evaluation comments and weekly-report blockers, open the rows behind every theme, and see who has not handed in last week's report.",
+      ],
+      tr: [
+        "Yöneticiler için yeni İçgörüler sayfası: değerlendirme yorumlarında ve haftalık rapor engellerinde tekrarlayan temaları gör, her temanın arkasındaki satırları aç ve geçen haftanın raporunu kimin teslim etmediğini gör.",
+      ],
+      de: [
+        "Neue Seite „Einblicke“ für Admins: wiederkehrende Themen in Bewertungskommentaren und Hindernissen aus Wochenberichten sehen, die Zeilen hinter jedem Thema öffnen und sehen, wer den Bericht der letzten Woche nicht abgegeben hat.",
+      ],
+    },
+  },
+  {
+    version: '0.301.0-beta',
+    date: '2026-10-06',
+    time: '20:55',
+    commit: '2fb1227',
+    highlights: {
+      en: [
+        "The AI summary of your interaction log is kept: it is there when you come back, and asking again for an unchanged log costs nothing.",
+      ],
+      tr: [
+        "Etkileşim kaydının yapay zekâ özeti artık saklanıyor: geri döndüğünde orada ve kayıt değişmediyse tekrar istemek ücretsiz.",
+      ],
+      de: [
+        "Die KI-Zusammenfassung deines Interaktionsprotokolls wird gespeichert: Sie ist da, wenn du zurückkommst, und eine erneute Anfrage zu einem unveränderten Protokoll kostet nichts.",
+      ],
+    },
+  },
+  {
+    version: '0.300.0-beta',
+    date: '2026-10-06',
+    time: '20:40',
+    commit: '5c2cc02',
+    highlights: {
+      en: [
+        "If your Google Calendar is connected, bookings now respect the times it shows as busy. Only the busy times are read, never what they are.",
+      ],
+      tr: [
+        "Google Takvimin bağlıysa randevular artık orada dolu görünen saatlere saygı gösteriyor. Yalnızca dolu saatler okunur, ne oldukları asla.",
+      ],
+      de: [
+        "Ist dein Google Kalender verbunden, berücksichtigen Buchungen jetzt die dort als belegt markierten Zeiten. Gelesen werden nur die belegten Zeiten, nie was sie sind.",
+      ],
+    },
+  },
+  {
+    version: '0.299.0-beta',
+    date: '2026-10-06',
+    time: '20:39',
+    commit: 'c994356',
+    highlights: {
+      en: [
+        "Your CV feedback and interview prep are now kept: they are still there after a reload, asking the same question again answers from the saved copy at no cost, and you can choose to share a result with your mentor.",
+      ],
+      tr: [
+        "CV geri bildirimin ve mülakat hazırlığın artık saklanıyor: sayfayı yenilesen de duruyor, aynı soruyu tekrar sorduğunda kayıtlı kopyadan ücretsiz yanıt geliyor ve istersen bir sonucu mentorunla paylaşabiliyorsun.",
+      ],
+      de: [
+        "Dein CV-Feedback und deine Interviewvorbereitung werden jetzt gespeichert: Sie bleiben nach dem Neuladen erhalten, dieselbe Frage wird kostenlos aus der gespeicherten Kopie beantwortet, und du kannst ein Ergebnis mit deinem Mentor teilen.",
+      ],
+    },
+  },
+  {
+    version: '0.298.0-beta',
+    date: '2026-10-06',
+    time: '20:20',
+    commit: '60511d7',
+    highlights: {
+      en: [
+        "When you schedule or request a meeting, Suggested times now offers slots that suit both of you, within working hours on each person's clock. One tap fills in the form.",
+      ],
+      tr: [
+        "Toplantı planlarken ya da talep ederken artık Önerilen saatler, ikinize de uyan ve herkesin kendi saatine göre mesai içinde kalan saatleri gösteriyor. Tek dokunuşla form doluyor.",
+      ],
+      de: [
+        "Beim Planen oder Anfragen eines Meetings schlägt Vorgeschlagene Zeiten jetzt Termine vor, die für euch beide passen und auf der Uhr jeder Person in der Arbeitszeit liegen. Ein Tipp füllt das Formular aus.",
+      ],
+    },
+  },
+  {
+    version: '0.297.0-beta',
+    date: '2026-10-06',
+    time: '19:53',
+    commit: '6bad6da',
+    highlights: {
+      en: [
+        "Mentors can set booking rules on their Availability page: minimum notice, a break between meetings, a weekly or monthly limit and a session length. When a request is refused, mentees see which rule applied.",
+      ],
+      tr: [
+        "Mentörler Uygunluk sayfasından randevu kuralları belirleyebiliyor: en az önceden haber, toplantılar arası mola, haftalık ya da aylık sınır ve görüşme süresi. Bir talep reddedildiğinde mentee hangi kurala takıldığını görüyor.",
+      ],
+      de: [
+        "Mentorinnen und Mentoren können auf ihrer Verfügbarkeitsseite Buchungsregeln festlegen: Mindestvorlauf, Pause zwischen Meetings, ein Wochen- oder Monatslimit und die Sitzungslänge. Wird eine Anfrage abgelehnt, sehen Mentees, welche Regel gegriffen hat.",
+      ],
+    },
+  },
+  {
+    version: '0.296.0-beta',
+    date: '2026-10-06',
+    time: '19:21',
+    commit: '832171c',
+    highlights: {
+      en: [
+        "New First destination screen in Analytics: where participants ended up, with the share you actually know about, by cohort and source. It prints as a one-page report and is included in the Excel export.",
+      ],
+      tr: [
+        "Analitik'te yeni İlk varış yeri ekranı: katılımcıların nereye vardığı ve bunun ne kadarını gerçekten bildiğin, kohort ve kaynağa göre. Tek sayfalık rapor olarak yazdırılabiliyor ve Excel dışa aktarımında yer alıyor.",
+      ],
+      de: [
+        "Neue Ansicht Verbleib in der Analyse: wo Teilnehmende gelandet sind und für welchen Anteil du es wirklich weißt, nach Kohorte und Quelle. Sie lässt sich als einseitiger Bericht drucken und ist im Excel-Export enthalten.",
+      ],
+    },
+  },
+  {
+    version: '0.295.0-beta',
+    date: '2026-10-06',
+    time: '19:01',
+    commit: '4ce414d',
+    highlights: {
+      en: [
+        "You can now edit an availability slot in place, offer a one-off time on a specific date, and mark days you're away: none of your hours are offered then, and your weekly pattern stays as it is.",
+      ],
+      tr: [
+        "Artık bir uygunluk slotunu yerinde düzenleyebilir, belirli bir tarihe tek seferlik saat açabilir ve uzakta olacağın günleri işaretleyebilirsin: o günlerde hiçbir saatin önerilmez, haftalık düzenin olduğu gibi kalır.",
+      ],
+      de: [
+        "Du kannst einen Verfügbarkeits-Slot jetzt direkt bearbeiten, an einem bestimmten Datum eine einmalige Zeit anbieten und Tage markieren, an denen du abwesend bist: Dann werden keine deiner Zeiten angeboten, und dein Wochenmuster bleibt, wie es ist.",
+      ],
+    },
+  },
+  {
+    version: '0.294.0-beta',
+    date: '2026-10-06',
+    time: '18:55',
+    commit: '2f4ebfa',
+    highlights: {
+      en: [
+        "Programmes can now ask participants where they ended up, 30, 90 or 180 days after the programme, and see the answers by cohort and source, always alongside how many people actually answered.",
+      ],
+      tr: [
+        "Programlar artık katılımcılara, program bittikten 30, 90 ya da 180 gün sonra nereye vardıklarını sorabiliyor ve cevapları kohort ve kaynağa göre görebiliyor. Kaç kişinin gerçekten cevap verdiği her zaman yanında yazıyor.",
+      ],
+      de: [
+        "Programme können Teilnehmende jetzt 30, 90 oder 180 Tage nach Programmende fragen, wo sie gelandet sind, und die Antworten nach Kohorte und Quelle sehen, immer zusammen mit der Zahl derer, die tatsächlich geantwortet haben.",
+      ],
+    },
+  },
+  {
+    version: '0.293.0-beta',
+    date: '2026-10-06',
+    time: '18:31',
+    commit: 'e4e934e',
+    highlights: {
+      en: [
+        "Saved views now follow you to any device and can be shared with your team — and you can save them on the board, mentors, companies and users lists too.",
+      ],
+      tr: [
+        "Kayıtlı görünümler artık her cihazda seninle ve ekibinle paylaşılabiliyor — ayrıca pano, mentorlar, şirketler ve kullanıcılar listelerinde de görünüm kaydedebilirsin.",
+      ],
+      de: [
+        "Gespeicherte Ansichten begleiten dich jetzt auf jedes Gerät und lassen sich mit deinem Team teilen — und du kannst sie auch auf dem Board sowie in den Listen für Mentor:innen, Unternehmen und Nutzer speichern.",
+      ],
+    },
+  },
+  {
+    version: '0.292.0-beta',
+    date: '2026-10-06',
+    time: '18:29',
+    commit: 'd175cd3',
+    highlights: {
+      en: [
+        "Nobody gets double-booked any more: a meeting can't be scheduled, moved or requested into an hour that's already taken, and you see what's in the way. Booked hours no longer appear among the times you can request.",
+      ],
+      tr: [
+        "Artık kimseye aynı saate iki toplantı konmuyor: dolu bir saate toplantı planlanamıyor, taşınamıyor ya da talep edilemiyor ve neyle çakıştığı gösteriliyor. Dolu saatler artık talep edebileceğin saatler arasında görünmüyor.",
+      ],
+      de: [
+        "Niemand wird mehr doppelt gebucht: In eine bereits belegte Stunde lässt sich kein Meeting mehr planen, verschieben oder anfragen, und du siehst, was im Weg ist. Belegte Zeiten erscheinen nicht mehr unter den Zeiten, die du anfragen kannst.",
+      ],
+    },
+  },
+  {
+    version: '0.291.1-beta',
+    date: '2026-10-06',
+    time: '17:44',
+    commit: '4adef55',
+    highlights: {
+      en: [
+        "When the AI service has a hiccup, AI features now retry quietly and, if it is still down, say \"temporarily unavailable\" instead of failing — and a failed attempt never counts against your monthly allowance.",
+      ],
+      tr: [
+        "AI hizmeti aksadığında AI özellikleri artık sessizce yeniden deniyor; hâlâ yanıt yoksa hata vermek yerine \"geçici olarak kullanılamıyor\" diyor — ve başarısız bir deneme aylık hakkından düşülmüyor.",
+      ],
+      de: [
+        "Wenn der KI-Dienst hakt, versuchen KI-Funktionen es jetzt still erneut und sagen, falls er weiter ausfällt, „vorübergehend nicht verfügbar“ statt zu scheitern — ein fehlgeschlagener Versuch zählt nie gegen dein Monatskontingent.",
+      ],
+    },
+  },
+  {
+    version: '0.291.0-beta',
+    date: '2026-10-06',
+    time: '17:33',
+    commit: '1c9852d',
+    highlights: {
+      en: [
+        "When you end a meeting, you can now note who was there in one tap — and each mentorship shows whether the pair meets on the rhythm you agreed.",
+      ],
+      tr: [
+        "Bir görüşmeyi bitirirken artık kimin katıldığını tek dokunuşla not edebilirsin — her mentorlukta da çiftin anlaşılan sıklıkta görüşüp görüşmediği görünüyor.",
+      ],
+      de: [
+        "Wenn du ein Treffen beendest, kannst du jetzt mit einem Tipp festhalten, wer dabei war — und jedes Mentoring zeigt, ob sich das Paar im vereinbarten Rhythmus trifft.",
+      ],
+    },
+  },
+  {
+    version: '0.290.0-beta',
+    date: '2026-10-06',
+    time: '17:21',
+    commit: '274c66b',
+    highlights: {
+      en: [
+        "The programme health card now also shows evaluation coverage — how many of the evaluations that fell due were actually written.",
+      ],
+      tr: [
+        "Program sağlığı kartı artık değerlendirme kapsamını da gösteriyor — zamanı gelen değerlendirmelerin ne kadarının gerçekten yazıldığını.",
+      ],
+      de: [
+        "Die Programm-Health-Karte zeigt jetzt auch die Abdeckung der Bewertungen — wie viele der fälligen Bewertungen tatsächlich geschrieben wurden.",
+      ],
+    },
+  },
+  {
+    version: '0.289.1-beta',
+    date: '2026-10-06',
+    time: '17:18',
+    commit: '2a0bf92',
+    highlights: {
+      en: [
+        "In dark mode, links stay readable when you hover them: the footer's release-notes link, your mentor's e-mail address and the back button in Messages.",
+      ],
+      tr: [
+        "Koyu temada bağlantılar üzerine gelince de okunur kalıyor: alt bilgideki sürüm notları bağlantısı, mentorunun e-posta adresi ve Mesajlar'daki geri düğmesi.",
+      ],
+      de: [
+        "Im Dunkelmodus bleiben Links auch beim Überfahren lesbar: der Link zu den Versionshinweisen in der Fußzeile, die E-Mail-Adresse deines Mentors und die Zurück-Schaltfläche in Nachrichten.",
+      ],
+    },
+  },
+  {
+    version: '0.289.0-beta',
+    date: '2026-10-06',
+    time: '17:14',
+    commit: '7c84bbe',
+    highlights: {
+      en: [
+        "Survey campaigns can now repeat: send a short pulse every week or month, and everyone gets one invitation per round.",
+      ],
+      tr: [
+        "Anket kampanyaları artık tekrarlanabiliyor: her hafta ya da ay kısa bir nabız anketi gönder, herkes her turda tek bir davet alır.",
+      ],
+      de: [
+        "Umfragekampagnen können sich jetzt wiederholen: Schicke jede Woche oder jeden Monat eine kurze Pulsumfrage, und jede Person erhält pro Runde eine Einladung.",
+      ],
+    },
+  },
+  {
+    version: '0.288.0-beta',
+    date: '2026-10-06',
+    time: '17:10',
+    commit: 'd4894ae',
+    highlights: {
+      en: [
+        "Analytics now shows whether your pairs actually meet: who met in the last 30 days, who keeps the agreed rhythm, and the no-show rate — counted from real meetings, never predicted.",
+      ],
+      tr: [
+        "Analitik artık çiftlerin gerçekten görüşüp görüşmediğini gösteriyor: son 30 günde kimin görüştüğünü, kimin anlaşılan sıklığı tuttuğunu ve gelmeme oranını — tahminle değil, gerçek görüşmelerden sayılarak.",
+      ],
+      de: [
+        "Die Analytics zeigen jetzt, ob sich deine Paare wirklich treffen: wer sich in den letzten 30 Tagen getroffen hat, wer den vereinbarten Rhythmus hält und die Quote des Nichterscheinens — gezählt aus echten Treffen, nie vorhergesagt.",
+      ],
+    },
+  },
+  {
+    version: '0.287.0-beta',
+    date: '2026-10-06',
+    time: '16:55',
+    commit: '0cb71a1',
+    highlights: {
+      en: [
+        "The programme health card now shows your Net Promoter Score and survey response rate, and your surveys appear in the printable report and the Excel export.",
+      ],
+      tr: [
+        "Program sağlığı kartı artık Net Tavsiye Skorunu ve anket yanıt oranını gösteriyor; anketlerin de yazdırılabilir raporda ve Excel dışa aktarımında yer alıyor.",
+      ],
+      de: [
+        "Die Programm-Health-Karte zeigt jetzt deinen Net Promoter Score und die Rücklaufquote der Umfragen, und deine Umfragen erscheinen im druckbaren Bericht und im Excel-Export.",
+      ],
+    },
+  },
+  {
+    version: '0.286.0-beta',
+    date: '2026-10-06',
+    time: '16:36',
+    commit: 'f99866c',
+    highlights: {
+      en: [
+        "Mentors are now reminded when an interim or final evaluation is due — on the day and once more a week later — and the reminders stop the moment it is written. Set when each one falls due in Settings.",
+      ],
+      tr: [
+        "Mentorlara artık ara ya da final değerlendirmenin zamanı geldiğinde hatırlatılıyor — o gün ve bir hafta sonra bir kez daha — ve değerlendirme yazıldığı anda hatırlatmalar duruyor. Ne zaman geleceklerini Ayarlar'dan belirle.",
+      ],
+      de: [
+        "Mentor:innen werden jetzt erinnert, wenn eine Zwischen- oder Abschlussbewertung fällig ist — am Tag selbst und eine Woche später noch einmal — und die Erinnerungen hören auf, sobald sie geschrieben ist. Wann sie fällig werden, legst du in den Einstellungen fest.",
+      ],
+    },
+  },
+  {
+    version: '0.285.0-beta',
+    date: '2026-10-06',
+    time: '16:20',
+    commit: '0a64a5f',
+    highlights: {
+      en: [
+        "Too many written answers to read? Summarise them with AI into themes, with quotes taken word for word from the answers — and nobody is ever named.",
+      ],
+      tr: [
+        "Okunamayacak kadar çok yazılı yanıt mı var? AI ile temalara özetle; alıntılar yanıtlardan kelimesi kelimesine alınır ve kimsenin adı geçmez.",
+      ],
+      de: [
+        "Zu viele Freitextantworten zum Lesen? Fasse sie mit KI zu Themen zusammen, mit wörtlichen Zitaten aus den Antworten — und niemand wird je genannt.",
+      ],
+    },
+  },
+  {
+    version: '0.284.2-beta',
+    date: '2026-10-06',
+    time: '16:12',
+    commit: 'a3ad16d',
+    highlights: {
+      en: [
+        "SaleVali no longer records internal pipeline-stage changes as notifications on a lead's own account.",
+      ],
+      tr: [
+        "SaleVali artık iç satış aşaması değişikliklerini müşteri adayının kendi hesabına bildirim olarak yazmıyor.",
+      ],
+      de: [
+        "SaleVali legt interne Phasenwechsel nicht mehr als Benachrichtigungen im Konto des Leads ab.",
+      ],
+    },
+  },
+  {
+    version: '0.284.0-beta',
+    date: '2026-10-06',
+    time: '15:53',
+    commit: '02ddd7a',
+    highlights: {
+      en: [
+        "The estimated deal value now shows the net change per month and comes along in both Excel exports and the printable report.",
+      ],
+      tr: [
+        "Tahmini iş değeri artık her ay için net değişimi gösteriyor; iki Excel dışa aktarımında ve yazdırılabilir raporda da yer alıyor.",
+      ],
+      de: [
+        "Der geschätzte Deal-Wert zeigt jetzt die monatliche Nettoveränderung und ist in beiden Excel-Exporten sowie im druckbaren Bericht enthalten.",
+      ],
+    },
+  },
+  {
+    version: '0.283.0-beta',
+    date: '2026-10-06',
+    time: '15:49',
+    commit: 'e710446',
+    highlights: {
+      en: [
+        "Surveys now remind people who have not answered — twice at most — and a new completion screen shows who still owes an answer, with a \"remind now\" button. Anonymous surveys show only the numbers.",
+      ],
+      tr: [
+        "Anketler artık yanıtlamayanlara en fazla iki kez hatırlatıyor; yeni tamamlanma ekranı kimin henüz yanıtlamadığını gösteriyor ve \"şimdi hatırlat\" düğmesi sunuyor. Anonim anketlerde yalnızca sayılar görünür.",
+      ],
+      de: [
+        "Umfragen erinnern jetzt alle, die noch nicht geantwortet haben — höchstens zweimal — und eine neue Rücklauf-Seite zeigt, wer noch aussteht, mit einem „Jetzt erinnern“-Knopf. Bei anonymen Umfragen sind nur die Zahlen sichtbar.",
+      ],
+    },
+  },
+  {
+    version: '0.282.1-beta',
+    date: '2026-10-06',
+    time: '15:40',
+    commit: '46098da',
+    highlights: {
+      en: [
+        "Going back from a conversation twice in a row no longer shows an error screen.",
+      ],
+      tr: [
+        "Bir sohbetten art arda iki kez geri dönünce artık hata ekranı çıkmıyor.",
+      ],
+      de: [
+        "Zweimal hintereinander aus einer Unterhaltung zurückzugehen, zeigt keinen Fehlerbildschirm mehr.",
+      ],
+    },
+  },
+  {
+    version: '0.282.0-beta',
+    date: '2026-10-06',
+    time: '15:21',
+    commit: '4c78444',
+    highlights: {
+      en: [
+        "Survey results are here: see your programme's Net Promoter Score, how it moves week by week and how each question was answered — with groups smaller than five never shown.",
+      ],
+      tr: [
+        "Anket sonuçları geldi: programının Net Tavsiye Skorunu, haftadan haftaya nasıl değiştiğini ve her sorunun nasıl yanıtlandığını gör — beş kişiden küçük gruplar hiçbir zaman gösterilmez.",
+      ],
+      de: [
+        "Umfrageergebnisse sind da: Sieh den Net Promoter Score deines Programms, wie er sich Woche für Woche entwickelt und wie jede Frage beantwortet wurde — Gruppen unter fünf Personen werden nie angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.281.0-beta',
+    date: '2026-10-06',
+    time: '15:03',
+    commit: 'fe58150',
+    highlights: {
+      en: [
+        "SaleVali now has a published price list: three plans for sales teams, billed per user, on the pricing page.",
+      ],
+      tr: [
+        "SaleVali'nin artık yayımlanmış bir fiyat listesi var: fiyatlandırma sayfasında, kullanıcı başına faturalanan üç satış ekibi paketi.",
+      ],
+      de: [
+        "SaleVali hat jetzt eine veröffentlichte Preisliste: drei Pläne für Vertriebsteams, abgerechnet pro Nutzer, auf der Preisseite.",
+      ],
+    },
+  },
+  {
+    version: '0.280.0-beta',
+    date: '2026-10-06',
+    time: '14:38',
+    commit: 'ca8c947',
+    highlights: {
+      en: [
+        "Surveys can now go out on their own: when someone reaches a stage, a set number of days after they start or before a deadline, or once to everyone — each person invited once, and anyone who turned survey e-mails off is left alone.",
+      ],
+      tr: [
+        "Anketler artık kendiliğinden gidebiliyor: biri bir aşamaya ulaştığında, başladıktan ya da bir son tarihten belirli gün önce veya herkese bir kez — her kişi yalnızca bir kez davet ediliyor ve anket e-postalarını kapatanlara hiç gönderilmiyor.",
+      ],
+      de: [
+        "Umfragen können jetzt von selbst verschickt werden: wenn jemand eine Phase erreicht, eine bestimmte Anzahl Tage nach dem Start oder vor einer Frist, oder einmal an alle — jede Person wird nur einmal eingeladen, und wer Umfrage-E-Mails abgeschaltet hat, bekommt keine.",
+      ],
+    },
+  },
+  {
+    version: '0.279.1-beta',
+    date: '2026-10-06',
+    time: '14:27',
+    commit: 'fdc551e',
+    highlights: {
+      en: [
+        "In dark mode, the missing-field links on your profile stay readable when you hover them.",
+      ],
+      tr: [
+        "Koyu temada profilindeki eksik alan bağlantıları, üzerine gelince de okunur kalıyor.",
+      ],
+      de: [
+        "Im Dunkelmodus bleiben die Links zu fehlenden Profilfeldern auch beim Überfahren lesbar.",
+      ],
+    },
+  },
+  {
+    version: '0.279.0-beta',
+    date: '2026-10-06',
+    time: '14:20',
+    commit: '020937a',
+    highlights: {
+      en: [
+        "Surveys can now be answered straight from the e-mail link — no login, one question per screen on a phone, and a link that works once.",
+      ],
+      tr: [
+        "Anketler artık doğrudan e-postadaki bağlantıdan cevaplanabiliyor — giriş yok, telefonda her ekranda bir soru ve yalnızca bir kez çalışan bir bağlantı.",
+      ],
+      de: [
+        "Umfragen lassen sich jetzt direkt über den Link in der E-Mail beantworten — ohne Anmeldung, auf dem Handy eine Frage pro Bildschirm, und der Link funktioniert genau einmal.",
+      ],
+    },
+    media: {
+      poster: "release-media/survey-token-answering.png",
+      alt: {
+        en: "A survey opened from an e-mail link: a note that answers are anonymous, a 0 to 10 recommendation scale with 9 selected, a 1 to 5 expectation scale with 4 selected, a free-text answer and a Send answers button",
+        tr: "E-posta bağlantısından açılmış bir anket: cevapların anonim olduğunu belirten not, 9 seçili 0–10 tavsiye ölçeği, 4 seçili 1–5 beklenti ölçeği, serbest metin cevabı ve Cevapları gönder düğmesi",
+        de: "Eine über einen E-Mail-Link geöffnete Umfrage: ein Hinweis, dass die Antworten anonym sind, eine Empfehlungsskala von 0 bis 10 mit 9 gewählt, eine Erwartungsskala von 1 bis 5 mit 4 gewählt, eine Freitextantwort und die Schaltfläche Antworten senden",
+      },
+      width: 576,
+      height: 586,
+    },
+  },
+  {
+    version: '0.278.0-beta',
+    date: '2026-10-06',
+    time: '13:52',
+    commit: '4d85cc7',
+    highlights: {
+      en: [
+        "After a meeting you can now say in one tap whether it happened and how helpful it was — in the app right after ending it, or from a single e-mail without logging in. The other person only ever sees an average of several answers.",
+      ],
+      tr: [
+        "Bir toplantıdan sonra artık tek dokunuşla toplantının gerçekleşip gerçekleşmediğini ve ne kadar faydalı olduğunu söyleyebilirsin — bitirdikten hemen sonra uygulamada ya da giriş yapmadan tek bir e-postadan. Karşı taraf yalnızca birkaç cevabın ortalamasını görür.",
+      ],
+      de: [
+        "Nach einem Termin kannst du jetzt mit einem Tipp angeben, ob er stattgefunden hat und wie hilfreich er war — direkt nach dem Beenden in der App oder ohne Anmeldung aus einer einzigen E-Mail. Die andere Person sieht immer nur einen Durchschnitt aus mehreren Antworten.",
+      ],
+    },
+    media: {
+      poster: "release-media/meeting-feedback.png",
+      alt: {
+        en: "The meeting feedback card: did it take place, answered yes; how helpful was it, 4 of 5 selected; an optional note field; Send and Skip; and a line saying the other person only sees an average",
+        tr: "Toplantı geri bildirim kartı: gerçekleşti mi sorusuna evet; ne kadar faydalıydı sorusunda 5 üzerinden 4 seçili; isteğe bağlı not alanı; Gönder ve Geç; karşı tarafın yalnızca ortalamayı gördüğünü söyleyen bir satır",
+        de: "Die Feedback-Karte zum Termin: Hat er stattgefunden, mit Ja beantwortet; wie hilfreich war er, 4 von 5 gewählt; ein optionales Notizfeld; Senden und Überspringen; und ein Hinweis, dass die andere Person nur einen Durchschnitt sieht",
+      },
+      width: 960,
+      height: 358,
+    },
+  },
+  {
     version: '0.276.0-beta',
     date: '2026-10-06',
     time: '13:14',

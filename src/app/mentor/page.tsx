@@ -122,7 +122,7 @@ export default async function MentorDashboard() {
       {/* Volunteers itself while a newly joined mentee still needs onboarding (#51). */}
       <MenteeOnboardingWizard />
 
-      <MentorAttentionQueue items={attention.items} dormantCount={attention.dormantCount} t={t} />
+      <MentorAttentionQueue items={attention.items} dormantCount={attention.dormantCount} t={t} locale={locale} />
 
       <ReferralLinkCard />
 

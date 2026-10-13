@@ -7,7 +7,8 @@ import { logActivity } from '@/lib/activity';
 import { orgPlanHasFeature } from '@/lib/orgPlans';
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
-import { MAPPABLE_ROLES } from '@/lib/ssoRoleMapping';
+import { isMappableRole, mappableRolesFor } from '@/lib/ssoRoleMapping';
+import { verticalCapabilities } from '@/lib/verticals';
 
 // A tenant's IdP role mapping (#1940): "a user whose `claim` contains
 // `matchValue` gets `role`", plus the opt-in `ssoSyncRole` switch. The rule
@@ -21,6 +22,11 @@ import { MAPPABLE_ROLES } from '@/lib/ssoRoleMapping';
 // ignored by resolveRole) until the platform gate #1575 lands — mapping a claim
 // to ADMIN turns any gap in who may edit an org's SSO config into remote
 // privilege escalation.
+//
+// ONLY THE VERTICAL'S ROLES (#2839). GET offers, and POST accepts, exactly
+// `mappableRolesFor(verticalCapabilities(org.vertical))`: a MARKETING tenant
+// never sees SOURCE, because that product has no `sourcing` module and a user
+// provisioned into the role would have no shell. The ACS applies the same list.
 //
 // Not wrapped in withTenantScope, for the reason pipeline-stages gives: a super
 // admin manages another tenant by explicit id. Every query names `orgId: id`.
@@ -37,7 +43,7 @@ async function requireAdminOrg(id: string, route: string) {
   }
   const org = await prisma.organization.findUnique({
     where: { id },
-    select: { id: true, plan: true, ssoSyncRole: true },
+    select: { id: true, plan: true, ssoSyncRole: true, vertical: true },
   });
   if (!org) return { error: 'Organization not found' as const, status: 404 };
   return { org, session };
@@ -54,7 +60,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     select: mappingSelect,
   });
-  return NextResponse.json({ mappings, syncRole: gate.org.ssoSyncRole, roles: MAPPABLE_ROLES });
+  return NextResponse.json({
+    mappings,
+    syncRole: gate.org.ssoSyncRole,
+    roles: mappableRolesFor(verticalCapabilities(gate.org.vertical)),
+  });
 }
 
 const createSchema = z.object({
@@ -76,16 +86,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
   const { claim, matchValue, role, priority } = parsed.data;
-  if (!(MAPPABLE_ROLES as readonly string[]).includes(role)) {
-    return NextResponse.json(
-      {
-        error: role === 'ADMIN'
-          ? 'Mapping an IdP claim to ADMIN is not available yet.'
-          : 'Unknown role.',
-        code: role === 'ADMIN' ? 'admin_mapping_unavailable' : 'invalid_role',
-      },
-      { status: 400 },
-    );
+  const offered = mappableRolesFor(verticalCapabilities(gate.org.vertical));
+  if (!(offered as readonly string[]).includes(role)) {
+    const refusal = role === 'ADMIN'
+      ? { error: 'Mapping an IdP claim to ADMIN is not available yet.', code: 'admin_mapping_unavailable' }
+      : isMappableRole(role)
+        ? { error: 'That role is not part of this product.', code: 'role_not_in_vertical' }
+        : { error: 'Unknown role.', code: 'invalid_role' };
+    return NextResponse.json(refusal, { status: 400 });
   }
   try {
     const mapping = await prisma.ssoClaimMapping.create({

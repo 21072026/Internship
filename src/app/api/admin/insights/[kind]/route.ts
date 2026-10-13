@@ -6,6 +6,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { getLocale } from '@/i18n/server';
+import { AI_PACK_FEATURE } from '@/lib/aiGate';
 import { INSIGHT_KINDS, type InsightKind } from '@/lib/insights/openTextSources';
 import { insightFiltersSchema, insightsResponse, resolveFilters } from '@/lib/insights/insightsResponse';
 
@@ -20,6 +21,10 @@ import { insightFiltersSchema, insightsResponse, resolveFilters } from '@/lib/in
 //   • Below NAMED_ROWS_FLOOR usable rows the summary is refused and says so.
 //   • With AI off or the provider down every number still comes back; only
 //     `summary` is null, with `reason` saying why.
+//   • Both engines are operator tasks behind the AI pack (#1738). GET carries
+//     `locked` so the screen can say so without a call; a POST from an org
+//     without the pack is the shared 403 `feature_locked` (the gate's
+//     'not_entitled'), never a 200 with a reason — the numbers are on the GET.
 
 function kindOf(raw: string): InsightKind | null {
   return (INSIGHT_KINDS as readonly string[]).includes(raw) ? (raw as InsightKind) : null;
@@ -68,7 +73,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ kin
   const filters = resolveFilters(kind, parsed.data);
   if (!filters) return NextResponse.json({ error: 'invalid_range', code: 'invalid_range' }, { status: 400 });
   const locale = await getLocale();
-  return withTenantScope(session, async () =>
-    NextResponse.json(await insightsResponse(session, kind, filters, locale, { run: true, regenerate: parsed.data.regenerate })),
-  );
+  return withTenantScope(session, async () => {
+    const body = await insightsResponse(session, kind, filters, locale, { run: true, regenerate: parsed.data.regenerate });
+    if (body.reason === 'not_entitled') {
+      return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
+    }
+    return NextResponse.json(body);
+  });
 }

@@ -11,6 +11,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { DECLINE_REASON_CODES, OFFER_STATUSES } from '@/lib/offers';
+import { OfferBenchmarkCard } from '@/components/OfferBenchmarkCard';
 
 interface OfferRow {
   id: string;
@@ -192,6 +193,9 @@ function OffersIndex() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{a.title}</h1>
         <p className="text-gray-500 mt-1 max-w-3xl">{a.subtitle}</p>
       </div>
+
+      {/* Structured compensation read model (#1851); collapsed until asked. */}
+      <OfferBenchmarkCard />
 
       <div className="flex flex-wrap gap-2" data-testid="admin-offers-presets">
         {PRESETS.map((preset) => (

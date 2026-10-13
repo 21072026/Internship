@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { BrandTile } from '@/components/BrandMark';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { PasswordRules } from '@/components/auth/PasswordRules';
+import { passwordPolicyError, passwordRefusalText, usePasswordPolicy } from '@/lib/passwordPolicyClient';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -17,6 +19,9 @@ function ResetForm() {
 
   const [valid, setValid] = useState<boolean | null>(null);
   const [password, setPassword] = useState('');
+  // The account's org decides the rule; the form shows and checks the same one
+  // the API enforces (#1544).
+  const pw = usePasswordPolicy();
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,6 +44,11 @@ function ResetForm() {
       setError(t.account.passwordMismatch);
       return;
     }
+    const policyError = passwordPolicyError(password, pw.policy, t.passwordPolicy);
+    if (policyError) {
+      setError(policyError);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/reset', {
@@ -47,7 +57,7 @@ function ResetForm() {
         body: JSON.stringify({ token, password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(passwordRefusalText(data, pw.policy, t.passwordPolicy) ?? data.error ?? 'Failed');
       router.push('/auth/signin?reset=true');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
@@ -88,6 +98,7 @@ function ResetForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <PasswordRules policy={pw.policy} rules={pw.rules} value={password} breachCheck={pw.breachCheck} />
               <Input
                 label={t.auth.confirmPassword}
                 type="password"

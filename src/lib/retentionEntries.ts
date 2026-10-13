@@ -10,6 +10,8 @@ import {
 } from '@/lib/notificationRetention';
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { messageRetentionCutoff } from '@/lib/safeguarding';
 import { inquiryErasureData } from '@/lib/companyContactErasure';
 import { ERASED_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import {
@@ -517,6 +519,109 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
   };
 }
 
+/** One org's message window, falling back to keep-forever on any read error. */
+async function messageWindowFor(orgId: string): Promise<number> {
+  try {
+    const parsed = Number.parseInt(await getSetting('messageRetentionDays', orgId), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Sender ids per IN clause — far under any placeholder limit, and a short statement. */
+const MESSAGE_SENDER_CHUNK = 1000;
+
+/**
+ * Message bodies past their org's window (#2056) — MASKED, never deleted.
+ *
+ * The masking is the existing delete-for-everyone mechanism, applied by age:
+ * attachments dropped, `body` emptied, `deletedForEveryoneAt` stamped. The row
+ * stays, so the other participant's thread keeps its shape ("message deleted"
+ * where the text was) instead of losing turns, and every count that reads
+ * messages (the last-contact rule, unread state) keeps working. An already
+ * masked row is never selected again, so the sweep is idempotent and cannot
+ * re-stamp the moment a sender deleted their own message.
+ *
+ * THE WINDOW IS PER ORG, resolved inside this function — `ctx.cutoff` is unused
+ * for the reason the notification entry gives (#1561). Default `0` = keep
+ * forever, so on an installation where no programme chose a window this entry
+ * touches nothing; a positive window is raised to MESSAGE_RETENTION_FLOOR_DAYS.
+ *
+ * WHOSE ORG. Message has no orgId and its parents do not settle it (a project or
+ * group conversation has none), and `senderId` has no foreign key to User — so
+ * the org is the SENDER's, resolved the way every settings read resolves a row
+ * (an org-less account belongs to the default org). The same rule decides
+ * which watch list a message is scanned against, so one programme's choices
+ * apply to the words its own people wrote.
+ */
+async function maskOldMessages(ctx: RetentionContext): Promise<RetentionOutcome> {
+  const fallbackOrg = await defaultOrgId();
+  const orgs = await prisma.organization.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
+  let masked = 0;
+  let capped = false;
+  let keepForever = 0;
+
+  for (const org of orgs) {
+    const cutoff = messageRetentionCutoff(ctx.now, await messageWindowFor(org.id));
+    if (!cutoff) {
+      keepForever += 1;
+      continue;
+    }
+    const members = await prisma.user.findMany({
+      where: org.id === fallbackOrg ? { OR: [{ orgId: org.id }, { orgId: null }] } : { orgId: org.id },
+      select: { id: true },
+    });
+    const senderIds = members.map((m) => m.id);
+    for (let i = 0; i < senderIds.length; i += MESSAGE_SENDER_CHUNK) {
+      const budget = ctx.budget - masked;
+      if (budget <= 0) {
+        capped = true;
+        break;
+      }
+      const chunk = senderIds.slice(i, i + MESSAGE_SENDER_CHUNK);
+      const outcome = await pruneInBatches({
+        batchSize: ctx.batchSize,
+        budget,
+        selectIds: async (take) =>
+          (
+            await prisma.message.findMany({
+              where: { senderId: { in: chunk }, createdAt: { lt: cutoff }, deletedForEveryoneAt: null },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true },
+              take,
+            })
+          ).map((r) => r.id),
+        handleBatch: async (ids) => {
+          const stamp = new Date();
+          // Attachments first: once the body is masked nothing points back at
+          // the bytes worth keeping, and they are reached only through the row.
+          const [, res] = await prisma.$transaction([
+            prisma.messageAttachment.deleteMany({ where: { messageId: { in: ids } } }),
+            prisma.message.updateMany({
+              where: { id: { in: ids }, deletedForEveryoneAt: null },
+              data: { body: '', deletedForEveryoneAt: stamp },
+            }),
+          ]);
+          return res.count;
+        },
+      });
+      masked += outcome.processed;
+      capped = capped || outcome.capped;
+    }
+    if (capped) break;
+  }
+
+  return {
+    deleted: 0,
+    masked,
+    capped,
+    // Keep-forever is the default, so "off" is the normal case — reported only
+    // when SOME org has a window, where it tells a partial sweep from a full one.
+    note: keepForever > 0 && keepForever < orgs.length ? `off:${keepForever}/${orgs.length}` : undefined,
+  };
+}
+
 /**
  * Anonymize orphan applicant accounts past the grace period (#1780).
  *
@@ -686,6 +791,18 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A bell entry is a rendered sentence about a person plus a link to their record — the same category of personal data EmailLog is pruned for, and until #1646 the one table nobody ever deleted from. 180 days matches PageView, the other per-user history table, so the product defends one number rather than two. An unread row, and anything younger than 30 days, is never touched whatever the setting says; the consent and impersonation notices (RETAINED_NOTIFICATION_TYPES) are never touched at all.',
     run: pruneNotifications,
+  },
+  {
+    key: 'message',
+    // Declared for the operator's list; the runner's single number is not the
+    // one that fires — `maskOldMessages` resolves each org's own window and
+    // ignores `ctx.cutoff` (#1561). The default is keep-forever, which the
+    // registry cannot express as a number, hence the nominal ten years here.
+    settingKey: 'messageRetentionDays',
+    defaultDays: 3650,
+    reason:
+      'A private conversation between a mentor and a (possibly under-age) participant is free-text personal data that nothing else in the product limits (GDPR Art. 5(1)(e)). How long a programme keeps it is that programme\'s own decision, so the window is per org and off by default; when set, bodies are MASKED with the existing delete-for-everyone mechanism rather than deleted, so the other participant\'s thread stays coherent. A window under 30 days is raised to 30. See docs/safeguarding.md.',
+    run: maskOldMessages,
   },
   {
     key: 'companyInquiry',

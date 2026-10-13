@@ -166,6 +166,16 @@ export default async function AccessibilityPage() {
               </p>
             </section>
 
+            <section data-testid="accessibility-vpat">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{a.vpatTitle}</h2>
+              <p>{a.vpatBody}</p>
+              <p className="mt-2">
+                <Link href="/accessibility/vpat" className="text-blue-600 underline underline-offset-2 font-medium" data-testid="accessibility-vpat-link">
+                  {a.vpatLink} →
+                </Link>
+              </p>
+            </section>
+
             <section>
               <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{a.enforcementTitle}</h2>
               <p>{a.enforcementBody}</p>

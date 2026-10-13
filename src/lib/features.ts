@@ -40,7 +40,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
-  BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
+  BarChart3, ShieldCheck, ShieldAlert, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
@@ -178,5 +178,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     // Light gamification: the mentee portal's profile completeness meter. Lives
     // only inside /portal (the mentorship shell), so it carries `mentorship`.
     { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
+    { key: 'safeguarding', category: 'trust', icon: ShieldAlert, color: 'amber', capability: 'mentorship', title: C.safeguarding.t, desc: C.safeguarding.d },
   ];
 }

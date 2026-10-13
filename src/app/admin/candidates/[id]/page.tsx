@@ -41,6 +41,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
+import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
@@ -60,6 +61,7 @@ interface Relation {
   // The trial window of a funnel record (#2551/#2553); null outside a trial.
   trialStartedAt?: string | null;
   trialEndsAt?: string | null;
+  contractEndsAt?: string | null;
   mentor: { id: string; fullName: string; email: string };
   company: { id: string; name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
@@ -488,6 +490,7 @@ export default function AdminMenteeDetailPage() {
                 relationId={rel.id}
                 nextActionAt={rel.nextActionAt}
                 nextActionNote={rel.nextActionNote}
+                pipelineStatus={rel.pipelineStatus}
                 onSaved={load}
               />
 
@@ -501,6 +504,15 @@ export default function AdminMenteeDetailPage() {
                 pipelineStatus={rel.pipelineStatus}
                 trialStartedAt={rel.trialStartedAt}
                 trialEndsAt={rel.trialEndsAt}
+                canEdit={rel.status === 'ACTIVE'}
+                onSaved={load}
+              />
+
+              {/* A won customer's notice period (#2841); DEAL_WON only. */}
+              <ContractEndPanel
+                relationId={rel.id}
+                pipelineStatus={rel.pipelineStatus}
+                contractEndsAt={rel.contractEndsAt}
                 canEdit={rel.status === 'ACTIVE'}
                 onSaved={load}
               />

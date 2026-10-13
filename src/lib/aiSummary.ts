@@ -1,15 +1,12 @@
 // AI auto-summary of a mentorship's interaction logs (Faz 2, #534). Sends only
 // the log text (dates, types, subjects, notes) — never files or contact data —
 // and returns a compact mentor-facing summary. Callers MUST go through
-// runAiGated (consent + quota); this module only talks to the provider.
+// runAiGated (consent + quota); this module holds the prompt only — the
+// client, model, timeout and input cap are callModel's (#2022, task
+// `interaction_summary`).
 
-import Anthropic from '@anthropic-ai/sdk';
-
-// A generation that has not answered in a minute is not going to.
-const AI_TIMEOUT_MS = 60_000;
-
-const MODEL = process.env.ANTHROPIC_SUMMARY_MODEL || process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
-const MAX_INPUT_CHARS = 24_000;
+import { callModel } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 
 export interface SummaryInteraction {
   date: Date;
@@ -21,22 +18,13 @@ export interface SummaryInteraction {
 const SYSTEM = `You summarize a mentor's interaction log with one mentee. Write for the mentor. Use the same language the log entries are written in. Return 4-8 short bullet lines covering: overall progress, recurring themes, open risks or blockers, and 1-2 concrete suggested next steps. Be specific to the log content; do not invent facts.`;
 
 export async function aiSummarizeInteractions(menteeName: string, interactions: SummaryInteraction[]): Promise<string> {
-  // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
-  // enough to hold a request handler open until the user gives up (#895).
-  // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const log = interactions
     .map((i) => `${i.date.toISOString().slice(0, 10)} · ${i.type}${i.subject ? ` · ${i.subject}` : ''}\n${i.notes}`)
-    .join('\n---\n')
-    .slice(0, MAX_INPUT_CHARS);
-
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 700,
+    .join('\n---\n');
+  const reply = await callModel({
+    task: 'interaction_summary',
     system: SYSTEM,
-    messages: [{ role: 'user', content: `Mentee: ${menteeName}\n\nInteraction log (newest first):\n\n${log}` }],
+    input: `Mentee:\n${wrapUntrusted('mentee', menteeName)}\n\nInteraction log (newest first):\n\n${wrapUntrusted('log', log)}`,
   });
-
-  const block = res.content.find((b) => b.type === 'text');
-  return block && block.type === 'text' ? block.text.trim() : '';
+  return reply.trim();
 }

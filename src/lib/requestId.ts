@@ -72,6 +72,9 @@ export function resolveRequestId(inbound: string | null | undefined): string {
 export type RequestIdAmbient = {
   // The id bound to the current async context, or undefined when none is.
   currentRequestId: () => string | undefined;
+  // Count one database query against the request in flight (#1608). A no-op
+  // outside a request.
+  countQuery?: (model: string) => void;
 };
 
 let ambient: RequestIdAmbient | null = null;
@@ -89,4 +92,13 @@ export function registerRequestIdAmbient(impl: RequestIdAmbient): void {
  */
 export function ambientRequestId(): string | undefined {
   return ambient?.currentRequestId();
+}
+
+/**
+ * Count one database query against the request in flight (#1608) — called by
+ * `src/lib/dbQueryObserver.ts` for every Prisma operation. A no-op outside a
+ * request, or in a process where the server-only engine was never loaded.
+ */
+export function ambientCountQuery(model: string): void {
+  ambient?.countQuery?.(model);
 }

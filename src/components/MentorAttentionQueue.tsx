@@ -3,7 +3,10 @@ import { AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import type { AttentionItem, AttentionReason } from '@/lib/mentorAttention';
+import type { UsageNote } from '@/lib/usageSignals';
 import type { Dictionary } from '@/i18n/dictionaries';
+import type { Locale } from '@/i18n/config';
+import { formatDate } from '@/lib/relativeTime';
 
 const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'purple'> = {
   inactive: 'warning',
@@ -22,6 +25,12 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   next_action_due: 'danger',
   // Amber: a task waiting to be done, with reminders on the way (#1891).
   evaluation_due: 'warning',
+  // Product usage (#2449). Red for a drop — revenue walking away; amber for a
+  // trial nobody started using — still a conversation to have.
+  usage_drop: 'danger',
+  trial_inactive: 'warning',
+  // Red: a paying customer is on their way out (#2841).
+  cancellation_pending: 'danger',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -31,15 +40,24 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
 export function MentorAttentionQueue({
   items,
   dormantCount = 0,
+  usage = null,
   t,
+  locale = 'en',
   hrefBase = '/mentor/mentees',
 }: {
   items: AttentionItem[];
   dormantCount?: number;
+  /** The usage signals' footnote (#2449), from getAttentionItems(). */
+  usage?: UsageNote | null;
   t: Dictionary;
+  /** For the notice-period date (#2841). */
+  locale?: Locale;
   hrefBase?: string;
 }) {
-  if (items.length === 0) return null;
+  // Accounts left out of the usage signals are said out loud even when the
+  // queue is otherwise empty — an empty queue must not read as "all fine".
+  const usageExcluded = !!usage && (usage.noHistory > 0 || usage.unowned > 0);
+  if (items.length === 0 && !usageExcluded) return null;
   const labels = t.mentor.attention;
   const reasonLabel: Record<AttentionReason, string> = {
     inactive: labels.inactive,
@@ -52,6 +70,9 @@ export function MentorAttentionQueue({
     trial_no_end_date: labels.trialNoEndDate,
     next_action_due: labels.nextActionDue,
     evaluation_due: labels.evaluationDue,
+    usage_drop: labels.usageDrop,
+    trial_inactive: labels.trialInactive,
+    cancellation_pending: labels.cancellationPending,
   };
 
   return (
@@ -80,7 +101,9 @@ export function MentorAttentionQueue({
             <div className="flex flex-wrap gap-1">
               {item.reasons.map((r) => (
                 <Badge key={r} variant={REASON_VARIANT[r]} className="text-xs">
-                  {reasonLabel[r]}
+                  {r === 'cancellation_pending' && item.contractEndsAt
+                    ? reasonLabel[r].replace('{date}', formatDate(item.contractEndsAt, locale, { timeZone: 'UTC' }))
+                    : reasonLabel[r]}
                 </Badge>
               ))}
             </div>
@@ -90,6 +113,21 @@ export function MentorAttentionQueue({
       {dormantCount > 0 && (
         <p className="pt-3 text-xs text-gray-500 dark:text-gray-400" data-testid="attention-dormant-note">
           {labels.dormantHidden.replace('{n}', String(dormantCount))}
+        </p>
+      )}
+      {usage && usage.noHistory > 0 && (
+        <p className="pt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="attention-usage-no-history">
+          {labels.usageNoHistory.replace('{n}', String(usage.noHistory))}
+        </p>
+      )}
+      {usage && usage.unowned > 0 && (
+        <p className="pt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="attention-usage-unowned">
+          {labels.usageUnowned.replace('{n}', String(usage.unowned))}
+        </p>
+      )}
+      {usage && !usage.feedConnected && items.length > 0 && (
+        <p className="pt-1 text-xs text-gray-400 dark:text-gray-500" data-testid="attention-usage-no-feed">
+          {labels.usageNoFeed}
         </p>
       )}
     </Card>

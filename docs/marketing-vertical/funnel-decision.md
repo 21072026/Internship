@@ -1,10 +1,11 @@
 # MARKETING_FUNNEL aşamaları ve DEAL_WON sonrası müşteri durumu (#2572)
 
-> **Durum: KARAR BEKLİYOR — maintainer onayı.** Bu bir **taslaktır**. Hiçbir kod, şema,
-> preset veya test bu dosyayla değişmedi. Aşağıdaki "Öneri" satırları, onaylanana kadar
-> hiçbir PR'ın dayanabileceği bir karar değildir; onaylanınca bu başlık "Karar" olur,
-> uygulama task'ları açılır ve [`pipeline-record.md`](pipeline-record.md) → "SaleVali
-> yolculuğu" bölümü buraya işaret eder.
+> **Durum: KARAR — maintainer onayı 2026-10-07.** Aşağıdaki "Öneri" satırlarının hepsi
+> onaylandı ve karar oldu; [§ Maintainer'a açık sorular](#maintainera-açık-sorular) da
+> aşağıda verilen varsayılanlarla kapandı. Uygulama task'ları
+> [§ Uygulama task'ları](#onaylanırsa-açılacak-uygulama-taskları-taslak) altında issue
+> numaralarıyla duruyor; [`pipeline-record.md`](pipeline-record.md) → "SaleVali
+> yolculuğu" buraya işaret eder.
 >
 > Parent: #2571 · İlgili: #2425 (churn/retention), #419 (bir mentee bir aktif mentor),
 > #2391 / #2555 (gerçek tablo cutover'ı), #2565 (SaleVali karşı işi: lisans olayları).
@@ -102,7 +103,7 @@ modeli ([`salevali-domain.md`](salevali-domain.md) § Yaşam döngüsü).
   eklemek "terminal"in anlamını da bozar. `e2e/vertical-stage-preset.spec.ts:38-40`
   preset listesini sabitler.
 
-### Seçenek C — funnel `DEAL_WON`'da biter; durum = olay + tek sözleşme tarihi + dikkat sebebi *(öneri)*
+### Seçenek C — funnel `DEAL_WON`'da biter; durum = olay + tek sözleşme tarihi + dikkat sebebi *(karar)*
 
 | Müşteri durumu | Nasıl ifade edilir | Yeni şey |
 | --- | --- | --- |
@@ -143,7 +144,7 @@ yazmak) değerlendirildi ve **reddedildi**: dikkat sebebi ve bitiş hatırlatmas
 ihtiyaç duyar; o tarihi serbest metinli bir olay satırından türetmek, `trialEndsAt`'in
 kaçındığı kırılganlığın aynısıdır.
 
-**Öneri: C.**
+**Karar: C.**
 
 ## Diğer sorular
 
@@ -269,6 +270,10 @@ yüzden de basittir.
 
 ## Onaylanırsa açılacak uygulama task'ları (taslak)
 
+Açıldı (2026-10-07): 1 → #2840 · 2+3 → #2841 · 4 → #2842 · 5 → #2843 · 6 → #2846 ·
+7 → #2844 · 8 → SaleVali repolarında (salevali-provider-contract.md § SaleVali karşı işleri) ·
+9 → #2845 · açık soru 5 → #2847.
+
 1. Preset: `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` yeni org'lardan kaldırılır; `TRIAL_EXPIRED`
    SLA'sı 3 → 7; e2e preset spec'i, `marketing-import.md`, demo seed aynası
    (`MARKETING_DEMO_STAGES` + demo kayıtları, parite testi `marketing-demo-tenant.test.mjs`),
@@ -298,21 +303,20 @@ yüzden de basittir.
 
 ## Maintainer'a açık sorular
 
-1. Preset tüm MARKETING kiracıları için mi, fiilen yalnız SaleVali için mi? (Soru 1'in
-   "kaldır" / "yalnız SaleVali org'unda sil" ayrımı buna bağlı.)
-2. `TRIAL_EXPIRED` SLA'sı 7 gün mü, yoksa 3 gün kalsın mı?
-3. İhbar süresi dolduğunda `DEAL_WON → DEAL_LOST` **otomatik** mi olsun (trial sweep'i
-   gibi, #2417), yoksa yalnız dikkat sebebi + insan kararı mı? Otomatik seçilirse yol artık
-   var: sweep `statusChangeData` üzerinden sistem aktörüyle (`changedById: null`) bir
-   `StatusChange` yazmalı — ve off-path hedef olduğu için `reasonCode: CUSTOMER_CANCELLED` ile —
-   tıpkı `expireTrials`'ın yaptığı gibi (`trialReminders.ts:414-428`). Triangle'ın otomatik
-   churn'ü görmesini sağlayan tam olarak bu satırdır.
-4. Pasif/feshetmiş eski SaleVali hesapları cutover'da aktarılsın mı (win-back listesi
-   olarak `DEAL_LOST` + `reasonCode`), yoksa hiç mi?
-5. `DEAL_LOST`'a düşen kayıtların `status`'u `COMPLETED` yapılsın mı? Bugün `ACTIVE`
-   kalıyorlar; dikkat kuyruğunda `inactive` olarak görünebilir ve dokunulursa metering'de
-   sayılırlar. (Genel bir MARKETING davranışı; bu karardan bağımsız bir task olabilir.)
-6. Kazanılmış müşterinin sahip değişikliği (transfer) funnel analitiğinde nasıl okunsun:
-   `previousRelationId`/`ENDED_REASSIGNED` zinciri tek yolculuk olarak mı birleşsin, yoksa
-   halef ilişki kohortlardan mı atlansın (task 9)? Bugün ikisi de yok ve transfer ayında ikinci
-   bir kazanım görünür.
+Hepsi 2026-10-07'de kapandı ("önerileri olduğu gibi onayla"). Açık bir önerisi olmayan
+sorularda kararlaştırılan varsayılan, ilkesiyle birlikte:
+
+1. **Preset tüm MARKETING kiracıları içindir** → `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` yeni
+   org'ların preset'inden kalkar; mevcut org'larda backfill yok (kiracı kendi siler).
+2. **`TRIAL_EXPIRED` SLA'sı 7 gün.**
+3. **İhbar süresi dolunca otomatik `DEAL_WON → DEAL_LOST` yok** — yalnız dikkat sebebi
+   (`cancellation_pending`, bitiş gününde de) ve insan kararı. Gerekçe: bir müşterinin kaybı,
+   otomatik bir yazmanın yanlış kaydedemeyeceği kadar pahalı bir olay; geri dönüşü olmayan
+   bir aşama hareketinin bir insanı olmalı. Otomatik tetik, SaleVali'nin `cancelled` olayı
+   (SV-1/SV-2, uygulama task'ı 8) geldiğinde ayrı bir karar olarak yeniden açılır.
+4. **Pasif/feshetmiş eski hesaplar ilk cutover'da aktarılmaz** (tablo 7'deki öneri).
+5. **`DEAL_LOST`'a düşen kaydın `status`'u** — bu karardan bağımsız; ayrı issue olarak
+   açıldı, burada karar verilmedi.
+6. **Transfer zinciri tek yolculuk olarak birleşir** (task 9): `ENDED_REASSIGNED` +
+   `previousRelationId` zincirinin halefi kohortlarda ikinci kazanım sayılmaz; churn
+   zincirin ilk kazanımına bağlanır.

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { normalizeMachineList } from '@/lib/machineTranslation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
-import { brandHeader, emailBrand, sendEmail } from '@/services/emailService';
+import { brandHeader, emailBrand, sendEmail, recordOptOuts } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -42,6 +43,8 @@ const schema = z.object({
   // normalizeAnnouncementTranslations rather than rejected, so a form that
   // submits three boxes with two of them empty is valid.
   translations: z.record(z.string(), z.string()).optional(),
+  // Locales a machine filled and nobody has reviewed yet (#2055).
+  machineTranslated: z.array(z.string()).max(3).optional(),
   link: z.string().max(TEXT_LIMITS.announcementLink).optional(),
   email: z.boolean().optional(),
 });
@@ -93,6 +96,7 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         // The multilingual form sends one field per language; JSON clients send
         // a `translations` object. Both land in the same shape here.
         ...(form.get('translations') ? { translations: safeJson(form.get('translations')) } : {}),
+        ...(form.get('machineTranslated') ? { machineTranslated: safeJson(form.get('machineTranslated')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('email') === null ? {} : { email: form.get('email') === 'true' }),
       },
@@ -150,6 +154,7 @@ async function handleGet(request: Request) {
       // Normalized rather than passed through raw: the edit form binds one box
       // per language and should never be handed an unexpected key (#1163).
       translations: normalizeAnnouncementTranslations(a.translations),
+      machineTranslated: normalizeMachineList(a.machineTranslated, normalizeAnnouncementTranslations(a.translations)),
       sentByName: senderName.get(a.sentById) ?? null,
       imageUrl: image ? announcementImageUrl(a.id) : null,
     })),
@@ -245,6 +250,7 @@ async function handlePost(request: Request) {
     data: {
       text,
       translations,
+      machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
       link: link || null,
       sentById: session.user.id,
       // The sending tenant (#2357), so a later reader/query is scoped to its own
@@ -272,7 +278,17 @@ async function handlePost(request: Request) {
   });
 
   let emailed = 0;
+  // The people the broadcast honoured an opt-out for (#2054): one SKIPPED
+  // EmailLog row each, from the preference row this handler already loaded —
+  // one batched insert, no extra read — so "show me this person's opt-out was
+  // honoured on this announcement" has an answer.
+  let skipped = 0;
   if (email) {
+    const mailed = new Set(mailRecipients.map((u) => u.id));
+    skipped = await recordOptOuts(
+      users.filter((u) => u.email && !mailed.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)' })),
+    );
+
     const escapeHtml = (value: string) =>
       value.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
     // The image is attached inline (cid:) rather than linked: /api/announcements/
@@ -357,7 +373,7 @@ async function handlePost(request: Request) {
 
   await logActivity({ action: 'announcement.broadcast', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json(
-    { recipients: users.length, emailed, imageUrl: imageData ? announcementImageUrl(announcement.id) : null },
+    { recipients: users.length, emailed, skipped, imageUrl: imageData ? announcementImageUrl(announcement.id) : null },
     { status: 201 }
   );
   });

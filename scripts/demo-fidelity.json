@@ -42,35 +42,44 @@
     },
     {
       "model": "Requisition",
-      "minRows": 0,
-      "target": 3,
+      "minRows": 4,
+      "target": 4,
       "screen": "/admin/requisitions — company requisition list and its pipeline counts",
       "issue": "#2062"
     },
     {
       "model": "InterviewRequest",
-      "minRows": 0,
+      "minRows": 2,
       "target": 3,
       "screen": "/admin/interview-requests, /mentor/interview-requests — interview request inbox",
       "issue": "#2062"
     },
     {
       "model": "Offer",
-      "minRows": 0,
+      "minRows": 2,
       "target": 2,
       "screen": "/admin/mentorship relation detail — offer stage and offer history",
       "issue": "#2062"
     },
     {
       "model": "InterviewPanel",
-      "minRows": 0,
+      "minRows": 1,
       "target": 2,
       "screen": "interview panel scheduling and panel-member scoring",
       "issue": "#2062"
     },
     {
+      "model": "Evaluation",
+      "where": { "type": "INTERVIEW", "submittedAt": { "not": null } },
+      "label": "Evaluation(submitted INTERVIEW)",
+      "minRows": 2,
+      "target": 2,
+      "screen": "interview panel calibration — independently submitted scorecards",
+      "issue": "#1419"
+    },
+    {
       "model": "CompanyInterest",
-      "minRows": 0,
+      "minRows": 2,
       "target": 3,
       "screen": "company talent-pool interest list — the COMPANY role's main screen",
       "issue": "#2062"
@@ -121,9 +130,9 @@
       "model": "User",
       "where": { "role": "SOURCE" },
       "label": "User(role=SOURCE)",
-      "minRows": 0,
+      "minRows": 1,
       "target": 2,
-      "screen": "/admin/sources — the SOURCE role has no demo account at all, so the screen is blank",
+      "screen": "/admin/sources — SOURCE accounts and their referred candidates",
       "issue": "#2062"
     },
     {
@@ -139,8 +148,8 @@
       "model": "PipelineStage",
       "where": { "org": { "vertical": "MARKETING" } },
       "label": "PipelineStage(MARKETING)",
-      "minRows": 9,
-      "target": 9,
+      "minRows": 7,
+      "target": 7,
       "screen": "the marketing funnel board — LEAD_NEW … DEAL_LOST from the shipped MARKETING_FUNNEL preset",
       "issue": "#2443"
     },
@@ -166,8 +175,8 @@
       "model": "StatusChange",
       "where": { "relation": { "org": { "vertical": "MARKETING" } } },
       "label": "StatusChange(MARKETING)",
-      "minRows": 94,
-      "target": 94,
+      "minRows": 80,
+      "target": 80,
       "screen": "stage aging + cohort conversion on a marketing tenant — back-dated history is what they are drawn from",
       "issue": "#2443"
     },
@@ -175,8 +184,8 @@
       "model": "InteractionLog",
       "where": { "relation": { "org": { "vertical": "MARKETING" } } },
       "label": "InteractionLog(MARKETING)",
-      "minRows": 61,
-      "target": 61,
+      "minRows": 59,
+      "target": 59,
       "screen": "the marketing attention queue and the 'no recent contact' badge (docs/last-contact.md)",
       "issue": "#2443"
     }

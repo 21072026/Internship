@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { createImpersonationGrant } from '@/lib/impersonation';
 import { logActivity } from '@/lib/activity';
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
     // below: the account holder's own access history (#1587) is built from
     // these rows, and "why" is the part that turns a scary line into an
     // explanation.
-    data: { actorId: session.user.id, action: 'IMPERSONATE_START', targetId: target.id, detail: reason },
+    data: { actorId: session.user.id, action: 'IMPERSONATE_START', targetId: target.id, detail: reason, orgId: resolveOrgId(session) },
   });
   await logActivity({
     action: 'impersonate.start',

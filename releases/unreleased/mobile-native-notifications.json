@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Native notifications in the mobile app** (#2775). `GET /api/notifications` now carries `display` on every row — the sentence the bell shows, rendered server-side in the reader's locale and vertical by the same `renderNotification` the web uses — because the native app cannot carry the web dictionary; the field is additive and the web keeps rendering from `type`/`params`. The app gets a native Notifications tab (server-rendered text, unread dot, pull to refresh, paging, mark one / all read, a tap opens the row's same-site path in the signed-in web view — never an absolute link) with an unread badge refreshed on foreground and once a minute. Unused `expo-secure-store` dropped. Pinned by `e2e/notifications-history.spec.ts` (\"carries each row rendered for display\") and the app's unit tests."
-}

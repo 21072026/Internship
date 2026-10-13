@@ -8,6 +8,17 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+import { CompensationSummary } from '@/components/CompensationSummary';
+import { parseMinorUnits } from '@/lib/money';
+import {
+  BASE_PERIODS,
+  CONTRACT_TYPES,
+  EQUITY_NOTE_MAX,
+  MAX_HOURS_PER_WEEK,
+  OFFER_CURRENCIES,
+  validateCompensation,
+  type CompensationFields,
+} from '@/lib/compensation';
 
 export interface OfferDraftFields {
   id?: string;
@@ -17,9 +28,48 @@ export interface OfferDraftFields {
   startDate: string; // yyyy-mm-dd
   compensationNote: string;
   expiresAt: string; // yyyy-mm-dd
+  // Structured compensation (#1851), held as the TYPED text until save: the
+  // amounts are parsed with parseMinorUnits (money.ts) into integer minor
+  // units, so "2.500,00" and "2,500.00" both become 250000 and never a float.
+  currency: string;
+  baseAmount: string;
+  basePeriod: string;
+  hoursPerWeek: string;
+  contractType: string;
+  signingBonus: string;
+  otherBonus: string;
+  equityNote: string;
 }
 
-const EMPTY: OfferDraftFields = { position: '', requisitionId: '', startDate: '', compensationNote: '', expiresAt: '' };
+const EMPTY: OfferDraftFields = {
+  position: '', requisitionId: '', startDate: '', compensationNote: '', expiresAt: '',
+  currency: '', baseAmount: '', basePeriod: '', hoursPerWeek: '', contractType: '', signingBonus: '', otherBonus: '', equityNote: '',
+};
+
+/** The structured figures of the form as the API's field set — or `'invalid'`
+ * when an amount could not be read, so the user is told instead of a 0 saved. */
+function figuresFrom(f: OfferDraftFields): CompensationFields | 'invalid' {
+  const money = (raw: string): number | null | 'invalid' => {
+    const parsed = parseMinorUnits(raw);
+    if (parsed === null) return null;
+    return Number.isNaN(parsed) || parsed < 0 ? 'invalid' : parsed;
+  };
+  const base = money(f.baseAmount);
+  const signing = money(f.signingBonus);
+  const other = money(f.otherBonus);
+  if (base === 'invalid' || signing === 'invalid' || other === 'invalid') return 'invalid';
+  const hours = f.hoursPerWeek.trim() ? Number(f.hoursPerWeek) : null;
+  return {
+    currency: f.currency || null,
+    baseAmountMinor: base,
+    basePeriod: f.basePeriod || null,
+    signingBonusMinor: signing,
+    otherBonusMinor: other,
+    equityNote: f.equityNote.trim() || null,
+    hoursPerWeek: hours != null && Number.isInteger(hours) && hours >= 1 && hours <= MAX_HOURS_PER_WEEK ? hours : null,
+    contractType: f.contractType || null,
+  };
+}
 
 interface OfferWizardModalProps {
   open: boolean;
@@ -86,7 +136,18 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
 
   const set = (patch: Partial<OfferDraftFields>) => setFields((f) => ({ ...f, ...patch }));
 
+  const figures = figuresFrom(fields);
+  const figuresProblem = figures === 'invalid' ? 'invalid' : validateCompensation(figures);
+
   const save = async (send: boolean) => {
+    if (figures === 'invalid') {
+      toast(t.offers.wizard.amountInvalid, 'error');
+      return;
+    }
+    if (figuresProblem) {
+      toast(t.offers.wizard.compensationInvalid, 'error');
+      return;
+    }
     setBusy(send ? 'send' : 'draft');
     try {
       const body = {
@@ -94,6 +155,7 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
         requisitionId: fields.requisitionId.trim() || null,
         startDate: fields.startDate || null,
         compensationNote: fields.compensationNote.trim() || null,
+        ...figures,
         expiresAt: fields.expiresAt || null,
       };
       const res = fields.id
@@ -193,6 +255,79 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
               value={fields.expiresAt}
               onChange={(e) => set({ expiresAt: e.target.value })}
             />
+            <div className="rounded-lg border border-gray-100 dark:border-gray-700 p-3 space-y-3" data-testid="offer-compensation-fields">
+              <p className="text-xs font-medium text-gray-500">{t.offers.wizard.figuresTitle}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Select
+                  label={t.offers.wizard.currency}
+                  value={fields.currency}
+                  onChange={(e) => set({ currency: e.target.value })}
+                  options={[{ value: '', label: '—' }, ...OFFER_CURRENCIES.map((code) => ({ value: code, label: code }))]}
+                  data-testid="offer-currency"
+                />
+                <Input
+                  label={t.offers.wizard.baseAmount}
+                  placeholder={t.offers.wizard.baseAmountPlaceholder}
+                  inputMode="decimal"
+                  value={fields.baseAmount}
+                  onChange={(e) => set({ baseAmount: e.target.value })}
+                  error={figures === 'invalid' ? t.offers.wizard.amountInvalid : undefined}
+                  data-testid="offer-base-amount"
+                />
+                <Select
+                  label={t.offers.wizard.basePeriod}
+                  value={fields.basePeriod}
+                  onChange={(e) => set({ basePeriod: e.target.value })}
+                  options={[{ value: '', label: '—' }, ...BASE_PERIODS.map((period) => ({ value: period, label: t.offers.compensation.periods[period] }))]}
+                  data-testid="offer-base-period"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label={t.offers.wizard.hoursPerWeek}
+                  type="number"
+                  min={1}
+                  max={MAX_HOURS_PER_WEEK}
+                  value={fields.hoursPerWeek}
+                  onChange={(e) => set({ hoursPerWeek: e.target.value })}
+                  data-testid="offer-hours-per-week"
+                />
+                <Select
+                  label={t.offers.wizard.contractType}
+                  value={fields.contractType}
+                  onChange={(e) => set({ contractType: e.target.value })}
+                  options={[{ value: '', label: t.offers.wizard.noContractType }, ...CONTRACT_TYPES.map((type) => ({ value: type, label: t.offers.compensation.contractTypes[type] }))]}
+                  data-testid="offer-contract-type"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label={t.offers.wizard.signingBonus}
+                  inputMode="decimal"
+                  value={fields.signingBonus}
+                  onChange={(e) => set({ signingBonus: e.target.value })}
+                  data-testid="offer-signing-bonus"
+                />
+                <Input
+                  label={t.offers.wizard.otherBonus}
+                  inputMode="decimal"
+                  value={fields.otherBonus}
+                  onChange={(e) => set({ otherBonus: e.target.value })}
+                  data-testid="offer-other-bonus"
+                />
+              </div>
+              <Input
+                label={t.offers.wizard.equityNote}
+                maxLength={EQUITY_NOTE_MAX}
+                value={fields.equityNote}
+                onChange={(e) => set({ equityNote: e.target.value })}
+                data-testid="offer-equity-note"
+              />
+              {figuresProblem && figuresProblem !== 'invalid' && (
+                <p className="text-xs text-red-600">{t.offers.wizard.compensationInvalid}</p>
+              )}
+              <p className="text-xs text-gray-500">{t.offers.wizard.figuresHint}</p>
+            </div>
             <div>
               <Textarea
                 aria-label={t.offers.wizard.compensationNote}
@@ -224,6 +359,7 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
                   {t.offers.wizard.expiresAt}: {fields.expiresAt}
                 </p>
               )}
+              {figures !== 'invalid' && <CompensationSummary offer={figures} testId="offer-wizard-compensation-preview" />}
               {fields.compensationNote && (
                 <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{fields.compensationNote}</p>
               )}

@@ -1,7 +1,8 @@
 // IdP role mapping (#1940) — the pure rule. No Next, no DB.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractClaims, resolveRole, isMappableRole } from '../../src/lib/ssoRoleMapping.ts';
+import { extractClaims, resolveRole, isMappableRole, mappableRolesFor, MAPPABLE_ROLES } from '../../src/lib/ssoRoleMapping.ts';
+import { verticalCapabilities } from '../../src/lib/verticals.ts';
 
 const GROUPS = 'groups';
 const ROLE_URI = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
@@ -38,6 +39,26 @@ test('ADMIN is never granted, even by a row that somehow holds it', () => {
   assert.equal(resolveRole([m(GROUPS, 'admins', 'ADMIN', 100)], { groups: ['admins'] }), null);
   assert.equal(resolveRole([m(GROUPS, 'admins', 'ADMIN', 100), m(GROUPS, 'staff', 'MENTOR')], { groups: ['admins', 'staff'] }), 'MENTOR');
   assert.equal(resolveRole([m(GROUPS, 'x', 'SUPERUSER')], { groups: ['x'] }), null);
+});
+
+test('a vertical offers only the roles whose module it has, and a row outside that list grants nothing (#2839)', () => {
+  // Read from the catalogue, so a capability moved there moves the roles here.
+  assert.deepEqual(mappableRolesFor(verticalCapabilities('INTERNSHIP')), [...MAPPABLE_ROLES]);
+  assert.deepEqual(mappableRolesFor(verticalCapabilities('MARKETING')), ['MENTEE', 'COMPANY', 'MENTOR']);
+  assert.deepEqual(mappableRolesFor([]), ['MENTEE', 'MENTOR'], 'MENTEE and MENTOR exist in every vertical');
+  assert.deepEqual(mappableRolesFor(['sourcing']), ['MENTEE', 'SOURCE', 'MENTOR']);
+
+  // The ACS passes the vertical's list: a SOURCE row in a MARKETING org is
+  // ignored like an ADMIN row — even at the highest priority — and the next
+  // matching row (or null → MENTEE) decides.
+  const marketing = mappableRolesFor(verticalCapabilities('MARKETING'));
+  assert.equal(resolveRole([m(GROUPS, 'partners', 'SOURCE', 100)], { groups: ['partners'] }, marketing), null);
+  assert.equal(
+    resolveRole([m(GROUPS, 'partners', 'SOURCE', 100), m(GROUPS, 'reps', 'MENTOR')], { groups: ['partners', 'reps'] }, marketing),
+    'MENTOR',
+  );
+  // Without a list the rule is unchanged: every mappable role is allowed.
+  assert.equal(resolveRole([m(GROUPS, 'partners', 'SOURCE')], { groups: ['partners'] }), 'SOURCE');
 });
 
 test('extractClaims normalises a single string and an array alike, and drops non-strings', () => {

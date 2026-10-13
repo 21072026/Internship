@@ -7,6 +7,7 @@ import { generateSecret, verifyTotp, otpauthUrl } from '@/lib/totp';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { worldOfOrg } from '@/lib/userWorld';
+import { sendSecurityNotice } from '@/lib/securityNotices';
 import { productNameFor } from '@/lib/verticals';
 import {
   clearRecoveryCodes,
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
     // find a "generate codes" button is a user who never has any.
     const recoveryCodes = await generateRecoveryCodes(session.user.id);
     await logActivity({ action: '2fa.enable', actorId: session.user.id, actorEmail: session.user.email ?? null });
+    await sendSecurityNotice('twoFactorEnabled', { userId: session.user.id, request });
     // The one and only response that carries the plaintext.
     return NextResponse.json({ enabled: true, recoveryCodes });
   }
@@ -111,6 +113,8 @@ export async function POST(request: Request) {
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
     });
+    // Says that the old set is dead, never what the new one is (#1717).
+    await sendSecurityNotice('recoveryCodesRegenerated', { userId: session.user.id, request });
     return NextResponse.json({ recoveryCodes });
   }
 
@@ -125,6 +129,7 @@ export async function POST(request: Request) {
   // more, and re-enabling 2FA later would silently inherit them.
   await clearRecoveryCodes(session.user.id);
   await logActivity({ action: '2fa.disable', level: 'warning', actorId: session.user.id, actorEmail: session.user.email ?? null });
+  await sendSecurityNotice('twoFactorDisabled', { userId: session.user.id, request });
   return NextResponse.json({ enabled: false });
   });
 }

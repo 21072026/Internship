@@ -21,6 +21,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, useConflictText, usePolicyText, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
+import { LinkRefusalNotice, MeetLinkHint, readLinkRefusal, type MeetingLinkRefusal } from '@/components/meeting/MeetLinkField';
 
 interface Relation {
   id: string;
@@ -56,6 +57,8 @@ export function MeetingsManager() {
   const interviewRequestId = searchParams.get('interviewRequestId');
   const interviewRequisitionId = searchParams.get('requisitionId');
   const interviewRequisitionTitle = searchParams.get('requisitionTitle');
+  // The meeting an interview request was turned into (#1844): the queue links here with its id.
+  const linkedMeetingId = searchParams.get('meetingId');
   const [relations, setRelations] = useState<Relation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +84,8 @@ export function MeetingsManager() {
   const conflictText = useConflictText();
   const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
   const policyText = usePolicyText();
+  // A link refused as typed, or required by the tenant's policy (#2007).
+  const [linkRefusal, setLinkRefusal] = useState<MeetingLinkRefusal | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -156,6 +161,7 @@ export function MeetingsManager() {
         }),
       });
       const data = await res.json();
+      setLinkRefusal(readLinkRefusal(data));
       if (res.ok) {
         // Two counts, not one: "3 mentees" and "2 outsiders" are different
         // facts, and an organizer who typed an address needs to see it landed.
@@ -202,6 +208,13 @@ export function MeetingsManager() {
         <p className="text-gray-500 mt-1">{t.meetings.subtitle}</p>
       </div>
 
+      {linkedMeetingId && (
+        <Card className="mb-4" data-testid="interview-meeting-linked">
+          <a href={`#meeting-${linkedMeetingId}`} className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            {t.interviewRequests.meetingLinked}
+          </a>
+        </Card>
+      )}
       {interviewRelationId && interviewRequestId && interviewRequisitionId && (
         <Card className="mb-4" data-testid="interview-meeting-context">
           <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -328,6 +341,8 @@ export function MeetingsManager() {
               value={meetLink}
               onChange={(e) => setMeetLink(e.target.value)}
             />
+            <MeetLinkHint link={meetLink} className="-mt-2" />
+            {linkRefusal && <LinkRefusalNotice refusal={linkRefusal} />}
             {/* Outsiders are additive to the selection above, never a
                 replacement for it: this endpoint schedules against relations. */}
             <GuestInviteField guests={guests} onChange={setGuests} max={MAX_GUESTS_PER_MEETING} disabled={busy} testIdPrefix="guest" />
@@ -348,7 +363,7 @@ export function MeetingsManager() {
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {meetings.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-3 py-3">
+                <div key={m.id} id={`meeting-${m.id}`} className={`flex items-center justify-between gap-3 py-3${m.id === linkedMeetingId ? ' rounded-lg bg-blue-50 px-2 dark:bg-blue-950/40' : ''}`}>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 truncate">

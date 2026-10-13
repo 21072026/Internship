@@ -19,6 +19,15 @@
 //      org's SSO config into remote privilege escalation.
 //   4. Claim values compare case-insensitively and trimmed; a claim NAME is
 //      matched exactly (IdPs use URIs, and two different URIs are two claims).
+//   5. A vertical may only grant the roles whose MODULE it has (#2839). The
+//      role enum is shared by every product (src/lib/verticals.ts: a capability
+//      is a module, not a permission), so a MARKETING tenant's IdP may map a
+//      group to MENTOR — a rep there — but not to SOURCE: that product has no
+//      `sourcing`, and a user provisioned into it lands in a role with no shell.
+//      `mappableRolesFor()` is the list; the API offers and accepts only it,
+//      and `resolveRole()` ignores a row outside it the way it ignores ADMIN.
+
+import type { VerticalCapability } from '@/lib/verticals';
 
 export type SsoRole = 'MENTEE' | 'MENTOR' | 'ADMIN' | 'COMPANY' | 'SOURCE';
 
@@ -30,6 +39,24 @@ export const MAPPABLE_ROLES: readonly SsoRole[] = ['MENTEE', 'SOURCE', 'COMPANY'
 
 export function isMappableRole(role: string): role is SsoRole {
   return (MAPPABLE_ROLES as readonly string[]).includes(role);
+}
+
+/** The module a role needs before a vertical may map a claim to it (rule 5). Roles absent here exist in every vertical. */
+const ROLE_REQUIRES_CAPABILITY: Partial<Record<SsoRole, VerticalCapability>> = {
+  SOURCE: 'sourcing',
+  COMPANY: 'companies',
+};
+
+/**
+ * The roles a mapping may grant in a vertical with these capabilities:
+ * MAPPABLE_ROLES minus the ones whose module is switched off. Takes plain
+ * strings so a caller hands over `verticalCapabilities(org.vertical)` as is.
+ */
+export function mappableRolesFor(capabilities: readonly string[]): SsoRole[] {
+  return MAPPABLE_ROLES.filter((role) => {
+    const needs = ROLE_REQUIRES_CAPABILITY[role];
+    return !needs || capabilities.includes(needs);
+  });
 }
 
 export interface ClaimMapping {
@@ -63,11 +90,19 @@ export function extractClaims(profile: Record<string, unknown> | null | undefine
   return out;
 }
 
-/** The role the mappings grant for these claims, or null (→ the caller's MENTEE). */
-export function resolveRole(mappings: readonly ClaimMapping[], claims: SsoClaims): SsoRole | null {
+/**
+ * The role the mappings grant for these claims, or null (→ the caller's MENTEE).
+ * `allowed` is the vertical's list (rule 5); a row outside it is ignored, so a
+ * mapping written before the gate — or by hand — grants nothing the product lacks.
+ */
+export function resolveRole(
+  mappings: readonly ClaimMapping[],
+  claims: SsoClaims,
+  allowed: readonly SsoRole[] = MAPPABLE_ROLES,
+): SsoRole | null {
   let best: { role: SsoRole; priority: number } | null = null;
   for (const m of mappings) {
-    if (!isMappableRole(m.role)) continue;
+    if (!isMappableRole(m.role) || !allowed.includes(m.role)) continue;
     const values = claims[m.claim];
     if (!values || !values.some((v) => norm(v) === norm(m.matchValue))) continue;
     const better =

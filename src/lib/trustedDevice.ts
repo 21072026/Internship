@@ -155,7 +155,10 @@ export type RotateResult =
    * browser should keep. See the concurrency note in rotateTrustedDevice().
    */
   | { ok: true; userId: string; deviceId: string; token: string | null; expiresAt: Date }
-  | { ok: false; reason: 'unknown' | 'expired' | 'revoked' | 'reuse' };
+  | { ok: false; reason: 'unknown' | 'expired' | 'revoked' }
+  // A replay names the owner so the caller can tell them (#1717) — the device
+  // row was just revoked, and the person it belonged to is the one to warn.
+  | { ok: false; reason: 'reuse'; userId: string };
 
 /**
  * Verify a presented remember-me cookie and rotate it.
@@ -210,7 +213,7 @@ export async function rotateTrustedDevice(rawToken: string, request: HeaderSourc
       detail: 'A superseded remember-me token was replayed; the device was revoked.',
       request,
     });
-    return { ok: false, reason: 'reuse' };
+    return { ok: false, reason: 'reuse', userId: device.userId };
   }
 
   if (device.expiresAt <= now || device.absoluteExpiresAt <= now) return { ok: false, reason: 'expired' };

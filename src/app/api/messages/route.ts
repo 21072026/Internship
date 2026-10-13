@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -13,6 +14,7 @@ import {
   directCounterpartId,
   directKeyFor,
   latestMentorshipFor,
+  mutedParticipants,
 } from '@/lib/conversations';
 import { markThreadRead } from '@/lib/threadRead';
 import { publishRealtime } from '@/lib/realtimeBus';
@@ -217,6 +219,10 @@ async function handleGet(request: Request) {
             ...group,
             participants,
             mentorId,
+            // The mentorship behind a 1:1 conversation, so the mentor's composer
+            // can ask for a grounded draft for it (#2048). The draft route does
+            // its own authorization; this only names the relation.
+            mentorshipId: counterpartMentorship?.id ?? null,
             // Lets the client render the thread read-only instead of failing on
             // send. The POST route enforces the same rule regardless (#770).
             canPost: await canPostToConversation(session.user, conversation!),
@@ -338,6 +344,11 @@ async function handlePost(request: Request) {
       include: { attachments: { select: ATTACHMENT_SELECT } },
     });
 
+    // Safeguarding (#2056): flag a shared contact detail or a watch keyword for
+    // the admin queue. After the write and never able to fail or hold it — the
+    // message is delivered whatever this finds.
+    await scanMessageForSafeguarding({ messageId: message.id, body, senderId: session.user.id });
+
     // Notify everyone but the sender — the single other party on a mentorship
     // thread, or every other participant of a conversation. An admin posting
     // into someone else's thread isn't a recipient of their own message.
@@ -375,12 +386,17 @@ async function handlePost(request: Request) {
     // chat's POST. Still awaited before responding, so a slow push service
     // cannot log after the response is gone; never able to fail the send,
     // because sendNewMessagePush swallows everything.
-    const pushes = recipients.map((recipient) =>
-      sendNewMessagePush(recipient, { senderName, link, preview: body }),
-    );
+    // Whoever muted this thread (#1609) is not interrupted by it at all: no
+    // push, no e-mail mirror, no bell. The realtime publish above still went to
+    // them — it only refreshes a tab that already has the thread open.
+    const muted = await mutedParticipants(threadConversationId, recipients);
+    const pushes = recipients
+      .filter((recipient) => !muted.has(recipient))
+      .map((recipient) => sendNewMessagePush(recipient, { senderName, link, preview: body }));
 
 
     for (const recipient of recipients) {
+      if (muted.has(recipient)) continue;
       // Read the recipient's preferences BEFORE either channel (#1426). The
       // "Messages" switch on /account is documented — in all three locales — as
       // applying to e-mail and in-app alike, but the in-app insert below used to

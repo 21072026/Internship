@@ -67,6 +67,9 @@ export function AssignMentorInline({
   // whether this answer came from the stored copy instead of the provider.
   const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
   const [cached, setCached] = useState(false);
+  // The org lacks the AI pack (#1738): the list is the rule-based order and
+  // the hint says why there is no rationale — never a paywall, never a price.
+  const [locked, setLocked] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   // The dismiss reason picker, open only after the ✕ is clicked.
   const [dismissing, setDismissing] = useState(false);
@@ -100,6 +103,7 @@ export function AssignMentorInline({
 
   // Mentor suggestion (#533): rule-based ranking, AI-deepened with a rationale
   // when the AI gate allows — otherwise the top rule-based match, no rationale.
+  // `locked: 'AI_PACKAGE'` (#1738) is the one denial the server names.
   const suggest = async (regenerate = false) => {
     setSuggesting(true);
     setErr('');
@@ -120,6 +124,7 @@ export function AssignMentorInline({
         setAiUsed(!!d.aiUsed);
         setArtifact(d.artifact ?? null);
         setCached(!!d.cached);
+        setLocked(d.locked === 'AI_PACKAGE');
         if (list[0]) setChoice(list[0].mentorId);
         else setErr(a.noSuggestion);
       } else {
@@ -256,7 +261,7 @@ export function AssignMentorInline({
                 ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
                 : ''}
             {aiUsed && suggestion.reason && <AiBadge className="ml-1.5" />}
-            {!aiUsed && <span className="text-gray-400"> ({a.ruleBased})</span>}
+            {!aiUsed && !locked && <span className="text-gray-400"> ({a.ruleBased})</span>}
           </p>
           <button
             type="button"
@@ -269,6 +274,11 @@ export function AssignMentorInline({
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
+      )}
+      {suggestion && locked && (
+        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400" data-testid="mentor-suggest-locked">
+          {a.locked}
+        </p>
       )}
       {suggestion && aiUsed && artifact && (
         <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => suggest(true)} regenerating={suggesting} />

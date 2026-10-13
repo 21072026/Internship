@@ -36,6 +36,18 @@ enum OrgPlan {
   ENTERPRISE
 }
 
+// Where a tenant's meetings get their video room (#2007). The rule itself —
+// pasted link → organiser's saved room → built-in room — is
+// src/lib/conferencingRule.ts; this only names the three answers.
+//   BUILTIN           today's behaviour: a room of ours unless a link is pasted
+//   PREFER_PERSONAL   the organiser's saved personal room when they have one
+//   REQUIRE_EXTERNAL  never a room of ours — the organiser must supply a link
+enum ConferencingPolicy {
+  BUILTIN
+  PREFER_PERSONAL
+  REQUIRE_EXTERNAL
+}
+
 enum InteractionType {
   Meeting
   Feedback
@@ -147,6 +159,12 @@ model Organization {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // Conferencing policy (#2007): which video room this tenant's meetings get.
+  // On the Organization, NOT on Setting — Setting is keyed by a `String @id`,
+  // and giving it an orgId re-keys the table (a drop-and-recreate under
+  // `db push`). Literal default, so `db push` fills existing rows itself.
+  conferencingPolicy ConferencingPolicy @default(BUILTIN)
+
   users                   User[]
   sources                 Source[]
   cohorts                 Cohort[]
@@ -170,6 +188,7 @@ model Organization {
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
   aiArtifacts             AiArtifact[]
+  aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
@@ -178,6 +197,7 @@ model Organization {
   offers                  Offer[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
+  applications            Application[]
   messageTemplates        MessageTemplate[]
   apiKeys                 ApiKey[]
   matchFeedback           MatchFeedback[]
@@ -197,11 +217,14 @@ model Organization {
   contactSuppressions     ContactSuppression[]
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
+  auditDrains             AuditDrain[]
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
+  agendaTemplates         AgendaTemplate[]
+  safeguardingFlags       SafeguardingFlag[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -382,6 +405,12 @@ model User {
   linkedinUrl             String?
   githubUrl               String?
   portfolioUrl            String?
+  // The organiser's own video room (#2007): a Zoom PMI, a Meet room, a Teams
+  // "meet now" link. Used for the meetings this person organises when their
+  // tenant's conferencingPolicy allows it (src/lib/conferencingRule.ts).
+  // Validated on write like the profile URLs — https only, no credentials,
+  // never one of our own hosts — and sized to fit Meeting.meetLink.
+  personalMeetingUrl      String?
   // Mentee: interests / target position. Mentor: max concurrent mentees.
   interests               String?       @db.Text
   targetPosition          String?
@@ -535,6 +564,8 @@ model User {
   assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
   supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
+  sessionNotes                      SessionNote[]                 @relation("SessionNoteAuthor")
+  sessionNoteRevisions              SessionNoteRevision[]         @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
   referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
   referredUsers                     User[]                        @relation("UserReferrals")
@@ -544,6 +575,7 @@ model User {
   projectJoinRequests               ProjectJoinRequest[]          @relation("JoinRequester")
   decidedJoinRequests               ProjectJoinRequest[]          @relation("JoinRequestDecider")
   taskTemplates                     ProjectTaskTemplate[]         @relation("TaskTemplateAuthor")
+  agendaTemplates                   AgendaTemplate[]              @relation("AgendaTemplateAuthor")
   mentorOnboardings                 MenteeOnboarding[]            @relation("OnboardingMentor")
   menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
   missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
@@ -563,9 +595,13 @@ model User {
   meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
+  applications                      Application[]                 @relation("ApplicationMentee")
+  applicationEvents                 ApplicationEvent[]            @relation("ApplicationEventActor")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
+  cancelledInterviewRequests        InterviewRequest[]            @relation("InterviewRequestCanceller")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  signInDevices                     SignInDevice[]
   ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
   authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
   createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
@@ -576,6 +612,10 @@ model User {
   createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
   placements                        Placement[]                   @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
+  loginLinkTokens                   LoginLinkToken[]
+  // Text-only practice interviews (#2051).
+  practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
+  safeguardingReviews               SafeguardingFlag[]            @relation("SafeguardingReviewer")
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -814,6 +854,14 @@ model ConversationParticipant {
   // Last time this participant read the conversation — powers per-conversation
   // unread counts without a per-message read row.
   lastReadAt     DateTime?
+  // Per-viewer inbox state (#1609, src/lib/conversationState.ts). Nullable,
+  // no default, no index — additive columns only (see the warning below about
+  // indexes on this table). Archived hides the thread behind a filter (nothing
+  // is deleted), mutedUntil silences push / e-mail / bell / digest for this
+  // viewer until then, pinnedAt sorts the thread first.
+  archivedAt     DateTime?
+  mutedUntil     DateTime?
+  pinnedAt       DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -856,13 +904,16 @@ model Message {
   // can never post the same reply twice. Null for messages written in-app.
   inboundMessageId     String?        @unique
 
-  relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  attachments  MessageAttachment[]
+  relation          MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  conversation      Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  attachments       MessageAttachment[]
   // Per-user "delete for me" — hides the message only from these users' view.
-  hiddenFor    MessageHiddenFor[]
+  hiddenFor         MessageHiddenFor[]
   // Emoji reactions (👍❤️😂…) from thread participants.
-  reactions    MessageReaction[]
+  reactions         MessageReaction[]
+  // Safeguarding flags raised on this message (#2056). Detection never blocks
+  // the message; these rows are the admin review queue's record of it.
+  safeguardingFlags SafeguardingFlag[]
 
   @@index([conversationId])
   @@index([relationId])
@@ -873,6 +924,10 @@ model Message {
   // db push to drop or rename an FK-backing index is what MySQL refuses (#784).
   @@index([conversationId, createdAt])
   @@index([relationId, createdAt])
+  // One sender's messages over a window (#1608): the activity report's sent/
+  // received counts (`senderId` + `createdAt: { gte }`), the message-retention
+  // sweep (`senderId: { in }` + `createdAt: { lt }`, #2056) and erasure.
+  @@index([senderId, createdAt])
 }
 
 // A single emoji reaction on a message by one user (WhatsApp/Slack style).
@@ -946,20 +1001,24 @@ model MessageTemplate {
   // already honours both so a "save this reply" affordance is additive.
   ownerId String?
 
-  title        String    @db.Text
-  translations Json?
+  title             String    @db.Text
+  translations      Json?
+  // Locales filled by machine translation and not yet reviewed (#2055): a
+  // JSON array like ["tr","de"]. A locale leaves it when an admin edits
+  // or confirms it; null/[] = everything here was written by a person.
+  machineTranslated Json?
   // How many times this text has been inserted — the picker sorts by it, so the
   // replies actually used float to the top and the pool stays usable as it grows.
-  useCount     Int       @default(0)
-  createdById  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  useCount          Int       @default(0)
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   // Retired from the picker, not deleted (same reasoning as ProjectTaskTemplate,
   // #1113): `useCount` is the only record of which wording a program actually
   // leans on, and re-adding the same text revives this row rather than starting
   // a second one from zero. Nothing here is referenced by a sent Message — the
   // insert is a copy — so this is about the pool's own history.
-  archivedAt   DateTime?
+  archivedAt        DateTime?
 
   org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
   owner     User?         @relation("MessageTemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -1100,22 +1159,26 @@ model NativePushToken {
 // Notification rows it fans out to) — lets the admin UI show a history of
 // what was sent, by whom, and to how many people.
 model Announcement {
-  id             String   @id @default(cuid())
+  id                String   @id @default(cuid())
   // Broadcast body — TEXT, not the default VARCHAR(191), so admins can publish
   // long-form announcements (release notes, articles) without hitting a limit.
-  text           String   @db.Text
+  text              String   @db.Text
   // { en?, tr?, de? } — the announcement in each language it was written in
   // (#1163). `text` above stays the canonical wording and the fallback for a
   // reader whose language has no entry here, so every row written before this
   // column existed keeps working untouched. Nullable for the same reason.
   // Resolved per reader in src/lib/announcementText.ts.
-  translations   Json?
+  translations      Json?
+  // Locales filled by machine translation and not yet reviewed (#2055): a
+  // JSON array like ["tr","de"]. A locale leaves it when an admin edits
+  // or confirms it; null/[] = everything here was written by a person.
+  machineTranslated Json?
   // VarChar(500) to match the API's 500-char cap — see Notification.link.
-  link           String?  @db.VarChar(500)
-  sentById       String
-  recipientCount Int
-  emailedCount   Int      @default(0)
-  createdAt      DateTime @default(now())
+  link              String?  @db.VarChar(500)
+  sentById          String
+  recipientCount    Int
+  emailedCount      Int      @default(0)
+  createdAt         DateTime @default(now())
 
   // Optional attached image. Deliberately NOT mirrored into an `imageUrl`
   // column: the URL is a pure function of the announcement id
@@ -1485,6 +1548,7 @@ model Company {
   offers             Offer[]
   requisitions       Requisition[]
   interviewRequests  InterviewRequest[]
+  applications       Application[]
   placements         Placement[]
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
@@ -2129,6 +2193,25 @@ model Offer {
   position             String
   startDate            DateTime?
   compensationNote     String?            @db.Text
+  // Structured compensation (#1851). The free-text note above STAYS as the
+  // elaboration; these are the figures a benchmark can read. Same money rule
+  // as ProgramCost/Placement (see "MONEY IS ALWAYS AN INTEGER IN MINOR UNITS"
+  // below): integer minor units + ISO 4217 code, never a Float or a Decimal.
+  // Every one of these rides the compensationNote visibility rule
+  // (canSeeCompensation, src/lib/offers.ts) — ADMIN and the offer's own
+  // MENTEE, nobody else, and never SELECTed for anyone else.
+  // `basePeriod` HOURLY|MONTHLY|YEARLY and `contractType`
+  // INTERNSHIP|WORKING_STUDENT|FIXED_TERM|PERMANENT are Strings validated
+  // against the whitelists in src/lib/compensation.ts, not enums — the
+  // `db push` reasoning at Organization.planKey applies.
+  currency             String?            @db.VarChar(3)
+  baseAmountMinor      Int?
+  basePeriod           String?            @db.VarChar(10)
+  signingBonusMinor    Int?
+  otherBonusMinor      Int?
+  equityNote           String?            @db.VarChar(500)
+  hoursPerWeek         Int?
+  contractType         String?            @db.VarChar(20)
   expiresAt            DateTime?
   sentAt               DateTime?
   decidedAt            DateTime?
@@ -2144,6 +2227,7 @@ model Offer {
 
   @@index([orgId, status])
   @@index([relationId])
+  @@index([orgId, currency])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -2184,9 +2268,55 @@ model AiUsage {
   // a failure must stay visible without costing the tenant anything.
   outcome String @default("ok") @db.VarChar(20)
 
+  // What the call was and what it cost (#2022). All nullable so the columns
+  // apply to the populated table; rows from before them carry NULL (the deploy
+  // runs prisma/backfill-ai-usage-task.mjs to copy `scope` into `taskId`).
+  // `taskId` is the registry key (src/lib/ai/tasks.ts) — the same string as
+  // `scope`, which stays as the historic column every reader already groups on.
+  // `costMicros` is the provider's list price in MICRO-DOLLARS
+  // (src/lib/ai/pricing.ts); null when the model is not in the rate table,
+  // never an estimate. `latencyMs` is the time spent waiting on the provider
+  // across the attempts of this one logical call.
+  taskId       String? @db.VarChar(64)
+  provider     String? @db.VarChar(32)
+  model        String? @db.VarChar(64)
+  inputTokens  Int?
+  outputTokens Int?
+  costMicros   Int?
+  latencyMs    Int?
+  // The prompt-injection tripwire's hits over the call's untrusted input
+  // (#2026, src/lib/ai/injection.ts), comma-joined — e.g.
+  // "instruction_override,prompt_exfiltration". A flag, never a block: the call
+  // ran normally. Null when nothing tripped. Never the text itself.
+  flags        String? @db.VarChar(191)
+
   @@index([createdAt])
   @@index([scope])
   @@index([orgId, createdAt])
+  @@index([taskId, createdAt])
+}
+
+// Per-task AI switches and quota overrides of ONE organisation (#2032). The
+// org-wide kill switch is the `aiEnabled` Setting; this table holds what is
+// decided per task: off, or a monthly allowance of its own (null = the org's
+// `aiMonthlyQuota`). No row means "on, inherit" — the chain lives in
+// src/lib/ai/policy.ts and is the only reader. Tenant configuration, so it is
+// in TENANT_MODELS; `taskId` is a registry key (src/lib/ai/tasks.ts), not a
+// foreign key, so a retired task's row is harmless and a typo never compiles
+// into the gate.
+model AiFeatureSetting {
+  id           String   @id @default(cuid())
+  orgId        String
+  taskId       String   @db.VarChar(64)
+  enabled      Boolean  @default(true)
+  monthlyQuota Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, taskId])
+  @@index([orgId])
 }
 
 // What an AI call PRODUCED (#2044) — AiUsage above is the meter (that a call
@@ -2310,9 +2440,36 @@ model ApiKey {
   revokedAt   DateTime?
   lastUsedAt  DateTime?
   createdAt   DateTime      @default(now())
+  // Period allowance (#2010). Both null = no period quota (the per-minute
+  // limit still applies) — every key minted before this stays exactly as it
+  // was. `quotaPeriod` is 'day' | 'month' (UTC calendar periods).
+  quotaPeriod String?       @db.VarChar(10)
+  quotaLimit  Int?
+  usage       ApiKeyUsage[]
 
   @@index([orgId])
   @@index([createdById])
+}
+
+// Requests per API key per quota period (#2010) — the only counter model the
+// per-key quota adds. Written in BATCHES by src/lib/apiKeyQuota.ts (an
+// in-process tally flushed every few seconds as one `increment` upsert per
+// key), never once per request: a write per request would turn the meter into
+// an amplifier for the traffic it measures. The increment is atomic in the
+// database, so replicas add up rather than overwrite each other, and the
+// count survives a restart (minus at most one unflushed window).
+model ApiKeyUsage {
+  id          String   @id @default(cuid())
+  apiKeyId    String
+  apiKey      ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  orgId       String?
+  periodStart DateTime
+  requests    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([apiKeyId, periodStart])
+  @@index([orgId])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
@@ -2485,12 +2642,14 @@ model ProjectTask {
   // place that decides what "late" means.
   dueDate     DateTime?
 
-  project  Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?                @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  author   User?                @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  project     Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?                  @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  author      User?                  @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   // A template is archived rather than deleted, so this normally stays intact;
   // SetNull is the safety net that leaves the snapshot title behind.
-  template ProjectTaskTemplate? @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  template    ProjectTaskTemplate?   @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  // The minutes line this to-do was promoted from (#1849), when it was.
+  minutesItem SessionNoteActionItem?
 
   @@index([projectId])
   @@index([assigneeId])
@@ -2505,33 +2664,37 @@ model ProjectTask {
 // Not tenant-anchored: reached through Project / User, like the other child
 // models (see TENANT_MODELS in src/lib/orgContext.ts).
 model ProjectTaskTemplate {
-  id           String    @id @default(cuid())
-  projectId    String?
+  id                String    @id @default(cuid())
+  projectId         String?
   // The fallback wording, and the key the pool dedupes on. A localized title
   // lives in `translations`; `title` is what a member sees when their language
   // has no entry there.
-  title        String
+  title             String
   // { en?, tr?, de? } — the goal in each language it has been written in. The
   // task created from a template is a plain string, resolved once from the
   // assignee's own language (src/lib/goalTemplates.ts).
-  translations Json?
-  createdById  String?
+  translations      Json?
+  // Locales filled by machine translation and not yet reviewed (#2055): a
+  // JSON array like ["tr","de"]. A locale leaves it when an admin edits
+  // or confirms it; null/[] = everything here was written by a person.
+  machineTranslated Json?
+  createdById       String?
   // How many times this template has been handed to someone — the pool sorts
   // by it so the goals actually used float to the top.
-  useCount     Int       @default(0)
-  createdAt    DateTime  @default(now())
+  useCount          Int       @default(0)
+  createdAt         DateTime  @default(now())
   // Retired from the pool, not deleted (#1113). Handing a to-do out creates a
   // live reference to this row, so removing it would blank the wording for
   // everyone who was ever given it. Archived means "don't offer this again";
   // adding the same wording back revives the row.
-  archivedAt   DateTime?
+  archivedAt        DateTime?
   // The tenant whose pool this template is in (cross-world isolation). The
   // shared (`projectId: null`) half used to be ONE global pool offered to every
   // organization, so a MARKETING admin saw — and could reword — the internship
   // starter goals. Nullable for the expand step (#2298);
   // prisma/backfill-task-template-org.mjs stamps legacy rows from their project,
   // else their author, else the default org. NULL reads as the default org.
-  orgId        String?
+  orgId             String?
 
   project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
@@ -2753,6 +2916,16 @@ model MentorshipRelation {
   // contractual date, and moving the record to another stage would erase it.
   trialStartedAt          DateTime?
   trialEndsAt             DateTime?
+  // A won customer's notice period (#2841, decision #2572 option C): the day
+  // their contract ends after they gave notice. Same class of date as
+  // `trialEndsAt` — agreed, contractual, survives every stage change — so the
+  // same reasoning against `stageDeadline` applies. Set only on a DEAL_WON
+  // record (src/lib/contractEndRule.ts); cleared when the customer withdraws
+  // the notice. The record stays DEAL_WON until a human moves it to DEAL_LOST.
+  contractEndsAt          DateTime?
+  // When the end-day bell went out, so a re-run never rings twice. Cleared
+  // with the date.
+  contractEndRemindedAt   DateTime?
   // The owner's own "next step" on this record (#2563): a date and a short
   // line — "call Thursday about pricing". All three nullable and additive, so
   // `db push` adds them over a populated table and an untouched row means what
@@ -2823,6 +2996,8 @@ model MentorshipRelation {
   // INTERIM/FINAL due dates and their reminders (#1891).
   evaluationDues        EvaluationDue[]
   goals                 Goal[]
+  sessionAgendas        SessionAgenda[]
+  sessionNotes          SessionNote[]
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
   relationNotes         RelationNote[]
@@ -2975,25 +3150,39 @@ model Evaluation {
 //
 // That rule is enforced in the API, never merely hidden in the UI.
 model InterviewPanel {
-  id          String    @id @default(cuid())
-  orgId       String?
+  id                   String    @id @default(cuid())
+  orgId                String?
   // The candidate being interviewed.
-  subjectId   String
+  subjectId            String
   // The rubric to score against (#822). Null = the org's built-in mentee
   // criteria, resolved at read time like everywhere else.
-  templateId  String?
-  title       String?
-  scheduledAt DateTime?
-  createdById String?
+  templateId           String?
+  title                String?
+  scheduledAt          DateTime?
+  createdById          String?
   // Set when an admin closes the panel early — a no-show interviewer must not
   // hold the calibration view hostage for ever. Closing reveals the scorecards
   // that were submitted.
-  closedAt    DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  closedAt             DateTime?
+  // The calendar entry this panel scores (#1846): set when an interview
+  // request is scheduled with `createPanel`, so `scheduledAt` is the meeting's
+  // and the interviewers are on a calendar.
+  meetingId            String?   @unique
+  // The decision a closed panel produced (#1846): ADVANCE | REJECT | OFFER,
+  // written once by POST /api/interview-panels/[id]/outcome and never by a
+  // side effect. The application it moved is kept so the funnel can be read
+  // back from the panel.
+  outcome              String?
+  outcomeAt            DateTime?
+  outcomeById          String?
+  outcomeApplicationId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  members    InterviewPanelMember[]
-  scorecards Evaluation[]
+  members          InterviewPanelMember[]
+  scorecards       Evaluation[]
+  meeting          Meeting?               @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  interviewRequest InterviewRequest?
 
   @@index([orgId, subjectId])
   @@index([subjectId, createdAt])
@@ -3133,24 +3322,227 @@ model RelationNote {
   @@index([relationId])
 }
 
+// The pair's SHARED minutes (#1847): one record of what was said and agreed,
+// readable and editable by both the mentor and the mentee (an admin reads).
+// Deliberately a THIRD model beside PersonalNote (author-private, "only the
+// author can see it") and RelationNote (mentor-private): rows in those two were
+// written under an explicit privacy promise, and a visibility flag on either
+// would break it retroactively. `meetingId` and `agendaId` are SetNull for the
+// PersonalNote reason — deleting the meeting or the agenda must not delete what
+// was written in it; the minutes are the durable part.
+//
+// No `orgId`, deliberately: this is a child of MentorshipRelation, which IS in
+// TENANT_MODELS (src/lib/orgContext.ts), so it is reached only through a scoped
+// parent — the same arrangement as MeetingGuest under Meeting. Worth stating,
+// because a model that is not anchored gets no automatic tenant protection and
+// every reader has to know that on purpose.
+model SessionNote {
+  id          String   @id @default(cuid())
+  relationId  String
+  meetingId   String?
+  agendaId    String?
+  body        String   @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  relation    MentorshipRelation      @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting     Meeting?                @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  agenda      SessionAgenda?          @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  createdBy   User?                   @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  revisions   SessionNoteRevision[]
+  actionItems SessionNoteActionItem[]
+
+  @@index([relationId])
+  @@index([meetingId])
+}
+
+// A `- [ ]` line of the minutes promoted to a to-do (#1849): the link that
+// keeps the two in step — ticking the to-do ticks the line, ticking the line
+// ticks the to-do. `text` is the line as promoted, which is how the line is
+// found again after the body is edited (lines move; wording rarely does). One
+// to-do per line, one line per to-do (taskId @unique). Cascade from the note:
+// without the minutes there is nothing to keep in step; the to-do itself
+// stays (SetNull on the task side would be wrong — the row IS the link).
+// Reached through SessionNote → MentorshipRelation, so no `orgId` either.
+model SessionNoteActionItem {
+  id        String   @id @default(cuid())
+  noteId    String
+  taskId    String   @unique
+  text      String
+  createdAt DateTime @default(now())
+
+  note SessionNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  task ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
+}
+
+// Who changed the minutes after the meeting (#1847): an append-only trail, one
+// row per saved edit holding the body AS SAVED and who saved it. The routes
+// keep the last SESSION_NOTE_REVISIONS_KEPT rows per note; there is no diff UI.
+// Reached through SessionNote → MentorshipRelation, so no `orgId` either.
+model SessionNoteRevision {
+  id        String   @id @default(cuid())
+  noteId    String
+  authorId  String?
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  note   SessionNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  author User?       @relation("SessionNoteRevisionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([noteId, createdAt])
+}
+
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
 model Goal {
-  id            String     @id @default(cuid())
-  relationId    String
-  title         String
-  description   String?    @db.Text
-  status        GoalStatus @default(OPEN)
-  dueDate       DateTime?
-  createdAt     DateTime   @default(now())
+  id              String     @id @default(cuid())
+  relationId      String
+  title           String
+  description     String?    @db.Text
+  status          GoalStatus @default(OPEN)
+  dueDate         DateTime?
+  createdAt       DateTime   @default(now())
   // Set when the goal is marked DONE (cleared if reopened); powers the
   // "completed todos" line of the activity report.
-  completedAt   DateTime?
+  completedAt     DateTime?
   // Which side created the goal (mentor vs mentee), so it's clear at a glance.
-  createdByRole Role?
+  createdByRole   Role?
+  // Who created it (#1858) — the one reader of a PRIVATE goal. Null on rows
+  // older than the column; src/lib/goalVisibilityRule.ts falls back to
+  // createdByRole for those.
+  createdById     String?
+  // "How you will know it is achieved" — free text beside the title (#1858).
+  successCriteria String?    @db.Text
+  // The date the pair aims at, distinct from dueDate (the deadline).
+  targetDate      DateTime?
+  // 0-100, entered by hand until sub-tasks derive it (#1858).
+  progress        Int?
+  // Sharing scope: PAIR (default) | PROGRAM | PRIVATE. Enforced at the route
+  // level by src/lib/goalVisibilityRule.ts, never only in the component.
+  visibility      String     @default("PAIR")
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
   @@index([relationId])
+}
+
+// ── Session agendas (#1841) ──────────────────────────────────────────────────
+// "What are we going to talk about." Two pairs of tables: a reusable,
+// trilingual guided-conversation LIBRARY (AgendaTemplate + its items), and the
+// per-session INSTANCE a pair works through (SessionAgenda + its items), which
+// hangs off a MentorshipRelation and optionally off the Meeting it was held in.
+// Same shape as ProjectTaskTemplate / ProjectTask on purpose: the canonical
+// string is the dedupe key and the fallback wording, `translations` carries the
+// per-locale text, and a templated item resolves its wording LIVE from the
+// template in the reader's language (src/lib/agendas.ts) — rewording a prompt
+// in the library reaches every session that was given it. UI is #1843.
+model AgendaTemplate {
+  id           String    @id @default(cuid())
+  // The tenant whose library this is. Nullable like ProjectTaskTemplate.orgId
+  // (#2298): the starter set may be seeded before the default org exists on a
+  // first deploy, and NULL reads as the default org.
+  orgId        String?
+  // The Program (#1622) this conversation belongs to. Nullable until that
+  // model lands; a plain id on purpose so this change does not wait for it.
+  programId    String?
+  // Who the conversation is for. PAIR today; a group session gets its own value.
+  audience     String    @default("PAIR")
+  // The fallback wording, and the key the library dedupes on (@@unique below).
+  title        String
+  // { en?, tr?, de? } — the title in each language it has been written in.
+  translations Json?
+  // { en?, tr?, de? } — one or two sentences on when to hold this conversation.
+  summary      Json?
+  // How many sessions were instantiated from it — the picker sorts by it.
+  useCount     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  // Retired from the library, not deleted (#1113): instantiating one creates a
+  // live reference from SessionAgenda.templateId, and removing the row would
+  // blank the wording of every session that was held from it. Archived means
+  // "don't offer this again".
+  archivedAt   DateTime?
+  createdById  String?
+
+  org       Organization?        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User?                @relation("AgendaTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  items     AgendaTemplateItem[]
+  sessions  SessionAgenda[]
+
+  // One template per wording per tenant, so re-seeding is a no-op. MySQL does
+  // not enforce it across NULL orgIds; the seeder checks by title itself.
+  @@unique([orgId, title])
+  @@index([orgId])
+  @@index([programId])
+}
+
+// One prompt of a template, in order — the EvaluationCriterion shape.
+model AgendaTemplateItem {
+  id           String  @id @default(cuid())
+  templateId   String
+  order        Int     @default(0)
+  // The fallback wording of the prompt; `translations` carries the locales.
+  prompt       String
+  translations Json?
+  // Facilitation notes for the mentor: why ask this, what to listen for. Not
+  // shown to the mentee.
+  guidance     String? @db.Text
+
+  template     AgendaTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sessionItems SessionAgendaItem[]
+
+  @@index([templateId, order])
+}
+
+// The agenda of ONE session of a pair. `meetingId` is unique: a meeting has at
+// most one agenda, and an agenda may exist before the meeting is scheduled.
+// `templateId` is SetNull so retiring a template never blanks a held session.
+//
+// No `orgId`, deliberately: this is a child of MentorshipRelation, which IS in
+// TENANT_MODELS (src/lib/orgContext.ts), so it is reached only through a scoped
+// parent — the same arrangement as MeetingGuest under Meeting. Worth stating,
+// because a model that is not anchored gets no automatic tenant protection and
+// every reader has to know that on purpose.
+model SessionAgenda {
+  id          String   @id @default(cuid())
+  relationId  String
+  meetingId   String?  @unique
+  templateId  String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  relation MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting  Meeting?            @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  template AgendaTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  items    SessionAgendaItem[]
+  notes    SessionNote[]
+
+  @@index([relationId])
+  @@index([templateId])
+}
+
+// One line of a session agenda. Templated (`templateItemId` set — the text
+// resolves live from the template in the reader's language, `text` is the
+// snapshot fallback) or ad hoc (`templateItemId` null — `text` is the wording).
+model SessionAgendaItem {
+  id                String    @id @default(cuid())
+  agendaId          String
+  order             Int       @default(0)
+  text              String    @db.Text
+  templateItemId    String?
+  done              Boolean   @default(false)
+  doneAt            DateTime?
+  // The item of a PREVIOUS session this one continues ("carried over"). A
+  // plain id, not a self-relation: the previous agenda may be deleted with
+  // its relation, and the link is informational.
+  carriedFromItemId String?
+
+  agenda       SessionAgenda       @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  templateItem AgendaTemplateItem? @relation(fields: [templateItemId], references: [id], onDelete: SetNull)
+
+  @@index([agendaId, order])
+  @@index([templateItemId])
 }
 
 model InteractionLog {
@@ -3278,16 +3670,20 @@ model Meeting {
   // nulls".
   batchKey            String?
 
-  relation     MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  conversation Conversation?             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  series       MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  interaction  InteractionLog?
-  notes        PersonalNote[]
-  googleEvents GoogleCalendarEventLink[]
-  guests       MeetingGuest[]
-  feedback     MeetingFeedback[]
-  attendance   MeetingAttendance[]
+  relation         MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  project          Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation     Conversation?             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  series           MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  interaction      InteractionLog?
+  notes            PersonalNote[]
+  googleEvents     GoogleCalendarEventLink[]
+  guests           MeetingGuest[]
+  feedback         MeetingFeedback[]
+  attendance       MeetingAttendance[]
+  agenda           SessionAgenda?
+  sessionNotes     SessionNote[]
+  interviewRequest InterviewRequest?
+  interviewPanel   InterviewPanel?
 
   @@index([relationId])
   @@index([projectId])
@@ -3703,6 +4099,31 @@ model SsoLoginGrant {
   expiresAt DateTime
 }
 
+// Magic-link sign-in (#1959): "e-mail me a sign-in link". One row per link
+// requested, holding ONLY the SHA-256 of the token the mail carries — the raw
+// value exists in that one e-mail and nowhere else, so a read of this table
+// (a backup, a log, a support session) hands nobody a sign-in. Single use:
+// `usedAt` is stamped by the same conditional UPDATE that admits the sign-in
+// (src/lib/magicLink.ts), so two clicks on one link cannot both win. Expired
+// and spent rows are dropped by the nightly trusted-device purge.
+//
+// User-keyed, not tenant-keyed, like SsoLoginGrant and PasswordResetToken: the
+// row is a credential for ONE account, and that account's row already carries
+// the tenant. An orgId here would be a second copy of the same fact.
+model LoginLinkToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  requestIp String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 // Single-use bridge token minted by /api/auth/remember/refresh once a trusted
 // device's remember-me cookie has been verified AND rotated, then consumed by
 // the `remember` NextAuth provider to mint a fresh session. Same shape as
@@ -3762,6 +4183,36 @@ model TrustedDevice {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// A browser a person has signed in from (#1717).
+//
+// The memory behind the "new sign-in from a device we haven't seen" security
+// notice. One row per (user, browser fingerprint); the fingerprint is the
+// SHA-256 of the user-agent string, so two tabs of the same browser are one
+// device and an upgraded browser is a new one — a deliberately coarse notion
+// that errs towards the occasional extra notice rather than silence. No
+// geolocation, no cookie: the row says "this browser has signed in here before"
+// and nothing else, which is why the first sign-in of an account is the
+// baseline (nothing to compare against) and sends no mail. The address is the
+// one the sign-in came from; the mail quotes it so the reader can recognise
+// their own network. User-keyed and without `orgId`, exactly like TrustedDevice:
+// the row is read only through the user it belongs to.
+model SignInDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // sha256(userAgent), hex. Never the raw agent as the key: it is 512 bytes wide.
+  fingerprint String
+  // "Chrome on macOS" — the label the notice quotes.
+  label       String?
+  userAgent   String?  @db.Text
+  lastIp      String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([userId, fingerprint])
+  @@index([lastSeenAt])
 }
 
 // Single-use 2FA recovery codes (#1542).
@@ -3876,6 +4327,9 @@ model ActivityLog {
   @@index([action])
   @@index([createdAt])
   @@index([orgId])
+  // /admin/activity (#1608): one tenant's rows, newest first, a page at a time
+  // — `where: { orgId }` + `orderBy: { createdAt: 'desc' }` + skip/take.
+  @@index([orgId, createdAt])
 }
 
 enum EmailStatus {
@@ -3918,11 +4372,25 @@ model EmailLog {
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  // The FAILED/SENT-by-recency shape (#1608): /api/health's
+  // `findFirst({ where: { status: 'FAILED' }, orderBy: { createdAt: 'desc' } })`
+  // and the email-log screen's `groupBy` over `{ status, createdAt: { gte } }`.
+  // Without it MySQL filesorts the status set or walks createdAt past every
+  // row of the other statuses — the documented ep:health landmine.
+  @@index([status, createdAt])
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
 model AuditLog {
   id        String   @id @default(cuid())
+  // The tenant the audited action happened in (#2012). Nullable + backfilled:
+  // prisma/backfill-audit-log-org.mjs attributes legacy rows by the actor's
+  // org, then the target user's; what is left (system rows) falls to the
+  // default org in backfill-organization.mjs. NULL reads as the default org
+  // (tenantFilter). Registered in TENANT_MODELS, so a request-scoped writer
+  // has it stamped by the middleware; the sessionless writers (the offer
+  // expiry sweep, the impersonation STOP) pass it themselves.
+  orgId     String?
   actorId   String // who performed the action (e.g. the admin)
   action    String // e.g. IMPERSONATE_START / IMPERSONATE_STOP
   targetId  String? // affected user, when applicable
@@ -3936,6 +4404,51 @@ model AuditLog {
   // "Who accessed my account" (#1587) reads this table by the *affected* user,
   // not the actor — without this index that self-service list is a full scan.
   @@index([targetId])
+  // A time-ordered drain (#2012) and the age-based sweep (#1585) both walk
+  // this table by time; the per-tenant drain walks it by (org, time).
+  @@index([createdAt])
+  @@index([orgId, createdAt])
+}
+
+// Where a tenant's audit trail is streamed to (#2012): one row per receiver
+// (a Splunk HEC, a Sentinel data collector, an Elastic ingest endpoint). The
+// drain job (src/lib/auditDrain.ts) reads AuditLog forward from the cursor,
+// POSTs signed newline-delimited batches and moves the cursor only on a 2xx —
+// at-least-once, receivers dedupe on the audit row id (docs/audit-stream.md).
+//
+// Strictly tenant property: a drain receives its own org's rows and nothing
+// else, which is why it carries a REQUIRED orgId and is in TENANT_MODELS.
+// Nothing here can edit or delete an audit row; the only thing a drain writes
+// is its own bookkeeping.
+model AuditDrain {
+  id            String       @id @default(cuid())
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // @db.Text: a SIEM collector URL carries a token in its path or query and
+  // runs past 191 characters. The route caps it (AUDIT_DRAIN_URL_MAX).
+  url           String       @db.Text
+  // The HMAC-SHA256 key the receiver verifies each batch with. Shown once at
+  // creation and on rotation, like Webhook.secret.
+  secret        String
+  // 'json_lines' (our record, one per line) or 'ecs' (Elastic Common Schema).
+  format        String       @default("json_lines")
+  active        Boolean      @default(true)
+  // Where the next batch starts: the (createdAt, id) of the last row shipped.
+  // Null = nothing shipped yet, start at the beginning of the trail.
+  cursorAt      DateTime?
+  cursorId      String?
+  lastOkAt      DateTime?
+  // Through sanitizeError, never a raw response body.
+  lastError     String?      @db.Text
+  // Consecutive failed deliveries; cleared by a success. Drives the backoff
+  // (nextAttemptAt) and, past AUDIT_DRAIN_PAUSE_AFTER_FAILURES, the pause.
+  failures      Int          @default(0)
+  nextAttemptAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orgId])
+  @@index([active, nextAttemptAt])
 }
 
 // Single-use, time-limited token to confirm a user's email address.
@@ -4140,6 +4653,7 @@ model Requisition {
 
   interests         CompanyInterest[]
   interviewRequests InterviewRequest[]
+  applications      Application[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])
@@ -4164,19 +4678,95 @@ model InterviewRequest {
   decidedAt         DateTime?
   proposedSlots     Json?
   activeKey         String?   @unique
+  // The interview as a real Meeting (#1844): set when an approver schedules
+  // it, so the request and the calendar entry point at each other. SCHEDULED
+  // and CANCELLED are written only by /schedule and /cancel; the meeting is
+  // taken off the calendars through the shared cancel path, never deleted.
+  meetingId         String?   @unique
+  scheduledAt       DateTime?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  cancelReason      String?   @db.Text
+  // The scorecard panel convened for this interview (#1846), created in the
+  // same transaction as the meeting when the approver asks for one.
+  panelId           String?   @unique
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  mentee      User         @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  decidedBy   User?        @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  requisition Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User            @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  decidedBy   User?           @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  meeting     Meeting?        @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  cancelledBy User?           @relation("InterviewRequestCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+  panel       InterviewPanel? @relation(fields: [panelId], references: [id], onDelete: SetNull)
 
   @@index([orgId, status])
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+}
+
+/// One person being considered for one role, and where they are in it (#1828).
+/// The row every hiring screen reads: the per-role funnel, the interview
+/// outcome, the offer that fills the requisition. `stage`, `status` and
+/// `source` are plain Strings validated against the whitelists in
+/// src/lib/applications.ts (the repo's convention for status-like values, see
+/// Offer.status) — `stage` is the fine-grained funnel step, `status` the coarse
+/// outcome derived from it (ACTIVE | HIRED | REJECTED | WITHDRAWN) so a report
+/// can count open applications without knowing the stage vocabulary.
+/// CompanyInterest stays in place as the company's flat flag; the only bridge
+/// between the two is applicationFromInterest(). One application per person
+/// per role is enforced by the database, not by a handler.
+model Application {
+  id               String    @id @default(cuid())
+  orgId            String
+  requisitionId    String
+  menteeId         String
+  companyId        String
+  status           String    @default("ACTIVE")
+  stage            String    @default("APPLIED")
+  source           String    @default("SELF")
+  screeningAnswers Json?
+  coverNote        String?   @db.Text
+  dispositionCode  String?
+  dispositionNote  String?   @db.Text
+  withdrawnAt      DateTime?
+  decidedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org         Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requisition Requisition        @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User               @relation("ApplicationMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  events      ApplicationEvent[]
+
+  @@unique([requisitionId, menteeId])
+  @@index([orgId, status])
+  @@index([companyId, stage])
+  @@index([menteeId])
+}
+
+/// The audit trail of an application: one row per stage change, the funnel
+/// report's source (#1828). Reached only through its application, so it
+/// carries no orgId and is deliberately not in TENANT_MODELS. `fromStage` is
+/// null on the row that created the application.
+model ApplicationEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  fromStage     String?
+  toStage       String
+  actorId       String?
+  note          String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?       @relation("ApplicationEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([actorId])
 }
 
 /// A user's own Google Calendar, connected by them and revocable by them (#709).
@@ -5479,4 +6069,79 @@ model SavedView {
 
   @@unique([orgId, surface, createdById, name])
   @@index([orgId, surface])
+}
+
+// A text-only practice interview (#2051): the mentee answers, an AI interviewer
+// asks the next question, and after `maxTurns` answers an after-action report is
+// written and stored as a PRIVATE AiArtifact (`reportArtifactId`) the mentee may
+// share with their mentor. No audio, no video, no recording — text only, by
+// design. `turns` is the transcript: [{ q, a?, note? }], the mentee's typed
+// answers included, so the row cascades with the person (erasure) and is
+// tenant-anchored (orgId + TENANT_MODELS).
+model PracticeSession {
+  id               String    @id @default(cuid())
+  orgId            String?
+  userId           String
+  user             User      @relation("PracticeSessions", fields: [userId], references: [id], onDelete: Cascade)
+  requisitionId    String?
+  role             String    @db.VarChar(191)
+  // ACTIVE | COMPLETED
+  status           String    @default("ACTIVE") @db.VarChar(16)
+  turns            Json      @default("[]")
+  maxTurns         Int       @default(6)
+  reportArtifactId String?
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+
+  @@index([userId, startedAt])
+  @@index([orgId])
+}
+
+// ── Safeguarding (#2056) ─────────────────────────────────────────────────────
+// A message that shared a contact detail or hit an org's watch keyword. The
+// rule is src/lib/safeguarding.ts (pure, corpus-tested); the only writer is
+// src/lib/safeguardingScan.ts; the queue is /admin/safeguarding. Detection
+// NEVER blocks or holds the message — this row is a note for an admin, not a
+// gate on the participant's channel. docs/safeguarding.md has the whole story.
+
+enum SafeguardingFlagKind {
+  CONTACT_DETAIL
+  KEYWORD
+}
+
+enum SafeguardingOutcome {
+  // Looked at; nothing to do (a false positive, or harmless in context).
+  NO_ACTION
+  // Looked at and dealt with inside the programme (a word with the mentor…).
+  REVIEWED
+  // Handed on — to the safeguarding lead, the institution, the authorities.
+  ESCALATED
+}
+
+model SafeguardingFlag {
+  id           String               @id @default(cuid())
+  // Tenant data: the org of the message's SENDER, stamped at write time. In
+  // TENANT_MODELS (src/lib/orgContext.ts) and filtered by hand in every read.
+  orgId        String?
+  messageId    String
+  kind         SafeguardingFlagKind
+  // A MASKED contact detail ("01•• ••••••78") or the watch keyword as the admin
+  // configured it — never the full number or address: the message body is the
+  // record, and the retention sweep masks bodies, so a flag that kept the
+  // number would outlive it.
+  matchedTerm  String               @db.VarChar(191)
+  createdAt    DateTime             @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  outcome      SafeguardingOutcome?
+
+  org        Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  message    Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reviewedBy User?         @relation("SafeguardingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  // Re-scanning an edited message must not raise the same flag twice.
+  @@unique([messageId, kind, matchedTerm])
+  // The queue: one org's open flags, newest first.
+  @@index([orgId, reviewedAt, createdAt])
+  @@index([reviewedById])
 }

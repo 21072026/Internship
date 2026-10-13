@@ -97,3 +97,46 @@ export function freeMeetingFallbackLink(link: string | null | undefined): string
   const jaas = parseJaasMeetingLink(link);
   return jaas ? `https://meet.jit.si/${jaas.room}` : null;
 }
+
+// The product a link belongs to, for an "Open in <provider>" button (#2007).
+// Nothing but a label: Meet/Zoom/Teams all refuse to be framed, so when the
+// panel cannot show the room it should at least say where the room is. Known
+// hosts get their brand name; anything else gets its hostname, which for a
+// company's own instance (`video.acme.de`) is the name people know it by.
+const MEETING_PROVIDERS: ReadonlyArray<readonly [host: string, name: string]> = [
+  ['meet.google.com', 'Google Meet'],
+  ['zoom.us', 'Zoom'],
+  ['zoom.com', 'Zoom'],
+  ['teams.microsoft.com', 'Microsoft Teams'],
+  ['teams.live.com', 'Microsoft Teams'],
+  ['webex.com', 'Webex'],
+  ['whereby.com', 'Whereby'],
+  ['meet.jit.si', 'Jitsi'],
+  ['8x8.vc', 'Jitsi'],
+];
+
+// A Slack huddle is a product, not a host (#2879): `app.slack.com` also serves
+// message permalinks and the workspace itself, so only the `/huddle/…` link of
+// a channel gets the name. Anything else on that host falls through to the
+// hostname like every unknown link. Deliberately NOT in EMBEDDABLE_MEETING_HOSTS:
+// Slack refuses to be framed, and "Open in Slack Huddle" is the whole point.
+export const SLACK_HUDDLE_PROVIDER = 'Slack Huddle';
+
+export function meetingProviderName(link: string | null | undefined): string | null {
+  if (!link) return null;
+  let host: string;
+  let path: string;
+  try {
+    const url = new URL(link);
+    host = url.hostname.toLowerCase();
+    path = url.pathname;
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  if (host === 'app.slack.com' && /^\/huddle\/[^/]+\/[^/]+\/?$/.test(path)) return SLACK_HUDDLE_PROVIDER;
+  for (const [known, name] of MEETING_PROVIDERS) {
+    if (host === known || host.endsWith(`.${known}`)) return name;
+  }
+  return host;
+}

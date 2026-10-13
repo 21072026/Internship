@@ -127,6 +127,19 @@ const googleMock = `http://127.0.0.1:${E2E_GOOGLE_MOCK_PORT}`;
 // stub, the app needs no env pointing at it: a tenant's IdP endpoint is stored
 // per organization, so the spec seeds the port into the org row it creates.
 export const E2E_IDP_MOCK_PORT = 4600;
+// Shared with e2e/audit-stream.spec.ts (#2012). A local stand-in for a SIEM
+// receiver: records the signed batches the audit stream POSTs and can be
+// switched into an outage, so the cursor/replay contract is tested for real.
+// The app server below runs with AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS=1 so a
+// plain-http loopback URL is accepted as a receiver; no deployment sets it.
+export const E2E_AUDIT_SINK_PORT = 4601;
+// Shared with e2e/password-policy.spec.ts (#1544). A local stand-in for the
+// Have I Been Pwned range API: the app's breach screening runs against it, so
+// CI never calls the real service and the spec can switch it into an outage to
+// prove the lookup fails open. HIBP_RANGE_URL points the app at it and
+// HIBP_ALLOW_INSECURE_STUB=1 lets a plain-http loopback URL past the SSRF
+// guard — a test-only switch no deployment sets.
+export const E2E_HIBP_MOCK_PORT = 4602;
 
 export default defineConfig({
   testDir: './e2e',
@@ -219,6 +232,20 @@ export default defineConfig({
         env: { IDP_MOCK_PORT: String(E2E_IDP_MOCK_PORT) },
       },
       {
+        command: `node e2e/support/hibp-mock.mjs`,
+        url: `http://127.0.0.1:${E2E_HIBP_MOCK_PORT}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { HIBP_MOCK_PORT: String(E2E_HIBP_MOCK_PORT) },
+      },
+      {
+        command: `node e2e/support/audit-sink.mjs`,
+        url: `http://127.0.0.1:${E2E_AUDIT_SINK_PORT}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { AUDIT_SINK_PORT: String(E2E_AUDIT_SINK_PORT) },
+      },
+      {
         command: process.env.CI ? 'npm run start' : 'npm run dev',
         url: localURL,
         reuseExistingServer: !process.env.CI,
@@ -256,6 +283,10 @@ export default defineConfig({
           // because CI serves a production build. Unset everywhere else, so the
           // routes are a 404 on preview and production.
           E2E_ERROR_ROUTES: '1',
+          // Per-model database query tally for the N+1 report (#1608,
+          // e2e/db-query-report.spec.ts). Same opt-in shape as E2E_ERROR_ROUTES:
+          // unset everywhere else, where /api/dev/db-tally is a 404.
+          DB_QUERY_TALLY: '1',
           JAAS_WEBHOOK_SECRET: E2E_JAAS_WEBHOOK_SECRET,
           // Web Push (#1464/#1716): makes `pushConfigured()` true so the account
           // page renders its push device list. Keys are generated above, per run.
@@ -271,6 +302,13 @@ export default defineConfig({
           GOOGLE_OAUTH_TOKEN_URL: `${googleMock}/token`,
           GOOGLE_OAUTH_REVOKE_URL: `${googleMock}/revoke`,
           GOOGLE_CALENDAR_API_BASE: `${googleMock}/calendar/v3`,
+          // The audit stream (#2012): lets the local sink above be registered
+          // as a receiver over plain http on a loopback port, which the URL
+          // rule and the SSRF guard otherwise refuse. Test-only switch.
+          AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS: '1',
+          // Breached-password screening (#1544) against the local stub above.
+          HIBP_RANGE_URL: `http://127.0.0.1:${E2E_HIBP_MOCK_PORT}/range`,
+          HIBP_ALLOW_INSECURE_STUB: '1',
         },
       },
       ] : []),

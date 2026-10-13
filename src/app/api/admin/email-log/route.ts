@@ -27,6 +27,9 @@ import { worldUserWhere } from '@/lib/userWorld';
 // worlds send through the same SMTP allowance, so it stays installation-wide
 // and carries no address.
 const STATUSES = ['SENT', 'FAILED', 'SKIPPED'] as const;
+// The reason every honoured opt-out row carries — sendEmail()'s central check
+// and recordOptOuts() write the same shape (#2054).
+const OPT_OUT_PREFIX = 'Unsubscribed:';
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -49,10 +52,17 @@ export async function GET(request: Request) {
   const statusParam = params.get('status');
   const status = STATUSES.find((s) => s === statusParam);
   const category = params.get('category');
+  // The opt-out proof (#2054): `suppressed=1` narrows to honoured opt-outs
+  // (SKIPPED with an `Unsubscribed: <group>` reason, the one shape every path
+  // writes); `to=` looks up one address — exact match, and still only inside
+  // this world's addresses, so a lookup cannot read across the world line.
+  const suppressed = params.get('suppressed') === '1';
+  const toParam = (params.get('to') ?? '').trim().toLowerCase().slice(0, 320);
+  const days = Math.min(Math.max(Math.round(Number(params.get('days')) || 7), 1), 90);
 
   const where = {
-    ...inWorld,
-    ...(status ? { status } : {}),
+    ...(toParam ? { AND: [inWorld, { to: toParam }] } : inWorld),
+    ...(suppressed ? { status: 'SKIPPED' as const, error: { startsWith: OPT_OUT_PREFIX } } : status ? { status } : {}),
     ...(category ? { category } : {}),
   };
 
@@ -61,7 +71,8 @@ export async function GET(request: Request) {
   // window — the 7-day totals below would badly overstate today's usage.
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  const [entries, counts, dayByTransport, dayByCategory] = await Promise.all([
+  const sinceWindow = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const [entries, counts, dayByTransport, dayByCategory, optOuts] = await Promise.all([
     prisma.emailLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -98,6 +109,12 @@ export async function GET(request: Request) {
       where: { ...inWorld, createdAt: { gte: since24h }, status: 'SENT' },
       _count: { _all: true },
     }),
+    // Honoured opt-outs in the window, by reason (= group) and category (#2054).
+    prisma.emailLog.groupBy({
+      by: ['error', 'category'],
+      where: { ...inWorld, createdAt: { gte: sinceWindow }, status: 'SKIPPED', error: { startsWith: OPT_OUT_PREFIX } },
+      _count: { _all: true },
+    }),
   ]);
 
   const summary = { SENT: 0, FAILED: 0, SKIPPED: 0 };
@@ -119,5 +136,22 @@ export async function GET(request: Request) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  return NextResponse.json({ entries, summary, last24h, byCategory });
+  const byGroup = new Map<string, number>();
+  const byOptOutCategory = new Map<string, number>();
+  for (const row of optOuts) {
+    const group = (row.error ?? '').slice(OPT_OUT_PREFIX.length).trim() || '(unknown)';
+    byGroup.set(group, (byGroup.get(group) ?? 0) + row._count._all);
+    const cat = row.category ?? '(uncategorised)';
+    byOptOutCategory.set(cat, (byOptOutCategory.get(cat) ?? 0) + row._count._all);
+  }
+  const sorted = (m: Map<string, number>, key: 'group' | 'category') =>
+    [...m.entries()].map(([k, count]) => ({ [key]: k, count })).sort((a, b) => b.count - a.count);
+  const suppression = {
+    days,
+    total: [...byGroup.values()].reduce((a, b) => a + b, 0),
+    byGroup: sorted(byGroup, 'group'),
+    byCategory: sorted(byOptOutCategory, 'category'),
+  };
+
+  return NextResponse.json({ entries, summary, last24h, byCategory, suppression });
 }

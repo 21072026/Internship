@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 import { createSurvey, submitSurveyResponse } from '../src/lib/surveys';
 import { prepareOpenText } from '../src/lib/ai/openTextRules';
@@ -46,6 +46,9 @@ test.describe('survey results', () => {
     orgId = (await prisma.organization.create({ data: { name: `SR Org ${stamp}`, slug: `sr-${stamp}` } })).id;
     otherOrgId = (await prisma.organization.create({ data: { name: `SR Other ${stamp}`, slug: `sr-other-${stamp}` } })).id;
     await seedUser(admin, PW, 'ADMIN', `SR Admin ${stamp}`, orgId);
+    // The summary is an operator task behind the AI pack (#1738); this org
+    // holds it so the summary tests keep testing the engine.
+    await setOrgFeature(orgId, 'AI_PACKAGE', true);
     const cohort = await prisma.cohort.create({ data: { orgId, name: `Spring ${stamp}` } });
     for (const [i, email] of mentors.entries()) {
       mentorIds.push((await seedUser(email, PW, 'MENTOR', `SR Mentor ${'ABC'[i]} ${stamp}`, orgId)).id);
@@ -71,6 +74,7 @@ test.describe('survey results', () => {
     await prisma.mentorshipRelation.deleteMany({ where: { orgId } });
     await prisma.cohort.deleteMany({ where: { orgId } });
     for (const email of [admin, ...mentors, ...menteeEmails]) await cleanupByEmail(email);
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: { in: [orgId, otherOrgId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgId, otherOrgId] } } });
     await prisma.$disconnect();
   });

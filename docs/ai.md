@@ -13,19 +13,47 @@ not disagree.** If you change what a feature sends, change both.
 
 Every provider call in this codebase goes through
 [`src/lib/aiGate.ts`](../src/lib/aiGate.ts). Nothing else may construct an
-`Anthropic` client and call it — the `src/lib/ai*.ts` modules only *talk* to the
-provider, they never decide whether they are allowed to.
+`Anthropic` client and call it — the `src/lib/ai*.ts` modules hold a prompt and
+a parser, call `callModel()` for the request, and never decide whether they are
+allowed to.
 
 ```
-runAiGated({ scope, consent?, userId?, companyId?, call })
+runAiGated({ scope: AiTaskId, consent?, userId?, companyId?, call })
   │
   ├─ consent?      hasConsent(userId, type) — false → { ok:false, 'no_consent' }
-  ├─ quota         Setting.aiMonthlyQuota, calls this calendar month
+  ├─ switches      resolveAiPolicy(orgId, task) (#2032): the org kill switch, then
+  │                this task's own — off → { ok:false, 'disabled' }, before everything below
+  ├─ entitlement   operator tasks only (#1738): entitled(orgId, 'AI_PACKAGE')
+  │                false → { ok:false, 'not_entitled' }; a participant task skips this
+  ├─ cache         persist? a stored artefact for the same input → { ok:true, cached:true }
+  ├─ quota         the chain's allowance: the task's own monthlyQuota against its own
+  │                calls, else aiMonthlyQuota against the org's, this calendar month
   │                0 or exhausted → { ok:false, 'quota_exceeded' }
   ├─ configured    ANTHROPIC_API_KEY set → else { ok:false, 'not_configured' }
-  ├─ call()        the provider request
-  └─ meter         AiUsage row AFTER success only
+  ├─ call()        the task's module → callModel() → the provider request
+  └─ meter         AiUsage row AFTER success only, with model / tokens / cost / latency
 ```
+
+### The registry and the provider module (#2022)
+
+Three files carry what used to be copied into every feature module:
+
+| File | What it owns |
+|---|---|
+| [`src/lib/ai/tasks.ts`](../src/lib/ai/tasks.ts) | **The registry.** One entry per task, keyed on the historic `scope` string (so metering history keeps its meaning): a label, `audience` (`participant` / `operator`), the `ConsentType` or `null`, a model `tier` (`fast` / `balanced` / `strong`), `maxInputChars`, `maxOutputTokens`. `runAiGated`'s `scope` is typed on it — a typo does not compile. Dependency-free and client-safe. |
+| [`src/lib/ai/provider.ts`](../src/lib/ai/provider.ts) | **The only importer of `@anthropic-ai/sdk`** (pinned by `scripts/test/ai-tasks.test.mjs`). `callModel({ task, system, input, jsonSchema? })` sends one user message under the task's entry — the resolved model, the input cap, the output cap, the 60 s timeout — and records what the provider answered with. `resolveModel(task)` and `isAiConfigured()` live here. The retries, the breaker and `safeParseModelJson` (#2024) are the same file. |
+| [`src/lib/ai/pricing.ts`](../src/lib/ai/pricing.ts) | **The rate table**, in the provider's published US-dollar list prices per million tokens, with the source and date in its header. A model not in it costs `null` — never a guess. |
+
+**Model routing** is an env change, never a deploy. `resolveModel(task)` takes
+the first that is set: `AI_MODEL_<TASK_ID>` (one task) → `AI_MODEL_TIER_<TIER>`
+(every task in a tier) → `ANTHROPIC_SUMMARY_MODEL` (the summary family, kept so
+an existing deployment keeps its model) → `ANTHROPIC_CV_MODEL` (every task) →
+the built-in default. Unset, every tier resolves to the same default, which is
+why adding the tiers changed nothing. `.env.example` lists every variable and
+which tasks sit in which tier.
+
+**Adding a task** is one registry entry plus a module that calls
+`callModel({ task: '<id>', … })`; see § Adding an AI task.
 
 The order is deliberate. Quota is checked **before** configuration so that
 `aiMonthlyQuota = 0` means "AI is off" whether or not an API key happens to be
@@ -45,6 +73,98 @@ hint. Scoping the meter per tenant means adding `orgId` to `AiUsage`,
 registering it, and filtering the count — until then, treat the quota as an
 operator-level cost control that happens to be editable per tenant.
 
+### Who the task is for: audience and the AI pack (#1738)
+
+Every registry entry carries an `audience`, and a task cannot be registered
+without one. It is the one place that decides whether the gate asks for the
+paid add-on:
+
+- **`participant`** — the free core: `cv_extract`, `cv_feedback`,
+  `interview_prep`, `practice_interview`, `interaction_summary`, `thread_summary`,
+  `suggested_reply`, `outreach_draft`, `bulk_draft`, `profile_enrich`,
+  `next_step_suggest`, `agenda_personalize`. The
+  mentee's own tools and the mentor's own view of their own mentee. The gate never runs the entitlement
+  query on this path: no extra read, no paywall, and `not_entitled` cannot
+  reach a participant route or screen. A route may **escalate one call** to
+  operator (`runAiGated({ audience: 'operator' })`) when staff use a
+  participant task as a tool — `POST /api/interactions/summary` does so for an
+  ADMIN summarising a pair that is not theirs, `POST /api/mentorship/[id]/next-step`
+  for an ADMIN on a record that is not theirs, `POST /api/agendas/personalize` for
+  an ADMIN who is neither seat of the pair, and `POST /api/ai/bulk-draft` for
+  an ADMIN's bulk draft; all answer `403 feature_locked` without the pack.
+  The registry's audience is the floor and is never lowered per call.
+- **`operator`** — the admin tools: `mentor_match`, `survey_summary`,
+  `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`,
+  `content_translate`, `content_draft`, `company_enrich`. The
+  gate asks `entitled(orgId, 'AI_PACKAGE')` (#1733; the constant is
+  `AI_PACK_FEATURE` in `aiGate.ts`) right after consent and **before the
+  artefact cache** — a locked org is not answered from a stored copy of the
+  add-on either — and answers `{ ok: false, reason: 'not_entitled' }` when the
+  org has neither a plan with the pack nor a grant.
+
+An operator route turns that denial into the shared locked shape,
+`403 { error: 'feature_locked', code: 'feature_locked', feature: 'AI_PACKAGE' }`
+(the one `GET /api/admin/export/[dataset]` already answers with), and its `GET`
+reports `locked: true` so the screen draws a locked state — one line of copy,
+no Run button — instead of a card that fails on the click. The exception is
+`POST /api/admin/mentor-suggest`: the rule-based ranking is not AI and stays
+available to every admin, so on `not_entitled` it answers
+`200 { batchId, suggestions, aiUsed: false, locked: 'AI_PACKAGE' }` — the same
+list, no rationale, and a short locked hint where the "(rule-based)" suffix
+would be.
+
+Two things keep the gate from taking the tools away from the people who had
+them:
+
+- **Grandfathering.** [`prisma/backfill-ai-package-grandfather.mjs`](../prisma/backfill-ai-package-grandfather.mjs),
+  run by `infra/deploy-prod.sh`, grants `AI_PACKAGE` to every org that exists
+  on the deploy that adds the gate — once. Its grants carry a marker note, and
+  any later run that finds one does nothing, so an org created after the gate
+  is really gated. The same call the maintainer made for `REPORT_EXPORT`
+  (#1740); the run-once rule is unit-tested in
+  `scripts/test/ai-package-grandfather.test.mjs`.
+- **The demo.** `prisma/seed-demo.mjs` grants the pack to both demo tenants,
+  because the demo must show the whole product (#2061): without it every topic
+  environment's admin AI tools would render locked.
+
+## Switches and the policy chain (#2032)
+
+Switching AI off used to mean setting the quota to zero — all-or-nothing, and
+reported to the person as "quota used up" when the operator meant "off". The
+organisation's AI settings are now one chain, read in exactly one place,
+`src/lib/ai/policy.ts` (`resolveAiPolicy(orgId, taskId)`; the pure arithmetic is
+`src/lib/ai/policyRule.ts`, unit-tested), in this order and nothing else:
+
+1. **the org kill switch** — the `aiEnabled` Setting (`'false'` is off): every
+   task is off, whatever the rows below say;
+2. **the per-task switch** — `AiFeatureSetting.enabled` for `(orgId, taskId)`;
+   no row means on;
+3. **the per-task quota** — `AiFeatureSetting.monthlyQuota`, when set: this
+   task's own monthly allowance, counted against **this task's** answered
+   calls (`AiUsage.scope`);
+4. **the org quota** — the tenant's `aiMonthlyQuota` row, counted against the
+   org's answered calls;
+5. **the global default** — the deployment's global row, then the code
+   default (`SETTING_DEFAULTS`); 4 and 5 are what one `getSetting()` resolves.
+
+`runAiGated` asks the chain **before** the AI pack, the artefact cache and the
+quota: a switched-off task is refused with the typed denial **`'disabled'`**,
+never answered from a stored copy, and never dressed up as `'quota_exceeded'`.
+Every route answers it as `403 { code: 'disabled' }` and every screen says
+"AI is switched off for your organisation" — honest copy, no paywall, no
+upgrade prompt, for participants and staff alike. `getAiQuota(orgId, taskId)`
+measures a task with its own allowance against its own calls and every other
+task against the org's.
+
+`AiFeatureSetting` is a new additive table in `TENANT_MODELS`; `taskId` is a
+registry key (`src/lib/ai/tasks.ts`), not a foreign key, so a retired task's row
+is harmless and a typo never compiles into the gate. The switches are edited on
+`/admin/ai` through `GET`/`PUT /api/admin/ai/policy` (ADMIN, the session's org,
+never a request value; the master switch asks for a confirmation before it goes
+off); no other code may read `aiEnabled` or `aiMonthlyQuota`. The existing
+`Setting` table was **not** re-keyed for this — its `key String @id` makes
+adding `orgId` a drop-and-recreate under `db push`.
+
 ## The task table
 
 | Task (`scope`) | Route | Audience | What is sent | What is deliberately **not** sent | Consent | Free? |
@@ -53,11 +173,13 @@ operator-level cost control that happens to be editable per tenant.
 | `cv_feedback` | `POST /api/cv/feedback` | mentee, own CV only | the same extracted CV text, same cap | the file; other people's CVs (the route ignores any id and reads the caller's own) | `AI_CV_PARSING`, from the caller | yes — never a paywall |
 | `interaction_summary` | `POST /api/interactions/summary` | mentor / admin on their own relation | the 30 newest log entries: date, type, subject, notes; the mentee's display name | attachments, documents, e-mail addresses, phone numbers, CV | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes |
 | `interview_prep` | `POST /api/interview-prep` | mentee, for themselves | the target position, the skills on the profile, an optional free-text focus (≤300 chars) | name, contact data, CV, employer names, anything about the mentor | none — no identifier is sent | yes — never a paywall |
-| `mentor_match` | `POST /api/admin/mentor-suggest` | admin | the mentee's skills / target position / interests, and up to five mentors as **anonymous labels A–E** with skills, interests and load | every name, e-mail and id on both sides; labels are mapped back to mentor ids locally, after the response | none — no identifier is sent | n/a (admin tool) |
-| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers on the open-text engine: unattributed, contact details masked, under labels `r1…`; only above the survey's response floor **and** only when the question itself has that many answers | respondent ids, names, timestamps | none — no identifier is sent | n/a (admin tool) |
-| `analytics_narrative` | `POST /api/admin/analytics/narrative` | admin | the dashboard's totals as `label: value` lines (stage counts with stage names, monthly trends, engagement, RSVP rate, sign-up windows), recomputed on the server | mentor workload rows (they carry names), every per-person row and id | none — totals only | n/a (admin tool) |
-| `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | n/a (admin tool) |
-| `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | n/a (admin tool) |
+| `mentor_match` | `POST /api/admin/mentor-suggest` | admin | the mentee's skills / target position / interests, and up to five mentors as **anonymous labels A–E** with skills, interests and load | every name, e-mail and id on both sides; labels are mapped back to mentor ids locally, after the response | none — no identifier is sent | no — AI pack (#1738); the rule-based list stays free |
+| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers on the open-text engine: unattributed, contact details masked, under labels `r1…`; only above the survey's response floor **and** only when the question itself has that many answers | respondent ids, names, timestamps | none — no identifier is sent | no — AI pack (#1738) |
+| `analytics_narrative` | `POST /api/admin/analytics/narrative` | admin | the dashboard's totals as `label: value` lines (stage counts with stage names, monthly trends, engagement, RSVP rate, sign-up windows), recomputed on the server | mentor workload rows (they carry names), every per-person row and id | none — totals only | no — AI pack (#1738) |
+| `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | no — AI pack (#1738) |
+| `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | no — AI pack (#1738) |
+| `next_step_suggest` | `POST /api/mentorship/[id]/next-step` | the mentor who owns the record / admin | the stage key and its label, the days in stage, the 10 newest log entries (date, type, subject, notes), the owner's current follow-up note; written in the **caller's** language | names, e-mail addresses, the company's contact data, files; with no log entry at all the route answers `empty` and nothing is sent | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | no — AI pack (#1738) for an admin on a record that is not theirs; the owning mentor stays free |
+| `agenda_personalize` | `POST /api/agendas/personalize` | either seat of the pair / admin | the guide's title and prompts (library text), the lines already on the agenda, the **open goals the caller may read** (title, success criteria, progress — the goal visibility rule decides, so another seat's PRIVATE goal never rides along), the previous session's lines with their done state, the 3 newest log entries (date, type, subject, notes), the stage label; written in the **caller's** language | names, e-mail addresses, CVs, documents, attachments, the company's contact data; with no guide, no readable goal, no previous session and no log entry the route answers `empty` and nothing is sent | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes — never a paywall for a seat; an ADMIN who is neither seat is operator use (#1738) |
 
 Two of these carry no consent type because there is no personal identifier in
 the payload to consent to. That is not an oversight and it is not a loophole:
@@ -76,12 +198,13 @@ Revoking one takes effect on the next call — there is no cached grant.
 |---|---|
 | Provider | Anthropic, through the official `@anthropic-ai/sdk` |
 | Credential | `ANTHROPIC_API_KEY` — server-side only, never reaches the browser |
-| Model | `ANTHROPIC_CV_MODEL` (default `claude-opus-4-8`), plus `ANTHROPIC_SUMMARY_MODEL` for the interaction summary. The operator of an instance chooses. |
-| Request timeout | 60 s. The SDK's own default is 10 minutes, long enough to hold a request handler open until the user gives up (#895). |
+| Model | Per task, from the environment (§ The registry and the provider module): `AI_MODEL_<TASK_ID>` → `AI_MODEL_TIER_<TIER>` → `ANTHROPIC_SUMMARY_MODEL` (summary family) → `ANTHROPIC_CV_MODEL` → the default `claude-opus-4-8`. The operator of an instance chooses; the model that answered is on every `AiUsage` row. |
+| Request timeout | 60 s, applied once in `callModel()`. The SDK's own default is 10 minutes, long enough to hold a request handler open until the user gives up (#895). |
 | Retries | At most 2, only on 429 / 5xx / timeout / connection loss, jittered exponential backoff, and no attempt starts after 45 s (`src/lib/ai/provider.ts`, #2024). The SDK's own retries are off (`maxRetries: 0`) so the two cannot multiply. One task is one metered call however many attempts it took. |
 | Circuit breaker | 5 failures inside a minute open it for a minute; calls then fail fast with `provider_error` and no network request, and the first call after the cool-down is the probe. Per container — a cost guard, not a distributed breaker. |
-| Input cap | 24 000 chars for text tasks; the structured tasks are bounded by their schema |
-| Output cap | 600–1024 `max_tokens` per task |
+| Input cap | `maxInputChars` per task in the registry, applied once in `callModel()`: 24 000 chars for the text tasks; 32 000 as a backstop for the JSON payload of `mentor_match` and for the open-text engines, whose rows are already bounded to 24 000 chars upstream (a cap that could cut a row in half would fail the verbatim quote check) |
+| Output cap | `maxOutputTokens` per task in the registry, 500–1500 `max_tokens`; a call may lower it, never raise it |
+| Cost | `src/lib/ai/pricing.ts`: list price per million tokens, in the provider's own currency (USD). `costMicros` on `AiUsage` is tokens × $/Mtok, i.e. micro-dollars, exact. An unpriced model records `null`. |
 
 `cv_extract` and `mentor_match` additionally pin a **JSON schema** on the
 response — and still parse it through `safeParseModelJson` (#2024), which
@@ -117,14 +240,23 @@ The prompt is never stored. Since #2044 some generated text **is** kept, as an
 | Interview prep | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
 | Match rationale | **kept** as an `AiArtifact` about the mentee (1-day cache TTL), keyed on the exact candidate list |
 | Open-text themes (evaluation comments, weekly-report blockers) | **kept** as an org-level `AiArtifact` with no subject (1-day cache TTL); wiped for the whole org the moment any person in it is erased or anonymized, since it may quote them |
+| Next-step suggestions (#2875) | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL, keyed on log + stage + note + day in stage); rendered as chips the owner clicks into the follow-up field — the note itself is saved only by the owner's Save |
+| Personalised session agenda (#1845) | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL, keyed on the agenda's lines, the guide, the goals the caller may read, the previous session and the newest log entries); a **draft** in the agenda panel — lines are saved only when a seat adds them (`POST /api/agendas/[id]/items` with `texts[]`). Every denial answers 200 with the guide's prompts not yet on the agenda and the `reason` (`no_consent` / `not_configured` / `quota_exceeded` / `provider_error`): the templated agenda stays usable, no upgrade prompt |
 
-The only row written per call is `AiUsage` — `scope`, `userId`, `companyId`,
-`createdAt` and `outcome` (`ok`, `parse_error` when the reply was not the JSON
+The only row written per call is `AiUsage` — `scope` and `taskId` (the same
+registry id; `scope` is the historic column), `orgId`, `userId`, `companyId`,
+`createdAt`, `outcome` (`ok`, `parse_error` when the reply was not the JSON
 asked for and the task fell back, `provider_error` when the provider never
 answered — the last one is recorded for the console but **does not consume
-quota**). **No prompt, no completion, no excerpt.** It exists to meter the
-monthly quota and to answer "how much did this cost us", and it is the reason a
-usage figure can be shown without keeping anyone's CV around.
+quota**) and, since #2022, what the call was: `provider`, `model`,
+`inputTokens`, `outputTokens`, `costMicros` (list price, micro-dollars, `null`
+for an unpriced model) and `latencyMs` (time waiting on the provider across the
+attempts of the one logical call). A `provider_error` row still names the model
+that was asked; its token columns stay `null`. **No prompt, no completion, no
+excerpt.** It exists to meter the monthly quota and to answer "how much did this
+cost us", and it is the reason a usage figure can be shown without keeping
+anyone's CV around. Rows from before the columns existed carry `NULL`s; the
+deploy's `prisma/backfill-ai-usage-task.mjs` copies `scope` into `taskId`.
 
 ## Artefacts (#2044)
 
@@ -258,7 +390,8 @@ worse than none.
 
 ## The degradation contract
 
-An AI denial is never an error page and never a paywall:
+An AI denial is never an error page, and on a participant surface never a
+paywall:
 
 | Reason | Mentee-facing surfaces | Staff-facing surfaces |
 |---|---|---|
@@ -266,12 +399,14 @@ An AI denial is never an error page and never a paywall:
 | `not_configured` | the feature **hides itself** (`GET` availability probes) | the button hides after the first attempt |
 | `quota_exceeded` | a neutral "temporarily unavailable" — never quota mechanics, never pricing | the actual reason, because they can fix it |
 | `provider_error` (#2024) | the same neutral "temporarily unavailable" (HTTP 503, `code: 'provider_error'`) | "the AI service is not answering right now" |
+| `not_entitled` (#1738) | **never reaches one** — only an `operator` task asks for the pack, so a participant route cannot receive it | a locked state that names the add-on (`403 feature_locked`, `feature: 'AI_PACKAGE'`; the screen's `GET` says `locked: true`) and nothing beyond that — no mechanics, no pricing |
+| `disabled` (#2032) | the org's kill switch or this task's switch is off — `403 { code: 'disabled' }` and "AI is switched off for your organisation"; the non-AI path stays (the guide as written, the form, the log), never a stored copy, never a quota message, never a paywall | the same `403 { code: 'disabled' }` and the same sentence; the console (`/admin/ai`) is where it is switched back on |
 
 `mentor_match` degrades differently and more strongly: the rule-based ranking
 (skill overlap, then lighter load) is computed **first, always**. AI only
 re-orders that list and adds one sentence of reasoning. With no provider, no
-quota or a provider failure, the admin gets the same list with `aiUsed: false`
-and no rationale text. The feature is a garnish on a deterministic ranking, not
+quota, a provider failure or no AI pack (`locked: 'AI_PACKAGE'`), the admin
+gets the same list with `aiUsed: false` and no rationale text. The feature is a garnish on a deterministic ranking, not
 the ranking.
 
 ## Human in the loop
@@ -294,13 +429,36 @@ needs a separate discussion first.
 
 1. **No provider call outside `runAiGated`.** A module that imports
    `@anthropic-ai/sdk` and calls it directly bypasses consent, quota and
-   metering all at once — three failures for the price of one import. New AI
-   tasks add a `scope` and go through the gate.
+   metering all at once — three failures for the price of one import. Since
+   #2022 the import exists in exactly one file, `src/lib/ai/provider.ts`, and
+   a unit test fails on a second one. New AI tasks add a registry entry and go
+   through the gate.
 2. **Participant AI is never paywalled.** `cv_feedback` and `interview_prep`
    belong to the mentee, cost the mentee nothing, and surface quota exhaustion
    as "not right now" rather than "upgrade". The org's plan is the operator's
    problem; a student preparing for an interview is not the person to bill for
-   it.
+   it. Since #1738 the boundary is enforced by the registry's `audience`
+   field rather than by convention: the gate asks for the AI pack only on an
+   `operator` task, and a `participant` task never runs the entitlement query
+   at all — so a route cannot paywall a participant tool without first
+   re-registering it as an operator one, in a diff a reviewer sees.
+
+## User text is data, never instructions (#2026)
+
+Everything a person wrote — a CV, a log, a conversation, a survey row, a free-form field, a
+name — enters a prompt inside a `wrapUntrusted(label, text)` block
+(`src/lib/ai/untrusted.ts`): a nonce-fenced block whose fence cannot be
+forged. `callModel()` enforces the rest so no module can forget it: it
+**refuses** an input with no block, appends `UNTRUSTED_DATA_RULE` to every
+system prompt, masks contact details inside the blocks unless the task's
+registry entry says `needsContactDetails: true` (only `cv_extract`;
+`src/lib/ai/redact.ts`), cuts an over-long input inside the data rather than
+through a fence, and runs the injection tripwire (`src/lib/ai/injection.ts`)
+whose hits land on `AiUsage.flags` — a flag, never a block. Model output is
+rendered only through `AiText` (`src/components/ai/AiText.tsx`): a plain
+text node, no markup, no live links, control and bidi characters stripped.
+`scripts/test/ai-untrusted.test.mjs` fails on an unfenced caller or a
+surface that renders generated prose another way.
 
 ## Labelling
 
@@ -317,15 +475,29 @@ badge in the same change.
 
 ## Adding an AI task
 
-1. A `src/lib/ai<Task>.ts` module that only talks to the provider: a `SYSTEM`
-   prompt, an input cap, a timeout, and a return value. No consent logic.
-2. A route that calls `runAiGated` with a new `scope` string and, if any
-   personal data is in the payload, a `ConsentType` — added additively to
+1. An entry in the registry, `src/lib/ai/tasks.ts`: the id (snake_case — it
+   becomes `AI_MODEL_<ID>`), audience, consent type or `null`, tier, caps.
+   The `audience` is what decides whether the gate asks for the AI pack
+   (§ Who the task is for): an admin or company tool is `operator`; anything a
+   mentee or mentor uses for themselves is `participant` and is never
+   paywalled. Choosing it is a product decision, not a default.
+2. A `src/lib/ai<Task>.ts` module that holds the `SYSTEM` prompt and the
+   parser and calls `callModel({ task: '<id>', system, input })`. No client,
+   no model, no timeout, no consent logic — those are the provider module's and
+   the gate's.
+3. A route that calls `runAiGated` with that `scope` and, if any personal data
+   is in the payload, a `ConsentType` — added additively to
    `prisma/schema.prisma`, surfaced in `ConsentSettings`.
-3. Handle all three denial reasons per the degradation contract above.
-4. `<AiBadge />` on whatever renders the result.
-5. A row in the task table here, the matching entry in the `ai` dictionary block
+4. Handle every denial reason per the degradation contract above — an
+   `operator` route answers `not_entitled` with the `403 feature_locked` shape
+   and reports `locked` on its `GET`; a `participant` route can never receive
+   it and carries no locked copy.
+5. `<AiBadge />` on whatever renders the result, and the result itself through
+   `<AiText />`. User text in the prompt goes through `wrapUntrusted()` —
+   `callModel` refuses it otherwise. Set `needsContactDetails: true` only if
+   the task truly reads an e-mail, phone number or link off the text.
+6. A row in the task table here, the matching entry in the `ai` dictionary block
    for `/ai`, and the route in
    [`role-access-matrix.md`](role-access-matrix.md).
 
-Step 5 is the one that gets skipped, and it is the one this document exists for.
+Step 6 is the one that gets skipped, and it is the one this document exists for.
