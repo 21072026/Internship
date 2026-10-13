@@ -371,6 +371,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   leave `lastTotpStep` alone (it is the TOTP replay floor, #865); and no endpoint may return
   a code after enrolment — `GET /api/account/2fa` answers with counts. Admin-side 2FA reset
   is a separate task (#1543).
+- **The 2FA policy is one vocabulary and one gate** ([`docs/two-factor-policy.md`](docs/two-factor-policy.md),
+  #1644): `require2fa` is `off` | `admins` | `admins_mentors` | `all` (every role, COMPANY and
+  SOURCE included), per org through the settings chain. Which mode covers which role, what
+  "stricter" means and how many people a switch would hold live in the pure
+  `src/lib/twoFactorPolicyRule.ts`; `is2faRequiredFor(role, orgId)` is the server half. **Every
+  authenticated role shell** carries the same server-side gate (skip under impersonation,
+  `redirect('/security-setup')`) — a new shell without it makes `all` a false claim. The
+  coverage report `GET /api/admin/2fa-coverage` counts **active** accounts only, takes the org
+  from the session, and the settings form confirms any stricter switch with the number it locks out.
 - **Security notices have one sender** ([`docs/security-notices.md`](docs/security-notices.md),
   #1717): a sign-in from a browser the account has not used before, a replayed remember-me
   cookie, a password or e-mail change, 2FA on/off, recovery codes replaced and "sign out of all

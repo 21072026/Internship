@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**2FA for everyone + an enrolment coverage report (#1644):** `require2fa` gains a fourth mode, `all`, that holds every role — mentees, company and source logins included — at `/security-setup` until they enrol; the company and source shells now carry the same server-side gate as the others (impersonation still skips it everywhere). The vocabulary is pure in `src/lib/twoFactorPolicyRule.ts` (which mode covers which role, what \"stricter\" means, how many people a switch would hold) and unit-tested. `GET /api/admin/2fa-coverage` (admin-only, org from the session) returns per-role `{ total, enabled, percentage }` for active accounts plus a paginated list — or a CSV — of those without 2FA; `/admin/settings` shows it next to the policy select, with the coverage of the selected mode, and a switch to a stricter mode asks for confirmation naming how many accounts it will hold.",
+  "notes": {
+    "en": ["Admins can now require two-factor authentication for everyone, and see per role who has enrolled — with a list of the accounts that have not, downloadable as CSV. Switching to a stricter policy shows how many people it will affect and asks you to confirm first."],
+    "tr": ["Yöneticiler artık iki adımlı doğrulamayı herkes için zorunlu kılabilir ve rol başına kimin kurduğunu görebilir; kurmamış hesapların listesi CSV olarak indirilebilir. Daha sıkı bir politikaya geçerken kaç kişinin etkileneceği gösterilir ve önce onay istenir."],
+    "de": ["Admins können die Zwei-Faktor-Authentifizierung jetzt für alle verlangen und je Rolle sehen, wer sie eingerichtet hat — mit einer Liste der Konten ohne 2FA, auch als CSV. Beim Wechsel zu einer strengeren Richtlinie wird angezeigt, wie viele Personen betroffen sind, und vorher eine Bestätigung verlangt."]
+  }
+}
