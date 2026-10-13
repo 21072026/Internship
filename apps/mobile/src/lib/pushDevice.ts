@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { Alert, Platform } from 'react-native';
 import { strings } from './i18n';
 import { nativeRouteFor } from './nativeRoutes';
-import { pushData, PUSH_CHANNEL, registrationKey, registrationReason, shouldAsk, shouldPresent } from './push';
+import { deviceTokenEvent, pushData, PUSH_CHANNEL, registrationKey, registrationReason, shouldAsk, shouldPresent } from './push';
 
 // The expo-notifications half of native push (#2775, docs/mobile-push.md); the
 // rules are in push.ts. Every function here is best-effort and never throws:
@@ -41,7 +41,12 @@ Notifications.setNotificationHandler({
   },
 });
 
-/** Android 8+: notifications need a channel, and Android 13 shows no permission prompt before one exists. */
+/**
+ * Android 8+: notifications need a channel. Creating the first one can make
+ * Android 13+ show its own permission prompt on the spot, so it is created only
+ * once permission is in hand or the person has just said yes to our
+ * explanation — never before it (#2775).
+ */
 async function ensureChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(PUSH_CHANNEL, {
@@ -60,7 +65,10 @@ async function permission(): Promise<boolean> {
     const perm = await Notifications.getPermissionsAsync();
     const asked = (await AsyncStorage.getItem(ASKED_KEY).catch(() => null)) === '1';
     const step = shouldAsk(perm, asked);
-    if (step === 'granted') return true;
+    if (step === 'granted') {
+      await ensureChannel();
+      return true;
+    }
     if (step === 'skip') return false;
     await AsyncStorage.setItem(ASKED_KEY, '1').catch(() => {});
     const t = strings();
@@ -71,6 +79,7 @@ async function permission(): Promise<boolean> {
       ], { cancelable: true, onDismiss: () => resolve(false) }),
     );
     if (!yes) return false;
+    await ensureChannel();
     return (await Notifications.requestPermissionsAsync()).granted;
   } catch {
     return false;
@@ -101,9 +110,30 @@ export function markFreshSignIn(host: string): void {
  * host. Called whenever the app is signed in to a product: after a sign-in,
  * at launch, after switching product, and when the token changes.
  */
-export async function registerPush(origin: string, host: string): Promise<void> {
+export function registerPush(origin: string, host: string): Promise<void> {
+  // One registration per host at a time: launch, sign-in and a token event can
+  // all ask within the same second.
+  const running = inflight.get(host);
+  if (running) return running;
+  const run = doRegister(origin, host).finally(() => inflight.delete(host));
+  inflight.set(host, run);
+  return run;
+}
+
+const inflight = new Map<string, Promise<void>>();
+
+// The device token last reported by the OS, for deviceTokenEvent().
+let lastDeviceToken: string | null = null;
+
+/** addPushTokenListener's handler: re-register only on a real rotation. */
+export function onDeviceToken(origin: string, host: string, token: string): void {
+  const next = deviceTokenEvent(lastDeviceToken, token);
+  lastDeviceToken = next.seen;
+  if (next.register) void registerPush(origin, host);
+}
+
+async function doRegister(origin: string, host: string): Promise<void> {
   try {
-    await ensureChannel();
     if (!(await permission())) return;
     const token = await expoToken();
     if (!token) return;

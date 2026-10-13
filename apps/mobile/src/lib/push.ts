@@ -93,3 +93,16 @@ export function shouldAsk(perm: { granted: boolean; canAskAgain: boolean }, aske
   if (!perm.canAskAgain || askedBefore) return 'skip';
   return 'ask';
 }
+
+/**
+ * Whether a device-token event means the token really changed. On Android,
+ * expo-notifications re-emits `onDevicePushToken` on EVERY token fetch —
+ * getExpoPushTokenAsync included (PushTokenModule.kt calls onNewToken after
+ * each fetch) — so a listener that re-registers on every event re-fetches,
+ * which emits again: an endless loop. The first token seen is only recorded
+ * (the registration that fetched it is already under way); only a DIFFERENT
+ * token afterwards is a rotation worth registering.
+ */
+export function deviceTokenEvent(seen: string | null, incoming: string): { seen: string; register: boolean } {
+  return { seen: incoming, register: seen !== null && incoming !== seen };
+}

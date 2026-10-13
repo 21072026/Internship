@@ -113,11 +113,20 @@ The table is new and has no required column without a database default, so
 
 - **Permission.** It is asked once per install, after the first signed-in launch. The app
   first shows a short native explanation, then the system prompt (`POST_NOTIFICATIONS` on
-  Android 13+, which only appears once a channel exists, so the channel `messages` is
-  created first). "Not now" is never asked again; the phone's settings remain the way
-  back. Android 12 and older grant it without a prompt.
+  Android 13+). "Not now" is never asked again; the phone's settings remain the way back.
+  Android 12 and older grant it without a prompt.
+  - The channel `messages` is created only **after** the person says yes to the
+    explanation, or once permission is already granted. Creating the first channel can make
+    Android show its own prompt on the spot, and then the explanation never appears; the
+    emulator test caught exactly that (#2775).
 - **Registration.** It runs whenever the app is signed in to a product: after a sign-in,
   at launch, after a product switch, and on a token change (`addPushTokenListener`).
+  - On Android, expo-notifications fires `onDevicePushToken` on **every** token fetch,
+    `getExpoPushTokenAsync` included (`PushTokenModule.kt` calls `onNewToken` after each
+    fetch). A listener that re-registers on every event therefore loops: about 24 requests
+    a second on the emulator. `deviceTokenEvent()` (`push.ts`) records the first token and
+    re-registers only when a later one differs, and `registerPush` runs one registration
+    per host at a time.
   - The token last registered on each host is kept in AsyncStorage.
   - A **sign-in** or a **different token** registers (create or take over).
   - The **same token** only refreshes. A phone revoked on /account therefore stays revoked
@@ -161,17 +170,21 @@ Nobody but the maintainer handles key material, and none of it goes into the rep
 
    ```bash
    cd apps/mobile
-   npx eas-cli@latest env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret --environment production --environment preview --environment development
+   npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret --environment production --environment preview --environment development
    ```
 
    On the builder, `GOOGLE_SERVICES_JSON` is the path to that file, and
    `android.googleServicesFile` reads it.
 4. **FCM V1 service account key.**
    1. Open Firebase → Project settings → Service accounts → *Generate new private key*.
-   2. Upload it with `npx eas-cli@latest credentials`: Android → `production` (or any
-      profile) → Google Service Account → *Manage your Google Service Account Key for Push
-      Notifications (FCM V1)* → upload. The Expo dashboard does the same under
-      Project → Credentials → Android.
+   2. Upload it with `npx eas-cli@latest credentials -p android`, run **inside
+      `apps/mobile`**: any profile → Google Service Account → *Manage your Google Service
+      Account Key for Push Notifications (FCM V1)* → *Set up…*. The Expo dashboard does the
+      same under bcsit-gmbh → interncrm → Credentials → Android.
+      - Run from the repo root, the CLI finds no EAS project, offers to **create a new one**
+        (`@bcsit-gmbh/internship-crm`) and writes a root `app.json`. Answer no. The key
+        belongs to `interncrm`; the summary screen must read Project `interncrm`,
+        Application Identifier `de.bcsitgmbh.crm`.
    3. Delete the local JSON afterwards. Without this key, Expo accepts the message and the
       receipt reads `InvalidCredentials`.
 5. **Rebuild** after the steps above, since the Firebase config is native: run
@@ -202,6 +215,26 @@ Nobody but the maintainer handles key material, and none of it goes into the rep
     4. Expect a notification. A tap opens the native thread.
   - With both products signed in, sign out of one; only that product's messages stop.
   - The EAS `preview` APK talks to **production** hosts.
+
+### Verified on the emulator (2026-10-13)
+
+Pixel 8 AVD, API 36, Google Play image, `APP_ENV=preview`, Firebase project `interncrm`.
+
+- An FCM token is issued and the app registers it **once** per launch (after the loop fix).
+- A push sent through Expo arrives while the app is in the background **and** while its
+  process is dead. It shows under "Internship CRM" on the `messages` channel.
+- A tap on `/messages` opens the Messages tab; on `/notifications` the Notifications tab;
+  on `/messages/c/<id>` the native thread, cold start included.
+- **Cold start needs a release build.** In a development build, expo-dev-client's launcher
+  takes the launch intent, so `useLastNotificationResponse` reads `null` and the app opens
+  on Home. `npx expo run:android --variant release` (about 25 min on an Intel Mac) or an
+  EAS APK is the honest test.
+- A newly assigned FCM V1 key took a few minutes to take effect on Expo's side: the first
+  sends after the upload came back `ok` and still never reached the device.
+- To tell Expo from FCM, send a Firebase Console test message (Messaging → New campaign →
+  *Send test message*) to the raw FCM token, and read the GMS log with
+  `adb shell dumpsys activity service com.google.android.gms/.gcm.GcmService`. It prints
+  `Received <package>` and `Successful broadcast` for every delivered message.
 
 ## iOS — still to do
 
