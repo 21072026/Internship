@@ -98,7 +98,7 @@
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0",
+    "@anthropic-ai/sdk": "^0.132.1",
     "@hookform/resolvers": "^3.9.0",
     "@node-saml/node-saml": "^5.1.0",
     "@prisma/client": "^5.16.1",
@@ -106,7 +106,7 @@
     "clsx": "^2.1.1",
     "imapflow": "^1.7.8",
     "lucide-react": "^0.577.0",
-    "mailparser": "^3.9.33",
+    "mailparser": "^3.9.37",
     "mammoth": "^1.13.0",
     "next": "^15.5.27",
     "next-auth": "^4.24.7",
@@ -126,7 +126,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/mailparser": "^3.9.0",
     "@types/node": "^20",
