@@ -185,9 +185,16 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // by hand (src/lib/companyContactErasure.ts).
   'CompanyContact',
   // Machine-source events (#2450): the idempotency claim is per org. The only
-  // writer (src/lib/salevaliIngest.ts) runs under an API key's bound org and
+  // writer (src/lib/accountEventIngest.ts) runs under an API key's bound org and
   // passes `orgId` itself.
   'IntegrationEvent',
+  // The machine sources a tenant registered (#2914). Which upstream systems feed
+  // a tenant is that tenant's business, and a slug must resolve only inside the
+  // key's own org. The only reader (src/lib/integrationSources.ts) runs under
+  // the key's bound org and filters by `orgId` itself; the writers are the
+  // operator CLI (prisma/register-integration-source.mjs) and the demo seed,
+  // both sessionless, both passing it.
+  'IntegrationSource',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was

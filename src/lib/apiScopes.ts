@@ -7,10 +7,10 @@
 // Naming shape: `<resource>:<action>`, lowercase, singular action verbs
 // (`read`, `write`). `candidates:read` is `GET /api/v1/candidates`;
 // `companies:write` (#2450) is the first WRITE scope — the machine-to-machine
-// account ingest, `POST /api/integrations/salevali/events`, deliberately outside
-// the frozen /api/v1. Never a default: an admin grants it to the one key a
-// source system uses. A key carrying an unknown scope string is treated as
-// holding nothing.
+// account ingest, `POST /api/integrations/<source>/events` (#2914), deliberately
+// outside the frozen /api/v1. Never a default: an admin grants it to the one key
+// an upstream source system uses. A key carrying an unknown scope string is
+// treated as holding nothing.
 //
 // NOTE: nothing here enforces anything. Checking a scope at the door of an
 // /api/v1 route is #1546; this module defines and parses the vocabulary.
@@ -30,9 +30,10 @@ export const DEFAULT_API_SCOPES: readonly ApiScope[] = ['candidates:read'];
 // scripts/check-api-key-routes.mjs fails an /api/v1 route whose scope maps to
 // anything but INTEGRATIONS_API.
 //   candidates:read  — the public API the plans sell ("public API + webhooks").
-//   companies:write  — NOT the public API: SaleVali's own account ingest
-//                      (#2450), the marketing product's provider contract.
-//                      Gating it would switch off the product's own data feed.
+//   companies:write  — NOT the public API: the account-event ingest a
+//                      tenant's own registered source system posts to (#2450,
+//                      docs/integrations/account-events.md). Gating it would
+//                      switch off the tenant's own data feed.
 export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'candidates:read': 'INTEGRATIONS_API',
   'companies:write': null,

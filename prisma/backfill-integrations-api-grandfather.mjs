@@ -12,8 +12,8 @@
 //
 // WHO COUNTS AS USING IT: an org holding a live (not revoked, not expired) API
 // key with a public-API scope (`candidates:read` — see SCOPE_ENTITLEMENT in
-// src/lib/apiScopes.ts; a SaleVali ingest key is not the public API), or an
-// active webhook. An org-less key or webhook belongs to the default org.
+// src/lib/apiScopes.ts; an account-event ingest key is not the public API), or
+// an active webhook. An org-less key or webhook belongs to the default org.
 //
 // RUN-ONCE, NOT RUN-ALWAYS: the grants carry GRANDFATHER_NOTE, and a later run
 // that finds one does nothing — otherwise every org that later creates a key

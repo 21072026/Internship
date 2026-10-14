@@ -6,8 +6,8 @@ import { signInAndSettle } from './helpers/auth';
 // INTEGRATIONS_API (#1744): the public API, webhook subscriptions and issuing a
 // key that can read the API are the plan's, not free. What stays open: the
 // OpenAPI document, taking an integration DOWN (pause a webhook, revoke a key),
-// and a SaleVali ingest key (companies:write), which is the marketing
-// product's own feed, not the public API. Its own org, so the gate it toggles
+// and an account-event ingest key (companies:write), which is the tenant's own
+// registered source feeding it, not the public API. Its own org, so the gate it toggles
 // cannot race the specs that grant the feature to the default org.
 
 const PW = 'IntegrationsGate123!';
@@ -71,7 +71,7 @@ test.describe('INTEGRATIONS_API gate', () => {
     await form.locator('button[type="submit"]').click();
     await expect(page.getByTestId('integrations-locked')).toBeVisible();
 
-    // A SaleVali ingest key is the product's own feed, not the public API.
+    // An account-event ingest key is the tenant's own feed, not the public API.
     const ingest = await page.request.post('/api/admin/api-keys', { data: { name: `intgate-ingest-${stamp}`, scopes: ['companies:write'] } });
     expect(ingest.status()).toBe(201);
 

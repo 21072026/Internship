@@ -96,7 +96,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     country: { limit: 'companyCountry', files: MARKETING_IMPORT_WRITERS },
     externalId: {
       exempt:
-        'no request path writes it (#2446 is the column; the nightly usage sync that stamps it is #2447). It is not typed by a person at all — the feed matches on it and fills it as a gap — so the cap belongs on that validator, which the data contract already fixes at the column width: docs/marketing-vertical/salevali-usage-feed.md § Alanlar. A form or route that ever offers this field replaces this exemption with a limit.',
+        'no person ever types it (#2446 is the column; the nightly usage sync that stamps it is #2447, the account-event ingest #2450). The machine feeds match on it and fill it as a gap, so the cap belongs on their validator, which the data contracts fix at the column width: docs/usage-feed.md and docs/integrations/account-events.md (EXTERNAL_ID_MAX in src/lib/accountEventRule.ts, enforced by src/lib/accountEventSchema.ts). A form or route that ever offers this field to a person replaces this exemption with a limit.',
     },
   },
   CompanyContact: {
