@@ -359,6 +359,12 @@ jobs:
       # quietly stop being true.
       - name: replica rollout arithmetic + generated routing (#1701)
         run: bash infra/test/replica-rollout.test.sh
+      # The post-deploy marketing title check lives in two deploy scripts and
+      # in the uptime probe. One rule in three copies drifts unless something
+      # holds them together, and the deploy log it writes is public, so the
+      # test also pins that it never prints a host, a title or a brand (#2919).
+      - name: marketing host title check (#2579, #2919)
+        run: bash infra/test/marketing-title-check.test.sh
       # The steps above each run ONE unit suite because each was added by the
       # incident it names. Nothing held the set together, so a suite whose rule
       # got refactored away could lose its assertions and stay green — the test

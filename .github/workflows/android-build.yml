@@ -1,11 +1,10 @@
 name: Android app bundle (TWA)
 
-# Builds the Play Store bundle for one of the two Android apps
-# (docs/mobile-strategy.md, #2085). The app is a Trusted Web Activity: a thin
-# shell that opens the live site, so it is rebuilt only when the SHELL changes
-# (icon, name, colours, a Bubblewrap template update, a version bump for the
-# store) — never because the web app changed. Every web deploy reaches the
-# installed app on its own.
+# Builds the Play Store bundle for the Android app (docs/mobile-strategy.md,
+# #2085). The app is a Trusted Web Activity: a thin shell that opens the live
+# site, so it is rebuilt only when the SHELL changes (icon, name, colours, a
+# Bubblewrap template update, a version bump for the store) — never because the
+# web app changed. Every web deploy reaches the installed app on its own.
 #
 # Committed input: mobile/android/<app>/twa-manifest.json. The Gradle project is
 # generated from it on every run (mobile/android/generate-project.mjs) and never
@@ -33,7 +32,7 @@ on:
       app:
         description: 'Which app'
         type: choice
-        options: [interncrm, salevali]
+        options: [interncrm]
         default: interncrm
       version_code:
         description: 'versionCode — a positive integer, strictly greater than the last one uploaded to Play'
@@ -56,8 +55,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A PR builds both apps; a dispatch builds the one it names.
-        app: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.app)) || fromJSON('["interncrm","salevali"]') }}
+        # A PR and a dispatch both build the one generic app this repository
+        # ships; the matrix stays so the input keeps its shape.
+        app: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.app)) || fromJSON('["interncrm"]') }}
     env:
       APP: ${{ matrix.app }}
       VERSION_CODE: ${{ inputs.version_code }}

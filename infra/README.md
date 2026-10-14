@@ -155,7 +155,9 @@ fallback, which means the host's brand is missing). The run also checks each of 
 hosts' `/api/health`. Nothing the probe writes names a host: logs, alert issues and
 mails are as public as the repository, so a host is `marketing host #<n>`, the place
 of its origin in the secret. Without the secret the marketing hosts are not probed,
-and the run says so in a notice. A finding opens its **own** incident: a separate
+and the run says so in a notice; such a run also neither opens nor closes an
+incident about them (an open content incident, or an outage that names a marketing
+host, stays open until a run that read those hosts finds them right). A finding opens its **own** incident: a separate
 `uptime-content-alert` issue + mail (subject *"Marketing host yanlış ürünü
 gösteriyor"*), never the outage's `uptime-alert` one. The two must not share a
 state — a content problem can stay open for days waiting on an env-file edit,
@@ -173,8 +175,10 @@ caller names (`MARKETING_PROBE_HOST` in `deploy-prod.yml` / `deploy-preview.yml`
 else for every host in `MARKETING_HOSTS`, and skips the check when neither names one.
 A caller-named host is deliberately **not** read from `MARKETING_HOSTS`: whatever that
 variable names gets the marketing page by construction, so a check that took its host
-from there could never catch it being wrong. The script also warns when that host is
-missing from a non-empty `MARKETING_HOSTS`. Run the probe by hand with
+from there could never catch it being wrong, which is also why the caller must keep
+naming one (from a runner-side variable or a secret) once the hostnames leave the
+workflow files: without it the check only compares `MARKETING_HOSTS` with itself. The
+script also warns when that host is missing from a non-empty `MARKETING_HOSTS`. Run the probe by hand with
 `MARKETING_PROBE_URLS="https://<marketing host>/ https://<marketing host>/imprint" node scripts/marketing-content-probe.mjs`.
 It prints nothing on stdout and exits 0 when every page is right. Otherwise it prints
 one `marketing host #<h>, page #<p> -> <reason>` line per wrong page and exits 1. A

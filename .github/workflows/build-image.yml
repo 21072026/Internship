@@ -140,6 +140,12 @@ jobs:
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
+        env:
+          # No build record artifact (`*.dockerbuild`). The action uploads one
+          # per build by default, and in a public repository every artifact can
+          # be downloaded by anyone. A record holds the full build log, which
+          # nobody here reads from the artifact: it is in the step log anyway.
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           platforms: ${{ matrix.platform }}

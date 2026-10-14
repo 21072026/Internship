@@ -1,0 +1,131 @@
+name: Forbidden terms
+
+# Keeps a list of names off the visible surface of the repository (#2919):
+# file contents, file names, commit messages and authors, branch names, PR
+# titles and bodies. The rule and its output format live in
+# scripts/check-forbidden-terms.mjs; docs/testing.md § Forbidden-terms guard
+# explains it.
+#
+# THE LIST IS A SECRET, NEVER A FILE
+#   The terms come only from the FORBIDDEN_TERMS secret: one case-insensitive
+#   JavaScript regular expression per line. A committed list would publish the
+#   names it keeps out. The script prints locations only (`path:line`, `commit
+#   <sha7> message`, `PR title` …), never what matched: GitHub masks the
+#   secret's exact text in a log, not a match in another case or spelling.
+#   For the same reason the PR's title, body and branch name are NOT passed in
+#   `env:` — GitHub prints a step's env block in its log — the script reads
+#   them from the event payload ($GITHUB_EVENT_PATH) itself.
+#
+# THREE JOBS
+#   pr    — every pull request, blocking: what the PR ADDS (added lines, new
+#           file names, its commits' messages, authors and committers, the
+#           branch name, title and body). `edited` is a trigger so a retitled
+#           PR is checked again.
+#   push  — every push to main, blocking: the same checks over what the push
+#           brought in (`before..after`), minus title/body/branch. This is what
+#           sees the squash message a merge wrote (edited in the merge dialog or
+#           not), a fork PR after it lands, and a direct push. It is a red
+#           check after the fact, not a gate: with no branch protection nothing
+#           stops a push, so the PR job is where a name is meant to be caught.
+#   tree  — every push to main, daily, and by hand: the whole tracked tree.
+#           WARN-ONLY while the cleanup of the existing tree is in progress; the
+#           `continue-on-error` line on its step is the one switch that makes it
+#           blocking.
+#
+# NO PATH FILTER, on purpose: a docs-only change can carry a name as easily as
+# code, and a path-filtered workflow reports nothing at all for the PRs it
+# skips (#2719).
+#
+# FAIL CLOSED WHERE THE SECRET EXISTS. REQUIRE_TERMS=1 makes an empty list an
+# error, so a missing or emptied secret is a red check, never a silent pass. It
+# is set on every run that gets this repository's secrets. Only two kinds of
+# run get none: a PR from a FORK and a PR from Dependabot (which reads the
+# separate Dependabot secret store). Those pass with a notice; a maintainer
+# checks such a PR's title, body, branch and commits by hand before merging,
+# and the push job checks what it brought in once it lands.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A PR's runs replace each other (a newer push or edit supersedes the old
+# check). A push to main must NEVER be cancelled by the next one: the next
+# push's range starts at this push's `after`, so a cancelled run would leave
+# this push's commits unchecked for good. Every non-PR run gets its own group.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('forbidden-terms-pr-{0}', github.event.pull_request.number) || format('forbidden-terms-run-{0}', github.run_id) }}
+  cancel-in-progress: true
+
+jobs:
+  pr:
+    name: Forbidden terms (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history: the diff is taken from the merge base, and every commit
+      # of the PR is read.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Title, body and branch name are read from $GITHUB_EVENT_PATH by the
+      # script (see the header); only the two shas are passed here.
+      - name: Scan what this PR adds
+        env:
+          FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # '1' = this run has the repository's secrets, so an empty list is a
+          # configuration error. '' for a fork or Dependabot PR, which have none.
+          REQUIRE_TERMS: ${{ (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') && '1' || '' }}
+        run: node scripts/check-forbidden-terms.mjs --pr
+
+  push:
+    name: Forbidden terms (push)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A `before` that is gone (force-push) makes the script check the head
+      # commit alone, with a notice.
+      - name: Scan what this push brought in
+        env:
+          FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.after }}
+          REQUIRE_TERMS: '1'
+        run: node scripts/check-forbidden-terms.mjs --push
+
+  tree:
+    name: Forbidden terms (tree)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Scan every tracked file and path
+        # THE SWITCH: true = warn only (findings show in the log and the job
+        # summary, the run stays green). Set it to false once the tree is clean,
+        # and the tree scan blocks like the PR scan.
+        continue-on-error: true
+        env:
+          FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+          REQUIRE_TERMS: '1'
+        run: node scripts/check-forbidden-terms.mjs --tree

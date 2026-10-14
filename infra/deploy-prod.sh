@@ -364,8 +364,8 @@ app_env_args() {
 # is AGPL and other people run their own instances. This forwarding line is the
 # whole feature on a deployed host: unset here, the container would keep saying
 # "no imprint published" no matter what the env file holds. MARKETING_OPERATOR_*
-# (#2697) is the marketing product's own provider (BCS-IT GmbH for SaleVali),
-# shown on the marketing hosts and printed on postal campaign letters.
+# (#2697) is the marketing product's own provider (the operator of the Marketing
+# CRM), shown on the marketing hosts and printed on postal campaign letters.
 mapfile -d '' -t APP_ENV_ARGS < <(app_env_args)
 
 # Wait for /api/health?db=1 and assert what it says. Used for the canary, for
@@ -997,61 +997,108 @@ log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS
 # /api/health is the same JSON on every host this container serves, so it cannot
 # notice the marketing domain showing the internship product (an empty
 # MARKETING_HOSTS did exactly that until #2428). Ask each new replica for its
-# landing AS the marketing host and read the <title>: it must name SaleVali and
-# must not say "Internship CRM" — the same rule as
-# scripts/marketing-content-probe.mjs, which the external uptime job
-# (.github/workflows/uptime.yml) enforces with an alert. This copy is deliberately
-# plain curl + sed (the box need not have Node) and only WARNS: the containers
-# are already swapped and healthy, and the fix is an env-file edit, not a
-# rollback.
+# landing AS the marketing host and compare what the host says about itself
+# (#2919): the landing's <title> must contain the `name` of that host's own
+# /manifest.webmanifest, and that name must be neither "Internship CRM" (the
+# wrong product) nor "coreCRM" (the neutral fallback, i.e. the host's brand is
+# missing). It is the same rule as scripts/marketing-content-probe.mjs, which
+# the external uptime job (.github/workflows/uptime.yml) enforces with an alert;
+# infra/test/marketing-title-check.test.sh keeps the copies in step. This copy
+# is deliberately plain curl + grep + sed (the box need not have Node) and only
+# WARNS: the containers are already swapped and healthy, and the fix is an
+# env-file edit, not a rollback.
 #
-# The host asked for comes from OUTSIDE the env file, never from MARKETING_HOSTS:
-# whatever host MARKETING_HOSTS names is by construction the one that gets the
-# marketing page, so a check that read its host from there would pass for every
-# misconfiguration (a preview env file that lost `marketing.bcsit-gmbh.dev`
-# falls back to the .de default and would read "OK"). The caller says which host
-# this environment must serve — MARKETING_PROBE_HOST, set in deploy-prod.yml /
-# deploy-preview.yml — else it is derived from the container name; an unknown
-# container skips the check. The host must also be in the effective set
-# (MARKETING_HOSTS, or the app default when that is empty — src/lib/servedHosts.ts).
-# MARKETING_PROBE=0 skips it.
-MARKETING_DEFAULT_HOST=marketing.bcsit-gmbh.de
-marketing_expected_host() {
-  if [ -n "${MARKETING_PROBE_HOST:-}" ]; then printf '%s' "$MARKETING_PROBE_HOST"; return; fi
-  case "$CONTAINER" in
-    internship-crm) printf '%s' marketing.bcsit-gmbh.de ;;
-    internship-crm-preview) printf '%s' marketing.bcsit-gmbh.dev ;;
-  esac
+# The deploy log is as public as the repository, so nothing here prints a
+# title, a manifest name or a marketing hostname: a host is "marketing host
+# <n>", its position in the list it was read from.
+#
+# Which hosts: the one the caller names in MARKETING_PROBE_HOST (deploy-prod.yml
+# / deploy-preview.yml), else every host in MARKETING_HOSTS; with neither, the
+# check is skipped. A caller-named host comes from OUTSIDE the env file on
+# purpose — whatever MARKETING_HOSTS names gets the marketing page by
+# construction, so only a host named elsewhere can catch an env file that lost
+# it — and it must also be in MARKETING_HOSTS when that is set (an empty
+# MARKETING_HOSTS means the app's built-in default, which this script does not
+# repeat). MARKETING_PROBE=0 skips the check. Only the caller-named host can
+# catch a lost host, so when the hostnames leave the workflow files the caller
+# must keep passing MARKETING_PROBE_HOST from a runner-side variable or a
+# secret; dropping it leaves a check that compares MARKETING_HOSTS with itself.
+
+# The document's <title> from the HTML on stdin, entity-decoded and with its
+# whitespace collapsed. The FIRST <title> is the document's (an inline <svg>
+# later on may carry its own).
+marketing_page_title() {
+  tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 \
+    | sed -e 's/<[^>]*>//g' -e 's/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g' \
+          -e "s/&#x27;/'/g; s/&#39;/'/g" -e 's/&amp;/\&/g' \
+    | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' || true
+}
+# The top-level "name" of the web app manifest JSON on stdin: the first "name"
+# key, because Next.js writes `id` and `name` before `shortcuts`, whose entries
+# carry names of their own.
+marketing_manifest_name() {
+  tr '\n' ' ' | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 \
+    | sed 's/^"name"[[:space:]]*:[[:space:]]*"//; s/"$//' \
+    | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' || true
+}
+# The verdict on one landing: prints nothing when it is right, else ONE fixed
+# reason — never the title or the name themselves.
+marketing_title_verdict() { # <title> <manifest name>
+  local t n
+  t="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  n="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+  if [ -z "$t" ]; then printf '%s\n' 'no <title> in the landing'; return 0; fi
+  case "$t" in *'internship crm'*) printf '%s\n' 'it serves the INTERNSHIP landing'; return 0 ;; esac
+  if [ -z "$n" ]; then printf '%s\n' 'its /manifest.webmanifest has no name'; return 0; fi
+  case "$n" in *'internship crm'*) printf '%s\n' 'its manifest names the INTERNSHIP product'; return 0 ;; esac
+  if [ "$n" = 'corecrm' ]; then printf '%s\n' 'its manifest carries the coreCRM fallback name, so its brand is missing'; return 0; fi
+  case "$t" in *"$n"*) ;; *) printf '%s\n' 'its <title> does not contain its manifest name' ;; esac
+  return 0
+}
+# The hosts to ask for, one per line, lower-case.
+marketing_probe_hosts() {
+  if [ -n "${MARKETING_PROBE_HOST:-}" ]; then
+    printf '%s\n' "$MARKETING_PROBE_HOST"
+  else
+    printf '%s\n' "${MARKETING_HOSTS:-}" | tr ',' '\n'
+  fi | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]//g' | grep -v '^$' || true
 }
 marketing_content_check() {
-  local host effective i port page title
-  host="$(marketing_expected_host | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-  if [ -z "$host" ]; then
-    log "Marketing host check skipped — no MARKETING_PROBE_HOST and container $CONTAINER has no known marketing host"
+  local hosts effective host n i port page manifest title name verdict
+  hosts="$(marketing_probe_hosts)"
+  if [ -z "$hosts" ]; then
+    log "Marketing host check skipped — neither MARKETING_PROBE_HOST nor MARKETING_HOSTS names a host"
     return 0
   fi
-  effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-  [ -n "$effective" ] || effective="$MARKETING_DEFAULT_HOST"
-  case ",${effective}," in
-    *",${host},"*) ;;
-    *) warn "marketing host $host is NOT in MARKETING_HOSTS (effective: $effective) — this container will serve it the internship landing; check $ENV_FILE" ;;
-  esac
-  i=1
-  while [ "$i" -le "$REPLICAS" ]; do
-    port="$(replica_port "$i")"
-    page="$(curl -sS --max-time 15 -H "Host: $host" "http://127.0.0.1:$port/" 2>/dev/null || true)"
-    # The FIRST <title> is the document's (an inline <svg> later on may carry its own).
-    title="$(printf '%s' "$page" | tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 | sed 's/<[^>]*>//g' || true)"
-    if [ -z "$title" ]; then
-      warn "marketing host $host: no <title> in the landing served on :$port — check it by hand (infra/README.md § The marketing hosts)"
-    elif printf '%s' "$title" | grep -q 'Internship CRM'; then
-      warn "marketing host $host on :$port serves the INTERNSHIP landing (title: $title) — check MARKETING_HOSTS in $ENV_FILE"
-    elif ! printf '%s' "$title" | grep -q 'SaleVali'; then
-      warn "marketing host $host on :$port: title '$title' does not name SaleVali"
+  if [ -n "${MARKETING_PROBE_HOST:-}" ]; then
+    effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]//g')"
+    if [ -z "$effective" ]; then
+      log "MARKETING_HOSTS is empty, so the app's built-in marketing host applies — not checking that the probe host is in it"
     else
-      log "Marketing host $host on :$port OK — title: $title"
+      case ",${effective}," in
+        *",${hosts},"*) ;;
+        *) warn "the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS — this container will serve it the internship landing; check $ENV_FILE" ;;
+      esac
     fi
-    i=$((i + 1))
+  fi
+  n=0
+  for host in $hosts; do
+    n=$((n + 1))
+    i=1
+    while [ "$i" -le "$REPLICAS" ]; do
+      port="$(replica_port "$i")"
+      page="$(curl -sS --max-time 15 -H "Host: $host" "http://127.0.0.1:$port/" 2>/dev/null || true)"
+      manifest="$(curl -sS --max-time 15 -H "Host: $host" "http://127.0.0.1:$port/manifest.webmanifest" 2>/dev/null || true)"
+      title="$(printf '%s' "$page" | marketing_page_title)"
+      name="$(printf '%s' "$manifest" | marketing_manifest_name)"
+      verdict="$(marketing_title_verdict "$title" "$name")"
+      if [ -n "$verdict" ]; then
+        warn "marketing host $n on :$port: $verdict — check MARKETING_HOSTS in $ENV_FILE and the host's brand (infra/README.md § The marketing hosts)"
+      else
+        log "Marketing host $n on :$port OK"
+      fi
+      i=$((i + 1))
+    done
   done
   return 0
 }
