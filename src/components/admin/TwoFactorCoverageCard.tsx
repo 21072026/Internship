@@ -121,7 +121,7 @@ export function TwoFactorCoverageCard({
                       <span className="text-gray-800 dark:text-gray-200">{u.fullName}</span>
                       <span className="text-gray-500"> · {u.email}</span>
                     </span>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                    <span className="text-xs text-gray-500 sm:whitespace-nowrap">
                       {roleLabel(u.role)} · {t.settings.twoFactorCoverageLastSignIn}{' '}
                       {u.lastLoginAt ? <RelativeTime date={u.lastLoginAt} /> : t.settings.twoFactorCoverageNever}
                     </span>
