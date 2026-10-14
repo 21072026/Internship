@@ -10,6 +10,8 @@ import { JsonLd } from '@/components/JsonLd';
 import { getServerDictionary, urlLocale } from '@/i18n/server';
 import { requestSiteUrl } from '@/lib/siteUrl';
 import { productNameFor } from '@/lib/verticals';
+import { hostBrand } from '@/lib/hostBrand';
+import { brandAssetPath } from '@/lib/brandRule';
 import { GITHUB_URL, FOUNDER_NAME, FOUNDER_URL } from './links';
 
 /**
@@ -73,6 +75,10 @@ export async function PublicShell({
     sameAs: [GITHUB_URL],
     founder: { '@type': 'Person', name: FOUNDER_NAME, url: FOUNDER_URL },
   };
+  // A host mapped to an organization with a generated icon set (#2922) names
+  // that icon as the logo; every other host keeps the line above.
+  const brand = await hostBrand();
+  if (brand.source === 'org' && brand.markVersion) organization.logo = `${origin}${brandAssetPath(brand.markVersion, 'icon-192')}`;
   const breadcrumbList = breadcrumb && {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',

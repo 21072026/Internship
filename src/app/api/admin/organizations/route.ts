@@ -24,6 +24,10 @@ import {
   ssoEnforcementBlockers,
 } from '@/lib/ssoEnforcement';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { isAccentColor } from '@/lib/accent';
+import { BRAND_ACCENT, normalizeHex, paletteIsReadable, parsePalette } from '@/lib/brandRule';
+import { invalidateBrandCache } from '@/lib/hostBrand';
+import { rerenderBrandMark, tileFor } from '@/lib/brandAssets';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -118,6 +122,11 @@ export async function GET() {
           brandLogoUrl: o.brandLogoUrl,
           brandColor: o.brandColor,
           supportEmail: o.supportEmail,
+          // The per-organization brand (#2922).
+          brandTileColor: o.brandTileColor,
+          brandAccent: o.brandAccent,
+          brandPalette: o.brandPalette,
+          brandMarkVersion: o.brandMarkVersion,
         },
         sso: {
           ssoEnabled: o.ssoEnabled,
@@ -256,6 +265,10 @@ const patchSchema = z.object({
   brandLogoUrl: z.string().max(2000).optional(),
   brandColor: z.string().max(TEXT_LIMITS.orgBrandColor).optional(),
   supportEmail: z.string().max(TEXT_LIMITS.orgSupportEmail).optional(),
+  // The per-organization brand (#2922). Empty string clears, like the others.
+  brandTileColor: z.string().max(TEXT_LIMITS.orgBrandTileColor).optional(),
+  brandAccent: z.string().max(TEXT_LIMITS.orgBrandAccent).optional(),
+  brandPalette: z.string().max(TEXT_LIMITS.orgBrandPalette).optional(),
   // SSO config (#545).
   ssoEnabled: z.boolean().optional(),
   ssoProvider: z.string().max(20).optional(),
@@ -322,6 +335,7 @@ export async function PATCH(request: Request) {
 
   const {
     id, plan, vertical, brandName, brandLogoUrl, brandColor, supportEmail,
+    brandTileColor, brandAccent, brandPalette,
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced,
   } = parsed.data;
 
@@ -428,8 +442,9 @@ export async function PATCH(request: Request) {
   const effectivePlan = plan ?? existing.plan;
 
   const touchesBranding = brandName !== undefined || brandLogoUrl !== undefined ||
-    brandColor !== undefined || supportEmail !== undefined;
-  const clearsBranding = isPureClear([brandName, brandLogoUrl, brandColor, supportEmail]);
+    brandColor !== undefined || supportEmail !== undefined ||
+    brandTileColor !== undefined || brandAccent !== undefined || brandPalette !== undefined;
+  const clearsBranding = isPureClear([brandName, brandLogoUrl, brandColor, supportEmail, brandTileColor, brandAccent, brandPalette]);
   if (touchesBranding && !clearsBranding && !orgPlanHasFeature(effectivePlan, 'WHITE_LABEL')) {
     return featureLocked('WHITE_LABEL');
   }
@@ -445,6 +460,40 @@ export async function PATCH(request: Request) {
   // Validate an explicitly-set (non-blank) brand color as a hex value.
   if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {
     return NextResponse.json({ error: 'Brand color must be a hex value like #2563eb' }, { status: 400 });
+  }
+
+  // The per-organization brand (#2922, src/lib/brandRule.ts). The palette is
+  // the exact ramp every control of the 'brand' accent is painted from, so who
+  // sets it is the operator's call, like the plan: a tenant ADMIN may clear it
+  // (undoing is always allowed) but not write one. Every value is checked here
+  // in the shape it is read in, so the resolver never meets a half-valid row.
+  if (brandTileColor && brandTileColor.trim() && !isHexColor(brandTileColor)) {
+    return NextResponse.json({ code: 'invalid_tile_color', error: 'Tile color must be a hex value like #1e293b' }, { status: 400 });
+  }
+  if (brandAccent && brandAccent.trim() && brandAccent.trim() !== BRAND_ACCENT && !isAccentColor(brandAccent.trim())) {
+    return NextResponse.json({ code: 'invalid_accent', error: 'Unknown accent' }, { status: 400 });
+  }
+  if (brandPalette && brandPalette.trim()) {
+    if (!superAdmin) {
+      await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (brandPalette)', id);
+      return NextResponse.json({ code: 'palette_super_admin_only', error: 'Only a super admin may set an organization\'s palette' }, { status: 403 });
+    }
+    const palette = parsePalette(brandPalette);
+    if (!palette) {
+      return NextResponse.json({ code: 'invalid_palette', error: 'A palette is ten hex colours, lightest (50) to darkest (900), separated by commas' }, { status: 400 });
+    }
+    if (!paletteIsReadable(palette)) {
+      return NextResponse.json({ code: 'palette_contrast', error: 'White text on the palette\'s 600 shade must reach 4.5:1 (WCAG AA)' }, { status: 400 });
+    }
+  }
+  // 'brand' needs something to be a palette OF: an exact palette, or a brand
+  // colour to generate one from — as the row will stand after this request.
+  if (brandAccent?.trim() === BRAND_ACCENT) {
+    const nextPalette = brandPalette !== undefined ? brandPalette.trim() : existing.brandPalette;
+    const nextColor = brandColor !== undefined ? brandColor.trim() : existing.brandColor;
+    if (!nextPalette && !nextColor) {
+      return NextResponse.json({ code: 'brand_accent_needs_colour', error: 'Set a brand color or a palette before choosing the organization colour as the accent' }, { status: 400 });
+    }
   }
 
   // The logo URL is fetched by the server when a certificate is rendered and is
@@ -464,6 +513,9 @@ export async function PATCH(request: Request) {
   const bl = orNull(brandLogoUrl); if (bl !== undefined) data.brandLogoUrl = bl;
   const bc = orNull(brandColor); if (bc !== undefined) data.brandColor = bc;
   const se = orNull(supportEmail); if (se !== undefined) data.supportEmail = se;
+  const bt = orNull(brandTileColor); if (bt !== undefined) data.brandTileColor = bt === null ? null : normalizeHex(bt);
+  const ba = orNull(brandAccent); if (ba !== undefined) data.brandAccent = ba;
+  const bp = orNull(brandPalette); if (bp !== undefined) data.brandPalette = bp === null ? null : (parsePalette(bp) ?? []).join(',');
 
   // SSO fields: only touch what's provided, then validate the effective config
   // (existing merged with the incoming changes) — so enabling requires a
@@ -532,6 +584,16 @@ export async function PATCH(request: Request) {
   const sweepPreview = willSweep ? await countSweepableUsers(id) : 0;
 
   const organization = await prisma.organization.update({ where: { id }, data });
+
+  // The brand changed: every cached read of it in this process is stale, and a
+  // generated icon set painted on the old tile colour is re-rendered from its
+  // stored original on the new one (a no-op when the tile did not move).
+  if (touchesBranding) {
+    invalidateBrandCache();
+    if (organization.brandMarkVersion && tileFor(organization) !== tileFor(existing)) {
+      await rerenderBrandMark(id).catch(() => null);
+    }
+  }
 
   // The sweep on flip. Turning enforcement on has to END the sessions that were
   // obtained by password — otherwise every one of them keeps working for

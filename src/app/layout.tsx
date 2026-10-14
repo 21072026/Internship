@@ -14,13 +14,16 @@ import { productNameFor } from '@/lib/verticals';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
-import { resolveAccent, themeColorFor } from '@/lib/accent';
+import { isAccentColor, resolveAccent, themeColorFor } from '@/lib/accent';
 import { DENSITY_CLASS, resolveDensity } from '@/lib/density';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
+import { applyHostBrandMetadata } from '@/lib/brandMetadata';
+import { clientBrandOf, hostBrand, requestBrand } from '@/lib/hostBrand';
+import { paletteCssVars, resolveAccentChoice } from '@/lib/brandRule';
 
 // Vertical-aware tab title / app name (#2498): a marketing host/tenant reads
 // its own product name instead of "Internship CRM". resolveRequestVertical is
@@ -31,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const isMarketing = vertical === 'MARKETING';
   const productName = productNameFor(vertical);
   const { t } = await getServerDictionary();
-  return {
+  const metadata: Metadata = {
   // Absolute URLs for file-convention images (OG) follow the host that served
   // the page (#2488), never NEXTAUTH_URL.
   metadataBase: new URL(await requestSiteUrl()),
@@ -86,6 +89,12 @@ export async function generateMetadata(): Promise<Metadata> {
     other: appleSplashLinks(isMarketing ? 'salevali' : ''),
   },
   };
+  // A host mapped to an organization that carries brand data (#2922) wears that
+  // brand on what an installed app shows — its name and its icon set. Only then:
+  // a default brand leaves everything above exactly as it was.
+  const brand = await hostBrand();
+  if (brand.source === 'org') applyHostBrandMetadata(metadata, brand);
+  return metadata;
 }
 
 // The browser-UI tint follows the vertical (#2492) — `themeColorFor` is the
@@ -93,8 +102,12 @@ export async function generateMetadata(): Promise<Metadata> {
 // manifest. resolveRequestVertical is cached per request, so this is free.
 export async function generateViewport(): Promise<Viewport> {
   const vertical = await resolveRequestVertical();
+  // An organization brand (#2922) — the signed-in person's own, else the
+  // host's — tints the browser with its colour; a default brand keeps the
+  // vertical's.
+  const brand = await requestBrand();
   return {
-  themeColor: themeColorFor(vertical),
+  themeColor: brand.source === 'org' ? brand.themeColor : themeColorFor(vertical),
   // Shrink the layout viewport when the on-screen keyboard opens instead of
   // letting it overlay the page, so a full-height screen (the chat shell, #1006)
   // keeps its composer above the keyboard rather than behind it.
@@ -146,12 +159,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
   const fontSizeClass = fontSize === 'sm' || fontSize === 'lg' || fontSize === 'xl' ? `font-${fontSize}` : undefined;
   const densityClass = resolveDensity(density) === 'compact' ? DENSITY_CLASS : undefined;
+  // The organization brand (#2922): its default accent (possibly its own
+  // palette, written below as --brand-* variables that globals.css bridges to
+  // the accent ramp) — only when the brand comes from an organization. A
+  // default brand takes the line it always took.
+  const brand = await requestBrand();
+  const accentAttr = brand.source === 'org' ? resolveAccentChoice(accent, brand, isAccentColor) : resolveAccent(accent, vertical);
+  const brandStyle = brand.source === 'org' && brand.palette ? (paletteCssVars(brand.palette) as React.CSSProperties) : undefined;
 
   return (
     <html
       lang={locale}
       className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass, densityClass].filter(Boolean).join(' ') || undefined}
-      data-accent={resolveAccent(accent, vertical)}
+      data-accent={accentAttr}
+      style={brandStyle}
       // The preferences this request resolved (cookie, else the signed-in
       // user's saved value). The no-flash script falls back to these when the
       // device itself has stored nothing, so a preference that lives only in
@@ -180,7 +201,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             offline fallback and the install prompt used to exist only behind
             login. Renders nothing. */}
         <ServiceWorkerRegistrar />
-        <Providers locale={locale} dict={dict} vertical={vertical}>
+        <Providers locale={locale} dict={dict} vertical={vertical} brand={clientBrandOf(brand)}>
           {/* Public demo (#966) — above everything, on every route, so a visitor
               never mistakes the demo for their own tenant. */}
           {IS_DEMO_MODE && <DemoModeBanner />}

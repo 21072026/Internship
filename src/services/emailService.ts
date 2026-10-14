@@ -70,6 +70,7 @@ import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
 import { sameTenant } from '@/lib/orgScope';
+import { brandAssetPath } from '@/lib/brandRule';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -81,17 +82,20 @@ import { sameTenant } from '@/lib/orgScope';
 // deliverability probe): one brand rule, not a second lookup per route.
 export async function emailBrand(orgId?: string | null) {
   const b = await getOrgBranding(orgId ?? null);
+  // The origin every link in this org's mail points at (#2495): its own
+  // product host when one is mapped and served, else NEXT_PUBLIC_APP_URL.
+  // Carried on the brand because the brand is already "who is this mail
+  // from" — the same org decides the logo and the host its links open.
+  const appUrl = await appOriginForOrg(orgId);
   return {
     name: b.name,
     accent: b.color || mailAccentFor(b.vertical),
-    logoUrl: b.logoUrl,
+    // An uploaded mark (#2922) stands in for a logo URL the tenant never set:
+    // absolute, on the org's own host, so a mail client can load it.
+    logoUrl: b.logoUrl ?? (b.markVersion ? `${appUrl}${brandAssetPath(b.markVersion, 'mark-128')}` : null),
     supportEmail: b.supportEmail,
     vertical: b.vertical,
-    // The origin every link in this org's mail points at (#2495): its own
-    // product host when one is mapped and served, else NEXT_PUBLIC_APP_URL.
-    // Carried on the brand because the brand is already "who is this mail
-    // from" — the same org decides the logo and the host its links open.
-    appUrl: await appOriginForOrg(orgId),
+    appUrl,
   };
 }
 

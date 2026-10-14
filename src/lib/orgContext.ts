@@ -319,6 +319,14 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // sessionless import run is right without a bound context; the registration
   // keeps every reader (the monthly series on /admin/analytics) in its tenant.
   'RelationValue',
+  // An organization's generated brand icons (#2922). Written only by
+  // src/lib/brandAssets.ts, which binds the TARGET org (runWithOrg) and stamps
+  // `orgId` on every row itself. The one sessionless reader — the public
+  // /brand/<version>/<file> route — runs with no bound context, which the
+  // middleware treats as "do not scope", and finds a row by (version, kind)
+  // alone: the version is a hash and names no tenant. Registered so any later
+  // reader (an admin listing, a cleanup) stays inside its own tenant.
+  'BrandAsset',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

@@ -307,7 +307,8 @@ tenant ADMIN'i — hedef org'un **kendi** admin'i dahil — reddedilir ve ret
 
 | `GET /api/admin/organizations` | ✅ yalnızca kendi dünyasının org'ları (`world`, `verticals` = oluşturulabilir) | yalnızca kendi org'u | 401 | 401 | Süper-admin dünya başınadır ([`docs/worlds.md`](worlds.md) § Süper-admin dünya başınadır) |
 | `POST /api/admin/organizations` | ✅ 201 — `vertical` zorunlu (`400 vertical_required`), öbür dünya `403 vertical_other_world` | **403** | 401 | 401 | Yeni müşteri org'u doğuşta dikeyiyle tiplenir |
-| `PATCH /api/admin/organizations` | ✅ kendi dünyasının org'u; öbür dünyanın org'u **403**; dikey taşıma **403 `vertical_other_world`** | yalnızca kendi org'u (plan/dikey hariç) | 401 | 401 | |
+| `PATCH /api/admin/organizations` | ✅ kendi dünyasının org'u; öbür dünyanın org'u **403**; dikey taşıma **403 `vertical_other_world`** | yalnızca kendi org'u (plan/dikey/`brandPalette` hariç — paleti yalnızca temizleyebilir) | 401 | 401 | |
+| `POST` / `DELETE /api/admin/organizations/[id]/brand-mark` | ✅ kendi dünyasının org'u | yalnızca kendi org'u; yükleme planın `WHITE_LABEL` özelliğini ister (`403 feature_locked`), silme her zaman serbest | **403** | 401 | Kurumun logo işareti ve ondan üretilen simge seti (#2922, [`docs/white-label.md`](white-label.md)). Ret, org aranmadan önce gelir. Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` → `ORG_SETUP_WRITES` |
 | `GET /api/admin/email-log` | ✅ yalnızca kendi dünyasında hesabı olan adreslere giden posta (24s kota kurulum geneli) | **403 `super_admin_only`** | 401 | 401 | |
 
 Her süper-admin kontrolü isteğin host'unun dünyasını da ister: öbür dünyanın host'unda

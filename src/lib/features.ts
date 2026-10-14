@@ -44,7 +44,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -147,6 +147,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
     { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
+    // #2922 — an organization's uploaded mark becomes every app icon; true in
+    // every vertical, so untagged.
+    { key: 'brandIcons', category: 'platform', icon: ImagePlus, color: 'purple', title: C.brandIcons.t, desc: C.brandIcons.d },
     { key: 'enterpriseSso', category: 'trust', icon: KeyRound, color: 'indigo', title: C.enterpriseSso.t, desc: C.enterpriseSso.d },
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     // #2563 — core CRM (a person-written follow-up date on any record), so untagged.

@@ -5,6 +5,7 @@ import { sendNativePushToUser } from '@/lib/expoPush';
 import { notificationCategoryAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
 import { worldOfOrg } from '@/lib/userWorld';
 import type { VerticalKey } from '@/lib/verticals';
+import { brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 
 /**
  * Background Web Push (#1464, #675 Kademe 2).
@@ -61,6 +62,20 @@ const PUSH_ICON: Record<VerticalKey, string> = {
   INTERNSHIP: '/icon-192.png',
   MARKETING: '/icon-salevali-192.png',
 };
+
+// The recipient organization's own icon (#2922) when it uploaded a mark — the
+// 192px tile of its generated set, relative like PUSH_ICON — else its world's
+// built-in tile above. Never throws: a push must not fail over its icon.
+async function pushIconFor(orgId: string | null | undefined): Promise<string> {
+  if (orgId) {
+    const org = await prisma.organization
+      .findUnique({ where: { id: orgId }, select: { brandMarkVersion: true } })
+      .catch(() => null);
+    const version = org?.brandMarkVersion;
+    if (isBrandVersion(version)) return brandAssetPath(version, 'icon-192');
+  }
+  return PUSH_ICON[await worldOfOrg(orgId)];
+}
 
 const MAX_FAILURES = 5;
 // A push service that is slow is not worth holding a request open for.
@@ -143,7 +158,7 @@ async function sendWebPush(userId: string, orgId: string | null | undefined, pay
     });
     if (subscriptions.length === 0) return 0;
 
-    const icon = PUSH_ICON[await worldOfOrg(orgId)];
+    const icon = await pushIconFor(orgId);
     const body = JSON.stringify({ icon, badge: icon, ...payload });
     const results = await Promise.all(
       subscriptions.map(async (subscription) => {

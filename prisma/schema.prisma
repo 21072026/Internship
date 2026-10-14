@@ -111,6 +111,20 @@ model Organization {
   brandLogoUrl     String?  @db.Text
   brandColor       String?
   supportEmail     String?
+  // Per-organization brand (#2922, docs/white-label.md). The rule is pure in
+  // src/lib/brandRule.ts: a field left null falls back to the vertical's
+  // default on its own, and a row with none of them set IS the default. All
+  // nullable, so `db push` is additive (#2298).
+  //   brandTileColor   #rrggbb behind the mark on every generated icon
+  //   brandAccent      the default accent: a key of ACCENT_COLORS, or 'brand'
+  //   brandPalette     the 'brand' accent's exact ramp, ten hexes 50…900
+  //                    (super admin only; generated from brandColor when unset)
+  //   brandMarkVersion the current generated icon set (BrandAsset.version);
+  //                    null = the vertical's static files under public/
+  brandTileColor   String?
+  brandAccent      String?
+  brandPalette     String?  @db.Text
+  brandMarkVersion String?
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
@@ -225,6 +239,7 @@ model Organization {
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
   safeguardingFlags       SafeguardingFlag[]
+  brandAssets             BrandAsset[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -1353,6 +1368,33 @@ model NewsletterSend {
 }
 
 // A user's profile picture, stored in the database (same approach as CvFile).
+// One generated image of an organization's brand icon set (#2922). An upload
+// renders ~27 of these under one `version` — every served kind (the bare mark,
+// manifest icons, maskable icon, apple-touch icon, favicon, shortcut icons, one
+// iOS launch image per device) plus the original as `source`, which is kept so
+// a tile-colour change can re-render the set and is NEVER served. Writer:
+// src/lib/brandAssets.ts. Reader: the public route under src/app/brand/, by
+// (version, kind) only — the version is a hash that carries no organization
+// id, and the route runs with no tenant context (the middleware does not scope
+// it). Registered in TENANT_MODELS so every other reader stays inside its
+// tenant. Stored in the database like AvatarFile: there is no object store,
+// and a redeploy must not lose the icons.
+model BrandAsset {
+  id          String   @id @default(cuid())
+  orgId       String
+  version     String
+  kind        String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([version, kind])
+  @@index([orgId])
+}
+
 model AvatarFile {
   id          String   @id @default(cuid())
   userId      String   @unique
