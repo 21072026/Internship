@@ -97,6 +97,26 @@ test('a host mapped to a branded organization wears its brand: manifest, head, a
     data: { id: orgId, brandName: BRAND_NAME, brandColor: BRAND_COLOR, brandTileColor: TILE_COLOR, brandAccent: 'brand' },
   });
   expect(patch.status(), await patch.text()).toBe(200);
+  // The exact palette is the operator's: a tenant ADMIN may not write one.
+  const palette = await request.patch('/api/admin/organizations', {
+    headers: asHost(HOST),
+    data: { id: orgId, brandPalette: '#ecfeff,#cffafe,#a5f3fc,#67e8f9,#22d3ee,#06b6d4,#0e7490,#155e75,#164e63,#083344' },
+  });
+  expect(palette.status()).toBe(403);
+  expect((await palette.json()).code).toBe('palette_super_admin_only');
+  // A hostile SVG never reaches the rasterizer.
+  const hostile = await request.post(`/api/admin/organizations/${orgId}/brand-mark`, {
+    headers: asHost(HOST),
+    multipart: {
+      file: {
+        name: 'mark.svg',
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><image href="file:///etc/passwd" width="48" height="48"/></svg>'),
+      },
+    },
+  });
+  expect(hostile.status()).toBe(400);
+  expect(await hostile.json()).toMatchObject({ code: 'mark_refused', reason: 'forbidden_element' });
   const upload = await request.post(`/api/admin/organizations/${orgId}/brand-mark`, {
     headers: asHost(HOST),
     multipart: { file: { name: 'mark.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(MARK_SVG) } },
