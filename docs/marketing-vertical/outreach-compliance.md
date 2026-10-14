@@ -1,4 +1,4 @@
-# SaleVali satış iletişimi — kanal kuralları (UWG § 7 / DSGVO)
+# MARKETING dikeyi satış iletişimi — kanal kuralları (UWG § 7 / DSGVO)
 
 Issue #2576 · üst story #2575 · kardeş görev #2577 (izin kaydı) · epic #2348
 
@@ -25,14 +25,13 @@ Issue #2576 · üst story #2575 · kardeş görev #2577 (izin kaydı) · epic #2
 
 ## 0. Bu doküman neyi kapsar, neyi kapsamaz
 
-- **Kapsar:** BCS-IT GmbH'nin **SaleVali** ürünü için potansiyel ve mevcut **B2B**
-  müşterilere (online satıcılar, `salevali-domain.md`) yapılan reklam amaçlı temas — e-posta,
-  telefon, LinkedIn/XING mesajı, posta — ve bu temasın CRM'de (MARKETING dikeyi) nasıl
-  kaydedildiği.
+- **Kapsar:** MARKETING kiracısının sattığı ürün için potansiyel ve mevcut **B2B**
+  müşterilere yapılan reklam amaçlı temas — e-posta, telefon, LinkedIn/XING mesajı, posta —
+  ve bu temasın CRM'de (MARKETING dikeyi) nasıl kaydedildiği.
 - **Kapsamaz:** InternCRM'in kendi pazarlaması (o `docs/marketing/go-to-market.md` §7 ve
-  `docs/marketing/copy-bank.md` §9'da; bu doküman onların hukuki çerçevesini SaleVali'ye
-  uyarlar), işlemsel e-postalar (şifre sıfırlama, fatura, sistem bildirimi — reklam değildir,
-  ama içine reklam eklenirse reklam olur, bkz. §2.6), B2C.
+  `docs/marketing/copy-bank.md` §9'da; bu doküman onların hukuki çerçevesini MARKETING
+  dikeyine uyarlar), işlemsel e-postalar (şifre sıfırlama, fatura, sistem bildirimi — reklam
+  değildir, ama içine reklam eklenirse reklam olur, bkz. §2.6), B2C.
 - **Sıralama:** Bu doküman ile `go-to-market.md` §7 çelişirse, **daha dar olan** kural geçerlidir
   ve çelişki bir issue olarak açılır.
 
@@ -95,8 +94,9 @@ kanal `EMAIL` / `PHONE` / `POST`, dayanak `DOI_CONFIRMED` / `EXISTING_CUSTOMER_7
 - UWG § 7 yasak kataloğunda değildir — tek yasal "soğuk" outbound kanal budur
   (`go-to-market.md` §7.2, `copy-bank.md` §9.2).
 - DSGVO şartları zorunludur: Art. 6 Abs. 1 lit. f için **yazılı Interessenabwägung notu**;
-  Art. 14 bilgi notu (mektubun arkasında, `copy-bank.md` §9.2'deki DE şablonu SaleVali/BCS-IT
-  için uyarlanır); Art. 21 Abs. 2 itiraz hakkına açık atıf; itiraz edenin **kalıcı** bastırılması.
+  Art. 14 bilgi notu (mektubun arkasında, `copy-bank.md` §9.2'deki DE şablonu marketing
+  ürününü sunan şirket — `MARKETING_OPERATOR_*` — için uyarlanır); Art. 21 Abs. 2 itiraz
+  hakkına açık atıf; itiraz edenin **kalıcı** bastırılması.
 - Verinin kaynağı (Art. 14 Abs. 2 lit. f) kaydedilir: hangi dizin, hangi site, hangi tarih.
 
 ### 2.4 `INQUIRY_REPLY` — sorulan soruya yanıt
@@ -118,21 +118,21 @@ Dört koşul **birlikte** sağlanmalıdır; biri eksikse istisna yoktur ve e-pos
 
 1. Adres, bir mal veya hizmetin **satışıyla bağlantılı olarak** (im Zusammenhang mit dem Verkauf)
    müşterinin kendisinden alındı.
-2. Reklam yalnızca **benzer** (ähnliche) mal/hizmetler içindir — SaleVali müşterisine SaleVali
-   modülleri; BCS-IT'nin başka bir ürünü (ör. InternCRM) **benzer sayılmaz**.
+2. Reklam yalnızca **benzer** (ähnliche) mal/hizmetler içindir — ürünün müşterisine aynı
+   ürünün modülleri; aynı şirketin başka bir ürünü **benzer sayılmaz**.
 3. Müşteri bu kullanıma **itiraz etmedi**.
 4. Adres alınırken **ve her mailde** açık ve kolay itiraz imkânı gösterildi; itirazın temel
    tarifeler dışında masraf doğurmadığı belirtildi.
 
-**SaleVali için sınırlar (dar yorum):**
+**MARKETING için sınırlar (dar yorum)** — `MARKETING_FUNNEL` anahtarlarıyla:
 
 | Durum | § 7 Abs. 3? | Gerekçe |
 | --- | --- | --- |
-| Demo talebi (`CompanyInquiry`, `DEMO_SCHEDULED_300`) | **Hayır** | Satış yok |
-| 30 günlük ücretsiz deneme (`TRIAL_ACTIVE_500`, `TRIAL_EXPIRED_600`) | **Hayır** | Deneme otomatik ücretli sözleşmeye dönmez (`salevali-domain.md` § Deneme); ücretsiz deneme bir "Verkauf" değildir — içtihat tartışmalı, dar yorum seçildi (açık soru 1) |
-| Ücretli sözleşme, SEPA mandası `ACTIVE` (`CUSTOMER_ACTIVE_700`) | **Evet**, koşul 1'de adres satış sırasında müşteriden alındıysa ve koşul 4 kayıtta ilan edildiyse | Satış var |
-| Fesih bildirimi verilmiş (`CANCELLATION_NOTICE_800`) | Evet ama **dikkatli** — "geri kazanma" maili benzer hizmettir; itiraz varsa hayır | Koşul 3 |
-| Churn (`CHURNED_900`) | Makul süre sınırı (öneri: sözleşme bitiminden 12 ay) — içtihatta sabit süre yok (açık soru 2) | Bağlantı zamanla zayıflar |
+| Demo talebi (`CompanyInquiry`, `LEAD_*` aşamaları) | **Hayır** | Satış yok |
+| Ücretsiz deneme (`TRIAL_ACTIVE`, `TRIAL_EXPIRED`) | **Hayır** | Ücretsiz deneme bir "Verkauf" değildir — içtihat tartışmalı, dar yorum seçildi (açık soru 1) |
+| Ücretli sözleşme (`DEAL_WON`) | **Evet**, koşul 1'de adres satış sırasında müşteriden alındıysa ve koşul 4 kayıtta ilan edildiyse | Satış var |
+| Fesih bildirimi verilmiş (`DEAL_WON` + `contractEndsAt`) | Evet ama **dikkatli** — "geri kazanma" maili benzer hizmettir; itiraz varsa hayır | Koşul 3 |
+| Churn (kazanımdan sonra `DEAL_LOST`) | Makul süre sınırı (öneri: sözleşme bitiminden 12 ay) — içtihatta sabit süre yok (açık soru 2) | Bağlantı zamanla zayıflar |
 | Satış sırasında alınmamış, sonradan bulunmuş başka bir çalışanın adresi | **Hayır** | Koşul 1: adres müşteriden alınmadı |
 
 CRM kuralı: `EXISTING_CUSTOMER_7_3` **yalnızca elle**, yalnızca ücretli müşteride ve **gerekçe
@@ -143,7 +143,8 @@ metniyle** verilir (#2577 § 2). Hiçbir makine yolu onu yazamaz.
 Fatura, deneme bitiş hatırlatması, sistem bildirimi reklam değildir **sürece** içlerinde reklam
 yoktur. Deneme bitiş mailine "şimdi Pro'ya geçin, %20 indirim" eklemek o maili reklama çevirir
 ve dayanağını gerektirir (BGH VI ZR 225/17 çizgisi; "Werbung in Transaktionsmails" tartışması).
-Deneme süresince SaleVali'nin gönderdiği onboarding mailleri → açık soru 5.
+Deneme süresince ürünün kendisinin gönderdiği onboarding mailleri bu repo'nun dışındadır; aynı
+sınır onlar için de geçerlidir.
 
 ## 3. Double-Opt-In (DOI) — ne saklanır
 
@@ -182,7 +183,8 @@ tarafından teyit edilmelidir (açık soru 7).
 
 ### 3.3 Rıza metninin içeriği
 
-Metin şunları söyler: **kim** gönderecek (BCS-IT GmbH, SaleVali), **ne** (ürün haberleri — kapsamı
+Metin şunları söyler: **kim** gönderecek (marketing ürününü sunan şirket ve ürünün adı —
+`MARKETING_OPERATOR_*`), **ne** (ürün haberleri — kapsamı
 dar ve adlı), **hangi kanal** (yalnız e-posta; telefon ayrı kutu ve ayrı rıza), **nasıl geri
 alınır** (her mailde bağlantı, Art. 7 Abs. 3). "Ve iş ortaklarımızdan teklifler" gibi geniş
 ifadeler "für den bestimmten Fall" şartını boşa çıkarır → yasak.
@@ -196,38 +198,27 @@ kod, dışa aktarım veya kişi bu değere dayanarak mail gönderemez (`demo-for
 #2577 geldiğinde bu satır `ContactPermission(channel=EMAIL, basis=NONE)` + bekleyen DOI talebi
 olarak taşınır; `DOI_CONFIRMED` yalnız onay tıklamasıyla oluşur.
 
-## 4. SaleVali'nin newsletter bayrağı neden rıza değildir
+## 4. Upstream bir ürünün newsletter bayrağı neden rıza değildir
 
-SaleVali kaydında (ayrı repo `BCS-IT-Gmbh/salevali-client`, `salevali-server`; 2026-09-29'daki
-yerel checkout'ta doğrulandı: `salevali-client` @ `a41534f`, `salevali-server` @ `62d0d86`):
-
-- **Form:** `salevali-client/src/app/pages/auth/Registration.jsx:46` — Formik
-  `initialValues` içinde `newsletter: true`. Kutu **önceden işaretli** gelir. Aynı nesnede
-  `acceptTerms: true` da önceden işaretli (:45) — ayrı bir
-  sorun, bu dokümanın kapsamı dışında ama not edildi.
-- **Google ile kayıt:** `salevali-server/src/controllers/users/user.controller.ts:1741` —
-  gövdede `newsletter` yoksa varsayılan `true`; değer `performGoogleRegister` (:1781 → :1942)
-  üzerinden kullanıcıya yazılır. Kullanıcı hiçbir kutu görmeden "abone" olur.
-- **Standart kayıt:** `user.controller.ts:243` gövdeden `newsletter` alır, :301'de yazar — form
-  varsayılanı `true` olduğu için sonuç aynıdır.
-- **DOI yok.**
-
-Neden rıza sayılmaz:
+Başka bir üründen — ör. kiracının kendi ürününün kayıt formundan — taşınan bir newsletter
+bayrağı **hiçbir zaman** dayanak değildir:
 
 1. **Önceden işaretli kutu geçerli Einwilligung değildir** — EuGH 01.10.2019, C-673/17
    (*Planet49*); BGH 28.05.2020 – I ZR 7/16 (*Cookie-Einwilligung II*). Art. 4 Nr. 11 DSGVO
-   "eindeutige bestätigende Handlung" ister; susmak veya işareti kaldırmamak eylem değildir.
-2. Google yolunda kutu **hiç gösterilmez**: bilgilendirilmiş rıza (informiert) olamaz.
-3. DOI olmadığı için adresin sahibinin tıkladığı **kanıtlanamaz** (Art. 7 Abs. 1).
-4. Kayıt bir **deneme** kaydıdır, satış değildir → § 7 Abs. 3 de kapsamaz (§2.5).
+   "eindeutige bestätigende Handlung" ister; susmak veya işareti kaldırmamak eylem değildir. CRM,
+   kutunun kaynakta nasıl gösterildiğini bilemez.
+2. Kutu kaynakta **hiç gösterilmemiş** olabilir: bilgilendirilmiş rıza
+   (informiert) olamaz.
+3. DOI olmadan adresin sahibinin tıkladığı **kanıtlanamaz** (Art. 7 Abs. 1).
+4. Bir deneme kaydı **satış değildir** → § 7 Abs. 3 de kapsamaz (§2.5).
 
-**CRM kuralı:** SaleVali'den gelen `newsletter` değeri — kullanım beslemesi
-(`salevali-usage-feed.md`, #2445), import veya başka bir yol üzerinden — **hiçbir dayanak
-üretmez**; CRM onu okusa bile `NONE` yazar (#2577 § 2). Eski kayıtlarda `newsletter = true`
-olan kullanıcılar için yeniden DOI kampanyası **e-postayla yapılamaz** (izin isteyen mail de
-reklamdır, §2.1); yeni rıza yalnız ürün içinde (oturum açmış kullanıcıya gösterilen işaretsiz
-kutu + DOI) alınabilir. Önceden işaretli kutunun kaldırılması ve DOI, SaleVali tarafının işidir
-(#2575'te belirtildiği gibi #2565'te listelenir) — bu repo onu düzeltmez.
+**CRM kuralı:** upstream bir üründen gelen `newsletter` değeri — kullanım beslemesi
+(`docs/usage-feed.md`, #2445), hesap olayı ingest'i (`docs/integrations/account-events.md`,
+#2450), import veya başka bir yol üzerinden — **hiçbir dayanak üretmez**; CRM onu okusa bile
+`NONE` yazar (#2577 § 2). Böyle bir bayrağı taşıyan eski kayıtlar için yeniden DOI kampanyası
+**e-postayla yapılamaz** (izin isteyen mail de reklamdır, §2.1); yeni rıza yalnız ürün içinde
+(oturum açmış kullanıcıya gösterilen işaretsiz kutu + DOI) alınabilir. Kaynak ürünün kendi
+formu bu repo'nun işi değildir.
 
 ## 5. Makine yolları: `NONE`'dan başka bir şey yazamaz
 
@@ -238,7 +229,7 @@ tıklaması (`DOI_CONFIRMED`).
 | Yol | Yazabileceği dayanak | Not |
 | --- | --- | --- |
 | CSV/roster import (`src/lib/marketingImport.ts`; lead'ler stand-in `User`, `leadStandInEmail` :244) | `NONE` | Kaynak dosyada "opt-in: yes" sütunu olsa bile — o sütunun kanıtı bizde yok |
-| SaleVali kullanım beslemesi / ingest (`salevali-usage-feed.md`, #2445) | `NONE` | `newsletter` bayrağı dahil (§4) |
+| Kullanım beslemesi (`docs/usage-feed.md`, #2445) / hesap olayı ingest'i (`docs/integrations/account-events.md`, #2450) | `NONE` | upstream `newsletter` bayrağı dahil (§4) |
 | Kayıt birleştirme / duplicate merge | Mevcut izinleri **korur**, yenisini üretmez; iki kayıttan daha dar olan kazanır | Açık soru 8 |
 | Demo formu (`POST /api/company-inquiry`) | `NONE` + DOI talebi | Kutu tiklense bile |
 | DOI onay tıklaması (oturumsuz) | `DOI_CONFIRMED` — tek otomatik istisna, çünkü kanıt adres sahibinin eylemidir | `orgId`'yi kendisi geçer (CLAUDE.md § Multi-tenancy) |
@@ -251,28 +242,29 @@ Birim testi bu kuralı kilitler (#2577 kabul kriteri 1).
 
 Her giden **reklam** iletisinde (e-posta, DM, mektup):
 
-| Şart | Kaynak | SaleVali için |
+| Şart | Kaynak | MARKETING için |
 | --- | --- | --- |
-| Gönderenin kimliği gizlenmez; gerçek şirket adı | § 7 Abs. 2 Nr. 3 UWG (a.F. Nr. 4) — rıza olsa bile ihlal | "BCS-IT GmbH · SaleVali", kişi adıyla |
+| Gönderenin kimliği gizlenmez; gerçek şirket adı | § 7 Abs. 2 Nr. 3 UWG (a.F. Nr. 4) — rıza olsa bile ihlal | "<Operatör> · <Ürün>" (`MARKETING_OPERATOR_NAME` + ürün adı), kişi adıyla |
 | İtiraz için **geçerli bir adres** (masrafsız, temel tarife dışı ücret yok) | § 7 Abs. 2 Nr. 3, Abs. 3 Nr. 4 UWG | Okunan bir Reply-To; `noreply@` tek başına **yetmez** (`copy-bank.md` §9.0) |
 | Ticari iletişimin tanınabilirliği, göndericinin açıkça belirlenmesi | § 6 Abs. 1 und 2 DDG (eski § 6 TMG) | Konu satırı reklam niteliğini gizlemez |
 | Impressum | § 5 DDG — kolay fark edilir, doğrudan ulaşılabilir, sürekli erişilebilir; ticari sosyal medya profilleri dahil | Her mailin altbilgisinde Impressum **bağlantısı**; LinkedIn şirket sayfasında Impressum bağlantısı |
 | Her mailde opt-out bağlantısı + tek tıkla abonelikten çıkış | Art. 7 Abs. 3, Art. 21 Abs. 2-4 DSGVO; § 7 Abs. 3 Nr. 4 UWG | `List-Unsubscribe` + `List-Unsubscribe-Post` (RFC 8058), bu repoda `src/services/emailService.ts:389-390` |
-| Posta: Art. 14 bilgi notu | Art. 14 DSGVO | Mektup arkası, `copy-bank.md` §9.2 şablonu BCS-IT'ye uyarlanır |
+| Posta: Art. 14 bilgi notu | Art. 14 DSGVO | Mektup arkası, `copy-bank.md` §9.2 şablonu marketing operatörüne uyarlanır |
 
 **Impressum'da kim yazar?** InternCRM'in `/imprint` sayfası (`src/app/imprint/page.tsx`) kimliği
 **deployment ortamından** okur (`operatorIdentity()`, `src/lib/imprint.ts`) — host'a göre değişmez.
-Aynı container `marketing.bcsit-gmbh.de`'yi de sunduğu için (CLAUDE.md § Deployment, #2540) o host
-üzerindeki Impressum bugün **InternCRM operatörünü** gösterir. SaleVali reklamının Impressum'u ise
-**BCS-IT GmbH**'yi göstermelidir. Bu, ilk SaleVali reklam mailinden önce çözülmesi gereken bir
-**sert blokajdır** (açık soru 9). IP sahipliği kuralı (CLAUDE.md § Licensing) burada ilgisizdir:
-Impressum **hizmet sağlayıcıyı** gösterir, yazılımın hak sahibini değil.
+Aynı container marketing host'larını (`MARKETING_HOSTS`) da sunduğu için (CLAUDE.md § Deployment,
+#2540) o host üzerindeki Impressum, `MARKETING_OPERATOR_*` set edilmedikçe **InternCRM
+operatörünü** gösterir. Marketing reklamının Impressum'u ise **marketing ürününü sunan şirketi**
+göstermelidir. Bu, ilk reklam mailinden önce çözülmesi gereken bir **sert blokajdır** (açık
+soru 9). IP sahipliği kuralı (CLAUDE.md § Licensing) burada ilgisizdir: Impressum **hizmet
+sağlayıcıyı** gösterir, yazılımın hak sahibini değil.
 
 Altbilgi şablonu (DE, doldurulacak):
 
 ```text
-BCS-IT GmbH · SaleVali · <Anschrift> · Impressum: <URL>
-Sie erhalten diese E-Mail, weil <Grund: Sie haben am <Datum> bestätigt … | Sie sind Kunde von SaleVali>.
+<Anbieter> · <Produkt> · <Anschrift> · Impressum: <URL>
+Sie erhalten diese E-Mail, weil <Grund: Sie haben am <Datum> bestätigt … | Sie sind Kunde von <Produkt>>.
 Keine weiteren E-Mails: <Abmelde-Link> — oder antworten Sie einfach auf diese E-Mail.
 ```
 
@@ -305,14 +297,14 @@ yeniden verilmez, yalnız adres sahibinin yeni bir DOI tıklaması kaydı açar.
 | Makine yolları yalnız `NONE` yazar | **Hedef** (#2577, henüz yok) | Birim testi |
 | DOI tıklaması → `DOI_CONFIRMED`; opt-out geri alır | **Hedef** (#2577, henüz yok) | e2e |
 | Alıcı başına günde 1 onay maili | **Hedef** (#2577, henüz yok) | e2e |
-| `EXISTING_CUSTOMER_7_3` yalnız ücretli müşteride, elle, gerekçeyle | **Hedef: kısmen** (#2577, henüz yok) — elle ve gerekçe zorunlu; "ücretli mi" kontrolü aşamaya (`CUSTOMER_ACTIVE_700`) bakabilir ama koşul 1'i (adres satış sırasında mı alındı) **doğrulayamaz** | İnsan kararı |
+| `EXISTING_CUSTOMER_7_3` yalnız ücretli müşteride, elle, gerekçeyle | **Hedef: kısmen** (#2577, henüz yok) — elle ve gerekçe zorunlu; "ücretli mi" kontrolü aşamaya (`DEAL_WON`) bakabilir ama koşul 1'i (adres satış sırasında mı alındı) **doğrulayamaz** | İnsan kararı |
 | İzni olmayan hesapta e-posta aksiyonu uyarı gösterir | **Hedef: uyarı, engel değil** (#2577 § 4, henüz yok) | CRM, bir insanın elle attığı maili durduramaz (dış posta istemcisi) |
 | LinkedIn/XING DM yasağı | **Hayır** | CRM DM göndermez; kural satış ekibinin disiplinidir |
 | Telefon araması için somut bağ | **Hayır** — yalnız `PHONE` izin satırını ve gerekçesini gösterir | Aramanın kendisi CRM dışında |
 | Posta: Art. 14 notu, "Keine Werbung" levhası | **Kısmen** (#2697) — Art. 14 + Art. 21 notu her mektubun arkasına otomatik basılır; itiraz edenler ve 90 gün içinde yazılanlar kampanyaya eklenemez; levha süreçtir | `src/lib/postCampaignRule.ts` |
 | Rıza metninin doğru, dar ve işaretsiz olması | **Kısmen** — metin sürümü damgalanır; metnin hukuki yeterliliği Fachanwalt'ın işi | — |
 | İşlemsel maile reklam eklenmemesi | **Hayır** | Metin yazarı + gözden geçirme |
-| SaleVali'nin önceden işaretli kutusu | **Hayır** — bu repo dışında | #2565 (SaleVali karşı işi) |
+| Upstream bir ürünün kendi kayıt formu | **Hayır** — bu repo dışında | Kaynak ürünün işi (§4) |
 | Impressum doğru kimliği gösterir | **Evet, `MARKETING_OPERATOR_*` set edildiğinde** (#2697) — set edilmeden InternCRM operatörü görünür | Açık soru 9; operatör adımı [`postal-campaigns.md`](postal-campaigns.md) |
 
 "Hayır" satırları için satış ekibinin tek kontrolü bu dokümandır; bir CRM uyarısının yokluğu
@@ -344,8 +336,8 @@ Bu repoda:
 - `docs/marketing/go-to-market.md` §7 (InternCRM için aynı çerçeve; bağlayıcı) ·
   `docs/marketing/copy-bank.md` §9.0 (kanal tablosu), §9.2 (Art. 14 mektup şablonu), §9.7 (DOI akışı)
 - `docs/marketing-vertical/demo-form.md` (demo formu, ne saklanır)
-- `docs/marketing-vertical/salevali-domain.md` (deneme ve yaşam döngüsü)
-- `docs/marketing-vertical/salevali-usage-feed.md` (besleme sözleşmesi)
+- `docs/marketing-vertical/funnel-decision.md` (deneme ve müşteri durumu)
+- `docs/usage-feed.md` (besleme sözleşmesi) · `docs/integrations/account-events.md` (hesap olayları)
 - `prisma/schema.prisma:597-645` (`ConsentType`, `UserConsent` — pazarlama türü yok),
   `:1590-1624` (`CompanyInquiry` rıza alanları)
 - `src/lib/privacy.ts:19,25` (metin sürümleri) · `src/lib/newsletterTokens.ts` (DOI için token kalıbı)
@@ -358,20 +350,18 @@ Bu repoda:
 3. **LinkedIn/XING DM ayrı bir CRM kanalı mı olmalı?** #2577 yalnız `EMAIL/PHONE/POST` öneriyor;
    doküman DM'i `EMAIL` iznine bağladı. Ayrı `SOCIAL_DM` kanalı istenir mi?
 4. **`INQUIRY_REPLY` süre sınırı** (öneri 90 gün) CRM'de zorlanacak mı, yoksa yalnız uyarı mı?
-5. **SaleVali deneme süresindeki onboarding/aktivasyon mailleri** işlemsel mi reklam mı? İçerikleri
-   denetlenmeli.
+5. *(Kiracıya özgü bir soruydu; bu repo'nun dışında takip ediliyor.)*
 6. **DOI kanıtında IP.** `go-to-market.md` §7.2 IP'yi listeliyor; `demo-form.md` bilinçli olarak IP
    saklamıyor (veri minimizasyonu). Onay tıklamasında IP (veya hash'i) saklanmalı mı?
 7. **VG Düsseldorf 27.07.2026 kararı** yalnız ikincil kaynaktan (blog) alındı; dosya numarası ve
    tam metin teyit edilmeli.
 8. **Duplicate merge'de iki farklı izin** — "daha dar olan kazanır" kuralı uygun mu?
-9. **Impressum kimliği (sert blokaj):** `marketing.bcsit-gmbh.de` host'unda BCS-IT GmbH'yi
+9. **Impressum kimliği (sert blokaj):** marketing host'unda marketing ürününü sunan şirketi
    gösteren bir Impressum nasıl yayınlanacak — host başına operatör kimliği (`src/lib/imprint.ts`
-   değişikliği, ayrı issue) mi, yoksa SaleVali'nin kendi Impressum URL'sine bağlantı mı?
+   değişikliği, ayrı issue) mi, yoksa ürünün kendi Impressum URL'sine bağlantı mı?
 10. **Saklama süreleri:** izin kanıtı ve kampanya kayıtları için süre (öneri: izin bitiminden
     sonra 3 yıl, § 195 BGB Regelverjährung paraleli) avukatla belirlenmeli.
-11. **`acceptTerms: true`** (`Registration.jsx:45`) — önceden işaretli AGB/gizlilik kutusu;
-    #2565'e eklenmeli mi?
+11. *(Kiracıya özgü bir soruydu; bu repo'nun dışında takip ediliyor.)*
 12. **Başkasının web iletişim formu üzerinden reklam** (§2): doküman bunu elektronische Post
     sayıyor ve yalnız açık, herkese açık bir teklif davetini (belgelenmiş bağlantıyla) istisna
     tutuyor. Bu dar yorum teyit edilmeli. `copy-bank.md` §9.0 aynı satırı "serbest" diye yazıyor

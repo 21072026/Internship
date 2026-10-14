@@ -159,8 +159,9 @@ The table is new and has no required column without a database default, so
 Nobody but the maintainer handles key material, and none of it goes into the repo or a chat.
 
 1. **Firebase project.** In the [Firebase console](https://console.firebase.google.com),
-   use bcsit GmbH's Google account to create a project and add an **Android app** with
-   package `de.bcsitgmbh.crm`. Download `google-services.json`.
+   use the operator's Google account to create a project and add an **Android app** with
+   the package set as `android.package` in `apps/mobile/app.config.ts`. Download
+   `google-services.json`.
    - The file is client config (an API key restricted to the app), not a secret. It still
      stays out of git; `apps/mobile/.gitignore` covers it.
 2. **Local builds.** Put the file at `apps/mobile/google-services.json`. `app.config.ts`
@@ -180,11 +181,11 @@ Nobody but the maintainer handles key material, and none of it goes into the rep
    2. Upload it with `npx eas-cli@latest credentials -p android`, run **inside
       `apps/mobile`**: any profile → Google Service Account → *Manage your Google Service
       Account Key for Push Notifications (FCM V1)* → *Set up…*. The Expo dashboard does the
-      same under bcsit-gmbh → interncrm → Credentials → Android.
+      same under the operator's Expo organisation → interncrm → Credentials → Android.
       - Run from the repo root, the CLI finds no EAS project, offers to **create a new one**
-        (`@bcsit-gmbh/internship-crm`) and writes a root `app.json`. Answer no. The key
-        belongs to `interncrm`; the summary screen must read Project `interncrm`,
-        Application Identifier `de.bcsitgmbh.crm`.
+        (`@<expo-org>/internship-crm`) and writes a root `app.json`. Answer no. The key
+        belongs to `interncrm`; the summary screen must read Project `interncrm` and the
+        Application Identifier must equal `android.package` from `app.config.ts`.
    3. Delete the local JSON afterwards. Without this key, Expo accepts the message and the
       receipt reads `InvalidCredentials`.
 5. **Rebuild** after the steps above, since the Firebase config is native: run
@@ -240,7 +241,7 @@ Pixel 8 AVD, API 36, Google Play image, `APP_ENV=preview`, Firebase project `int
 
 The code is platform-neutral. What is missing is account work:
 
-1. An Apple Developer Program membership in bcsit GmbH's name (D-U-N-S, 99 USD/year).
+1. An Apple Developer Program membership in the publishing company's name (D-U-N-S, 99 USD/year).
 2. An **APNs key** (.p8): let `eas credentials` → iOS create and store it, or upload one.
    Expo then delivers to APNs with the same server code.
 3. An iOS build (`eas build -p ios`), installed through TestFlight or ad hoc.

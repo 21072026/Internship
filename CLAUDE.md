@@ -141,7 +141,7 @@ src/
   app/
     api/            # route handlers (auth, register, invite, mentorship, interactions, ...)
     admin/  mentor/  portal/  auth/  onboarding/   # role-scoped pages
-    layout.tsx  page.tsx        # app icons live in public/ (icon.svg, icon-salevali.svg)
+    layout.tsx  page.tsx        # app icons live in public/ (icon.svg + per-vertical variants)
   components/ui/    # Button, Card, Input, Select, Badge, ...
   components/forms/ # OnboardingForm, ...
   lib/              # auth.ts (NextAuth config), prisma.ts (client singleton)
@@ -179,8 +179,8 @@ host compiled on every PR push.
 | Topic (per PR) | `internship-crm-pr<N>` | 3400–3499 | `https://pr<N>.interncrm.com` | `topic-pr<N>` | every push to the PR |
 
 Production and Preview each **additionally serve the MARKETING vertical on a
-second hostname from the same container** — `marketing.bcsit-gmbh.de` (:3200) and
-`marketing.bcsit-gmbh.dev` (:3201), #2540. That host is not only a landing: it is the
+second hostname from the same container** — the marketing hosts (`MARKETING_HOSTS`):
+prod's on :3200, preview's on :3201 (#2540). That host is not only a landing: it is the
 door of the marketing *product* — the URL a person signs in on decides which of their
 accounts they get (`docs/worlds.md`, #2590). They are hand-written Caddy site files with
 automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The retired
@@ -249,6 +249,18 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
 - **Do not run `db push` against the shared preview/prod DB** without explicit confirmation;
   CI handles DB sync on deploy.
 - **Never commit secrets.** Real values live only in server-side env / GitHub secrets.
+- **Tenant names never enter this repo.** No customer or operator names, domains, logos or
+  internals (their systems, field names, code paths, prices, contract terms, decisions taken
+  with them, findings about their security) in code, docs, tests, fixtures, commit messages,
+  branch names, release fragments or PR/issue text. The code stays generic; what is specific
+  to one tenant is **data** (org settings, branding, registered integration sources) or lives
+  in the maintainer's private repository, never here. The forbidden-terms guard
+  (`scripts/check-forbidden-terms.mjs`, terms from the `FORBIDDEN_TERMS` secret) enforces it
+  in CI. Tests use synthetic brands such as "Acme Sales" and example hosts (`*.example`,
+  `*.test`); the marketing product's real hostnames live only in `MARKETING_HOSTS` and the env
+  files. Write "the MARKETING tenant", "a customer", "an upstream source system", "the
+  operator", "the marketing hosts (`MARKETING_HOSTS`)" — and check your diff, commit message
+  and PR text before you push.
 - **Develop on synthetic data only** ([docs/DATA_ACCESS_POLICY.md](docs/DATA_ACCESS_POLICY.md)):
   local DB + `npx prisma db seed` + `npm run seed:demo` (rich fake data set). Contributors
   never browse real/preview PII; the demo seeder refuses non-local `DATABASE_URL`s.
@@ -328,7 +340,7 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   to the matching column as you work.
 - Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 - **Licensing & IP**: the project is `AGPL-3.0-or-later` with **dual licensing**, and the
-  **sole rights holder is Mehmet Erşahin (a natural person — not bcsit GmbH)**. Don't name a
+  **sole rights holder is Mehmet Erşahin (a natural person — not a company)**. Don't name a
   company as the IP owner in docs or license texts; the invoicing entity is a *separate*,
   still-open question (`docs/legal/legal-tax-framework.md`). Contributor terms live in
   `CONTRIBUTING.md` (§ Contributor terms (IP)) and are confirmed via the PR template;
@@ -473,7 +485,7 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   (`DOI_CONFIRMED` / `EXISTING_CUSTOMER_7_3` / `INQUIRY_REPLY` / `NONE`) and its proof. Who may
   write which basis is `src/lib/contactPermissionRule.ts` (pure, unit-tested); the only writer is
   `src/lib/contactPermission.ts`, and a refused write **throws**. Three rules are load-bearing:
-  **machines (import, feeds, SaleVali's pre-ticked newsletter flag) write `NONE` only** and never
+  **machines (import, feeds, an upstream source system's newsletter flag) write `NONE` only** and never
   replace a row; **nobody but the address owner's own click produces `DOI_CONFIRMED`** (no admin
   path); and **the owner's own withdrawal (`revokedVia = 'LINK'`) locks the row against every
   admin write**, a neutral one included (NONE-then-§ 7(3) was a two-step re-grant) — only a
@@ -728,7 +740,7 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
 - **One served-host allowlist** (`src/lib/servedHosts.ts`, #2488): one container serves several
-  public hosts (interncrm.com + marketing.bcsit-gmbh.de, their preview twins, a topic env's own
+  public hosts (interncrm.com + the marketing hosts (`MARKETING_HOSTS`), their preview twins, a topic env's own
   `pr<N>` host), and NextAuth resolves every `callbackUrl` against `NEXTAUTH_URL` without ever
   seeing the request. So a redirect or an absolute same-app link is built from the REQUEST —
   `requestOrigin(headers)` on the server, `absoluteHere(path)` on the client — and

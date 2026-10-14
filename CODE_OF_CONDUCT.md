@@ -50,7 +50,7 @@ in public.
 
 ## Reporting
 
-Report unacceptable behaviour to the maintainer at **ersahin@bcsit-gmbh.de**.
+Report unacceptable behaviour to the maintainer at **21072026@ersah.in**.
 
 Reports are handled confidentially. Include what happened, when, who was
 involved, and any evidence you can share (screenshots, links, message IDs) — but

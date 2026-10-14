@@ -42,7 +42,7 @@ olmayabileceğini kendisi kabul ediyor). Bir doküman diğerini kilitliyordu; ka
 
 | # | Ön koşul | Bugünkü durum | Neden bloklayıcı |
 |---|---|---|---|
-| ÖK1 | `interncrm.com/imprint` gerçek verilerle dolu (ad, ladungsfähige Adresse, e-posta, sorumlu kişi) | **Kırmızı** — "operatör tarafından doldurulacak" placeholder (#1371) | Ticari kullanılan sosyal medya varlığı § 5 DDG kapsamında impressum yükümlüsü. Eksik impressumla sayfa açmak, kendi kanalını Abmahnung'a açmaktır. Hak sahibi **Mehmet Erşahin (gerçek kişi)** yazılır, bcsit GmbH değil |
+| ÖK1 | `interncrm.com/imprint` gerçek verilerle dolu (ad, ladungsfähige Adresse, e-posta, sorumlu kişi) | **Kırmızı** — "operatör tarafından doldurulacak" placeholder (#1371) | Ticari kullanılan sosyal medya varlığı § 5 DDG kapsamında impressum yükümlüsü. Eksik impressumla sayfa açmak, kendi kanalını Abmahnung'a açmaktır. Hak sahibi **Mehmet Erşahin (gerçek kişi)** yazılır, bir şirket değil |
 | ÖK2 | En az 3 ürün ekran görüntüsü (#1399) | **Kırmızı** | Sayfa banner'ı, gönderi görselleri ve carousel'in ortak hammaddesi. Görselsiz LinkedIn = text-only, en zayıf format |
 | ÖK3 (**dar kapı**) | Sayfadan gidilecek iniş sayfası hazır: `/features`, `/for-companies` **yeşil** — `/pricing` (#1403) **kırmızı** | `/pricing` yayında değil | **Yalnız fiyat iddiası taşıyan metinleri kapatır**: "yayımlanmış EUR fiyat" konumlandırması, fiyat carousel'i (takvim hafta 10), Featured'daki fiyat linki, dizin profilinin fiyat alanı, mektuptaki fiyat satırı. Fiyat cümlesi içermeyen gönderiler ÖK3'e tabi değildir. Custom button'ın hedefi `/for-companies`'tir ve o yeşil |
 
@@ -60,7 +60,7 @@ tablodaki her satırı sırayla kontrol et; "doğru değer" sütunundaki metinle
 
 | Alan | Doğru değer / ölçü | Neden | Kaynak |
 |---|---|---|---|
-| **Sayfa adı** | `InternCRM` | Ürün adı. Tüzel kişilik hâlâ açık soru (`docs/legal/legal-tax-framework.md`) ve hak sahibi gerçek kişi — sayfayı bcsit GmbH adıyla taşımak IP anlatısıyla çelişir | [LinkedIn Help — Pages oluşturma](https://www.linkedin.com/help/linkedin/answer/a543852) |
+| **Sayfa adı** | `InternCRM` | Ürün adı. Tüzel kişilik hâlâ açık soru (`docs/legal/legal-tax-framework.md`) ve hak sahibi gerçek kişi — sayfayı bir şirketin adıyla taşımak IP anlatısıyla çelişir | [LinkedIn Help — Pages oluşturma](https://www.linkedin.com/help/linkedin/answer/a543852) |
 | **Logo** | **400×400 px** (mutlak min. 268×268), PNG veya JPEG, **≤3 MB**, **opak zemin** | LinkedIn logoyu hem açık hem koyu zeminde gösteriyor; şeffaf PNG'de koyu logo koyu zeminde kayboluyor. Bizde şans var: `public/icon.svg` zaten opak `#1D4ED8` yuvarlak kare üzerine beyaz mezuniyet kepi — 400×400 PNG'ye **şeffaflık olmadan** export et, kenarlık eklemeye gerek yok | [Image specifications for Pages](https://www.linkedin.com/help/linkedin/answer/a563309/image-specifications-for-your-linkedin-pages-and-career-pages?lang=en) |
 | **Cover / banner** | **1512×256 px** (≈5,9:1), PNG/JPEG, ≤3 MB, animasyon yok | Üçüncü taraf 2026 blogları 1128×191 ve 4200×700 veriyor; **resmî LinkedIn Help ile çelişiyorlar** — resmî değeri kullan. Görsel farklı ekranlarda kırpılır: kritik metni ortadaki güvenli alana koy ve **sol-alt köşeyi boş bırak** (logo oraya biner) | aynı kaynak |
 | **Tagline** | 120 karakter sınırı; anlamı **ilk 60-70 karaktere** sığdır. Metin burada yazılmaz: üç dilli kanonik tagline `copy-bank.md` §8.1'dedir (DE: `Praktikums- und Mentoring-CRM: 13 Stufen vom Erstkontakt bis zur Einstellung. AGPL-3.0, selbst hostbar.`). **"veröffentlichte Preise" ibaresi tagline'a girmez** — tagline sayfanın en kalıcı alanı ve `/pricing` yayında değil (ÖK3, #1403); sayfa yayına girdikten sonra eklenmesi ayrı bir karardır | Arama sonuçlarında ve dar ekranda yalnız ilk yarı görünür. **Sayı çelişkisi notu:** 120 karakteri resmî Help sayfaları yazmıyor; birden çok üçüncü taraf tutarlı veriyor — güvenli tarafta kal, 110 karakteri geçme | [Tagline alanı](https://derrick-app.com/linkedin/company-information/tagline) (üçüncü taraf) |
@@ -434,10 +434,10 @@ tek istisna H11 Çarşamba'dır ve orada adlandırılmıştır.
   URN), title, description **elle** set edilir; yani API'den atılan gönderide link önizlemesi otomatik
   oluşmaz. Bu, sitede OG/Twitter kartı olmaması sorununu (#1362/#1376/#1378) API tarafında tekrar ediyor.
   [Kaynak](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)
-- **Hattın kuralları (BCSIT hattından devralınır, tartışmaya kapalı):** metni **hat** yazar, fikir besleyen
+- **Hattın kuralları (operatörün mevcut hattından devralınır, tartışmaya kapalı):** metni **hat** yazar, fikir besleyen
   taraf metin yazmaz; fikir ekleme endpoint'i dışında yazma endpoint'i kullanılmaz; **kategorik yayın
   yasağı** — LinkedIn'e doğrudan istek yok, Telegram onay butonlarına ajan basmaz, yayın kararı insana ait.
-- **InternCRM hattı BCSIT hattından ayrı olmalı:** farklı kitle (staj/mentorluk), farklı ses, farklı
+- **InternCRM hattı operatörün mevcut hattından ayrı olmalı:** farklı kitle (staj/mentorluk), farklı ses, farklı
   kategoriler. Aynı hatta karıştırmak iki kitleyi de bozar.
 
 ---

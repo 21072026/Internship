@@ -34,9 +34,12 @@ the marketing product simply stops existing:
 
 | File | Contents | Consequence if missing |
 |---|---|---|
-| `/etc/caddy/sites/marketing.bcsit-gmbh.de.caddy` | `reverse_proxy 127.0.0.1:3200`, **no `tls` line** (Caddy issues the certificate itself) | the live marketing domain answers nothing |
-| `/etc/caddy/sites/marketing.bcsit-gmbh.dev.caddy` | same, to `:3201` | the marketing test domain answers nothing |
-| `MARKETING_HOSTS='marketing.bcsit-gmbh.dev'` in `/etc/internship-crm/preview.env` | which host preview dresses as MARKETING | preview falls back to the code default and starts answering for the **live** marketing domain |
+| `/etc/caddy/sites/<prod marketing host>.caddy` | `reverse_proxy 127.0.0.1:3200`, **no `tls` line** (Caddy issues the certificate itself) | the live marketing domain answers nothing |
+| `/etc/caddy/sites/<preview marketing host>.caddy` | same, to `:3201` | the marketing test domain answers nothing |
+| `MARKETING_HOSTS='<preview marketing host>'` in `/etc/internship-crm/preview.env` | which host preview dresses as MARKETING | preview falls back to the code default and starts answering for the **live** marketing domain |
+
+The real hostnames are not written in this repo; the operator keeps them with the rest of
+the box's runbook notes.
 
 Prod's env file deliberately sets no `MARKETING_HOSTS`: the constant in
 `src/lib/servedHosts.ts` is the live marketing domain, so prod needs nothing

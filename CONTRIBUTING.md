@@ -4,7 +4,7 @@ Thanks for contributing to Internship CRM. This guide covers the workflow.
 
 By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md)
 ([Türkçe](docs/code-of-conduct.tr.md), [Deutsch](docs/code-of-conduct.de.md)).
-Report unacceptable behaviour to **ersahin@bcsit-gmbh.de**.
+Report unacceptable behaviour to **21072026@ersah.in**.
 
 ## Contributor terms (IP)
 

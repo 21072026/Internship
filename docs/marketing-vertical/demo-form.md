@@ -1,7 +1,7 @@
 # The demo form on the marketing landing (#2569) and the default lead owner (#2580)
 
-A merchant who wants to see SaleVali asks for a demo on the marketing landing
-(`marketing.bcsit-gmbh.de/#demo`). The request becomes a `CompanyInquiry` row in the
+A prospect who wants to see the tenant's product asks for a demo on the marketing landing
+(`/#demo` on a marketing host). The request becomes a `CompanyInquiry` row in the
 **MARKETING tenant that explicitly claims that host**, and — if the tenant has a default
 lead owner — a funnel record on that owner's pipeline straight away.
 
@@ -33,21 +33,21 @@ own request into another tenant's queue.
 
 ### Operator step — REQUIRED after merge, once per environment
 
-Nothing in the deploy opens the form: until this runs, `marketing.bcsit-gmbh.de` and
-`marketing.bcsit-gmbh.dev` show *demo requests are closed right now*. Every deploy prints
+Nothing in the deploy opens the form: until this runs, the prod and preview marketing hosts
+show *demo requests are closed right now*. Every deploy prints
 the state in its log (`infra/deploy-prod.sh` runs `set-public-host.mjs --list`, report
 only), including a `WARNING:` line with the exact command for each MARKETING org that
 claims no host — so the slug to use is the one that line names.
 
 | Environment | Host | Org |
 | --- | --- | --- |
-| Production | `marketing.bcsit-gmbh.de` | the prod MARKETING org (slug from the deploy log's `WARNING:` line) |
-| Preview | `marketing.bcsit-gmbh.dev` | the preview MARKETING org (same) |
+| Production | prod's marketing host (`MARKETING_HOSTS`) | the prod MARKETING org (slug from the deploy log's `WARNING:` line) |
+| Preview | preview's marketing host (`MARKETING_HOSTS` in `preview.env`) | the preview MARKETING org (same) |
 | Topic env (`pr<N>`) | not mapped | the form stays closed there unless a reviewer maps it by hand |
 
 ```bash
-node prisma/set-public-host.mjs --org <slug|id> --host marketing.bcsit-gmbh.de   # prod
-node prisma/set-public-host.mjs --org <slug|id> --host marketing.bcsit-gmbh.dev  # preview
+node prisma/set-public-host.mjs --org <slug|id> --host <prod marketing host>      # prod
+node prisma/set-public-host.mjs --org <slug|id> --host <preview marketing host>   # preview
 node prisma/set-public-host.mjs --list
 node prisma/set-public-host.mjs --org <slug|id> --clear
 ```
