@@ -200,8 +200,8 @@ olarak taşınır; `DOI_CONFIRMED` yalnız onay tıklamasıyla oluşur.
 
 ## 4. Upstream bir ürünün newsletter bayrağı neden rıza değildir
 
-Başka bir üründen — ör. kiracının kendi ürününün kayıt formundan — taşınan bir newsletter
-bayrağı **hiçbir zaman** dayanak değildir:
+Başka bir üründen ya da bir upstream kaynak sistemden taşınan bir newsletter bayrağı
+**hiçbir zaman** dayanak değildir:
 
 1. **Önceden işaretli kutu geçerli Einwilligung değildir** — EuGH 01.10.2019, C-673/17
    (*Planet49*); BGH 28.05.2020 – I ZR 7/16 (*Cookie-Einwilligung II*). Art. 4 Nr. 11 DSGVO
@@ -304,7 +304,7 @@ yeniden verilmez, yalnız adres sahibinin yeni bir DOI tıklaması kaydı açar.
 | Posta: Art. 14 notu, "Keine Werbung" levhası | **Kısmen** (#2697) — Art. 14 + Art. 21 notu her mektubun arkasına otomatik basılır; itiraz edenler ve 90 gün içinde yazılanlar kampanyaya eklenemez; levha süreçtir | `src/lib/postCampaignRule.ts` |
 | Rıza metninin doğru, dar ve işaretsiz olması | **Kısmen** — metin sürümü damgalanır; metnin hukuki yeterliliği Fachanwalt'ın işi | — |
 | İşlemsel maile reklam eklenmemesi | **Hayır** | Metin yazarı + gözden geçirme |
-| Upstream bir ürünün kendi kayıt formu | **Hayır** — bu repo dışında | Kaynak ürünün işi (§4) |
+| Upstream bir kaynak sistemin kendi rıza akışları | **Hayır** — bu repo dışında | Kaynak sistemin işi (§4) |
 | Impressum doğru kimliği gösterir | **Evet, `MARKETING_OPERATOR_*` set edildiğinde** (#2697) — set edilmeden InternCRM operatörü görünür | Açık soru 9; operatör adımı [`postal-campaigns.md`](postal-campaigns.md) |
 
 "Hayır" satırları için satış ekibinin tek kontrolü bu dokümandır; bir CRM uyarısının yokluğu

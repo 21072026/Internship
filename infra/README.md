@@ -90,24 +90,22 @@ The MARKETING vertical's public landing is served **from the same containers** a
 the internship product — two urls, two products, one deployment (#2355). Prod's
 marketing host is answered on `:3200` and preview's on `:3201`; which names those
 are is environment data (`MARKETING_HOSTS`, the env files and the Caddy site
-files on the box), not something this repo writes down. They replaced
-`marketing.ersah.in` / `preview-marketing.ersah.in` on 2026-09-23 (#2540); that
-apex now does **mail only**, and the two retired names redirect to the current
-hosts.
+files on the box), not something this repo writes down. They replaced the
+earlier marketing names on 2026-09-23 (#2540); that apex now does **mail only**,
+and the two retired names redirect to the current hosts.
 
 What makes the box answer for them:
 
 - **DNS** — an explicit `A` record per host → `92.5.120.186`, created on the
-  marketing domains directly (the `*.ersah.in` wildcard and its MX records were
+  marketing domains directly (the old apex's wildcard and its MX records were
   deliberately left alone: mail for that apex lives elsewhere).
 - **TLS** — each name is on its own apex with **no wildcard on the box**, so
   Caddy issues a certificate for it **automatically** (the same way the
   `interncrm.com` apex works: its site file carries no `tls` directive). Nothing
   to run by hand, and nothing to renew — do *not* copy the `tls /etc/caddy/certs/…`
-  lines the retired `*.ersah.in` hosts used. If a host sits on an HSTS-preloaded
-  TLD (`.dev` is one), plain HTTP is not merely discouraged there, it is
-  unusable: the certificate has to be in place before a browser will talk to the
-  host at all.
+  lines the retired hosts used. If a host sits on an HSTS-preloaded TLD, plain
+  HTTP is not merely discouraged there, it is unusable: the certificate has to be
+  in place before a browser will talk to the host at all.
 - **Site file** — `/etc/caddy/sites/<prod marketing host>.caddy`, one
   `reverse_proxy 127.0.0.1:3200` to the prod container
   (`<preview marketing host>.caddy` points at `:3201`). Same shape as the topic
@@ -137,38 +135,50 @@ file first (so the name resolves and gets its certificate), then ship the
 default (or set `MARKETING_HOSTS`), then repoint `preview.env`, then turn the old
 site file into a redirect.
 
-Verify after a deploy (both must hold, on each host):
+Verify after a deploy (both must hold, on each host), with `MKT` and `MKT_PREVIEW`
+set to `https://` plus the prod and the preview marketing host:
 
 ```bash
-MKT=https://<prod marketing host>; MKT_PREVIEW=https://<preview marketing host>
 curl -s "$MKT/" | grep -o '<title>[^<]*</title>'           # names the marketing product, not "Internship CRM"
 curl -s "$MKT/api/health" | jq '{status,sha}'               # same sha as interncrm.com
 curl -s "$MKT_PREVIEW/api/health" | jq '{status,sha}'       # same sha as preview.interncrm.com
-curl -sI https://marketing.ersah.in/ | head -2              # 308 → the prod marketing host
+curl -sI https://<retired marketing name>/ | head -2       # 308 → the prod marketing host
 ```
 
-The first line is **no longer only a hand check** (#2579). `uptime.yml` reads
-`/` and `/imprint` on both marketing hosts every run with
-`scripts/marketing-content-probe.mjs` — the `<title>` must name the marketing product and
-must not say `Internship CRM`. A finding opens its **own** incident: a separate
+The first line is **no longer only a hand check** (#2579). Every `uptime.yml` run
+reads the marketing pages listed in the `MARKETING_PROBE_URLS` secret (one URL per
+line, for example each marketing host's `/` and `/imprint`) with
+`scripts/marketing-content-probe.mjs`. The rule names no brand (#2919). A page's
+`<title>` must contain the `name` in its host's own `/manifest.webmanifest`. That name
+must be neither `Internship CRM` (the wrong product) nor `coreCRM` (the neutral
+fallback, which means the host's brand is missing). The run also checks each of those
+hosts' `/api/health`. Nothing the probe writes names a host: logs, alert issues and
+mails are as public as the repository, so a host is `marketing host #<n>`, the place
+of its origin in the secret. Without the secret the marketing hosts are not probed,
+and the run says so in a notice. A finding opens its **own** incident: a separate
 `uptime-content-alert` issue + mail (subject *"Marketing host yanlış ürünü
 gösteriyor"*), never the outage's `uptime-alert` one. The two must not share a
 state — a content problem can stay open for days waiting on an env-file edit,
 and an outage of interncrm.com during those days would otherwise find
 "already alerting" and stay silent (the gap #2169 closed). A content finding on
 a host whose `/api/health` is already down is left to the outage alert, so one
-dead marketing host still opens one incident. The same title check runs inside
-`deploy-prod.sh` right after the swap, on every replica, but there it only
-**warns** (`::warning::` in the deploy job): the fix is an env-file edit, not a
-rollback. The host it asks for is named by the caller (`MARKETING_PROBE_HOST`
-in `deploy-prod.yml` / `deploy-preview.yml`), **not** read from
-`MARKETING_HOSTS` — whatever that variable names gets the marketing page by
-construction, so a check that took its host from there could never catch it
-being wrong; it also warns when the expected host is missing from the
-effective `MARKETING_HOSTS` set. Run the probe by hand with
-`node scripts/marketing-content-probe.mjs "$MKT/" "$MKT_PREVIEW/imprint"`
-— silent and exit 0 when right, one `<url> -> <reason>` line per wrong page and
-exit 1 otherwise.
+dead marketing host still opens one incident. The same rule runs inside
+`deploy-prod.sh` right after the swap, on every replica, and at the end of
+`infra/server/topic-deploy.sh`, but there it only **warns** (`::warning::` in the
+prod and preview deploy jobs, a `WARN` line in a topic deploy): the fix is an
+env-file edit, not a rollback. Those two copies are plain
+shell and print neither the title nor the manifest name; `infra/test/marketing-title-check.test.sh`
+keeps all three copies of the rule in step. `deploy-prod.sh` asks for the host the
+caller names (`MARKETING_PROBE_HOST` in `deploy-prod.yml` / `deploy-preview.yml`),
+else for every host in `MARKETING_HOSTS`, and skips the check when neither names one.
+A caller-named host is deliberately **not** read from `MARKETING_HOSTS`: whatever that
+variable names gets the marketing page by construction, so a check that took its host
+from there could never catch it being wrong. The script also warns when that host is
+missing from a non-empty `MARKETING_HOSTS`. Run the probe by hand with
+`MARKETING_PROBE_URLS="https://<marketing host>/ https://<marketing host>/imprint" node scripts/marketing-content-probe.mjs`.
+It prints nothing on stdout and exits 0 when every page is right. Otherwise it prints
+one `marketing host #<h>, page #<p> -> <reason>` line per wrong page and exits 1. A
+per-page `OK`/`FAIL` line goes to stderr.
 
 #### Go-live checklist for the MARKETING org (#2579 — operator, needs prod access)
 
@@ -227,9 +237,9 @@ on the story, #2578. Nothing below has been run by the change that wrote it.
    for content, the first suspect is `MARKETING_HOSTS` in the environment's
    env file (above).
 5. **The retired name still redirects:**
-   `curl -sI https://marketing.ersah.in/ | head -2` shows `308` and a
-   `location:` on the prod marketing host. Repeat for
-   `preview-marketing.ersah.in` → the preview marketing host.
+   `curl -sI https://<retired marketing name>/ | head -2` shows `308` and a
+   `location:` on the prod marketing host. Repeat for the retired preview name →
+   the preview marketing host.
 
 ### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)
 

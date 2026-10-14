@@ -1,10 +1,9 @@
-// The sales channels a merchant works on (#2408) — THE vocabulary.
+// The sales channels an account sells on (#2408) — THE vocabulary.
 //
 // Which marketplaces, shop systems and carriers an account uses is the first
 // thing sales asks ("do you sell on OTTO?") and the obvious targeting filter
-// for a postal campaign (#2697). The list mirrors SaleVali's own integration
-// folders (docs/marketing-vertical/salevali-domain.md § Satış kanalları,
-// salevali-server src/services/shops/ + src/services/shippers/).
+// for a postal campaign (#2697). The list covers the common marketplaces, shop
+// systems and carriers of online retail in the markets the product serves.
 //
 // Keys are STRINGS stored in `CompanyChannel.channel`, never a Prisma enum:
 // adding Temu's successor is a change to this file, not a `db push`.
@@ -38,8 +37,8 @@ export const SALES_CHANNELS: readonly SalesChannel[] = [
   { key: 'hood', label: 'Hood', kind: 'MARKETPLACE', aliases: ['hood.de'] },
   { key: 'shop-apotheke', label: 'Shop Apotheke', kind: 'MARKETPLACE', aliases: ['shopapotheke'] },
   { key: 'avocadostore', label: 'Avocadostore', kind: 'MARKETPLACE' },
-  // Not a SaleVali integration, but where the Turkish merchants SaleVali sells
-  // to work (the sample import file carries it) — knowing it is the point.
+  // Where many Turkish online sellers work (the sample import file carries
+  // it) — knowing it is the point.
   { key: 'trendyol', label: 'Trendyol', kind: 'MARKETPLACE' },
   // Shop systems
   { key: 'shopify', label: 'Shopify', kind: 'SHOP' },

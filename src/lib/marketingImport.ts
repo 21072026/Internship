@@ -111,11 +111,9 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
   { field: 'contactName', header: 'contact_name', required: false, aliases: ['ansprechpartner'], target: 'Company.contactName + User.fullName' },
   { field: 'contactEmail', header: 'contact_email', required: false, aliases: ['email', 'e-mail'], target: 'Company.contactEmail + User.email' },
   { field: 'contactPhone', header: 'contact_phone', required: false, aliases: ['telefon', 'phone'], target: 'Company.contactPhone + User.phone' },
-  // #2554. The account's id in the product the tenant sells — for SaleVali the
-  // merchant's `User._id` (the key #2565 proposes; `user_number` is a display
-  // number and is deliberately NOT an alias). It is the key the usage feed
-  // matches on (docs/marketing-vertical/salevali-usage-feed.md), and the first
-  // half of the match key below.
+  // #2554. The account's id in the product the tenant sells — its stable,
+  // never-changing key (#2565). It is the key the usage feed matches on
+  // (docs/usage-feed.md), and the first half of the match key below.
   {
     field: 'externalId',
     header: 'external_id',

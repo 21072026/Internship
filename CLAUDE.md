@@ -184,7 +184,7 @@ prod's on :3200, preview's on :3201 (#2540). That host is not only a landing: it
 door of the marketing *product* — the URL a person signs in on decides which of their
 accounts they get (`docs/worlds.md`, #2590). They are hand-written Caddy site files with
 automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The retired
-`*.ersah.in` marketing names redirect there, and that apex now serves **mail only**.
+marketing names redirect there, and their apex now serves **mail only**.
 
 - **Replicas (#1701):** every environment is **one container today** —
   `REPLICAS` defaults to `1` in `infra/deploy-prod.sh` and at that value the
@@ -254,9 +254,9 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   with them, findings about their security) in code, docs, tests, fixtures, commit messages,
   branch names, release fragments or PR/issue text. The code stays generic; what is specific
   to one tenant is **data** (org settings, branding, registered integration sources) or lives
-  in the maintainer's private repository, never here. The forbidden-terms guard
-  (`scripts/check-forbidden-terms.mjs`, terms from the `FORBIDDEN_TERMS` secret) enforces it
-  in CI. Tests use synthetic brands such as "Acme Sales" and example hosts (`*.example`,
+  in the maintainer's private repository, never here. The forbidden-terms guard (#2919,
+  `scripts/check-forbidden-terms.mjs`; its terms come only from the `FORBIDDEN_TERMS` secret,
+  and without that secret it passes with a notice) enforces it in CI. Tests use synthetic brands such as "Acme Sales" and example hosts (`*.example`,
   `*.test`); the marketing product's real hostnames live only in `MARKETING_HOSTS` and the env
   files. Write "the MARKETING tenant", "a customer", "an upstream source system", "the
   operator", "the marketing hosts (`MARKETING_HOSTS`)" — and check your diff, commit message

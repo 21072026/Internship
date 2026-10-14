@@ -43,7 +43,7 @@ the box's runbook notes.
 
 Prod's env file deliberately sets no `MARKETING_HOSTS`: the constant in
 `src/lib/servedHosts.ts` is the live marketing domain, so prod needs nothing
-restored. The two retired `*.ersah.in` marketing names carry redirect-only site
+restored. The two retired marketing names carry redirect-only site
 files; losing those costs old links, not the product. Full shapes and the
 verification curls are in `infra/README.md` § The marketing hosts.
 

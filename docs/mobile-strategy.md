@@ -69,8 +69,8 @@ Marketing host'unun uygulaması bir müşteri markasıyla yayımlanır; onun kay
 tutulmaz.
 
 **Paket adları kalıcıdır.** Play yayımlanmış bir paketin adını değiştirtmez. Ad,
-yayıncının (operatör şirketi) ters alan adından gelir; Java paket segmentinde tire
-geçersiz olduğu için alan adındaki tire düşer. Paket adı iki yerde duruyor
+yayıncının (operatör şirketi) ters alan adından gelir; Java paket segmentinde geçersiz
+olan karakterler düşer. Paket adı iki yerde duruyor
 (`src/lib/androidAppLinks.ts` ve `twa-manifest.json`), ve
 `npm run test:android-app-links` ikisini karşılaştırır.
 

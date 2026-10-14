@@ -77,9 +77,8 @@ açık kuralıdır (`CLAUDE.md` → *One import engine, one parser*).
 ## Kimlik anahtarı: kiracı kapsamlı, benzersiz **olmayan**, opak dış id
 
 Anahtar `Company.externalId` — hesabın upstream üründeki kendi kimliği. CRM için
-**opaktır**: kararlı, en fazla 191 karakter, upstream ürünün sahip olduğu bir id;
-düzenlenebilir bir görüntü numarası (müşteri no, hesap no gibi elle değişebilen bir
-etiket) **asla**. Hangi alanın kullanılacağı kiracıyla bir kez kararlaştırılır ve
+**opaktır**: kararlı, en fazla 191 karakter, upstream ürünün sahip olduğu ve hesabın
+ömrü boyunca değişmeyen bir id. Hangi alanın kullanılacağı kiracıyla bir kez kararlaştırılır ve
 hesap içe aktarımı, bu besleme ve hesap olayı ingest'i
 ([`integrations/account-events.md`](integrations/account-events.md)) **aynı**
 anahtarı kullanır.
@@ -121,9 +120,8 @@ anahtarı kullanır.
 | `orders` | tam sayı ≥ 0 | hayır | O günün sipariş sayısı; besleme taşımıyorsa boş |
 
 `transactions`, upstream ürünün **kendi tanımıyla faturalanabilir hacimdir**. Tanım
-kiracı başına bir kez kararlaştırılır ve o anlaşmada yazar; ürünün kendi
-ekranındaki benzer adlı başka bir sayaç onun yerine
-kullanılmaz — besleme, müşterinin fatura gördüğü sayıyı taşır.
+kiracı başına bir kez kararlaştırılır ve o anlaşmada yazar; besleme, müşterinin
+faturada gördüğü sayıyı taşır.
 
 Tanecik **hesap × gün**, ve bu tabloyu `UsageRollup`'tan ayıran şey tam olarak
 bu: `UsageRollup` (org, metrik, **takvim ayı**) bazlı faturalama ölçümüdür ve

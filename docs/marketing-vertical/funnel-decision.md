@@ -8,14 +8,14 @@
 > and after `DEAL_WON`" buraya işaret eder.
 >
 > Parent: #2571 · İlgili: #2425 (churn/retention), #419 (bir mentee bir aktif mentor),
-> #2391 / #2555 (gerçek tablo cutover'ı), #2565 (upstream kaynağın karşı işi: hesap olayları).
+> #2391 / #2555 (mevcut müşteri tabanının içe aktarımı), #2565 (upstream kaynağın karşı işi: hesap olayları).
 
 Satır numaraları `origin/main` üzerinde doğrulandı (2026-09-29).
 
 ## Neden şimdi
 
-Cutover (#2555) MARKETING kiracısının mevcut ücretli müşterilerini **bir aşamayla** içe aktaracak. O
-aşamanın ne olduğu, müşteri durumunu (aktif / fesih bildirdi / feshetti / geri kazanıldı)
+CRM'e geçen bir MARKETING kiracısı mevcut ücretli müşterilerini **bir aşamayla** içe aktarır
+(#2555). O aşamanın ne olduğu, müşteri durumunu (aktif / fesih bildirdi / feshetti / geri kazanıldı)
 nerede tuttuğumuza bağlı. Bu dosya o soruyu, kodun bugün gerçekte ne yaptığına dayanarak
 cevaplar.
 
@@ -44,18 +44,12 @@ cevaplar.
 | `Company` üzerinde müşteri durumu / fesih alanı **yok** | `prisma/schema.prisma:1295` (`model Company`) |
 | Hesap × gün kullanım tablosu var (`transactions`), henüz okuyan yok | `prisma/schema.prisma:1407` (`CompanyUsage`), [`usage-feed.md`](../usage-feed.md) |
 
-Kiracının ürünü (upstream kaynak sistem) tarafındaki model, kararın dayandığı kadarıyla:
-bir **serbest dönem** (deneme), ardından bir **karar penceresi** — müşteri pencere içinde
-ücretli plana geçişi kendisi onaylamazsa hesap kapanır. Serbest dönemin uzunluğu deneme
-tipine göre değişebilir; karar penceresi değişmez. Kazanma anı müşterinin **kendi
-yükseltme onayıdır**: ürünün teklif ya da pazarlık adımı **yoktur**. Fesih bir **ihbar
-süresiyle** işler: müşteri fesih bildirir, sözleşme ihbar süresinin sonunda biter.
-
-Kaynak sistemin bu durumları hangi alanlarda tuttuğu ve cutover'ın hangi alanı okuyacağı
-kiracıya özgüdür ve bu repoda tutulmaz. Tek genel ders: fesih tarihi, kaynağın gerçekten
-**yazdığı** alandan okunmalıdır — model dosyasında duran ama hiçbir kodun yazmadığı bir alana
-dayanan bir cutover veya besleme hiçbir fesih bulmaz ve ihbar süresindeki her müşteriyi düz
-aktif diye aktarır.
+Karar, abonelikle satılan bir ürünün funnel'ını hedefler ve şu genel durumları kapsar: bir
+**deneme** (serbest kullanım) ve ardından isteğe bağlı bir **karar penceresi**; teklif ya da
+pazarlık sonucu olabileceği gibi müşterinin **kendi yükseltmesi** de olabilen (self-serve) bir
+kazanma anı; ve bir **ihbar süresiyle** işleyebilen fesih. Bir kiracının bunlardan hangilerini
+kullandığı ve upstream kaynak sistemin bu durumları hangi alanlarda tuttuğu kiracı verisidir;
+bu repoda tutulmaz.
 
 ## Asıl soru (3): DEAL_WON sonrası müşteri durumu nerede?
 
@@ -142,8 +136,8 @@ kaçındığı kırılganlığın aynısıdır.
 
 ### 1. `DEAL_PROPOSAL` ve `DEAL_NEGOTIATION` preset'te kalsın mı?
 
-Kiracının ürününde teklif/pazarlık adımı yok; kazanma müşterinin kendi yükseltme onayıdır.
-Bugünkü preset `TRIAL_EXPIRED`'dan sonra iki aşama daha ister ve bunlara SLA bağlar
+Self-serve bir abonelik funnel'ında teklif/pazarlık adımı yoktur; kazanma müşterinin kendi
+yükseltmesidir. Bugünkü preset `TRIAL_EXPIRED`'dan sonra iki aşama daha ister ve bunlara SLA bağlar
 (`programTemplates.ts:590-591`), yani bir kayıt hiç olmayan bir adımda "gecikmiş"
 görünebilir.
 
@@ -162,31 +156,31 @@ aynı PR'da güncellenmesi gerekenler:
   ya da kayba dönüşür").
 
 `scripts/test/funnel-cohorts.test.mjs` bu anahtarları yalnız saf fonksiyon fikstürü olarak
-kullanır, preset'e bağlı değildir. Uyarı: preset **tüm** MARKETING org'ları içindir — başka
-bir (teklif veren) MARKETING kiracısı beklenirse kaldırmak yerine yalnız o kiracının org'unda
-silmek daha dürüst olur (açık soru 1).
+kullanır, preset'e bağlı değildir. Uyarı: preset **tüm** MARKETING org'ları içindir — teklif
+veren kiracılar da bekleniyorsa, kaldırmak yerine yalnız self-serve satan org'larda silmek
+daha dürüst olur (açık soru 1).
 
-### 2. `TRIAL_EXPIRED` = 30 günlük karar penceresi mi? `trialEndsAt` neyin sonu?
+### 2. `TRIAL_EXPIRED` bir karar penceresi mi? `trialEndsAt` neyin sonu?
 
-Kiracının ürününün iki eşiği var: serbest dönemin sonu ve karar penceresinin sonu (serbest
-dönemden sonra sabit bir süre; pencere kapanınca hesap kapanır).
+Bir denemenin iki eşiği olabilir: serbest kullanımın sonu ve ardından gelen karar
+penceresinin sonu.
 
 **Öneri:**
-- `trialEndsAt` = **serbest kullanımın sonu**. `DEFAULT_TRIAL_LENGTH_DAYS = 30`
-  (`trialReminderRule.ts:105`) ve 7/3/0 hatırlatmaları (`:81`) zaten bunu sayıyor — 30 gün
-  yalnız bir varsayılandır; daha uzun serbest dönemli bir deneme varsayılana güvenmez,
-  importer'ın gerçek `trial_ends_at` kolonu (task 7) her tipi kapsar; "ücretli plana geç?"
-  sorusunun ürün içinde göründüğü an budur, satış temasının en değerli olduğu an da budur.
+- `trialEndsAt` = **serbest kullanımın sonu**. `DEFAULT_TRIAL_LENGTH_DAYS`
+  (`trialReminderRule.ts:105`) ve 7/3/0 hatırlatmaları (`:81`) zaten bunu sayıyor — o
+  yalnız bir varsayılandır; başka uzunlukta bir deneme varsayılana güvenmez, importer'ın
+  gerçek `trial_ends_at` kolonu (task 7) her denemenin gerçek bitişini taşır. Satış
+  temasının en değerli olduğu an budur.
 - `TRIAL_EXPIRED` = **karar penceresi** olarak etiketlenir/açıklanır; pencerenin sonu ayrı
-  bir kolon değil, `trialEndsAt + 30 gün` olarak türetilir (tek sabit, `trialReminderRule.ts`'te;
-  pencere her deneme tipinde aynıdır).
+  bir kolon değil, `trialEndsAt` + sabit bir süre olarak türetilir (tek sabit,
+  `trialReminderRule.ts`'te).
 - SLA: 3 gün "kimse dokunmadıysa gecikmiş" anlamında bir **iç** saat olarak savunulabilir,
-  ama 30 günlük pencereyle yan yana "3 günde karar ver" gibi okunur. **7 gün** öner
-  (sona erişten sonraki ilk bir hafta içinde insan teması); pencerenin kapanmasına yakın
-  (ör. `trialEndsAt + 23 g`) ayrı bir "karar penceresi kapanıyor" hatırlatması uygulama
-  task'ı olur. Otomatik süre dolumu artık aynı transaction'da `changedById: null` ile bir
-  `StatusChange` yazıyor (#2527, `src/lib/jobs/trialReminders.ts:414-428`, satır `:426-427`),
-  dolayısıyla aşama saati ve SLA başlangıcı doğru. (`mentorAttention.ts:144-150`'deki "sweep
+  ama haftalarca süren bir pencereyle yan yana "3 günde karar ver" gibi okunur. **7 gün** öner
+  (sona erişten sonraki ilk bir hafta içinde insan teması); pencerenin kapanmasına bir hafta
+  kala ayrı bir "karar penceresi kapanıyor" hatırlatması uygulama task'ı olur. Otomatik süre
+  dolumu artık aynı transaction'da `changedById: null` ile bir `StatusChange` yazıyor (#2527,
+  `src/lib/jobs/trialReminders.ts:414-428`, satır `:426-427`), dolayısıyla aşama saati ve
+  SLA başlangıcı doğru. (`mentorAttention.ts:144-150`'deki "sweep
   `StatusChange` yazmıyor" yorumu bayattır; o dosyaya dokunan ilk PR düzeltir.)
 
 ### 3. DEAL_WON sonrası durum
@@ -221,36 +215,36 @@ temas kuralının (`docs/last-contact.md`) ve metering aktivite sinyallerinin
 ve sahibin `nextActionAt`'i (#2563) var. "Demo yapıldı mı?" oranı gerekirse bir analitik
 sorgusudur, aşama değil.
 
-### 6. Ücretsiz kota aşımı upsell sinyali olarak nerede?
+### 6. Kullanım eşiği aşımı upsell sinyali olarak nerede?
 
 **Öneri:** `CompanyUsage.transactions` (`schema.prisma:1407`) üzerinden, gecelik kullanım
-işinin (#2447) hesapladığı **dikkat sebebi** (ör. `free_quota_exceeded`) — aşama değil,
+işinin (#2447) hesapladığı **dikkat sebebi** (ör. `usage_threshold_exceeded`) — aşama değil,
 `Company` durumu değil. Sinyal ilgili hesabın **açık** funnel kaydına düşer (dikkat kuyruğu
-`status: 'ACTIVE'` okur, `mentorAttention.ts:56`). Kota eşiği bir kiracı ayarıdır,
+`status: 'ACTIVE'` okur, `mentorAttention.ts:56`). Eşik bir kiracı ayarıdır,
 koda gömülmez. Tetik kuralı ve eşik [`usage-feed.md`](../usage-feed.md)'ye
 yazılır.
 
-### 7. Cutover: mevcut ücretli müşteriler hangi aşama/durumla içe aktarılır?
+### 7. İçe aktarım: mevcut ücretli müşteriler hangi aşama/durumla gelir?
 
 | Kaynak sistemdeki hâl | Aşama | Ek alan |
 | --- | --- | --- |
-| Ücretli, aktif | `DEAL_WON` | `startDate` = **müşteri olduğu tarih** (kaynağın yükseltme onayı tarihi) |
-| Ücretli, fesih bildirmiş | `DEAL_WON` | `contractEndsAt` = fesih bildiriminin tarihi + ihbar süresi — kaynağın gerçekten yazdığı alandan |
+| Ücretli, aktif | `DEAL_WON` | `startDate` = **müşteri olduğu tarih** (kaynaktaki müşteri olma tarihi) |
+| Ücretli, fesih bildirmiş | `DEAL_WON` | `contractEndsAt` = kaynaktaki sözleşme bitiş tarihi (fesih bildirimi + ihbar süresi) |
 | Deneme, serbest dönemde | `TRIAL_ACTIVE` | `trialEndsAt` = kaynaktaki **gerçek** serbest dönem sonu |
 | Deneme, karar penceresinde | `TRIAL_EXPIRED` | `trialEndsAt` = aynı |
-| Pasif / feshetmiş | **aktarılmaz** ilk turda (win-back listesi ayrı karar) | — |
+| Kapanmış / feshetmiş | **aktarılmaz** ilk turda (win-back listesi ayrı karar) | — |
 
 Her hücrenin kaynak alanı kiracıya özgüdür ve bu repoda tutulmaz.
 
 **Kritik:** triangle içe aktarılan kazanılmış bir kaydı `startDate` ayında kazanılmış sayar
 (`funnelKpi.ts:382-383`, `route.ts:136`). `startDate` varsayılanla (`now()`,
-`schema.prisma:2204`) yazılırsa **tüm** müşteri tabanı cutover ayının kohortuna yığılır ve
+`schema.prisma:2204`) yazılırsa **tüm** müşteri tabanı içe aktarım ayının kohortuna yığılır ve
 o satırın retention'ı anlamsızlaşır. Importer'ın bugün böyle bir kolonu yok
 (`docs/marketing-import.md:55-72`'de `customer_since` yok) → uygulama task'ı. Aynı tuzak
 denemede de var: importer `TRIAL_ACTIVE`'e yazdığı kayda `trialEndsAt` = **çalışma anı** +
 `trialLengthDays` damgalar (`docs/marketing-import.md:183-188`) — yarısı geçmiş bir
-deneme 30 gün uzamış görünür; gerçek bitişi taşıyan bir `trial_ends_at` kolonu aynı task'a
-girer. `DEAL_LOST`
+deneme baştan başlamış gibi görünür; gerçek bitişi taşıyan bir `trial_ends_at` kolonu aynı
+task'a girer. `DEAL_LOST`
 aktarımı off-path olduğu için `reasonCode` gerektirir; ilk turda dışarıda bırakmak bu
 yüzden de basittir.
 
@@ -282,14 +276,13 @@ Açıldı (2026-10-07): 1 → #2840 · 2+3 → #2841 · 4 → #2842 · 5 → #28
 4. `lifecycleState = ENDED_CHURNED` + geri kazanım akışı (eski ilişkiyi kapat, yeni ilişkiyi
    `previousRelationId` ile aç — `activeMentorship.ts` üzerinden) + `companyDetail.ts` zincir
    etiketinin sebebe göre ayrılması.
-5. Karar penceresi sonu türetimi (`trialEndsAt + 30`) ve "pencere kapanıyor" hatırlatması.
-6. Kota aşımı dikkat sebebi (#2447'ye bağlı).
+5. Karar penceresi sonu türetimi (`trialEndsAt` + sabit süre) ve "pencere kapanıyor" hatırlatması.
+6. Kullanım eşiği aşımı dikkat sebebi (#2447'ye bağlı).
 7. Importer: `customer_since` → `startDate`, `trial_ends_at` → `trialEndsAt` (çalışma anı
    yerine), `contract_ends_at` → `contractEndsAt`
    (#2555 bu dosyanın 7. maddesine referans verir).
-8. Upstream kaynağın karşı işi (#2565): onay ve fesih olaylarının beslemeye çıkması —
-   yükseltme onayı ve tarihi; fesih bildirimi ve kapanış geçişleri, her biri kaynağın
-   gerçekten yazdığı alandan. 2 ve 4'ün otomatik tetiği.
+8. Upstream kaynağın karşı işi (#2565): yükseltme, fesih bildirimi ve kapanış olaylarının
+   tarihleriyle beslemeye çıkması. 2 ve 4'ün otomatik tetiği.
 9. Triangle/kohortlar sahip değişikliğini kazanım saymaz: `ENDED_REASSIGNED` +
    `previousRelationId` ile zincirlenen ilişkiler tek yolculuk olarak birleştirilir (ya da halef
    atlanır), churn zincirin ilk kazanımına bağlanır (bkz. Seçenek C eksileri, açık soru 6).
@@ -307,7 +300,7 @@ sorularda kararlaştırılan varsayılan, ilkesiyle birlikte:
    otomatik bir yazmanın yanlış kaydedemeyeceği kadar pahalı bir olay; geri dönüşü olmayan
    bir aşama hareketinin bir insanı olmalı. Otomatik tetik, kaynağın `cancelled` olayı
    (uygulama task'ı 8) geldiğinde ayrı bir karar olarak yeniden açılır.
-4. **Pasif/feshetmiş eski hesaplar ilk cutover'da aktarılmaz** (tablo 7'deki öneri).
+4. **Kapanmış/feshetmiş eski hesaplar ilk içe aktarımda aktarılmaz** (tablo 7'deki öneri).
 5. **`DEAL_LOST`'a düşen kaydın `status`'u** — bu karardan bağımsız; ayrı issue olarak
    açıldı, burada karar verilmedi.
 6. **Transfer zinciri tek yolculuk olarak birleşir** (task 9): `ENDED_REASSIGNED` +

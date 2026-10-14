@@ -7123,7 +7123,7 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
   callback'te REDDEDİLİR (origin !== baseUrl). Tek kaldıraç: allowlist'li custom redirect
   callback + client'ın mutlak same-origin URL göndermesi. Allowlist yeni env değil, mevcut
   config'den türetilir; URL hostname'ini doğrudan set'e bak (header parser'ı virgül böler —
-  `marketing.ersah.in,evil.example` bypass'ı), https'te alınan porta güvenme.
+  `<marketing host>,evil.example` bypass'ı), https'te alınan porta güvenme.
 - **Marka rengi vs WCAG:** bir kiracı markasının primary'si beyaz metinle 4.1:1 — primary
   butonlarda (14px/500, "large" değil) AA regresyonu. Çözüm: metin ve butonlar için daha koyu
   600 basamağı (≥ 4.5:1), primary 500'de yalnız dolgu olarak; işaret markanın koyu karosu
@@ -7304,8 +7304,8 @@ belirli bir testid'le aramaktan daha güvenilir.
 
 ## 2026-09-22 — Marketing dikeyi backlog dalgası: paralel worktree'ler, env tuzağı, merge sırası
 
-- **`${VAR:-}` ile threadlenen bir env değişkeninde `??` yanlış operatördür.** `marketing.ersah.in`
-  prod'da aylardır internship landing'i gösteriyordu ve DNS/cert/Caddy'nin hepsi doğruydu.
+- **`${VAR:-}` ile threadlenen bir env değişkeninde `??` yanlış operatördür.** O zamanki marketing
+  host'u prod'da aylardır internship landing'i gösteriyordu ve DNS/cert/Caddy'nin hepsi doğruydu.
   `infra/deploy-prod.sh` her opsiyonel değişkeni `-e VAR="${VAR:-}"` ile geçiriyor, yani env
   dosyasında **olmayan** bir değişken container'a **boş string** olarak iner. `process.env.X ?? D`
   boş string'i geçerli değer sayar → `MARKETING_HOSTS` kümesi boş → host varsayılana düşer.
@@ -7385,7 +7385,7 @@ belirli bir testid'le aramaktan daha güvenilir.
 
 ## 2026-09-23 — Bir alan adını taşırken: iki yarı aynı anda doğru olamaz (#2540)
 
-Marketing dikeyi `*.ersah.in`'den kendi alan adlarına (canlı ve test; `MARKETING_HOSTS`)
+Marketing dikeyi eski alt alan adlarından kendi alan adlarına (canlı ve test; `MARKETING_HOSTS`)
 taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor olan sıralama ve kapsam.
 
 - **İki yarı birbirine kilitli.** `marketingHosts()` varsayılanı *değiştirir*, genişletmez —
@@ -7396,10 +7396,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   henüz kimsenin bilmediği yeni adda geçer.
 - **Eski adı SİLME, yönlendir.** Site dosyası olmayan ad varsayılan siteye düşer ve bir marketing
   URL'i altında internship sayfası servis eder — #2428'in ta kendisi.
-- **Yeni apex = otomatik sertifika.** Eski ad `*.ersah.in` joker dosyasını `tls` satırıyla
+- **Yeni apex = otomatik sertifika.** Eski ad eski apex'in joker dosyasını `tls` satırıyla
   kullanıyordu; iki yeni ad kendi apex'lerinde tek isim olduğu için Caddy kendi alır ve yeniler.
-  Joker satırlarını kopyalamak, var olmayan bir dosyayı işaret etmek demekti. `.dev` HSTS preload
-  listesinde: sertifika oluşana kadar tarayıcıyla hiçbir şekilde test edilemez, yalnızca `curl`.
+  Joker satırlarını kopyalamak, var olmayan bir dosyayı işaret etmek demekti. HSTS preload
+  listesindeki bir TLD'de sertifika oluşana kadar tarayıcıyla hiçbir şekilde test edilemez, yalnızca `curl`.
 - **`grep ersah.in` bu depoda tek bir şeyi göstermez.** 200'den fazla eşleşmenin çoğu **posta**:
   gönderim alan adı, SPF/DKIM/DMARC, inbound, reply/unsubscribe token'ları, ICS UID'leri. Taşınan
   yalnızca web host'u. Süpürmeden önce her eşleşmeyi DEĞİŞMELİ / DEĞİŞMEMELİ / TARİH diye ayır.

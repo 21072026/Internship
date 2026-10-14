@@ -10,7 +10,7 @@
 Epic #2348 ile marketing, bu çekirdeğin ikinci bir **dikeyi** oldu: iki ürün, iki
 host, tek deploy. Ama `User.email` global olarak `@unique` idi. Bir kişi — ilk
 olarak bakımcının kendisi — iki üründe aynı adresle hesap açamıyordu; üstelik
-bir marketing host'unda `21072026@ersah.in` ile giriş yapınca dikey
+bir marketing host'unda bakımcının kendi adresiyle giriş yapınca dikey
 çözümlemesi oturum-önce olduğu için (`resolveRequestVertical`: önce oturumun
 org'u, sonra host) kişi kendi internship org'una düşüp **internship
 uygulamasını** görüyordu. İstenen bunun tersi: marketing host'unda giriş =
