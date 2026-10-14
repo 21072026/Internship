@@ -104,8 +104,7 @@ Story [#2396](https://github.com/21072026/Internship/issues/2396); karar
 [#2429](https://github.com/21072026/Internship/issues/2429), builder
 [#2430](https://github.com/21072026/Internship/issues/2430), uygulama
 [#2431](https://github.com/21072026/Internship/issues/2431), fixture
-[#2432](https://github.com/21072026/Internship/issues/2432). Kürasyon gerekçesi:
-[`marketing-vertical/CURATION.md`](marketing-vertical/CURATION.md) → epic-06.
+[#2432](https://github.com/21072026/Internship/issues/2432).
 
 `Company`, INTERNSHIP'te partner firma kaydı, MARKETING'de ise **müşteri
 defterinin kendisi** (account master; funnel kaydı `MentorshipRelation`'ın

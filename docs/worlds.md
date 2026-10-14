@@ -1,16 +1,16 @@
 # Bir kişi, iki dünya — girdiğin URL hangi ürünü kullandığını belirler (#2590)
 
-> Aynı e-posta adresinin hem internship CRM'de hem marketing CRM'de (SaleVali)
+> Aynı e-posta adresinin hem internship CRM'de hem Marketing CRM'de
 > ayrı birer hesabı olabilir. Hangisine gireceğini **oturum açtığın host**
-> seçer: `interncrm.com` internship'i, `marketing.bcsit-gmbh.de` marketing'i
-> açar — ve oturum boyunca öyle **kalır**.
+> seçer: `interncrm.com` internship'i, marketing host'ları (`MARKETING_HOSTS`)
+> marketing'i açar — ve oturum boyunca öyle **kalır**.
 
 ## Problem
 
 Epic #2348 ile marketing, bu çekirdeğin ikinci bir **dikeyi** oldu: iki ürün, iki
 host, tek deploy. Ama `User.email` global olarak `@unique` idi. Bir kişi — ilk
 olarak bakımcının kendisi — iki üründe aynı adresle hesap açamıyordu; üstelik
-`marketing.bcsit-gmbh.de`'de `ersahin@bcsit-gmbh.de` ile giriş yapınca dikey
+bir marketing host'unda bakımcının kendi adresiyle giriş yapınca dikey
 çözümlemesi oturum-önce olduğu için (`resolveRequestVertical`: önce oturumun
 org'u, sonra host) kişi kendi internship org'una düşüp **internship
 uygulamasını** görüyordu. İstenen bunun tersi: marketing host'unda giriş =
@@ -51,7 +51,7 @@ Kural `src/lib/hostWorld.ts`'te (saf; yalnızca iki bağımlılıksız modülü 
 
 | İsteğin host'u | Dünya |
 |---|---|
-| `MARKETING_HOSTS`'ta listelenen her host (varsayılan: `marketing.bcsit-gmbh.de`) | `MARKETING` |
+| `MARKETING_HOSTS`'ta listelenen her host (boşsa `src/lib/servedHosts.ts`'teki varsayılan) | `MARKETING` |
 | Diğer her host — bilinmeyen ve başlıksız istek dahil | `INTERNSHIP` |
 
 - **Sinyal:** önce proxy'nin `x-forwarded-host`'u, sonra `host` — `hostVertical.ts`
@@ -61,7 +61,7 @@ Kural `src/lib/hostWorld.ts`'te (saf; yalnızca iki bağımlılıksız modülü 
   girdirir" iki ayrı kopya olarak birbirinden kayamaz.
 - **`MARKETING_HOSTS`:** virgülle ayrılmış çıplak host adları. Yok, boş ya da yalnız
   boşluk = varsayılan. Liste varsayılanın **yerine geçer**, üzerine eklenmez —
-  preview `marketing.bcsit-gmbh.dev`'i böyle koyar ve bu yüzden prod adına cevap
+  preview kendi marketing host'unu böyle koyar ve bu yüzden prod'unkine cevap
   vermez. Aynı küme yönlendirme allowlist'ini de besler (`servedHosts.ts`, #2488);
   runbook `infra/README.md` § The marketing hosts.
 - **API:** `worldForHeaders(get)`, `worldForHeaderBag(bag)` (NextAuth
@@ -194,7 +194,7 @@ açabilir — davet, posta kutusunun kontrolünü zaten kanıtlar.
   daveti "açıldı" saymaz. Davet postasının bağlantısı zaten davetin kendi ürününü
   açar (`invitationRegisterUrl`), yani meşru bir davetli bu kapıya takılmaz.
 - Kayıt sayfası, marketing host'unda (`isMarketing`) formun altında yalnızca kendi
-  ürününü adlandırır: "Bu işlem, kendi parolası ve kendi verisi olan bir SaleVali
+  ürününü adlandırır: "Bu işlem, kendi parolası ve kendi verisi olan bir <ürün adı>
   hesabı oluşturur." (`t.auth.separateAccountHint`). Öbür ürünün adı geçmez.
   Veri paylaşımı kutusu (`dataSharingTitle` / `dataSharingBody`) MARKETING
   katmanında lead / temsilci diliyle konuşur. Internship host'undaki açık kayıt
@@ -355,7 +355,7 @@ Token'lar `userId` ile anahtarlıdır ve öyle kalmalıdır.
 - **`POST /api/auth/forgot`** oturumsuzdur; dünyayı **form'un sunulduğu host**
   söyler ve yalnızca **o dünyadaki** hesap(lar) için posta yollanır. O dünyada hesap
   yoksa hiçbir şey yollanmaz — adresin öbür dünyadaki hesabına "kurtarma" postası
-  da gitmez: SaleVali'de istenen sıfırlama bir Internship CRM postası ve
+  da gitmez: marketing host'unda istenen sıfırlama bir Internship CRM postası ve
   interncrm.com bağlantısı üretmemeli. Yanıt her durumda aynıdır — "bulundu" ile
   "bu dünyada yok" dışarıdan ayırt edilemez (`findAccountsForMailedLink`,
   `src/lib/passwordReset.ts`). `POST /api/auth/verify-email/resend`'in oturumsuz
@@ -430,7 +430,7 @@ başlat:
 
 **e2e.** Marketing host'u sahte başlıkla taklit edilir; proxy yoktur, başlığı istemci
 yazar (güven notu bunu güvenli kılıyor):
-`{ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' }` — `page.setExtraHTTPHeaders(...)`
+`{ 'x-forwarded-host': '<MARKETING_HOSTS içindeki bir host>' }` — `page.setExtraHTTPHeaders(...)`
 tarayıcı için, `page.request.get(path, { headers })` doğrudan istek için
 (`e2e/host-coherent-redirects.spec.ts`, `e2e/host-vertical-public-pages.spec.ts`).
 İki kiracılı fixture `e2e/helpers/tenants.ts`'te (`verticalA` / `verticalB`).

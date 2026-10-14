@@ -55,7 +55,7 @@ Interaktionsprotokollen und Terminen — und immer dann, wenn jemand das Projekt
 ## Meldung
 
 Melden Sie inakzeptables Verhalten dem Maintainer unter
-**ersahin@bcsit-gmbh.de**.
+**21072026@ersah.in**.
 
 Meldungen werden vertraulich behandelt. Beschreiben Sie, was wann passiert ist,
 wer beteiligt war, und fügen Sie Belege bei, die Sie teilen können (Screenshots,

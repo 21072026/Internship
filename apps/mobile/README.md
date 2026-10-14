@@ -1,10 +1,10 @@
-# Internship CRM / SaleVali — native app
+# Internship CRM / Marketing CRM — native app
 
 Expo (React Native) app for iOS and Android. It is one app that serves both products. Epic: #2775. Decision and reasoning: [`docs/mobile-strategy.md`](../../docs/mobile-strategy.md).
 
 ## How it fits the web app
 
-- **One product, one host.** The person picks Internship CRM or SaleVali on first launch. From then on, every request goes to that product's host (`src/lib/products.ts`). The host decides which account signs in ([`docs/worlds.md`](../../docs/worlds.md)), so the app never mixes hosts.
+- **One product, one host.** The person picks the internship or the marketing product on first launch. From then on, every request goes to that product's host (`src/lib/products.ts`). The host decides which account signs in ([`docs/worlds.md`](../../docs/worlds.md)), so the app never mixes hosts.
 - **No session of its own.** Sign-in runs NextAuth's own HTTP flow (`src/lib/authClient.ts`):
   - `GET /api/auth/csrf`, then `POST /api/auth/callback/credentials`.
   - Every session is still minted by the one `jwt` callback in `src/lib/auth.ts`. Rate limits, lockouts, 2FA and recovery codes, enforced SSO and the world check all apply unchanged.
@@ -88,7 +88,7 @@ APP_ENV=preview npx expo run:android           # first time, and after any nativ
 APP_ENV=preview npx expo start --dev-client    # every other day: Metro only, press `a`
 ```
 
-- `APP_ENV=preview` points both products at the preview hosts (`preview.interncrm.com`, `marketing.bcsit-gmbh.dev`); leave it out for production. Give it to **both** commands: `run:android` bakes it into the native config, and Metro serves it to JS.
+- `APP_ENV=preview` points both products at the preview hosts (`preview.interncrm.com` and the preview marketing host); leave it out for production. Give it to **both** commands: `run:android` bakes it into the native config, and Metro serves it to JS.
 - Save a file → Fast Refresh in about a second. `r` in the Metro terminal reloads, `m` opens the dev menu (or `Cmd+M` / `Ctrl+M` in the emulator).
 - Rebuild (`run:android`) after `npx expo install` of a package with native code, or after an `app.config.ts` change. `npx expo prebuild --clean` first if the native folders get into a bad state.
 - iOS on a Mac: `APP_ENV=preview npx expo run:ios` (CocoaPods runs on its own).
@@ -98,16 +98,16 @@ APP_ENV=preview npx expo start --dev-client    # every other day: Metro only, pr
 | EAS profile | Hosts | Output |
 |---|---|---|
 | `preview` | production | Internal APK / ad-hoc iOS build, for testers |
-| `staging` | preview (`preview.interncrm.com`, `marketing.bcsit-gmbh.dev`) | Internal APK / ad-hoc iOS build |
+| `staging` | preview (`preview.interncrm.com` and the preview marketing host) | Internal APK / ad-hoc iOS build |
 | `production` | production | Store builds (AAB / IPA) |
 
 One-time setup (maintainer):
 
-1. Create an Expo account, preferably an organisation account for bcsit GmbH.
-2. Done (#2775): the project is `@bcsit-gmbh/interncrm` (org account). `app.config.ts` is dynamic, so `eas init` cannot write to it — `owner` and `extra.eas.projectId` were added by hand. To re-link, run `npx eas-cli@latest init --id <projectId>` and update both fields.
+1. Create an Expo account, preferably an organisation account for the publishing company.
+2. Done (#2775): the project is `interncrm` under the operator's Expo organisation (`owner` in `app.config.ts`). `app.config.ts` is dynamic, so `eas init` cannot write to it — `owner` and `extra.eas.projectId` were added by hand. To re-link, run `npx eas-cli@latest init --id <projectId>` and update both fields.
 3. Add `EXPO_TOKEN` (expo.dev → Access tokens) as a GitHub secret.
 4. Run Actions → *Mobile app* → `profile` / `platform`.
 
-iOS distribution (TestFlight) needs an Apple Developer Program membership in bcsit GmbH's name (99 USD/year, D-U-N-S). EAS creates and stores the signing certificates.
+iOS distribution (TestFlight) needs an Apple Developer Program membership in the publishing company's name (99 USD/year, D-U-N-S). EAS creates and stores the signing certificates.
 
-**Permanent before the first store upload:** `ios.bundleIdentifier` and `android.package` in `app.config.ts`. Both are currently `de.bcsitgmbh.crm`. Also confirm the display name.
+**Permanent before the first store upload:** `ios.bundleIdentifier` and `android.package` in `app.config.ts` (both the same reverse-domain id today). Also confirm the display name.

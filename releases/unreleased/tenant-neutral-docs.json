@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Documentation and changelog wording made tenant-neutral (#2915):** tenant- and operator-specific notes left the public docs; the remaining docs, `CHANGELOG.md` and the `/release-notes` entries now speak of \"the MARKETING tenant\", \"an upstream source system\", \"the operator\" and \"the marketing hosts (`MARKETING_HOSTS`)\" (\"the Marketing CRM\" in user-facing notes, EN/TR/DE kept in parity), with no price figures, hostnames or source-system internals. The product-usage feed contract is now the generic `docs/usage-feed.md`; release entries whose linked commit message named a tenant keep their date but drop the commit link (`commit` is optional on `ReleaseNote`). The contact address in README, CONTRIBUTING and the Code of Conduct is 21072026@ersah.in. `CLAUDE.md` gains the rule that tenant names never enter this repo."
+}

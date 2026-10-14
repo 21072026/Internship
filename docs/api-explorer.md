@@ -314,9 +314,11 @@ and Employer Plus, or granted per org as an add-on (`OrgEntitlement`).
   (`src/lib/integrationsGate.ts`).
 - **What is not.** `GET /api/v1/openapi.json` (documentation); pausing or
   deleting a webhook, revoking a key, rotating a secret (taking an integration
-  down must always work); the delivery of existing webhooks; and the SaleVali
-  ingest scope `companies:write`, which is the marketing product's own data
-  feed, not the public API.
+  down must always work); the delivery of existing webhooks; and the
+  account-event ingest scope `companies:write`
+  (`POST /api/integrations/[source]/events`,
+  [`docs/integrations/account-events.md`](integrations/account-events.md)), which
+  is a tenant's own product feed, not the public API.
 - **Existing integrations.** The deploy that added the gate granted the feature
   once to every org holding a live public-API key or an active webhook
   (`prisma/backfill-integrations-api-grandfather.mjs`), the same call as

@@ -46,8 +46,8 @@ required to develop or review a change.
 
 5. **External feeds are never pointed at a live source from a dev machine.**
    Some tenants configure an inbound feed — an HR roster export
-   (`docs/roster-feed.md`), or the SaleVali usage feed
-   (`docs/marketing-vertical/salevali-usage-feed.md`, #2445). Both pull a real
+   (`docs/roster-feed.md`), or a product-usage feed
+   (`docs/usage-feed.md`, #2445). Both pull a real
    customer's data over the network, so:
    - Develop and test against **fixture files**, never a tenant's live endpoint.
      A local feed row points at a file or a throwaway HTTPS target you control.

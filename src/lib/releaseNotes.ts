@@ -581,7 +581,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.323.0-beta',
     date: '2026-10-07',
     time: '05:31',
-    commit: '5d4f45d',
     highlights: {
       en: [
         "A lost customer who comes back starts a new journey with one click — a new trial or signed straight away — and the return counts as a new win.",
@@ -598,16 +597,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.322.0-beta',
     date: '2026-10-07',
     time: '05:31',
-    commit: '5d4f45d',
     highlights: {
       en: [
-        "New sales workspaces follow the SaleVali journey: no proposal or negotiation stage — a deal is won straight out of the trial’s decision window.",
+        "New sales workspaces follow a trial-led journey: no proposal or negotiation stage — a deal is won straight out of the trial’s decision window.",
       ],
       tr: [
-        "Yeni satış alanları SaleVali yolculuğunu izler: teklif ve pazarlık aşaması yok — iş doğrudan denemenin karar penceresinden kazanılır.",
+        "Yeni satış alanları deneme odaklı bir yolculuğu izler: teklif ve pazarlık aşaması yok — iş doğrudan denemenin karar penceresinden kazanılır.",
       ],
       de: [
-        "Neue Vertriebsbereiche folgen der SaleVali-Customer-Journey: keine Angebots- oder Verhandlungsphase — der Deal wird direkt aus dem Entscheidungsfenster der Testphase gewonnen.",
+        "Neue Vertriebsbereiche folgen einer Customer Journey ab der Testphase: keine Angebots- oder Verhandlungsphase — der Deal wird direkt aus dem Entscheidungsfenster der Testphase gewonnen.",
       ],
     },
   },
@@ -615,7 +613,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.321.0-beta',
     date: '2026-10-07',
     time: '05:31',
-    commit: '5d4f45d',
     highlights: {
       en: [
         "When a customer gives notice, record the day their contract ends: they stay a won customer, show up in your attention queue for the whole notice period, and you get a reminder on the last day.",
@@ -1304,13 +1301,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: 'a3ad16d',
     highlights: {
       en: [
-        "SaleVali no longer records internal pipeline-stage changes as notifications on a lead's own account.",
+        "The Marketing CRM no longer records internal pipeline-stage changes as notifications on a lead's own account.",
       ],
       tr: [
-        "SaleVali artık iç satış aşaması değişikliklerini müşteri adayının kendi hesabına bildirim olarak yazmıyor.",
+        "Marketing CRM artık iç satış aşaması değişikliklerini müşteri adayının kendi hesabına bildirim olarak yazmıyor.",
       ],
       de: [
-        "SaleVali legt interne Phasenwechsel nicht mehr als Benachrichtigungen im Konto des Leads ab.",
+        "Das Marketing-CRM legt interne Phasenwechsel nicht mehr als Benachrichtigungen im Konto des Leads ab.",
       ],
     },
   },
@@ -1386,16 +1383,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.281.0-beta',
     date: '2026-10-06',
     time: '15:03',
-    commit: 'fe58150',
     highlights: {
       en: [
-        "SaleVali now has a published price list: three plans for sales teams, billed per user, on the pricing page.",
+        "The Marketing CRM now has a published price list: three plans for sales teams, billed per user, on the pricing page.",
       ],
       tr: [
-        "SaleVali'nin artık yayımlanmış bir fiyat listesi var: fiyatlandırma sayfasında, kullanıcı başına faturalanan üç satış ekibi paketi.",
+        "Marketing CRM'in artık yayımlanmış bir fiyat listesi var: fiyatlandırma sayfasında, kullanıcı başına faturalanan üç satış ekibi paketi.",
       ],
       de: [
-        "SaleVali hat jetzt eine veröffentlichte Preisliste: drei Pläne für Vertriebsteams, abgerechnet pro Nutzer, auf der Preisseite.",
+        "Das Marketing-CRM hat jetzt eine veröffentlichte Preisliste: drei Pläne für Vertriebsteams, abgerechnet pro Nutzer, auf der Preisseite.",
       ],
     },
   },
@@ -1616,7 +1612,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.270.0-beta',
     date: '2026-10-06',
     time: '10:36',
-    commit: 'fed42eb',
     highlights: {
       en: [
         "The public API and webhooks are now part of Program Plus and Enterprise. Organisations already using them keep them; taking an integration down always works.",
@@ -1694,18 +1689,17 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.266.0-beta',
     date: '2026-10-06',
     time: '08:07',
-    commit: 'cff3a52',
     highlights: {
       en: [
-        "The SaleVali home page now shows the product in action: the pipeline board, a rep's dashboard and the funnel analytics.",
+        "The Marketing CRM home page now shows the product in action: the pipeline board, a rep's dashboard and the funnel analytics.",
         "On a phone, a long workspace name no longer covers the buttons in the top bar.",
       ],
       tr: [
-        "SaleVali ana sayfası artık ürünü çalışırken gösteriyor: pipeline panosu, satışçı paneli ve huni analizi.",
+        "Marketing CRM ana sayfası artık ürünü çalışırken gösteriyor: pipeline panosu, satışçı paneli ve huni analizi.",
         "Telefonda uzun bir çalışma alanı adı artık üst çubuktaki düğmelerin üstüne binmiyor.",
       ],
       de: [
-        "Die SaleVali-Startseite zeigt das Produkt jetzt in Aktion: das Pipeline-Board, das Dashboard im Vertrieb und die Funnel-Analyse.",
+        "Die Startseite des Marketing-CRM zeigt das Produkt jetzt in Aktion: das Pipeline-Board, das Dashboard im Vertrieb und die Funnel-Analyse.",
         "Auf dem Handy verdeckt ein langer Name des Arbeitsbereichs nicht mehr die Schaltflächen in der oberen Leiste.",
       ],
     },
@@ -1765,19 +1759,18 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.260.0-beta',
     date: '2026-10-05',
     time: '17:38',
-    commit: '3a682c6',
     highlights: {
       en: [
         "The home page's product tour now shows each screen in action, in a clean browser or phone frame.",
-        "In dark mode the SaleVali home page keeps its magenta accent.",
+        "In dark mode the Marketing CRM home page keeps its own accent colour.",
       ],
       tr: [
         "Ana sayfadaki ürün turu artık her ekranı çalışırken, temiz bir tarayıcı veya telefon çerçevesinde gösteriyor.",
-        "Koyu temada SaleVali ana sayfası magenta vurgu rengini koruyor.",
+        "Koyu temada Marketing CRM ana sayfası kendi vurgu rengini koruyor.",
       ],
       de: [
         "Die Produkttour auf der Startseite zeigt jeden Bildschirm jetzt in Aktion, in einem sauberen Browser- oder Handyrahmen.",
-        "Im Dunkelmodus behält die SaleVali-Startseite ihren Magenta-Akzent.",
+        "Im Dunkelmodus behält die Startseite des Marketing-CRM ihre eigene Akzentfarbe.",
       ],
     },
   },
@@ -1941,7 +1934,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.253.0-beta',
     date: '2026-10-05',
     time: '01:43',
-    commit: 'bd46ea4',
     highlights: {
       en: [
         "Sales teams can set a monthly target for won deals: every rep sees how many they have won this month against it, with a progress bar. Admins can also switch on a team leaderboard for reps — names and counts only.",
@@ -1958,7 +1950,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.252.0-beta',
     date: '2026-10-05',
     time: '01:43',
-    commit: 'bd46ea4',
     highlights: {
       en: [
         "Your portal now shows how complete your profile is, with a short list of the fields that are still empty — each one takes you straight to the field. The fuller your profile, the more matching and the people reviewing it have to work with.",
@@ -1975,7 +1966,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.251.0-beta',
     date: '2026-10-05',
     time: '01:43',
-    commit: 'bd46ea4',
     highlights: {
       en: [
         "Your completion certificate is now in your portal: download the PDF or add it to your LinkedIn profile in one click, with the name, issuer and date already filled in.",
@@ -1992,7 +1982,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.250.0-beta',
     date: '2026-10-05',
     time: '01:43',
-    commit: 'bd46ea4',
     highlights: {
       en: [
         "Mentors now see a private summary of their own impact on the dashboard: how many people they have guided, how many they guide now, and how many reached an internship or a hire. Only you see it — no points, no rankings, no comparisons.",
@@ -2009,7 +1998,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.249.0-beta',
     date: '2026-10-05',
     time: '00:16',
-    commit: '7cfa87c',
     highlights: {
       en: [
         "Postal campaigns: win new customers by letter — the one cold channel German law allows. Pick accounts, print letters with the privacy notice on the back, and see every demo request that came through the letter’s link.",
@@ -2083,13 +2071,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: '22f7cda',
     highlights: {
       en: [
-        "The SaleVali home page now answers the most common questions in an FAQ, and every public page tells search engines and AI assistants its one true address.",
+        "The Marketing CRM home page now answers the most common questions in an FAQ, and every public page tells search engines and AI assistants its one true address.",
       ],
       tr: [
-        "SaleVali ana sayfası artık en sık sorulan soruları bir SSS bölümünde yanıtlıyor; her herkese açık sayfa da arama motorlarına ve yapay zekâ asistanlarına tek ve doğru adresini bildiriyor.",
+        "Marketing CRM ana sayfası artık en sık sorulan soruları bir SSS bölümünde yanıtlıyor; her herkese açık sayfa da arama motorlarına ve yapay zekâ asistanlarına tek ve doğru adresini bildiriyor.",
       ],
       de: [
-        "Die SaleVali-Startseite beantwortet die häufigsten Fragen jetzt in einem FAQ, und jede öffentliche Seite nennt Suchmaschinen und KI-Assistenten ihre eine richtige Adresse.",
+        "Die Startseite des Marketing-CRM beantwortet die häufigsten Fragen jetzt in einem FAQ, und jede öffentliche Seite nennt Suchmaschinen und KI-Assistenten ihre eine richtige Adresse.",
       ],
     },
   },
@@ -2148,16 +2136,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.244.5-beta',
     date: '2026-10-01',
     time: '06:07',
-    commit: 'e279e8d',
     highlights: {
       en: [
-        "Everything you do on SaleVali now stays in SaleVali (and the same for Internship CRM): password-reset and verification e-mails, notifications, reminders, calendar entries and links always come from the product you are using.",
+        "Everything you do in the Marketing CRM now stays in the Marketing CRM (and the same for Internship CRM): password-reset and verification e-mails, notifications, reminders, calendar entries and links always come from the product you are using.",
       ],
       tr: [
-        "SaleVali'de yaptığın her şey artık SaleVali'de kalıyor (Internship CRM için de aynısı): şifre sıfırlama ve doğrulama e-postaları, bildirimler, hatırlatmalar, takvim kayıtları ve bağlantılar her zaman kullandığın üründen geliyor.",
+        "Marketing CRM'de yaptığın her şey artık Marketing CRM'de kalıyor (Internship CRM için de aynısı): şifre sıfırlama ve doğrulama e-postaları, bildirimler, hatırlatmalar, takvim kayıtları ve bağlantılar her zaman kullandığın üründen geliyor.",
       ],
       de: [
-        "Alles, was du in SaleVali tust, bleibt jetzt in SaleVali (und genauso bei Internship CRM): Passwort-Reset- und Bestätigungsmails, Benachrichtigungen, Erinnerungen, Kalendereinträge und Links kommen immer aus dem Produkt, das du gerade nutzt.",
+        "Alles, was du im Marketing-CRM tust, bleibt jetzt im Marketing-CRM (und genauso bei Internship CRM): Passwort-Reset- und Bestätigungsmails, Benachrichtigungen, Erinnerungen, Kalendereinträge und Links kommen immer aus dem Produkt, das du gerade nutzt.",
       ],
     },
   },
@@ -2610,7 +2597,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.234.0-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "The analytics page has a new Trial → paid card for sales pipelines with a trial stage: of the trials that started in a month, how many became paying customers — and, on the premium tier, the same rate by lead source.",
@@ -2630,7 +2616,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.233.0-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "Super admins can now invite the first administrator of any organization straight from the Organizations screen — including from a phone: the registration link appears with Copy and Share buttons, and the invitation is emailed too.",
@@ -2647,7 +2632,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.232.1-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "For a marketing organisation, the invite, users, analytics, settings and account screens — and the invitation, assignment and reminder e-mails — now talk about leads and sales reps instead of mentees and mentors.",
@@ -2664,7 +2648,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.231.0-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "Marketing organisations can import their customer table themselves: Settings → import → \"Marketing accounts\". Preview the file first — nothing is written — then apply it; running the same file again changes nothing.",
@@ -2684,7 +2667,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.230.0-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "Leads from the website demo form, the account import and the manual lead form are now attributed to a source automatically — the campaign they came from, or the source you typed — so the source report on the analytics page counts them. Leads with no known source are listed separately.",
@@ -2704,16 +2686,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.229.1-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
-        "Signing in with your company's SSO, or connecting Google Calendar, from SaleVali now brings you back to SaleVali — and the unsubscribe and preference links in SaleVali e-mails open SaleVali too.",
+        "Signing in with your company's SSO, or connecting Google Calendar, from the Marketing CRM now brings you back to it — and the unsubscribe and preference links in its e-mails open it too.",
       ],
       tr: [
-        "SaleVali'den şirketinin SSO'suyla giriş yapmak ya da Google Takvim'i bağlamak artık seni yine SaleVali'ye döndürüyor; SaleVali e-postalarındaki abonelikten çıkma ve tercih bağlantıları da SaleVali'yi açıyor.",
+        "Marketing CRM'den şirketinin SSO'suyla giriş yapmak ya da Google Takvim'i bağlamak artık seni yine Marketing CRM'e döndürüyor; onun e-postalarındaki abonelikten çıkma ve tercih bağlantıları da Marketing CRM'i açıyor.",
       ],
       de: [
-        "Die Anmeldung per Firmen-SSO und das Verbinden von Google Kalender aus SaleVali führen jetzt zurück zu SaleVali – und die Abmelde- und Einstellungslinks in SaleVali-E-Mails öffnen ebenfalls SaleVali.",
+        "Die Anmeldung per Firmen-SSO und das Verbinden von Google Kalender aus dem Marketing-CRM führen jetzt dorthin zurück – und die Abmelde- und Einstellungslinks in seinen E-Mails öffnen ebenfalls das Marketing-CRM.",
       ],
     },
   },
@@ -2721,7 +2702,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.229.0-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "Sales records can now carry an estimated monthly value, and the analytics page shows month by month what was won, what was lost and the estimated monthly value of the accounts you hold.",
@@ -2738,7 +2718,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.228.0-beta',
     date: '2026-09-30',
     time: '08:25',
-    commit: '1a96720',
     highlights: {
       en: [
         "Every account now shows on what basis you may contact it — a confirmed double opt-in, a §7(3) existing-customer record with its reason, or only a reply to their own request — with the proof, and a warning when there is no provable e-mail permission. The product-news box on the demo form sends one confirmation e-mail and only counts once the person clicks it; imports never create a permission. The company list can be filtered to the accounts you may actually e-mail.",
@@ -2843,13 +2822,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: '950af5c',
     highlights: {
       en: [
-        "In SaleVali, a lost deal now records why in sales terms — price, a missing marketplace or feature, a competitor, no response and more — and the analytics break losses down by those reasons.",
+        "In the Marketing CRM, a lost deal now records why in sales terms — price, a missing marketplace or feature, a competitor, no response and more — and the analytics break losses down by those reasons.",
       ],
       tr: [
-        "SaleVali'de kaybedilen bir fırsat artık satış diliyle kaydediliyor — fiyat, eksik pazaryeri ya da özellik, rakip, yanıt yok ve diğerleri — ve analizler kayıpları bu nedenlere göre ayırıyor.",
+        "Marketing CRM'de kaybedilen bir fırsat artık satış diliyle kaydediliyor — fiyat, eksik pazaryeri ya da özellik, rakip, yanıt yok ve diğerleri — ve analizler kayıpları bu nedenlere göre ayırıyor.",
       ],
       de: [
-        "In SaleVali wird bei einem verlorenen Deal der Grund jetzt in Vertriebsbegriffen erfasst — Preis, fehlender Marktplatz oder fehlende Funktion, Wettbewerber, keine Antwort und mehr —, und die Analyse schlüsselt Verluste danach auf.",
+        "Im Marketing-CRM wird bei einem verlorenen Deal der Grund jetzt in Vertriebsbegriffen erfasst — Preis, fehlender Marktplatz oder fehlende Funktion, Wettbewerber, keine Antwort und mehr —, und die Analyse schlüsselt Verluste danach auf.",
       ],
     },
   },
@@ -2860,13 +2839,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: '2316b30',
     highlights: {
       en: [
-        "In SaleVali, the analytics, settings and account pages no longer mention mentors or mentees.",
+        "In the Marketing CRM, the analytics, settings and account pages no longer mention mentors or mentees.",
       ],
       tr: [
-        "SaleVali'de analiz, ayarlar ve hesap sayfaları artık mentor ya da mentee'den söz etmiyor.",
+        "Marketing CRM'de analiz, ayarlar ve hesap sayfaları artık mentor ya da mentee'den söz etmiyor.",
       ],
       de: [
-        "In SaleVali erwähnen die Analyse-, Einstellungs- und Kontoseiten keine Mentoren oder Mentees mehr.",
+        "Im Marketing-CRM erwähnen die Analyse-, Einstellungs- und Kontoseiten keine Mentoren oder Mentees mehr.",
       ],
     },
   },
@@ -2877,13 +2856,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: '61fdc24',
     highlights: {
       en: [
-        "In SaleVali, inviting your team and the user list now talk about sales reps and leads, and the invitation e-mail invites a sales rep.",
+        "In the Marketing CRM, inviting your team and the user list now talk about sales reps and leads, and the invitation e-mail invites a sales rep.",
       ],
       tr: [
-        "SaleVali'de ekip daveti ve kullanıcı listesi artık satış temsilcisi ve müşteri adayından söz ediyor; davet e-postası da satış temsilcisi olarak davet ediyor.",
+        "Marketing CRM'de ekip daveti ve kullanıcı listesi artık satış temsilcisi ve müşteri adayından söz ediyor; davet e-postası da satış temsilcisi olarak davet ediyor.",
       ],
       de: [
-        "In SaleVali sprechen die Team-Einladung und die Benutzerliste jetzt von Vertriebsmitarbeitern und Leads, und die Einladungs-E-Mail lädt als Vertriebsmitarbeiter ein.",
+        "Im Marketing-CRM sprechen die Team-Einladung und die Benutzerliste jetzt von Vertriebsmitarbeitern und Leads, und die Einladungs-E-Mail lädt als Vertriebsmitarbeiter ein.",
       ],
     },
   },
@@ -2894,15 +2873,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: '25301cb',
     highlights: {
       en: [
-        "One e-mail address can now have an account in Internship CRM and another in SaleVali at the same time. The site you sign in on decides which one you get: interncrm.com opens Internship CRM, marketing.bcsit-gmbh.de opens SaleVali, and your session stays in that product.",
+        "One e-mail address can now have an account in Internship CRM and another in the Marketing CRM at the same time. The site you sign in on decides which one you get: interncrm.com opens Internship CRM, the marketing site opens the Marketing CRM, and your session stays in that product.",
         "Entering the right password on the wrong site no longer says \"invalid email or password\". It tells you which product your account is in and links straight to its sign-in page.",
       ],
       tr: [
-        "Aynı e-posta adresiyle artık hem Internship CRM'de hem SaleVali'de ayrı birer hesabın olabilir. Hangisine gireceğini oturum açtığın site belirler: interncrm.com Internship CRM'i, marketing.bcsit-gmbh.de SaleVali'yi açar ve oturumun o üründe kalır.",
+        "Aynı e-posta adresiyle artık hem Internship CRM'de hem Marketing CRM'de ayrı birer hesabın olabilir. Hangisine gireceğini oturum açtığın site belirler: interncrm.com Internship CRM'i, marketing sitesi Marketing CRM'i açar ve oturumun o üründe kalır.",
         "Doğru parolayı yanlış sitede girmek artık \"e-posta veya parola hatalı\" demiyor. Hesabının hangi üründe olduğunu söylüyor ve doğrudan o ürünün giriş sayfasına bağlantı veriyor.",
       ],
       de: [
-        "Dieselbe E-Mail-Adresse kann jetzt gleichzeitig ein Konto in Internship CRM und ein weiteres in SaleVali haben. Welches Konto geöffnet wird, entscheidet die Seite, auf der die Anmeldung erfolgt: interncrm.com öffnet Internship CRM, marketing.bcsit-gmbh.de öffnet SaleVali, und die Sitzung bleibt in diesem Produkt.",
+        "Dieselbe E-Mail-Adresse kann jetzt gleichzeitig ein Konto in Internship CRM und ein weiteres im Marketing-CRM haben. Welches Konto geöffnet wird, entscheidet die Seite, auf der die Anmeldung erfolgt: interncrm.com öffnet Internship CRM, die Marketing-Seite öffnet das Marketing-CRM, und die Sitzung bleibt in diesem Produkt.",
         "Wer das richtige Passwort auf der falschen Seite eingibt, sieht nicht mehr „E-Mail oder Passwort ungültig“. Stattdessen steht dort, in welchem Produkt das Konto liegt, mit einem Link direkt zu dessen Anmeldeseite.",
       ],
     },
@@ -2914,13 +2893,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     commit: 'cbf2267',
     highlights: {
       en: [
-        "In SaleVali, the lead page and the suggested first messages now talk about reps, demos and trials instead of mentors and internships.",
+        "In the Marketing CRM, the lead page and the suggested first messages now talk about reps, demos and trials instead of mentors and internships.",
       ],
       tr: [
-        "SaleVali'de müşteri adayı sayfası ve önerilen ilk mesajlar artık mentor ve staj yerine temsilci, demo ve denemeden söz ediyor.",
+        "Marketing CRM'de müşteri adayı sayfası ve önerilen ilk mesajlar artık mentor ve staj yerine temsilci, demo ve denemeden söz ediyor.",
       ],
       de: [
-        "In SaleVali sprechen die Lead-Seite und die vorgeschlagenen ersten Nachrichten jetzt von Vertrieb, Demo und Testphase statt von Mentoring und Praktikum.",
+        "Im Marketing-CRM sprechen die Lead-Seite und die vorgeschlagenen ersten Nachrichten jetzt von Vertrieb, Demo und Testphase statt von Mentoring und Praktikum.",
       ],
     },
   },
@@ -2928,16 +2907,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.224.3-beta',
     date: '2026-09-29',
     time: '21:00',
-    commit: 'b20229e',
     highlights: {
       en: [
-        "Reminder and notification e-mails from a SaleVali workspace now open SaleVali.",
+        "Reminder and notification e-mails from a Marketing CRM workspace now open the Marketing CRM.",
       ],
       tr: [
-        "Bir SaleVali çalışma alanından gelen hatırlatma ve bildirim e-postaları artık SaleVali'yi açıyor.",
+        "Bir Marketing CRM çalışma alanından gelen hatırlatma ve bildirim e-postaları artık Marketing CRM'i açıyor.",
       ],
       de: [
-        "Erinnerungs- und Benachrichtigungs-E-Mails aus einem SaleVali-Arbeitsbereich öffnen jetzt SaleVali.",
+        "Erinnerungs- und Benachrichtigungs-E-Mails aus einem Arbeitsbereich des Marketing-CRM öffnen jetzt das Marketing-CRM.",
       ],
     },
   },
@@ -2945,16 +2923,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.224.2-beta',
     date: '2026-09-29',
     time: '20:55',
-    commit: 'f9cf6e6',
     highlights: {
       en: [
-        "Invitations and password e-mails from a SaleVali workspace now open SaleVali, not the internship app.",
+        "Invitations and password e-mails from a Marketing CRM workspace now open the Marketing CRM, not the internship app.",
       ],
       tr: [
-        "Bir SaleVali çalışma alanından gelen davet ve şifre e-postaları artık staj uygulamasını değil SaleVali'yi açıyor.",
+        "Bir Marketing CRM çalışma alanından gelen davet ve şifre e-postaları artık staj uygulamasını değil Marketing CRM'i açıyor.",
       ],
       de: [
-        "Einladungen und Passwort-E-Mails aus einem SaleVali-Arbeitsbereich öffnen jetzt SaleVali statt der Praktikums-App.",
+        "Einladungen und Passwort-E-Mails aus einem Arbeitsbereich des Marketing-CRM öffnen jetzt das Marketing-CRM statt der Praktikums-App.",
       ],
     },
   },
@@ -2979,7 +2956,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.224.0-beta',
     date: '2026-09-29',
     time: '20:23',
-    commit: 'c7ec3dd',
     highlights: {
       en: [
         "To-dos can now have a due date. Late ones are marked “Overdue” — in words, not just in red — and a counter shows how many; a to-do due today is not late. Undated to-dos sit at the end of the list.",
@@ -3101,7 +3077,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.221.0-beta',
     date: '2026-09-29',
     time: '16:29',
-    commit: '9dd83d5',
     highlights: {
       en: [
         "Every trial now shows when it ends — on the record and on its board card, with the days left. The owner or an admin can extend it right there; an extended trial that had already run out goes back to \"trial running\", and reminders already sent are not sent again. A running trial without an end date is flagged in red so it gets one.",
@@ -3118,7 +3093,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.220.0-beta',
     date: '2026-09-29',
     time: '16:29',
-    commit: '9dd83d5',
     highlights: {
       en: [
         "The marketing website now has a demo request form. Each request lands in your own organization with its campaign source and consent record, and goes straight onto the pipeline of the default lead owner you pick in Settings — or waits, marked unowned, under Demo requests until an admin adds it.",
@@ -3135,7 +3109,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.219.0-beta',
     date: '2026-09-29',
     time: '16:29',
-    commit: '9dd83d5',
     highlights: {
       en: [
         "Every company now has its own page: open it from the company list to see the account, the contact person, every record in the pipeline with its stage, owner, trial and next step, and the latest interactions — and record the id the account has in your own product.",
@@ -3254,7 +3227,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.214.4-beta',
     date: '2026-09-28',
     time: '22:50',
-    commit: '2232850',
     highlights: {
       en: [
         "The marketing site no longer shows pages that belong to the internship product — the company placement pitch, the mentor application and the internship changelog.",
@@ -3271,16 +3243,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.214.3-beta',
     date: '2026-09-23',
     time: '20:18',
-    commit: '6b0a0f1',
     highlights: {
       en: [
-        "The marketing product now lives at marketing.bcsit-gmbh.de. The old address redirects there, and because a sign-in is tied to one address you will be asked to sign in again on the new one.",
+        "The marketing product now lives at its own address. The old address redirects there, and because a sign-in is tied to one address you will be asked to sign in again on the new one.",
       ],
       tr: [
-        "Pazarlama ürünü artık marketing.bcsit-gmbh.de adresinde. Eski adres oraya yönlendiriyor; oturum adrese bağlı olduğu için yeni adreste bir kez daha giriş yapmanız istenecek.",
+        "Pazarlama ürünü artık kendi adresinde. Eski adres oraya yönlendiriyor; oturum adrese bağlı olduğu için yeni adreste bir kez daha giriş yapmanız istenecek.",
       ],
       de: [
-        "Das Marketing-Produkt ist jetzt unter marketing.bcsit-gmbh.de erreichbar. Die alte Adresse leitet dorthin weiter; da eine Anmeldung an eine Adresse gebunden ist, müssen Sie sich dort einmal neu anmelden.",
+        "Das Marketing-Produkt ist jetzt unter einer eigenen Adresse erreichbar. Die alte Adresse leitet dorthin weiter; da eine Anmeldung an eine Adresse gebunden ist, müssen Sie sich dort einmal neu anmelden.",
       ],
     },
   },
@@ -3428,7 +3399,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.208.0-beta',
     date: '2026-09-22',
     time: '15:05',
-    commit: 'eb08011',
     highlights: {
       en: [
         "An account list kept in a spreadsheet can now be imported: companies, their VAT id, country and primary contact, and where each one sits in the funnel. It previews before it writes, and running the same file twice changes nothing.",
@@ -3550,7 +3520,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.205.2-beta',
     date: '2026-09-22',
     time: '09:59',
-    commit: '7529409',
     highlights: {
       en: [
         "The marketing product's own domain shows the marketing landing page again.",
@@ -3584,16 +3553,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.205.0-beta',
     date: '2026-09-21',
     time: '22:32',
-    commit: 'e60b9c5',
     highlights: {
       en: [
-        "The marketing product now looks like SaleVali — its magenta accent, its V mark and its own app icon — and Magenta is a new accent anyone can pick in Account.",
+        "The marketing product now has its own look — a magenta accent, its own mark and its own app icon — and Magenta is a new accent anyone can pick in Account.",
       ],
       tr: [
-        "Pazarlama ürünü artık SaleVali gibi görünüyor — macenta vurgu rengi, V işareti ve kendi uygulama simgesi; Macenta ayrıca Hesap'ta herkesin seçebileceği yeni bir vurgu rengi.",
+        "Pazarlama ürünü artık kendi görünümüne sahip — macenta vurgu rengi, kendi işareti ve kendi uygulama simgesi; Macenta ayrıca Hesap'ta herkesin seçebileceği yeni bir vurgu rengi.",
       ],
       de: [
-        "Das Marketing-Produkt sieht jetzt aus wie SaleVali — Magenta-Akzent, das V-Zeichen und ein eigenes App-Symbol; Magenta ist außerdem eine neue Akzentfarbe, die jeder im Konto wählen kann.",
+        "Das Marketing-Produkt hat jetzt einen eigenen Auftritt — Magenta-Akzent, ein eigenes Zeichen und ein eigenes App-Symbol; Magenta ist außerdem eine neue Akzentfarbe, die jeder im Konto wählen kann.",
       ],
     },
   },
@@ -3723,7 +3691,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.202.0-beta',
     date: '2026-09-14',
     time: '08:42',
-    commit: '7c6c9fe',
     highlights: {
       en: [
         "Marketing tenants now see marketing terminology throughout — leads, reps and deals on the dashboard and checklist, and the marketing product name in the wordmark and browser tab — instead of internship wording.",
@@ -3791,7 +3758,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.201.3-beta',
     date: '2026-09-14',
     time: '04:23',
-    commit: '28c80c9',
     highlights: {
       en: [
         "If you renamed your pipeline stages, the cohort comparison, source conversion, programme benchmark, admin conversion rate and mentor analytics now count your own final stage — they used to report zero placements no matter how many people you had placed.",
@@ -3874,7 +3840,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.197.4-beta',
     date: '2026-09-14',
     time: '03:30',
-    commit: '5da215b',
     highlights: {
       en: [
         "A marketing organization that hasn't set a custom brand now shows its own name in the header instead of \"Internship CRM\".",
@@ -3968,7 +3933,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.190.0-beta',
     date: '2026-09-09',
     time: '21:43',
-    commit: 'be597bb',
     highlights: {
       en: [
         "Organizations can now require single sign-on: with it on, nobody in the tenant can sign in with a password, reset one, set one from an invitation or change one — the identity provider is the only way in.",
@@ -4017,7 +3981,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.188.0-beta',
     date: '2026-09-09',
     time: '21:35',
-    commit: 'e3c60b0',
     highlights: {
       en: [
         "A meeting can now be rescheduled, cancelled or deleted instead of being abandoned at the wrong time — a cancelled meeting disappears from the dashboard, the calendar, the subscription feed and the reminder e-mails, and is withdrawn from the calendars it was mirrored to.",
@@ -4377,7 +4340,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.173.0-beta',
     date: '2026-09-07',
     time: '12:04',
-    commit: '012d03d',
     highlights: {
       en: [
         "Pricing now has its own entry in the site menu — on desktop and on a phone — and in the footer, so the price is one click from any public page.",
@@ -5077,7 +5039,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.154.0-beta',
     date: '2026-09-03',
     time: '21:02',
-    commit: '70c3ce2',
     highlights: {
       en: [
         "Admins can now sign a user out of every device and remembered browser instantly, without deactivating their account.",
@@ -5137,7 +5098,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.152.0-beta',
     date: '2026-09-03',
     time: '20:46',
-    commit: '3e0e16a',
     highlights: {
       en: [
         "New public trust centre at /trust: who can receive your data and why, what protects it, where it is hosted — and, in the same list, what is not true yet.",
@@ -5154,7 +5114,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.151.0-beta',
     date: '2026-09-03',
     time: '14:41',
-    commit: '73ff73a',
     highlights: {
       en: [
         "API keys now have a lifecycle: pick what a key may read, give it an expiry date, and see who created each key. Revoking a key keeps it in the list so the audit trail stays intact.",
@@ -5520,7 +5479,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.141.0-beta',
     date: '2026-09-03',
     time: '07:59',
-    commit: '06c3637',
     highlights: {
       en: [
         "Enlarged images now open inside the app: close them with ✕, Escape, a tap outside or your phone's back button, and zoom or step through several images without leaving the page.",
@@ -5968,7 +5926,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.124.0-beta',
     date: '2026-08-27',
     time: '11:45',
-    commit: '17d8500',
     highlights: {
       en: [
         "A new imprint page says who runs this service and how to reach them — linked from every page's footer, and named as the data controller in the privacy notice.",
@@ -6405,7 +6362,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.114.2-beta',
     date: '2026-08-25',
     time: '01:36',
-    commit: 'd1133e4',
     highlights: {
       en: [
         "The admin board now shows a customized pipeline's stages on desktop, not only on a phone.",
@@ -6422,7 +6378,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.114.1-beta',
     date: '2026-08-25',
     time: '01:36',
-    commit: 'd1133e4',
     highlights: {
       en: [
         "Dark mode is now covered by the automated accessibility checks, which found and fixed four low-contrast links and labels that were unreadable on dark backgrounds.",
@@ -6439,7 +6394,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.114.0-beta',
     date: '2026-08-24',
     time: '23:48',
-    commit: '29e072a',
     highlights: {
       en: [
         "Site owners can now connect Plausible, GA4 or PostHog for public-page analytics — off unless configured, and never loaded without the visitor's cookie consent.",
@@ -6456,7 +6410,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.113.0-beta',
     date: '2026-08-24',
     time: '23:03',
-    commit: '6c0e748',
     highlights: {
       en: [
         "Candidates who are not placed this cycle can now be kept in a re-engagement pool with their consent — with an agreed date to talk again, and a one-click way out of it from any e-mail.",
@@ -6473,7 +6426,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.112.0-beta',
     date: '2026-08-24',
     time: '22:42',
-    commit: '6c8b027',
     highlights: {
       en: [
         "Admins can now manage tags: rename, recolour, merge duplicates together, or retire one — with the number of people affected shown before anything is deleted.",
@@ -6490,7 +6442,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.111.0-beta',
     date: '2026-08-24',
     time: '22:17',
-    commit: '3ba4083',
     highlights: {
       en: [
         "You can now connect your own Google Calendar from your account settings — meetings you are part of show up there too, and disconnecting revokes the access again.",
@@ -6541,7 +6492,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.110.0-beta',
     date: '2026-08-24',
     time: '21:37',
-    commit: '30d79fc',
     highlights: {
       en: [
         "Admins get a contributor-terms report: who has accepted, who is on an outdated version, who has not accepted at all — filterable and exportable to Excel.",
@@ -6558,7 +6508,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.109.0-beta',
     date: '2026-08-24',
     time: '21:07',
-    commit: 'c6343ee',
     highlights: {
       en: [
         "Projects can now carry their own contributor terms: members read and accept them once per project, and a project with no IP question can skip asking altogether.",
@@ -6575,7 +6524,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.108.0-beta',
     date: '2026-08-24',
     time: '20:56',
-    commit: 'aac75ae',
     highlights: {
       en: [
         "People's names are clickable almost everywhere now — click one for a card with who they are and a way to message them.",
@@ -6595,7 +6543,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.107.3-beta',
     date: '2026-08-24',
     time: '20:53',
-    commit: '4ed3ec5',
     highlights: {
       en: [
         "Dialogs are now fully keyboard-accessible: focus moves into the dialog when it opens, stays inside while you Tab through it, Escape closes it, and focus returns to the control you opened it from.",
@@ -6646,7 +6593,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.107.0-beta',
     date: '2026-08-24',
     time: '20:34',
-    commit: '31f010f',
     highlights: {
       en: [
         "Contributor terms now live in the app: read the text in force at /contributor-terms, accept it once with a single checkbox, and download or re-read what you accepted at any time.",

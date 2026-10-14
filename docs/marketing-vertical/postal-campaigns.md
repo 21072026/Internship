@@ -28,7 +28,8 @@ e-posta temasının yasal dayanağını üretir.
      (Art. 14 Abs. 2 lit. f).
    - **Interessenabwägung** (zorunlu, ≥20 karakter) — basılmaz; Art. 5 Abs. 2 hesap verebilirlik kaydı.
      Dikeye göre hazır bir taslakla gelir (`src/lib/postCampaignTemplates.ts`).
-   - **Mektup metni** — SaleVali için hazır taslakla gelir; yer tutucular `{salutation}`,
+   - **Mektup metni** — dikeyin varsayılan taslağıyla gelir (`src/lib/postCampaignTemplates.ts`,
+     kampanyada düzenlenir); yer tutucular `{salutation}`,
      `{company}`, `{link}`. Hitap cinsiyet tahmin etmez ("Guten Tag Eva Weber," /
      "Sehr geehrte Damen und Herren,").
    - **Kampanya kodu** — `utm_campaign` ve kısa link `/b/<kod>`.
@@ -76,7 +77,7 @@ e-posta temasının yasal dayanağını üretir.
 Mektubun göndereni ve marketing host'undaki `/imprint`, `/privacy`, `/trust`, `/accessibility`
 artık **dünyaya göre** okunur (`operatorIdentity(env, world)`, `src/lib/imprint.ts`):
 
-- MARKETING dünyası → `MARKETING_OPERATOR_*` (ör. BCS-IT GmbH); set eksikse (`NAME` + `EMAIL`)
+- MARKETING dünyası → `MARKETING_OPERATOR_*` (marketing ürününü sunan şirket); set eksikse (`NAME` + `EMAIL`)
   bütünüyle `OPERATOR_*`'a düşer — asla karışık bir kimlik değil.
 - Mektup, admin hangi host'ta olursa olsun **kampanyanın org'unun dünyasının** kimliğini ve
   origin'ini basar.
@@ -86,7 +87,7 @@ artık **dünyaya göre** okunur (`operatorIdentity(env, world)`, `src/lib/impri
 `/etc/internship-crm/prod.env` ve `preview.env`'e ekleyin (deploy betikleri iletir):
 
 ```bash
-MARKETING_OPERATOR_NAME="BCS-IT GmbH"
+MARKETING_OPERATOR_NAME="<Firma GmbH>"
 MARKETING_OPERATOR_ADDRESS="<Straße Nr.>|<PLZ Ort>"
 MARKETING_OPERATOR_EMAIL="<okunan bir adres — itirazlar buraya gelir>"
 MARKETING_OPERATOR_REGISTER="Amtsgericht <…> HRB <…>"

@@ -48,13 +48,13 @@ demo seeder `prisma/seed-demo-marketing.mjs` (`:93-94`, reused at `:154-161`, `:
 which cannot import the TS constants. `TRIAL_ACTIVE` deliberately carries no SLA
 and `TRIAL_EXPIRED` a 7-day one (3 until #2840) (`src/lib/programTemplates.ts:573-591`).
 
-How long a trial runs is the SaleVali product's rule, not this repo's: 30 free days plus a
-30-day decision window (60 + 30 for an affiliate trial) — see
-[`salevali-domain.md` § Deneme](salevali-domain.md#deneme-trial--serbest-dönem--karar-penceresi).
-The `trialLengthDays` org setting (default 30) models only the free period; where the
-decision window is `TRIAL_EXPIRED`, ending `trialEndsAt` + 30 days (#2572 Q2, #2843).
+How long a trial runs is the tenant product's rule, not this repo's. The `trialLengthDays`
+org setting (default 30) models the free period; the decision window after it is
+`TRIAL_EXPIRED`, ending `trialEndsAt` + `DECISION_WINDOW_DAYS` (30, `src/lib/trialReminderRule.ts`;
+#2572 Q2, #2843). A source system that knows the real dates sends them (the import's
+`trial_ends_at` column, the account-event ingest) and they win over the default.
 
-## SaleVali yolculuğu (#2572 — decided 2026-10-07)
+## Around the trial and after `DEAL_WON` (#2572 — decided 2026-10-07)
 
 What happens around the trial and **after** `DEAL_WON` (active / notice given / churned /
 won back), the preset without `DEAL_PROPOSAL`/`DEAL_NEGOTIATION`, and which stage existing

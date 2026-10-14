@@ -12,7 +12,7 @@ karardır ve hak sahipliğini değiştirmez.
 
 ## Karar: faturalayan taraf **ilk satışa kadar ertelendi** (maintainer, 2026-08-01)
 
-Faturalamanın bcsit GmbH üzerinden mi, hak sahibinin şahsı üzerinden mi yapılacağı
+Faturalamanın bir şirket (GmbH) üzerinden mi, hak sahibinin şahsı üzerinden mi yapılacağı
 **şimdi karara bağlanmıyor**; ilk gerçek satış/talep geldiğinde karara bağlanacak. Bu
 bilinçli bir erteleme ve güvenlidir, çünkü:
 
@@ -35,7 +35,7 @@ bilinçli bir erteleme ve güvenlidir, çünkü:
 > Bunlar yapılmadan sözleşme imzalanmamalı/fatura kesilmemeli.
 
 ### 1. Tüzel yapı
-- **Aday (henüz seçilmedi):** bcsit GmbH (Almanya) — gelir, sözleşmeler ve faturalar GmbH
+- **Aday (henüz seçilmedi):** Almanya merkezli bir GmbH — gelir, sözleşmeler ve faturalar GmbH
   üzerinden; yazılımın hakları hak sahibinde kalır, GmbH iç lisansla satar.
 - Gerekçe: hazır yapı, sınırlı sorumluluk, kurumsal müşterinin (Enterprise) sözleşme
   yapmak isteyeceği tüzel kişilik.
@@ -71,7 +71,7 @@ bilinçli bir erteleme ve güvenlidir, çünkü:
 
 ## Aksiyon listesi
 - [x] Kararı ilk satışa ertele (yukarıdaki şartlarla) — 2026-08-01.
-- [ ] **İlk talep geldiğinde:** faturalayan tarafı seç (bcsit GmbH mi, şahıs mı).
+- [ ] **İlk talep geldiğinde:** faturalayan tarafı seç (GmbH mi, şahıs mı).
 - [ ] GmbH seçilirse: hak sahibi → GmbH ticari dağıtım lisansını **fatura öncesi** imzala.
 - [ ] Steuerberater ile KDV/reverse-charge faturalama akışını netleştir.
 - [ ] Avukatla B2B SaaS sözleşme + DPA şablonları hazırlat.

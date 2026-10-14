@@ -7123,10 +7123,11 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
   callback'te REDDEDİLİR (origin !== baseUrl). Tek kaldıraç: allowlist'li custom redirect
   callback + client'ın mutlak same-origin URL göndermesi. Allowlist yeni env değil, mevcut
   config'den türetilir; URL hostname'ini doğrudan set'e bak (header parser'ı virgül böler —
-  `marketing.ersah.in,evil.example` bypass'ı), https'te alınan porta güvenme.
-- **Marka rengi vs WCAG:** SaleVali primary #cc33e5 beyaz metinle 4.1:1 — primary butonlarda
-  (14px/500, "large" değil) AA regresyonu. Çözüm: 600 = #b929cf (4.9:1), primary 500'de dolgu
-  olarak; altın işaret asla magenta üzerine değil, marka koyu moru (#1a0a2e, 10.9:1) üzerine.
+  `<marketing host>,evil.example` bypass'ı), https'te alınan porta güvenme.
+- **Marka rengi vs WCAG:** bir kiracı markasının primary'si beyaz metinle 4.1:1 — primary
+  butonlarda (14px/500, "large" değil) AA regresyonu. Çözüm: metin ve butonlar için daha koyu
+  600 basamağı (≥ 4.5:1), primary 500'de yalnız dolgu olarak; işaret markanın koyu karosu
+  üzerine konur, accent üzerine değil.
   Workflow'un kontrast tablosu (37 çift, blue/purple parity etiketli) kararı dakikada verdirdi.
 - **Next 15 metadata:** `app/icon.svg` dosya-konvansiyonu host'a göre dallanamaz ve
   layout'taki `icons.icon` ile ikinci `<link rel=icon>` üretir → public/'e taşı, tek kaynak
@@ -7303,8 +7304,8 @@ belirli bir testid'le aramaktan daha güvenilir.
 
 ## 2026-09-22 — Marketing dikeyi backlog dalgası: paralel worktree'ler, env tuzağı, merge sırası
 
-- **`${VAR:-}` ile threadlenen bir env değişkeninde `??` yanlış operatördür.** `marketing.ersah.in`
-  prod'da aylardır internship landing'i gösteriyordu ve DNS/cert/Caddy'nin hepsi doğruydu.
+- **`${VAR:-}` ile threadlenen bir env değişkeninde `??` yanlış operatördür.** O zamanki marketing
+  host'u prod'da aylardır internship landing'i gösteriyordu ve DNS/cert/Caddy'nin hepsi doğruydu.
   `infra/deploy-prod.sh` her opsiyonel değişkeni `-e VAR="${VAR:-}"` ile geçiriyor, yani env
   dosyasında **olmayan** bir değişken container'a **boş string** olarak iner. `process.env.X ?? D`
   boş string'i geçerli değer sayar → `MARKETING_HOSTS` kümesi boş → host varsayılana düşer.
@@ -7384,7 +7385,7 @@ belirli bir testid'le aramaktan daha güvenilir.
 
 ## 2026-09-23 — Bir alan adını taşırken: iki yarı aynı anda doğru olamaz (#2540)
 
-Marketing dikeyi `*.ersah.in`'den `marketing.bcsit-gmbh.de` (canlı) ve `.dev` (test) adreslerine
+Marketing dikeyi eski alt alan adlarından kendi alan adlarına (canlı ve test; `MARKETING_HOSTS`)
 taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor olan sıralama ve kapsam.
 
 - **İki yarı birbirine kilitli.** `marketingHosts()` varsayılanı *değiştirir*, genişletmez —
@@ -7395,10 +7396,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   henüz kimsenin bilmediği yeni adda geçer.
 - **Eski adı SİLME, yönlendir.** Site dosyası olmayan ad varsayılan siteye düşer ve bir marketing
   URL'i altında internship sayfası servis eder — #2428'in ta kendisi.
-- **Yeni apex = otomatik sertifika.** Eski ad `*.ersah.in` joker dosyasını `tls` satırıyla
+- **Yeni apex = otomatik sertifika.** Eski ad eski apex'in joker dosyasını `tls` satırıyla
   kullanıyordu; iki yeni ad kendi apex'lerinde tek isim olduğu için Caddy kendi alır ve yeniler.
-  Joker satırlarını kopyalamak, var olmayan bir dosyayı işaret etmek demekti. `.dev` HSTS preload
-  listesinde: sertifika oluşana kadar tarayıcıyla hiçbir şekilde test edilemez, yalnızca `curl`.
+  Joker satırlarını kopyalamak, var olmayan bir dosyayı işaret etmek demekti. HSTS preload
+  listesindeki bir TLD'de sertifika oluşana kadar tarayıcıyla hiçbir şekilde test edilemez, yalnızca `curl`.
 - **`grep ersah.in` bu depoda tek bir şeyi göstermez.** 200'den fazla eşleşmenin çoğu **posta**:
   gönderim alan adı, SPF/DKIM/DMARC, inbound, reply/unsubscribe token'ları, ICS UID'leri. Taşınan
   yalnızca web host'u. Süpürmeden önce her eşleşmeyi DEĞİŞMELİ / DEĞİŞMEMELİ / TARİH diye ayır.
@@ -7791,8 +7792,8 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   deal-value unit test runs `retentionTriangle` and `valueByMonth` on the same journeys and
   compares the won counts month by month.
 - **`e2e/trial-end-extend.spec.ts` signs a MARKETING admin in on the default host** and now gets
-  `WRONG_WORLD` (#2590's per-host worlds): the sign-in page shows "this account lives in
-  SaleVali". It touches nothing a trial-end change does; fix the spec's host, not your code.
+  `WRONG_WORLD` (#2590's per-host worlds): the sign-in page says this account lives in the
+  marketing product. It touches nothing a trial-end change does; fix the spec's host, not your code.
 - **A feature card that is true only WITHOUT a module** had no tag to express it; `features.ts`
   now has `withoutCapability` and one `isFeatureShown()` filter shared by `/` and `/features`.
 
@@ -8177,7 +8178,7 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Assert a Link's `href`, not the navigation, when the target page is cold in `next dev`.** The first compile of a page can exceed the 5 s default and fail the click.
 - **A dashboard indicator with no data source is a row that says so** ("not yet measurable — needs #N"), never a 0 and never a proxy. Reviewers and sponsors read a 0 as a measurement.
 
-## 2026-10-06 — Dünya sızıntıları, adres defteri, SaleVali ingest (#2643, #2729, #2733)
+## 2026-10-06 — Dünya sızıntıları, adres defteri, hesap olayı ingest'i (#2643, #2729, #2733)
 
 - **Açık görünen bir issue'ya başlamadan önce kodu ve `git log`'u oku.** #2570 açıktı ama
   #2633 onu zaten tamamen sevk etmişti (eşleme, birim test, org başına tekillik, e2e). Kapatmak

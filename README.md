@@ -205,7 +205,7 @@ paths exist for organizations:
   all rights are held by a single person, such a license can be granted directly.
 
 For hosting, a commercial license, custom deployment, or support, contact
-**ersahin@bcsit-gmbh.de**. Strategy and rationale:
+**21072026@ersah.in**. Strategy and rationale:
 [docs/legal/licensing-strategy.md](docs/legal/licensing-strategy.md).
 
 ## Contributing

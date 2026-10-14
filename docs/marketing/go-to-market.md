@@ -119,7 +119,7 @@ commit geçmişi public. Satış cümlesi değil, olgudur — öyle sunulur.
 | "DSGVO/KVKK sertifikalı" | Sertifika yok. Söylenebilir: "kaynağı açık, kendi sunucunuzda çalıştırılabilir" |
 | "BBiG anlamında Ausbildungsnachweis / IHK'ya kabul edilen Berichtsheft" | Doğrulanmadı; odalar kendi formatını dayatıyor. Denir: "haftalık rapor + onay akışı" |
 | "MÜDEK/YÖKAK raporlaması", "BİLSİS/OBS entegrasyonu" | Yok. TR'de üniversite idaresine bu eksenden girilmez |
-| Şirketi hak sahibi göstermek (bcsit GmbH vb.) | Hak sahibi Mehmet Erşahin, gerçek kişi. Faturalama tüzel kişiliği hâlâ açık (`docs/legal/legal-tax-framework.md`) |
+| Şirketi hak sahibi göstermek (operatör şirketi vb.) | Hak sahibi Mehmet Erşahin, gerçek kişi. Faturalama tüzel kişiliği hâlâ açık (`docs/legal/legal-tax-framework.md`) |
 | "Kurumsal düzeyde ölçeklenir", ölçüsüz büyüklük iddiaları | Yük profili k6 ile ölçülüyor; ölçülmemiş rakam verilmez |
 | `crm-demo.ersah.in` | Eski adres. Tek demo adresi: https://demo.interncrm.com |
 | **"DSGVO-konform" / "DSGVO-compliant" tek başına** (ör. "DSGVO-konform, weil Sie es selbst hosten") | Uyumu **operatör** kurar, ürün kurmaz: TOM, Verarbeitungsverzeichnis, silme süreleri, AVV. Kayıtsız şartsız uyum beyanı UWG § 5 riski. Denir: "Sie hosten selbst — die Verarbeitung bleibt in Ihrer Infrastruktur und in Ihrer Verantwortung" |
@@ -211,7 +211,7 @@ Getiri, bugünkü sıfır iz durumuna göre **göreli** yazılmıştır; mutlak 
 | 7 | awesome-recruitment (Sjamilla) | B | EN | S | Düşük — birkaç yüz görüntüleme + backlink | Yok | 1 | README'ye tek satır ekleyen PR; 15 dk zaman kutusu, takip yatırımı yok |
 | 8 | awesome-hrtech (Talentbait) | B | EN | S | Düşük | Yok | 1 | Aynı: tek satır PR |
 | 9 | LinkedIn organik (kişisel profil + şirket sayfası) | A/B | **EN (hafta 3-6) → DE (7-10) → DE+TR (11-12)** (§4 faz-dil tablosu) | L | Orta-yüksek, süregelen; DE'de tek yasal "outbound benzeri" görünürlük | **Sayfa Impressum linki hazır olmadan yayına açık kalmaz** — sayfa hâlihazırda açıksa (`linkedin-playbook.md` §0) hafta 1'de ya alan doldurulur ya sayfa yayından kaldırılır | 1→3 | Önce sayfanın var olup olmadığını doğrula (Me → Manage); sonra kişisel profilden başla, Info → Website URL = tam Impressum linki |
-| 10 | InternCRM autoposter hattı (Telegram onaylı) | A/B | **EN (3-6) → DE (7-10) → DE+TR (11-12)**; 12 haftanın toplamı ~%60 DE / %25 EN / %15 TR (`autoposter-interncrm-line.md` §2.1) | M | Orta; içerik üretimini sürdürülebilir kılar | BCSIT hattından ayrı kategori/ses; kategorik yayın yasağına tabi | 1 | Yeni içerik kategorisi tanımla, fikir besle; metni HAT yazar, insan Telegram'da onaylar |
+| 10 | InternCRM autoposter hattı (Telegram onaylı) | A/B | **EN (3-6) → DE (7-10) → DE+TR (11-12)**; 12 haftanın toplamı ~%60 DE / %25 EN / %15 TR | M | Orta; içerik üretimini sürdürülebilir kılar | Operatörün mevcut hattından ayrı kategori/ses; kategorik yayın yasağına tabi | 1 | Yeni içerik kategorisi tanımla, fikir besle; metni HAT yazar, insan Telegram'da onaylar |
 | 11 | awesome-selfhosted (HRM kategorisi) | B + geliştirici | EN | M | **Stratejik olarak en değerli liste**; HRM kategorisi ince (3 kayıt) | Release'ten **4 ay** + çalışan kurulum talimatı | Faz sonrası (hafta ~18) | Bugün değil: takvime "Release + 4 ay" notu; sonra `software/interncrm.yml` PR'ı |
 | 12 | Forum Mentoring e.V. | B | DE | M | Yüksek nitelik: 120+ üniversitede program yürüten koordinatörler | DE ekran görüntüleri | 2 | AG/Jahrestagung takvimini izle; kalite standartları ↔ ekran eşleme tablosunu (1 sayfa DE) hazırla |
 | 13 | csnd — Career Service Netzwerk Deutschland | B | DE | M | Yüksek: ~200 üye, Persona B'nin en yoğun havuzu | Impressum, `/pricing`, DE demo | 2 | Üye listesinden hedef listesi çıkar (**soğuk e-posta listesi değil**); Geschäftsstelle'ye oturum önerisi |
@@ -406,8 +406,8 @@ references, **not existing image files**:
 | S2 | Mentor: `https://demo.interncrm.com/mentor` | Mentor workspace / Mentoren-Arbeitsbereich | Missing — #2225/#1399 |
 | S3 | Mentor → select a mentee → Reports tab (`/mentor/mentees/[id]`) | Weekly-report approval / Freigabe von Wochenberichten | Missing — #2225/#1399 |
 
-Capture actual rendered screens with synthetic demo data, following
-`autoposter-interncrm-line.md` §7.2. For S3, select a seeded relationship through the UI;
+Capture actual rendered screens with synthetic demo data, right after a demo reset (02:00 and
+14:00 UTC, `.github/workflows/demo-reset.yml`), at 1440×900 in the light theme. For S3, select a seeded relationship through the UI;
 `[id]` is a route parameter, not a literal demo URL. Keep the synthetic-data demo banner visible.
 Use EN for GetApp and DE for Capterra/OMR; inspect every image for real personal data,
 readability and relevance. Record the resulting repository paths here before upload.
@@ -530,7 +530,7 @@ gruplarda tartışma, karşı taraf yazdıktan **sonra** yanıt, LinkedIn'in üc
 (`linkedin-playbook.md` §0). Hafta 1'in ilk işi bunu belirlemektir: sayfa varsa Impressum alanı
 **derhal** doldurulur veya sayfa yayından kaldırılır; yoksa hafta 2'de açılır. Impressumsuz ve
 hâlihazırda yayında olan ticari bir sayfa, açılmamış bir sayfadan daha büyük risktir.
-**Autoposter hattı:** InternCRM hattı BCSIT hattından **ayrı** olmalı (farklı kitle, ses, kategoriler).
+**Autoposter hattı:** InternCRM hattı operatörün mevcut hattından **ayrı** olmalı (farklı kitle, ses, kategoriler).
 Hattın kuralları aynen geçerli: metni **hat** yazar, fikir besleyen taraf metin yazmaz; fikir ekleme
 endpoint'i dışında yazma endpoint'i kullanılmaz; **kategorik yayın yasağı** — LinkedIn'e doğrudan istek yok,
 Telegram butonlarına ajan basmaz, yayın kararı insana aittir.
@@ -591,7 +591,7 @@ Sayfa yayına girdiğinde eklenecek cümle: "Preise stehen offen auf interncrm.c
 ### 6.10 Product Hunt (Faz 3, EN — tek kullanımlık, 6 ay kilit)
 
 **Hesap:** yalnız **kişisel** hesap ("We don't allow company or brand accounts to post products or comment") —
-Mehmet self-hunt eder; hunter zorunlu değil. Kurumsal marka hesabı açılmaz, bcsit adı geçmez.
+Mehmet self-hunt eder; hunter zorunlu değil. Kurumsal marka hesabı açılmaz, operatör şirketinin adı geçmez.
 **Zamanlama:** gün 12:01 AM PT'de başlar; ilk saatte yayımlanan lansman tam 24 saatlik pencere alır.
 **Etik:** upvote istemek, toplu mesaj, teşvik → kategorik yasak; yakalanan lansman unfeatured edilebiliyor.
 Söylenebilecek tek şey: "göz atın, dürüst geri bildirim verin".

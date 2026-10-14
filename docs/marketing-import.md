@@ -71,7 +71,7 @@ checked per field: a value past its cap is a row-level `ERROR`, never a silent t
 | `contact_name` (`ansprechpartner`) | no | free text, ≤ 191 | `Company.contactName` **and** the lead's `User.fullName` |
 | `contact_email` (`email`, `e-mail`) | no | an address; `@import.local` / `@erased.local` refused | `Company.contactEmail`. It is also the lead person's **identity** for matching — but a lead this importer *creates* is stored under a generated stand-in address, never this one (see "What it writes") |
 | `contact_phone` (`telefon`, `phone`) | no | free text, ≤ 40; compared by normalised digits, so a re-spelling is not a change | `Company.contactPhone` **and** the lead's `User.phone` |
-| `external_id` (`external id`, `externalid`, `salevali_id`, `salevali id`, `externe_id`, `externe id`, `harici_id`, `harici id`) | no | the account's id in the product the tenant sells, ≤ 191, stored as written; matched trimmed and case-insensitively. For SaleVali: the merchant's `User._id` (24 hex characters) — the key [#2565](https://github.com/21072026/Internship/issues/2565) proposes; `user_number` is a display number and is **not** accepted as this column | `Company.externalId` — what the usage feed matches on ([`salevali-usage-feed.md`](marketing-vertical/salevali-usage-feed.md)) |
+| `external_id` (`external id`, `externalid`, `externe_id`, `externe id`, `harici_id`, `harici id`) | no | the account's id in the upstream product the tenant sells — its stable key, which never changes for the account; ≤ 191, stored as written; matched trimmed and case-insensitively | `Company.externalId` — what the usage feed and the account-event ingest match on ([`usage-feed.md`](usage-feed.md), [`integrations/account-events.md`](integrations/account-events.md)) |
 | `trial_started_at` (`trial_start`, `trial start`, `testbeginn`, `test_beginn`, `deneme_baslangic`, `deneme başlangıç`) | no | ISO date — see [Dates](#dates-2554) | the funnel record's `trialStartedAt` |
 | `trial_ends_at` (`trial_end`, `trial end`, `testende`, `test_ende`, `deneme_bitis`, `deneme bitiş`) | no | ISO date; not before `trial_started_at` | the funnel record's `trialEndsAt` — what the trial reminders and the expiry sweep read |
 | `customer_since` (`customer since`, `kunde_seit`, `kunde seit`, `musteri_tarihi`, `müşteri tarihi`) | no | ISO date | the funnel record's `startDate` — what the cohort, retention and aging reports read |
@@ -293,7 +293,7 @@ half-written, and the rest of the file still lands.
 
 This is the runbook: what to do, in order, when you have the real customer file in hand.
 It does not restate a rule another page owns — each warning below links the page that
-does. For the one-off move of the real SaleVali table into production, follow the
+does. For a tenant's first production import of its existing customer table, follow the
 [cutover checklist](#cutover-checklist-2555) at the end; it points back into these steps.
 
 There are two doors to the **same** engine (`runMarketingAccountImport()` in
@@ -631,7 +631,7 @@ back `UNCHANGED`.
 
 ## Cutover checklist (#2555)
 
-The one-off move of the real SaleVali customer table into the production MARKETING
+The one-off move of a tenant's existing customer table into its production MARKETING
 organisation. **An operator action** — a contributor never runs it, never sees the file and
 never touches production ([`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md)). Everything
 below happens in the admin panel ([The admin panel](#the-admin-panel-2552)); the numbered
@@ -646,10 +646,10 @@ order; stop at the first one that does not hold.
 - [ ] The **stage of the current paying customers** is decided (#2572, item 7), so every row's
       `stage` cell holds a key from [the MARKETING funnel](#the-stage-column-takes-marketing-funnel-keys-only),
       never a label.
-- [ ] The **external id** is the SaleVali `User._id` for every row (#2565's key; if #2565 decides
-      otherwise, use that — but one key for the whole file, and the same one the usage feed uses).
-- [ ] A **freeze date** for the source table is agreed and announced: nobody edits the SaleVali
-      side after the export is taken.
+- [ ] The **external id** is the account's id in the upstream product for every row — one key
+      for the whole file, and the same one the usage feed and the account-event ingest use.
+- [ ] A **freeze date** for the source table is agreed and announced: nobody edits the source
+      system after the export is taken.
 - [ ] The **default owner** is chosen (the person who owns unassigned leads) — and written down,
       because every re-run uses the same one.
 

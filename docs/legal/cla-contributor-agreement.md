@@ -6,7 +6,7 @@
 ## Karar
 
 **Projenin tek hak sahibi Mehmet Erşahin'dir** (gerçek kişi). Ürünün fikri
-mülkiyeti bir tüzel kişiye (bcsit GmbH dahil) devredilmemiştir; telif
+mülkiyeti hiçbir tüzel kişiye devredilmemiştir; telif
 `LICENSE` dosyasında da bu şekilde kayıtlıdır (`Copyright (C) 2026 Mehmet
 Erşahin`). İkili lisanslama (AGPL-3.0-or-later + ayrıca ticari lisans) yetkisi
 yalnızca hak sahibine aittir.

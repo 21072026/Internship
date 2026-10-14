@@ -20,7 +20,6 @@ bu yüzden her olgunun **tek bir sahibi** vardır — aşağıdaki tablo o sahip
 | [`content-calendar.md`](content-calendar.md) | 12 haftalık uygulama takvimi: hangi hafta ne yayınlanır, haftalık zaman bütçesi, içerik pilerleri (P1-P7), yayınlamama kuralları (Y1-Y10) | **Gönderi konularının tek kaynağı** (§2 tablosu + §2.0 metin eşlemesi) · haftalık kapasite bütçesi · faz-dil hizalaması |
 | [`linkedin-playbook.md`](linkedin-playbook.md) | LinkedIn'e özgü mekanik: sayfa/profil alan alan denetim listesi, format ve uzunluk kuralları, etkileşim protokolü, UTM şeması, ölçüm | **Kanonik demo adresi kuralı** (§3.3) · UTM şeması (§7.2) · sayfa ve profil alanlarının doğru değerleri · ÖK1/ÖK2/ÖK3 |
 | [`copy-bank.md`](copy-bank.md) | Kopyala-yapıştır metin bankası: GitHub, Show HN, Product Hunt, awesome PR'ları, Reddit, 10 LinkedIn gönderisi, ilk temas metinleri, one-pager | **Doğrulanmış sayı tablosu** (§0.1 — beş dokümanın tek sayı kaynağı) · yayın öncesi kontrol listesi (§12) · metinlerin kendisi |
-| [`autoposter-interncrm-line.md`](autoposter-interncrm-line.md) | Autoposter'ın InternCRM hattının işletim sözleşmesi: kategori seti, fikir şeması (`fikirler.json`), tekrar engelleme, görsel politikası, kategorik yayın yasağı | **Hattın nasıl beslendiği** · fikir şeması alanları · görsel çekme prosedürü · §8 yayın yasağı |
 
 ---
 
@@ -46,9 +45,8 @@ bu yüzden her olgunun **tek bir sahibi** vardır — aşağıdaki tablo o sahip
 | Kanal işe yarıyor mu, nereden okurum? | `linkedin-playbook.md` · `content-calendar.md` · `go-to-market.md` | §7 · §7 · §8 |
 | Demo linkini hangi biçimde yazarım? | `linkedin-playbook.md` | §3.3 kanonik kural kutusu |
 | Impressum linki ne? | Hepsi — kanonik yol `https://interncrm.com/imprint` | `copy-bank.md` §12 kontrol maddesi |
-| Ekran görüntüsünü nereden alırım? | `autoposter-interncrm-line.md` | §7.2 prosedür |
-| Hatta fikir nasıl beslenir? | `autoposter-interncrm-line.md` | §5 şema · §10 haftalık akış |
-| Ajan neyi yapamaz? | `autoposter-interncrm-line.md` | §8 kategorik yayın yasağı |
+| Ekran görüntüsünü nereden alırım? | `go-to-market.md` | §6.4.1 ekran görüntüsü notu (sentetik demo verisi) |
+| Ajan neyi yapamaz? | `linkedin-playbook.md` · `content-calendar.md` | §5.5 · K5 kategorik yayın yasağı |
 | Sürüm numarası kaç? | Hiçbiri — `npm run check:release-fragments` çıktısının son satırı | — |
 
 ---
@@ -67,7 +65,8 @@ bu yüzden her olgunun **tek bir sahibi** vardır — aşağıdaki tablo o sahip
    bu iki sayfa okunur; sayı tablosu bütün metinlerin kanıt tabanıdır.
 5. **`linkedin-playbook.md` §0-§1** — ön koşullar ve sayfa denetimi. LinkedIn ilk açılacak kanal.
 6. Geri kalanı **ihtiyaç anında** okunur: `copy-bank.md`'nin metin bölümleri gönderirken,
-   `linkedin-playbook.md` §5-§7 yayın günü, `autoposter-interncrm-line.md` hattı kurarken.
+   `linkedin-playbook.md` §5-§7 yayın günü. Autoposter hattının işletim notları bu repo dışında
+   tutulur (operatörün kendi altyapısı).
 
 **Haftalık iş yaparken (Pazartesi, ≈10 dk):**
 
