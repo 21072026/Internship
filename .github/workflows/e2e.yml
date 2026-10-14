@@ -11,8 +11,10 @@ on:
         description: 'Playwright --grep filter (e.g. @smoke, or a test title)'
         required: false
         default: '@smoke'
-  push:
-    branches: [main]
+  # No `push: main` since 2026-10 (#2916). Re-running the smoke set on the
+  # merged commit cost ~6,400 min a month, and the deploys never waited for
+  # it. The scheduled e2e-full.yml run on main is the net under main now, and
+  # it also took over saving the Next.js build cache that PR runs restore.
   # No `paths-ignore` here on purpose (#2719). `Playwright smoke` is a REQUIRED
   # check on `main`, and a workflow skipped by a path filter reports nothing at
   # all — so a docs-only PR sat BLOCKED with every check green, and only an
@@ -37,7 +39,7 @@ jobs:
   # don't count are the ones the old `paths-ignore` listed: docs/**,
   # releases/unreleased/**, any *.md, and root .HANDOFF-* notes. A rename counts
   # by BOTH names, so moving code into docs/ is still a code change. Every
-  # event other than a PR (push to main, a manual dispatch) always tests.
+  # event other than a PR (a manual dispatch) always tests.
   changes:
     name: Detect code changes
     runs-on: ubuntu-latest
@@ -163,10 +165,12 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
-      # Next's webpack cache. Restored on every run, SAVED only by the push to
-      # main — so PR runs start from main's cache (a branch may read its base
-      # branch's caches) without each PR push adding a few hundred MB to the
-      # repo's 10 GB cache budget and evicting the npm/Playwright caches.
+      # Next's webpack cache. Restored on every run, never saved here: the
+      # scheduled e2e-full.yml run on main saves it (#2916; until then the push
+      # to main did). So PR runs start from main's cache (a branch may read its
+      # base branch's caches) without each PR push adding a few hundred MB to
+      # the repo's 10 GB cache budget and evicting the npm/Playwright caches.
+      # Keep the key in step with e2e-full.yml.
       - name: Restore Next.js build cache
         uses: actions/cache/restore@v6
         with:
@@ -179,13 +183,6 @@ jobs:
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Save Next.js build cache
-        if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
-        uses: actions/cache/save@v6
-        with:
-          path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6

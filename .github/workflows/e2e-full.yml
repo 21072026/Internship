@@ -176,11 +176,31 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
+      # Next's webpack cache, the one e2e.yml's PR runs restore (same key). Since
+      # ci.yml and e2e.yml stopped running on push to main (#2916), this
+      # scheduled run on main is what keeps it fresh: shard 1 saves it, the
+      # other shards only read it. Caches saved on main are readable from every
+      # PR branch; a save from a dispatched branch run would not be, so only
+      # main saves. Keep the key in step with e2e.yml.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       - name: Build app
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Save Next.js build cache
+        if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 }}
+        uses: actions/cache/save@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6

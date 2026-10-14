@@ -1,7 +1,7 @@
 name: Build image (reusable)
 
 # Builds the app's Docker image ON GITHUB-HOSTED RUNNERS and pushes a
-# MULTI-ARCH manifest (linux/amd64 + linux/arm64) to ghcr.io. Every deploy
+# manifest list for linux/arm64 to ghcr.io. Every deploy
 # workflow (prod / preview / topic) calls this instead of running
 # `docker build` on the server.
 #
@@ -15,23 +15,25 @@ name: Build image (reusable)
 # included, #2910). The build stays hosted anyway: compiling on the production
 # box is what this file exists to avoid.
 #
-# WHY MULTI-ARCH (2026-09-05, #2166): the project is moving to an Oracle Cloud
-# Ampere instance, which is **arm64**. An amd64-only image does not fail at
-# `docker pull` — it fails later, at `docker run`, with "exec format error", so
-# the failure would land in the deploy step of a green pipeline. Both arches are
-# published during the migration because the old (amd64) box and the new (arm64)
-# box are live at the same time. Once the old server is retired, the amd64 half
-# of the matrix can be dropped.
+# WHY ARM64 ONLY (2026-10, #2916): the server is an Oracle Cloud Ampere
+# instance, which is **arm64** (#2166). Prod, preview and every topic env run
+# there. An amd64 image does not fail at `docker pull`; it fails later, at
+# `docker run`, with "exec format error", so the failure would land in the
+# deploy step of a green pipeline. From 2026-09-05 both arches were published,
+# because the old (amd64) box and the new one were live at the same time. The
+# old box was retired on 2026-09-06, and nothing has pulled an amd64 image since.
+# The amd64 leg was dropped once the repo went private and every hosted minute
+# started to count (~5,400 a month, #2910). The cost: an x86 machine can no
+# longer `docker run` a ghcr image natively. Run the app from source there.
 #
-# WHY A MATRIX INSTEAD OF `platforms: linux/amd64,linux/arm64`: that one-liner
-# builds the foreign arch under QEMU emulation, and `npm ci` + `next build`
-# emulated takes tens of minutes. This repo merges ~78 PRs a week and every one
-# of them builds a topic image. So each arch builds on its OWN NATIVE RUNNER
-# (`ubuntu-24.04-arm`: free while the repo was public; in a private repo it is
-# metered from the same 2,000-minute pool as x64, at $0.005/min against x64's
-# $0.006, and gets 2 vCPUs instead of 4) and the two results are stitched
-# into one manifest list afterwards. The two builds run in parallel, so
-# wall-clock is roughly unchanged from the single-arch build.
+# Each arch builds on its OWN NATIVE RUNNER (`ubuntu-24.04-arm`: free while the
+# repo was public; in a private repo it is metered from the same 2,000-minute
+# pool as x64, at $0.005/min against x64's $0.006, and gets 2 vCPUs instead of
+# 4). `platforms: linux/amd64,linux/arm64` on one runner would build the foreign
+# arch under QEMU emulation, and `npm ci` + `next build` emulated takes tens of
+# minutes. The legs are a matrix and the merge job stitches their digests into
+# one manifest list. Bringing amd64 back means adding its matrix entry AND its
+# name to EXPECTED_ARCHES in the merge job, nothing else.
 #
 # The image is the ONLY artifact that crosses over. Secrets still never leave the
 # server (deploy-prod.sh reads /etc/internship-crm/*.env there) and no build-time
@@ -110,14 +112,14 @@ jobs:
     needs: prep
     runs-on: ${{ matrix.runner }}
     strategy:
-      # Both arches are reported even when one fails; a red arm64 leg with a
-      # green amd64 leg is the exact signal that something is arch-specific.
+      # With more than one arch, every leg is reported even when one fails: a
+      # red leg next to a green one is the exact signal that something is
+      # arch-specific.
       fail-fast: false
       matrix:
+        # amd64 dropped in 2026-10 (#2916, see the header). Keep EXPECTED_ARCHES
+        # in the merge job in step with this list.
         include:
-          - arch: amd64
-            platform: linux/amd64
-            runner: ubuntu-latest
           - arch: arm64
             platform: linux/arm64
             runner: ubuntu-24.04-arm
@@ -179,6 +181,10 @@ jobs:
     name: Publish ${{ inputs.tag }} manifest
     needs: [prep, build]
     runs-on: ubuntu-latest
+    env:
+      # The arches the matrix above builds, space-separated. The two checks
+      # below fail CLOSED against this list.
+      EXPECTED_ARCHES: arm64
     outputs:
       image: ${{ needs.prep.outputs.image }}
     steps:
@@ -205,20 +211,21 @@ jobs:
           IMAGE: ${{ needs.prep.outputs.image }}
           REPO: ${{ needs.prep.outputs.repo }}
         run: |
-          # One file per arch, each named after its digest. Two is the expected
-          # count; anything else means a matrix leg silently produced nothing,
-          # and publishing a single-arch manifest under the shared tag is
-          # exactly the failure this workflow exists to prevent.
+          # One file per arch, each named after its digest. Any count other
+          # than EXPECTED_ARCHES means a matrix leg silently produced nothing,
+          # and publishing a manifest that lacks an arch under the shared tag
+          # is exactly the failure this workflow exists to prevent.
           COUNT="$(find . -type f | wc -l)"
-          if [ "$COUNT" -ne 2 ]; then
-            echo "::error::expected 2 architecture digests, found $COUNT"
+          WANT="$(wc -w <<< "$EXPECTED_ARCHES")"
+          if [ "$COUNT" -ne "$WANT" ]; then
+            echo "::error::expected $WANT architecture digest(s) ($EXPECTED_ARCHES), found $COUNT"
             exit 1
           fi
           # shellcheck disable=SC2046
           docker buildx imagetools create -t "$IMAGE" \
             $(printf "${REPO}@sha256:%s " $(find . -type f -printf '%f '))
 
-      - name: Verify both architectures resolve
+      - name: Verify every expected architecture resolves
         env:
           IMAGE: ${{ needs.prep.outputs.image }}
         run: |
@@ -232,13 +239,13 @@ jobs:
           # than counted as an architecture.
           ARCHES="$(jq -r '[.manifests[]?.platform | select(.os != "unknown") | .architecture] | sort | join(",")' manifest.json)"
           echo "manifest platforms: $ARCHES"
-          for want in amd64 arm64; do
+          for want in $EXPECTED_ARCHES; do
             case ",$ARCHES," in
               *",$want,"*) ;;
               *) echo "::error::$want missing from $IMAGE manifest (found: $ARCHES)"; exit 1 ;;
             esac
           done
-          echo "amd64 + arm64 both present"
+          echo "present: $EXPECTED_ARCHES"
 
       - name: Summary
         env:
@@ -247,5 +254,5 @@ jobs:
           {
             echo "### Pushed \`$IMAGE\`"
             echo
-            echo "Platforms: \`linux/amd64\`, \`linux/arm64\`"
+            echo "Platforms: $(printf '`linux/%s` ' $EXPECTED_ARCHES)"
           } >> "$GITHUB_STEP_SUMMARY"

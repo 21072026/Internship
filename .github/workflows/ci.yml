@@ -4,13 +4,14 @@ on:
   # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota.
   # This note used to say the gate costs ~2 min and that e2e-full, stress and
   # topic-preview stay workflow_dispatch-only. Neither is true any more. A run
-  # is two jobs, ~7 billed minutes (each job rounds up to a whole minute), and
-  # it runs on every PR push and again on every push to main. The repo is
-  # private on the Free plan since 2026-10, so those minutes come out of 2,000
-  # a month (#2910).
+  # is two jobs, ~7 billed minutes (each job rounds up to a whole minute), on
+  # every PR push. The repo is private on the Free plan since 2026-10, so those
+  # minutes come out of 2,000 a month (#2910).
+  # No `push: main` since 2026-10 (#2916). Re-running the gate on the merged
+  # commit cost ~2,300 min a month, and the deploys never waited for that run.
+  # Two PRs that pass alone but break together are caught by the next scheduled
+  # e2e-full run on main, or by `workflow_dispatch` here.
   workflow_dispatch:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 

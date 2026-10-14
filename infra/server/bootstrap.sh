@@ -89,10 +89,10 @@ step_preflight() {
   [ "${ID:-}" = "ubuntu" ] || die "expected Ubuntu, found ${ID:-unknown}"
   ok "Ubuntu ${VERSION_ID} (${VERSION_CODENAME}) on $(dpkg --print-architecture)"
 
-  # arm64 is not a detail. The images this project ships are built on
-  # ubuntu-latest, i.e. amd64; pulling one here fails at `docker run` with
-  # "exec format error", not at pull time. build-image.yml has to emit a
-  # multi-arch manifest before any deploy to this host can work.
+  # arm64 is not a detail. An amd64 image pulled here fails at `docker run`
+  # with "exec format error", not at pull time. build-image.yml builds on a
+  # native arm64 runner (#2166), and since 2026-10 builds arm64 ONLY (#2916),
+  # so a host of any other architecture cannot run the shipped images.
   if [ "$(dpkg --print-architecture)" = "arm64" ]; then
     warn "arm64 host — app images must be built for linux/arm64 (see #2166)"
   fi

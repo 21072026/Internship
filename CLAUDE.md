@@ -78,6 +78,10 @@ in the job summary which green run it is deferring to; `workflow_dispatch` alway
 A Turkish summary email (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`) goes out
 **only when the run is red** — the failing tests with error snippets. Set the repo variable
 `E2E_REPORT_MODE=always` to restore the "✅ N/N test geçti" green heartbeat.
+Since 2026-10 `ci.yml` and `e2e.yml` run on PRs and `workflow_dispatch` only, **not on push
+to `main`** (#2916, hosted minutes). The scheduled full suite is the only automatic test of a
+merged commit, and its shard 1 saves the Next.js build cache that PR runs restore. Keep that
+cache key identical in both files.
 
 **Load tests (k6)** live in `k6/` and are the *non-functional* net: the app can be
 correct and still be too slow. `k6/nightly-load.js` runs **nightly at 23:40 UTC**
@@ -170,7 +174,9 @@ went private in 2026-10 on the Free plan, which includes 2,000 hosted minutes a 
 counts against the same pool, and every job is rounded up to a whole minute (#2910). Cost is
 still not a reason to build on the box without the maintainer's explicit approval. Between
 2026-06 and 2026-07-29 the builds ran there as a quota workaround (#636), and the production
-host compiled on every PR push.
+host compiled on every PR push. The image is **linux/arm64 only** since 2026-10 (#2916). The
+box is arm64, and the amd64 leg had no consumer after the old server was retired. To add an
+arch back, add its matrix entry and its name in `EXPECTED_ARCHES` (`build-image.yml`).
 
 | Env | Container | Port | URL | Image tag | Trigger |
 |-----|-----------|------|-----|-----------|---------|
