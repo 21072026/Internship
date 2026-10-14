@@ -133,10 +133,10 @@ for (const file of files) {
 // machine-to-machine door, so it is listed here with its reason — a new one
 // cannot appear by accident.
 const KEY_ROUTES_OUTSIDE_V1 = {
-  'src/app/api/integrations/salevali/events/route.ts':
-    'SaleVali account events (#2450): the machine-to-machine ingest a source system POSTs to with a ' +
-    'companies:write key; the tenant is the key\'s bound org. Contract: ' +
-    'docs/marketing-vertical/salevali-provider-contract.md.',
+  'src/app/api/integrations/[source]/events/route.ts':
+    'Account events (#2450, #2914): the machine-to-machine ingest a registered source system POSTs to ' +
+    'with a companies:write key; the tenant is the key\'s bound org and the [source] slug is resolved ' +
+    'inside it (IntegrationSource). Contract: docs/integrations/account-events.md.',
 };
 const outside = routeFiles('src/app/api').filter((f) => !f.replace(/\\/g, '/').startsWith(`${V1_DIR}/`));
 for (const file of outside) {

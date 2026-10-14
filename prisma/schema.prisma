@@ -148,8 +148,9 @@ model Organization {
   // never inferred from an IP or a locale.
   billingCountry   String?
   // The public hostname whose sessionless forms write into THIS tenant (#2569):
-  // the marketing landing's demo form on marketing.bcsit-gmbh.de lands in the
-  // org whose `publicHost` is exactly that name. An explicit mapping, never a
+  // the marketing landing's demo form on one of the marketing hosts
+  // (MARKETING_HOSTS) lands in the org whose `publicHost` is exactly that host
+  // name. An explicit mapping, never a
   // heuristic ("the first MARKETING org"): a marketing host no org claims is a
   // CLOSED form, not the internship tenant's inbox. Lowercase hostname, no port,
   // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
@@ -211,6 +212,7 @@ model Organization {
   companyUsage            CompanyUsage[]
   contactPermissions      ContactPermission[]
   integrationEvents       IntegrationEvent[]
+  integrationSources      IntegrationSource[]
   companyContacts         CompanyContact[]
   postCampaigns           PostCampaign[]
   postRecipients          PostCampaignRecipient[]
@@ -1514,9 +1516,9 @@ model Company {
   size            String?
   address         String?
   quota           Int?
-  // The id this account carries in the product the tenant sells (#2446) — the
-  // SaleVali merchant id for a MARKETING org, whatever a later feed keys on for
-  // anyone else. Nullable and unbackfilled: a company typed in by hand, or
+  // The account's id in the source system the tenant's feeds key on (#2446) —
+  // an opaque string the upstream source system assigned, never interpreted
+  // here. Nullable and unbackfilled: a company typed in by hand, or
   // imported from the old spreadsheet, never has one, and a required column
   // would fail the import that creates it.
   //
@@ -1533,7 +1535,8 @@ model Company {
   // watching, and this epic's rule is that an ambiguous id is REPORTED (count +
   // sample), never guessed at and never turned into a failed chunk at 03:00.
   // The index below is what that lookup reads ("which company of THIS org is
-  // external id X?"). Contract: docs/marketing-vertical/salevali-usage-feed.md.
+  // external id X?"). Contracts: docs/usage-feed.md and
+  // docs/integrations/account-events.md.
   externalId      String?       @db.VarChar(191)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -1604,7 +1607,7 @@ model CompanyChannel {
 // nothing here gates anything; it is a signal.
 //
 // Filled by the nightly usage sync (#2447) from the feed described in
-// docs/marketing-vertical/salevali-usage-feed.md. No job, endpoint or screen
+// docs/usage-feed.md. No job, endpoint or screen
 // reads it yet — this slice is the table and the contract only.
 model CompanyUsage {
   id String @id @default(cuid())
@@ -1950,14 +1953,15 @@ model CompanyContact {
 // the per-account high-water mark. The row is inserted FIRST (the unique index
 // is the claim, the CompanyInquiry `convertedCompanyId` pattern), so a repeated
 // `event_id` writes nothing a second time; `outcome` records what the event did.
-// Written only by src/lib/salevaliIngest.ts, which always passes `orgId`.
+// Written only by src/lib/accountEventIngest.ts, which always passes `orgId`.
+// Contract: docs/integrations/account-events.md.
 model IntegrationEvent {
   orgId      String
   org        Organization @relation(fields: [orgId], references: [id])
   id         String       @id @default(cuid())
-  // The machine source, e.g. "salevali".
+  // The source's slug: `IntegrationSource.slug` of the same org.
   provider   String       @db.VarChar(40)
-  // The source's own event id (SaleVali: the outbox document's _id).
+  // The source's own id for this event, lower-cased; unique per org × source.
   eventId    String       @db.VarChar(64)
   eventType  String       @db.VarChar(40)
   // Lower-cased, as Company.externalId stores it.
@@ -1971,6 +1975,37 @@ model IntegrationEvent {
 
   @@unique([orgId, provider, eventId])
   @@index([orgId, provider, externalId, occurredAt])
+}
+
+// One machine source a tenant registered (#2914): what the `[source]` segment
+// of POST /api/integrations/<slug>/events resolves to. The slug is DATA — the
+// code names no source. It is looked up inside the API key's org, so another
+// tenant's slug is the same 404 as an unknown one. `slug` is the
+// `IntegrationEvent.provider` of this source's events and is immutable: a
+// rename would split the dedupe claim and the high-water mark, so a new name
+// is a new source. Registered by prisma/register-integration-source.mjs
+// (operator CLI; the demo seed adds a `demo-feed` one); read only by
+// src/lib/integrationSources.ts.
+// Contract: docs/integrations/account-events.md.
+model IntegrationSource {
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
+  // Lower-case `^[a-z0-9][a-z0-9-]{1,39}$`, never a static sibling route
+  // (src/lib/accountEventRule.ts: SOURCE_SLUG_PATTERN, RESERVED_SOURCE_SLUGS).
+  slug      String       @db.VarChar(40)
+  // Display name; also the prefix of a placeholder account name
+  // ("<label> <external id>") when an event carries no company or person.
+  label     String       @db.VarChar(80)
+  // A disabled source answers 404, exactly like an unregistered one.
+  enabled   Boolean      @default(true)
+  // Optional binding: when set, only this `companies:write` key may post for
+  // the source (403 `wrong_source_key`); null = any such key of the org.
+  apiKeyId  String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([orgId, slug])
 }
 
 model ContactPermission {

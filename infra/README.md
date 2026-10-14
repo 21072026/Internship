@@ -84,41 +84,40 @@ self-contained nginx server block for `pr<N>.interncrm.com` into `$NGINX_CONF_DI
 from step 2 and `proxy_pass`es to the topic's port; teardown removes it. Both
 reload nginx afterwards.
 
-### The marketing hosts: `marketing.bcsit-gmbh.de` / `.dev` (#2540, epic #2348)
+### The marketing hosts (`MARKETING_HOSTS`, #2540, epic #2348)
 
 The MARKETING vertical's public landing is served **from the same containers** as
-the internship product — two urls, two products, one deployment (#2355). The live
-marketing domain is `marketing.bcsit-gmbh.de` (prod, `:3200`) and the test one is
-`marketing.bcsit-gmbh.dev` (preview, `:3201`). They replaced
-`marketing.ersah.in` / `preview-marketing.ersah.in` on 2026-09-23 (#2540); that
-apex now does **mail only**, and the two retired names redirect here.
+the internship product — two urls, two products, one deployment (#2355). Prod's
+marketing host is answered on `:3200` and preview's on `:3201`; which names those
+are is environment data (`MARKETING_HOSTS`, the env files and the Caddy site
+files on the box), not something this repo writes down. They replaced the
+earlier marketing names on 2026-09-23 (#2540); that apex now does **mail only**,
+and the two retired names redirect to the current hosts.
 
 What makes the box answer for them:
 
 - **DNS** — an explicit `A` record per host → `92.5.120.186`, created on the
-  company domains directly (the `*.ersah.in` wildcard and its MX records were
+  marketing domains directly (the old apex's wildcard and its MX records were
   deliberately left alone: mail for that apex lives elsewhere).
 - **TLS** — each name is on its own apex with **no wildcard on the box**, so
   Caddy issues a certificate for it **automatically** (the same way the
   `interncrm.com` apex works: its site file carries no `tls` directive). Nothing
   to run by hand, and nothing to renew — do *not* copy the `tls /etc/caddy/certs/…`
-  lines the retired `*.ersah.in` hosts used. `.dev` is an HSTS-preloaded TLD, so
-  plain HTTP is not merely discouraged there, it is unusable: the certificate has
-  to be in place before a browser will talk to the host at all.
-- **Site file** — `/etc/caddy/sites/marketing.bcsit-gmbh.de.caddy`, one
+  lines the retired hosts used. If a host sits on an HSTS-preloaded TLD, plain
+  HTTP is not merely discouraged there, it is unusable: the certificate has to be
+  in place before a browser will talk to the host at all.
+- **Site file** — `/etc/caddy/sites/<prod marketing host>.caddy`, one
   `reverse_proxy 127.0.0.1:3200` to the prod container
-  (`marketing.bcsit-gmbh.dev.caddy` points at `:3201`). Same shape as the topic
+  (`<preview marketing host>.caddy` points at `:3201`). Same shape as the topic
   site files `topic-deploy.sh` writes; nothing else is special about them.
 - **Which host means MARKETING** is the app's business, not Caddy's:
   `src/lib/hostVertical.ts` reads `X-Forwarded-Host`/`Host` and compares it with
   `MARKETING_HOSTS` (comma-separated bare hostnames). **Unset, empty or
-  whitespace-only means the default `marketing.bcsit-gmbh.de`**, so **prod's env
-  file sets nothing** — the constant in `src/lib/servedHosts.ts` IS the live
-  marketing domain. Preview does set
-  `MARKETING_HOSTS='marketing.bcsit-gmbh.dev'` in
-  `/etc/internship-crm/preview.env` — and by setting it, preview stops answering
-  for the prod domain (the list replaces the default, it does not extend it).
-  `deploy-prod.sh` threads the variable as
+  whitespace-only means the code default in `src/lib/servedHosts.ts`**, which is
+  why prod's env file sets nothing today. Preview does set `MARKETING_HOSTS` to its
+  own marketing host in `/etc/internship-crm/preview.env` — and by setting it,
+  preview stops answering for the prod domain (the list replaces the default, it
+  does not extend it). `deploy-prod.sh` threads the variable as
   `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, i.e. an env file with no value
   puts an **empty string** in the container; the app treats that as unset
   (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the
@@ -132,16 +131,18 @@ What makes the box answer for them:
 Moving the marketing domain again means changing **both** halves close together:
 while the app still defaults to the old name, the new host serves the internship
 landing, and the moment the default moves, the old host does. Add the new site
-file first (so the name resolves and gets its certificate), then ship the code
-default, then repoint `preview.env`, then turn the old site file into a redirect.
+file first (so the name resolves and gets its certificate), then ship the
+default (or set `MARKETING_HOSTS`), then repoint `preview.env`, then turn the old
+site file into a redirect.
 
-Verify after a deploy (both must hold, on each host):
+Verify after a deploy (both must hold, on each host), with `MKT` and `MKT_PREVIEW`
+set to `https://` plus the prod and the preview marketing host:
 
 ```bash
-curl -s https://marketing.bcsit-gmbh.de/ | grep -o '<title>[^<]*</title>'  # names SaleVali, not "Internship CRM"
-curl -s https://marketing.bcsit-gmbh.de/api/health | jq '{status,sha}'     # same sha as interncrm.com
-curl -s https://marketing.bcsit-gmbh.dev/api/health | jq '{status,sha}'    # same sha as preview.interncrm.com
-curl -sI https://marketing.ersah.in/ | head -2                             # 308 → marketing.bcsit-gmbh.de
+curl -s "$MKT/" | grep -o '<title>[^<]*</title>'           # names the marketing product, not "Internship CRM"
+curl -s "$MKT/api/health" | jq '{status,sha}'               # same sha as interncrm.com
+curl -s "$MKT_PREVIEW/api/health" | jq '{status,sha}'       # same sha as preview.interncrm.com
+curl -sI https://<retired marketing name>/ | head -2       # 308 → the prod marketing host
 ```
 
 The first line is **no longer only a hand check** (#2579). Every `uptime.yml` run
@@ -240,9 +241,9 @@ on the story, #2578. Nothing below has been run by the change that wrote it.
    for content, the first suspect is `MARKETING_HOSTS` in the environment's
    env file (above).
 5. **The retired name still redirects:**
-   `curl -sI https://marketing.ersah.in/ | head -2` shows `308` and
-   `location: https://marketing.bcsit-gmbh.de/`. Repeat for
-   `preview-marketing.ersah.in` → `marketing.bcsit-gmbh.dev`.
+   `curl -sI https://<retired marketing name>/ | head -2` shows `308` and a
+   `location:` on the prod marketing host. Repeat for the retired preview name →
+   the preview marketing host.
 
 ### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)
 
@@ -421,7 +422,7 @@ on the server:
 - **The marketing world gets a second host, `pr<N>-m.interncrm.com`** (#2612), served by
   the same container. Still one DNS label, so the existing `*.interncrm.com` DNS record
   and wildcard cert cover it — no per-PR Let's Encrypt issuance (the 50/week/domain
-  ceiling is why `pr<N>-marketing.bcsit-gmbh.dev` was rejected). The container gets
+  ceiling is why a per-PR name under the preview marketing domain was rejected). The container gets
   `MARKETING_HOSTS=pr<N>-m.interncrm.com` explicitly — never the value from
   `preview.env`, which names the shared preview marketing domain — and the deploy
   points the seeded `demo-marketing` org's `publicHost` at it, so e-mail links stay on

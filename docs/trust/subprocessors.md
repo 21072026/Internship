@@ -43,12 +43,12 @@ are changed together.
 
 ## Not subprocessors
 
-- **The SaleVali usage feed is a SOURCE, not a subprocessor** (#2445,
-  `docs/marketing-vertical/salevali-usage-feed.md`). A MARKETING tenant may
+- **A product-usage feed is a SOURCE, not a subprocessor** (#2445,
+  `docs/usage-feed.md`). A MARKETING tenant may
   configure a nightly pull of its own product's per-account transaction counts.
   The direction is *inbound*: what leaves this server is an authenticated GET
   for a date window, and what arrives is business volume — no name, address or
-  anything about the merchant's own customers. It is the tenant's system and the
+  anything about the account's own customers. It is the tenant's system and the
   tenant's data on both ends, exactly like the roster feed (#1965), which is why
   neither appears in the table above: that register is derived from
   `.env.example` — the integrations the *operator* configures — and a feed

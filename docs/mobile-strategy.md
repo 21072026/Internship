@@ -1,8 +1,8 @@
 # Mobil strateji: native uygulama, PWA ve mağaza kabukları (#2085, #2775)
 
 > **Güncel karar — 2026-10-06 (maintainer):** **native uygulama yapılıyor.** Expo
-> (React Native) ile iOS + Android için **tek uygulama, iki ürün** (girişte Internship
-> CRM / SaleVali seçilir). MVP mentee + mentor; admin/pipeline/analiz uygulama içinde
+> (React Native) ile iOS + Android için **tek uygulama, iki ürün** (girişte ürün —
+> internship ya da marketing host'u — seçilir). MVP mentee + mentor; admin/pipeline/analiz uygulama içinde
 > oturumu açık web görünümünde (hibrit). Derleme Expo EAS. Kod: `apps/mobile/`
 > (README orada), epic **#2775**. Bu karar 2026-10-05 tarihli "native yok" kararını
 > **geri alır**; aşağıdaki eski gerekçeler (§ Neden ikinci bir native istemci değil)
@@ -19,7 +19,7 @@
 >    bir okuma yüzeyi açılmaz.
 >
 > TWA (`mobile/android`, `android-build.yml`) native uygulama mağazaya çıkana kadar
-> Android yedeği olarak kalır, sonra kaldırılır. Mağaza hesapları **bcsit GmbH** adına.
+> Android yedeği olarak kalır, sonra kaldırılır. Mağaza hesapları **operatör şirketi** adına.
 >
 > *Önceki karar — 2026-10-05:* native istemci yok; Android'de TWA, iOS talep olursa.
 
@@ -59,16 +59,18 @@ var olma sebebi olan görünümün tam tersi.
 ### İki dünya, iki uygulama
 
 Oturum açılan host ürünü seçer (`docs/worlds.md`) ve bir TWA tek bir host'a bağlıdır.
-Bu yüzden iki ayrı Play kaydı var:
+Bu yüzden her ürün host'u için ayrı bir Play kaydı var:
 
 | Uygulama | Paket adı | Host | Yapılandırma |
 |---|---|---|---|
-| Internship CRM | `de.bcsitgmbh.interncrm` | `interncrm.com` | `mobile/android/interncrm/twa-manifest.json` |
-| SaleVali | `de.bcsitgmbh.salevali` | `marketing.bcsit-gmbh.de` | `mobile/android/salevali/twa-manifest.json` |
+| Internship CRM | `<yayıncının ters alan adı>.interncrm` | `interncrm.com` | `mobile/android/interncrm/twa-manifest.json` |
+
+Marketing host'unun uygulaması bir müşteri markasıyla yayımlanır; onun kaydı bu dokümanda
+tutulmaz.
 
 **Paket adları kalıcıdır.** Play yayımlanmış bir paketin adını değiştirtmez. Ad,
-yayıncının (bcsit GmbH, `bcsit-gmbh.de`) ters alan adından gelir. Java paket
-segmentinde tire geçersiz olduğu için `bcsitgmbh`. Paket adı iki yerde duruyor
+yayıncının (operatör şirketi) ters alan adından gelir; Java paket segmentinde geçersiz
+olan karakterler düşer. Paket adı iki yerde duruyor
 (`src/lib/androidAppLinks.ts` ve `twa-manifest.json`), ve
 `npm run test:android-app-links` ikisini karşılaştırır.
 
@@ -109,20 +111,20 @@ bir parmak iziyle yalnızca o host'un paketini listeledi.
 
 ### Hesap ve hukuki ön koşullar (yayından önce, bu sırayla)
 
-1. **Hak sahibinden bcsit GmbH'ye yazılı dağıtım lisansı.** Yazılımın hak sahibi
-   Mehmet Erşahin'dir (gerçek kişi). Mağazada yayıncı bcsit GmbH olacağı için GmbH,
+1. **Hak sahibinden yayıncı şirkete yazılı dağıtım lisansı.** Yazılımın hak sahibi
+   Mehmet Erşahin'dir (gerçek kişi). Mağazada yayıncı operatör şirketi (bir GmbH) olacağı için GmbH,
    hakkı kendisinde olmayan bir yazılımı dağıtmış olmasın diye
    `docs/legal/legal-tax-framework.md`'nin "GmbH seçilirse" maddesindeki münhasır
    olmayan dağıtım lisansı **ilk yüklemeden önce** imzalanmalı. Bu yalnızca dağıtım
    kararıdır: faturalayan taraf kararı hâlâ ilk satışa ertelenmiş durumda, ve hak
    sahipliği değişmez.
-2. **D-U-N-S numarası** (bcsit GmbH için). Play organizasyon hesabı bunu istiyor; Apple
+2. **D-U-N-S numarası** (yayıncı şirket için). Play organizasyon hesabı bunu istiyor; Apple
    da ileride aynı numarayı isteyecek.
 3. **Play Console organizasyon hesabı** (bir kerelik 25 USD). Organizasyon hesabı,
    2023 sonrası açılan kişisel hesaplara getirilen "12 testçi × 14 gün kapalı test"
    şartına tabi değil.
 4. **AB DSA satıcı (trader) beyanı.** Adres, telefon ve e-posta mağazada herkese açık
-   yayımlanır. SaleVali için `MARKETING_OPERATOR_*`, InternshipCRM için `OPERATOR_*`
+   yayımlanır. Marketing uygulaması için `MARKETING_OPERATOR_*`, InternshipCRM için `OPERATOR_*`
    Impressum değerleriyle tutarlı olmalı.
 
 ### Mağaza kaydı kontrol listesi (uygulama başına)
@@ -205,7 +207,7 @@ Neden TWA kadar ucuz değil:
   kurumsal SSO üzerinden; yine de inceleme öncesi doğrulanmalı. B2B faturalama
   uygulama dışında olduğu için IAP gerekmez; uygulama içinde fiyat ya da "satın al"
   akışı gösterilmemeli.
-- **Hesap:** Apple Developer Program, organizasyon (bcsit GmbH, aynı D-U-N-S), yıllık
+- **Hesap:** Apple Developer Program, organizasyon (yayıncı şirket, aynı D-U-N-S), yıllık
   99 USD.
 
 ## Çevrimdışı — ertelendi
@@ -227,8 +229,8 @@ Native olmak çevrimdışını bedavaya getirmez; aynı iş native tarafta da ya
 
 > Yes. InternshipCRM is an installable progressive web app on every phone, for every
 > role and at every tier, with push notifications, home-screen shortcuts and sharing
-> into the app. On Android it is also distributed through Google Play (publisher
-> bcsit GmbH), so it can be found in the store and rolled out through your MDM. On
+> into the app. On Android it is also distributed through Google Play (published by
+> the operating company), so it can be found in the store and rolled out through your MDM. On
 > iPhone it installs from Safari in two taps and receives push notifications (iOS
 > 16.4+). Because the store app opens the same live application, every improvement
 > reaches every device the day it ships — no app update, no version skew between

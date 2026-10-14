@@ -180,7 +180,7 @@ bölünebilir — ürün yol haritası ile mentorluk müfredatı bilinçli olara
 ## 6. Açık sorular
 
 - Ürünün hukuki/vergisel çerçevesi: **hak sahipliği çözüldü** (Mehmet Erşahin, gerçek
-  kişi); **faturalayan taraf hâlâ açık** (şahıs mı, bcsit GmbH mi) — success-fee ve
+  kişi); **faturalayan taraf hâlâ açık** (şahıs mı, bir şirket mi) — success-fee ve
   abonelik faturalamasını etkiler, ilk satıştan önce netleşmeli. Bkz.
   [legal/legal-tax-framework.md](legal/legal-tax-framework.md).
 - Katkı şartları: **çözüldü** — mentee katkıları hak talebi doğurmaz, gelecek katkılar

@@ -1,21 +1,20 @@
-# Marketing dikeyi — devralınan backlog
+# MARKETING dikeyi — tasarım notları
 
-Bu klasör, kapatılan **`21072026/Marketing`** repo'sundan (SaleVali Marketing CRM)
-devralınan ürün backlog'unu tutar: 9 epic, 22 story, 89 görev; her görevin
-Almanca/Türkçe özeti, önceliği, eforu, "Done when" ölçütleri ve hazır bir
-başlangıç prompt'u var.
+Bu klasör MARKETING dikeyinin (`Organization.vertical = "MARKETING"`, epic #2348)
+tasarım notlarını tutar: funnel kaydının ne olduğu, aşama kararları, demo formu, posta
+kampanyaları, satış iletişiminin kanal kuralları ve canlıya alma listesi.
 
-Repo silinmeden önce buraya taşındı. Kaybolan tek şey GitHub issue'larının
-kendisi — dosyalardaki `21072026/Marketing/issues/...` bağlantıları artık ölü.
+Marketing CRM, bu çekirdeğin bir **dikeyidir** — ayrı bir ürün ya da ayrı bir repo değil.
+Belgeler yalnızca bu repo'nun genel kararlarını anlatır; tek bir kiracıya özgü olan her şey
+(bir müşterinin kendi sistemleri, alan adları, fiyatları, sözleşme şartları) burada
+**tutulmaz** — kiracı verisi olarak veritabanında ya da bakımcının kendi notlarında durur.
 
-## ⚠️ Bu dosyalar dikey kararından ÖNCE yazıldı
+## Dikey kararı neyi değiştirdi
 
-Backlog, Marketing CRM'in **ayrı bir ürün ve ayrı bir repo** olarak devam
-edeceği varsayımıyla yazılmıştı. Epic #2348 bunu iptal etti: Marketing artık bu
-çekirdeğin bir **dikeyi** (`Organization.vertical = "MARKETING"`). Dolayısıyla
-dosyalardaki şu varsayımlar **geçersiz**:
+Ayrı bir Marketing CRM'in varsayacağı her şeyin bu repoda bir karşılığı var; ikinci bir
+kopyası yazılmaz:
 
-| Backlog'un varsaydığı | Gerçekte ne oldu |
+| Ayrı bir CRM'in varsayacağı | Bu repoda |
 | --- | --- |
 | Kendi auth'u, davet akışı, rolleri | Bu repo'nun auth'u; `Role` enum'u **donuk** (#2348) |
 | Kendi deploy'u, health'i, yedeklemesi, cron'u | Bu repo'nunki; hepsi mevcut |
@@ -23,49 +22,31 @@ dosyalardaki şu varsayımlar **geçersiz**:
 | `LifecycleStage` enum'u | `PipelineStage` satırları + `MARKETING_FUNNEL` preset'i (`src/lib/programTemplates.ts`) |
 | Kendi i18n'i | `src/i18n/` + `check:i18n` kapısı |
 | Marketing'e özel roller | Rol yok; dikey **yetenek** kısıtlar (`src/lib/verticals.ts`) |
-| Marketing'in ayrı kullanıcı tabanı (aynı kişi iki ayrı uygulamada, aynı e-posta) | Tek `User` tablosu, ama e-posta **dünya başına** benzersiz: aynı kişi iki ürüne aynı adresle, ayrı hesap ve ayrı parolayla girer; hangisini kullandığını girdiği **host** belirler — [`../worlds.md`](../worlds.md) |
-
-**Bir görevi buradan alıp doğrudan uygulamayın.** Önce `CURATION.md`'ye bakın:
-her görev, bu repoda zaten var olana karşı denetlenip **KEEP / ADAPT / DROP**
-olarak sınıflandı ve DROP olanların neden gereksiz olduğu, karşılığı olan dosya
-adıyla yazıldı.
+| Ayrı kullanıcı tabanı (aynı kişi iki ayrı uygulamada, aynı e-posta) | Tek `User` tablosu, ama e-posta **dünya başına** benzersiz: aynı kişi iki ürüne aynı adresle, ayrı hesap ve ayrı parolayla girer; hangisini kullandığını girdiği **host** belirler — [`../worlds.md`](../worlds.md) |
 
 ## Önce oku: veri modeli kararı
 
-Backlog'un hiçbir görevinin kendi başına cevaplayamadığı tek soru var: bu şemada bir
-**funnel kaydı hangi satır?** Cevap — hesap = `Company`, funnel kaydı =
+Bu şemada bir **funnel kaydı hangi satır?** Cevap — hesap = `Company`, funnel kaydı =
 `MentorshipRelation` (sahip = `mentorId`, lead kişi = `menteeId`, hesap = `companyId`),
 lead kişi = `MENTEE` rolünde bir `User` — [`pipeline-record.md`](pipeline-record.md)
 dosyasında, gerekçeleriyle ve neyi **dışladığıyla** birlikte yazılı (epic #2348, açık
-karar 1). Bütün epic'ler bunu varsayar. **Maliyet sahibi hâlâ değiştirebilir**; değişmediği
-sürece tek bir PR sessizce farklı davranamaz.
+karar 1). Bütün MARKETING işleri bunu varsayar. **Maliyet sahibi hâlâ değiştirebilir**;
+değişmediği sürece tek bir PR sessizce farklı davranamaz.
 
 ## Dosyalar
 
 - `pipeline-record.md` — funnel kaydı nedir (bağlayıcı varsayılan karar)
 - `funnel-decision.md` — MARKETING_FUNNEL aşamaları ve DEAL_WON sonrası müşteri
-  durumu (#2572) — **taslak, maintainer onayı bekliyor**
+  durumu (#2572) — karar, 2026-10-07
 - `../worlds.md` — bir kişi, iki dünya: aynı e-posta iki üründe ayrı hesap, giriş
-  yapılan host'a göre ürün seçimi (#2590); devralınan değil, bu repo'nun kararı
-- `CURATION.md` — görev görev karar listesi (asıl okunacak dosya)
-- `backlog/INDEX.md` — devralınan epic tablosu
-- `backlog/epic-01..09-*.md` — devralınan epic'ler, olduğu gibi
-- `salevali-domain.md` — SaleVali'nin ticari modeli: fiyat V2, deneme 30 + 30, fesih, dil ve kanallar SaleVali koduna eşitlendi (kaynak satırlarıyla — #2574); yaşam döngüsü, SEPA ve müşteri kaynağı eski Marketing CRM tarihçesi
-- `salevali-usage-feed.md` — kullanım beslemesinin veri sözleşmesi (#2445),
-  devralınan değil: bu repo'nun kararlarıyla yazıldı
-- `salevali-provider-contract.md` — SaleVali'den istenenler (#2565): `externalId`
-  anahtarı, kullanım ve lisans olayı uçları, alan eşlemesi, SaleVali karşı işleri
+  yapılan host'a göre ürün seçimi (#2590)
+- [`../usage-feed.md`](../usage-feed.md) — ürün kullanım beslemesinin veri sözleşmesi (#2445)
+- [`../integrations/account-events.md`](../integrations/account-events.md) — upstream bir
+  ürünün hesap olaylarının CRM'e alınması (#2450)
 - `postal-campaigns.md` — giden müşteri kazanımı: yasal Briefwerbung kampanyası, Werbewiderspruch +
   engel listesi, DIN 5008 mektup, kampanya atfı ve `MARKETING_OPERATOR_*` (#2697)
 - `sales-email-capture.md` — satış e-postalarının CRM'e düşmesi: BCC-to-CRM, gövdesiz (karar #2564, uygulama #2809)
 - `go-live-checklist.md` — ilk gün / ilk hafta kontrol listesi ve ölçüm (#2581)
-- `old-server-teardown.md` — eski Marketing kutusunun sökümü
-- `outreach-compliance.md` — SaleVali satış iletişimi kanal kuralları (UWG § 7 /
+- `outreach-compliance.md` — MARKETING satış iletişimi kanal kuralları (UWG § 7 /
   DSGVO, #2576); CRM izin kodlarının (#2577) hukuki metni — hukuki danışmanlık değildir,
   Fachanwalt incelemesi bekliyor
-
-## Neden olduğu gibi saklandı
-
-Sadece "hâlâ geçerli" olanları taşımak, *neden* bir şeyin elendiğini kaybettirirdi.
-Bu dosyalar 89 görevin gerekçesini ve hazır prompt'larını taşıyor; ADAPT edilen bir
-görevin orijinal niyetini okumak, onu dikey mimarisine doğru çevirmenin en hızlı yolu.

@@ -51,7 +51,7 @@ ettiği her durumda.
 
 ## Bildirim
 
-Kabul edilemez davranışları **ersahin@bcsit-gmbh.de** adresinden proje
+Kabul edilemez davranışları **21072026@ersah.in** adresinden proje
 sorumlusuna bildirin.
 
 Bildirimler gizlilikle ele alınır. Ne olduğunu, ne zaman olduğunu, kimlerin dahil

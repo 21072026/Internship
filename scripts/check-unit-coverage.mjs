@@ -312,11 +312,11 @@ const FLOORS = new Map([
     },
   ],
   [
-    'src/lib/salevaliIngestRule.ts',
+    'src/lib/accountEventRule.ts',
     {
       floor: 95,
       measured: 100.0,
-      why: 'only decided SaleVali events move the funnel, and SaleVali trial dates never overwrite a window the record already carries (#2450)',
+      why: 'only three account-event types move the funnel, a source\'s trial dates never overwrite a window the record already carries, and a slug that is malformed or names a static sibling route never resolves (#2450, #2914)',
     },
   ],
   [

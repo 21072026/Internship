@@ -6,10 +6,9 @@ import path from 'node:path';
 // The usage-signal schema (#2446), pinned where a reviewer can see it break.
 //
 // WHY THIS TEST EXISTS. Every decision below was made AGAINST the obvious one,
-// and the obvious one is written down in the inherited backlog
-// (docs/marketing-vertical/backlog/epic-09-product-signals.md, T-9.1.2) as
-// "`Customer.externalId` — nullable, `@unique`". A later reader who finds a
-// duplicate merchant id and "fixes" the column by adding `@unique` — or who
+// which was also the first draft of this column: "`externalId` — nullable,
+// `@unique`". A later reader who finds a duplicate account id and "fixes" the
+// column by adding `@unique` — or who
 // adds `@@unique([orgId, externalId])` because per-tenant uniqueness is what we
 // actually want — gets a constraint that enforces NOTHING while the column is
 // still null on every row (MySQL counts NULLs in a unique index as distinct),
@@ -18,7 +17,7 @@ import path from 'node:path';
 // document; this is the assertion that keeps the third instance of it out.
 //
 // The rest pins what the data contract promises
-// (docs/marketing-vertical/salevali-usage-feed.md): a day is a day, one row per
+// (docs/usage-feed.md): a day is a day, one row per
 // account per day, the row dies with its account, the table is tenant-scoped,
 // and it has a retention window because it grows every night for ever.
 //

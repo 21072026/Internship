@@ -22,7 +22,7 @@ import {
 const NOW = new Date('2026-09-29T12:00:00Z');
 const REASON = 'Invoice 2026-0042, paid subscription since March';
 
-test('machine paths (import, ingest, the SaleVali newsletter flag) cannot write any basis but NONE', () => {
+test('machine paths (import, ingest) cannot write any basis but NONE', () => {
   for (const writer of MACHINE_WRITERS) {
     for (const channel of CONTACT_CHANNELS) {
       for (const basis of CONTACT_BASES) {

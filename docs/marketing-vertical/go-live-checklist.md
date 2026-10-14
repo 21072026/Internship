@@ -8,10 +8,10 @@ bu dosyanın durumu #2578'e yorum olarak geçer.
 
 - [ ] Prod MARKETING org'u var; `TRIAL_ACTIVE` ve `TRIAL_EXPIRED` aşamaları mevcut
       (`/admin/settings` → aşamalar; ya da deploy logundaki trial-reminders `inScope` satırı) — #2579
-- [ ] Host eşlemesi: `node prisma/set-public-host.mjs --list` prod'da `marketing.bcsit-gmbh.de`'yi
+- [ ] Host eşlemesi: `node prisma/set-public-host.mjs --list` prod'da prod marketing host'unu
       bu org'a bağlı gösteriyor; landing'de demo formu **açık** ([`demo-form.md`](demo-form.md))
-- [ ] `MARKETING_OPERATOR_*` prod + preview env dosyasında; `https://marketing.bcsit-gmbh.de/imprint`
-      **BCS-IT GmbH** gösteriyor ([`postal-campaigns.md`](postal-campaigns.md) § Operatör adımı)
+- [ ] `MARKETING_OPERATOR_*` prod + preview env dosyasında; prod marketing host'unun `/imprint`'i
+      `MARKETING_OPERATOR_NAME`'deki kimliği gösteriyor ([`postal-campaigns.md`](postal-campaigns.md) § Operatör adımı)
 - [ ] Uptime içerik probu yeşil (`uptime.yml`, açık `uptime-content-alert` issue'su yok)
 - [ ] Hukuki sayfalar (#2543) ve `outreach-compliance.md` + mektup şablonu **avukata gönderildi**
       (onay gelmeden posta kampanyası postalanmaz)

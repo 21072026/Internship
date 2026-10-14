@@ -109,7 +109,8 @@ export async function POST(request: Request) {
   }
 
   // A key that can read the public API is the paid feature (#1744); a key for
-  // SaleVali's own ingest (companies:write) is not — see SCOPE_ENTITLEMENT.
+  // a registered source's account-event ingest (companies:write) is not — see
+  // SCOPE_ENTITLEMENT.
   if (publicApiScopes(scopes).length > 0) {
     const locked = await integrationsLocked(session);
     if (locked) return locked;

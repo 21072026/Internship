@@ -5,7 +5,7 @@ The screens in the landing page's product tour
 
 - **Internship** (interncrm.com): `mentee` (the journey), `mentor` (the board)
   and `company` (a candidate view).
-- **Marketing / SaleVali** (the marketing host): `mkt-pipeline` (the funnel
+- **Marketing** (the marketing host): `mkt-pipeline` (the funnel
   board), `mkt-rep` (a sales rep's dashboard) and `mkt-insights` (funnel
   analytics). They are captured on `marketing.localhost` against the seeded
   `demo-marketing` tenant (`prisma/seed-demo-marketing.mjs`, part of

@@ -49,7 +49,7 @@ writes the table.
 
 | Writer | May write |
 | --- | --- |
-| `import`, `ingest`, `salevali-newsletter` (the machines) | **`NONE` only**, and only when no row exists |
+| `import`, `ingest` (the machines) | **`NONE` only**, and only when no row exists |
 | `doi` (the address owner's click) | `DOI_CONFIRMED`, with `confirmedAt` |
 | `inquiry` (an enquiry becoming an account) | `INQUIRY_REPLY`, or `DOI_CONFIRMED` if the enquiry was already confirmed |
 | `admin` | `EXISTING_CUSTOMER_7_3` (e-mail only, with a reason ≥ 10 chars), `INQUIRY_REPLY`, `NONE` |
@@ -78,13 +78,11 @@ Replacement (`writeReplaces`):
   (`revokedVia` becomes `LINK`, the earlier `revokedAt` stays): the admin's revocation is
   not the person's objection, and only the latter locks the row.
 
-**Why the SaleVali newsletter flag is not a basis.** SaleVali's registration box is
-pre-ticked (`salevali-client/src/app/pages/auth/Registration.jsx:46`; the Google sign-up
-path defaults `newsletter = true` server-side), and a pre-ticked box is no consent
-(CJEU C-673/17 *Planet49*). A flag carried over from another product proves nothing
-about this address owner's will. Hence `salevali-newsletter` is a machine writer:
-`NONE` only. Today no feed reads that flag; the writer name exists so the first one
-that does is refused by the rule instead of by review.
+**Why an upstream newsletter flag is not a basis.** A sign-up flag carried over from
+another product proves nothing about this address owner's will: the box may have been
+pre-ticked, and a pre-ticked box is no consent (CJEU C-673/17 *Planet49*), or never shown
+at all. Hence whatever feed carries such a flag writes as a machine: `NONE` only. Today no
+feed reads one; the first that does is refused by the rule instead of by review.
 
 **Why an admin cannot type in a DOI.** A double opt-in is the address owner's own
 click. Nobody can perform it on their behalf.
