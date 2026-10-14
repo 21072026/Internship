@@ -149,9 +149,8 @@ curl -sI https://marketing.ersah.in/ | head -2              # 308 → the prod m
 
 The first line is **no longer only a hand check** (#2579). `uptime.yml` reads
 `/` and `/imprint` on both marketing hosts every run with
-`scripts/marketing-content-probe.mjs` — the `<title>` must name the marketing
-product the probe expects and must not say `Internship CRM`. A finding opens its
-**own** incident: a separate
+`scripts/marketing-content-probe.mjs` — the `<title>` must name the marketing product and
+must not say `Internship CRM`. A finding opens its **own** incident: a separate
 `uptime-content-alert` issue + mail (subject *"Marketing host yanlış ürünü
 gösteriyor"*), never the outage's `uptime-alert` one. The two must not share a
 state — a content problem can stay open for days waiting on an env-file edit,

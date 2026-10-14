@@ -49,7 +49,7 @@ writes the table.
 
 | Writer | May write |
 | --- | --- |
-| `import`, `ingest` and any other feed (the machines) | **`NONE` only**, and only when no row exists |
+| `import`, `ingest` (the machines) | **`NONE` only**, and only when no row exists |
 | `doi` (the address owner's click) | `DOI_CONFIRMED`, with `confirmedAt` |
 | `inquiry` (an enquiry becoming an account) | `INQUIRY_REPLY`, or `DOI_CONFIRMED` if the enquiry was already confirmed |
 | `admin` | `EXISTING_CUSTOMER_7_3` (e-mail only, with a reason ≥ 10 chars), `INQUIRY_REPLY`, `NONE` |
