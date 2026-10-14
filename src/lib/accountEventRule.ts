@@ -18,6 +18,7 @@
 //
 // Unit-tested in scripts/test/account-event-rule.test.mjs.
 import { ACQUISITION_SOURCES } from './leadSourceName';
+import { TEXT_LIMITS } from './textLimits';
 
 /** The envelope version this code understands; anything else is refused. */
 export const ACCOUNT_EVENT_SCHEMA_VERSION = 1;
@@ -51,18 +52,27 @@ export const EVENT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
 /** `Company.externalId` / `IntegrationEvent.externalId` are VarChar(191). */
 export const EXTERNAL_ID_MAX = 191;
 
-const CONTROL_CHARS = /\p{Cc}/u;
+/**
+ * Printable ASCII, U+0020–U+007E. The id columns compare under the database's
+ * case- AND accent-insensitive collation (`café` = `cafe`, `straße` =
+ * `strasse`), so a non-ASCII id could silently match a different account.
+ * Inside ASCII the only folding left is letter case, which the CRM applies
+ * itself by lower-casing — a match is then exactly the string it stored.
+ */
+const PRINTABLE_ASCII = /^[\x20-\x7E]+$/;
 
 /**
  * The account's id in the source system, as the CRM stores and matches it:
- * trimmed, lower-cased, 1–191 characters, no control characters. Opaque — its
- * shape is the sender's business. Null when nothing valid is left.
+ * trimmed, 1–191 characters of printable ASCII, lower-cased. Otherwise opaque —
+ * its shape is the sender's business. Null when nothing valid is left.
+ * Checked BEFORE lower-casing, so a non-ASCII letter that lower-cases to an
+ * ASCII one (the Kelvin sign → `k`) is refused rather than folded.
  */
 export function normalizeExternalId(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const v = raw.trim().toLowerCase();
-  if (v.length === 0 || v.length > EXTERNAL_ID_MAX || CONTROL_CHARS.test(v)) return null;
-  return v;
+  const v = raw.trim();
+  if (v.length === 0 || v.length > EXTERNAL_ID_MAX || !PRINTABLE_ASCII.test(v)) return null;
+  return v.toLowerCase();
 }
 
 /**
@@ -127,9 +137,18 @@ export interface EventContact {
   company_name?: string | null;
 }
 
-/** The person on the event, "First Last", or ''. */
+/** `Company.contactName` — VarChar(191), the same cap the import validator applies. */
+export const CONTACT_NAME_MAX = TEXT_LIMITS.companyContactName;
+
+/**
+ * The person on the event, "First Last", or ''. Capped at `Company.contactName`:
+ * each part may be 191 characters on its own, and a joined name past the column
+ * would turn a valid event into a permanent `conflict` (a new account) or a
+ * failed write (gap-filling an existing one).
+ */
 export function contactFullName(contact: EventContact | null | undefined): string {
-  return [contact?.first_name, contact?.last_name].map((p) => (p ?? '').trim()).filter(Boolean).join(' ');
+  const full = [contact?.first_name, contact?.last_name].map((p) => (p ?? '').trim()).filter(Boolean).join(' ');
+  return full.slice(0, CONTACT_NAME_MAX).trim();
 }
 
 /** `Company.name` is VarChar(191). */
@@ -157,9 +176,9 @@ export interface TrialDates {
 }
 
 /**
- * The trial window a record gets from an event. The source computes the dates
- * and the CRM does not recompute them, but a date the record already carries
- * is never overwritten — the first window is the one that was agreed.
+ * The trial window a record gets from an event. The event's own dates are
+ * taken as sent, but a date the record already carries is never overwritten —
+ * the first window is the one that was agreed.
  * `fallback` is what the CRM's own rule (`trialWindowFor`, #2551) would stamp;
  * it fills only what neither the record nor the event provides.
  */

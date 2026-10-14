@@ -22,10 +22,12 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
 //      are written once;
 //   2. an account whose record is at DEAL_WON is NOT moved back by an event
 //      naming it — the refusal is logged, the stage is untouched.
-// …and the rest: a bad payload is a readable 400, a new account lands in
-// TRIAL_ACTIVE with the source's own trial dates, its Source and a NONE
-// contact permission, an event with no contact names the account after the
-// source's label; `converted` moves to DEAL_WON with a history row; a lost
+// …and the rest: a bad payload (a non-ASCII external id included) is a
+// readable 400, a new account lands in TRIAL_ACTIVE with the source's own trial
+// dates, its Source and a NONE contact permission; an event with no contact
+// creates the account alone (no funnel record), named after the source's label;
+// a long first + last name is cut to the column, not refused; `converted`
+// moves to DEAL_WON with a history row; a lost
 // record gets a NEW chained journey instead of being reopened; an out-of-date
 // event is stale; an org without a default owner answers 409 and the event is
 // retryable.
@@ -81,7 +83,7 @@ function envelope(over: Record<string, unknown> = {}) {
     occurred_at: new Date().toISOString(),
     external_id: extId(),
     trial_started_at: new Date(Date.now() - DAY).toISOString(),
-    trial_ends_at: new Date(Date.now() + 59 * DAY).toISOString(),
+    trial_ends_at: new Date(Date.now() + 19 * DAY).toISOString(),
     acquisition_source: 'youtube',
     referral_code: `AFF${STAMP}`,
     contact: { first_name: 'Ingo', last_name: 'Ingest', email: `ingo-${STAMP}@shop.example`, company_name: `Ingest Shop ${STAMP}` },
@@ -192,6 +194,13 @@ test('a bad payload is a readable 400', async ({ request }) => {
   expect(bad.status()).toBe(400);
   const paths = (await bad.json()).issues.map((i: { path: string }) => i.path);
   expect(paths).toEqual(expect.arrayContaining(['external_id', 'schema_version', 'event_type', 'event_id']));
+
+  // A non-ASCII external id is refused: the id columns fold accents, so
+  // `café-1` would otherwise be the same account as `cafe-1`.
+  const accented = await post(request, envelope({ external_id: `café-${STAMP}` }));
+  expect(accented.status()).toBe(400);
+  expect((await accented.json()).issues.map((i: { path: string }) => i.path)).toEqual(['external_id']);
+  expect(await prisma.company.count({ where: { orgId, externalId: `cafe-${STAMP}` } })).toBe(0);
 });
 
 test('the same event twice: one account, one record, the trial written once (#2452 claim 1)', async ({ request }) => {
@@ -235,12 +244,39 @@ test('the same event twice: one account, one record, the trial written once (#24
   expect(history[0].changedById).toBeNull();
 });
 
-test('an event with no contact names the new account after the source; ids are matched lower-cased', async ({ request }) => {
+test('an event with no contact creates the account alone, named after the source; ids are matched lower-cased', async ({ request }) => {
   const externalId = `EXT-${randomBytes(6).toString('hex').toUpperCase()}`;
   const res = await post(request, envelope({ external_id: externalId, contact: null }));
-  expect((await res.json()).outcome).toBe('applied');
+  const body = await res.json();
+  expect(body.outcome).toBe('applied');
+  // A funnel record's lead is a person, found or created by the contact's
+  // e-mail: without one the account is created with no record, and says so.
+  expect(body.relationId).toBeUndefined();
+  expect(body.detail).toContain('without a funnel record');
   const account = await prisma.company.findFirstOrThrow({ where: { orgId, externalId: externalId.toLowerCase() } });
   expect(account.name).toBe(`${SOURCE_LABEL} ${externalId.toLowerCase()}`);
+  expect(await prisma.mentorshipRelation.count({ where: { companyId: account.id } })).toBe(0);
+
+  // A later funnel event for it moves nothing and says why.
+  const won = await post(request, envelope({ external_id: externalId, event_type: 'converted', contact: null }));
+  const wonBody = await won.json();
+  expect(wonBody).toMatchObject({ outcome: 'recorded', companyId: account.id });
+  expect(wonBody.detail).toContain('no funnel record');
+});
+
+test('a first and last name at their own maximum are cut to the contact-name column, not refused', async ({ request }) => {
+  const externalId = extId();
+  const res = await post(
+    request,
+    envelope({
+      external_id: externalId,
+      contact: { first_name: 'F'.repeat(191), last_name: 'L'.repeat(191), email: `long-${STAMP}@shop.example`, company_name: `Long Name Shop ${STAMP}` },
+    }),
+  );
+  const body = await res.json();
+  expect(body.outcome, JSON.stringify(body)).toBe('applied');
+  const account = await prisma.company.findFirstOrThrow({ where: { orgId, externalId } });
+  expect(account.contactName).toBe('F'.repeat(191));
 });
 
 test('a won account is never moved back to the trial (#2452 claim 2)', async ({ request }) => {

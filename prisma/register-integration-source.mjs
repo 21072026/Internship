@@ -24,7 +24,11 @@
 //     in silence).
 // It WARNS, and still writes, when the organization is not a MARKETING tenant:
 // the account-event writer creates marketing accounts, so on another product
-// the events would land in a funnel that does not expect them.
+// the events would land in a funnel that does not expect them. It also WARNS
+// when the source would be enabled next to another enabled source of the same
+// organization: every source of one org matches accounts on ONE `external_id`
+// space (`Company.externalId`), so two sources that use the same id for
+// different accounts would act on one account.
 //
 // The slug is immutable by design (it keys every stored event's dedupe claim
 // and high-water mark); there is no rename — register a new source instead.
@@ -176,6 +180,21 @@ async function main() {
       apiKeyId: unbind ? null : keyArg !== undefined ? keyArg : (existing?.apiKeyId ?? null),
     };
     const describe = (s) => `label="${s.label}", ${s.enabled ? 'enabled' : 'DISABLED'}, ${s.apiKeyId ? `bound to key ${s.apiKeyId}` : 'any companies:write key'}`;
+
+    if (enabled) {
+      const siblings = await prisma.integrationSource.findMany({
+        where: { orgId: org.id, enabled: true, slug: { not: slug } },
+        select: { slug: true },
+        orderBy: { slug: 'asc' },
+      });
+      if (siblings.length > 0) {
+        console.warn(
+          `WARNING: ${org.slug} already has enabled source(s): ${siblings.map((s) => s.slug).join(', ')}. All sources of one ` +
+            'organization match accounts on ONE external_id space: an id two sources use for different accounts is one ' +
+            'account to the CRM. Use the same id for the same account, or ids that cannot collide (e.g. a per-source prefix).',
+        );
+      }
+    }
 
     if (existing) {
       const changed = ['label', 'enabled', 'apiKeyId'].filter((f) => existing[f] !== want[f]);

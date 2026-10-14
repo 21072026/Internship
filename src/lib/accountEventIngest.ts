@@ -18,6 +18,18 @@
 // is never reopened: a new trial opens a NEW journey chained by
 // `previousRelationId`, and the old record stays as it ended.
 //
+// ONE ACCOUNT NAMESPACE PER ORG. The claim and the high-water mark are kept per
+// source, but the account is matched on `Company.externalId` inside the org,
+// whichever source sent the event: two sources of one org that use the same id
+// for different accounts would act on one Company. The contract says so and the
+// operator CLI warns when a second enabled source joins an org; scoping the
+// match by source would need a source column on Company (an expand step).
+//
+// A FUNNEL RECORD NEEDS A PERSON. A new account is placed on the funnel only
+// when the event carries `contact.email` (the record's lead is a person, see
+// planFunnel in src/lib/marketingImport.ts); without one the account is created
+// alone and the answer says so in `detail`.
+//
 // NOT AUTHORITATIVE. On an existing account the feed only fills gaps
 // (`planFieldUpdates`, authoritative: false); an operator's edit is never
 // overwritten. It never writes a marketing permission: a new account gets the
@@ -47,6 +59,10 @@ import type { AccountEvent } from '@/lib/accountEventSchema';
 
 /** A `processing` claim older than this belongs to a run that died. */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
+
+/** The `detail` of a new account created without a funnel record. */
+export const NO_FUNNEL_RECORD_CREATED =
+  "account created without a funnel record (a record needs the contact's e-mail); an operator places it on the funnel";
 
 export type IngestOutcome =
   | 'applied'
@@ -181,7 +197,10 @@ async function apply(orgId: string, source: EventSource, event: AccountEvent): P
   return moveAccount(orgId, companyId, intent.toStage, stages, source, event);
 }
 
-/** A new account on the default owner's funnel, straight into TRIAL_ACTIVE. */
+/**
+ * A new account on the default owner's funnel, straight into TRIAL_ACTIVE — or,
+ * when the event names no contact e-mail, the account alone (no funnel record).
+ */
 async function createAccount(
   orgId: string,
   source: EventSource,
@@ -209,8 +228,8 @@ async function createAccount(
         where: { companyId: outcome.companyId, status: 'ACTIVE' },
         select: { id: true },
       });
-      // The import stamped the CRM's default window seconds ago; the source's
-      // own dates (the source computes them, the CRM does not) replace it.
+      // The import stamped the CRM's default window seconds ago; the dates the
+      // event carries replace it.
       if (relation && (event.trial_started_at || event.trial_ends_at)) {
         await prisma.mentorshipRelation.update({
           where: { id: relation.id },
@@ -226,7 +245,10 @@ async function createAccount(
         companyId: outcome.companyId,
         address: event.contact?.email ?? null,
       });
-      return { outcome: 'applied', companyId: outcome.companyId, relationId: relation?.id };
+      if (!relation) {
+        return { outcome: 'applied', companyId: outcome.companyId, detail: NO_FUNNEL_RECORD_CREATED };
+      }
+      return { outcome: 'applied', companyId: outcome.companyId, relationId: relation.id };
     }
     case 'exists':
       // Matched by name/VAT, not by the external id: the existing-account path

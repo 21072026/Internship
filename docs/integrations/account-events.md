@@ -30,8 +30,8 @@ One request carries one event. The tenant is always the API key's organization, 
 
 The order is the security model; each step answers before the next one runs.
 
-1. **The API key.** No key, or an unknown, expired or revoked one, is `401`. A key without the `companies:write` scope is `403`. The slug is not looked at before this, so a caller without a key gets the same `401` for every slug and cannot find out which slugs exist. Requests are rate limited per key (the same limiter and numbers as `/api/v1`).
-2. **The source.** The slug is lower-cased and looked up in the key's organization. Not registered, switched off, malformed, reserved, or registered only in *another* organization: all of these are the same `404 { "code": "unknown_source" }`.
+1. **The API key.** No key, or an unknown, expired or revoked one, is `401`. A key without the `companies:write` scope is `403`. The slug is not looked at before this, so a caller without a key gets the same `401` for every slug and cannot find out which slugs exist. Requests are rate limited per key (the same limiter and numbers as `/api/v1`). A key with a request allowance (a quota) is charged once the key passes this step, so every answer from the later steps counts toward it, a `404` or `403` included.
+2. **The source.** The slug is lower-cased and looked up in the key's organization. Not registered, switched off, malformed, reserved, or registered only in *another* organization: all of these are the same `404 { "code": "unknown_source" }`. Nothing is written, and a source an operator switched off answers exactly like one that does not exist, so a sender should park an event answered `404` and retry it later rather than drop it.
 3. **The key binding.** A source can be bound to one API key. Any other key of the organization then gets `403 { "code": "wrong_source_key" }`. An unbound source accepts any `companies:write` key of the organization.
 4. **The product.** The organization's product must include accounts (the `companies` capability), otherwise `403 { "code": "capability_unavailable" }`.
 5. **The envelope**, then the writer.
@@ -48,13 +48,13 @@ Unknown keys are ignored, so a sender may add fields without breaking anything. 
 | `schema_version` | number | yes | Always `1`. |
 | `event_type` | string | yes | One of the [event types](#event-types). |
 | `occurred_at` | string | yes | ISO 8601 with offset: when it happened at the source. |
-| `external_id` | string | yes | The account's id in the source system. Opaque: trimmed, lower-cased, 1–191 characters, no control characters. It is what `Company.externalId` holds and what every later event is matched on. |
-| `trial_started_at` | string \| null | no | ISO 8601. The trial window as the source computed it. |
+| `external_id` | string | yes | The account's id in the source system: 1–191 characters of printable ASCII (U+0020–U+007E) after trimming, stored lower-cased. Otherwise opaque. It is what `Company.externalId` holds and what every later event is matched on (see [Idempotency](#idempotency) and [Several sources in one organization](#several-sources-in-one-organization)). |
+| `trial_started_at` | string \| null | no | ISO 8601. The trial window as the source sends it. |
 | `trial_ends_at` | string \| null | no | ISO 8601. |
 | `decision_ends_at` | string \| null | no | ISO 8601. Accepted and validated, not stored yet. |
 | `acquisition_source` | string \| null | no | The channel the person reported at sign-up: `search_engine`, `social_media`, `youtube`, `referral`, `advertisement` or `other` (the list in `src/lib/leadSourceName.ts`). |
 | `referral_code` | string \| null | no | An affiliate or referral code, at most 64 characters. |
-| `contact` | object \| null | no | `first_name`, `last_name`, `company_name` (each at most 191 characters) and `email` (a valid address, at most 191). |
+| `contact` | object \| null | no | `first_name`, `last_name`, `company_name` (each at most 191 characters) and `email` (a valid address, at most 191). The account's contact name is `first_name` and `last_name` joined, cut to 191 characters. Without `email` a new account gets no funnel record (see [What an event does](#what-an-event-does)). |
 
 No field of the envelope is ever a marketing permission. A new account gets the machine `NONE` contact-permission row and nothing else ([contact-permission.md](../contact-permission.md)).
 
@@ -93,11 +93,12 @@ Any other value is a `400`.
 
 ## What an event does
 
-- **A new account** is created on the organization's default lead owner's funnel, straight into `TRIAL_ACTIVE`. Its name is the contact's company name, else the person's name, else a placeholder `"<source label> <external_id>"` that an operator renames. Its lead `Source` comes from `referral_code` (`affiliate:<code>`), else `acquisition_source` (`channel:<value>`). The source's trial dates replace the CRM's default window. Without a default lead owner the answer is `409 no_default_owner` and nothing is written, so the sender can simply retry once one is set.
+- **A new account** is created on the organization's default lead owner's funnel, straight into `TRIAL_ACTIVE`. Its name is the contact's company name, else the person's name, else a placeholder `"<source label> <external_id>"` that an operator renames. Its lead `Source` comes from `referral_code` (`affiliate:<code>`), else `acquisition_source` (`channel:<value>`). The event's trial dates replace the CRM's default window. Without a default lead owner the answer is `409 no_default_owner` and nothing is written, so the sender can simply retry once one is set.
+- **A funnel record needs a person.** The record's lead is the contact, found or created by `contact.email`. An event with no contact e-mail creates the account **alone**: the answer is `applied` with no `relationId` and a `detail` saying so. Later events for that account answer `recorded` ("the account has no funnel record; nothing moved") until an operator places the account on the funnel; a contact e-mail arriving later is filled into the account's gap but does not create the record by itself.
 - **An existing account** (matched on `external_id` inside the organization) only gets gaps filled: an operator's edit is never overwritten. A trial date the record already carries is never overwritten either.
 - **Never backwards.** A machine never moves a record to an earlier stage. A refused move is logged (`integration.backward_refused`) and answered `refused_backward`.
 - **A closed record is never reopened.** A new trial for a lost or completed account opens a **new** funnel record chained to the old one (`integration.new_journey`).
-- **Out of order.** An event older than the newest event already applied for the same account is `stale` and changes nothing.
+- **Out of order.** An event older than the newest event the same source already applied for the same account is `stale` and changes nothing.
 - An external id found on more than one account is a `conflict`; merge the accounts first.
 
 The ingest's own activity entries (`integration.event`, `integration.backward_refused`, `integration.new_journey`) belong to the organization and carry the source's slug in their detail.
@@ -108,17 +109,19 @@ Each event is claimed **once** per organization and source: `(organization, sour
 
 Ids are **case-insensitive**. `event_id` and `external_id` are stored lower-cased, and the database column collation compares them without regard to case anyway, so `EVT-1` and `evt-1` are the same event and `ACCT-7F3C` and `acct-7f3c` the same account. A sender whose ids differ only by case must not use this feed as is.
 
+Ids are **ASCII only**. The same collation also ignores accents (`café` equals `cafe`, `straße` equals `strasse`), so a non-ASCII id could match a different account. `event_id` has always been ASCII; `external_id` is refused with a `400` unless it is printable ASCII, so letter case is the only folding left and the CRM applies it itself.
+
 A claim whose processing crashed is taken over after ten minutes, and a request that fails with a server error releases its claim, so retrying is always safe.
 
 ## Responses
 
 | Status | Body | Meaning |
 |---|---|---|
-| `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"? }` | The event was handled. Only `applied` changed the funnel. |
+| `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"? }` | The event was handled. Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
 | `400` | `{ "error": "Invalid event", "issues": [{ "path", "message" }] }` | The envelope is invalid. Do not retry unchanged. |
 | `401` | `{ "error": … }` | No usable API key. |
 | `403` | `{ "error": … }`, `{ "code": "wrong_source_key" }`, `{ "code": "capability_unavailable" }` | Wrong scope, wrong key for this source, or the product has no accounts. |
-| `404` | `{ "code": "unknown_source" }` | No such source for this organization. |
+| `404` | `{ "code": "unknown_source" }` | No such source for this organization, or it is switched off. Nothing was written; park the event and retry later rather than dropping it. |
 | `409` | `{ "code": "no_default_owner" }` | Retry once the organization has a default lead owner. |
 | `429` | `{ "type": "rate_limited" \| "quota_exceeded" }` | Back off; `Retry-After` says how long. |
 
@@ -128,7 +131,7 @@ A source is one `IntegrationSource` row: `orgId`, `slug`, `label`, `enabled`, an
 
 - **slug**: 2–40 characters of `a–z`, `0–9` and `-`, starting with a letter or digit. It is the URL segment and the key every stored event is filed under, so it is **immutable**: a new name means registering a new source. The names of the other routes under `/api/integrations/` (`calendar`, `google`) are reserved.
 - **label**: up to 80 characters; shown to operators and used in placeholder account names.
-- **enabled**: a disabled source answers `404`, exactly like an unregistered one.
+- **enabled**: a disabled source answers `404`, exactly like an unregistered one. Switching a source off therefore pauses it only for senders that retry a `404`; a sender that drops on `404` loses the events posted meanwhile.
 - **apiKeyId**: optional; when set, only that `companies:write` key may post for the source.
 
 The operator registers a source with the CLI. It is a dry run unless `--apply` is given:
@@ -142,9 +145,17 @@ node prisma/register-integration-source.mjs --org <org> --slug <slug> --disable 
 node prisma/register-integration-source.mjs --list [--org <org>]
 ```
 
-Every run says whether the source is on: `--disable` switches it off and a run without it switches it back on. The CLI refuses a malformed or reserved slug, an unknown organization, and a `--key` that is not a live `companies:write` key of that organization. It warns, and still writes, when the organization is not a MARKETING tenant: the writer creates marketing accounts and funnel records.
+Every run says whether the source is on: `--disable` switches it off and a run without it switches it back on. The CLI refuses a malformed or reserved slug, an unknown organization, and a `--key` that is not a live `companies:write` key of that organization. It warns, and still writes, when the organization is not a MARKETING tenant (the writer creates marketing accounts and funnel records) and when the organization already has another enabled source (see below).
 
 The demo seed registers a `demo-feed` source in the demo marketing tenant, so a preview environment can exercise the route once an admin has issued a `companies:write` key and set a default lead owner.
+
+## Several sources in one organization
+
+An organization may register more than one source, but all of them share **one account namespace**. `external_id` is matched against `Company.externalId` inside the organization, whichever source sent the event. Two sources that both use `1001` for *different* accounts act on one account: a `converted` from one moves the funnel record the other one opened.
+
+So the sources of one organization must either use the same id for the same account (a sign-up service and a billing system of the same product, say) or ids that can never collide, for example a per-source prefix (`billing:1001`).
+
+What stays per source is the bookkeeping: the duplicate claim is keyed on `(organization, source slug, event_id)`, so two sources may reuse each other's event ids, and the out-of-order check compares an event only with the events of its own source.
 
 ## Pull instead of push
 

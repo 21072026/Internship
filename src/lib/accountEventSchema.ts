@@ -33,7 +33,7 @@ export const accountEventSchema = z.object({
       if (id === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `external_id: 1–${EXTERNAL_ID_MAX} characters after trimming, no control characters`,
+          message: `external_id: 1–${EXTERNAL_ID_MAX} characters of printable ASCII after trimming`,
         });
         return z.NEVER;
       }

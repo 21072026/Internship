@@ -148,8 +148,9 @@ model Organization {
   // never inferred from an IP or a locale.
   billingCountry   String?
   // The public hostname whose sessionless forms write into THIS tenant (#2569):
-  // the marketing landing's demo form on marketing.bcsit-gmbh.de lands in the
-  // org whose `publicHost` is exactly that name. An explicit mapping, never a
+  // the marketing landing's demo form on one of the marketing hosts
+  // (MARKETING_HOSTS) lands in the org whose `publicHost` is exactly that host
+  // name. An explicit mapping, never a
   // heuristic ("the first MARKETING org"): a marketing host no org claims is a
   // CLOSED form, not the internship tenant's inbox. Lowercase hostname, no port,
   // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so

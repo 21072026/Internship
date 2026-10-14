@@ -25,6 +25,12 @@ import { ingestAccountEvent } from '@/lib/accountEventIngest';
 //   4. the product — the org's vertical must carry the `companies` capability;
 //   5. the envelope, then the writer (src/lib/accountEventIngest.ts).
 //
+// withApiKey counts the request against a quota-limited key's allowance before
+// this handler runs, so a 404 or 403 answered below spends it like any other
+// request past the door (the contract says so). A disabled source answering
+// the same 404 as an unknown one is deliberate; the contract tells senders to
+// park and retry a 404 rather than drop the event.
+//
 // Outside /api/v1 on purpose (/api/v1 is frozen, #2348 decision 3); listed in
 // scripts/check-api-key-routes.mjs. A repeated event_id answers 200 with
 // `outcome: duplicate` and writes nothing; `no_default_owner` is a 409 the

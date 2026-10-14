@@ -15,6 +15,7 @@ const {
   ACCOUNT_ACQUISITION_SOURCES,
   ACCOUNT_EVENT_TYPES,
   ACCOUNT_NAME_MAX,
+  CONTACT_NAME_MAX,
   EVENT_ID_PATTERN,
   EXTERNAL_ID_MAX,
   RESERVED_SOURCE_SLUGS,
@@ -56,9 +57,16 @@ test('an event id is opaque, 1–64 characters of a fixed alphabet', () => {
   }
 });
 
-test('an external id is opaque: trimmed, lower-cased, 1–191 characters, no control characters', () => {
+test('an external id is opaque printable ASCII: trimmed, lower-cased, 1–191 characters', () => {
   assert.equal(normalizeExternalId('  Ext-ABC-001  '), 'ext-abc-001');
   assert.equal(normalizeExternalId('acct 42 / shop'), 'acct 42 / shop', 'any printable shape is the sender\'s business');
+  assert.equal(normalizeExternalId('Billing:1001~#'), 'billing:1001~#');
+  // The id columns also fold accents (`café` = `cafe`), so a non-ASCII id
+  // could match another account: refused, never folded.
+  for (const accented of ['café-1', 'straße', 'ＡＢＣ', 'id x', 'emoji-🙂']) {
+    assert.equal(normalizeExternalId(accented), null, JSON.stringify(accented));
+  }
+  assert.equal(normalizeExternalId('Kelvin'), null, 'checked before lower-casing: the Kelvin sign is not a k');
   assert.equal(normalizeExternalId('x'.repeat(EXTERNAL_ID_MAX)), 'x'.repeat(EXTERNAL_ID_MAX));
   assert.equal(normalizeExternalId('x'.repeat(EXTERNAL_ID_MAX + 1)), null);
   assert.equal(normalizeExternalId('   '), null);
@@ -132,6 +140,16 @@ test('a new account is named after the company, else the person, else "<source l
   assert.equal(long.length, ACCOUNT_NAME_MAX, 'a long label plus a long id still fits Company.name');
 });
 
+test('the contact name fits Company.contactName even when both parts are at their own maximum', () => {
+  assert.equal(CONTACT_NAME_MAX, 191);
+  const full = contactFullName({ first_name: 'F'.repeat(191), last_name: 'L'.repeat(191) });
+  assert.equal(full.length, CONTACT_NAME_MAX);
+  assert.ok(full.startsWith('F'.repeat(191)));
+  // A cut that lands on the separating space leaves no trailing blank.
+  assert.equal(contactFullName({ first_name: 'F'.repeat(190), last_name: 'Lovelace' }), 'F'.repeat(190));
+  assert.equal(contactFullName({ first_name: ' Ada ', last_name: ' Lovelace ' }), 'Ada Lovelace');
+});
+
 test("the source's trial dates fill gaps but never overwrite a date the record carries", () => {
   const d = (n) => new Date(Date.UTC(2026, 9, n));
   const event = { trialStartedAt: d(1), trialEndsAt: d(31) };
@@ -171,8 +189,8 @@ test('the v1 envelope: ids lower-cased, dropped fields stripped, a changed versi
     decision_ends_at: '2026-11-14T09:00:00+01:00',
     contact: { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@shop.example', company_name: null },
     // Not part of the contract: accepted and dropped, never stored or read.
-    newsletter: true,
-    status: 'anything',
+    x_sender_flag: true,
+    x_sender_note: 'anything',
   };
   const ok = accountEventSchema.safeParse(base);
   assert.ok(ok.success, JSON.stringify(ok.error?.issues));
@@ -181,7 +199,7 @@ test('the v1 envelope: ids lower-cased, dropped fields stripped, a changed versi
   assert.equal(ok.data.referral_code, 'AFF-7');
   assert.equal(ok.data.trial_started_at, null);
   assert.ok(ok.data.decision_ends_at instanceof Date);
-  assert.ok(!('newsletter' in ok.data) && !('status' in ok.data), 'unknown keys are stripped');
+  assert.ok(!('x_sender_flag' in ok.data) && !('x_sender_note' in ok.data), 'unknown keys are stripped');
 
   const bad = accountEventSchema.safeParse({
     ...base,
@@ -196,4 +214,9 @@ test('the v1 envelope: ids lower-cased, dropped fields stripped, a changed versi
   for (const p of ['schema_version', 'event_type', 'event_id', 'external_id', 'acquisition_source']) {
     assert.ok(paths.includes(p), `${p} refused (${paths.join(', ')})`);
   }
+
+  const accented = accountEventSchema.safeParse({ ...base, external_id: 'Café-1' });
+  assert.ok(!accented.success);
+  assert.deepEqual(accented.error.issues.map((i) => i.path.join('.')), ['external_id']);
+  assert.match(accented.error.issues[0].message, /printable ASCII/);
 });
