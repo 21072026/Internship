@@ -1,0 +1,91 @@
+name: Forbidden terms
+
+# Keeps a list of names off the visible surface of the repository (#2919):
+# file contents, file names, commit messages, branch names, PR titles and
+# bodies. The rule and its output format live in
+# scripts/check-forbidden-terms.mjs; docs/testing.md § Forbidden-terms guard
+# explains it.
+#
+# THE LIST IS A SECRET, NEVER A FILE
+#   The terms come only from the FORBIDDEN_TERMS secret: one case-insensitive
+#   JavaScript regular expression per line. A committed list would publish the
+#   names it keeps out. The script prints locations only (`path:line`, `commit
+#   <sha7> message`, `PR title` …), never what matched: GitHub masks the
+#   secret's exact text in a log, not a match in another case or spelling.
+#
+# TWO JOBS
+#   pr   — every pull request, blocking: what the PR ADDS (added lines, new
+#          file names, its commit messages, the branch name, title and body).
+#          `edited` is a trigger so a retitled PR is checked again.
+#   tree — every push to main, daily, and by hand: the whole tracked tree.
+#          WARN-ONLY while the cleanup of the existing tree is in progress; the
+#          `continue-on-error` line on its step is the one switch that makes it
+#          blocking.
+#
+# NO PATH FILTER, on purpose: a docs-only change can carry a name as easily as
+# code, and a path-filtered workflow reports nothing at all for the PRs it
+# skips (#2719).
+#
+# NO SECRET, NO CHECK: a fork PR gets no secrets, and neither does a repository
+# where FORBIDDEN_TERMS has not been set yet. The script then prints a notice
+# and passes; the tree job after the merge covers what a fork PR brought in.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forbidden-terms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr:
+    name: Forbidden terms (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history: the diff is taken from the merge base, and every commit
+      # of the PR is read.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Everything from the event payload goes in through env, never into the
+      # script text: a title or a branch name is user input.
+      - name: Scan what this PR adds
+        env:
+          FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-forbidden-terms.mjs --pr
+
+  tree:
+    name: Forbidden terms (tree)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Scan every tracked file and path
+        # THE SWITCH: true = warn only (findings show in the log and the job
+        # summary, the run stays green). Set it to false once the tree is clean,
+        # and the tree scan blocks like the PR scan.
+        continue-on-error: true
+        env:
+          FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+        run: node scripts/check-forbidden-terms.mjs --tree

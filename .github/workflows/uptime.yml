@@ -37,6 +37,17 @@ name: Uptime
 #   days would find "already alerting" and stay silent — exactly the gap #2169
 #   closed. A content finding on a host that is itself unreachable is left to
 #   the outage alert, so one dead marketing host still opens ONE incident.
+#
+# THE MARKETING HOSTS COME FROM A SECRET (#2919)
+#   Their URLs are the secret MARKETING_PROBE_URLS (whitespace- or
+#   newline-separated, e.g. each marketing host's `/` and `/imprint`), never a
+#   literal in this file and never a repository variable: a run log, the alert
+#   issue and the mail are all readable by anyone who can read the repository,
+#   and only secrets are masked in a log. For the same reason nothing below
+#   prints one of those URLs: a marketing host is "marketing host #<n>", the
+#   place of its origin among the distinct origins of the secret, in order. When
+#   the secret is not set the marketing hosts are not probed at all, and the run
+#   says so in a notice instead of failing.
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -81,36 +92,53 @@ jobs:
         env:
           # Production first: it is the one whose failure matters most, and
           # listing it first makes the subject line read correctly.
-          # The two marketing hosts (#2540) are separate NAMES on the same
-          # containers, so what they add is exactly what /api/health cannot tell
-          # you from the internship host: that DNS, the certificate and the Caddy
-          # site file for that name are alive. Each is on its own apex with its
-          # own automatically-issued certificate, so an expiry or a deleted site
-          # file takes only that name down — silently, until someone visits.
           TARGETS: >-
             https://interncrm.com/api/health
             https://preview.interncrm.com/api/health
             https://demo.interncrm.com/api/health
-            https://marketing.bcsit-gmbh.de/api/health
-            https://marketing.bcsit-gmbh.dev/api/health
+          # The marketing hosts (#2540) are separate NAMES on the same
+          # containers, so their /api/health adds exactly what the internship
+          # host cannot tell you: that DNS, the certificate and the Caddy site
+          # file for that name are alive. Each is on its own apex with its own
+          # automatically-issued certificate, so an expiry or a deleted site
+          # file takes only that name down — silently, until someone visits.
           # ...and /api/health cannot tell you WHICH PRODUCT a host shows: it is
           # the same JSON on every name the container serves. An empty
           # MARKETING_HOSTS once made the prod marketing domain serve the
           # internship landing (#2428) with this job green throughout. So the
-          # marketing pages are also read, and their <title> must name SaleVali
-          # and must not say "Internship CRM" (#2579; the rule lives in
-          # scripts/marketing-content-probe.mjs and its test). /imprint is
-          # listed too (#2543): a separate route that can go wrong on its own.
-          CONTENT_TARGETS: >-
-            https://marketing.bcsit-gmbh.de/
-            https://marketing.bcsit-gmbh.de/imprint
-            https://marketing.bcsit-gmbh.dev/
-            https://marketing.bcsit-gmbh.dev/imprint
+          # marketing pages are also read (#2579; /imprint too, #2543, a
+          # separate route that can go wrong on its own): each page's <title>
+          # must contain the name in its host's own /manifest.webmanifest, and
+          # that name must be neither "Internship CRM" nor the coreCRM fallback
+          # (the brand is missing). The rule lives in
+          # scripts/marketing-content-probe.mjs and its test. Both probes take
+          # their URLs from this secret (see the header).
+          MARKETING_PROBE_URLS: ${{ secrets.MARKETING_PROBE_URLS }}
           CONTENT_PROBE: .content-probe/scripts/marketing-content-probe.mjs
         run: |
           set -uo pipefail
+          MARKETING_PROBE_URLS="${MARKETING_PROBE_URLS:-}"
+          MARKETING_ON=1
+          if [ -z "${MARKETING_PROBE_URLS//[[:space:]]/}" ]; then
+            MARKETING_ON=0
+            echo "::notice title=Marketing hosts not probed::The MARKETING_PROBE_URLS secret is not set, so this run checked neither the reachability nor the content of the marketing hosts."
+          fi
+
+          # The distinct origins of MARKETING_PROBE_URLS, one per line, in
+          # order — the same key as originKey() in the content probe, so
+          # "marketing host #<n>" means the same host in both probes.
+          marketing_origins() {
+            local url origin seen=$'\n'
+            for url in $MARKETING_PROBE_URLS; do
+              origin="$(printf '%s' "$url" | sed -E 's|^(https?://[^/?#]+).*|\1|' | tr '[:upper:]' '[:lower:]')"
+              case "$seen" in *$'\n'"$origin"$'\n'*) continue ;; esac
+              seen="${seen}${origin}"$'\n'
+              printf '%s\n' "$origin"
+            done
+          }
+
           probe_all() {
-            local failed=""
+            local failed="" n=0 origin
             for url in $TARGETS; do
               # `|| echo 000` here would APPEND to curl's own output: curl exits
               # non-zero on a connection failure but has already printed `000`,
@@ -123,31 +151,47 @@ jobs:
               # just another non-200.
               if [ "$code" != "200" ]; then failed="${failed}${url} -> ${code}"$'\n'; fi
             done
+            # A marketing host is named by its number, never by its URL.
+            if [ "$MARKETING_ON" = 1 ]; then
+              while IFS= read -r origin; do
+                [ -n "$origin" ] || continue
+                n=$((n + 1))
+                code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "${origin}/api/health" 2>/dev/null)" || true
+                [ -n "$code" ] || code=000
+                if [ "$code" != "200" ]; then failed="${failed}marketing host #${n} -> ${code}"$'\n'; fi
+              done < <(marketing_origins)
+            fi
             printf '%s' "$failed"
           }
 
           # One line per wrong page, nothing when every title is right. The
-          # script exits 1 on a finding and its stdout is the detail. A run it
-          # cannot explain itself (a crash, exit 2 = no targets) is still a
+          # script reads MARKETING_PROBE_URLS itself, exits 1 on a finding and
+          # its stdout is the detail (`marketing host #<h>, page #<p> -> …`);
+          # its per-page OK/FAIL lines go to stderr, i.e. this log only. A run
+          # it cannot explain itself (a crash, exit 2 = no targets) is still a
           # finding: a probe that silently stops probing is the failure mode
           # #2169 exists to rule out.
           probe_content() {
             local out rc
-            # shellcheck disable=SC2086 # CONTENT_TARGETS is a word list on purpose
-            out="$(node "$CONTENT_PROBE" $CONTENT_TARGETS)"; rc=$?
+            [ "$MARKETING_ON" = 1 ] || return 0
+            out="$(node "$CONTENT_PROBE")"; rc=$?
             if [ "$rc" -ne 0 ] && [ -z "$out" ]; then out="content probe exited $rc without a finding"; fi
             if [ -n "$out" ]; then printf '%s\n' "$out" | sed 's/^/wrong content: /'; fi
             return 0
           }
 
           # Content findings for a host that is not answering at all belong to
-          # the outage alert, not to a second incident: drop them.
+          # the outage alert, not to a second incident: drop them. Both probes
+          # name the host by the same number ("marketing host #2 -> 000" there,
+          # "marketing host #2, page #3 -> …" here).
           drop_unreachable_hosts() {
             local line host
             while IFS= read -r line; do
               [ -n "$line" ] || continue
-              host="$(printf '%s' "$line" | sed -E 's#^wrong content: (https?://[^/ ]+).*#\1#')"
-              case "$DOWN_PART" in *"${host}/"*) continue ;; esac
+              host="$(printf '%s' "$line" | sed -nE 's/^wrong content: (marketing host #[0-9]+),.*/\1/p')"
+              if [ -n "$host" ]; then
+                case "$DOWN_PART" in *"${host} ->"*) continue ;; esac
+              fi
               printf '%s\n' "$line"
             done
           }
@@ -285,7 +329,7 @@ jobs:
           esac
           case "${CONTENT_T:-}" in
             open)  send "🔴 Marketing host yanlış ürünü gösteriyor" \
-                     "$(printf 'Marketing sayfalarının <title> etiketi SaleVali içermiyor ya da Internship CRM diyor (30 saniye arayla iki kez).\n\n%s\nOlay kaydı: %s\nİlk bakılacak yer: MARKETING_HOSTS (infra/README.md § The marketing hosts).\n' "$CONTENT_DETAIL" "$CONTENT_URL")" ;;
+                     "$(printf 'Bir marketing sayfasının <title> etiketi kendi host adresinin manifest adını içermiyor ya da o ad Internship CRM veya coreCRM (30 saniye arayla iki kez). Host numaraları, MARKETING_PROBE_URLS secret içindeki sıradır.\n\n%s\nOlay kaydı: %s\nİlk bakılacak yer: MARKETING_HOSTS ve o host için ayarlı marka (infra/README.md § The marketing hosts).\n' "$CONTENT_DETAIL" "$CONTENT_URL")" ;;
             close) send "🟢 Marketing host yeniden doğru ürünü gösteriyor" \
                      "Marketing sayfalarının başlıkları yeniden doğru. İçerik olay kaydı kapatıldı." ;;
           esac

@@ -544,16 +544,49 @@ echo "==> Route check (Host: ${FQDN}) -> ${rcode}"
 mcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${MARKETING_FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
 echo "==> Route check (Host: ${MARKETING_FQDN}) -> ${mcode}"
 
-page="$(curl -sS --max-time 15 -H "Host: ${MARKETING_HOST}" "http://127.0.0.1:${PORT}/" 2>/dev/null || true)"
-title="$(printf '%s' "$page" | tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 | sed 's/<[^>]*>//g' || true)"
-if [ -z "$title" ]; then
-  echo "==> WARN: marketing host ${MARKETING_HOST}: no <title> in the landing on :${PORT}"
-elif printf '%s' "$title" | grep -q 'Internship CRM'; then
-  echo "==> WARN: marketing host ${MARKETING_HOST} serves the INTERNSHIP landing (title: ${title})"
-elif ! printf '%s' "$title" | grep -q 'SaleVali'; then
-  echo "==> WARN: marketing host ${MARKETING_HOST}: title '${title}' does not name SaleVali"
+# Marketing host content check (#2579, #2919) — warn only. The same rule as
+# infra/deploy-prod.sh and scripts/marketing-content-probe.mjs: the landing's
+# <title> must contain the `name` of the host's own /manifest.webmanifest, and
+# that name must be neither "Internship CRM" nor the "coreCRM" fallback (the
+# brand is missing). The title and the name are never printed: the deploy log is
+# as public as the repository. infra/test/marketing-title-check.test.sh keeps
+# the three helpers below identical to their deploy-prod.sh twins.
+marketing_page_title() {
+  tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 \
+    | sed -e 's/<[^>]*>//g' -e 's/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g' \
+          -e "s/&#x27;/'/g; s/&#39;/'/g" -e 's/&amp;/\&/g' \
+    | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' || true
+}
+marketing_manifest_name() {
+  tr '\n' ' ' | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 \
+    | sed 's/^"name"[[:space:]]*:[[:space:]]*"//; s/"$//' \
+    | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' || true
+}
+marketing_title_verdict() { # <title> <manifest name>
+  local t n
+  t="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  n="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+  if [ -z "$t" ]; then printf '%s\n' 'no <title> in the landing'; return 0; fi
+  case "$t" in *'internship crm'*) printf '%s\n' 'it serves the INTERNSHIP landing'; return 0 ;; esac
+  if [ -z "$n" ]; then printf '%s\n' 'its /manifest.webmanifest has no name'; return 0; fi
+  case "$n" in *'internship crm'*) printf '%s\n' 'its manifest names the INTERNSHIP product'; return 0 ;; esac
+  if [ "$n" = 'corecrm' ]; then printf '%s\n' 'its manifest carries the coreCRM fallback name, so its brand is missing'; return 0; fi
+  case "$t" in *"$n"*) ;; *) printf '%s\n' 'its <title> does not contain its manifest name' ;; esac
+  return 0
+}
+if [ -z "${MARKETING_HOST:-}" ]; then
+  echo "==> Marketing host check skipped — this topic has no marketing host"
 else
-  echo "==> Marketing host ${MARKETING_HOST} OK — title: ${title}"
+  page="$(curl -sS --max-time 15 -H "Host: ${MARKETING_HOST}" "http://127.0.0.1:${PORT}/" 2>/dev/null || true)"
+  manifest="$(curl -sS --max-time 15 -H "Host: ${MARKETING_HOST}" "http://127.0.0.1:${PORT}/manifest.webmanifest" 2>/dev/null || true)"
+  title="$(printf '%s' "$page" | marketing_page_title)"
+  mname="$(printf '%s' "$manifest" | marketing_manifest_name)"
+  verdict="$(marketing_title_verdict "$title" "$mname")"
+  if [ -n "$verdict" ]; then
+    echo "==> WARN: marketing host ${MARKETING_HOST} on :${PORT}: ${verdict}"
+  else
+    echo "==> Marketing host ${MARKETING_HOST} OK"
+  fi
 fi
 
 # Reclaim space from older images — but never the rollback targets. `-af`

@@ -193,7 +193,7 @@ jobs:
             const marker = '<!-- topic-preview -->';
             const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
               `Branch **\`${{ github.head_ref }}\`** → **${url}**\n` +
-              `Marketing (SaleVali) world → **${marketingUrl}** (#2612)\n\n` +
+              `Marketing world → **${marketingUrl}** (#2612)\n\n` +
               `> Isolated environment for this PR (container \`internship-crm-${topic}\`, ` +
               `database \`internship_${topic}\`). Rebuilt on every push; container and database are ` +
               `both removed when this PR is merged or closed.\n` +
