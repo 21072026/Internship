@@ -298,8 +298,8 @@ async function pruneTrialReminders(ctx: RetentionContext) {
  * Daily product-usage rows (#2446).
  *
  * The one entry whose rows come from OUTSIDE this product: one row per merchant
- * account per day, fetched from the product the tenant sells
- * (docs/marketing-vertical/salevali-usage-feed.md). Like the trial claim rows
+ * account per day, fetched from the tenant's upstream source system
+ * (docs/usage-feed.md). Like the trial claim rows
  * above it carries no personal data, so this is a hygiene window rather than a
  * data-protection one — but nothing else here grows on a schedule that no user
  * of this app controls. It is in the registry for the reason PageView is — an

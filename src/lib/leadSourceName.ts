@@ -6,13 +6,15 @@
 //
 // ── THE INPUTS ───────────────────────────────────────────────────────────────
 //
-//   • `reference`          — an affiliate code (SaleVali `User.reference`).
+//   • `reference`          — an affiliate / referral code (an account event's
+//                            `referral_code`, docs/integrations/account-events.md).
 //   • `utmSource/Medium/Campaign` — the campaign parameters a browser carried
 //                            (the marketing demo form stores them raw on
 //                            CompanyInquiry, #2569; an ingest carries them too).
-//   • `acquisitionSource`  — the self-reported channel SaleVali asks for at
-//                            sign-up (`User.acquisition_source`, one of
-//                            ACQUISITION_SOURCES below).
+//   • `acquisitionSource`  — the channel the person reported themselves at
+//                            sign-up in the source system (an account event's
+//                            `acquisition_source`, one of ACQUISITION_SOURCES
+//                            below).
 //
 // ── THE PRIORITY: affiliate reference > utm_source > acquisition_source > unknown
 //

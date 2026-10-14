@@ -53,7 +53,6 @@ export class ContactPermissionRuleError extends Error {
 const SOURCE_FOR: Record<ContactPermissionWriter, ContactPermissionSource> = {
   import: 'IMPORT',
   ingest: 'INGEST',
-  'salevali-newsletter': 'INGEST',
   doi: 'DOI_LINK',
   inquiry: 'INQUIRY',
   admin: 'ADMIN',

@@ -18,7 +18,7 @@ import path from 'node:path';
 // document; this is the assertion that keeps the third instance of it out.
 //
 // The rest pins what the data contract promises
-// (docs/marketing-vertical/salevali-usage-feed.md): a day is a day, one row per
+// (docs/usage-feed.md): a day is a day, one row per
 // account per day, the row dies with its account, the table is tenant-scoped,
 // and it has a retention window because it grows every night for ever.
 //

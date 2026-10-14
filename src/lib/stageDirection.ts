@@ -1,11 +1,11 @@
 // Which way a stage move goes (#2451) — the rule, dependency-free.
 //
-// WHY. A machine writer (the SaleVali ingest, a feed, an auto-advance) acts on
-// events that can arrive late, twice, or out of order: a late `account_created`
-// for a merchant who has since bought must not drag the record back to the
-// trial. People are different — an admin moving a card back, or extending a
-// trial, is a decision — so this rule is OPT-IN: only machine writers ask it,
-// and a human move never goes through it.
+// WHY. A machine writer (the account-event ingest, a feed, an auto-advance)
+// acts on events that can arrive late, twice, or out of order: a late
+// `account_created` for a merchant who has since bought must not drag the
+// record back to the trial. People are different — an admin moving a card
+// back, or extending a trial, is a decision — so this rule is OPT-IN: only
+// machine writers ask it, and a human move never goes through it.
 //
 // THE RULE, on the org's OWN resolved stages (never hardcoded keys — a tenant's
 // pipeline is its own, #1884):

@@ -19,15 +19,15 @@ export type ContactBasis = (typeof CONTACT_BASES)[number];
 
 /**
  * Who is writing. The MACHINE writers are the ones nobody watches while they
- * run: the account import (#2405/#2562), the SaleVali usage/merchant feed
- * (#2446) and anything that reads SaleVali's own newsletter flag. SaleVali's
- * registration box is PRE-TICKED (salevali-client Registration.jsx; the Google
- * sign-up path defaults `newsletter = true` server-side) — a pre-ticked box is
- * no consent (CJEU C-673/17 Planet49), and a flag carried over from another
- * product proves nothing about this address owner's will. So a machine may
+ * run: the account import (#2405/#2562) and the feeds of a registered source
+ * system (the account-event ingest, the usage feed — #2446/#2450). No field a
+ * machine carries is ever a marketing permission: an upstream system's own
+ * "newsletter" flag may come from a pre-ticked box, and a pre-ticked box is no
+ * consent (CJEU C-673/17 Planet49); a flag carried over from another product
+ * proves nothing about this address owner's will either. So a machine may
  * record that it knows of an account's address, and nothing more.
  */
-export const MACHINE_WRITERS = ['import', 'ingest', 'salevali-newsletter'] as const;
+export const MACHINE_WRITERS = ['import', 'ingest'] as const;
 export type MachineWriter = (typeof MACHINE_WRITERS)[number];
 export type ContactPermissionWriter =
   | MachineWriter
@@ -54,7 +54,6 @@ export type ContactPermissionWriter =
 const ALLOWED: Record<ContactPermissionWriter, readonly ContactBasis[]> = {
   import: ['NONE'],
   ingest: ['NONE'],
-  'salevali-newsletter': ['NONE'],
   doi: ['DOI_CONFIRMED'],
   inquiry: ['INQUIRY_REPLY', 'DOI_CONFIRMED'],
   admin: ['EXISTING_CUSTOMER_7_3', 'INQUIRY_REPLY', 'NONE'],

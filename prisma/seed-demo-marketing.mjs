@@ -96,6 +96,15 @@ export const MARKETING_DEMO_STAGES = [
   { key: 'DEAL_LOST', label: 'Lost', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280' },
 ];
 
+/**
+ * The tenant's demo machine source (#2914): a registered `IntegrationSource`,
+ * so a topic environment can exercise `POST /api/integrations/demo-feed/events`
+ * (docs/integrations/account-events.md) with a `companies:write` key an admin
+ * mints on /admin/integrations. Not bound to a key: any such key of the org may
+ * post. Neutral on purpose — it names no real upstream system.
+ */
+export const MARKETING_DEMO_SOURCE = { slug: 'demo-feed', label: 'Demo feed' };
+
 /** The tenant's admin — the identity you sign in as to browse the marketing product. */
 export const MARKETING_ADMIN = { local: 'admin.marketing', fullName: 'Marketing Admin Demo' };
 
@@ -334,6 +343,16 @@ export async function seedMarketingDemo({ prisma, passwordHash, domain, log = co
   const owners = [];
   for (const owner of MARKETING_DEMO_OWNERS) {
     owners.push(await upsertUser({ ...owner, role: 'MENTOR' }));
+  }
+
+  // Looked up by (org, slug) first, so a re-seed creates nothing and never
+  // switches back on a demo source somebody disabled.
+  const demoSource = await prisma.integrationSource.findFirst({
+    where: { orgId: org.id, slug: MARKETING_DEMO_SOURCE.slug },
+    select: { id: true },
+  });
+  if (!demoSource) {
+    await prisma.integrationSource.create({ data: { orgId: org.id, ...MARKETING_DEMO_SOURCE } });
   }
 
   let accountsCreated = 0;

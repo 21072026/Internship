@@ -1,8 +1,10 @@
-// The SaleVali account-event writer (#2450/#2451) — the Prisma half. The rule
-// is src/lib/salevaliIngestRule.ts; the contract is
-// docs/marketing-vertical/salevali-provider-contract.md; the design notes are
-// docs/marketing-vertical/salevali-ingest.md. Push (the route) and a future pull
-// job call the SAME function — only the caller differs (contract § Taşıma).
+// The account-event writer (#2450/#2451, generic since #2914) — the Prisma
+// half. The rule is src/lib/accountEventRule.ts; the public contract is
+// docs/integrations/account-events.md. The source is a registered
+// `IntegrationSource` row (src/lib/integrationSources.ts): its slug is the
+// `provider` every claim and high-water mark is keyed on, its label names a
+// placeholder account. Push (the route) and a future pull job call the SAME
+// function — only the caller differs.
 //
 // ONE EVENT, ONCE. An `IntegrationEvent` row is inserted FIRST and its unique
 // index (orgId, provider, eventId) is the claim — the CompanyInquiry
@@ -35,14 +37,13 @@ import { recordMachineContactPermission } from '@/lib/contactPermission';
 import { leadSourceName } from '@/lib/leadSourceName';
 import { logActivity } from '@/lib/activity';
 import {
-  SALEVALI_PROVIDER,
   accountNameFor,
   contactFullName,
   ingestIntent,
   ingestTrialWindow,
   isStaleEvent,
-} from '@/lib/salevaliIngestRule';
-import type { SaleValiEvent } from '@/lib/salevaliIngestSchema';
+} from '@/lib/accountEventRule';
+import type { AccountEvent } from '@/lib/accountEventSchema';
 
 /** A `processing` claim older than this belongs to a run that died. */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
@@ -66,6 +67,12 @@ export interface IngestResult {
 
 type Stages = Awaited<ReturnType<typeof resolvePipelineStages>>;
 
+/** What the writer needs to know about the source: its key and its name. */
+export interface EventSource {
+  slug: string;
+  label: string;
+}
+
 const RELATION_SELECT = {
   id: true,
   status: true,
@@ -78,13 +85,13 @@ const RELATION_SELECT = {
 } as const;
 type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION_SELECT }>;
 
-export async function ingestSaleValiEvent(orgId: string, event: SaleValiEvent): Promise<IngestResult> {
+export async function ingestAccountEvent(orgId: string, source: EventSource, event: AccountEvent): Promise<IngestResult> {
   return runWithOrg(orgId, async () => {
-    const claimId = await claim(orgId, event);
+    const claimId = await claim(orgId, source, event);
     if (!claimId) return { outcome: 'duplicate' };
     let result: IngestResult;
     try {
-      result = await apply(orgId, event);
+      result = await apply(orgId, source, event);
     } catch (e) {
       await prisma.integrationEvent.delete({ where: { id: claimId } }).catch(() => {});
       throw e;
@@ -103,11 +110,11 @@ export async function ingestSaleValiEvent(orgId: string, event: SaleValiEvent): 
 }
 
 /** The claim row's id, or null when the event was already seen. */
-async function claim(orgId: string, event: SaleValiEvent): Promise<string | null> {
+async function claim(orgId: string, source: EventSource, event: AccountEvent): Promise<string | null> {
   const data = {
     orgId,
-    provider: SALEVALI_PROVIDER,
-    eventId: event.event_id.toLowerCase(),
+    provider: source.slug,
+    eventId: event.event_id,
     eventType: event.event_type,
     externalId: event.external_id,
     occurredAt: event.occurred_at,
@@ -120,30 +127,31 @@ async function claim(orgId: string, event: SaleValiEvent): Promise<string | null
   }
   // Seen before. A finished event stays finished; a `processing` claim whose run
   // died is taken over by ONE conditional update (two takers cannot both win).
-  const where = { orgId, provider: SALEVALI_PROVIDER, eventId: data.eventId, outcome: 'processing', createdAt: { lt: new Date(Date.now() - CLAIM_STALE_MS) } };
+  const where = { orgId, provider: source.slug, eventId: data.eventId, outcome: 'processing', createdAt: { lt: new Date(Date.now() - CLAIM_STALE_MS) } };
   const taken = await prisma.integrationEvent.updateMany({ where, data: { createdAt: new Date() } });
   if (taken.count === 0) return null;
   const row = await prisma.integrationEvent.findFirst({
-    where: { orgId, provider: SALEVALI_PROVIDER, eventId: data.eventId },
+    where: { orgId, provider: source.slug, eventId: data.eventId },
     select: { id: true },
   });
   return row?.id ?? null;
 }
 
-async function apply(orgId: string, event: SaleValiEvent): Promise<IngestResult> {
+async function apply(orgId: string, source: EventSource, event: AccountEvent): Promise<IngestResult> {
   const intent = ingestIntent(event.event_type);
   if (intent.kind === 'record') {
     await logActivity({
-      action: 'salevali.event',
+      action: 'integration.event',
+      orgId,
       targetType: 'company_external_id',
       targetId: event.external_id,
-      detail: `${event.event_type} (no funnel mapping decided yet)`,
+      detail: `${source.slug}: ${event.event_type} (recorded; this event type has no funnel mapping)`,
     });
     return { outcome: 'recorded', detail: event.event_type };
   }
 
   const newest = await prisma.integrationEvent.findFirst({
-    where: { orgId, provider: SALEVALI_PROVIDER, externalId: event.external_id, outcome: 'applied' },
+    where: { orgId, provider: source.slug, externalId: event.external_id, outcome: 'applied' },
     orderBy: { occurredAt: 'desc' },
     select: { occurredAt: true },
   });
@@ -161,30 +169,31 @@ async function apply(orgId: string, event: SaleValiEvent): Promise<IngestResult>
 
   if (intent.kind === 'won') {
     if (!companyId) return { outcome: 'unknown_account' };
-    return moveAccount(orgId, companyId, intent.toStage, stages, event);
+    return moveAccount(orgId, companyId, intent.toStage, stages, source, event);
   }
 
   if (!companyId) {
-    const created = await createAccount(orgId, event);
+    const created = await createAccount(orgId, source, event);
     if (created.outcome !== 'exists') return created;
     companyId = created.companyId;
   }
   await fillGaps(companyId, event);
-  return moveAccount(orgId, companyId, intent.toStage, stages, event);
+  return moveAccount(orgId, companyId, intent.toStage, stages, source, event);
 }
 
 /** A new account on the default owner's funnel, straight into TRIAL_ACTIVE. */
 async function createAccount(
   orgId: string,
-  event: SaleValiEvent,
+  source: EventSource,
+  event: AccountEvent,
 ): Promise<IngestResult | { outcome: 'exists'; companyId: string }> {
   const owner = await resolveDefaultLeadOwner(orgId);
   if (!owner) return { outcome: 'no_default_owner' };
-  const source = leadSourceName({ reference: event.reference, acquisitionSource: event.acquisition_source });
+  const leadSource = leadSourceName({ reference: event.referral_code, acquisitionSource: event.acquisition_source });
   const outcome = await createMarketingAccount({
     owner,
     fields: {
-      name: accountNameFor(event.external_id, event.contact),
+      name: accountNameFor(event.external_id, event.contact, source.label),
       contactName: contactFullName(event.contact) || undefined,
       contactEmail: event.contact?.email ?? undefined,
       externalId: event.external_id,
@@ -192,7 +201,7 @@ async function createAccount(
     },
     origin: 'ingest',
     actor: null,
-    leadSourceName: source.kind === 'unknown' ? null : source.name,
+    leadSourceName: leadSource.kind === 'unknown' ? null : leadSource.name,
   });
   switch (outcome.kind) {
     case 'created': {
@@ -200,8 +209,8 @@ async function createAccount(
         where: { companyId: outcome.companyId, status: 'ACTIVE' },
         select: { id: true },
       });
-      // The import stamped the CRM's default window seconds ago; SaleVali's own
-      // dates (contract: SaleVali computes, the CRM does not) replace it.
+      // The import stamped the CRM's default window seconds ago; the source's
+      // own dates (the source computes them, the CRM does not) replace it.
       if (relation && (event.trial_started_at || event.trial_ends_at)) {
         await prisma.mentorshipRelation.update({
           where: { id: relation.id },
@@ -229,7 +238,7 @@ async function createAccount(
 }
 
 /** Gap-fill only: an operator's value is never overwritten by the feed. */
-async function fillGaps(companyId: string, event: SaleValiEvent): Promise<void> {
+async function fillGaps(companyId: string, event: AccountEvent): Promise<void> {
   const current = await prisma.company.findUniqueOrThrow({
     where: { id: companyId },
     select: { externalId: true, contactEmail: true, contactName: true },
@@ -247,7 +256,8 @@ async function moveAccount(
   companyId: string,
   toStage: string,
   stages: Stages,
-  event: SaleValiEvent,
+  source: EventSource,
+  event: AccountEvent,
 ): Promise<IngestResult> {
   const relations = await prisma.mentorshipRelation.findMany({
     where: { companyId, orgId },
@@ -260,14 +270,15 @@ async function moveAccount(
 
   const current = stages.find((s) => s.key === relation.pipelineStatus);
   const closed = relation.status !== 'ACTIVE' || !!current?.isOffPath;
-  if (closed && toStage === 'TRIAL_ACTIVE') return newJourney(orgId, companyId, relation, toStage, stages, event);
+  if (closed && toStage === 'TRIAL_ACTIVE') return newJourney(orgId, companyId, relation, toStage, stages, source, event);
   if (closed || isBackwardMove(stages, relation.pipelineStatus, toStage)) {
     await logActivity({
-      action: 'salevali.backward_refused',
+      action: 'integration.backward_refused',
+      orgId,
       level: 'warning',
       targetType: 'MentorshipRelation',
       targetId: relation.id,
-      detail: `${event.event_type}: ${relation.pipelineStatus} → ${toStage} refused (a machine never moves a record backwards)`,
+      detail: `${source.slug}: ${event.event_type}: ${relation.pipelineStatus} → ${toStage} refused (a machine never moves a record backwards)`,
     });
     return { outcome: 'refused_backward', companyId, relationId: relation.id, detail: `${relation.pipelineStatus} → ${toStage}` };
   }
@@ -276,7 +287,7 @@ async function moveAccount(
 }
 
 /** One transaction: the stage, its trial window, and the history row. */
-async function moveRelation(orgId: string, relation: RelationRow, toStage: string, event: SaleValiEvent): Promise<void> {
+async function moveRelation(orgId: string, relation: RelationRow, toStage: string, event: AccountEvent): Promise<void> {
   const window =
     toStage === 'TRIAL_ACTIVE'
       ? ingestTrialWindow(
@@ -306,7 +317,7 @@ async function moveRelation(orgId: string, relation: RelationRow, toStage: strin
 }
 
 /**
- * A new trial for a merchant whose record is closed (lost, or completed): a NEW
+ * A new trial for an account whose record is closed (lost, or completed): a NEW
  * journey, chained by `previousRelationId`, for the same lead and owner. The
  * old record is not reopened; an ACTIVE-but-lost one is completed first, so
  * the lead never has two active records (#419).
@@ -317,7 +328,8 @@ async function newJourney(
   previous: RelationRow,
   toStage: string,
   stages: Stages,
-  event: SaleValiEvent,
+  source: EventSource,
+  event: AccountEvent,
 ): Promise<IngestResult> {
   if (!stages.some((s) => s.key === toStage)) return { outcome: 'conflict', detail: `the org has no ${toStage} stage` };
   const window = ingestTrialWindow(
@@ -346,10 +358,11 @@ async function newJourney(
     });
   });
   await logActivity({
-    action: 'salevali.new_journey',
+    action: 'integration.new_journey',
+    orgId,
     targetType: 'MentorshipRelation',
     targetId: created.id,
-    detail: `${event.event_type}: new journey after ${previous.pipelineStatus} (${previous.id})`,
+    detail: `${source.slug}: ${event.event_type}: new journey after ${previous.pipelineStatus} (${previous.id})`,
   });
   return { outcome: 'applied', companyId, relationId: created.id };
 }
