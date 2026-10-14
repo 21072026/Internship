@@ -24,6 +24,60 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.359.4-beta] - 2026-10-14
+
+_Shipped 2026-10-14 07:26 UTC · commit [e73db7b](https://github.com/21072026/Internship/commit/e73db7b28438811d407198a494b4226d115d5dba)_
+
+- **CI checks, deploy scripts and bot comments no longer print a tenant name or a marketing hostname, and a forbidden-terms guard keeps such names out** (#2919). The marketing content check no longer compares the served `<title>` with a hard-coded brand. A page's `<title>` must now contain the `name` in its host's own `/manifest.webmanifest`, and that name must be neither `Internship CRM` nor the `coreCRM` fallback. The same rule runs in `scripts/marketing-content-probe.mjs` (uptime), `infra/deploy-prod.sh` and `infra/server/topic-deploy.sh` (both warn-only). The new `infra/test/marketing-title-check.test.sh` keeps the three copies in step. `uptime.yml` reads the marketing URLs from the `MARKETING_PROBE_URLS` secret and names a host only by its number. When the secret is unset it skips them with a notice and neither opens nor closes an incident about them. The deploy checks print neither the title, the manifest name nor a hostname. The deploy workflows still pass the probe host in their step script, so the deploy job log shows it until the hostnames move out of the workflow files. The topic-preview comment says "Marketing world", `android-build.yml` builds only the generic app, and `build-image.yml` no longer uploads Docker build records. New: `scripts/check-forbidden-terms.mjs` + `forbidden-terms.yml`. The guard takes its list only from the `FORBIDDEN_TERMS` secret and prints locations, never matches. It blocks a PR that adds a match (lines, file names, commit messages and authors, branch, title, body). It turns a push to `main` red when the push brings one in, which covers squash messages, fork PRs and direct pushes. Every run that has the repository's secrets fails when the list is missing. It also scans the whole tree on `main` and daily, warn-only for now.
+
+## [0.359.3-beta] - 2026-10-14
+
+_Shipped 2026-10-14 07:15 UTC · commit [aeeb132](https://github.com/21072026/Internship/commit/aeeb1324d64ddb6746c19142ba2bbfd1d0edd179)_
+
+**Machine sources are registered per organization; one generic account-event route (#2914).** A new tenant model `IntegrationSource` (`slug`, `label`, `enabled`, optional `apiKeyId`, `@@unique([orgId, slug])`, in `TENANT_MODELS`) is what `POST /api/integrations/[source]/events` resolves its slug to, inside the API key's organization: no key is a 401 for every slug, an unregistered, disabled, malformed, reserved or other-org slug is one `404 unknown_source`, and a source bound to one key answers `403 wrong_source_key` to the others. The previous single-source route and its libs are replaced by `src/lib/accountEventRule.ts` (pure, unit-tested: event types, opaque ids, `SOURCE_SLUG_PATTERN`, `RESERVED_SOURCE_SLUGS`), `accountEventSchema.ts`, `accountEventIngest.ts` and the resolver `integrationSources.ts`; the v1 envelope is generic (`referral_code`, `contact.first_name/last_name`, a generic event-type vocabulary; ids stored lower-cased, `external_id` limited to printable ASCII because the id columns also fold accents; the joined contact name is cut to its column) and `IntegrationEvent.provider` is the source's slug. Activity entries are `integration.event`, `integration.backward_refused` and `integration.new_journey`, now stamped with the org. Sources are registered with the operator CLI `prisma/register-integration-source.mjs` (dry run unless `--apply`; it warns when a second enabled source joins an organization, since all sources of one organization share one `external_id` space); the demo marketing tenant gets a `demo-feed` source. The caller-less extra machine writer key in the contact-permission rule is removed (machines still write `NONE` only). Contract: `docs/integrations/account-events.md`. Unit `scripts/test/account-event-rule.test.mjs`, e2e `e2e/account-event-ingest.spec.ts`.
+
+## [0.359.2-beta] - 2026-10-14
+
+_Shipped 2026-10-14 06:25 UTC · commit [55263f3](https://github.com/21072026/Internship/commit/55263f3c832444bb82894a8ebca3f65450b3a507)_
+
+**Documentation and changelog wording made tenant-neutral (#2915):** tenant- and operator-specific notes left the public docs; the remaining docs, `CHANGELOG.md` and the `/release-notes` entries now speak of "the MARKETING tenant", "an upstream source system", "the operator" and "the marketing hosts (`MARKETING_HOSTS`)" ("the Marketing CRM" in user-facing notes, EN/TR/DE kept in parity), with no price figures, hostnames or source-system internals. The product-usage feed contract is now the generic `docs/usage-feed.md`; release entries whose linked commit message named a tenant keep their date but drop the commit link (`commit` is optional on `ReleaseNote`). The contact address in README, CONTRIBUTING and the Code of Conduct is 21072026@ersah.in. `CLAUDE.md` gains the rule that tenant names never enter this repo.
+
+## [0.359.1-beta] - 2026-10-13
+
+_Shipped 2026-10-13 21:52 UTC · commit [a83f7c5](https://github.com/21072026/Internship/commit/a83f7c519be62ef1aa1608bc6d9fec9e0998b732)_
+
+**Native push: no registration loop, explanation before the permission prompt (#2775):** on Android, expo-notifications re-emits `onDevicePushToken` on every token fetch, so the `addPushTokenListener` handler that re-registered on each event looped — about 24 `POST /api/push/native` a second on the emulator. `deviceTokenEvent()` (`apps/mobile/src/lib/push.ts`, unit-tested) now records the first token and re-registers only on a real change, and `registerPush` runs one registration per host at a time. The `messages` channel is created only after the person agrees to the explanation (or permission is already granted), because creating it first let Android show its own prompt and the explanation never appeared. Verified on the emulator: delivery in the background and with the process dead, and a tap routes to the Messages tab, the Notifications tab and the native thread, cold start included (release build — the dev client swallows the launch intent). `docs/mobile-push.md` gains the test notes and the `eas credentials`-from-the-repo-root trap.
+
+## [0.359.0-beta] - 2026-10-13
+
+_Shipped 2026-10-13 19:43 UTC · commit [0b36dcd](https://github.com/21072026/Internship/commit/0b36dcdc70f1faa2156739f3f5cb5bea51a88abe)_
+
+**2FA for everyone + an enrolment coverage report (#1644):** `require2fa` gains a fourth mode, `all`, that holds every role — mentees, company and source logins included — at `/security-setup` until they enrol; the company and source shells now carry the same server-side gate as the others (impersonation still skips it everywhere). The vocabulary is pure in `src/lib/twoFactorPolicyRule.ts` (which mode covers which role, what "stricter" means, how many people a switch would hold) and unit-tested. `GET /api/admin/2fa-coverage` (admin-only, org from the session) returns per-role `{ total, enabled, percentage }` for active accounts plus a paginated list — or a CSV — of those without 2FA; `/admin/settings` shows it next to the policy select, with the coverage of the selected mode, and a switch to a stricter mode asks for confirmation naming how many accounts it will hold.
+
+## [0.358.0-beta] - 2026-10-13
+
+_Shipped 2026-10-13 19:20 UTC · commit [332e82c](https://github.com/21072026/Internship/commit/332e82c7cc4fd736c4a931c01ab632c7fe20d338)_
+
+**Native push for the mobile app (#2775):** a new message now reaches the Android app while it is closed, and a tap opens the native thread in the right product. Delivery goes through the Expo push service with plain `fetch` (`src/lib/expoPush.ts`, rules in `src/lib/expoPushRules.ts`: batches of 100, `DeviceNotRegistered` deletes the row, other ticket/receipt errors count towards the same 5-strike ceiling as web push, never throws). `sendPushToUser` fans one payload and one category check out to browsers **and** app installs; native push needs no VAPID keys, so `sendNewMessagePush` no longer bails out without them. New model `NativePushToken` keyed by `(token, host)` — one phone, one Expo token, two products — and `POST/DELETE /api/push/native` (session required; the host is the one the request arrived on). A launch-time `refresh` never re-creates a row, so a device revoked on /account stays revoked until the next sign-in. Session revocation (`revokeAllTrustedDevices` / `revokeTrustedDevicesForUsers`) drops the account's tokens; the push retention rule now covers them too. /account lists app installs next to browsers. Optional `EXPO_ACCESS_TOKEN`. Design: `docs/mobile-push.md`.
+
+## [0.357.1-beta] - 2026-10-13
+
+_Shipped 2026-10-13 18:48 UTC · commit [5996a71](https://github.com/21072026/Internship/commit/5996a71be7be0b1e6cd4d560262608ace56087c7)_
+
+**Funnel analytics: a win-back is a new journey, a handover is not** (#2845, decision #2572 Q6). Transfer chains were already folded into one journey (#2556); the new win-back chain (#2842) shares the same `previousRelationId` link and would have been folded too, hiding the churn and the return. `cutChurnLinks()` (`src/lib/funnelKpi.ts`, unit-tested) drops a link whose predecessor closed as `ENDED_CHURNED` before chaining, in both the funnel and the deal-value routes.
+
+## [0.357.0-beta] - 2026-10-13
+
+_Shipped 2026-10-13 18:48 UTC · commit [5996a71](https://github.com/21072026/Internship/commit/5996a71be7be0b1e6cd4d560262608ace56087c7)_
+
+**Marketing import: `contract_ends_at`** (#2844, decision #2572 Q7). A won customer who already gave notice imports with the day the contract ends (`MentorshipRelation.contractEndsAt`, #2841); the column is refused on any row that is not `DEAL_WON`, and follows the import's one overwrite policy (gaps only unless authoritative). `customer_since` and `trial_ends_at` already shipped in #2554, so the cutover (#2555) now has every column the decision asks for.
+
+## [0.356.0-beta] - 2026-10-13
+
+_Shipped 2026-10-13 18:48 UTC · commit [5996a71](https://github.com/21072026/Internship/commit/5996a71be7be0b1e6cd4d560262608ace56087c7)_
+
+**The trial's decision window** (#2843, decision #2572 Q2). `TRIAL_EXPIRED` is the decision window; it closes `trialEndsAt` + `DECISION_WINDOW_DAYS` (30), derived in `src/lib/trialReminderRule.ts` (`decisionWindowEndsAt`, `isDecisionWindowClosing`), never stored. A week before it closes (and after, while nobody decided) the record shows `decision_window_closing` with the date in its owner's attention queue, and the daily trial sweep rings the owner once (`trial.decisionWindowClosing`, in-app), claimed through `TrialReminder` at the negative threshold `DECISION_WINDOW_CLAIM` so it can never collide with the 7/3/0 ladder. Never a stage move. Unit `scripts/test/decision-window.test.mjs`, e2e `e2e/decision-window.spec.ts`.
+
 ## [0.355.0-beta] - 2026-10-12
 
 _Shipped 2026-10-12 16:14 UTC · commit [623af3d](https://github.com/21072026/Internship/commit/623af3d2aa8313c94697a96a63e8f55d6ebe60b7)_

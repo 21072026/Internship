@@ -65,6 +65,74 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.359.0-beta',
+    date: '2026-10-13',
+    time: '19:43',
+    commit: '0b36dcd',
+    highlights: {
+      en: [
+        "Admins can now require two-factor authentication for everyone, and see per role who has enrolled — with a list of the accounts that have not, downloadable as CSV. Switching to a stricter policy shows how many people it will affect and asks you to confirm first.",
+      ],
+      tr: [
+        "Yöneticiler artık iki adımlı doğrulamayı herkes için zorunlu kılabilir ve rol başına kimin kurduğunu görebilir; kurmamış hesapların listesi CSV olarak indirilebilir. Daha sıkı bir politikaya geçerken kaç kişinin etkileneceği gösterilir ve önce onay istenir.",
+      ],
+      de: [
+        "Admins können die Zwei-Faktor-Authentifizierung jetzt für alle verlangen und je Rolle sehen, wer sie eingerichtet hat — mit einer Liste der Konten ohne 2FA, auch als CSV. Beim Wechsel zu einer strengeren Richtlinie wird angezeigt, wie viele Personen betroffen sind, und vorher eine Bestätigung verlangt.",
+      ],
+    },
+  },
+  {
+    version: '0.358.0-beta',
+    date: '2026-10-13',
+    time: '19:20',
+    commit: '332e82c',
+    highlights: {
+      en: [
+        "The Android app now notifies you of new messages even when it is closed. Tap the notification to open the conversation — in the right product, if you use both. Signing out of one product stops its notifications only, and you can see and revoke the app under Account settings → Devices receiving push notifications.",
+      ],
+      tr: [
+        "Android uygulaması artık kapalıyken bile yeni mesajları bildiriyor. Bildirime dokununca sohbet açılıyor — iki ürünü de kullanıyorsan doğru üründe. Bir üründen çıkış yapmak yalnızca o ürünün bildirimlerini durdurur; uygulamayı Hesap ayarları → Anlık bildirim alan cihazlar altında görüp kaldırabilirsin.",
+      ],
+      de: [
+        "Die Android-App benachrichtigt dich jetzt auch bei geschlossener App über neue Nachrichten. Ein Tipp auf die Benachrichtigung öffnet das Gespräch — im richtigen Produkt, wenn du beide nutzt. Die Abmeldung von einem Produkt beendet nur dessen Benachrichtigungen, und unter Kontoeinstellungen → Geräte, die Push-Benachrichtigungen erhalten, kannst du die App sehen und widerrufen.",
+      ],
+    },
+  },
+  {
+    version: '0.357.0-beta',
+    date: '2026-10-13',
+    time: '18:48',
+    commit: '5996a71',
+    highlights: {
+      en: [
+        "The account import takes the day a customer’s contract ends, so customers who already gave notice arrive with their notice period.",
+      ],
+      tr: [
+        "Hesap içe aktarımı müşterinin sözleşme bitiş gününü alır; fesih bildirmiş müşteriler ihbar süreleriyle birlikte gelir.",
+      ],
+      de: [
+        "Der Account-Import übernimmt das Vertragsende, sodass Kunden, die bereits gekündigt haben, mit ihrer Kündigungsfrist ankommen.",
+      ],
+    },
+  },
+  {
+    version: '0.356.0-beta',
+    date: '2026-10-13',
+    time: '18:48',
+    commit: '5996a71',
+    highlights: {
+      en: [
+        "A week before an expired trial’s decision window closes, it shows up in your attention queue with the date, and you get one reminder.",
+      ],
+      tr: [
+        "Süresi dolan bir denemenin karar penceresi kapanmadan bir hafta önce, tarihiyle birlikte dikkat kuyruğunuzda görünür ve bir kez hatırlatılırsınız.",
+      ],
+      de: [
+        "Eine Woche bevor das Entscheidungsfenster einer abgelaufenen Testphase schließt, erscheint sie mit Datum in Ihrer Aufmerksamkeitsliste, und Sie werden einmal erinnert.",
+      ],
+    },
+  },
+  {
     version: '0.355.0-beta',
     date: '2026-10-12',
     time: '16:14',

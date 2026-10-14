@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The trial's decision window** (#2843, decision #2572 Q2). `TRIAL_EXPIRED` is the decision window; it closes `trialEndsAt` + `DECISION_WINDOW_DAYS` (30), derived in `src/lib/trialReminderRule.ts` (`decisionWindowEndsAt`, `isDecisionWindowClosing`), never stored. A week before it closes (and after, while nobody decided) the record shows `decision_window_closing` with the date in its owner's attention queue, and the daily trial sweep rings the owner once (`trial.decisionWindowClosing`, in-app), claimed through `TrialReminder` at the negative threshold `DECISION_WINDOW_CLAIM` so it can never collide with the 7/3/0 ladder. Never a stage move. Unit `scripts/test/decision-window.test.mjs`, e2e `e2e/decision-window.spec.ts`.",
-  "notes": {
-    "en": ["A week before an expired trial’s decision window closes, it shows up in your attention queue with the date, and you get one reminder."],
-    "tr": ["Süresi dolan bir denemenin karar penceresi kapanmadan bir hafta önce, tarihiyle birlikte dikkat kuyruğunuzda görünür ve bir kez hatırlatılırsınız."],
-    "de": ["Eine Woche bevor das Entscheidungsfenster einer abgelaufenen Testphase schließt, erscheint sie mit Datum in Ihrer Aufmerksamkeitsliste, und Sie werden einmal erinnert."]
-  }
-}
