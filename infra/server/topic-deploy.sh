@@ -123,9 +123,9 @@ fi
 # pr<N>.<domain>, so every sign-in callback on a topic env pointed at a host
 # that does not resolve.
 HOST="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
-# Second public host on the SAME wildcard (#2612). Option A in the issue used
-# pr<N>-marketing.bcsit-gmbh.dev, which would mint a new certificate per PR
-# (50/week/domain). pr<N>-m.<BASE_DOMAIN> is still two worlds on two hosts,
+# Second public host on the SAME wildcard (#2612). Option A in the issue used a
+# per-PR name under the preview marketing domain, which would mint a new
+# certificate per PR (50/week/domain). pr<N>-m.<BASE_DOMAIN> is still two worlds on two hosts,
 # and it rides the cert this script already prefers. Do NOT inherit
 # MARKETING_HOSTS from ENV_FILE — that file names the shared preview domain.
 MARKETING_HOST="${ENV_PREFIX}${TOPIC}-m.${BASE_DOMAIN}"

@@ -19,32 +19,59 @@
 //   Locations only, never what matched and never a pattern. GitHub masks the
 //   secret's exact text in a log, but a match in another case or spelling is
 //   not the secret's text and would be printed in the clear. So a finding is
-//   `path:line`, `<path> (file name)`, `commit <sha7> message`, `PR title`,
-//   `PR body` or `branch name`. A path that itself matches is printed with each
-//   match replaced by `***`.
+//   `path:line`, `<path> (file name)`, `commit <sha7> message`, `commit <sha7>
+//   author`, `commit <sha7> committer`, `PR title`, `PR body` or `branch name`.
+//   A path that itself matches is printed with every path segment that holds a
+//   match replaced by `***` (a whole segment, never just the matched part:
+//   overlapping or alternative terms would otherwise leave part of a longer
+//   term next to the stars).
 //
 // MODES
 //   --pr    What a pull request ADDS: the added lines of `git diff base...head`,
-//           the paths of added, renamed and copied files, every commit message
-//           in `base..head`, the head branch name and the PR title and body.
-//           Inputs: BASE_SHA, HEAD_SHA (or --base/--head), and optionally
-//           HEAD_REF, PR_TITLE, PR_BODY. Lines a PR deletes are fine: removing
-//           a name is the point.
+//           the paths of added, renamed and copied files, every commit in
+//           `base..head` (message, author, committer), the head branch name and
+//           the PR title and body. Inputs: BASE_SHA, HEAD_SHA (or
+//           --base/--head). The branch, title and body come from HEAD_REF,
+//           PR_TITLE and PR_BODY when those are set (local runs, tests), else
+//           from the event payload at GITHUB_EVENT_PATH. CI passes them that
+//           way so they never appear in the step's `env:` block, which GitHub
+//           prints in the log. Lines a PR deletes are fine: removing a name is
+//           the point.
+//   --push  What a push to the default branch brought in: the same checks as
+//           --pr without branch, title and body, i.e. added lines, new file
+//           names and every commit (message, author, committer) in
+//           `base..head`. It is what catches the squash message a merge wrote,
+//           a fork PR (which gets no secret, so its --pr run checked nothing)
+//           and a direct push. Inputs: BASE_SHA, HEAD_SHA (or --base/--head).
+//           When the base is all zeros or not in the clone (a force-push), only
+//           the head commit itself is checked, and a notice says so.
 //   --tree  The whole tracked tree: every tracked path, and the content of
 //           every tracked text file in the working tree. Binary files cannot be
 //           scanned as text; they are counted as "unscannable binary".
 //
+// FAIL CLOSED
+//   With REQUIRE_TERMS=1 an empty FORBIDDEN_TERMS is an error (exit 2), not a
+//   pass. CI sets it on every run that has the repository's secrets (a PR from
+//   a branch of this repository, a push, the tree scan), so a missing or
+//   emptied secret turns the check red instead of silently checking nothing.
+//   It is left unset only where no secret can exist: a fork PR and a Dependabot
+//   PR. Those pass with a notice; the --push run after the merge checks what
+//   they brought in, and a maintainer checks their title, body and branch by
+//   hand before merging.
+//
 // EXIT CODES
-//   0  nothing found, or FORBIDDEN_TERMS is not set (a fork PR gets no
-//      secrets; the --tree run after the merge covers it). A notice says so.
+//   0  nothing found, or FORBIDDEN_TERMS is not set and REQUIRE_TERMS is not 1.
+//      A notice says so.
 //   1  something was found.
-//   2  usage or configuration error: an unknown mode, missing commits, or a
-//      line of FORBIDDEN_TERMS that is not a valid regular expression (named by
-//      its line number only).
+//   2  usage or configuration error: an unknown mode, missing commits, an
+//      unreadable event payload, FORBIDDEN_TERMS empty under REQUIRE_TERMS=1,
+//      or a line of FORBIDDEN_TERMS that is not a valid regular expression
+//      (named by its line number only).
 //
 // USAGE
 //   FORBIDDEN_TERMS="$(cat terms.txt)" node scripts/check-forbidden-terms.mjs --tree
 //   FORBIDDEN_TERMS="$(cat terms.txt)" node scripts/check-forbidden-terms.mjs --pr --base origin/main --head HEAD
+//   FORBIDDEN_TERMS="$(cat terms.txt)" node scripts/check-forbidden-terms.mjs --push --base HEAD~3 --head HEAD
 //   Tests: node --test scripts/test/forbidden-terms.test.mjs
 //
 // Plain ESM with no dependency, like the other scripts CI runs before `npm ci`.
@@ -90,14 +117,20 @@ export function hitLines(text, patterns) {
   return hits;
 }
 
-// The text with every match of every pattern replaced by `***`. Used on paths
-// before they are printed; never needed for anything else, because nothing
-// else that matched is ever printed.
+// A path with every segment that holds a match replaced by `***`. Used on
+// paths before they are printed; never needed for anything else, because
+// nothing else that matched is ever printed. Whole segments, not match ranges:
+// an alternation stops at its first matching branch and patterns apply one
+// after another, so replacing only what matched can leave the tail of a longer
+// term in the output (`foo` and `foobar` on `foobar.md` gave `***bar.md`). A
+// term that spans a `/` matches no single segment; if anything still matches
+// after the segments are replaced, the whole path becomes `***`.
 export function redact(text, patterns) {
-  return patterns.reduce(
-    (out, p) => out.replace(new RegExp(p.source, 'gi'), (m) => (m ? '***' : m)),
-    String(text),
-  );
+  const out = String(text)
+    .split('/')
+    .map((segment) => (matchesAny(segment, patterns) ? '***' : segment))
+    .join('/');
+  return matchesAny(out, patterns) ? '***' : out;
 }
 
 // Git's own heuristic: a NUL byte in the first 8000 bytes means binary.
@@ -212,24 +245,35 @@ export function parseBinaryPaths(numstatZ) {
   return binaries.filter(Boolean);
 }
 
-// `git log -z --format=%H%n%B`: one { sha, message } per commit.
+// The `git log` format parseCommits() reads: sha, author name and e-mail,
+// committer name and e-mail, one per line, then the raw message. A name or an
+// e-mail cannot hold a newline, so the first five lines are always these.
+export const COMMIT_FORMAT = '%H%n%an%n%ae%n%cn%n%ce%n%B';
+
+// `git log -z --format=<COMMIT_FORMAT>`: one { sha, author, committer, message }
+// per commit; author and committer are "name <e-mail>".
 export function parseCommits(logZ) {
   return String(logZ)
     .split('\0')
     .filter((record) => record.trim())
     .map((record) => {
-      const nl = record.indexOf('\n');
-      return nl < 0
-        ? { sha: record.trim(), message: '' }
-        : { sha: record.slice(0, nl).trim(), message: record.slice(nl + 1) };
+      const lines = record.split('\n');
+      const [sha = '', an = '', ae = '', cn = '', ce = ''] = lines;
+      return {
+        sha: sha.trim(),
+        author: `${an} <${ae}>`,
+        committer: `${cn} <${ce}>`,
+        message: lines.slice(5).join('\n'),
+      };
     });
 }
 
 // ── Findings ─────────────────────────────────────────────────────────────────
 
-// Everything a PR adds, judged. `pr` is already parsed: { added, newPaths,
-// commits, branch, title, body }. Returns finding objects; format() turns them
-// into the only text that is ever printed.
+// Everything a PR (or a push) adds, judged. `pr` is already parsed: { added,
+// newPaths, commits, branch, title, body }; a push has no branch, title or
+// body. Returns finding objects; format() turns them into the only text that
+// is ever printed.
 export function prFindings(pr, patterns) {
   const findings = [];
   for (const { path, line, text } of pr.added ?? []) {
@@ -238,8 +282,10 @@ export function prFindings(pr, patterns) {
   for (const path of pr.newPaths ?? []) {
     if (matchesAny(path, patterns)) findings.push({ kind: 'path', path });
   }
-  for (const { sha, message } of pr.commits ?? []) {
+  for (const { sha, message, author, committer } of pr.commits ?? []) {
     if (matchesAny(message, patterns)) findings.push({ kind: 'commit', sha });
+    if (author && matchesAny(author, patterns)) findings.push({ kind: 'author', sha });
+    if (committer && matchesAny(committer, patterns)) findings.push({ kind: 'committer', sha });
   }
   if (pr.branch && matchesAny(pr.branch, patterns)) findings.push({ kind: 'branch' });
   if (pr.title && matchesAny(pr.title, patterns)) findings.push({ kind: 'title' });
@@ -268,6 +314,10 @@ export function format(finding, patterns) {
       return `${where()} (file name)`;
     case 'commit':
       return `commit ${finding.sha.slice(0, 7)} message`;
+    case 'author':
+      return `commit ${finding.sha.slice(0, 7)} author`;
+    case 'committer':
+      return `commit ${finding.sha.slice(0, 7)} committer`;
     case 'branch':
       return 'branch name';
     case 'title':
@@ -311,17 +361,33 @@ function hasCommit(ref) {
   }
 }
 
-function readPr({ base, head, branch, title, body }) {
+function readRange({ base, head, branch, title, body }) {
   const range = `${base}...${head}`;
   const diffArgs = ['--no-color', '--no-ext-diff', '--no-textconv', '--find-renames'];
   return {
     added: parseAddedLines(git(['diff', ...diffArgs, '--unified=0', range])),
     newPaths: parseNewPaths(git(['diff', ...diffArgs, '--name-status', '-z', range])),
     binaries: parseBinaryPaths(git(['diff', ...diffArgs, '--numstat', '-z', range])),
-    commits: parseCommits(git(['log', '-z', '--format=%H%n%B', `${base}..${head}`])),
+    commits: parseCommits(git(['log', '-z', `--format=${COMMIT_FORMAT}`, `${base}..${head}`])),
     branch,
     title,
     body,
+  };
+}
+
+// The PR's branch, title and body: from HEAD_REF / PR_TITLE / PR_BODY when set,
+// else from the pull_request event payload at GITHUB_EVENT_PATH. Throws on a
+// payload it cannot read or parse.
+export function prMetadata(env) {
+  const fromEnv = (name) => (env[name] === undefined ? undefined : String(env[name]));
+  let pr = {};
+  if (env.GITHUB_EVENT_PATH && [env.HEAD_REF, env.PR_TITLE, env.PR_BODY].includes(undefined)) {
+    pr = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8')).pull_request ?? {};
+  }
+  return {
+    branch: fromEnv('HEAD_REF') ?? pr.head?.ref ?? '',
+    title: fromEnv('PR_TITLE') ?? pr.title ?? '',
+    body: fromEnv('PR_BODY') ?? pr.body ?? '',
   };
 }
 
@@ -344,12 +410,12 @@ function parseArgs(argv) {
   const opts = { mode: null, base: null, head: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--pr' || a === '--tree') opts.mode = a.slice(2);
+    if (a === '--pr' || a === '--push' || a === '--tree') opts.mode = a.slice(2);
     else if (a === '--base') opts.base = argv[++i];
     else if (a === '--head') opts.head = argv[++i];
     else return { error: `unknown argument: ${a}` };
   }
-  if (!opts.mode) return { error: 'choose a mode: --pr or --tree' };
+  if (!opts.mode) return { error: 'choose a mode: --pr, --push or --tree' };
   return opts;
 }
 
@@ -379,9 +445,17 @@ export function main(argv = process.argv.slice(2), env = process.env) {
     return 2;
   }
   if (!patterns.length) {
+    if (env.REQUIRE_TERMS === '1') {
+      const why =
+        "FORBIDDEN_TERMS is not set (or holds no terms), but this run has the repository's secrets, " +
+        'so an empty list means a missing secret, not a clean change. Set the FORBIDDEN_TERMS secret.';
+      console.error(inActions ? `::error title=Forbidden-terms guard not configured::${why}` : `check-forbidden-terms: ${why}`);
+      return 2;
+    }
     const why =
       'FORBIDDEN_TERMS is not set (or holds no terms), so nothing was checked. ' +
-      'A fork PR gets no secrets; the scan of main after the merge covers it.';
+      'A fork or Dependabot PR gets no secrets: check its title, body, branch and commits by hand ' +
+      'before merging. The --push scan of main after the merge checks what it brought in.';
     console.log(inActions ? `::notice title=Forbidden-terms guard skipped::${why}` : `check-forbidden-terms: ${why}`);
     return 0;
   }
@@ -389,23 +463,46 @@ export function main(argv = process.argv.slice(2), env = process.env) {
   let findings;
   let scanned;
   let binaries;
-  if (opts.mode === 'pr') {
-    const base = opts.base || env.BASE_SHA;
+  if (opts.mode === 'pr' || opts.mode === 'push') {
+    let base = opts.base || env.BASE_SHA;
     const head = opts.head || env.HEAD_SHA;
     if (!base || !head) {
-      console.error('check-forbidden-terms: --pr needs BASE_SHA and HEAD_SHA (or --base and --head)');
+      console.error(`check-forbidden-terms: --${opts.mode} needs BASE_SHA and HEAD_SHA (or --base and --head)`);
       return 2;
     }
-    for (const [label, ref] of [['base', base], ['head', head]]) {
-      if (!hasCommit(ref)) {
-        console.error(`check-forbidden-terms: the ${label} commit is not in this clone (check out with fetch-depth: 0)`);
+    if (!hasCommit(head)) {
+      console.error('check-forbidden-terms: the head commit is not in this clone (check out with fetch-depth: 0)');
+      return 2;
+    }
+    if (/^0+$/.test(base) || !hasCommit(base)) {
+      // A PR's base is always there with fetch-depth: 0, so a missing one is a
+      // broken checkout. A push's `before` can be gone after a force-push (or
+      // be all zeros for a new branch): check the head commit on its own then,
+      // rather than nothing.
+      if (opts.mode === 'pr' || !hasCommit(`${head}^`)) {
+        console.error('check-forbidden-terms: the base commit is not in this clone (check out with fetch-depth: 0)');
+        return 2;
+      }
+      const why = 'The push base is not in this clone (a force-push?), so only the head commit is checked.';
+      console.log(inActions ? `::notice title=Forbidden-terms guard::${why}` : `check-forbidden-terms: ${why}`);
+      base = `${head}^`;
+    }
+    let meta = {};
+    if (opts.mode === 'pr') {
+      try {
+        meta = prMetadata(env);
+      } catch {
+        console.error('check-forbidden-terms: cannot read the pull_request event payload (GITHUB_EVENT_PATH)');
         return 2;
       }
     }
-    const pr = readPr({ base, head, branch: env.HEAD_REF, title: env.PR_TITLE, body: env.PR_BODY });
+    const pr = readRange({ base, head, ...meta });
     findings = prFindings(pr, patterns);
     binaries = pr.binaries.length;
-    scanned = `${pr.added.length} added line(s), ${pr.newPaths.length} new path(s), ${pr.commits.length} commit message(s), the branch name, title and body`;
+    scanned =
+      `${pr.added.length} added line(s), ${pr.newPaths.length} new path(s), ` +
+      `${pr.commits.length} commit(s) (message, author, committer)` +
+      (opts.mode === 'pr' ? ', the branch name, title and body' : '');
   } else {
     const paths = git(['ls-files', '-z']).split('\0').filter(Boolean);
     findings = [];
@@ -420,7 +517,7 @@ export function main(argv = process.argv.slice(2), env = process.env) {
 
   const lines = findings.map((f) => format(f, patterns));
   for (const line of lines) console.log(line);
-  if (inActions && opts.mode === 'pr') for (const f of findings) console.log(annotation(f, patterns));
+  if (inActions && opts.mode !== 'tree') for (const f of findings) console.log(annotation(f, patterns));
 
   const verdict = findings.length
     ? `${findings.length} finding(s): a term from the FORBIDDEN_TERMS list appears at the location(s) above. The matched text is never printed.`

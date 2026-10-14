@@ -29,6 +29,8 @@ import {
   parseNewPaths,
   parseBinaryPaths,
   parseCommits,
+  COMMIT_FORMAT,
+  prMetadata,
   prFindings,
   fileFindings,
   format,
@@ -63,10 +65,24 @@ test('hitLines finds every matching line, CRLF or not', () => {
   assert.deepEqual(hitLines('nothing here', patterns), []);
 });
 
-test('redact hides every match, in every case, and nothing else', () => {
-  assert.equal(redact('src/AcmeCorp/acme_corp.ts', patterns), 'src/***/***.ts');
+test('redact hides every path segment that holds a match, in every case, and nothing else', () => {
+  assert.equal(redact('src/AcmeCorp/acme_corp.ts', patterns), 'src/***/***');
   assert.equal(redact('docs/plain.md', patterns), 'docs/plain.md');
+  assert.equal(redact('docs/plain.md/x-WidgetWorks-y/z.ts', patterns), 'docs/plain.md/***/z.ts');
   assert.ok(!LEAK.test(redact('ACME.CORP widgetworks Widget Works', patterns)));
+});
+
+test('redact leaves no tail of a longer term: overlapping patterns, alternation, a term across "/"', () => {
+  // Two patterns, the shorter applied first: replacing match ranges gave "***bar.md".
+  const two = parseTerms('foo\nfoobar').patterns;
+  assert.equal(redact('docs/foobar.md', two), 'docs/***');
+  // One alternation whose first branch is a prefix of the second: "***cdef.md" before.
+  const alt = parseTerms('ab|abcdef').patterns;
+  assert.equal(redact('x/abcdef.md', alt), 'x/***');
+  assert.ok(!/cdef|bar/.test(redact('x/abcdef.md', alt) + redact('docs/foobar.md', two)));
+  // A term that only matches across a separator hides the whole path.
+  const across = parseTerms('one/two').patterns;
+  assert.equal(redact('a/one/two/b.md', across), '***');
 });
 
 test('isBinary uses the NUL-byte heuristic', () => {
@@ -128,11 +144,19 @@ test('parseBinaryPaths: "-" counts mean binary, renames included', () => {
   assert.deepEqual(parseBinaryPaths(z), ['logo.png', 'new.pdf']);
 });
 
-test('parseCommits splits git log -z output', () => {
-  const z = 'aaaaaaa1111\nfix: one\n\nbody line\n\0bbbbbbb2222\nfeat: two\n\0';
+test('parseCommits splits git log -z output: sha, author, committer, message', () => {
+  assert.equal(COMMIT_FORMAT, '%H%n%an%n%ae%n%cn%n%ce%n%B');
+  const z =
+    'aaaaaaa1111\nAnn\nann@example.com\nGitHub\nnoreply@github.com\nfix: one\n\nbody line\n\0' +
+    'bbbbbbb2222\nBob\nbob@example.com\nBob\nbob@example.com\nfeat: two\n\0';
   assert.deepEqual(parseCommits(z), [
-    { sha: 'aaaaaaa1111', message: 'fix: one\n\nbody line\n' },
-    { sha: 'bbbbbbb2222', message: 'feat: two\n' },
+    {
+      sha: 'aaaaaaa1111',
+      author: 'Ann <ann@example.com>',
+      committer: 'GitHub <noreply@github.com>',
+      message: 'fix: one\n\nbody line\n',
+    },
+    { sha: 'bbbbbbb2222', author: 'Bob <bob@example.com>', committer: 'Bob <bob@example.com>', message: 'feat: two\n' },
   ]);
 });
 
@@ -145,8 +169,9 @@ test('prFindings + format: every channel, located, never quoted', () => {
     ],
     newPaths: ['src/acme-corp.ts', 'src/clean.ts'],
     commits: [
-      { sha: '0123456789abcdef', message: 'fix: clean' },
-      { sha: 'fedcba9876543210', message: 'feat: support acme.corp' },
+      { sha: '0123456789abcdef', message: 'fix: clean', author: 'A <a@example.com>', committer: 'A <a@example.com>' },
+      { sha: 'fedcba9876543210', message: 'feat: support acme.corp', author: 'A <a@example.com>', committer: 'A <a@example.com>' },
+      { sha: 'abcdef0123456789', message: 'fix: clean', author: 'Dev <dev@acmecorp.test>', committer: 'WidgetWorks <ci@example.com>' },
     ],
     branch: 'feat/12-acmecorp',
     title: 'Add widgetworks',
@@ -155,9 +180,11 @@ test('prFindings + format: every channel, located, never quoted', () => {
   const lines = prFindings(pr, patterns).map((f) => format(f, patterns));
   assert.deepEqual(lines, [
     'src/ok.ts:2',
-    'src/***.ts:9',
-    'src/***.ts (file name)',
+    'src/***:9',
+    'src/*** (file name)',
     'commit fedcba9 message',
+    'commit abcdef0 author',
+    'commit abcdef0 committer',
     'branch name',
     'PR title',
     'PR body',
@@ -173,9 +200,28 @@ test('fileFindings: path and text lines; a binary file is judged by its path onl
   );
   assert.deepEqual(
     fileFindings('img/AcmeCorp.png', { binary: true }, patterns).map((f) => format(f, patterns)),
-    ['img/***.png (file name)'],
+    ['img/*** (file name)'],
   );
   assert.deepEqual(fileFindings('missing.txt', null, patterns), []);
+});
+
+test('prMetadata: env wins when set; otherwise the pull_request event payload', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'forbidden-terms-event-'));
+  try {
+    const eventPath = path.join(dir, 'event.json');
+    writeFileSync(eventPath, JSON.stringify({ pull_request: { title: 'T', body: null, head: { ref: 'fix/1-x' } } }));
+    assert.deepEqual(prMetadata({ GITHUB_EVENT_PATH: eventPath }), { branch: 'fix/1-x', title: 'T', body: '' });
+    assert.deepEqual(prMetadata({ GITHUB_EVENT_PATH: eventPath, HEAD_REF: 'b', PR_TITLE: 't', PR_BODY: 'x' }), {
+      branch: 'b',
+      title: 't',
+      body: 'x',
+    });
+    assert.deepEqual(prMetadata({}), { branch: '', title: '', body: '' });
+    writeFileSync(eventPath, '{not json');
+    assert.throws(() => prMetadata({ GITHUB_EVENT_PATH: eventPath }));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ── The real CLI against a throwaway repository ──────────────────────────────
@@ -213,7 +259,7 @@ function makeRepo() {
   git('add', '-A');
   git('commit', '-q', '-m', 'docs: clean up');
   const head = git('rev-parse', 'HEAD');
-  return { dir, base, head, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return { dir, base, head, git, write, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 function cli(args, { cwd, env = {} }) {
@@ -337,6 +383,113 @@ test('CLI --pr in Actions: annotations name the file only when the path is clean
     assert.match(r.out, /^::error file=src\/app\.ts,line=2::/m);
     assert.match(r.out, /^::error::src\/\*\*\*\/index\.ts \(file name\): /m);
     assert.ok(!LEAK.test(r.out), r.out);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('CLI: REQUIRE_TERMS=1 turns a missing list into a failure (a run that has the secrets)', () => {
+  const repo = makeRepo();
+  try {
+    const r = cli(['--pr'], {
+      cwd: repo.dir,
+      env: { GITHUB_ACTIONS: 'true', REQUIRE_TERMS: '1', BASE_SHA: repo.base, HEAD_SHA: repo.head },
+    });
+    assert.equal(r.code, 2, r.out);
+    assert.match(r.out, /^::error title=Forbidden-terms guard not configured::/m);
+    const blank = cli(['--push'], { cwd: repo.dir, env: { REQUIRE_TERMS: '1', FORBIDDEN_TERMS: '# none\n' } });
+    assert.equal(blank.code, 2, blank.out);
+    // Anything but "1" keeps the fork/Dependabot behaviour: a notice and a pass.
+    assert.equal(cli(['--tree'], { cwd: repo.dir, env: { REQUIRE_TERMS: '' } }).code, 0);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('CLI --pr: commit author and committer are checked, and never printed', () => {
+  const repo = makeRepo();
+  try {
+    repo.write('src/clean.ts', 'export const ok = true;\n');
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '--author', 'Dev <dev@acme-corp.test>', '-m', 'chore: clean');
+    const head = repo.git('rev-parse', 'HEAD');
+    const r = cli(['--pr'], {
+      cwd: repo.dir,
+      env: { FORBIDDEN_TERMS: TERMS, BASE_SHA: repo.head, HEAD_SHA: head, HEAD_REF: 'chore/1-clean', PR_TITLE: 'clean', PR_BODY: '' },
+    });
+    assert.equal(r.code, 1, r.out);
+    assert.ok(r.out.includes(`commit ${head.slice(0, 7)} author`), r.out);
+    assert.ok(!r.out.includes(`commit ${head.slice(0, 7)} message`), r.out);
+    assert.ok(!r.out.includes(`commit ${head.slice(0, 7)} committer`), r.out);
+    assert.ok(!LEAK.test(r.out), `the output leaks:\n${r.out}`);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('CLI --pr in Actions: branch, title and body come from the event payload, not env', () => {
+  const repo = makeRepo();
+  const eventPath = path.join(repo.dir, '..', `event-${path.basename(repo.dir)}.json`);
+  try {
+    writeFileSync(
+      eventPath,
+      JSON.stringify({ pull_request: { title: 'Add WidgetWorks', body: 'clean', head: { ref: 'fix/2-acmecorp' } } }),
+    );
+    const r = cli(['--pr', '--base', repo.base, '--head', repo.base], {
+      cwd: repo.dir,
+      env: { GITHUB_ACTIONS: 'true', FORBIDDEN_TERMS: TERMS, GITHUB_EVENT_PATH: eventPath },
+    });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /^PR title$/m);
+    assert.match(r.out, /^branch name$/m);
+    assert.ok(!/^PR body$/m.test(r.out), r.out);
+    assert.ok(!LEAK.test(r.out), r.out);
+    writeFileSync(eventPath, '{broken');
+    const broken = cli(['--pr', '--base', repo.base, '--head', repo.base], {
+      cwd: repo.dir,
+      env: { FORBIDDEN_TERMS: TERMS, GITHUB_EVENT_PATH: eventPath },
+    });
+    assert.equal(broken.code, 2, broken.out);
+  } finally {
+    rmSync(eventPath, { force: true });
+    repo.cleanup();
+  }
+});
+
+test('CLI --push: what landed (lines, names, commits), without PR metadata', () => {
+  const repo = makeRepo();
+  try {
+    const r = cli(['--push'], {
+      cwd: repo.dir,
+      env: { GITHUB_ACTIONS: 'true', FORBIDDEN_TERMS: TERMS, BASE_SHA: repo.base, HEAD_SHA: repo.head },
+    });
+    assert.equal(r.code, 1, r.out);
+    assert.ok(r.out.includes('src/app.ts:2'), r.out);
+    assert.ok(r.out.includes('src/***/index.ts (file name)'), r.out);
+    assert.match(r.out, /commit [0-9a-f]{7} message/);
+    assert.match(r.out, /^::error file=src\/app\.ts,line=2::/m);
+    for (const absent of ['branch name', 'PR title', 'PR body', 'docs/old.md']) assert.ok(!r.out.includes(absent), r.out);
+    assert.ok(!LEAK.test(r.out), `the output leaks:\n${r.out}`);
+    const clean = cli(['--push', '--base', repo.base, '--head', repo.base], { cwd: repo.dir, env: { FORBIDDEN_TERMS: TERMS } });
+    assert.equal(clean.code, 0, clean.out);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('CLI --push: a base that is gone (force-push) or all zeros checks the head commit alone', () => {
+  const repo = makeRepo();
+  try {
+    for (const base of ['0'.repeat(40), 'e'.repeat(40)]) {
+      const r = cli(['--push'], { cwd: repo.dir, env: { FORBIDDEN_TERMS: TERMS, BASE_SHA: base, HEAD_SHA: repo.head } });
+      // The head commit only removes a line ("docs: clean up"): clean on its own.
+      assert.equal(r.code, 0, r.out);
+      assert.match(r.out, /only the head commit is checked/);
+      assert.match(r.out, / 1 commit\(s\)/);
+    }
+    // --pr never falls back: a missing PR base is a broken checkout.
+    const pr = cli(['--pr'], { cwd: repo.dir, env: { FORBIDDEN_TERMS: TERMS, BASE_SHA: 'e'.repeat(40), HEAD_SHA: repo.head } });
+    assert.equal(pr.code, 2, pr.out);
   } finally {
     repo.cleanup();
   }

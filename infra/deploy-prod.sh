@@ -364,8 +364,8 @@ app_env_args() {
 # is AGPL and other people run their own instances. This forwarding line is the
 # whole feature on a deployed host: unset here, the container would keep saying
 # "no imprint published" no matter what the env file holds. MARKETING_OPERATOR_*
-# (#2697) is the marketing product's own provider (BCS-IT GmbH for SaleVali),
-# shown on the marketing hosts and printed on postal campaign letters.
+# (#2697) is the marketing product's own provider (the operator of the Marketing
+# CRM), shown on the marketing hosts and printed on postal campaign letters.
 mapfile -d '' -t APP_ENV_ARGS < <(app_env_args)
 
 # Wait for /api/health?db=1 and assert what it says. Used for the canary, for
@@ -1019,7 +1019,10 @@ log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS
 # construction, so only a host named elsewhere can catch an env file that lost
 # it — and it must also be in MARKETING_HOSTS when that is set (an empty
 # MARKETING_HOSTS means the app's built-in default, which this script does not
-# repeat). MARKETING_PROBE=0 skips the check.
+# repeat). MARKETING_PROBE=0 skips the check. Only the caller-named host can
+# catch a lost host, so when the hostnames leave the workflow files the caller
+# must keep passing MARKETING_PROBE_HOST from a runner-side variable or a
+# secret; dropping it leaves a check that compares MARKETING_HOSTS with itself.
 
 # The document's <title> from the HTML on stdin, entity-decoded and with its
 # whitespace collapsed. The FIRST <title> is the document's (an inline <svg>

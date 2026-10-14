@@ -47,7 +47,10 @@ name: Uptime
 #   prints one of those URLs: a marketing host is "marketing host #<n>", the
 #   place of its origin among the distinct origins of the secret, in order. When
 #   the secret is not set the marketing hosts are not probed at all, and the run
-#   says so in a notice instead of failing.
+#   says so in a notice instead of failing. Such a run also neither opens nor
+#   closes anything about them: the content state is `unknown` (no transition),
+#   and an open outage that names a marketing host stays open, because pages
+#   nobody read are not "right again".
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -231,7 +234,17 @@ jobs:
             fi
           }
           emit reach "$DOWN_PART"
-          emit content "$CONTENT_PART"
+          # Without the secret nothing was read, and "nothing found" must not
+          # read as "fixed": `unknown` is neither up nor down, so it opens and
+          # closes nothing (an open content incident stays open, and no green
+          # "the pages are right again" mail goes out for pages nobody read).
+          if [ "$MARKETING_ON" = 1 ]; then
+            emit content "$CONTENT_PART"
+          else
+            echo "content=unknown" >> "$GITHUB_OUTPUT"
+            echo "content unknown (marketing hosts not probed)"
+          fi
+          echo "marketing=$([ "$MARKETING_ON" = 1 ] && echo on || echo off)" >> "$GITHUB_OUTPUT"
 
       - name: Find the current alert states
         id: state
@@ -244,11 +257,19 @@ jobs:
                      --state open --limit 1 --json number --jq '.[0].number // ""')"
             echo "${pair%%:*}=${NUM}" >> "$GITHUB_OUTPUT"
             echo "open ${pair#*:} issue: ${NUM:-none}"
+            # Whether an open outage names a marketing host: a run that did not
+            # probe the marketing hosts cannot say that one is back.
+            if [ "${pair%%:*}" = reach_issue ] && [ -n "$NUM" ]; then
+              NAMES_MKT="$(gh issue view "$NUM" --repo "$GITHUB_REPOSITORY" --json body \
+                             --jq '.body | test("marketing host #")')"
+              echo "reach_issue_marketing=${NAMES_MKT}" >> "$GITHUB_OUTPUT"
+            fi
           done
 
       # ── the transitions, one state machine per alert class ───────────────
       # open  = down and not already alerting; close = up and we were alerting.
-      # Anything else (still down, still up) is no transition and sends nothing.
+      # Anything else (still down, still up, `unknown`) is no transition and
+      # sends nothing.
       - name: Open or close incidents
         id: transition
         env:
@@ -256,11 +277,20 @@ jobs:
           REACH: ${{ steps.probe.outputs.reach }}
           REACH_DETAIL: ${{ steps.probe.outputs.reach_detail }}
           REACH_ISSUE: ${{ steps.state.outputs.reach_issue }}
+          REACH_ISSUE_MARKETING: ${{ steps.state.outputs.reach_issue_marketing }}
+          MARKETING: ${{ steps.probe.outputs.marketing }}
           CONTENT: ${{ steps.probe.outputs.content }}
           CONTENT_DETAIL: ${{ steps.probe.outputs.content_detail }}
           CONTENT_ISSUE: ${{ steps.state.outputs.content_issue }}
         run: |
           set -euo pipefail
+          # With the marketing hosts not probed, "reach up" covers only the
+          # internship hosts. An open outage that names a marketing host stays
+          # open until a run that read those hosts finds them answering again.
+          if [ "$REACH" = up ] && [ "${MARKETING:-off}" != on ] && [ "${REACH_ISSUE_MARKETING:-}" = true ]; then
+            echo "::notice title=Outage left open::The open outage names a marketing host, and this run did not probe the marketing hosts (MARKETING_PROBE_URLS is not set)."
+            REACH=unknown
+          fi
           # transition <name> <status> <open issue> <label> <title> <detail>
           transition() {
             local name="$1" status="$2" num="$3" label="$4" title="$5" detail="$6" body url

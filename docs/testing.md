@@ -25,7 +25,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
-| **Forbidden terms** | No name from a secret term list on the visible surface: added lines, new file names, commit messages, branch name, PR title and body; the whole tree on `main` | `scripts/check-forbidden-terms.mjs` | `forbidden-terms.yml`: blocking on every PR, warn-only tree scan on `main` + daily ([below](#forbidden-terms-guard-2919)) |
+| **Forbidden terms** | No name from a secret term list on the visible surface: added lines, new file names, commit messages and authors, branch name, PR title and body; the whole tree on `main` | `scripts/check-forbidden-terms.mjs` | `forbidden-terms.yml`: blocking on every PR and on every push to `main`, warn-only tree scan on `main` + daily ([below](#forbidden-terms-guard-2919)) |
 
 Every row above the two load rows is a **functional / correctness** test: given an input,
 is the output right? The two load rows are **non-functional**: the app may be correct yet
@@ -815,7 +815,8 @@ the document — a fabricated manual-testing record is worse than an empty one.
 ## Forbidden-terms guard (#2919)
 
 Some names must not appear on the visible surface of this repository. That covers
-the tree, file names, commit messages, branch names and PR titles and bodies.
+the tree, file names, commit messages and authors, branch names and PR titles and
+bodies.
 `scripts/check-forbidden-terms.mjs` enforces this, and `.github/workflows/forbidden-terms.yml`
 runs it. The workflow has no path filter, because a docs-only PR can carry a name
 too (#2719).
@@ -826,26 +827,43 @@ too (#2719).
   includes this document, a test, a commit message or a PR. The unit test
   (`scripts/test/forbidden-terms.test.mjs`) uses made-up terms only.
 - **It prints locations, never matches.** A finding reads `path:line`,
-  `<path> (file name)`, `commit <sha7> message`, `branch name`, `PR title` or `PR body`.
-  A path that matches has the match replaced by `***`. GitHub masks only the secret's
-  exact text in a log, so a match in another case or spelling would otherwise be printed
-  in the clear. An invalid line in the secret fails the run and is named by its line
+  `<path> (file name)`, `commit <sha7> message`, `commit <sha7> author`,
+  `commit <sha7> committer`, `branch name`, `PR title` or `PR body`. In a path, every
+  segment that holds a match becomes `***` (the whole segment, so no tail of a longer
+  term is left next to the stars). GitHub masks only the secret's exact text in a log,
+  so a match in another case or spelling would otherwise be printed in the clear. For
+  the same reason the workflow does not pass the title, body or branch name through
+  `env:` (GitHub prints a step's env block in its log); the script reads them from the
+  event payload. An invalid line in the secret fails the run and is named by its line
   number only.
 - **`--pr` blocks** a pull request that adds a match. It checks the added lines of
-  `git diff base...head`, the names of added, renamed and copied files, every commit
-  message in the PR, the head branch name, and the title and body. A retitled PR is
-  checked again (`edited`). Deleting a line that holds a name is never a finding.
+  `git diff base...head`, the names of added, renamed and copied files, every commit in
+  the PR (message, author and committer name and e-mail), the head branch name, and the
+  title and body. A retitled PR is checked again (`edited`). Deleting a line that holds
+  a name is never a finding.
+- **`--push` checks what reached `main`**, on every push: the same checks over
+  `before..after`, without title, body and branch. It is what sees the squash message a
+  merge wrote (edited in the merge dialog or not), a fork PR once it lands, and a direct
+  push. It turns red after the fact; it cannot stop a push, because there is no branch
+  protection. Push runs are never cancelled by a newer push, since the newer one's range
+  starts where this one ends. When `before` is gone (a force-push), it checks the head
+  commit alone and says so.
 - **`--tree` scans everything** that is tracked: every path, and every text file's
   content. Binary files cannot be read as text, so they are reported as an
   "unscannable binary" count; images and video need a person's eye. The scan runs on
   every push to `main`, daily and on demand. It stays **warn-only** until the existing
   tree is clean. The one switch is the `continue-on-error` line on its step.
-- **No secret, no check.** When `FORBIDDEN_TERMS` is not set, the run prints a notice and
-  passes. A fork PR never gets secrets, and the tree scan after the merge covers it.
+- **Fail closed where the secret exists.** Every run that gets this repository's secrets
+  (a PR from a branch here, a push, the tree scan) sets `REQUIRE_TERMS=1`, so an unset
+  or emptied `FORBIDDEN_TERMS` is a red check, not a pass. Only a **fork PR** and a
+  **Dependabot PR** get no secrets; those print a notice and pass. Before merging one,
+  a maintainer checks its title, body, branch name and commits by hand; the push scan
+  checks what it brought in once it lands.
 
 To run it locally, put the list in the environment and choose a mode:
-`node scripts/check-forbidden-terms.mjs --tree`, or
-`node scripts/check-forbidden-terms.mjs --pr --base origin/main --head HEAD`.
+`node scripts/check-forbidden-terms.mjs --tree`,
+`node scripts/check-forbidden-terms.mjs --pr --base origin/main --head HEAD`, or
+`node scripts/check-forbidden-terms.mjs --push --base HEAD~3 --head HEAD`.
 
 ## Ideas for further test types
 
