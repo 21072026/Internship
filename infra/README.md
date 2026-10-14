@@ -491,9 +491,9 @@ run on GitHub does, and the server only does what has to happen on the server:
 
 | Runs on GitHub-hosted | Runs on the server (self-hosted runner) |
 |---|---|
-| `docker build` + push to ghcr (`build-image.yml`) | read `127.0.0.1:<port>/api/health` for the drift gate |
+| `docker build` (linux/arm64) + push to ghcr (`build-image.yml`) | read `127.0.0.1:<port>/api/health` for the drift gate |
 | lint / typecheck / build (`ci.yml`) | `docker pull` the prebuilt image |
-| Playwright smoke gate + 4×/day full suite | `prisma db push` + idempotent seeds/backfills |
+| Playwright smoke gate + daily full suite | `prisma db push` + idempotent seeds/backfills |
 | weekly stress test, runner watchdog | stop/start the container, Plesk route, health check |
 
 Nothing on the box compiles anymore. Between 2026-06 and 2026-07-29 it did: with

@@ -20,9 +20,9 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Responsive / mobile** | Layout at small viewports; the mechanical phone-width audit and its route-coverage gate | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/mobile-layout-coverage.spec.ts`, `e2e/mobile-fixed-bars.spec.ts`, `e2e/mobile-chat-layout.spec.ts` | with E2E |
 | **PWA / offline** | Manifest, service worker, offline page; and what the worker's cache may hold — no `/api/` entry, emptied on sign-out, registered for signed-out visitors (#1550) | `e2e/pwa.spec.ts`, `e2e/offline-page.spec.ts`, `e2e/sw-cache-scoping.spec.ts` (the one spec that runs with `serviceWorkers: 'allow'`), `scripts/test/service-worker-cache.test.mjs` | with E2E; the worker unit test on **every PR** |
 | **Health probe** | `/api/health` liveness + optional DB readiness | `e2e/health.spec.ts` | with E2E |
-| **Tenant isolation** | One tenant cannot read another's rows, against a server that really has `MT_ENFORCE_ISOLATION=true` | `e2e/isolation/*.spec.ts` (the `isolation` Playwright project) | its own job in `e2e-full.yml` (**4× a day**) + `npm run test:e2e:isolation` locally |
+| **Tenant isolation** | One tenant cannot read another's rows, against a server that really has `MT_ENFORCE_ISOLATION=true` | `e2e/isolation/*.spec.ts` (the `isolation` Playwright project) | its own job in `e2e-full.yml` (**once a day**) + `npm run test:e2e:isolation` locally |
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
-| **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
+| **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **weekly cron**, Sundays 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
@@ -113,7 +113,7 @@ project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a
   server that does not enforce is worse than not testing it.
 
 **Where it runs.** `e2e-full.yml` has an `isolation` job beside the four shards: same
-4×/day cadence, same drift gate, and its JSON report is named
+daily cadence, same drift gate, and its JSON report is named
 `e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
 (`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
 writing one is caught too). It is deliberately **not** in the PR gate: that gate is the
@@ -389,7 +389,7 @@ Per-endpoint budgets are tighter than the aggregate *because they are allowed to
 
 The budgets above were set by reasoning about what each endpoint does, then sanity-checked
 against an unloaded production baseline. They are **not** derived from a loaded run, so treat
-the first few nightly results as calibration rather than as a verdict:
+the first few scheduled results as calibration rather than as a verdict:
 
 | `ep` | baseline p95 | budget | headroom |
 |------|--------------|--------|----------|
@@ -401,7 +401,7 @@ the first few nightly results as calibration rather than as a verdict:
 
 Roughly 2–6× baseline. That is deliberate: latency at 20 VU is higher than at 1 VU, and a
 budget with no room for the load the test itself applies would fire every night. If the real
-nightly numbers land far from these, move the budgets — and say so in the comment next to them.
+scheduled numbers land far from these, move the budgets — and say so in the comment next to them.
 
 ### Safety rules (these are hard constraints)
 
@@ -416,10 +416,11 @@ A k6 script in this repo points at a **live, shared environment**, so:
   `/api/public/stats` (60 / 10 min) and `/api/v1/*` (120 / min) are excluded on purpose. A 429
   in a report means the mix drifted, not that the app is unhealthy.
 
-### The nightly cron and the alert
+### The weekly cron and the alert
 
-[`.github/workflows/k6-load.yml`](../.github/workflows/k6-load.yml) runs the scenario at
-**23:40 UTC daily** (01:40 Europe/Berlin CEST, 02:40 Europe/Istanbul) against
+[`.github/workflows/k6-load.yml`](../.github/workflows/k6-load.yml) runs the scenario
+**weekly, Sundays at 23:40 UTC** (Monday 01:40 Europe/Berlin CEST, 02:40 Europe/Istanbul;
+nightly until #2917, when the repo's metered minutes made a daily run too dear) against
 `STRESS_TARGET_URL` — the same secret `stress.yml` uses — falling back to production. A manual
 `workflow_dispatch` takes a target URL and a peak-VU override.
 
@@ -454,7 +455,7 @@ K6_REPORT_DRY_RUN=1 K6_REPORT_MODE=always \
 
 ### Adding a new k6 test
 
-Writing one is **expected** when a change puts real load on a surface the nightly mix does
+Writing one is **expected** when a change puts real load on a surface the scheduled mix does
 not cover.
 
 1. Create `k6/<name>.js`. **Keep it `.js`.** A `.ts` file here is picked up by
@@ -477,7 +478,7 @@ not cover.
 8. Wire it up in **its own workflow**, modelled on `k6-load.yml`. Do *not* add a second
    `k6 run` step to `k6-load.yml`: it hardcodes one summary filename in three places (the run
    step's env, the artifact path, and the reporter's input), so a second scenario would
-   overwrite the first one's summary and the nightly email would silently describe only the
+   overwrite the first one's summary and the alert email would silently describe only the
    last one to finish.
 9. Add a row to the tables above.
 
@@ -571,7 +572,7 @@ VPAT rows (#2037) can cite this section for WCAG 2.3.3 (Animation from Interacti
 
 ## Scheduled full E2E summary email
 
-The scheduled full suite (`e2e-full.yml`, 4×/day, 4-way sharded) sends a **Turkish
+The scheduled full suite (`e2e-full.yml`, once a day, 4-way sharded) sends a **Turkish
 summary email after every run** via
 [`scripts/e2e-report-email.mjs`](../scripts/e2e-report-email.mjs): on green a
 `✅ … 238/238 test geçti` heartbeat with the run stats (toplam/geçen/başarısız/flaky/
@@ -596,7 +597,7 @@ trail that needs no SMTP:
   hidden `<!-- ci-alert: key=… -->` marker, never by its title. A red run opens it, or
   refreshes it in place. It comments only when `ALERT_SIGNATURE` moved: e2e-full passes
   the commit sha, and the others default to the UTC day. So a broken commit re-tested
-  4×/day pings once. The next green run closes it. A new issue `cc`s the maintainer,
+  every day pings once. The next green run closes it. A new issue `cc`s the maintainer,
   which makes its creation a notification.
 - The issue step runs **before** the e-mail step, so a hanging SMTP connect cannot
   starve it. It is `continue-on-error`, and the script itself never fails the job.
@@ -717,7 +718,8 @@ gets a `src/lib/features.ts` entry and a release fragment.
 [`e2e/a11y-scan.spec.ts`](../e2e/a11y-scan.spec.ts) runs `@axe-core/playwright` over the
 app against WCAG 2.0/2.1/2.2 A+AA and compares each page's *critical* and *serious*
 counts with the frozen [`e2e/a11y-baseline.json`](../e2e/a11y-baseline.json). It carries
-no `@smoke` tag, so `e2e.yml` runs it as **its own step** on every PR — the smoke set
+no `@smoke` tag, so `e2e.yml` runs it as **its own step** on every PR, after the smoke run
+and a database reset to the seeded state — the smoke set
 stays small while the gate still blocks. The human-readable report is
 [`docs/a11y-audit.md`](a11y-audit.md); both files are regenerated together:
 

@@ -1,9 +1,8 @@
 name: Build image (reusable)
 
-# Builds the app's Docker image ON GITHUB-HOSTED RUNNERS and pushes a
-# MULTI-ARCH manifest (linux/amd64 + linux/arm64) to ghcr.io. Every deploy
-# workflow (prod / preview / topic) calls this instead of running
-# `docker build` on the server.
+# Builds the app's Docker image ON A GITHUB-HOSTED RUNNER and pushes it to
+# ghcr.io as a linux/arm64 image. Every deploy workflow (prod / preview / topic)
+# calls this instead of running `docker build` on the server.
 #
 # WHY (2026-07-29): while this repo was private the hosted Actions quota ran out,
 # so the deploys were moved onto a self-hosted runner *on the server itself*
@@ -15,23 +14,27 @@ name: Build image (reusable)
 # included, #2910). The build stays hosted anyway: compiling on the production
 # box is what this file exists to avoid.
 #
-# WHY MULTI-ARCH (2026-09-05, #2166): the project is moving to an Oracle Cloud
-# Ampere instance, which is **arm64**. An amd64-only image does not fail at
-# `docker pull` — it fails later, at `docker run`, with "exec format error", so
-# the failure would land in the deploy step of a green pipeline. Both arches are
-# published during the migration because the old (amd64) box and the new (arm64)
-# box are live at the same time. Once the old server is retired, the amd64 half
-# of the matrix can be dropped.
+# WHY ARM64 ONLY (2026-10-14, #2917): every environment runs on the Oracle
+# Cloud Ampere box, which is **arm64** — prod, preview and every topic env. From
+# 2026-09-05 (#2166) this built amd64 + arm64 on two native runners and stitched
+# them into one manifest list, because the old amd64 server and the new box were
+# live at the same time. The old server retired on 2026-09-06, and nothing has
+# pulled the amd64 half since; it cost ~5,400 metered minutes a month. With one
+# arch there is nothing to stitch, so the separate "resolve inputs" and "publish
+# manifest" jobs (a whole minute each, billed per job) folded into this one.
 #
-# WHY A MATRIX INSTEAD OF `platforms: linux/amd64,linux/arm64`: that one-liner
-# builds the foreign arch under QEMU emulation, and `npm ci` + `next build`
-# emulated takes tens of minutes. This repo merges ~78 PRs a week and every one
-# of them builds a topic image. So each arch builds on its OWN NATIVE RUNNER
-# (`ubuntu-24.04-arm`: free while the repo was public; in a private repo it is
+# THE ARCH CHECK STILL FAILS CLOSED. An image of the wrong arch does not fail at
+# `docker pull` — it fails later, at `docker run`, with "exec format error", so
+# the failure would land in the deploy step of a green pipeline. The last step
+# below refuses a pushed tag that does not resolve to linux/arm64. If an amd64
+# host ever comes back, add a second job for it and stitch the two again (the
+# matrix + `imagetools create` version is in git history before #2917); never
+# use `platforms: linux/amd64,linux/arm64` on one runner — the foreign arch
+# builds under QEMU emulation and `npm ci` + `next build` takes tens of minutes.
+#
+# `ubuntu-24.04-arm` was free while the repo was public; in a private repo it is
 # metered from the same 2,000-minute pool as x64, at $0.005/min against x64's
-# $0.006, and gets 2 vCPUs instead of 4) and the two results are stitched
-# into one manifest list afterwards. The two builds run in parallel, so
-# wall-clock is roughly unchanged from the single-arch build.
+# $0.006, and gets 2 vCPUs instead of 4.
 #
 # The image is the ONLY artifact that crosses over. Secrets still never leave the
 # server (deploy-prod.sh reads /etc/internship-crm/*.env there) and no build-time
@@ -57,21 +60,15 @@ on:
         type: string
     outputs:
       image:
-        description: 'Fully-qualified, multi-arch image reference that was pushed'
-        value: ${{ jobs.merge.outputs.image }}
+        description: 'Fully-qualified linux/arm64 image reference that was pushed'
+        value: ${{ jobs.build.outputs.image }}
 
 jobs:
-  # Resolve everything that must be IDENTICAL across the two architecture
-  # builds exactly once. Computing the release stamps inside each matrix leg
-  # would risk the two legs disagreeing (they read git history, and a race with
-  # a concurrent merge would bake different versions into the same manifest).
-  prep:
-    name: Resolve build inputs
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ inputs.tag }} (arm64)
+    runs-on: ubuntu-24.04-arm
     outputs:
       image: ${{ steps.meta.outputs.image }}
-      repo: ${{ steps.meta.outputs.repo }}
-      stamps: ${{ steps.stamps.outputs.json }}
     steps:
       - name: Checkout ${{ inputs.ref }}
         uses: actions/checkout@v7
@@ -80,6 +77,14 @@ jobs:
           # Full history: the release stamps below are read from the commit that
           # added each pending fragment (#1457).
           fetch-depth: 0
+
+      # The stamps script is dependency-free, but it needs a node on PATH; pin
+      # the same major the rest of CI uses rather than whatever the arm image
+      # happens to ship.
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
 
       # .dockerignore excludes .git, so `next build` inside the image cannot ask
       # git when each pending change shipped. Resolve it here and hand the answer
@@ -102,30 +107,7 @@ jobs:
         run: |
           # Docker image names must be lower-case; the repo is "21072026/Internship".
           REPO="$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          echo "repo=ghcr.io/${REPO}" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${REPO}:${TAG}" >> "$GITHUB_OUTPUT"
-
-  build:
-    name: Build ${{ inputs.tag }} (${{ matrix.arch }})
-    needs: prep
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      # Both arches are reported even when one fails; a red arm64 leg with a
-      # green amd64 leg is the exact signal that something is arch-specific.
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            platform: linux/amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      - name: Checkout ${{ inputs.ref }}
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4.6.0
@@ -137,115 +119,47 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build and push by digest
-        id: build
+      - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: ${{ matrix.platform }}
+          platforms: linux/arm64
           build-args: |
             GIT_SHA=${{ inputs.ref }}
             NEXT_PUBLIC_APP_ENV=${{ inputs.app_env }}
-            RELEASE_STAMPS=${{ needs.prep.outputs.stamps }}
-          # No tag here: each leg pushes an untagged, digest-addressed image and
-          # the merge job below binds the tag to the manifest list. Tagging both
-          # legs would make them overwrite each other, and whichever finished
-          # last would be the only arch the tag resolved to.
-          outputs: type=image,name=${{ needs.prep.outputs.repo }},push-by-digest=true,name-canonical=true,push=true
+            RELEASE_STAMPS=${{ steps.stamps.outputs.json }}
+          tags: ${{ steps.meta.outputs.image }}
+          push: true
           # Layer cache lives in the Actions cache, so repeat builds of the same
-          # dependency set skip the expensive `npm ci` layer. Scoped per arch —
-          # a shared scope would have the two legs evicting each other's layers
-          # on every run.
-          cache-from: type=gha,scope=${{ inputs.app_env }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ inputs.app_env }}-${{ matrix.arch }}
+          # dependency set skip the expensive `npm ci` layer. The scope name is
+          # the one the arm64 leg of the old two-arch matrix used, so the warm
+          # cache carries over.
+          cache-from: type=gha,scope=${{ inputs.app_env }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ inputs.app_env }}-arm64
 
-      - name: Export digest
+      - name: Verify the tag resolves to linux/arm64
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          test -n "$DIGEST" || { echo "::error::build produced no digest"; exit 1; }
-          mkdir -p /tmp/digests
-          touch "/tmp/digests/${DIGEST#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digest-${{ inputs.tag }}-${{ matrix.arch }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  merge:
-    name: Publish ${{ inputs.tag }} manifest
-    needs: [prep, build]
-    runs-on: ubuntu-latest
-    outputs:
-      image: ${{ needs.prep.outputs.image }}
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@v8
-        with:
-          path: /tmp/digests
-          pattern: digest-${{ inputs.tag }}-*
-          merge-multiple: true
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Create manifest list and push
-        working-directory: /tmp/digests
-        env:
-          IMAGE: ${{ needs.prep.outputs.image }}
-          REPO: ${{ needs.prep.outputs.repo }}
-        run: |
-          # One file per arch, each named after its digest. Two is the expected
-          # count; anything else means a matrix leg silently produced nothing,
-          # and publishing a single-arch manifest under the shared tag is
-          # exactly the failure this workflow exists to prevent.
-          COUNT="$(find . -type f | wc -l)"
-          if [ "$COUNT" -ne 2 ]; then
-            echo "::error::expected 2 architecture digests, found $COUNT"
-            exit 1
-          fi
-          # shellcheck disable=SC2046
-          docker buildx imagetools create -t "$IMAGE" \
-            $(printf "${REPO}@sha256:%s " $(find . -type f -printf '%f '))
-
-      - name: Verify both architectures resolve
-        env:
-          IMAGE: ${{ needs.prep.outputs.image }}
+          IMAGE: ${{ steps.meta.outputs.image }}
         run: |
           docker buildx imagetools inspect --raw "$IMAGE" > manifest.json
-          # Parsed, not grepped. The first version of this step looked for the
-          # substring `"architecture":"amd64"` and reported a perfectly good
-          # two-arch manifest as broken: whitespace in the JSON `--raw` prints
-          # is not contractual, and this check fails CLOSED, so getting it wrong
-          # blocks every deploy. buildx also appends provenance entries whose
-          # platform is os/architecture "unknown" — filtered out here rather
-          # than counted as an architecture.
+          # Parsed, not grepped: whitespace in the JSON `--raw` prints is not
+          # contractual, and this check fails CLOSED, so getting it wrong blocks
+          # every deploy. buildx pushes an index that also carries a provenance
+          # entry whose platform is os/architecture "unknown" — filtered out
+          # here rather than counted as an architecture.
           ARCHES="$(jq -r '[.manifests[]?.platform | select(.os != "unknown") | .architecture] | sort | join(",")' manifest.json)"
           echo "manifest platforms: $ARCHES"
-          for want in amd64 arm64; do
-            case ",$ARCHES," in
-              *",$want,"*) ;;
-              *) echo "::error::$want missing from $IMAGE manifest (found: $ARCHES)"; exit 1 ;;
-            esac
-          done
-          echo "amd64 + arm64 both present"
+          if [ "$ARCHES" != "arm64" ]; then
+            echo "::error::$IMAGE should resolve to linux/arm64 only (found: ${ARCHES:-none})"
+            exit 1
+          fi
 
       - name: Summary
         env:
-          IMAGE: ${{ needs.prep.outputs.image }}
+          IMAGE: ${{ steps.meta.outputs.image }}
         run: |
           {
             echo "### Pushed \`$IMAGE\`"
             echo
-            echo "Platforms: \`linux/amd64\`, \`linux/arm64\`"
+            echo "Platform: \`linux/arm64\`"
           } >> "$GITHUB_STEP_SUMMARY"

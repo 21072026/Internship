@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Emails the result of a nightly k6 load run, in Turkish, using the same SMTP_*
+ * Emails the result of a scheduled (weekly, #2917) k6 load run, in Turkish, using the same SMTP_*
  * env vars as the app's emailService. Invoked by the `report` job of
  * k6-load.yml.
  *
@@ -202,7 +202,7 @@ if (summaryError) {
       ? [
           'Özet dosyası okundu ve biçimi geçerli, ama içinde tek bir eşik sonucu yok.',
           'Bu, testin geçtiği anlamına gelmez — hiçbir şey ölçülmemiş demektir, ve',
-          'sessiz kalmak bu durumu her gece görünmez kılardı. k6/*.js dosyasındaki',
+          'sessiz kalmak bu durumu her koşuda görünmez kılardı. k6/*.js dosyasındaki',
           'options.thresholds tanımını kontrol edin (`npm run check:k6`).',
         ]
       : [
@@ -272,13 +272,13 @@ function escapeHtml(s) {
   );
 }
 
-const heading = isRed ? 'Gece yük testinde sorun var' : 'Gece yük testi temiz';
+const heading = isRed ? 'Haftalık yük testinde sorun var' : 'Haftalık yük testi temiz';
 const color = isRed ? '#b91c1c' : '#15803d';
 const html = `<div style="font-family:system-ui,Arial,sans-serif;line-height:1.5">
   <h2 style="color:${color};margin:0 0 8px">${heading}</h2>
-  <p><strong>Internship CRM</strong> gece k6 yük testinin özeti:</p>
+  <p><strong>Internship CRM</strong> haftalık k6 yük testinin özeti:</p>
   <pre style="background:#f3f4f6;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:13px">${escapeHtml(detail)}</pre>
-  <p style="color:#6b7280;font-size:12px">Gece k6 yük testi (k6-load workflow'u) tarafından gönderildi. Yanıtlar izlenmiyor.</p>
+  <p style="color:#6b7280;font-size:12px">Haftalık k6 yük testi (k6-load workflow'u) tarafından gönderildi. Yanıtlar izlenmiyor.</p>
 </div>`;
 
 if (process.env.K6_REPORT_DRY_RUN === '1') {

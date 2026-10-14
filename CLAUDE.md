@@ -36,7 +36,7 @@ npm run test:e2e:smoke   # critical-path subset only (tests tagged @smoke)
 npm run test:e2e:headed  # full suite, with a visible browser
 
 npm run test:stress      # weekly flat GET hammer     (BASE_URL=… ; Node, no deps)
-npm run test:load        # nightly k6 ramp            (BASE_URL=… ; needs the k6 binary)
+npm run test:load        # weekly k6 ramp             (BASE_URL=… ; needs the k6 binary)
 ```
 
 **E2E tests** (Playwright) live in `e2e/`. The PR quality gate
@@ -52,11 +52,14 @@ protection does. A path-filtered workflow reports nothing, which left every docs
 file list and the smoke job is *skipped* — which branch protection counts as passing — only
 when every path is `docs/**`, `releases/unreleased/**`, `*.md` or a root `.HANDOFF-*`; any
 other path (a rename counts by both names) runs it, and a failed detection runs it too.
-Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check. The gate runs as **parallel jobs**: Playwright `--shard` 1/2, 2/2 over the `@smoke` set plus
-the a11y baseline scan as a fifth job, each on its own runner with its own MySQL (so `workers: 1`
-stays — specs were never written to share one DB concurrently). The required `Playwright smoke`
-check is a small aggregator job over them; never rename it or make the matrix job carry that
-name. The smoke job installs Chromium **without** `--with-deps` (that only added fonts, ~4 min
+Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check.
+The gate runs on **PRs only** (no `push: main` re-run, #2917; `ci.yml` likewise) as **one job**
+named `Playwright smoke`: the `@smoke` set unsharded, then a database reset to the seeded
+state, then the a11y baseline scan, each against its own `next start` (`workers: 1` stays —
+specs were never written to share one DB concurrently). It was three parallel jobs plus an
+aggregator from #2811 to #2917; each job repeated ~4 min of setup, which on metered minutes
+was most of the bill. Never rename the job: `Playwright smoke` is the name branch protection
+matches. The smoke job installs Chromium **without** `--with-deps` (that only added fonts, ~4 min
 of apt per run). The **smoke set** is the tests
 tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth/SSO, landing i18n, invite,
 signup, pipeline, free-core regression, health, plus the **security guards** (authz matrix,
@@ -69,8 +72,10 @@ boots the dev server; set `BASE_URL=https://preview.interncrm.com` to run agains
 deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
-The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
-(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted). A drift gate skips the
+The **full suite** also runs on a schedule, once a day at 03:00 UTC
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted; 4× a day until #2917). It is
+the run that tests `main` itself, and its shard 1 saves the Next.js build cache the PR gate
+restores. A drift gate skips the
 scheduled firing when the commit already has a **green** run (#2374 — it used to accept the
 last *completed* run of any conclusion, so one red run masked itself green 4× a day forever;
 a red commit is now re-tested until it passes or a new commit lands), and the skip path says
@@ -80,8 +85,8 @@ A Turkish summary email (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`) go
 `E2E_REPORT_MODE=always` to restore the "✅ N/N test geçti" green heartbeat.
 
 **Load tests (k6)** live in `k6/` and are the *non-functional* net: the app can be
-correct and still be too slow. `k6/nightly-load.js` runs **nightly at 23:40 UTC**
-(`.github/workflows/k6-load.yml`) against the deployed target (`STRESS_TARGET_URL`,
+correct and still be too slow. `k6/nightly-load.js` runs **weekly, Sundays at 23:40 UTC**
+(`.github/workflows/k6-load.yml`; nightly until #2917, the file kept its name) against the deployed target (`STRESS_TARGET_URL`,
 default prod) — a 6m00s VU ramp to a peak of 20, **anonymous GET only**, with
 per-endpoint latency budgets declared in `options.thresholds` (each carrying its
 reasoning as a comment). A Turkish breach email (`scripts/k6-report-email.mjs`) goes
@@ -162,7 +167,8 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 ## Deployment
 
 All three environments follow the same shape: the image is **built on a GitHub-hosted
-runner** (`build-image.yml`, pushed to `ghcr.io/21072026/internship`), and the
+runner** (`build-image.yml`, **linux/arm64 only** since #2917 — the box is arm64 and the
+amd64 half had no consumer — pushed to `ghcr.io/21072026/internship`), and the
 server's **self-hosted runner** only pulls it, runs `prisma db push --accept-data-loss`
 + the idempotent backfills, swaps its container and health-checks it. **Nothing
 compiles on the server**. Keep it that way. Hosted minutes are **metered** again: the repo
@@ -642,7 +648,7 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   enforces itself. The `.js` files themselves are linted and typechecked by **nothing**
   (`next lint` only visits `src/`, tsconfig's `include` only `*.ts|tsx`), which is why
   `npm run check:k6` (a `k6 archive` parse, wired into `ci.yml`) exists — without it a
-  mistyped threshold key first surfaces at 23:40 UTC as a crash email. Tag every request `{ ep: '<name>' }` and give each tag both a
+  mistyped threshold key first surfaces at the Sunday 23:40 UTC run as a crash email. Tag every request `{ ep: '<name>' }` and give each tag both a
   `http_req_duration{ep:…}` budget and `http_reqs{ep:…}: ['count>0']` — a tagged sub-metric
   only reaches the JSON summary when a threshold names it, and the alert email's
   per-endpoint table is built from exactly those. Validate a change with

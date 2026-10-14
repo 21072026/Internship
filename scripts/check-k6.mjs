@@ -6,7 +6,7 @@
  * `app/pages/components/lib/src`, and `tsconfig.json`'s `include` lists only
  * `**\/*.ts|tsx`, so a `k6/*.js` file is invisible to both gates in `ci.yml`.
  * Without this, a typo in a k6 script — a mistyped threshold key, a stray comma,
- * a renamed import — is first observed at 23:40 UTC when the nightly cron fires,
+ * a renamed import — is first observed when the weekly cron fires (Sun 23:40 UTC),
  * and reaches the maintainer as a red "the load test crashed" email rather than
  * as a failed PR check.
  *

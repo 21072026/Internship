@@ -19,8 +19,9 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 # private and out of Actions quota (#636) the server ran a full `npm ci` +
 # `next build` for EVERY push to EVERY open PR. The compiling belongs on GitHub's
 # runners, even though the repo is private again since 2026-10 and those minutes
-# are metered (Free plan: 2,000 a month, #2910). Every push here builds two
-# arches (build-image.yml), which makes this one of the largest minute costs.
+# are metered (Free plan: 2,000 a month, #2910). Every push here builds an
+# image, which makes this one of the largest minute costs; since #2917 it is
+# linux/arm64 only, the arch of the box every topic env runs on.
 #
 # PREREQUISITES (one-time, on the server — see infra/README.md):
 #   1. The self-hosted runner is registered and its user can run docker AND the

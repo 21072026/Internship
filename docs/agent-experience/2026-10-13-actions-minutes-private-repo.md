@@ -31,3 +31,17 @@
   `ubuntu-24.04-arm` works in private repos and draws from the same included-minutes pool as
   x64, at $0.005/min against $0.006. It also gets 2 vCPUs instead of the 4 that public repos
   get.
+
+## 2026-10-14 — applying the cadence package (#2917)
+
+- **Before you drop a trigger, list every step that runs only on that trigger.** `e2e.yml`
+  saved the Next.js build cache only under `github.event_name == 'push'`. Removing
+  `push: main` would have left the PR gate with no cache writer, so every PR build would have
+  started cold and cost more minutes. `grep -n "event_name\|github.ref ==" .github/workflows/*.yml`
+  finds them. The save moved to shard 1 of the daily `e2e-full` run, which runs on `main`, so
+  PR branches can read the cache it writes.
+- **Each 1-minute helper job costs a full minute on every run.** At ~1,040 image builds a month,
+  `build-image.yml`'s "resolve inputs" and "publish manifest" jobs were ~2,000 minutes on their
+  own. When a matrix shrinks to one leg, fold its fan-in and fan-out jobs back into it. For the
+  same reason, the smoke gate is one job named `Playwright smoke` again, not a matrix plus an
+  aggregator.

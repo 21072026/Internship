@@ -190,7 +190,7 @@ emin ol — x64 paketi bu makinada çalışmaz.
 
 | # | İş | Durum |
 |---|---|---|
-| 1 | `build-image.yml` → çok mimarili manifest | **Bitti** (#2168). Her mimari kendi native runner'ında (`ubuntu-24.04-arm`), `imagetools create` ile birleştiriliyor, iki mimari de yoksa fail-closed. |
+| 1 | `build-image.yml` → çok mimarili manifest | **Bitti** (#2168). Her mimari kendi native runner'ında (`ubuntu-24.04-arm`), `imagetools create` ile birleştiriliyor, iki mimari de yoksa fail-closed. **2026-10-14 (#2917):** eski amd64 kutu emekli olduğu için amd64 bacağı kaldırıldı; imaj artık yalnızca linux/arm64, mimari kontrolü hâlâ fail-closed. |
 | 2 | Caddy tabanlı routing | **Bitti** (#2172). Router auto-detect; Plesk dalı eski kutu emekli olana kadar duruyor. |
 | 3 | `BASE_DOMAIN` repo değişkeni | **Bitti** (#2172). Kesmede `vars.BASE_DOMAIN=interncrm.com`. |
 | 4 | Deploy runner'ı repo değişkeni | **Bitti**. `vars.DEPLOY_RUNNER`; aşağıya bak. |

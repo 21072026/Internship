@@ -1,10 +1,17 @@
-name: Nightly k6 Load Test
+name: Weekly k6 Load Test
 
-# Runs the k6 scenario in k6/nightly-load.js against a DEPLOYED environment every
-# night and emails a Turkish breach report **only when a threshold is exceeded**.
+# Runs the k6 scenario in k6/nightly-load.js against a DEPLOYED environment once
+# a week and emails a Turkish breach report **only when a threshold is exceeded**.
 # A green run is silent — that is the design, not an omission (same call the
-# maintainer made for e2e-full in 2026-08-23: nightly green heartbeats became
-# noise). Set the repository variable K6_REPORT_MODE=always for a green summary.
+# maintainer made for e2e-full in 2026-08-23: green heartbeats became noise).
+# Set the repository variable K6_REPORT_MODE=always for a green summary.
+#
+# WEEKLY since 2026-10-14 (#2917), nightly before that. The repo is private on
+# the Free plan (2,000 hosted minutes a month, #2910), and a run is ~8 billed
+# minutes. A latency regression now surfaces within a week instead of a
+# night; dispatch a run by hand after a change that could move the numbers.
+# The script keeps its `nightly-load.js` name: package.json, the CI parse
+# check and the docs all point at it.
 #
 # WHY THIS EXISTS ALONGSIDE stress.yml. `stress.yml` is a flat weekly hammer with
 # one aggregate p95. This adds a staged VU ramp (where does latency start to
@@ -15,9 +22,10 @@ name: Nightly k6 Load Test
 # firing when the commit has not changed, because re-testing the same code only
 # repeats the same verdict. A load test measures the *environment*, and an
 # environment degrades (a full disk, a bloated table, a noisy neighbour) without
-# any commit changing. Every night runs.
+# any commit changing. Every scheduled firing runs.
 #
-# Cadence: 23:40 UTC daily = 01:40 Europe/Berlin (CEST) / 02:40 Europe/Istanbul.
+# Cadence: Sundays 23:40 UTC = Monday 01:40 Europe/Berlin (CEST) / 02:40
+# Europe/Istanbul.
 # That window is deliberately empty on the server: the deploy drift checks run
 # at :23 and :53 past hours 0/6/12/18, `demo-reset` at 02:00 and 14:00, the weekly
 # `stress` at Mon 02:30, the server's mysqldump at 03:15 and `e2e-full` at 03:00.
@@ -37,7 +45,8 @@ on:
         required: false
         type: string
   schedule:
-    - cron: '40 23 * * *'
+    # Sundays 23:40 UTC, the quiet slot described above.
+    - cron: '40 23 * * 0'
 
 concurrency:
   group: k6-load
@@ -129,14 +138,14 @@ jobs:
           node-version: 22
 
       # Same trail as e2e-full (#2322): one `ci-alert` issue while red, closed
-      # by the next green night. No signature: it defaults to the UTC day, so a
-      # red streak comments at most once a night. Runs before the e-mail.
+      # by the next green run. No signature: it defaults to the UTC day, so a
+      # red streak comments at most once a day. Runs before the e-mail.
       - name: Record the result as an issue (no SMTP)
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           ALERT_KEY: k6-load
-          ALERT_TITLE: '🚨 k6-load (nightly) is red'
+          ALERT_TITLE: '🚨 k6-load (weekly) is red'
           ALERT_SUMMARY: |
             The k6 ramp against `${{ github.event.inputs.base_url || 'the default target' }}` ended **${{ needs.load.result }}**: a latency budget broke, or k6 never produced a summary.
             The per-endpoint figures are in the run's `k6-summary` artifact.

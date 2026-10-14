@@ -2,15 +2,19 @@ name: CI
 
 on:
   # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota.
-  # This note used to say the gate costs ~2 min and that e2e-full, stress and
-  # topic-preview stay workflow_dispatch-only. Neither is true any more. A run
-  # is two jobs, ~7 billed minutes (each job rounds up to a whole minute), and
-  # it runs on every PR push and again on every push to main. The repo is
-  # private on the Free plan since 2026-10, so those minutes come out of 2,000
-  # a month (#2910).
+  # A run is two jobs, ~7 billed minutes (each job rounds up to a whole
+  # minute). The repo is private on the Free plan since 2026-10, so those
+  # minutes come out of 2,000 a month (#2910).
+  #
+  # PR-only since 2026-10-14 (#2917): no `push: main`. That run re-checked the
+  # diff its PR had just passed, ~2,300 minutes a month, and nothing waited
+  # for it — the deploy starts on the same push. What it could still catch is
+  # two PRs green alone and red together. That still surfaces: the next PR's
+  # run tests that PR merged into the new main, a type or build break also
+  # fails the image build (`next build`) before anything deploys, and the
+  # daily e2e-full run covers behaviour on main. Dispatch this by hand to
+  # check main on demand.
   workflow_dispatch:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 

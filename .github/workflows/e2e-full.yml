@@ -1,7 +1,7 @@
 name: E2E Full Suite (scheduled)
 
 # The PR gate (e2e.yml) runs only the @smoke subset; this workflow is the safety
-# net behind it (#621/#624): the FULL Playwright suite, 4× a day, 4-way sharded,
+# net behind it (#621/#624): the FULL Playwright suite, once a day, 4-way sharded,
 # plus the `isolation` project in a job of its own (#1566 — it needs a second
 # Next server with MT_ENFORCE_ISOLATION=true and cannot share a run with the
 # default project), with a Turkish summary email when a run goes red — the failing tests with
@@ -16,7 +16,7 @@ name: E2E Full Suite (scheduled)
 # (#2374): the gate used to ask for the last *completed* run of any conclusion,
 # so the first red run on a commit silenced every later firing on it, and each
 # of those skips reported as a green check in the Actions list. A red commit is
-# now re-tested (and re-mailed) every 6h until it is green or a new commit
+# now re-tested (and re-mailed) every day until it is green or a new commit
 # lands — that is the point of the alert, and a re-run also tells a flake apart
 # from a real break. workflow_dispatch always runs (manual = deliberate).
 #
@@ -28,15 +28,20 @@ name: E2E Full Suite (scheduled)
 # cadence from #627 came back. It had been cut to 1×/day serial while the
 # private-repo quota was exhausted (#636/#648). The repo is PRIVATE again since
 # 2026-10, on the Free plan: 2,000 hosted minutes a month, every job rounded up
-# to a whole minute. A full run is one of the largest single costs, and its
-# cadence is under review in #2910.
+# to a whole minute. A run is ~38 billed minutes, and at ~11 merges a day the
+# drift gate almost never skips one, so 4×/day was ~3,800 minutes a month.
+# Since 2026-10-14 (#2917) it runs ONCE a day, still sharded: a break on main
+# is reported within ~24h instead of ~6h. The PR gate (e2e.yml) no longer
+# re-runs on push to main either, so this run is the one that tests main
+# itself — and the one that saves the Next.js build cache PR runs restore.
 #
 # Note: GitHub scheduled workflows can lag a few minutes and are disabled
 # automatically after 60 days without repository activity.
 on:
   schedule:
-    # 4× a day at 03/09/15/21 UTC (~05/11/17/23 Europe/Berlin in summer).
-    - cron: '0 3,9,15,21 * * *'
+    # Once a day at 03:00 UTC (~05:00 Europe/Berlin in summer), before the
+    # European working day, so a red night is in the inbox by the morning.
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -176,11 +181,30 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
+      # Next's webpack cache, the same key e2e.yml restores. Shard 1 of a run
+      # on main SAVES it (#2917): that used to be the PR gate's push-to-main
+      # run, which no longer exists, and without a writer every PR build
+      # would start cold. A run on main is visible to every PR branch; a save
+      # from a PR would only fill the repo's 10 GB cache budget.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       - name: Build app
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Save Next.js build cache
+        if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 }}
+        uses: actions/cache/save@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -225,7 +249,7 @@ jobs:
   # refuses to assemble both projects in one run (two servers compiling into the
   # same .next/). The PR gate can't run it either — that gate is the @smoke
   # subset and these specs are excluded from the default project. So it rides
-  # along here: same 4×/day cadence, same drift gate, and its JSON report is
+  # along here: same daily cadence, same drift gate, and its JSON report is
   # named `e2e-json-shard-isolation` so the summary email below picks it up like
   # any other shard (a red isolation run therefore mails, and a crash that
   # writes no report is caught by E2E_EXPECTED_REPORTS).

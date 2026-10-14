@@ -1,7 +1,7 @@
 name: E2E Tests
 
 on:
-  # The @smoke-only PR gate. The full suite runs 4x a day in e2e-full.yml.
+  # The @smoke-only PR gate. The full suite runs once a day in e2e-full.yml.
   # A manual run takes an optional Playwright --grep filter, so a single
   # non-smoke spec can be re-verified on a branch without dispatching the whole
   # 4-shard e2e-full suite (which also emails a summary on every run).
@@ -11,8 +11,12 @@ on:
         description: 'Playwright --grep filter (e.g. @smoke, or a test title)'
         required: false
         default: '@smoke'
-  push:
-    branches: [main]
+  # PR-only since 2026-10-14 (#2917): no `push: main`. That run re-tested the
+  # diff its PR had just passed, ~6,400 metered minutes a month, and nothing
+  # waited for it — the deploy starts on the same push. Two PRs green alone
+  # and red together still surface: the next PR's run tests itself merged into
+  # the new main, and the daily e2e-full run tests main. It used to be the only
+  # writer of the Next.js build cache PR runs restore; e2e-full saves it now.
   # No `paths-ignore` here on purpose (#2719). `Playwright smoke` is a REQUIRED
   # check on `main`, and a workflow skipped by a path filter reports nothing at
   # all — so a docs-only PR sat BLOCKED with every check green, and only an
@@ -37,7 +41,7 @@ jobs:
   # don't count are the ones the old `paths-ignore` listed: docs/**,
   # releases/unreleased/**, any *.md, and root .HANDOFF-* notes. A rename counts
   # by BOTH names, so moving code into docs/ is still a code change. Every
-  # event other than a PR (push to main, a manual dispatch) always tests.
+  # event other than a PR (a manual dispatch) always tests.
   changes:
     name: Detect code changes
     runs-on: ubuntu-latest
@@ -80,28 +84,35 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "$count path(s) examined; code=$code"
 
-  # The smoke set and the accessibility gate, run as PARALLEL jobs (#2811).
+  # The smoke set and the accessibility gate, in ONE job, one after the other
+  # (#2917).
   #
-  # Serially this job took ~19 min wall-clock: ~4 min installing CJK/Thai/X11
-  # font packages from a slow apt mirror, 2.6 min building, 7.6 min for the
-  # ~200 @smoke tests on one worker and 2.9 min for the a11y gate. The smoke
-  # set was pruned back to critical flows + security guards (~107 tests, most
-  # of them browserless unit specs), and the rest is split:
+  # From #2811 they were three parallel jobs: smoke 1/2 and 2/2 (Playwright
+  # `--shard` over the @smoke set) and a11y. Each one repeated ~4 min of
+  # identical setup (MySQL service, `npm ci`, prisma, `next build`) before
+  # ~2.7 min of tests. On metered minutes that setup was most of the bill,
+  # ~3,700 minutes a month. In series the gate takes ~13 min wall-clock
+  # instead of ~7. #2811's other cuts (no `--with-deps` font install, the
+  # pruned ~107-test smoke set) stay.
   #
-  #   - smoke 1/2, 2/2: Playwright `--shard` over the @smoke set. Each shard is
-  #     its own runner with its own MySQL service and its own `next start`, so
-  #     the state isolation is exactly what one worker on one runner gave —
+  # Each suite still sees exactly what it saw as a job of its own:
+  #   - smoke runs unsharded, as it did before #2811: one `next start`, and
   #     `workers: 1` stays (specs share the seeded admin, rate-limit buckets and
   #     global rows, and were never written for concurrency on one DB).
-  #   - a11y: the serial baseline scan (e2e/a11y-scan.spec.ts) cannot be
-  #     sharded — its last test compares what every earlier test collected — so
-  #     it is a job of its own and, at ~3 min, the one that sets the pace.
+  #   - the a11y baseline scan (e2e/a11y-scan.spec.ts) runs serially by design
+  #     (its last test compares what every earlier test collected). It runs
+  #     after smoke on a database reset to the freshly seeded state, against a
+  #     `next start` of its own (every `playwright test` boots one, so the
+  #     in-memory rate-limit counters start empty too). It runs even when smoke
+  #     failed, so one red suite never hides the other's verdict.
   #
-  # The REQUIRED check is the `Playwright smoke` job at the bottom, which only
-  # aggregates these. Branch protection matches check names literally, and a
-  # matrix job is named `Playwright smoke (…)`, never `Playwright smoke`.
-  e2e:
-    name: Playwright smoke (${{ matrix.label }})
+  # This job carries the REQUIRED check name itself again. Without a matrix it
+  # is named `Playwright smoke`, which is the name branch protection matches,
+  # so the aggregator job the matrix needed is gone too. A docs-only PR skips
+  # it through the `if:` below, and a job skipped by its `if:` reports Success
+  # to branch protection.
+  smoke:
+    name: Playwright smoke
     needs: changes
     # Runs unless the PR is docs-only. FAILS CLOSED: if `changes` errors, its
     # output is empty, which is not 'false', so the smoke runs instead of the
@@ -109,15 +120,6 @@ jobs:
     # skipping this job the way an implicit `success()` would.
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
-    strategy:
-      # One red shard should not cancel the others: the report of every shard
-      # is what tells you whether it is one flaky spec or a real break.
-      fail-fast: false
-      matrix:
-        include:
-          - { label: 'smoke 1/2', suite: smoke, shard: '1/2' }
-          - { label: 'smoke 2/2', suite: smoke, shard: '2/2' }
-          - { label: 'a11y', suite: a11y, shard: '' }
 
     services:
       mysql:
@@ -163,7 +165,7 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
-      # Next's webpack cache. Restored on every run, SAVED only by the push to
+      # Next's webpack cache. Restored here, SAVED by the daily e2e-full run on
       # main — so PR runs start from main's cache (a branch may read its base
       # branch's caches) without each PR push adding a few hundred MB to the
       # repo's 10 GB cache budget and evicting the npm/Playwright caches.
@@ -175,17 +177,11 @@ jobs:
           restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       - name: Build app
+        id: build
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Save Next.js build cache
-        if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
-        uses: actions/cache/save@v6
-        with:
-          path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -204,23 +200,40 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install chromium
 
-      # PR gate runs the @smoke subset only (#623); the FULL suite runs 4x a
+      # PR gate runs the @smoke subset only (#623); the FULL suite runs once a
       # day via e2e-full.yml (sharded, email on failure) and on demand.
       # The filter is passed through an env var, not interpolated into the
       # shell — a dispatch input is untrusted text. `--pass-with-no-tests`
-      # because a narrow manual grep (one test title) leaves most shards empty,
-      # and an empty shard is not a failure.
-      - name: Run E2E tests (${{ matrix.label }})
-        if: ${{ matrix.suite == 'smoke' }}
+      # because a narrow manual grep (one test title) can match nothing, and
+      # an empty run is not a failure.
+      - name: Run E2E tests (smoke)
         env:
           E2E_GREP: ${{ inputs.grep || '@smoke' }}
-          E2E_SHARD: ${{ matrix.shard }}
-        run: npx playwright test --grep "$E2E_GREP" --shard="$E2E_SHARD" --pass-with-no-tests
+        run: npx playwright test --grep "$E2E_GREP" --pass-with-no-tests
+
+      # Uploaded before the a11y scan runs: the html reporter writes
+      # playwright-report/ afresh on every `playwright test`.
+      - name: Upload Playwright report (smoke)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-smoke
+          path: playwright-report/
+          retention-days: 7
+
+      # The a11y gate below runs on the database state it had as a job of its
+      # own: schema pushed, admin seeded, nothing the smoke specs wrote.
+      - name: Reset the database for the accessibility scan
+        id: reset
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && !inputs.grep }}
+        run: |
+          npx prisma db push --force-reset --skip-generate
+          npx prisma db seed
 
       # The accessibility regression gate, run OUTSIDE the grep (#826).
       #
-      # This job exists because the gate shipped in #862 did not gate. The scan
-      # carries no @smoke tag, and the smoke shards filter on @smoke, so the
+      # It exists because the gate shipped in #862 did not gate. The scan
+      # carries no @smoke tag, and the smoke run filters on @smoke, so the
       # 9-page baseline comparison only ever ran in the scheduled suite — a PR
       # introducing a new serious violation sailed through. #1333 is that
       # failure mode realised.
@@ -230,35 +243,14 @@ jobs:
       # block. Skipped when a manual run asked for a specific grep, because that
       # run is targeting something else on purpose.
       - name: Accessibility regression gate
-        if: ${{ matrix.suite == 'a11y' && !inputs.grep }}
+        id: a11y
+        if: ${{ !cancelled() && steps.reset.outcome == 'success' }}
         run: npx playwright test e2e/a11y-scan.spec.ts
 
-      - name: Upload Playwright report
-        if: always()
+      - name: Upload Playwright report (a11y)
+        if: ${{ always() && steps.a11y.outcome != 'skipped' }}
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-${{ strategy.job-index }}-${{ matrix.suite }}
+          name: playwright-report-a11y
           path: playwright-report/
           retention-days: 7
-
-  # The REQUIRED check. Green when every shard above is green, and when the PR
-  # is docs-only and the shards were skipped on purpose (`changes` said
-  # code=false) — the same outcome the single skipped job used to report.
-  # Anything else is red: a failed or cancelled shard, and a shard skipped for
-  # any OTHER reason (fails closed, like the `if:` above).
-  smoke:
-    name: Playwright smoke
-    needs: [changes, e2e]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - env:
-          RESULT: ${{ needs.e2e.result }}
-          CODE: ${{ needs.changes.outputs.code }}
-        run: |
-          echo "shards: $RESULT, code change: ${CODE:-unknown}"
-          if [ "$RESULT" = "success" ]; then exit 0; fi
-          if [ "$RESULT" = "skipped" ] && [ "$CODE" = "false" ]; then
-            echo "Docs-only PR: nothing for the smoke suite to test."; exit 0
-          fi
-          exit 1
