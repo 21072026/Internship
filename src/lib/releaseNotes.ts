@@ -2956,7 +2956,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.224.0-beta',
     date: '2026-09-29',
     time: '20:23',
-    commit: 'c7ec3dd',
     highlights: {
       en: [
         "To-dos can now have a due date. Late ones are marked “Overdue” — in words, not just in red — and a counter shows how many; a to-do due today is not late. Undated to-dos sit at the end of the list.",
@@ -3400,7 +3399,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.208.0-beta',
     date: '2026-09-22',
     time: '15:05',
-    commit: 'eb08011',
     highlights: {
       en: [
         "An account list kept in a spreadsheet can now be imported: companies, their VAT id, country and primary contact, and where each one sits in the funnel. It previews before it writes, and running the same file twice changes nothing.",
@@ -3760,7 +3758,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.201.3-beta',
     date: '2026-09-14',
     time: '04:23',
-    commit: '28c80c9',
     highlights: {
       en: [
         "If you renamed your pipeline stages, the cohort comparison, source conversion, programme benchmark, admin conversion rate and mentor analytics now count your own final stage — they used to report zero placements no matter how many people you had placed.",
@@ -3936,7 +3933,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.190.0-beta',
     date: '2026-09-09',
     time: '21:43',
-    commit: 'be597bb',
     highlights: {
       en: [
         "Organizations can now require single sign-on: with it on, nobody in the tenant can sign in with a password, reset one, set one from an invitation or change one — the identity provider is the only way in.",
@@ -3985,7 +3981,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.188.0-beta',
     date: '2026-09-09',
     time: '21:35',
-    commit: 'e3c60b0',
     highlights: {
       en: [
         "A meeting can now be rescheduled, cancelled or deleted instead of being abandoned at the wrong time — a cancelled meeting disappears from the dashboard, the calendar, the subscription feed and the reminder e-mails, and is withdrawn from the calendars it was mirrored to.",
@@ -4345,7 +4340,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.173.0-beta',
     date: '2026-09-07',
     time: '12:04',
-    commit: '012d03d',
     highlights: {
       en: [
         "Pricing now has its own entry in the site menu — on desktop and on a phone — and in the footer, so the price is one click from any public page.",
@@ -5045,7 +5039,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.154.0-beta',
     date: '2026-09-03',
     time: '21:02',
-    commit: '70c3ce2',
     highlights: {
       en: [
         "Admins can now sign a user out of every device and remembered browser instantly, without deactivating their account.",
@@ -5105,7 +5098,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.152.0-beta',
     date: '2026-09-03',
     time: '20:46',
-    commit: '3e0e16a',
     highlights: {
       en: [
         "New public trust centre at /trust: who can receive your data and why, what protects it, where it is hosted — and, in the same list, what is not true yet.",
@@ -5122,7 +5114,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.151.0-beta',
     date: '2026-09-03',
     time: '14:41',
-    commit: '73ff73a',
     highlights: {
       en: [
         "API keys now have a lifecycle: pick what a key may read, give it an expiry date, and see who created each key. Revoking a key keeps it in the list so the audit trail stays intact.",
@@ -5488,7 +5479,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.141.0-beta',
     date: '2026-09-03',
     time: '07:59',
-    commit: '06c3637',
     highlights: {
       en: [
         "Enlarged images now open inside the app: close them with ✕, Escape, a tap outside or your phone's back button, and zoom or step through several images without leaving the page.",
@@ -5936,7 +5926,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.124.0-beta',
     date: '2026-08-27',
     time: '11:45',
-    commit: '17d8500',
     highlights: {
       en: [
         "A new imprint page says who runs this service and how to reach them — linked from every page's footer, and named as the data controller in the privacy notice.",
@@ -6373,7 +6362,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.114.2-beta',
     date: '2026-08-25',
     time: '01:36',
-    commit: 'd1133e4',
     highlights: {
       en: [
         "The admin board now shows a customized pipeline's stages on desktop, not only on a phone.",
@@ -6390,7 +6378,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.114.1-beta',
     date: '2026-08-25',
     time: '01:36',
-    commit: 'd1133e4',
     highlights: {
       en: [
         "Dark mode is now covered by the automated accessibility checks, which found and fixed four low-contrast links and labels that were unreadable on dark backgrounds.",
@@ -6407,7 +6394,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.114.0-beta',
     date: '2026-08-24',
     time: '23:48',
-    commit: '29e072a',
     highlights: {
       en: [
         "Site owners can now connect Plausible, GA4 or PostHog for public-page analytics — off unless configured, and never loaded without the visitor's cookie consent.",
@@ -6424,7 +6410,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.113.0-beta',
     date: '2026-08-24',
     time: '23:03',
-    commit: '6c0e748',
     highlights: {
       en: [
         "Candidates who are not placed this cycle can now be kept in a re-engagement pool with their consent — with an agreed date to talk again, and a one-click way out of it from any e-mail.",
@@ -6441,7 +6426,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.112.0-beta',
     date: '2026-08-24',
     time: '22:42',
-    commit: '6c8b027',
     highlights: {
       en: [
         "Admins can now manage tags: rename, recolour, merge duplicates together, or retire one — with the number of people affected shown before anything is deleted.",
@@ -6458,7 +6442,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.111.0-beta',
     date: '2026-08-24',
     time: '22:17',
-    commit: '3ba4083',
     highlights: {
       en: [
         "You can now connect your own Google Calendar from your account settings — meetings you are part of show up there too, and disconnecting revokes the access again.",
@@ -6509,7 +6492,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.110.0-beta',
     date: '2026-08-24',
     time: '21:37',
-    commit: '30d79fc',
     highlights: {
       en: [
         "Admins get a contributor-terms report: who has accepted, who is on an outdated version, who has not accepted at all — filterable and exportable to Excel.",
@@ -6526,7 +6508,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.109.0-beta',
     date: '2026-08-24',
     time: '21:07',
-    commit: 'c6343ee',
     highlights: {
       en: [
         "Projects can now carry their own contributor terms: members read and accept them once per project, and a project with no IP question can skip asking altogether.",
@@ -6543,7 +6524,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.108.0-beta',
     date: '2026-08-24',
     time: '20:56',
-    commit: 'aac75ae',
     highlights: {
       en: [
         "People's names are clickable almost everywhere now — click one for a card with who they are and a way to message them.",
@@ -6563,7 +6543,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.107.3-beta',
     date: '2026-08-24',
     time: '20:53',
-    commit: '4ed3ec5',
     highlights: {
       en: [
         "Dialogs are now fully keyboard-accessible: focus moves into the dialog when it opens, stays inside while you Tab through it, Escape closes it, and focus returns to the control you opened it from.",
@@ -6614,7 +6593,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.107.0-beta',
     date: '2026-08-24',
     time: '20:34',
-    commit: '31f010f',
     highlights: {
       en: [
         "Contributor terms now live in the app: read the text in force at /contributor-terms, accept it once with a single checkbox, and download or re-read what you accepted at any time.",

@@ -1309,7 +1309,7 @@ Fixed the message composer scrolling out of view on mobile Safari when the keybo
 
 ## [0.224.0-beta] - 2026-09-29
 
-_Shipped 2026-09-29 20:23 UTC · commit [c7ec3dd](https://github.com/21072026/Internship/commit/c7ec3ddd1e55d294db5b74fc07db253ea757dd3f)_
+_Shipped 2026-09-29 20:23 UTC_
 
 - **A to-do can carry a due date, and a late one says so** (#2440, story #2397). New nullable `ProjectTask.dueDate`: `/api/todos` orders by it ascending with NULLS LAST (undated to-dos sort to the end instead of burying the dated ones), `POST /api/todos` and `PATCH /api/project-tasks/[id]` accept `YYYY-MM-DD` or an ISO instant (null clears it), and the date is set from the add box, the mentor's "give it" box and the row's edit mode. What "late" means lives in one dependency-free, unit-tested module, `src/lib/taskDue.ts`: a CALENDAR-DAY comparison, so a to-do due today at 09:00 is not late in the afternoon, and the stored value names a UTC day while "today" is the reader's own — only a day strictly before today is overdue. The row's chip reuses `StageClockChip`'s tones (red overdue, amber due-today, grey upcoming) and always carries the words as well as the tone (WCAG 1.4.1), with a counter tile above the list. `/api/todos?scope=team` answers the same list for everyone the reader may reach — ADMIN their organisation, MENTOR their own mentees, anyone else 403 — on the existing to-dos page rather than a second one, and keeps the list's privacy rule: a line somebody wrote for themselves is not on anybody else's screen. The daily activity digest gained an overdue block that rides along with the mail already going out (no new send, no new recipient).
 
@@ -1537,7 +1537,7 @@ _Shipped 2026-09-23 11:53 UTC · commit [9f01234](https://github.com/21072026/In
 
 ## [0.208.0-beta] - 2026-09-22
 
-_Shipped 2026-09-22 15:05 UTC · commit [eb08011](https://github.com/21072026/Internship/commit/eb080113b1f382a3f196334ddc14702cc96195c2)_
+_Shipped 2026-09-22 15:05 UTC_
 
 - **The marketing account spreadsheet can be imported, idempotently** (#2404, #2405, #2406, #2407 — story #2391, epic #2348). A written column contract ([`docs/marketing-import.md`](docs/marketing-import.md)) plus a sample file with its four edge cases (`scripts/fixtures/marketing-accounts-sample.csv`), and an importer that runs on the SHARED engine — `runImport({ parse, validate, resolve, apply })` and the shared delimited parser in `src/lib/importPreview.ts`, the same ones the roster feed uses. No second parser, no second dry-run engine, and no `if (dryRun)` branch in the planning path: a dry run is the same call with a writer that does not write, and `npm run import:marketing-accounts` is dry-run by default (`--apply` to write, `--owner=<email>` for the organisation and the default funnel owner, following `scripts/import-csv.mjs`'s flags). `Company` gains `vatId`, `country` (ISO-3166-1 alpha-2) with `@@unique([orgId, vatId])` — org-scoped, never global, because two tenants may each hold the same merchant — and `contactName`/`contactPhone` beside the existing `contactEmail`; all four nullable, so `db push` applies to populated tables. Matching is VAT id first, then `normalizeNameKey(name) + country` through the repo's existing normaliser, which transliterates İ/ı/ş/ğ/ü/ö/ç before lowercasing (a plain `toLowerCase()` makes `İstanbul Tekstil A.Ş.` and `ISTANBUL TEKSTIL A.S.` two accounts on every run), and it is batched — four queries per run, not four per row. Because both new columns arrive with this change, every account a tenant already holds has `vatId` and `country` NULL, so a blank country on **either** side falls back to the name alone when exactly one stored account bears it (and fills the country in as a gap, so the next run keys exactly); two same-named accounts in different countries and a row naming none is reported `SKIP` as ambiguous, never guessed. The in-file duplicate guard keys on the account a row **resolves to** rather than the identity it claims, so one merchant listed twice with the VAT filled in on only one line is one account. A bad row is reported as `{row, key, status:'ERROR', reason}` and never thrown; a second apply of the same file is all `UNCHANGED`. The data-model decision the rest of the backlog rests on is now written down in `docs/marketing-vertical/pipeline-record.md` and linked from that folder's README: account = `Company`, funnel record = `MentorshipRelation` (owner = `mentorId`, lead person = `menteeId`, account = `companyId`), lead person = a `MENTEE` `User` — no second pipeline carrier, and stage history stays `StatusChange` on the relation rather than a Company-level table. A row with a stage but no primary contact keeps its account and skips the stage with a warning, because a funnel record needs a person. The lead `User` a placed row mints is a record and not a login: password-less **and** on a generated stand-in address on `import.local` derived from the contact address and the org id, because the sentinel password alone is not the guarantee — `/api/auth/forgot` mails a reset link to any existing user and `/api/auth/reset` consumes it, so the merchant's real address would have made every imported contact a claimable MENTEE account. The real address stays on `Company.contactEmail`. The new `vatId`/`contactName`/`contactPhone` columns are stripped for non-ADMIN readers of `GET /api/companies` and `GET /api/companies/[id]` (`src/lib/companyVisibility.ts`) so this does not widen the broad company read tracked as #2431. `importErrorMessage()` in the shared engine now reports the first NON-empty line and the error code: Prisma formats every P2002/P2000/P2003 starting with a blank line, so every database-raised import failure was previously reported as ERROR with an empty reason — the roster feed inherits the fix. Unit-tested dependency-free with an in-memory writer (`npm run test:marketing-import`, 35 cases, `src/lib/marketingImport.ts` floored at 95%).
 
@@ -1723,13 +1723,13 @@ _Shipped 2026-09-14 04:28 UTC · commit [a9dd9c2](https://github.com/21072026/In
 
 ## [0.201.3-beta] - 2026-09-14
 
-_Shipped 2026-09-14 04:23 UTC · commit [28c80c9](https://github.com/21072026/Internship/commit/28c80c98963dbce6138f6f7c1acaed524d9a7f4d)_
+_Shipped 2026-09-14 04:23 UTC_
 
 - **The five paid reports count the tenant's own finished stage instead of a hardcoded `HIRED_660`** (#1882, story #1880). Cohort comparison, source conversion, the cross-program benchmark, the admin headline conversion and mentor analytics each carried their own `new Set(['HIRED_660','EMPLOYED_700'])`; a customer that renamed its pipeline (#747) holds neither key, so all five returned a confident zero — including the cohort route's `statusChanges.where.toStatus.in` filter, which left time-to-hire permanently `null`. One helper now answers the question for everybody: `outcomeStageKeys(orgId, locale)` / `outcomeStageKeysFrom(stages)` in `src/lib/pipelineStages.ts` returns `{ finished, finishedLabel, finishedLabelIsCustom, offPath, first }`. `finished` is anchored rather than "the last on-path stage" — the first on-path stage whose key is one of the canonical outcome keys, else the last on-path stage, and then everything ordered at or beyond it — because the built-in catalogue ends `HIRED_660 → EMPLOYED_700` and a naive "last stage" rule would silently stop counting `HIRED_660`. For an org with no `PipelineStage` rows the resolver falls back to the built-in catalogue and the sets come out byte-identical to the literals that were removed (`finished` = `['HIRED_660','EMPLOYED_700']`, `offPath` = `['INTERNSHIP_DROPPED_460','INTERNSHIP_FOUND_ELSEWHERE_800']`), so a single-tenant deployment's numbers do not move. The benchmark is the awkward one: it reads across ALL orgs behind a `MIN_RELATIONS = 5` k-anonymity floor, so it resolves a stage set per orgId from ONE batched `PipelineStage.findMany({ where: { orgId: { in: [...] } } })` — run through `runUnscoped` on purpose, because the tenant middleware's injection is an overwrite (`{ ...where, orgId }`) that would replace the `in` list with a single id and silently mis-count every other program. Only aggregate numbers still cross the boundary; only the viewer's own stage is ever named. Each payload now returns `finishedLabel` + `finishedLabelIsCustom`, and `/admin/analytics`, `CohortComparison`, `SourceConversion`, `ProgramBenchmark` and `/mentor/analytics` print the tenant's own stage name when the tenant renamed it and keep their existing EN/TR/DE wording when it did not — one new key trio, `analytics.conversionToStage`. Not a fork of #1504's placement definition: `src/lib/placement.ts` does not exist on `main`, and that issue is about which RELATIONS count while this is about which STAGES mean finished.
 
 ## [0.201.2-beta] - 2026-09-14
 
-_Shipped 2026-09-14 04:23 UTC · commit [28c80c9](https://github.com/21072026/Internship/commit/28c80c98963dbce6138f6f7c1acaed524d9a7f4d)_
+_Shipped 2026-09-14 04:23 UTC_
 
 Fixed a ~1-in-256 CI failure: the stub IdP's hand-rolled DER encoder emitted a non-minimal INTEGER for certificate serials beginning with a zero byte, so `new X509Certificate()` threw at import and the Playwright webServer never started. Guarded by `npm run test:idp-mock-der`.
 
@@ -1837,7 +1837,7 @@ _Shipped 2026-09-11 10:51 UTC · commit [ca90295](https://github.com/21072026/In
 
 ## [0.190.0-beta] - 2026-09-09
 
-_Shipped 2026-09-09 21:43 UTC · commit [be597bb](https://github.com/21072026/Internship/commit/be597bb1fdeb9375d5ef7d1e5043ecfa472b15e0)_
+_Shipped 2026-09-09 21:43 UTC_
 
 - **Enforced SSO per tenant — every other door closes, with a break-glass admin and a session sweep on flip** (#1950). `Organization.ssoEnforced` makes "our users cannot sign in with a password" a claim we can actually stand behind: the rule lives once in `src/lib/ssoEnforcement.ts` and **every** password-derived path calls it — the credentials provider, "remember me" silent re-authentication (refused in `POST /api/auth/remember/refresh` *and* in the `remember` provider, since the grant is a 60-second bearer token), password reset completion for both `RESET` and `SET_INITIAL`, invitation/self registration (it sets a password) and the self-service password change; `/api/auth/forgot` stops mailing a link that would be refused, and the admin reset-password route says why instead of looking like broken SMTP. Impersonation is deliberately left open and the reasoning is written down in `docs/sso-saml.md`. Two interlocks make it safe to turn on: enforcement cannot be enabled unless `isSsoActive(org)` **and** at least one active `ADMIN` holds the new `User.ssoExempt` break-glass exemption (granted through `POST /api/admin/users/[id]/sso-exempt`, admins only, audited as `sso.exempt_granted`/`sso.exempt_revoked`, badged in Admin → Users, and the last one cannot be revoked while enforcement is on), and enforcement only *applies* while SSO is still active, so a plan downgrade or a broken config falls back to password login instead of locking a tenant out. Flipping it on sweeps the tenant in batches of 500 — `sessionsValidFrom` **and** `revokeAllTrustedDevices`, never one without the other — and writes one `sso.enforced` activity row with the count. A refused sign-in returns the new allow-listed `SSO_REQUIRED` provider error, so the sign-in page says "your organization requires single sign-on" and links to `/auth/sso` instead of "invalid email or password"; that narrow enumeration trade is recorded in `docs/security-exceptions.md`. `e2e/sso-enforced.spec.ts` (`@smoke`) refuses each door by calling the API/provider directly, with a passing control beside each refusal.
 
@@ -1849,7 +1849,7 @@ _Shipped 2026-09-09 21:35 UTC · commit [b7563de](https://github.com/21072026/In
 
 ## [0.188.0-beta] - 2026-09-09
 
-_Shipped 2026-09-09 21:35 UTC · commit [e3c60b0](https://github.com/21072026/Internship/commit/e3c60b080c23b00613ca21f5e2f66a08ff70165f)_
+_Shipped 2026-09-09 21:35 UTC_
 
 - **A meeting can finally be moved, called off or deleted** (#1980). `/api/meetings/[id]` had no `PATCH` and no `DELETE`, so the only way to fix a wrong time was to schedule a second meeting and abandon the first — which stayed on the dashboard banner, in the reminder queue, in the calendar, in the `.ics` feed and on the participant's real Google Calendar forever. `Meeting` gains `status` (`MeetingStatus { SCHEDULED | CANCELLED }`), `cancelledAt` / `cancelledById` / `cancelReason`, `rescheduledAt` / `previousScheduledAt` so "this moved" is answerable without an audit join, and `batchKey` (indexed) — the shared identity of one bulk schedule, written by `POST /api/meetings`, so a cancel can mean this invitee (`scope: 'one'`, the default) or the whole session (`scope: 'batch'`); a null key means just this row, never "all the nulls". `PATCH` moves the time (re-parsed through `parseUserDateTime` against the actor's zone, never a bare `new Date()`, #1061), the clock, the title and the room link, clears `reminderSentAt` so the new time gets its own reminder, stamps the old time, and resets an RSVP that was given to the time nobody is meeting at any more; `status: 'CANCELLED'` records who called it off, when and why. `DELETE` removes the row — and what was *written* in the meeting survives, because `PersonalNote.meetingId` and `InteractionLog.meetingId` are `onDelete: SetNull` on purpose. Both refuse a meeting whose `endedAt` is set (410) and `PATCH` refuses one already cancelled (409); a cancelled row stays deletable, which is the only way a mistake ever leaves the list. Authorization is server-side and fail-closed in one place — the new `canManageMeeting()` in `src/lib/meetingAccess.ts`: organiser, the relation's mentor, admin. A MENTEE is a participant, not the owner (they decline; counter-proposals are #1982), and a COMPANY or SOURCE session never reaches the rule at all — every refusal answers exactly like an unknown id, so the id space stays opaque. Cancelling and deleting call `removeMeeting()` (its first real call site; #1986 owns the rest) before the rows go, since `GoogleCalendarEventLink` cascades away with the meeting; a move re-pushes, which PATCHes the event already on the invitee's calendar instead of leaving a second one next to the stale first. Both verbs are rate-limited (`meeting-mutate`, 20/min), audited (`meeting.cancel` / `meeting.delete`), and `meeting.rescheduled` + `meeting.cancelled` join `WEBHOOK_EVENTS`. Every reader that answers "is there a meeting?" now filters CANCELLED out: the dashboard banner, the reminder cron, `/api/calendar-events`, the ICS subscription feed, the public per-meeting `.ics` (410) and the auto-log sweep — a meeting that was called off did not take place, and writing "the scheduled meeting took place" into a mentee's history would be a false record. `e2e/meeting-reschedule.spec.ts` covers schedule → move → cancel, the mentee's and an unrelated mentor's 404, batch vs single scope, and a delete that keeps the note and the log.
 
@@ -2007,7 +2007,7 @@ Fixed: park the `/pricing` header, footer and free-core-band links until the pag
 
 ## [0.173.0-beta] - 2026-09-07
 
-_Shipped 2026-09-07 12:04 UTC · commit [012d03d](https://github.com/21072026/Internship/commit/012d03d2262ebfe981b6a9a48da71edd289e23fc)_
+_Shipped 2026-09-07 12:04 UTC_
 
 - **Pricing is reachable from the public chrome, and the free-core promise has its own landing band** (#1732). The header offered Features / For companies / Showcase and never mentioned money, so a visitor who came for the number had nothing to click. `publicNav` gains a `pricing` key in all three locales and `/pricing` is added to `PublicHeader`'s single `links` array (which drives the desktop bar and the phone disclosure panel alike) and to `PublicFooter`'s Product column. On the landing page the `landing.heroModel` sentence is promoted out of the hero — where the one line answering "what does this cost me" was a grey paragraph among five — into a dedicated `bg-green-50` band placed after the three audience sections, with a new supporting line and `/pricing` as its only CTA; the string itself is unchanged, so nothing an e2e spec pins moved. The band needs no new dark-mode rule: `bg-green-50` is already retinted in `globals.css` and its `text-green-*` descendants are covered by the existing green compound override, which is also why the band carries no `bg-green-100` chip (those stay light in dark mode while the override would still lighten their text). `e2e/pricing-nav.spec.ts` walks the header link, the footer link, the band CTA and the 375px menu, and checks the band does not overflow a phone. Depends on #1730 for the `/pricing` route itself.
 
@@ -2116,7 +2116,7 @@ _Shipped 2026-09-07 02:44 UTC · commit [3e888c0](https://github.com/21072026/In
 
 ## [0.165.1-beta] - 2026-09-07
 
-_Shipped 2026-09-07 02:34 UTC · commit [79797f9](https://github.com/21072026/Internship/commit/79797f91607fc4f966f4d9de1d6226342edca2ae)_
+_Shipped 2026-09-07 02:34 UTC_
 
 - **One daily retention job for the telemetry tables, and the registry the rest of the product will register into** (#1678). Exactly one table was ever pruned (`EmailLog`, by a line buried in the 09:00 mail tick) while `ActivityLog` (IP addresses, user agents), `PageView` (per-user browsing history), `PushSubscription` and the job queue grew forever — a storage-limitation exposure next to a privacy notice that promises we keep nothing longer than necessary. `src/lib/retentionPrune.ts` is now the one registry (Prisma-free, so the runner is unit-testable) and `src/lib/retentionEntries.ts` the policy: `activityLogRetentionDays` 365, `pageViewRetentionDays` 180, `pushSubscriptionStaleDays` 180, `jobRetentionDays` 30 in `SETTING_DEFAULTS`, each carrying the reason it is that number and not another (PageView is the shortest because the only surface that reads it looks back 30 days at most; ActivityLog the longest because it is the security ledger). An entry is a `run(ctx)` FUNCTION rather than a `{ table, dateField }` descriptor, so #1585, #1646, #1691 and #2056 each arrive as one `registerRetention()` call with no second schedule — including #2056's masking, which the shipped `ActivityLog` entry already exercises: the five evidence actions (`email.unsubscribe`/`email.resubscribe`, `account.delete`/`account.export`, `contributor_terms.accepted`) are never deleted, they only have their `ip`/`userAgent` stripped. Every delete goes through a shared batched sweep (500 rows per statement, 50k per table per run) because one unbounded `DELETE` against a table that has grown for a year locks it for the length of the statement; `DEAD_LETTER` and `FAILED` jobs are never pruned; a stale push subscription goes only when its owner has been quiet for the same window, so a live user who simply gets no notifications keeps theirs. One entry throwing no longer stops the rest, each run writes one `retention.pruned` `ActivityLog` receipt with the per-table counts (itself subject to the `ActivityLog` window), and `/api/health?jobs=1` reports when the sweep last ran — a stalled prune and a clean one both delete zero rows, and only the receipt's age tells them apart. Schema: one `@@index([createdAt])` on `PageView`, without which every batch would full-scan the fastest-growing table in the product.
 
@@ -2434,7 +2434,7 @@ _Shipped 2026-09-03 21:44 UTC · commit [5acdb75](https://github.com/21072026/In
 
 ## [0.154.0-beta] - 2026-09-03
 
-_Shipped 2026-09-03 21:02 UTC · commit [70c3ce2](https://github.com/21072026/Internship/commit/70c3ce27554b86628a49792041d3579ed5bbb335)_
+_Shipped 2026-09-03 21:02 UTC_
 
 - **Admin force sign-out & durable lockout**: new `POST /api/admin/users/[id]/sign-out-all` stamps `sessionsValidFrom` and revokes every trusted device (peer-admin refusal, impersonation refusal, `AuditLog` + activity warning + owner notification, tenant-scoped). Brute-force lockouts move out of the in-process `Map` into a new `AccountLockout` table — consulted before the bcrypt compare, surviving redeploys — with a "Locked" badge and `DELETE /api/admin/users/[id]/lockout` unlock in the admin user list. `rateLimit()` gains a pluggable counter store behind its existing signature.
 
@@ -2452,7 +2452,7 @@ _Shipped 2026-09-03 20:46 UTC · commit [23b57f9](https://github.com/21072026/In
 
 ## [0.152.0-beta] - 2026-09-03
 
-_Shipped 2026-09-03 20:46 UTC · commit [3e0e16a](https://github.com/21072026/Internship/commit/3e0e16a6689f16e8681a9c878aa02e89ebe04a97)_
+_Shipped 2026-09-03 20:46 UTC_
 
 - **Trust centre at `/trust`** (#2027) — one public URL to paste into a procurement e-mail. Posture summary, the full **subprocessor register** (13 rows: hosting, both SMTP channels, Anthropic, Google Calendar, 8x8 JaaS and the public Jitsi fallback, Web Push, Plausible/PostHog/GA4, tawk.to, GitHub Actions + ghcr.io — each with purpose, data categories, hosting location, DPA/SCC basis and whether it is optional per deployment), a controls grid, the residency answer, and an explicit "what is not true yet" block that states plainly that `MT_ENFORCE_ISOLATION` is **off in production** (#1572) and that prod, preview and every PR environment share one host. The register lives once, typed, in `src/lib/trust.ts` — only the prose is translated, keyed by the same ids, so a missing locale is a type error rather than a blank cell. Long-form documents in `docs/trust/` (`subprocessors.md`, `security-overview.md`, `hosting-and-residency.md`) plus a `README.md` stating the rule that adding an outbound integration must update the register. Linked from the footer's Legal column using `t.trust.title`, so the link cannot disagree with the heading. No schema change; the operator is read from `operatorIdentity()`, never hardcoded.
 
@@ -2464,7 +2464,7 @@ _Shipped 2026-09-03 20:42 UTC · commit [834a0d5](https://github.com/21072026/In
 
 ## [0.151.0-beta] - 2026-09-03
 
-_Shipped 2026-09-03 14:41 UTC · commit [73ff73a](https://github.com/21072026/Internship/commit/73ff73a025a4c3bf5d3bd6a6bc91c0c637abddf8)_
+_Shipped 2026-09-03 14:41 UTC_
 
 - **API keys get a real lifecycle** (#1545). `ApiKey` gains `createdById` (+ relation to User), `expiresAt`, `revokedAt`, `scopes` (comma-separated, canonical `<resource>:<action>` shape, single closed value `candidates:read` today) and `orgId` — the tenant anchor #1466 describes, with `ApiKey` added to `TENANT_MODELS`. All columns are additive/defaulted so `db push` stays non-destructive. `POST /api/admin/api-keys` now requires at least one valid scope, accepts an optional `expiresAt` capped at 12 months, and stamps the minting admin plus the caller's org. `DELETE` became a **soft revoke**: it sets `revokedAt` and never deletes the row, so the `apikey.revoked` ActivityLog entry no longer points at a vanished target. `GET` returns owner (name/email), scopes, expiry, revocation and a derived `active | expired | revoked` status — never the hash or the raw key, which is still shown exactly once at creation. `/admin/integrations` gained scope checkboxes, an expiry picker bounded to the same 12 months, owner/expiry/status per key and a visible warning on a key with no expiry (EN/TR/DE). One idempotent backfill, `prisma/backfill-api-key-lifecycle.mjs`, gives pre-existing rows the default org and `candidates:read`, wired into the deploy step after `backfill-organization.mjs`. Enforcing expiry/revocation/scope at the `/api/v1` door remains #1546.
 
@@ -2616,7 +2616,7 @@ _Shipped 2026-09-03 08:00 UTC · commit [ffc14fa](https://github.com/21072026/In
 
 ## [0.141.0-beta] - 2026-09-03
 
-_Shipped 2026-09-03 07:59 UTC · commit [06c3637](https://github.com/21072026/Internship/commit/06c3637344386beeb3a1511ba822f3e81428476e)_
+_Shipped 2026-09-03 07:59 UTC_
 
 - **In-app image viewer** (#2147). Images in messages, support tickets and announcements open in a dismissible lightbox (✕, Escape, backdrop tap, phone back button) with zoom, download and prev/next, instead of a chrome-less new tab the reader could not get out of.
 
@@ -2784,7 +2784,7 @@ _Shipped 2026-08-27 16:43 UTC · commit [75030fb](https://github.com/21072026/In
 
 ## [0.124.0-beta] - 2026-08-27
 
-_Shipped 2026-08-27 11:45 UTC · commit [17d8500](https://github.com/21072026/Internship/commit/17d8500ac22c64cf64d635cb04a93e1b933a57d2)_
+_Shipped 2026-08-27 11:45 UTC_
 
 - **Imprint page and a named controller** (#1396). New `/imprint` (EN/TR/DE), linked from the public footer, published from `OPERATOR_*` env vars (`src/lib/imprint.ts`) so a self-hosted instance never inherits ours. The privacy notice now names the controller and a real contact address instead of the placeholder saying the operator would supply them before production use; `PRIVACY_POLICY_VERSION` → 2026-08-25.
 
@@ -2967,37 +2967,37 @@ _Shipped 2026-08-25 09:15 UTC · commit [361ec61](https://github.com/21072026/In
 
 ## [0.114.2-beta] - 2026-08-25
 
-_Shipped 2026-08-25 01:36 UTC · commit [d1133e4](https://github.com/21072026/Internship/commit/d1133e4facae6fceac410805c2642cf95a9f337e)_
+_Shipped 2026-08-25 01:36 UTC_
 
 **Fixed** — the desktop admin board iterated the built-in stage list, so an organization with a customized pipeline saw its stages on a phone but no columns at all on a desktop. It now groups the organization's own resolved stages; stage keys outside the built-in phases get their own group. Added a 768px tablet layout tier, phone-width audits of the profile pages, a dark-mode phone audit, and board tests that seed 3-stage and 13-stage custom pipelines.
 
 ## [0.114.1-beta] - 2026-08-25
 
-_Shipped 2026-08-25 01:36 UTC · commit [d1133e4](https://github.com/21072026/Internship/commit/d1133e4facae6fceac410805c2642cf95a9f337e)_
+_Shipped 2026-08-25 01:36 UTC_
 
 **The accessibility gate now actually gates** (#826) — the 9-page axe scan shipped in #862 carried no `@smoke` tag while the PR job runs `--grep @smoke`, so the baseline comparison only ever ran in the scheduled suite and a PR introducing a new *serious* violation was never blocked (#1333 is that failure realised). It now runs as its own CI step, outside the grep. Regenerating the baseline also **says out loud what got wider**, in the console and in the audit report, so a violation can no longer freeze itself in silently on a page nobody touched. And the scan now runs **twice per page, light and dark** — dark results keyed `<page>#dark` so they gate independently. That immediately surfaced six previously invisible serious contrast failures; four are fixed here.
 
 ## [0.114.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 23:48 UTC · commit [29e072a](https://github.com/21072026/Internship/commit/29e072a02b4d3daff8f007b9de993582ccb0d2f2)_
+_Shipped 2026-08-24 23:48 UTC_
 
 **Growth analytics, off by default** (#1242, #966) — a dependency-free, multi-provider layer (Plausible / GA4 / PostHog) that resolves the two objections that held #1221 back. **CSP no longer loosens unconditionally**: provider hosts are added only when that provider's `NEXT_PUBLIC_*` variable is set, so a deployment with no analytics configured allows no analytics host at all. **The loader is mounted on the public shell, never the root layout**, so nothing runs on signed-in CRM pages where a pageview would carry a mentee's name to a vendor — and nothing loads at all without the visitor's `analytics` cookie consent, re-read live on the consent-change event. PostHog's autocapture, session recording and localStorage persistence are forced off in code rather than left to the dashboard.
 
 ## [0.113.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 23:03 UTC · commit [6c0e748](https://github.com/21072026/Internship/commit/6c0e7487396064b1f5f77e77a7582f86cd252ad4)_
+_Shipped 2026-08-24 23:03 UTC_
 
 **Talent re-engagement pool** (#834) — candidates who did not place this cycle can be given an explicit "we'll write in September" date instead of sitting in the pipeline forever. Joining requires the person's own consent (new `ConsentType.RE_ENGAGEMENT_POOL`) and **never touches `User.consentAt`**, so it cannot extend how long data is kept — the two permissions are deliberately separate and a test asserts it. One click from the e-mail (signed token, no login) leaves the pool and revokes the permission. An idempotent cron sends the reminder once per date. Pooled candidates drop out of the aging report's `overdue` list — which is what stops that report rotting — and appear in a `pooledCount` instead, with their own admin page at `/admin/re-engagement`.
 
 ## [0.112.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 22:42 UTC · commit [6c8b027](https://github.com/21072026/Internship/commit/6c8b027acd88c420428e54f6ae773ee574fcbb0f)_
+_Shipped 2026-08-24 22:42 UTC_
 
 **Tag management** (#845, completing the story #887 started) — a new admin screen at `/admin/tags` lists the org's labels with how many people carry each, and lets an admin **rename** one (in place, so the tag keeps its id and nobody loses the label or has a saved view silently empty), **recolour** it, **merge** it into another, or delete it behind a confirmation that names the usage count. New `PATCH /api/tags/:id` and `POST /api/tags/:id/merge`, both ADMIN-only and org-scoped. Merge moves everyone onto the target — carrying over the original tagger rather than the admin doing the merge — and the `(userId, tagId)` unique means someone who already had both simply keeps one.
 
 ## [0.111.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 22:17 UTC · commit [3ba4083](https://github.com/21072026/Internship/commit/3ba40837423edb975b7fc1bcbfb54588e316fdbd)_
+_Shipped 2026-08-24 22:17 UTC_
 
 **Google Calendar, connected by the user** (#709) — the last open piece of the meetings epic. `/account` gains a "Connect Google Calendar" card: connect your own Google account and the meetings you are part of are mirrored onto your calendar; disconnect revokes the access at Google rather than only forgetting it here. Refresh tokens are encrypted at rest (new `src/lib/secretBox.ts`, AES-256-GCM keyed from `NEXTAUTH_SECRET` via HKDF), the OAuth `state` is HMAC-signed and bound to the session that started the flow, and the meeting→event mapping is per (meeting, user) so each participant gets the event on their own calendar. Gated behind `GOOGLE_CALENDAR_ENABLED` (default off) and separate from merely having credentials; unconnected users keep the in-app calendar, `.ics` and reminders unchanged. The token exchange and calendar write are now covered by an e2e that points Google's endpoints at a local stub.
 
@@ -3015,26 +3015,26 @@ _Shipped 2026-08-24 21:47 UTC · commit [b0d36f4](https://github.com/21072026/In
 
 ## [0.110.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 21:37 UTC · commit [30d79fc](https://github.com/21072026/Internship/commit/30d79fc9497de5a045c73df873668b5ccd34663e)_
+_Shipped 2026-08-24 21:37 UTC_
 
 **Contributor terms: admin acceptance report** (#1027) — `/admin/contributor-terms` answers "who accepted which terms, for what, and when" from one screen instead of a database console. One row per person × scope (platform, plus every project they are on that asks), including the rows where the answer is no: `Accepted` / `Outdated version` / `Not accepted`, filterable by status and by project, exportable to Excel. Evidence is reported as *recorded*, never as the stored hash. ADMIN only, checked on the page itself rather than relying on the layout.
 
 ## [0.109.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 21:07 UTC · commit [c6343ee](https://github.com/21072026/Internship/commit/c6343ee598fa2f8c4ee4cae33654ad68a8009fd8)_
+_Shipped 2026-08-24 21:07 UTC_
 
 **Project-level contributor terms** (#1026) — a project now names the terms its members contribute under (`contributorTermsKey`, or the platform default) and can opt out entirely (`contributorTermsRequired`). A member opening a project whose terms they have not accepted gets the text and an unticked checkbox in place of the internal view; accepting writes an acceptance scoped to that project, distinct from the platform-level one. Admins are never gated — they look in to administer, not to contribute — and the public showcase view is untouched. The acceptance API now verifies membership and derives the terms key from the project, so a row cannot be minted for a project the caller is not on.
 
 ## [0.108.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 20:56 UTC · commit [aac75ae](https://github.com/21072026/Internship/commit/aac75ae4052e4e2bda4f01dd75d2a840dc5d89a2)_
+_Shipped 2026-08-24 20:56 UTC_
 
 - **Names are clickable across the app** (#1166 follow-up). The person card now sits behind the names on the project join-request queue, project rosters and goal assignees, the mentor's application inbox, the admin mentorship-request and interview queues, the meeting scheduler and list, group-chat participants, support tickets, the retention and user lists, the mentor/mentee dashboards and the mentee portal. Pending requests (project join, mentor application) now authorize the lookup, so an applicant's name resolves before the membership or relation exists.
 - **Fixed** the card's "open profile" link for mentors: /mentor/mentees is keyed by the relation, not the person, so the link built from the user id landed on "relation not found". The card endpoint now returns the viewer's relation id.
 
 ## [0.107.3-beta] - 2026-08-24
 
-_Shipped 2026-08-24 20:53 UTC · commit [4ed3ec5](https://github.com/21072026/Internship/commit/4ed3ec5be47c32c67e5445928d1121f1d05fd58a)_
+_Shipped 2026-08-24 20:53 UTC_
 
 - **Accessible focus management for modal dialogs** (#871). A new `useModalFocus` hook (`src/components/ui/useModalFocus.ts`) gives every blocking dialog initial focus inside itself, a two-way Tab trap, Escape-to-close through the existing handler, and focus restoration to whatever opened it. Applied to `ConfirmDialog`, `DropoffReasonDialog`, `TemplatesLibrary`, `CertificateGenerator`, `OfferWizardModal`, `RequisitionsManager`, `CompanyEntitlements`, `MeetingLauncher` and the bare admin modals on the companies/mentors/mentorship pages, which also gained the `role="dialog"` / `aria-modal` / `aria-labelledby` they were missing. Focusable-element detection filters on computed visibility, and a dialog with no focusable child falls back to the container. E2E coverage in `e2e/templates-library.spec.ts`.
 
@@ -3052,7 +3052,7 @@ _Shipped 2026-08-24 20:43 UTC · commit [cb3fdb5](https://github.com/21072026/In
 
 ## [0.107.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 20:34 UTC · commit [31f010f](https://github.com/21072026/Internship/commit/31f010fffba707c1e63db74d9e9b3c4903f519b2)_
+_Shipped 2026-08-24 20:34 UTC_
 
 **Contributor terms accepted in the app** (#1025) — the terms are versioned rows in the database rather than a paragraph in the code: `/contributor-terms` shows the text in force to anyone (no sign-in), lets a signed-in user download it and read back what they accepted, and `/onboarding/contributor-terms` is the acceptance step — full text on screen, an unticked checkbox, and the displayed version sent with the POST so a text that changed while it was being read is refused instead of recorded. Accepting writes an evidence row (who, which version, when, HMAC-hashed IP/user-agent — never a raw address). `/portal/projects` is gated on acceptance; the rest of the portal is deliberately not.
 
