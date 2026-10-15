@@ -5,7 +5,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { pageMetadata } from '@/lib/pageMetadata';
 import { operatorIdentityForRequest } from '@/lib/imprintRequest';
-import { hostBrand } from '@/lib/hostBrand';
+import { brandProductName, hostBrand } from '@/lib/hostBrand';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.deleteAccount.title, description: t.deleteAccount.description }));
@@ -46,7 +46,7 @@ export default async function DeleteAccountPage() {
           </div>
 
           <div className="space-y-6 text-sm text-gray-600 dark:text-gray-300">
-            <p>{d.intro.replace('{product}', brand.productName)}</p>
+            <p>{d.intro.replace('{product}', brandProductName(brand))}</p>
 
             <section>
               <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{d.selfTitle}</h2>

@@ -69,7 +69,10 @@ export const requestBrand = cache(async (): Promise<ResolvedBrand> => {
 /**
  * The product name the current page prints for `vertical` — its title, its
  * public chrome, the `{product}` in its copy. The request brand's name (the
- * signed-in person's organization, else the host's), never another vertical's.
+ * signed-in person's organization, else the host's), never another vertical's,
+ * and always the default name in the default vertical (brandProductName()).
+ * Not for a share card: that image is publicly cacheable, so it reads the
+ * host's brand only (getCardDictionary in src/i18n/server.ts).
  */
 export async function requestProductName(vertical: VerticalKey): Promise<string> {
   return productNameIn(await requestBrand(), vertical);

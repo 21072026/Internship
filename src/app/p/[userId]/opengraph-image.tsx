@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { prisma } from '@/lib/prisma';
-import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { getCardDictionary, resolveRequestVertical } from '@/i18n/server';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { THEME_COLOR } from '@/lib/accent';
 
@@ -32,7 +32,7 @@ export default async function OpengraphImage({
 }) {
   const { userId } = await params;
   const world = await resolveRequestVertical();
-  const { t } = await getServerDictionary();
+  const { t } = await getCardDictionary();
   const brandName = t.publicProfile.poweredBy;
   const BRAND_ACCENT = THEME_COLOR[world];
   const BRAND_BG = BRAND_BACKGROUNDS[world].light;

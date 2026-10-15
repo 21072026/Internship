@@ -1,8 +1,9 @@
 import { ImageResponse } from 'next/og';
-import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { getCardDictionary, resolveRequestVertical } from '@/i18n/server';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { themeColorFor } from '@/lib/accent';
-import { brandAssetDataUri, hostBrand, requestProductName } from '@/lib/hostBrand';
+import { brandAssetDataUri, hostBrand } from '@/lib/hostBrand';
+import { productNameFor } from '@/lib/verticals';
 
 // The share cards (#1378): what a link to a public page shows on LinkedIn,
 // WhatsApp, Slack or X. One renderer for every page, modelled on the profile
@@ -28,7 +29,7 @@ const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0
 export async function renderCard(copy: CardCopy | null): Promise<ImageResponse> {
   const vertical = await resolveRequestVertical();
   let brand = themeColorFor(vertical);
-  let productName = await requestProductName(vertical);
+  let productName = productNameFor(vertical);
   // A card is fetched by a scraper, without cookies: a host mapped to an
   // organization with brand data (#2922) gets that organization's name and
   // colour, and its mark — read from the database as a data: URI, never
@@ -121,6 +122,6 @@ export async function renderCard(copy: CardCopy | null): Promise<ImageResponse> 
 
 /** A public page's card, from the same dictionary keys as its title. */
 export async function pageCard(pick: (t: Dictionary) => CardCopy): Promise<ImageResponse> {
-  const { t } = await getServerDictionary();
+  const { t } = await getCardDictionary();
   return renderCard(pick(t));
 }

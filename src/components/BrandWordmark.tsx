@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { BrandMark } from '@/components/BrandMark';
 import { authOptions } from '@/lib/auth';
 import { getOrgBranding } from '@/lib/orgBranding';
-import { hostBrand } from '@/lib/hostBrand';
+import { brandProductName, hostBrand } from '@/lib/hostBrand';
 
 // White-label app wordmark (#546): shows the signed-in user's tenant brand — its
 // logo (if set) or the default graduation-cap icon, plus the brand name. Falls
@@ -17,7 +17,7 @@ export async function BrandWordmark({ className, oneLine = false }: { className?
   // (#2936), else its vertical's default. A signed-in tenant's own brandName
   // always overrides this. INTERNSHIP resolves to the same default as before,
   // so single-tenant chrome is unchanged.
-  const noOrgFallbackName = orgId ? undefined : (await hostBrand()).productName;
+  const noOrgFallbackName = orgId ? undefined : brandProductName(await hostBrand());
   const brand = await getOrgBranding(orgId, noOrgFallbackName);
   return (
     <span className={`flex items-center gap-2 ${oneLine ? 'min-w-0' : ''} ${className ?? ''}`}>

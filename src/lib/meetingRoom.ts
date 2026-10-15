@@ -36,8 +36,15 @@ import { brandForOrg, defaultBrand, productNameIn } from '@/lib/orgBrand';
 // neither the internship product — which is what every room was. Nothing parses
 // the prefix back (parseJaasMeetingLink accepts any room name), so old rooms
 // keep working.
+//
+// A brand name is tenant data (up to 191 characters, any script), and the link
+// is stored in a 191-character column, so the cleaned prefix is capped and a
+// name with no ASCII letter or digit left falls back to the vertical default.
+const ROOM_PREFIX_MAX = 32;
+const roomPrefix = (name: string) => name.replace(/[^A-Za-z0-9]/g, '').slice(0, ROOM_PREFIX_MAX);
+
 export function generateMeetingRoomName(vertical?: unknown, product?: string | null): string {
-  const prefix = (product ?? defaultBrand(toVerticalKey(vertical)).productName).replace(/[^A-Za-z0-9]/g, '');
+  const prefix = (product && roomPrefix(product)) || roomPrefix(defaultBrand(toVerticalKey(vertical)).productName);
   return `${prefix}-${randomBytes(8).toString('hex')}`;
 }
 

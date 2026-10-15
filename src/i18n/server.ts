@@ -10,7 +10,7 @@ import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
-import { requestProductName } from '@/lib/hostBrand';
+import { hostBrand, productNameIn, requestProductName } from '@/lib/hostBrand';
 
 // Read the active locale, in this order (#1384, #1386):
 //   0. the language of the URL — `/tr/…` and `/de/…` are rewritten by
@@ -147,5 +147,17 @@ export async function getServerDictionary() {
   const locale = await getLocale();
   const vertical = await resolveRequestVertical();
   const product = await requestProductName(vertical);
+  return { locale, product, t: applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }) };
+}
+
+// A share card's dictionary (src/lib/ogCard.tsx, the profile card): the same
+// overlay, but `{product}` is filled from the HOST's brand only. A card image
+// goes out publicly cacheable under one URL for every viewer, so it must never
+// carry the signed-in viewer's own organization name — only what a cookieless
+// scraper of that host would get.
+export async function getCardDictionary() {
+  const locale = await getLocale();
+  const vertical = await resolveRequestVertical();
+  const product = productNameIn(await hostBrand(), vertical);
   return { locale, product, t: applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }) };
 }

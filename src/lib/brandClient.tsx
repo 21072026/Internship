@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from 'react';
 import type { ClientBrand } from '@/lib/brandRule';
-import { productNameFor } from '@/lib/verticals';
+import { DEFAULT_VERTICAL, productNameFor } from '@/lib/verticals';
 import { useVertical } from '@/lib/verticalClient';
 
 // The request's organization brand for CLIENT components (#2922). The server
@@ -28,10 +28,12 @@ export function useBrand(): ClientBrand | null {
 /**
  * The product name a client component prints (#2936): the organization
  * brand's, else the vertical's default — the client twin of
- * requestProductName() in src/lib/hostBrand.ts, fed by the same request.
+ * requestProductName() in src/lib/hostBrand.ts, fed by the same request. The
+ * default vertical always prints its default name (brandProductName()).
  */
 export function useProductName(): string {
   const brand = useBrand();
   const vertical = useVertical();
+  if (vertical === DEFAULT_VERTICAL) return productNameFor(vertical);
   return brand?.productName ?? productNameFor(vertical);
 }

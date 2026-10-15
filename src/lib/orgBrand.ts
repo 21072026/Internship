@@ -191,5 +191,18 @@ export async function productNameForOrg(orgId: string | null | undefined): Promi
  * must never print one product's name in the other product's copy.
  */
 export function productNameIn(brand: ResolvedBrand, vertical: VerticalKey): string {
-  return brand.vertical === vertical ? brand.productName : defaultBrand(vertical).productName;
+  return brand.vertical === vertical ? brandProductName(brand) : defaultBrand(vertical).productName;
+}
+
+/**
+ * The product name a brand prints. The default vertical keeps its default
+ * name even for an organization that carries a `brandName`: that column is
+ * the older white-label field (#546), and the default world's product name in
+ * titles, mail, calendar files, the authenticator issuer and room names was
+ * never tenant data — it stays byte-identical (as the mail sender name does,
+ * e2e/world-mail-sender.spec.ts). Only a non-default vertical's brand name
+ * names the product.
+ */
+export function brandProductName(brand: ResolvedBrand): string {
+  return brand.vertical === DEFAULT_VERTICAL ? defaultBrand(DEFAULT_VERTICAL).productName : brand.productName;
 }

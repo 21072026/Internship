@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { APP_VERSION } from '@/lib/version';
-import { hostBrandFor } from '@/lib/orgBrand';
+import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 
 // The OpenAPI description of the ENTIRE internal API, for the admin API
 // explorer at /admin/api-explorer.
@@ -87,6 +87,6 @@ export async function GET(request: Request) {
   // host, so the host's product name is applied per request (docs/worlds.md):
   // the host's brand (#2936), else its vertical's default.
   const brand = await hostBrandFor(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
-  const title = `${brand.productName} - internal API`;
+  const title = `${brandProductName(brand)} - internal API`;
   return NextResponse.json({ ...spec, info: { ...spec.info, title } }, { headers: { 'Cache-Control': 'no-store' } });
 }
