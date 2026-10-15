@@ -4,7 +4,7 @@ Expo (React Native) app for iOS and Android. It is one app that can serve every 
 
 ## How it fits the web app
 
-- **One product, one host.** The internship product is built in. A build can add further products, such as a deployment's marketing product, through the build-time JSON `EXPO_PUBLIC_EXTRA_PRODUCTS` (format in `src/lib/products.ts`). With more than one product, the person picks one on first launch; with one, the app goes straight to its sign-in. From then on, every request goes to that product's host. The host decides which account signs in ([`docs/worlds.md`](../../docs/worlds.md)), so the app never mixes hosts.
+- **One product, one host.** The internship product is built in. A build can add further products, such as a deployment's marketing product, through the build-time JSON `EXPO_PUBLIC_EXTRA_PRODUCTS` (format in `src/lib/products.ts`). The app remembers the chosen product by its `id`, so an extra product keeps the `id` it first shipped with; a build that no longer knows a remembered `id` sends the person back to the picker rather than to another product's host. With more than one product, the person picks one on first launch; with one, the app goes straight to its sign-in. From then on, every request goes to that product's host. The host decides which account signs in ([`docs/worlds.md`](../../docs/worlds.md)), so the app never mixes hosts.
 - **No session of its own.** Sign-in runs NextAuth's own HTTP flow (`src/lib/authClient.ts`):
   - `GET /api/auth/csrf`, then `POST /api/auth/callback/credentials`.
   - Every session is still minted by the one `jwt` callback in `src/lib/auth.ts`. Rate limits, lockouts, 2FA and recovery codes, enforced SSO and the world check all apply unchanged.

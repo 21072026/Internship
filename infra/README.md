@@ -123,8 +123,13 @@ What makes the box answer for them:
   (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the
   #2488 redirect allowlist reads, so a host missing from it is not a served host
   either). Until #2926 an empty value fell back to a hostname written into the
-  code; an env file that loses the line now turns its marketing hosts into
-  internship hosts, which the content check below reports.
+  code; an env file that loses the line would turn its marketing hosts into
+  internship hosts, so `deploy-prod.sh` refuses to deploy the prod or preview
+  container (`internship-crm`, `internship-crm-preview`) with an empty
+  `MARKETING_HOSTS` — before the schema push and the swap, while the old
+  container still serves — unless the env file sets `MARKETING_HOSTS_NONE=1` on
+  purpose. It refuses in the same place when the caller-named
+  `MARKETING_PROBE_HOST` is missing from the list.
 - Signed-in users never go through this: their vertical is their
   `Organization.vertical`. The host decides copy and chrome only (see the TRUST
   NOTE in `hostVertical.ts`).

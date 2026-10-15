@@ -108,6 +108,26 @@ export function productById(id: string | null | undefined, products: readonly Pr
   return products.find((p) => p.id === id) ?? null;
 }
 
+/**
+ * Which product a launch opens, from the id the app remembered (#2926).
+ *
+ * - Nothing remembered: the build's only product, else the picker (null).
+ * - A remembered id this build knows: that product.
+ * - A remembered id this build does NOT know (a build without the extra
+ *   product, or one that renamed its id): the picker, never the only product,
+ *   and `forget` tells the caller to drop the stale id. Falling through to the
+ *   only product would quietly move a person of one product onto another
+ *   product's host.
+ */
+export function launchProduct(
+  storedId: string | null | undefined,
+  products: readonly Product[] = PRODUCTS,
+): { product: Product | null; forget: boolean } {
+  if (!storedId) return { product: products.length === 1 ? products[0] : null, forget: false };
+  const known = productById(storedId, products);
+  return known ? { product: known, forget: false } : { product: null, forget: true };
+}
+
 export function originFor(product: Product, env: AppEnv): string {
   return `https://${product.hosts[env]}`;
 }

@@ -134,7 +134,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
-           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
+           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -488,6 +488,42 @@ if [ "$ROLLBACK" = "1" ]; then
   log "Rolled back — ${REPLICAS} replica(s) up from :$PORT serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
   exit 0
 fi
+
+# ── 0b. Marketing hosts guard (#2926) ───────────────────────────────────────
+# The app has no built-in marketing host any more: an empty MARKETING_HOSTS
+# turns every marketing host into an internship host, which locks the
+# marketing tenant's users out of their sessions. The content check after the
+# swap can only warn, so refuse HERE, before anything changes and while the
+# old container still serves: the shared prod and preview containers must name
+# their marketing hosts, unless the env file says MARKETING_HOSTS_NONE=1 on
+# purpose. A caller-named probe host (MARKETING_PROBE_HOST, from a secret) that
+# the list leaves out is refused for the same reason. Messages never print a
+# hostname: the deploy log is public.
+marketing_hosts_guard() {
+  local effective probe
+  effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$CONTAINER" in
+    internship-crm|internship-crm-preview)
+      if [ -z "$effective" ] && [ "${MARKETING_HOSTS_NONE:-0}" != 1 ]; then
+        echo "ERROR: MARKETING_HOSTS is empty in $ENV_FILE — this deploy would serve the internship product on every marketing host." >&2
+        echo "       Name the marketing hosts there (comma-separated), or set MARKETING_HOSTS_NONE=1 if this environment has none." >&2
+        return 1
+      fi
+      ;;
+  esac
+  if [ -n "${MARKETING_PROBE_HOST:-}" ] && [ "${MARKETING_PROBE:-1}" != 0 ]; then
+    probe="$(printf '%s' "$MARKETING_PROBE_HOST" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case ",${effective}," in
+      *",${probe},"*) ;;
+      *)
+        echo "ERROR: the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS ($ENV_FILE) — refusing before the swap." >&2
+        return 1
+        ;;
+    esac
+  fi
+  return 0
+}
+marketing_hosts_guard || exit 1
 
 # ── 1. Sync source ───────────────────────────────────────────────────────────
 if [ "$NO_PULL" -eq 0 ]; then

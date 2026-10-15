@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getSession, resumeSession, signOut as signOutRemote } from './authClient';
 import type { SessionUser } from './authProtocol';
-import { originFor, productById, PRODUCTS, type AppEnv, type Product } from './products';
+import { launchProduct, originFor, productById, PRODUCTS, type AppEnv, type Product } from './products';
 import { markFreshSignIn, unregisterPush } from './pushDevice';
 
 // App-wide state (#2775): the chosen product and the signed-in user. The
@@ -32,8 +32,8 @@ interface SessionState {
 const Ctx = createContext<SessionState | null>(null);
 
 // A build with a single product (no EXPO_PUBLIC_EXTRA_PRODUCTS, products.ts)
-// has no choice to offer: it goes straight to that product's sign-in.
-const ONLY_PRODUCT: Product | null = PRODUCTS.length === 1 ? PRODUCTS[0] : null;
+// has no choice to offer: it goes straight to that product's sign-in
+// (launchProduct in products.ts).
 const CAN_SWITCH_PRODUCT = PRODUCTS.length > 1;
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -45,7 +45,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Launch: the stored product, then a live session, then a remembered device.
   useEffect(() => {
     (async () => {
-      const stored = productById(await AsyncStorage.getItem(PRODUCT_KEY).catch(() => null)) ?? ONLY_PRODUCT;
+      // An id this build does not know goes back to the picker (products.ts
+      // launchProduct), never silently to the only product's host.
+      const { product: stored, forget } = launchProduct(await AsyncStorage.getItem(PRODUCT_KEY).catch(() => null));
+      if (forget) await AsyncStorage.removeItem(PRODUCT_KEY).catch(() => {});
       if (!stored) {
         setStatus('no-product');
         return;

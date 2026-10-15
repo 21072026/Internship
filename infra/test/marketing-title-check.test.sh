@@ -182,6 +182,31 @@ printf '\nThe deploy check end to end, with curl stubbed\n'
   never_names_a_host 'a host that does not answer' "$out"
 )
 
+printf '\nThe pre-swap guard refuses an environment that lost its marketing hosts (#2926)\n'
+(
+  eval "$(extract_fn "$DEPLOY_SH" marketing_hosts_guard)"
+  ENV_FILE=/etc/internship-crm/test.env
+  guard() { # guard <CONTAINER> <MARKETING_HOSTS> <MARKETING_PROBE_HOST> [NONE] [PROBE]
+    CONTAINER="$1" MARKETING_HOSTS="$2" MARKETING_PROBE_HOST="$3" \
+      MARKETING_HOSTS_NONE="${4:-0}" MARKETING_PROBE="${5:-1}" \
+      marketing_hosts_guard 2>&1 && echo PASS || echo REFUSED
+  }
+  last() { printf '%s\n' "$1" | tail -1; }
+  eq 'prod with an empty list is refused' 'REFUSED' "$(last "$(guard internship-crm '' '')")"
+  eq 'preview with a whitespace-only list is refused' 'REFUSED' "$(last "$(guard internship-crm-preview '  ' '')")"
+  eq 'prod with MARKETING_HOSTS_NONE=1 passes' 'PASS' "$(last "$(guard internship-crm '' '' 1)")"
+  eq 'a topic env with an empty list passes' 'PASS' "$(last "$(guard internship-crm-pr12 '' '')")"
+  eq 'prod with a list passes' 'PASS' "$(last "$(guard internship-crm 'shop.acme.test' '')")"
+  eq 'a probe host in the list passes (case and spaces ignored)' 'PASS' "$(last "$(guard internship-crm 'a.acme.test, Shop.Acme.Test' 'SHOP.acme.test')")"
+  eq 'a probe host missing from the list is refused' 'REFUSED' "$(last "$(guard internship-crm 'shop.acme.test' 'lost.acme.test')")"
+  eq 'MARKETING_PROBE=0 skips the probe-host comparison' 'PASS' "$(last "$(guard internship-crm 'shop.acme.test' 'lost.acme.test' 0 0)")"
+  out="$(guard internship-crm 'shop.acme.test' 'lost.acme.test')"
+  case "$(printf '%s' "$out" | tr '[:upper:]' '[:lower:]')" in
+    *acme*) bad 'the refusal names no host' ;;
+    *) ok 'the refusal names no host' ;;
+  esac
+)
+
 printf '\nThe uptime probe agrees on right and wrong\n'
 if command -v node >/dev/null 2>&1 && [ -f "$PROBE_MJS" ]; then
   (

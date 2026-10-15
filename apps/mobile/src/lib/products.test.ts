@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTERNSHIP_PRODUCT, parseExtraProducts, productById, productsFrom } from './products.ts';
+import { INTERNSHIP_PRODUCT, launchProduct, parseExtraProducts, productById, productsFrom } from './products.ts';
 
 // All values are synthetic (#2926): the repository carries no deployment's
 // product names, colours or hosts.
@@ -45,4 +45,17 @@ test('a malformed entry is left out, the others still load', () => {
   const { products, rejected } = parseExtraProducts(JSON.stringify([...bad, ACME, { ...ACME, name: 'Duplicate' }]));
   assert.deepEqual(products, [ACME]);
   assert.deepEqual(rejected, [0, 1, 2, 3, 4, 5, 6, 7, 8, 10], 'the second "acme" is a duplicate id');
+});
+
+test('a launch opens the remembered product, and never swaps an unknown one for the only product', () => {
+  const single = productsFrom(undefined);
+  const both = productsFrom(JSON.stringify([ACME]));
+  assert.deepEqual(launchProduct(null, single), { product: INTERNSHIP_PRODUCT, forget: false }, 'nothing remembered, one product');
+  assert.deepEqual(launchProduct(null, both), { product: null, forget: false }, 'nothing remembered, a choice to make');
+  assert.deepEqual(launchProduct('acme', both), { product: ACME, forget: false });
+  assert.deepEqual(launchProduct('internship', single), { product: INTERNSHIP_PRODUCT, forget: false });
+  // A build that lost (or renamed) the extra product: back to the picker, and
+  // the stale id is dropped — not the internship host under the old account.
+  assert.deepEqual(launchProduct('acme', single), { product: null, forget: true });
+  assert.deepEqual(launchProduct('gone', both), { product: null, forget: true });
 });
