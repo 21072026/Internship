@@ -101,8 +101,8 @@ export function PublicHeader({
   const links = [
     { href: '/features', label: n.features },
     ...(hideInternshipLinks ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
-    // Back on both hosts since the marketing price list was published
-    // (2026-10-06, src/lib/marketingPlans.ts).
+    // On both hosts: a marketing host shows its organization's price list, or
+    // "pricing on request" without one (src/lib/marketingPriceList.ts).
     { href: '/pricing', label: n.pricing },
     ...(hideInternshipLinks ? [] : [{ href: '/projects', label: n.showcase }]),
   ].map((l) => ({ ...l, href: localizeHref(l.href, urlLocale) }));

@@ -19,7 +19,7 @@ const emails = {
   intMentor: uniqueEmail('icsw-int-mentor'),
   intMentee: uniqueEmail('icsw-int-mentee'),
 };
-const MKT_TITLE = `SaleVali demo call ${stamp}`;
+const MKT_TITLE = `Marketing demo call ${stamp}`;
 const INT_TITLE = `Internship check-in ${stamp}`;
 
 let orgId = '';
@@ -60,15 +60,15 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test("a SaleVali admin's feed holds only their organization, named SaleVali", async ({ request }) => {
+test("a marketing admin's feed holds only their organization, named after the product", async ({ request }) => {
   const feed = await request.get(`/api/calendar/feed/${tokens.mkt}`);
   expect(feed.status()).toBe(200);
-  expect(feed.headers()['content-disposition']).toContain('filename="salevali.ics"');
+  expect(feed.headers()['content-disposition']).toContain('filename="corecrm.ics"');
   const body = await feed.text();
   expect(body).toContain(MKT_TITLE);
   expect(body).not.toContain(INT_TITLE);
-  expect(body).toContain('X-WR-CALNAME:SaleVali');
-  expect(body).toContain('PRODID:-//SaleVali//EN');
+  expect(body).toContain('X-WR-CALNAME:coreCRM');
+  expect(body).toContain('PRODID:-//coreCRM//EN');
   expect(body).not.toContain('Internship');
 });
 

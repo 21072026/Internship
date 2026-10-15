@@ -4,9 +4,9 @@
 // cannot import TypeScript).
 //
 // What is pinned:
-//   • the fallback is byte-for-byte the built-in list — a host with no data
-//     shows what it showed before the list became data;
-//   • a stored value that does not parse reads as the built-in list, and says so;
+//   • there is no built-in list: unset reads as "none" (the page shows its
+//     neutral "pricing on request" state);
+//   • a stored value that does not parse reads as no list, and says so;
 //   • money is integer minor units in a two-decimal currency, plans are listed
 //     once each in key order, and unknown fields are refused;
 //   • the CLI's validator accepts and refuses exactly what the app's does.
@@ -23,12 +23,11 @@ const {
   PRICE_LIST_MAX_MIN_SEATS,
   PRICE_LIST_MAX_ONBOARDING_MINOR,
   PRICE_LIST_MAX_SEAT_MINOR,
-  builtinPriceList,
   parsePriceList,
   priceListFromSeatMinor,
   resolvePriceList,
 } = await import('../../src/lib/marketingPriceListRule.ts');
-const { MARKETING_PLANS, MARKETING_PLAN_KEYS, marketingFromSeatEur } = await import('../../src/lib/marketingPlans.ts');
+const { MARKETING_PLAN_KEYS } = await import('../../src/lib/marketingPlans.ts');
 const mirror = await import('../../prisma/set-org-pricing.mjs');
 
 const plan = (key, over = {}) => ({
@@ -41,29 +40,15 @@ const plan = (key, over = {}) => ({
 });
 const ACME = { currency: 'CHF', plans: [plan('team'), plan('business', { annualSeatMinor: 9900, monthlySeatMinor: null, minSeats: 3, onboardingMinor: 49000 })] };
 
-test('the built-in list is the constants, in minor units and EUR', () => {
-  const list = builtinPriceList();
-  assert.equal(list.currency, 'EUR');
-  assert.deepEqual(
-    list.plans,
-    MARKETING_PLANS.map((p) => ({
-      key: p.key,
-      annualSeatMinor: p.annualSeatEur * 100,
-      monthlySeatMinor: p.monthlySeatEur == null ? null : p.monthlySeatEur * 100,
-      minSeats: p.minSeats,
-      onboardingMinor: p.onboardingEur * 100,
-    })),
-  );
-  // …and it is itself a valid stored list, so an operator can start from it.
-  assert.deepEqual(parsePriceList(JSON.stringify(list)), { ok: true, value: list });
-  assert.equal(priceListFromSeatMinor(list), marketingFromSeatEur() * 100);
+test('unset reads as no list; a stored list wins; a broken one reads as no list and says so', () => {
+  for (const raw of [undefined, null, '', '   ']) assert.deepEqual(resolvePriceList(raw), { source: 'none', list: null });
+  assert.deepEqual(resolvePriceList(JSON.stringify(ACME)), { source: 'org', list: ACME });
+  assert.deepEqual(resolvePriceList('{"currency":"EUR"'), { source: 'invalid', list: null });
+  assert.deepEqual(resolvePriceList(JSON.stringify({ ...ACME, currency: 'JPY' })), { source: 'invalid', list: null });
 });
 
-test('unset reads as the built-in list; a stored list wins; a broken one falls back and says so', () => {
-  for (const raw of [undefined, null, '', '   ']) assert.deepEqual(resolvePriceList(raw), { source: 'builtin', list: builtinPriceList() });
-  assert.deepEqual(resolvePriceList(JSON.stringify(ACME)), { source: 'org', list: ACME });
-  assert.deepEqual(resolvePriceList('{"currency":"EUR"'), { source: 'invalid', list: builtinPriceList() });
-  assert.deepEqual(resolvePriceList(JSON.stringify({ ...ACME, currency: 'JPY' })), { source: 'invalid', list: builtinPriceList() });
+test('the plan keys are the three translated plans, in card order', () => {
+  assert.deepEqual([...MARKETING_PLAN_KEYS], ['team', 'business', 'enterprise']);
 });
 
 test('the "from" price is the cheapest annual seat', () => {
@@ -93,7 +78,7 @@ test('refusals name the field', () => {
 const big = PRICE_LIST_MAX_SEAT_MINOR;
 const CORPUS = [
   // valid
-  JSON.stringify(builtinPriceList()),
+  JSON.stringify({ currency: 'EUR', plans: [plan('team'), plan('business', { annualSeatMinor: 9900 }), plan('enterprise', { annualSeatMinor: 19900, monthlySeatMinor: null })] }),
   JSON.stringify(ACME),
   JSON.stringify({ currency: 'TRY', plans: [plan('enterprise', { monthlySeatMinor: null })] }),
   JSON.stringify({ currency: 'USD', plans: [plan('team'), plan('enterprise')] }),

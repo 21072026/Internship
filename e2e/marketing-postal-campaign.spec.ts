@@ -90,6 +90,8 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
     const letter = page.getByTestId('post-campaign-letter');
     await expect(page.getByTestId('post-campaign-letter-source')).toHaveAttribute('data-source', 'builtin', { timeout: 20_000 });
     await expect(letter).toHaveValue(/\{company\}/);
+    // The built-in MARKETING letter is a short generic text, not a tenant's own pitch.
+    await expect(letter).toHaveValue(/unser Produkt/);
     const ownLetter = `{salutation}\n\nUnser eigener Brief ${stamp} an {company}.\n\n{link}\n\nMit freundlichen Grüßen`;
     await letter.fill(ownLetter);
     await page.getByTestId('post-campaign-letter-save-default').click();

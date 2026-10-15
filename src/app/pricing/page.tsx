@@ -94,7 +94,8 @@ export default async function PricingPage() {
   const isMarketing = (await resolveRequestVertical()) === 'MARKETING';
 
   // The marketing price list is DATA (#2927): the list of the organization
-  // bound to this host, or the built-in one (src/lib/marketingPriceList.ts).
+  // bound to this host (src/lib/marketingPriceList.ts). There is no built-in
+  // list — without one the page shows a neutral "pricing on request" block.
   // Looked up on a marketing page only, so the internship page — every number
   // of which is a constant in src/lib/plans.ts — still renders without a
   // database.
@@ -147,8 +148,8 @@ export default async function PricingPage() {
 
         {/* The MARKETING price list (src/lib/marketingPriceListRule.ts): per
             user, invoiced after a conversation. Every number comes from the
-            host's organization's list (or the built-in one) and goes through
-            money.ts, like the internship plans. */}
+            host's organization's list and goes through money.ts, like the
+            internship plans. Without a list, no figure is printed at all. */}
         {priceList && (
           <section className="mt-12" data-testid="pricing-marketing-plans">
             <div className="text-center max-w-2xl mx-auto">
@@ -168,6 +169,18 @@ export default async function PricingPage() {
               ))}
             </div>
             <p className="mt-6 text-center text-sm text-gray-500" data-testid="pricing-marketing-net">{p.mktNetNote}</p>
+          </section>
+        )}
+        {isMarketing && !priceList && (
+          <section className="mt-12 text-center max-w-2xl mx-auto" data-testid="pricing-marketing-on-request">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{p.mktContactTitle}</h2>
+            <p className="mt-3 text-gray-600">{p.mktContactBody}</p>
+            <Link
+              href="/#demo"
+              className="mt-6 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            >
+              {p.mktTalk}
+            </Link>
           </section>
         )}
 

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCardDictionary, resolveRequestVertical } from '@/i18n/server';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { THEME_COLOR } from '@/lib/accent';
+import { hostBrand } from '@/lib/hostBrand';
 
 // OpenGraph card for public profiles (#966, extracted from PR #1221): when a
 // /p/<userId> link is shared on LinkedIn/WhatsApp/Slack/X, the scraper gets a
@@ -19,10 +20,13 @@ export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 // The card wears the product of the host it is fetched from (docs/worlds.md).
-// The accent is the browser-UI tint each world already uses (THEME_COLOR).
+// The accent is the browser-UI tint each world already uses (THEME_COLOR) —
+// or, on a host bound to an organization with brand data (#2922), that
+// organization's colour, and its palette's two lightest shades as the
+// background (a brand without a palette keeps the world's background).
 const BRAND_BACKGROUNDS: Record<VerticalKey, { light: string; tint: string }> = {
   INTERNSHIP: { light: '#EFF6FF', tint: '#E0E7FF' },
-  MARKETING: { light: '#FDF4FF', tint: '#FAE8FF' },
+  MARKETING: { light: '#EFF6FF', tint: '#E0E7FF' },
 };
 
 export default async function OpengraphImage({
@@ -34,8 +38,11 @@ export default async function OpengraphImage({
   const world = await resolveRequestVertical();
   const { t } = await getCardDictionary();
   const brandName = t.publicProfile.poweredBy;
-  const BRAND_ACCENT = THEME_COLOR[world];
-  const BRAND_BG = BRAND_BACKGROUNDS[world].light;
+  const host = await hostBrand();
+  const org = host.source === 'org' && host.vertical === world ? host : null;
+  const BRAND_ACCENT = org ? org.themeColor : THEME_COLOR[world];
+  const BRAND_BG = org?.palette ? org.palette[0] : BRAND_BACKGROUNDS[world].light;
+  const BRAND_TINT = org?.palette ? org.palette[1] : BRAND_BACKGROUNDS[world].tint;
 
   // Same visibility gate as the page: only opted-in mentee/mentor profiles,
   // and only on the owner's own product's host.
@@ -112,7 +119,7 @@ export default async function OpengraphImage({
           height: 630,
           display: 'flex',
           flexDirection: 'column',
-          background: `linear-gradient(135deg, ${BRAND_BG} 0%, ${BRAND_BACKGROUNDS[world].tint} 100%)`,
+          background: `linear-gradient(135deg, ${BRAND_BG} 0%, ${BRAND_TINT} 100%)`,
           fontFamily: 'sans-serif',
           padding: 64,
         }}

@@ -200,7 +200,7 @@ test('resolveMeetingLink names the room after the organizer org\'s world', async
     data: { name: `Room world I ${stamp}`, slug: `room-i-${stamp}`.slice(0, 60), plan: 'FREE', vertical: 'INTERNSHIP' },
   });
   try {
-    expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: marketing.id })).toMatch(/\/SaleVali-[0-9a-f]{16}$/);
+    expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: marketing.id })).toMatch(/\/coreCRM-[0-9a-f]{16}$/);
     expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: internship.id })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
     expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: null })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
     // The video meter is written fire-and-forget; wait for it before cleanup

@@ -29,7 +29,7 @@ test('llms.txt on the marketing host lists only marketing pages', async ({ reque
   const res = await request.get('/llms.txt', { headers: MARKETING });
   expect(res.status()).toBe(200);
   const body = await res.text();
-  expect(body.startsWith('# SaleVali\n')).toBe(true);
+  expect(body.startsWith('# coreCRM\n')).toBe(true);
   expect(body).toContain(`://${E2E_MARKETING_HOST}/privacy)`);
   // Internship-only pages 404 on this host; the map must not send an agent there.
   expect(body).not.toContain('/apply-as-mentor');
@@ -57,11 +57,11 @@ test('the marketing landing has its own FAQ', async ({ page }) => {
   await page.setExtraHTTPHeaders(MARKETING);
   await page.goto('/');
   const faq = page.getByTestId('landing-faq');
-  await expect(faq.getByText('What exactly is SaleVali?')).toBeVisible();
+  await expect(faq.getByText('What exactly is coreCRM?')).toBeVisible();
   // None of the internship per-role questions leak onto this host.
   await expect(faq.locator('details')).toHaveCount(6);
   const ld = await page.locator('script[type="application/ld+json"]').allTextContents();
-  expect(ld.some((s) => s.includes('"FAQPage"') && s.includes('What exactly is SaleVali?'))).toBe(true);
+  expect(ld.some((s) => s.includes('"FAQPage"') && s.includes('What exactly is coreCRM?'))).toBe(true);
 });
 
 test('/ai names itself in the tab', async ({ page }) => {

@@ -9,12 +9,12 @@
 // pages, and what a host publishes must not change with who happens to be
 // signed in while reading it.
 //
-// FAILS TO THE BUILT-IN LIST, never to an error page: no host, no bound org, a
-// bound org of the other vertical, an unset or unparseable setting, or a
-// database that cannot be reached all read as the built-in list in
-// src/lib/marketingPlans.ts — which is what every marketing host showed before
-// the list became data. A stored value that does not parse is logged, so a
-// broken row is visible rather than silently replaced.
+// FAILS TO "NO LIST", never to an error page: no host, no bound org, a bound
+// org of the other vertical, an unset or unparseable setting, or a database
+// that cannot be reached all read as no list, and the page shows its neutral
+// "contact us for pricing" state. There is no built-in price list in the code.
+// A stored value that does not parse is logged, so a broken row is visible
+// rather than silently replaced.
 //
 // SERVER-ONLY (Prisma).
 
@@ -23,18 +23,11 @@ import { getSetting } from '@/lib/settings';
 import { hostnameOf } from '@/lib/hostVertical';
 import { toVerticalKey } from '@/lib/verticals';
 import { logger } from '@/lib/logger';
-import {
-  builtinPriceList,
-  resolvePriceList,
-  type PriceList,
-  type PriceListSource,
-} from '@/lib/marketingPriceListRule';
+import { resolvePriceList, type ResolvedPriceList } from '@/lib/marketingPriceListRule';
 
-export async function marketingPriceListForHost(
-  hostHeader: string | null | undefined,
-): Promise<{ source: PriceListSource; list: PriceList }> {
+export async function marketingPriceListForHost(hostHeader: string | null | undefined): Promise<ResolvedPriceList> {
   const host = hostnameOf(hostHeader);
-  if (!host) return { source: 'builtin', list: builtinPriceList() };
+  if (!host) return { source: 'none', list: null };
   let orgId: string | null = null;
   let raw = '';
   try {
@@ -46,14 +39,14 @@ export async function marketingPriceListForHost(
       raw = await getSetting('marketingPriceList', org.id);
     }
   } catch (error) {
-    logger.warning('marketing price list: lookup failed, showing the built-in list', {
+    logger.warning('marketing price list: lookup failed, showing no price list', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { source: 'builtin', list: builtinPriceList() };
+    return { source: 'none', list: null };
   }
   const resolved = resolvePriceList(raw);
   if (resolved.source === 'invalid') {
-    logger.warning('marketing price list: the stored value does not parse, showing the built-in list', { orgId });
+    logger.warning('marketing price list: the stored value does not parse, showing no price list', { orgId });
   }
   return resolved;
 }

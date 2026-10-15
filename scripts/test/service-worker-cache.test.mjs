@@ -368,15 +368,15 @@ test('the push handlers survived the edit', () => {
 // and nothing the worker falls back to may name a product.
 test('a push shows the icon and badge the server chose for the recipient', async () => {
   const sw = loadWorker();
-  const note = await sw.push({ title: 'New message', body: 'hi', icon: '/icon-salevali-192.png', badge: '/icon-salevali-192.png' });
+  const note = await sw.push({ title: 'New message', body: 'hi', icon: '/icon-core-192.png', badge: '/icon-core-192.png' });
   assert.equal(note.title, 'New message');
-  assert.equal(note.options.icon, '/icon-salevali-192.png');
-  assert.equal(note.options.badge, '/icon-salevali-192.png');
+  assert.equal(note.options.icon, '/icon-core-192.png');
+  assert.equal(note.options.badge, '/icon-core-192.png');
 });
 
 test('an empty push is titled with the host, never a product name', async () => {
   const sw = loadWorker();
   const note = await sw.push(undefined);
   assert.equal(note.title, new URL(ORIGIN).hostname);
-  assert.doesNotMatch(readFileSync(SW_PATH, 'utf8'), /Internship CRM|SaleVali/);
+  assert.doesNotMatch(readFileSync(SW_PATH, 'utf8'), /Internship CRM|coreCRM/);
 });

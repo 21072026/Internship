@@ -10,13 +10,13 @@ import assert from 'node:assert/strict';
 import { resolveBranding, DEFAULT_BRANDING } from '../../src/lib/branding.ts';
 
 test('a set brandName always wins, fallbackName ignored', () => {
-  assert.equal(resolveBranding({ brandName: 'SaleVali' }, 'IgnoreMe').name, 'SaleVali');
+  assert.equal(resolveBranding({ brandName: 'Northwind' }, 'IgnoreMe').name, 'Northwind');
 });
 
 test('no brandName + a fallbackName uses the fallback (the org name), not the product default', () => {
-  assert.equal(resolveBranding(null, 'SaleVali').name, 'SaleVali');
-  assert.equal(resolveBranding({ brandName: null }, 'SaleVali').name, 'SaleVali');
-  assert.equal(resolveBranding({ brandName: '   ' }, 'SaleVali').name, 'SaleVali');
+  assert.equal(resolveBranding(null, 'Northwind').name, 'Northwind');
+  assert.equal(resolveBranding({ brandName: null }, 'Northwind').name, 'Northwind');
+  assert.equal(resolveBranding({ brandName: '   ' }, 'Northwind').name, 'Northwind');
 });
 
 test('no brandName + no fallbackName keeps the product default (INTERNSHIP path)', () => {

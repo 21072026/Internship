@@ -41,6 +41,7 @@ const {
   parseImportDate,
   IMPORT_DATE_YEARS,
   makeMarketingValidator,
+  parseHeaderAliases,
   normalizeVatKey,
   parseChannels,
   parseMinorUnits,
@@ -1095,6 +1096,26 @@ test('dates and external_id: German/Turkish header aliases are the same columns'
   assert.equal(trRow.value.externalId, 'X1');
   assert.equal(trRow.value.trialEndsAt.toISOString(), '2026-06-01T00:00:00.000Z');
   assert.equal(trRow.value.customerSince.toISOString(), '2024-01-01T00:00:00.000Z');
+});
+
+test('extra external_id aliases are org data: none by default, read when the org lists them', () => {
+  const file = parseDelimited('name,country,Northwind Kundennummer\nAlpha GmbH,DE,NW-7\n');
+  const plain = makeMarketingValidator({ stageKeys: TRIAL_STAGES })(file.rows[0], file.header);
+  assert.equal(plain.ok, true);
+  assert.equal(plain.value.externalId, '', 'an unknown header is not the external id without the setting');
+  const withAlias = makeMarketingValidator({
+    stageKeys: TRIAL_STAGES,
+    externalIdAliases: parseHeaderAliases(' Northwind Kundennummer ,\nother id'),
+  })(file.rows[0], file.header);
+  assert.equal(withAlias.value.externalId, 'NW-7');
+});
+
+test('parseHeaderAliases: split, trim, lower-case, dedupe, cap — never throws', () => {
+  assert.deepEqual(parseHeaderAliases(''), []);
+  assert.deepEqual(parseHeaderAliases(null), []);
+  assert.deepEqual(parseHeaderAliases('A id, a ID\n, b'), ['a id', 'b']);
+  assert.deepEqual(parseHeaderAliases('x'.repeat(65)), []);
+  assert.equal(parseHeaderAliases(Array.from({ length: 30 }, (_, i) => `h${i}`).join(',')).length, 10);
 });
 
 test('the file writes external_id and the funnel-record dates; the second apply is UNCHANGED', async () => {

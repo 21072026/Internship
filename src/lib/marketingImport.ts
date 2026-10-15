@@ -113,12 +113,14 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
   { field: 'contactPhone', header: 'contact_phone', required: false, aliases: ['telefon', 'phone'], target: 'Company.contactPhone + User.phone' },
   // #2554. The account's id in the product the tenant sells — its stable,
   // never-changing key (#2565). It is the key the usage feed matches on
-  // (docs/usage-feed.md), and the first half of the match key below.
+  // (docs/usage-feed.md), and the first half of the match key below. Only the
+  // generic spellings live here; a header that names the tenant's own product
+  // is that organization's data (`importExternalIdAliases`, parseHeaderAliases()).
   {
     field: 'externalId',
     header: 'external_id',
     required: false,
-    aliases: ['external id', 'externalid', 'salevali_id', 'salevali id', 'externe_id', 'externe id', 'harici_id', 'harici id'],
+    aliases: ['external id', 'externalid', 'externe_id', 'externe id', 'harici_id', 'harici id'],
     target: 'Company.externalId',
   },
   // #2554. The funnel record's dates, so an imported trial is reminded about and
@@ -443,15 +445,42 @@ export interface MarketingValidateContext {
    * renamed its stages.
    */
   stageKeys: readonly string[];
+  /**
+   * Extra header spellings of the `external_id` column, from the org's
+   * `importExternalIdAliases` setting (parseHeaderAliases()). Consulted after
+   * the canonical header and the built-in aliases. Default: none.
+   */
+  externalIdAliases?: readonly string[];
+}
+
+/** At most this many extra aliases, each at most this long. */
+export const MAX_EXTRA_HEADER_ALIASES = 10;
+export const MAX_EXTRA_HEADER_ALIAS_LENGTH = 64;
+
+/**
+ * The org's `importExternalIdAliases` setting → a clean alias list: split on
+ * commas and newlines, trimmed, lower-cased, blanks and duplicates dropped,
+ * over-long entries ignored, at most MAX_EXTRA_HEADER_ALIASES. Total: a broken
+ * value is fewer aliases, never an error — the canonical header always works.
+ */
+export function parseHeaderAliases(raw: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const part of (raw ?? '').split(/[,\n]/)) {
+    const alias = part.trim().toLowerCase();
+    if (!alias || alias.length > MAX_EXTRA_HEADER_ALIAS_LENGTH || out.includes(alias)) continue;
+    out.push(alias);
+    if (out.length >= MAX_EXTRA_HEADER_ALIASES) break;
+  }
+  return out;
 }
 
 type ColumnReader = (field: string) => string;
 
-function columnReader(header: string[], values: string[]): ColumnReader {
+function columnReader(header: string[], values: string[], extra: Readonly<Record<string, readonly string[]>> = {}): ColumnReader {
   const index = new Map<string, number>();
   for (const spec of MARKETING_IMPORT_COLUMNS) {
     let at = headerIndex(header, spec.header);
-    for (const alias of spec.aliases) {
+    for (const alias of [...spec.aliases, ...(extra[spec.field] ?? [])]) {
       if (at >= 0) break;
       at = headerIndex(header, alias);
     }
@@ -474,11 +503,12 @@ function columnReader(header: string[], values: string[]): ColumnReader {
  */
 export function makeMarketingValidator(context: MarketingValidateContext) {
   const stageKeys = new Set(context.stageKeys);
+  const extraAliases = { externalId: context.externalIdAliases ?? [] };
   return function validateMarketingRow(
     parsed: ParsedRow,
     header: string[],
   ): ValidatedRow<MarketingAccountRow> {
-    const read = columnReader(header, parsed.values);
+    const read = columnReader(header, parsed.values, extraAliases);
     const name = read('name');
     const reject = (reason: string): ValidatedRow<MarketingAccountRow> => ({
       ok: false,

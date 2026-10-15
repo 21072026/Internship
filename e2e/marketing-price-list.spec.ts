@@ -4,8 +4,9 @@ import { MARKETING_HOST } from './helpers/auth';
 
 // The marketing price list is per-organization data (#2927): /pricing on a
 // marketing host shows the list of the organization bound to that host
-// (`Organization.publicHost`, setting `marketingPriceList`), and the built-in
-// list when there is none or it does not parse.
+// (`Organization.publicHost`, setting `marketingPriceList`). There is no
+// built-in list: without one (or with one that does not parse) the page shows
+// a neutral "pricing on request" block and no figure at all.
 //
 // Serial: `publicHost` is unique, so the host is borrowed from whoever holds it
 // and given back afterwards (the same dance as marketing-demo-form.spec.ts).
@@ -45,14 +46,15 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test("the host's organization publishes its own list; without one the built-in list stays", async ({ page }) => {
+test("the host's organization publishes its own list; without one the page names no price", async ({ page }) => {
   await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
 
-  // Bound, but no list of its own: the built-in three plans.
+  // Bound, but no list of its own: "pricing on request", no plan cards, no figure.
   await page.goto('/pricing');
-  await expect(page.getByTestId('pricing-marketing-plans')).toBeVisible();
-  await expect(page.getByTestId('mkt-plan-enterprise')).toBeVisible();
-  await expect(page.getByTestId('pricing-marketing-plans')).not.toContainText('CHF');
+  await expect(page.getByTestId('pricing-marketing-on-request')).toBeVisible();
+  await expect(page.getByTestId('pricing-marketing-on-request').getByRole('link')).toHaveAttribute('href', '/#demo');
+  await expect(page.getByTestId('pricing-marketing-plans')).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText(/€\s?\d|\d\s?€/);
 
   // The organization's own list: its currency, its plans, nothing else.
   await prisma.setting.create({ data: { orgId, key: 'marketingPriceList', value: JSON.stringify(LIST) } });
@@ -63,10 +65,11 @@ test("the host's organization publishes its own list; without one the built-in l
   await expect(page.getByTestId('mkt-plan-business')).toContainText('Annual contract only');
   await expect(page.getByTestId('mkt-plan-business')).toContainText('CHF 500');
   await expect(page.getByTestId('mkt-plan-enterprise')).toHaveCount(0);
+  await expect(page.getByTestId('pricing-marketing-on-request')).toHaveCount(0);
 
-  // A stored value that does not parse reads as the built-in list, never as a broken page.
+  // A stored value that does not parse reads as no list, never as a broken page.
   await prisma.setting.updateMany({ where: { orgId, key: 'marketingPriceList' }, data: { value: '{"currency":"EUR","plans":[]}' } });
   await page.goto('/pricing');
-  await expect(page.getByTestId('mkt-plan-enterprise')).toBeVisible();
-  await expect(page.getByTestId('pricing-marketing-plans')).not.toContainText('CHF');
+  await expect(page.getByTestId('pricing-marketing-on-request')).toBeVisible();
+  await expect(page.getByTestId('pricing-marketing-plans')).toHaveCount(0);
 });

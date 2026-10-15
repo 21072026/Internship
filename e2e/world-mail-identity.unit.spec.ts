@@ -33,7 +33,7 @@ function withEnv(vars: Record<string, string | undefined>, run: () => void) {
 test.describe('From display name', () => {
   test('a bare SMTP_FROM takes the brand, else the configured default', () => {
     withEnv({ SMTP_FROM: 'noreply@example.test', MAIL_FROM_NAME: 'Internship CRM' }, () => {
-      expect(fromIdentity('SaleVali')).toEqual({ name: 'SaleVali', address: 'noreply@example.test' });
+      expect(fromIdentity('Northwind')).toEqual({ name: 'Northwind', address: 'noreply@example.test' });
       expect(fromIdentity(null)).toEqual({ name: 'Internship CRM', address: 'noreply@example.test' });
     });
   });
@@ -42,7 +42,7 @@ test.describe('From display name', () => {
     // It used to be returned verbatim, which dropped every tenant's brand name:
     // on such a deployment a marketing reader got the internship name on all mail.
     withEnv({ SMTP_FROM: '"Internship CRM" <noreply@example.test>', MAIL_FROM_NAME: undefined }, () => {
-      expect(fromIdentity('SaleVali')).toEqual({ name: 'SaleVali', address: 'noreply@example.test' });
+      expect(fromIdentity('Northwind')).toEqual({ name: 'Northwind', address: 'noreply@example.test' });
       expect(fromIdentity(null)).toEqual({ name: 'Internship CRM', address: 'noreply@example.test' });
     });
     withEnv({ SMTP_FROM: 'Ops Team <ops@example.test>' }, () => {
@@ -69,8 +69,8 @@ test.describe('List-Id follows the recipient world', () => {
 });
 
 test.describe('mail accent a tenant left unset', () => {
-  test('SaleVali magenta for MARKETING, the product blue otherwise — never preview green', () => {
-    expect(mailAccentFor('MARKETING')).toBe(ACCENT_SWATCH.magenta);
+  test('the product blue in every world — never preview green; a brand colour is org data', () => {
+    expect(mailAccentFor('MARKETING')).toBe(ACCENT_SWATCH.blue);
     expect(mailAccentFor('INTERNSHIP')).toBe('#2563eb');
     expect(mailAccentFor(null)).toBe('#2563eb');
   });

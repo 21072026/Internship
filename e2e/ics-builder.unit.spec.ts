@@ -126,14 +126,14 @@ test('the producer and the feed name follow the product; the UID domain does not
   expect(internship).toContain('X-WR-CALNAME:InternshipCRM');
   expect(feedFilename('Internship CRM')).toBe('internship-crm.ics');
 
-  const marketing = buildFeedIcs('SaleVali', [{ uid: 'm1', title: 'Demo', start: START }]);
-  expect(marketing).toContain('PRODID:-//SaleVali//EN');
-  expect(marketing).toContain('X-WR-CALNAME:SaleVali');
+  const marketing = buildFeedIcs('Northwind', [{ uid: 'm1', title: 'Demo', start: START }]);
+  expect(marketing).toContain('PRODID:-//Northwind//EN');
+  expect(marketing).toContain('X-WR-CALNAME:Northwind');
   expect(marketing).not.toContain('Internship');
   expect(marketing).toContain('UID:m1@crm.ersah.in');
-  expect(feedFilename('SaleVali')).toBe('salevali.ics');
+  expect(feedFilename('Northwind')).toBe('northwind.ics');
 
-  const invite = buildMeetingIcs({ product: 'SaleVali', uid: 'm1', title: 'Demo', start: START, method: 'REQUEST' });
-  expect(invite).toContain('PRODID:-//SaleVali//EN');
+  const invite = buildMeetingIcs({ product: 'Northwind', uid: 'm1', title: 'Demo', start: START, method: 'REQUEST' });
+  expect(invite).toContain('PRODID:-//Northwind//EN');
   expect(invite).not.toContain('Internship');
 });

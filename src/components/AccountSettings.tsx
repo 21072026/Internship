@@ -159,8 +159,8 @@ export function AccountSettings() {
   const [pushDeviceBusy, setPushDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
   // The accent the picker shows before a choice is the VERTICAL's default
-  // (#2492): magenta on a marketing tenant, blue/green otherwise — the same
-  // value the root layout painted, so the selected swatch matches the page.
+  // (#2492): blue (green on preview) in every vertical — the same value the
+  // root layout painted, so the selected swatch matches the page.
   const vertical = useVertical();
   const [theme, setTheme] = useState<Theme>('system');
   const [density, setDensity] = useState<Density>('comfortable');

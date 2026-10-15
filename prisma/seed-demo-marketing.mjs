@@ -53,7 +53,7 @@
 //   database and without a single import.
 
 export const MARKETING_ORG_SLUG = 'demo-marketing';
-export const MARKETING_ORG_NAME = 'SaleVali Demo (Marketing)';
+export const MARKETING_ORG_NAME = 'Acme Sales Demo (Marketing)';
 
 /**
  * MIRROR of `NO_LOGIN_PASSWORD` (src/lib/menteeAccount.ts) — a sentinel, never a

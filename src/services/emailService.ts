@@ -78,9 +78,8 @@ import { brandAssetPath } from '@/lib/brandRule';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
-// defaults, so behavior is unchanged. An unset accent falls back to the org's
-// WORLD colour (SaleVali magenta, else the product blue) — a marketing tenant
-// that never picked a colour must not get internship-blue mail.
+// defaults, so behavior is unchanged. An unset accent falls back to the
+// world default (mailAccentFor — the product blue in every world).
 //
 // Exported for the routes that assemble their own mail body (announcements, the
 // deliverability probe): one brand rule, not a second lookup per route.
@@ -297,7 +296,7 @@ function htmlToText(html: string): string {
 // The display name is the caller's brand when it gave one. A name already
 // written into SMTP_FROM ("Name <addr>") is only the DEFAULT now: it used to be
 // returned verbatim, which silently dropped every tenant's brand name — so on
-// such a deployment a SaleVali recipient got the internship name on every mail.
+// such a deployment a marketing recipient got the internship name on every mail.
 function fromIdentity(brandName?: string | null, transport: MailTransport = 'primary'): { name: string; address: string } {
   // Bulk mail may carry its own sender identity (e.g. noreply@ersah.in) so that
   // digest complaints never touch the domain the password-reset mail is signed
@@ -508,7 +507,7 @@ function withUnsubscribeFooter(html: string, footer: string): string {
 //
 // The namespace is the recipient's WORLD host, not their tenant's own host.
 // Mail clients show it as the list's name ("via digests.<host>"), so a fixed
-// internship host named the other product in every SaleVali digest; a tenant's
+// internship host named the other product in every marketing digest; a tenant's
 // own public host (#2495) would split one list into one per tenant. So the
 // origin is reduced to its world (hostWorld's host rule) and that world's host.
 function listIdHost(origin?: string): string {
@@ -642,7 +641,7 @@ export type EmailDeliveryResult = 'SENT' | 'SKIPPED' | 'FAILED';
 /**
  * The From display name for a mail whose caller named none (docs/worlds.md):
  * whatever a mail produces stays in its recipient's world, and a builder that
- * forgot `fromName` must not introduce a SaleVali reader as "Internship CRM".
+ * forgot `fromName` must not introduce a marketing reader as "Internship CRM".
  *
  * `null` — the default world: keep the configured name, byte-for-byte what it
  * always was (an internship tenant's brand is applied by the builders that pass
@@ -919,7 +918,7 @@ export async function prepareEmail({
     // not about access.
     //
     // A lookup that fails fails the send. Falling back to the default origin
-    // would put a SaleVali reader's unsubscribe link (and List-Id) on the
+    // would put a marketing reader's unsubscribe link (and List-Id) on the
     // internship host; dropping the footer instead would ship bulk mail with no
     // opt-out. This mail is non-essential by definition (`gated`), so not
     // sending it during a database error is the cheap side of that trade — and
@@ -1128,7 +1127,7 @@ export async function sendInvitationEmail({
   const registerUrl = `${await appUrlFor(orgId)}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  // In the inviting tenant's own vocabulary (#2558): a SaleVali invitation
+  // In the inviting tenant's own vocabulary (#2558): a marketing invitation
   // asks a sales rep to join, not "a mentor". INTERNSHIP's overlay is empty.
   const I = (await emailDictionary(resolved, orgId)).notifications.invitationEmail;
   const { roleLabel, bodyBefore, bodyAfter } = invitationBody(I, role);
@@ -1690,7 +1689,7 @@ export function ctaBlock(brand: { accent: string }, url: string, label: string):
 // For the builders that predate per-org branding (#546): a default-world reader
 // keeps the markup that mail always had, byte for byte (the same line the
 // sender name draws, recipientSenderName); a reader of another world gets their
-// own org's header and accent, never the internship blue (docs/worlds.md).
+// own org's header and accent (docs/worlds.md).
 function worldHeading(brand: Awaited<ReturnType<typeof emailBrand>>, heading: string, legacy: string): string {
   return brand.vertical === DEFAULT_VERTICAL ? legacy : brandHeader(brand, heading);
 }

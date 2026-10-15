@@ -55,8 +55,8 @@ test('2FA enrolment files the authenticator entry under the account\'s own produ
     expect((await signInViaApi(marketingJar, mkt, PW, { host: MARKETING_HOST, headers: freshIp('worlds-2fa-m') })).error).toBeNull();
     const m = await (await marketingJar.post('/api/account/2fa', { headers: H, data: { action: 'setup' } })).json();
     // A marketing-only account — no twin in the other world — keeps its product name.
-    expect(m.otpauth.startsWith(`otpauth://totp/${encodeURIComponent(`SaleVali:${mkt}`)}?`)).toBe(true);
-    expect(new URL(m.otpauth).searchParams.get('issuer')).toBe('SaleVali');
+    expect(m.otpauth.startsWith(`otpauth://totp/${encodeURIComponent(`coreCRM:${mkt}`)}?`)).toBe(true);
+    expect(new URL(m.otpauth).searchParams.get('issuer')).toBe('coreCRM');
 
     expect((await signInViaApi(internshipJar, int, PW, { headers: freshIp('worlds-2fa-i') })).error).toBeNull();
     const i = await (await internshipJar.post('/api/account/2fa', { data: { action: 'setup' } })).json();
@@ -67,7 +67,7 @@ test('2FA enrolment files the authenticator entry under the account\'s own produ
   }
 });
 
-test('a SaleVali rep connects Google Calendar on the marketing host and the round-trip stays there', async ({ request }) => {
+test('a marketing rep connects Google Calendar on the marketing host and the round-trip stays there', async ({ request }) => {
   const org = await seedMarketingOrg();
   const repEmail = email('worlds-gcal-rep');
   const leadEmail = email('worlds-gcal-lead');
@@ -121,5 +121,5 @@ test('a SaleVali rep connects Google Calendar on the marketing host and the roun
       },
       { timeout: 15_000 },
     )
-    .toBe('SaleVali');
+    .toBe('coreCRM');
 });

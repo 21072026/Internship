@@ -1,16 +1,16 @@
 // Generates the PWA raster assets that are committed under public/ (#2084),
 // one set per product mark (#2492):
 //
-//   public/icon[-salevali]-192.png, -512.png     manifest icons (purpose: any)
-//   public/icon[-salevali]-512-maskable.png      full-bleed tile for launchers that mask
-//   public/apple-touch-icon[-salevali].png       iOS home-screen icon (180, full-bleed:
+//   public/icon[-core]-192.png, -512.png     manifest icons (purpose: any)
+//   public/icon[-core]-512-maskable.png      full-bleed tile for launchers that mask
+//   public/apple-touch-icon[-core].png       iOS home-screen icon (180, full-bleed:
 //                                                iOS paints transparent corners black)
-//   public/shortcut-<name>[-salevali]-96.png     manifest shortcut icons (96x96)
-//   public/splash/apple-splash-<w>x<h>[-salevali].png   iOS launch screens, one per device
+//   public/shortcut-<name>[-core]-96.png     manifest shortcut icons (96x96)
+//   public/splash/apple-splash-<w>x<h>[-core].png   iOS launch screens, one per device
 //
 // Everything is derived from the two marks in public/ (icon.svg — the
-// internship cap on blue; icon-salevali.svg — the SaleVali mark on its purple
-// tile) and each tile colour, so re-running this after a logo change keeps
+// internship cap on blue; icon-core.svg — the neutral MARKETING default on its
+// slate tile, used only when a host has no organization brand) and each tile colour, so re-running this after a logo change keeps
 // every size of both products in step. Run with:
 //
 //   npm run gen:pwa-images
@@ -30,8 +30,8 @@ import { SHORTCUT_ICONS, fullBleedPng, markPng, shortcutPng, splashPng } from '.
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 type Brand = {
-  /** File-name suffix: '' for the internship set, '-salevali' for SaleVali. */
-  suffix: '' | '-salevali';
+  /** File-name suffix: '' for the internship set, '-core' for the neutral MARKETING default. */
+  suffix: '' | '-core';
   variant: SplashVariant;
   /** The rounded-tile mark under public/. */
   logo: string;
@@ -41,7 +41,7 @@ type Brand = {
 
 const BRANDS: Brand[] = [
   { suffix: '', variant: '', logo: 'public/icon.svg', tile: '#1D4ED8' },
-  { suffix: '-salevali', variant: 'salevali', logo: 'public/icon-salevali.svg', tile: '#1a0a2e' },
+  { suffix: '-core', variant: 'core', logo: 'public/icon-core.svg', tile: '#1e293b' },
 ];
 
 async function write(rel: string, png: Buffer | Promise<Buffer>) {

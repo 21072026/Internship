@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { E2E_MARKETING_HOST } from './helpers/marketingHost';
+import { BRAND_E2E_HOST } from './helpers/hosts';
+import { bindSyntheticBrand, SYNTHETIC_BRAND } from './helpers/brand';
 
 /**
  * The public sub-pages a marketing visitor can still click through to
@@ -50,7 +52,7 @@ test('the marketing host gets a catalogue with no mentoring, evaluation, placeme
   await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
   await page.goto('/features');
 
-  await expect(page.getByRole('heading', { name: 'Everything SaleVali can do' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Everything coreCRM can do' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Everything InternshipCRM can do' })).toHaveCount(0);
 
   // The core CRM cards survive — this is the half of the change that is easy to
@@ -95,44 +97,70 @@ test('the internship host keeps the published price list and its nav entry', asy
   await expect(page.getByTestId('public-header').getByRole('link', { name: 'Pricing' })).toHaveCount(1);
 });
 
+// The price list is the host organization's data (#2927): a synthetic one is
+// seeded on an organization bound to the marketing host for this test, and the
+// host's previous holder gets it back afterwards (`publicHost` is unique).
+const SYNTHETIC_PRICE_LIST = {
+  currency: 'EUR',
+  plans: [
+    { key: 'team', annualSeatMinor: 4900, monthlySeatMinor: 5900, minSeats: 2, onboardingMinor: 0 },
+    { key: 'business', annualSeatMinor: 9900, monthlySeatMinor: 11900, minSeats: 3, onboardingMinor: 50000 },
+    { key: 'enterprise', annualSeatMinor: 19900, monthlySeatMinor: null, minSeats: 5, onboardingMinor: 150000 },
+  ],
+};
+
 test('the marketing host shows its own price list, and none of the internship model', async ({ page }) => {
-  await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
-  await page.goto('/pricing');
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const holder = await prisma.organization.findUnique({ where: { publicHost: MARKETING_HOST }, select: { id: true } });
+  if (holder) await prisma.organization.update({ where: { id: holder.id }, data: { publicHost: null } });
+  const org = await prisma.organization.create({
+    data: { name: `Pricing host ${stamp}`, slug: `pricing-host-${stamp}`, vertical: 'MARKETING', publicHost: MARKETING_HOST },
+  });
+  await prisma.setting.create({ data: { orgId: org.id, key: 'marketingPriceList', value: JSON.stringify(SYNTHETIC_PRICE_LIST) } });
+  try {
+    await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
+    await page.goto('/pricing');
 
-  await expect(page.getByRole('heading', { name: 'One price per user, no surprises' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'One price per user, no surprises' })).toBeVisible();
 
-  // The internship price model (free core, pairs, meter, employer wallet) stays hidden.
-  for (const section of [
-    'pricing-free-core',
-    'pricing-program-plans',
-    'pricing-metering',
-    'pricing-overage',
-    'pricing-employer',
-    'pricing-placement-fee',
-    'pricing-addons',
-    'pricing-cta',
-  ]) {
-    await expect(page.getByTestId(section)).toHaveCount(0);
+    // The internship price model (free core, pairs, meter, employer wallet) stays hidden.
+    for (const section of [
+      'pricing-free-core',
+      'pricing-program-plans',
+      'pricing-metering',
+      'pricing-overage',
+      'pricing-employer',
+      'pricing-placement-fee',
+      'pricing-addons',
+      'pricing-cta',
+    ]) {
+      await expect(page.getByTestId(section)).toHaveCount(0);
+    }
+    await expect(page.locator('main')).not.toContainText('active pair');
+
+    // The host organization's list: three plans, per user, net of VAT, each
+    // with a way to talk to us.
+    const plans = page.getByTestId('pricing-marketing-plans');
+    await expect(plans).toBeVisible();
+    await expect(page.getByTestId('pricing-marketing-on-request')).toHaveCount(0);
+    await expect(page.getByTestId('mkt-plan-team')).toContainText('€49');
+    await expect(page.getByTestId('mkt-plan-business')).toContainText('€99');
+    await expect(page.getByTestId('mkt-plan-enterprise')).toContainText('€199');
+    await expect(page.getByTestId('mkt-plan-enterprise')).toContainText('Annual contract only');
+    await expect(page.getByTestId('pricing-marketing-net')).toContainText('plus VAT');
+    await expect(plans.getByRole('link', { name: 'Talk to us' })).toHaveCount(3);
+
+    // What was already true is still there.
+    await expect(page.getByTestId('pricing-discounts')).toContainText('Self-hosting is free forever');
+    await expect(page.getByTestId('pricing-faq').locator('dt')).toHaveCount(2);
+
+    // The nav entry is back now that there is a price list to point at.
+    await expect(page.getByTestId('public-header').getByRole('link', { name: 'Pricing' })).toHaveCount(1);
+  } finally {
+    await prisma.setting.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+    if (holder) await prisma.organization.update({ where: { id: holder.id }, data: { publicHost: MARKETING_HOST } }).catch(() => {});
   }
-  await expect(page.locator('main')).not.toContainText('active pair');
-
-  // The published marketing list (src/lib/marketingPlans.ts): three plans,
-  // per user, net of VAT, each with a way to talk to us.
-  const plans = page.getByTestId('pricing-marketing-plans');
-  await expect(plans).toBeVisible();
-  await expect(page.getByTestId('mkt-plan-team')).toContainText('€149');
-  await expect(page.getByTestId('mkt-plan-business')).toContainText('€249');
-  await expect(page.getByTestId('mkt-plan-enterprise')).toContainText('€390');
-  await expect(page.getByTestId('mkt-plan-enterprise')).toContainText('Annual contract only');
-  await expect(page.getByTestId('pricing-marketing-net')).toContainText('plus VAT');
-  await expect(plans.getByRole('link', { name: 'Talk to us' })).toHaveCount(3);
-
-  // What was already true is still there.
-  await expect(page.getByTestId('pricing-discounts')).toContainText('Self-hosting is free forever');
-  await expect(page.getByTestId('pricing-faq').locator('dt')).toHaveCount(2);
-
-  // The nav entry is back now that there is a price list to point at.
-  await expect(page.getByTestId('public-header').getByRole('link', { name: 'Pricing' })).toHaveCount(1);
 });
 
 // ── /projects ────────────────────────────────────────────────────────────────
@@ -253,7 +281,7 @@ test('pages that belong to the internship product 404 on the marketing host and 
   }
   // A mentor's personal apply link is the same front door.
   expect((await page.request.get('/apply/some-mentor-id', { headers })).status()).toBe(404);
-  // The release feed follows its page: no internship changelog on the SaleVali host.
+  // The release feed follows its page: no internship changelog on the marketing host.
   expect((await page.request.get('/release-notes/feed.xml', { headers })).status()).toBe(404);
 
   await page.setExtraHTTPHeaders(headers);
@@ -280,22 +308,22 @@ test('the internship host still serves every one of them, and still links to the
 
 // ── /rsvp and /m (the pages an e-mail link lands on) ─────────────────────────
 //
-// A SaleVali rep's guest invite and one-click message links open the marketing
+// A marketing rep's guest invite and one-click message links open the marketing
 // host (docs/worlds.md), so the page they land on wears that product's mark,
 // not the internship graduation cap. A bogus token is enough: the mark does not
 // depend on the token lookup.
 
 test('the RSVP and email-action pages show the mark of the product whose host serves them', async ({ page }) => {
-  const saleValiMark = page.locator('svg[aria-label="SaleVali"]');
+  const marketingMark = page.locator('svg[data-default-mark]');
   for (const path of ['/rsvp/not-a-real-token', '/m/not-a-real-token']) {
     await page.setExtraHTTPHeaders({});
     await page.goto(path);
     await expect(page.locator('svg').first(), `${path} renders a mark`).toBeAttached();
-    await expect(saleValiMark, `${path} on the internship host`).toHaveCount(0);
+    await expect(marketingMark, `${path} on the internship host`).toHaveCount(0);
 
     await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
     await page.goto(path);
-    await expect(saleValiMark.first(), `${path} on the marketing host`).toBeAttached();
+    await expect(marketingMark.first(), `${path} on the marketing host`).toBeAttached();
   }
 });
 
@@ -307,7 +335,7 @@ test('the RSVP and email-action pages show the mark of the product whose host se
 // the internship host must still read the originals.
 const DRESSED_STATEMENTS = ['/privacy', '/terms', '/imprint', '/trust', '/accessibility'];
 
-test('the legal, trust and accessibility pages name SaleVali on the marketing host', async ({ page }) => {
+test('the legal, trust and accessibility pages name the marketing product on the marketing host', async ({ page }) => {
   test.slow();
   await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
   for (const path of DRESSED_STATEMENTS) {
@@ -315,13 +343,13 @@ test('the legal, trust and accessibility pages name SaleVali on the marketing ho
     expect(res?.status(), `${path} on the marketing host`).toBe(200);
     const main = page.locator('main');
     await expect(main, `${path} names the other product`).not.toContainText(/Internship ?CRM/);
-    await expect(main, `${path} does not name this product`).toContainText('SaleVali');
+    await expect(main, `${path} does not name this product`).toContainText('coreCRM');
   }
   // The terms are short enough to hold to the whole rule: no internship model.
   await page.goto('/terms');
   await expect(page.locator('main')).not.toContainText(/mentor|mentee|internship/i);
   // The AI page and the privacy notice's AI section describe only what a
-  // SaleVali tenant can reach — not the four mentorship-shell features.
+  // marketing tenant can reach — not the four mentorship-shell features.
   for (const path of ['/ai', '/privacy']) {
     expect((await page.goto(path))?.status(), `${path} on the marketing host`).toBe(200);
     await expect(page.locator('main'), `${path} describes the mentorship product`).not.toContainText(/mentee|mentor/i);
@@ -332,7 +360,7 @@ test('the internship host keeps the original legal, trust and accessibility copy
   test.slow();
   for (const path of DRESSED_STATEMENTS) {
     await page.goto(path);
-    await expect(page.locator('main'), `${path} on the internship host`).not.toContainText('SaleVali');
+    await expect(page.locator('main'), `${path} on the internship host`).not.toContainText('coreCRM');
   }
   await page.goto('/terms');
   await expect(page.locator('main')).toContainText('By using InternshipCRM you agree to these terms.');
@@ -342,7 +370,7 @@ test('the internship host keeps the original legal, trust and accessibility copy
 
 test('the public OpenAPI spec is titled with the product of the host it was fetched from', async ({ request }) => {
   const marketing = await (await request.get('/api/v1/openapi.json', { headers: { 'x-forwarded-host': MARKETING_HOST } })).json();
-  expect(marketing.info.title).toBe('SaleVali Public API');
+  expect(marketing.info.title).toBe('coreCRM Public API');
   const internship = await (await request.get('/api/v1/openapi.json')).json();
   expect(internship.info.title).toBe('Internship CRM Public API');
 });
@@ -365,11 +393,11 @@ test('a public profile is served only on its owner\'s product host, wearing that
     expect((await request.get(`/p/${intern.id}`, { headers })).status()).toBe(404);
     expect((await request.get(`/p/${rep.id}`)).status()).toBe(404);
 
-    // On its own host, the marketing profile carries the SaleVali wordmark.
+    // On its own host, the marketing profile carries that product's wordmark.
     await page.setExtraHTTPHeaders(headers);
     await page.goto(`/p/${rep.id}`);
     await expect(page.getByRole('heading', { name: `World Rep ${stamp}` })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('link', { name: 'SaleVali' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'coreCRM' }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Internship ?CRM/ })).toHaveCount(0);
     // A rep is not a mentor: no "Mentor" badge, no mentee count, no capacity,
     // no request-this-mentor CTA. innerText, because the RSC payload in
@@ -387,5 +415,28 @@ test('a public profile is served only on its owner\'s product host, wearing that
     await cleanupByEmail(internEmail);
     await cleanupByEmail(marketingEmail);
     await prisma.organization.deleteMany({ where: { id: marketingOrg.id } });
+  }
+});
+
+// ── A host bound to a branded organization (#2922) ──────────────────────────
+//
+// Everything above is the neutral default of an unbound marketing host. A host
+// bound to an organization with brand data names THAT brand on the same pages —
+// a synthetic one here (e2e/helpers/brand.ts) on the suite-only brand host.
+test('a host bound to a branded organization names its brand on the public pages', async ({ page, request, playwright, baseURL }) => {
+  test.skip(!!process.env.BASE_URL, 'needs the local server, whose MARKETING_HOSTS includes the suite-only brand host');
+  const bound = await bindSyntheticBrand(playwright, baseURL!, BRAND_E2E_HOST);
+  try {
+    const headers = { 'x-forwarded-host': BRAND_E2E_HOST };
+    await page.setExtraHTTPHeaders(headers);
+    await page.goto('/features');
+    await expect(page.getByRole('heading', { name: `Everything ${SYNTHETIC_BRAND.name} can do` })).toBeVisible();
+    await page.goto('/terms');
+    await expect(page.locator('main')).toContainText(SYNTHETIC_BRAND.name);
+    await expect(page.locator('main')).not.toContainText('coreCRM');
+    const api = await (await request.get('/api/v1/openapi.json', { headers })).json();
+    expect(api.info.title).toBe(`${SYNTHETIC_BRAND.name} Public API`);
+  } finally {
+    await bound.release();
   }
 });
