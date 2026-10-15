@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 /**
  * #1380 — /robots.txt and /sitemap.xml exist and say the right things.
@@ -152,9 +153,9 @@ test('sitemap entries all resolve for an anonymous visitor', async ({ request })
 // #2495: one container serves both products, and a host must advertise its
 // own. The marketing host's robots.txt used to announce the INTERNSHIP sitemap
 // (NEXTAUTH_URL's), and the sitemap listed pages that 404 there. Forged proxy
-// headers, as in host-coherent-redirects.spec.ts: MARKETING_HOSTS defaults to
-// the live marketing domain, so no env change is needed.
-const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
+// headers, as in host-coherent-redirects.spec.ts: playwright.config.ts sets
+// MARKETING_HOSTS to the suite's marketing host, so no env change is needed.
+const MARKETING_HOST = E2E_MARKETING_HOST;
 const AS_MARKETING = { 'x-forwarded-host': MARKETING_HOST, 'x-forwarded-proto': 'https' };
 
 test('the marketing host announces and lists only its own product', async ({ request }) => {

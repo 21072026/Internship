@@ -22,8 +22,9 @@ export function siteUrl(): string {
 
 // The origin of the host THIS request came in on (#2495), for robots.txt's
 // `Sitemap:` line and every `<loc>`: one container serves interncrm.com and
-// marketing.bcsit-gmbh.de, and the marketing host's robots.txt used to announce
-// `Sitemap: https://interncrm.com/sitemap.xml` — the other product's pages.
+// the marketing hosts (MARKETING_HOSTS), and a marketing host's robots.txt used
+// to announce `Sitemap: https://interncrm.com/sitemap.xml` — the other
+// product's pages.
 // Validated against the served-host allowlist (#2488) by requestOrigin(), so a
 // forged Host can only ever produce one of our own origins; a request with no
 // usable host gets the configured origin, as siteUrl() always did.

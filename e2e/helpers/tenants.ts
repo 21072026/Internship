@@ -396,7 +396,7 @@ async function removeSeededRows({ orgIds, emails }: SeedScratch): Promise<void> 
 
 /**
  * Put the browser context "on" a world's host (#2590): the marketing world is
- * `marketing.bcsit-gmbh.de` (forged with `x-forwarded-host`, for the page AND
+ * `MARKETING_HOST` (forged with `x-forwarded-host`, for the page AND
  * `page.request`, which share the context's headers), every other world is the
  * plain default host. A session works only on its own world's host, so a spec
  * that hops between a MARKETING and an INTERNSHIP account calls this before each

@@ -112,28 +112,34 @@ What makes the box answer for them:
   site files `topic-deploy.sh` writes; nothing else is special about them.
 - **Which host means MARKETING** is the app's business, not Caddy's:
   `src/lib/hostVertical.ts` reads `X-Forwarded-Host`/`Host` and compares it with
-  `MARKETING_HOSTS` (comma-separated bare hostnames). **Unset, empty or
-  whitespace-only means the code default in `src/lib/servedHosts.ts`**, which is
-  why prod's env file sets nothing today. Preview does set `MARKETING_HOSTS` to its
-  own marketing host in `/etc/internship-crm/preview.env` — and by setting it,
-  preview stops answering for the prod domain (the list replaces the default, it
-  does not extend it). `deploy-prod.sh` threads the variable as
+  `MARKETING_HOSTS` (comma-separated bare hostnames). **There is no default
+  (#2926): unset, empty or whitespace-only means no host serves the marketing
+  product**, so every environment that has one names it in its own env file —
+  prod in `/etc/internship-crm/prod.env`, preview in
+  `/etc/internship-crm/preview.env` (each lists exactly its own hosts, so preview
+  never answers for the prod domain). `deploy-prod.sh` threads the variable as
   `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, i.e. an env file with no value
-  puts an **empty string** in the container; the app treats that as unset
+  puts an **empty string** in the container, which the app treats as unset
   (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the
-  #2488 redirect allowlist reads, so an empty value also made the marketing
-  domain a non-served host) — it once did not, and the prod marketing domain
-  served the internship landing until #2428 (2026-09-21).
+  #2488 redirect allowlist reads, so a host missing from it is not a served host
+  either). Until #2926 an empty value fell back to a hostname written into the
+  code; an env file that loses the line would turn its marketing hosts into
+  internship hosts, so `deploy-prod.sh` refuses to deploy the prod or preview
+  container (`internship-crm`, `internship-crm-preview`) with an empty
+  `MARKETING_HOSTS` — before the schema push and the swap, while the old
+  container still serves — unless the env file sets `MARKETING_HOSTS_NONE=1` on
+  purpose. It refuses in the same place when the caller-named
+  `MARKETING_PROBE_HOST` is missing from the list.
 - Signed-in users never go through this: their vertical is their
   `Organization.vertical`. The host decides copy and chrome only (see the TRUST
   NOTE in `hostVertical.ts`).
 
-Moving the marketing domain again means changing **both** halves close together:
-while the app still defaults to the old name, the new host serves the internship
-landing, and the moment the default moves, the old host does. Add the new site
-file first (so the name resolves and gets its certificate), then ship the
-default (or set `MARKETING_HOSTS`), then repoint `preview.env`, then turn the old
-site file into a redirect.
+Moving a marketing domain means changing **both** halves close together: until
+`MARKETING_HOSTS` names the new host it serves the internship landing. Add the
+new site file first (so the name resolves and gets its certificate), then list
+the new host in the env file's `MARKETING_HOSTS` and redeploy, update the
+`MARKETING_PROBE_HOST_PROD` / `MARKETING_PROBE_HOST_PREVIEW` secret, then turn the
+old site file into a redirect.
 
 Verify after a deploy (both must hold, on each host), with `MKT` and `MKT_PREVIEW`
 set to `https://` plus the prod and the preview marketing host:
@@ -171,14 +177,14 @@ prod and preview deploy jobs, a `WARN` line in a topic deploy): the fix is an
 env-file edit, not a rollback. Those two copies are plain
 shell and print neither the title nor the manifest name; `infra/test/marketing-title-check.test.sh`
 keeps all three copies of the rule in step. `deploy-prod.sh` asks for the host the
-caller names (`MARKETING_PROBE_HOST` in `deploy-prod.yml` / `deploy-preview.yml`),
+caller names (`MARKETING_PROBE_HOST`, which `deploy-prod.yml` / `deploy-preview.yml`
+pass from the `MARKETING_PROBE_HOST_PROD` / `MARKETING_PROBE_HOST_PREVIEW` secrets),
 else for every host in `MARKETING_HOSTS`, and skips the check when neither names one.
 A caller-named host is deliberately **not** read from `MARKETING_HOSTS`: whatever that
 variable names gets the marketing page by construction, so a check that took its host
-from there could never catch it being wrong, which is also why the caller must keep
-naming one (from a runner-side variable or a secret) once the hostnames leave the
-workflow files: without it the check only compares `MARKETING_HOSTS` with itself. The
-script also warns when that host is missing from a non-empty `MARKETING_HOSTS`. Run the probe by hand with
+from there could never catch it being wrong, which is also why the caller keeps
+naming one from a secret: without it the check only compares `MARKETING_HOSTS` with
+itself. The script also warns when that host is missing from `MARKETING_HOSTS`. Run the probe by hand with
 `MARKETING_PROBE_URLS="https://<marketing host>/ https://<marketing host>/imprint" node scripts/marketing-content-probe.mjs`.
 It prints nothing on stdout and exits 0 when every page is right. Otherwise it prints
 one `marketing host #<h>, page #<p> -> <reason>` line per wrong page and exits 1. A

@@ -1,5 +1,5 @@
 {
-  "packageId": "de.bcsitgmbh.interncrm",
+  "packageId": "com.example.interncrm",
   "host": "interncrm.com",
   "name": "Internship CRM",
   "launcherName": "InternshipCRM",

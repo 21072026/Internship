@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 /**
  * The public sub-pages a marketing visitor can still click through to
@@ -9,8 +10,8 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
  * internship catalogue, /pricing stated the internship price model ("free for
  * mentees and mentors", the active matched pair) and /projects mixed every
  * tenant's public projects into one grid. All three are sessionless, so the
- * only signal is the request host — `MARKETING_HOSTS` defaults to
- * `marketing.bcsit-gmbh.de`, which is why forging `x-forwarded-host` routes the
+ * only signal is the request host — playwright.config.ts sets `MARKETING_HOSTS`
+ * to the suite's marketing host, which is why forging `x-forwarded-host` routes the
  * marketing vertical here without an env change (same trick as
  * `host-vertical-landing.spec.ts`).
  *
@@ -18,7 +19,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
  * records from #2296: a URL that changed proves nothing about the page.
  */
 
-const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
+const MARKETING_HOST = E2E_MARKETING_HOST;
 
 test.afterAll(async () => {
   await prisma.$disconnect();

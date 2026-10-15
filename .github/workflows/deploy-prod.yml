@@ -252,6 +252,7 @@ jobs:
           DEPLOY_SHA: ${{ needs.gate.outputs.sha }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MARKETING_PROBE_HOST: ${{ secrets.MARKETING_PROBE_HOST_PROD }}
         run: |
           chmod +x infra/deploy-prod.sh
           # --pull-image: the image was built on the hosted runner, so this box
@@ -261,10 +262,10 @@ jobs:
           # FORWARD_ONLY=1 makes prod refuse to regress to an older commit
           #   (FORCE=1 for a deliberate rollback).
           # Secrets come from the server-side env file, never from the repo/workflow.
-          # MARKETING_PROBE_HOST: the host this env must serve as marketing (#2579);
-          #   named here, not read from the env file the check is validating.
+          # MARKETING_PROBE_HOST (step env, from the MARKETING_PROBE_HOST_PROD secret): the
+          #   host this env must serve as marketing (#2579) — named outside the
+          #   env file the check is validating, and outside the repository (#2926).
           FORWARD_ONLY=1 \
-          MARKETING_PROBE_HOST=marketing.bcsit-gmbh.de \
           ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
           ./infra/deploy-prod.sh --no-pull --pull-image
 

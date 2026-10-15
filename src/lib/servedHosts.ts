@@ -2,28 +2,21 @@
 // loaded by auth.ts, any route handler, the edge middleware if ever needed, and
 // `node --test --experimental-strip-types` with no resolve hook.
 //
-// One container serves several public hosts behind Caddy: interncrm.com and
-// marketing.bcsit-gmbh.de in prod, preview.interncrm.com and marketing.bcsit-gmbh.dev
-// on preview, exactly its own pr<N>.interncrm.com in a topic env. Every redirect
-// the app hands the browser, and every absolute same-app link it renders, must
-// stay on the host the browser is on — and must NEVER be able to leave the set
-// of hosts this deployment serves. That set is derived from config that already
-// exists (NEXTAUTH_URL, NEXT_PUBLIC_APP_URL, MARKETING_HOSTS); there is no
-// wildcard, no suffix rule and no new env var: a topic env is covered because
-// its own host IS its NEXTAUTH_URL.
+// One container serves several public hosts behind a reverse proxy: the
+// internship host and the marketing hosts (MARKETING_HOSTS) in prod, their
+// preview twins on preview, and exactly its own pr<N> hosts in a topic env.
+// Every redirect the app hands the browser, and every absolute same-app link it
+// renders, must stay on the host the browser is on — and must NEVER be able to
+// leave the set of hosts this deployment serves. That set is derived from
+// config that already exists (NEXTAUTH_URL, NEXT_PUBLIC_APP_URL,
+// MARKETING_HOSTS); there is no wildcard, no suffix rule and no new env var: a
+// topic env is covered because its own host IS its NEXTAUTH_URL.
 //
 // Two consumers, one rule: hostVertical.ts (which host shows the marketing
 // landing) and the redirect validation below read the same marketingHosts(), so
 // "a host that gets the marketing copy" and "a host a redirect may stay on" can
 // never drift apart.
 
-// The LIVE marketing host (#2540). Prod configures no MARKETING_HOSTS, by
-// design, so this constant IS the production marketing domain — moving it moves
-// the live site. Preview overrides it with the test domain
-// (marketing.bcsit-gmbh.dev) in its env file. The ersah.in subdomains this
-// replaced (marketing.ersah.in / preview-marketing.ersah.in) are retired; that
-// apex keeps serving mail only.
-const DEFAULT_MARKETING_HOST = 'marketing.bcsit-gmbh.de';
 const LOCAL_ORIGIN = 'http://localhost:3000';
 
 /**
@@ -41,21 +34,21 @@ export function hostnameOf(hostHeader: string | null | undefined): string | null
 /**
  * The hosts that serve the MARKETING landing (MARKETING_HOSTS, comma-separated).
  *
- * Unset, EMPTY and whitespace-only all mean the default (#2428). The deploy
- * script threads the variable into the container as
+ * There is NO built-in default: unset, EMPTY and whitespace-only all mean that
+ * no host serves the marketing product, so every host is the internship one.
+ * The deploy script threads the variable into the container as
  * `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"` (infra/deploy-prod.sh), so an env
- * file that never mentions it — prod's, by design, because .env.example says the
- * default covers the live domain — puts an EMPTY STRING here, not an absent
- * variable. `??` took that as a configured empty list, the set came out empty,
- * and the live marketing host served the internship landing (and, once #2488 shared
- * this set with the redirect allowlist, was not a served host either). The
- * trim() is what keeps prod, which configures nothing, on the default.
+ * file that never mentions it puts an EMPTY STRING here (#2428). Until #2926 an
+ * empty value fell back to a production hostname written into this file; now
+ * every environment names its own marketing hosts (the prod and preview env
+ * files, infra/server/topic-deploy.sh for a topic env, playwright.config.ts for
+ * the e2e server). One deployment's hostname is no longer everybody's default,
+ * and an environment that forgets the variable shows the internship product on
+ * every host rather than answering for a domain it does not own.
  */
 export function marketingHosts(): Set<string> {
-  const configured = process.env.MARKETING_HOSTS;
-  const raw = configured && configured.trim() ? configured : DEFAULT_MARKETING_HOST;
   const out = new Set<string>();
-  for (const entry of raw.split(',')) {
+  for (const entry of (process.env.MARKETING_HOSTS ?? '').split(',')) {
     const h = hostnameOf(entry);
     if (h) out.add(h);
   }
@@ -129,7 +122,7 @@ export function requestOrigin(get: (name: string) => string | null | undefined):
  *     checked — see safeRedirect.ts for why), must be https or baseUrl's own
  *     protocol, and its `hostname` must be in servedHosts() by EXACT match, so
  *     `interncrm.com.evil.example`, `https://interncrm.com@evil.example` and
- *     `marketing.bcsit-gmbh.de,evil.example` all fall back to baseUrl;
+ *     `marketing.example.test,evil.example` all fall back to baseUrl;
  *   - the accepted url is re-assembled from its parts, which drops userinfo and
  *     any received port (prod hosts have none; a same-origin dev url is returned
  *     verbatim by the origin check above it).

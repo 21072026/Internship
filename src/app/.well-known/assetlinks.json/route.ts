@@ -3,9 +3,9 @@ import { hostVertical } from '@/lib/hostVertical';
 
 // /.well-known/assetlinks.json — the site's half of the Android Trusted Web
 // Activity handshake (docs/mobile-strategy.md, #2085). Per host, like the
-// manifest: interncrm.com vouches for the InternshipCRM app, the marketing host
-// for SaleVali. The verifier fetches it without cookies, so the host is the
-// only signal, and `[]` (no fingerprint yet) is a valid "no association".
+// manifest: interncrm.com vouches for the internship app, a marketing host for
+// the marketing app. The verifier fetches it without cookies, so the host is
+// the only signal, and `[]` (no app configured) is a valid "no association".
 //
 // Dynamic because the answer follows the Host header.
 export const dynamic = 'force-dynamic';

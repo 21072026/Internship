@@ -2,6 +2,7 @@ import { getImageProps } from 'next/image';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { MARKETING_TOUR_SHOTS, PRODUCT_TOUR_SHOTS, TOUR_SIZE, clipPath, shotPath, type TourLocale, type TourShotName } from './productTourShots';
 import { TourClip } from './TourClip';
+import { primaryMarketingHost } from '@/lib/hostWorld';
 
 // The landing's product tour (#1399): three real screens, so a visitor sees
 // the product before deciding whether to sign up for it. Each product has its
@@ -69,8 +70,10 @@ export function ProductTour({ t, locale, marketing = false }: { t: Dictionary; l
         company: { title: T.companyT, body: T.companyD, alt: T.companyAlt },
       };
   const shots = marketing ? MARKETING_TOUR_SHOTS : PRODUCT_TOUR_SHOTS;
-  // The address bar names the product's own host — what the visitor would type.
-  const host = marketing ? 'marketing.bcsit-gmbh.de' : 'interncrm.com';
+  // The address bar names the product's own host — what the visitor would type:
+  // for the marketing product the deployment's primary marketing host
+  // (MARKETING_HOSTS), which a marketing landing always has.
+  const host = (marketing && primaryMarketingHost()) || 'interncrm.com';
 
   return (
     <section className="py-20 sm:py-24 px-4 bg-white border-y border-gray-200" data-testid="landing-product-tour">

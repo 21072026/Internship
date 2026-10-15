@@ -1,3 +1,4 @@
+import { E2E_MARKETING_HOST } from './e2e/helpers/marketingHost';
 import { defineConfig, devices } from '@playwright/test';
 import webpush from 'web-push';
 import { marketingHosts } from './src/lib/servedHosts';
@@ -142,6 +143,13 @@ export const E2E_AUDIT_SINK_PORT = 4601;
 // HIBP_ALLOW_INSECURE_STUB=1 lets a plain-http loopback URL past the SSRF
 // guard — a test-only switch no deployment sets.
 export const E2E_HIBP_MOCK_PORT = 4602;
+// The marketing product's host (#2926). There is no built-in one any more, so the
+// suite names its own (e2e/helpers/marketingHost.ts). Set on process.env, not only
+// on a webServer's env, because three parties must agree on it: both app servers
+// below (Playwright starts them with process.env underneath their own env), every
+// spec that forges `x-forwarded-host` with it, and the workers, which inherit
+// process.env — `*.unit.spec.ts` files resolve the marketing world in-process.
+process.env.MARKETING_HOSTS = E2E_MARKETING_HOST;
 
 export default defineConfig({
   testDir: './e2e',

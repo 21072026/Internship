@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 // The landing's product tour (#1399): three real screenshots, each in the
 // visitor's theme and for their device. Not a pixel comparison (house rule) —
@@ -124,7 +125,7 @@ test('a marketing host gets its own tour — SaleVali screens, never the interns
   page.on('response', (r) => {
     if (r.url().includes('/screenshots/')) fetched.push(new URL(r.url()).pathname.split('/').pop()!);
   });
-  await page.setExtraHTTPHeaders({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' });
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': E2E_MARKETING_HOST });
   await page.goto('/');
   await expect(page.getByText('Every lead, every conversation', { exact: false })).toBeVisible();
   const tour = page.getByTestId('landing-product-tour');

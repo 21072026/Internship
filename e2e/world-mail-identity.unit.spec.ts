@@ -8,6 +8,7 @@
 import { test, expect } from '@playwright/test';
 import { __testable } from '@/services/emailService';
 import { mailAccentFor, ACCENT_SWATCH } from '@/lib/accent';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
 
@@ -52,10 +53,11 @@ test.describe('From display name', () => {
 
 test.describe('List-Id follows the recipient world', () => {
   test("the namespace is the recipient world's host, never a tenant's own host", () => {
-    // MARKETING_HOSTS is unset here, so the marketing world is its default host.
-    const marketing = unsubscribeHeaders('user_1', 'digests', 'https://marketing.bcsit-gmbh.de');
-    expect(marketing['List-Id']).toBe('<digests.marketing.bcsit-gmbh.de>');
-    expect(marketing['List-Unsubscribe']).toContain('https://marketing.bcsit-gmbh.de/');
+    // playwright.config.ts sets MARKETING_HOSTS (workers too) to the suite's
+    // marketing host, so that host is the marketing world's.
+    const marketing = unsubscribeHeaders('user_1', 'digests', `https://${E2E_MARKETING_HOST}`);
+    expect(marketing['List-Id']).toBe(`<digests.${E2E_MARKETING_HOST}>`);
+    expect(marketing['List-Unsubscribe']).toContain(`https://${E2E_MARKETING_HOST}/`);
 
     // Any other host reads as the default world: its configured host.
     const configured = new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').host;

@@ -5,11 +5,11 @@ import { signInViaApi, apiSession, MARKETING_HOST } from './helpers/auth';
 
 // SaleVali branding on the marketing host (#2492): the accent, the mark, the
 // favicon/home-screen icons, the browser tint and the manifest all follow the
-// vertical. Host-forged like host-vertical-landing.spec.ts — the default
-// MARKETING_HOSTS is 'marketing.bcsit-gmbh.de', so no env change is needed. The
+// vertical. Host-forged like host-vertical-landing.spec.ts — playwright.config.ts
+// sets MARKETING_HOSTS to MARKETING_HOST, so no env change is needed. The
 // default host is asserted too: the internship product must be byte-identical.
 
-const MARKETING = { 'x-forwarded-host': 'marketing.bcsit-gmbh.de' };
+const MARKETING = { 'x-forwarded-host': MARKETING_HOST };
 
 test.afterAll(async () => {
   await prisma.$disconnect();

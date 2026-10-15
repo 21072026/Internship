@@ -12,7 +12,7 @@ import { useAppTheme } from '../../lib/theme';
 // its own drawer inside the app, so this is where its menu lives — followed by
 // the account actions.
 export default function MoreTab() {
-  const { user, product, origin, signOut, clearProduct } = useSession();
+  const { user, product, origin, signOut, clearProduct, canSwitchProduct } = useSession();
   const { c } = useAppTheme();
   const t = strings();
   const tint = product?.color ?? '#1D4ED8';
@@ -33,7 +33,7 @@ export default function MoreTab() {
     { label: t.account, icon: 'settings', onPress: () => open('/account', t.account) },
     { label: t.deleteAccount, icon: 'trash', onPress: () => open('/delete-account', t.deleteAccount) },
     // Keeps this product signed in; only "Sign out" ends a session.
-    { label: t.switchProduct, icon: 'swap-horizontal', onPress: () => void clearProduct() },
+    ...(canSwitchProduct ? [{ label: t.switchProduct, icon: 'swap-horizontal', onPress: () => void clearProduct() }] : []),
     {
       label: t.signOut,
       icon: 'log-out',

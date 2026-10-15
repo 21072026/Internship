@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 test('offline fallback page renders and is public', async ({ page }) => {
   await page.goto('/offline');
@@ -14,7 +15,7 @@ test('offline fallback page renders and is public', async ({ page }) => {
 });
 
 test('the offline page carries no internship domain on a marketing host', async ({ page }) => {
-  await page.setExtraHTTPHeaders({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' });
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': E2E_MARKETING_HOST });
   await page.goto('/offline');
   await expect(page.getByRole('heading', { name: /offline/i })).toBeVisible({ timeout: 10_000 });
   expect(await page.content()).not.toContain('interncrm.com');

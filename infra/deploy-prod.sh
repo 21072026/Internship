@@ -134,7 +134,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
-           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
+           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -333,6 +333,7 @@ app_env_args() {
     -e CRON_ENABLED="${CRON_ENABLED:-}" \
     -e MT_ENFORCE_ISOLATION="${MT_ENFORCE_ISOLATION:-}" \
     -e MARKETING_HOSTS="${MARKETING_HOSTS:-}" \
+    -e ANDROID_APP_LINKS="${ANDROID_APP_LINKS:-}" \
     -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
     -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
     -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
@@ -487,6 +488,42 @@ if [ "$ROLLBACK" = "1" ]; then
   log "Rolled back — ${REPLICAS} replica(s) up from :$PORT serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
   exit 0
 fi
+
+# ── 0b. Marketing hosts guard (#2926) ───────────────────────────────────────
+# The app has no built-in marketing host any more: an empty MARKETING_HOSTS
+# turns every marketing host into an internship host, which locks the
+# marketing tenant's users out of their sessions. The content check after the
+# swap can only warn, so refuse HERE, before anything changes and while the
+# old container still serves: the shared prod and preview containers must name
+# their marketing hosts, unless the env file says MARKETING_HOSTS_NONE=1 on
+# purpose. A caller-named probe host (MARKETING_PROBE_HOST, from a secret) that
+# the list leaves out is refused for the same reason. Messages never print a
+# hostname: the deploy log is public.
+marketing_hosts_guard() {
+  local effective probe
+  effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$CONTAINER" in
+    internship-crm|internship-crm-preview)
+      if [ -z "$effective" ] && [ "${MARKETING_HOSTS_NONE:-0}" != 1 ]; then
+        echo "ERROR: MARKETING_HOSTS is empty in $ENV_FILE — this deploy would serve the internship product on every marketing host." >&2
+        echo "       Name the marketing hosts there (comma-separated), or set MARKETING_HOSTS_NONE=1 if this environment has none." >&2
+        return 1
+      fi
+      ;;
+  esac
+  if [ -n "${MARKETING_PROBE_HOST:-}" ] && [ "${MARKETING_PROBE:-1}" != 0 ]; then
+    probe="$(printf '%s' "$MARKETING_PROBE_HOST" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case ",${effective}," in
+      *",${probe},"*) ;;
+      *)
+        echo "ERROR: the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS ($ENV_FILE) — refusing before the swap." >&2
+        return 1
+        ;;
+    esac
+  fi
+  return 0
+}
+marketing_hosts_guard || exit 1
 
 # ── 1. Sync source ───────────────────────────────────────────────────────────
 if [ "$NO_PULL" -eq 0 ]; then
@@ -1017,12 +1054,11 @@ log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS
 # check is skipped. A caller-named host comes from OUTSIDE the env file on
 # purpose — whatever MARKETING_HOSTS names gets the marketing page by
 # construction, so only a host named elsewhere can catch an env file that lost
-# it — and it must also be in MARKETING_HOSTS when that is set (an empty
-# MARKETING_HOSTS means the app's built-in default, which this script does not
-# repeat). MARKETING_PROBE=0 skips the check. Only the caller-named host can
-# catch a lost host, so when the hostnames leave the workflow files the caller
-# must keep passing MARKETING_PROBE_HOST from a runner-side variable or a
-# secret; dropping it leaves a check that compares MARKETING_HOSTS with itself.
+# it — and it must also be in MARKETING_HOSTS (an empty MARKETING_HOSTS means
+# the container serves no marketing host at all, #2926). MARKETING_PROBE=0 skips the check. Only the caller-named host can
+# catch a lost host, so the workflows pass MARKETING_PROBE_HOST from a secret
+# (the hostnames are not in the repository, #2926); dropping it leaves a check
+# that compares MARKETING_HOSTS with itself.
 
 # The document's <title> from the HTML on stdin, entity-decoded and with its
 # whitespace collapsed. The FIRST <title> is the document's (an inline <svg>
@@ -1072,14 +1108,10 @@ marketing_content_check() {
   fi
   if [ -n "${MARKETING_PROBE_HOST:-}" ]; then
     effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]//g')"
-    if [ -z "$effective" ]; then
-      log "MARKETING_HOSTS is empty, so the app's built-in marketing host applies — not checking that the probe host is in it"
-    else
-      case ",${effective}," in
-        *",${hosts},"*) ;;
-        *) warn "the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS — this container will serve it the internship landing; check $ENV_FILE" ;;
-      esac
-    fi
+    case ",${effective}," in
+      *",${hosts},"*) ;;
+      *) warn "the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS — this container will serve it the internship landing; check $ENV_FILE" ;;
+    esac
   fi
   n=0
   for host in $hosts; do

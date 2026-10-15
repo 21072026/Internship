@@ -52,15 +52,15 @@ test('a mapping to the other product closes the form in both directions', () => 
 // The operator script mirrors normalizePublicHost in plain ESM; one corpus runs
 // through both so they cannot drift.
 const CORPUS = [
-  ['marketing.bcsit-gmbh.de', 'marketing.bcsit-gmbh.de'],
-  ['  Marketing.BCSIT-GmbH.de ', 'marketing.bcsit-gmbh.de'],
+  ['marketing.example.test', 'marketing.example.test'],
+  ['  Marketing.Example.Test ', 'marketing.example.test'],
   ['localhost', 'localhost'],
   ['pr12.interncrm.com', 'pr12.interncrm.com'],
-  ['https://marketing.bcsit-gmbh.de', null],
-  ['marketing.bcsit-gmbh.de:443', null],
-  ['marketing.bcsit-gmbh.de/', null],
-  ['*.bcsit-gmbh.de', null],
-  ['marketing.bcsit-gmbh.de.', null],
+  ['https://marketing.example.test', null],
+  ['marketing.example.test:443', null],
+  ['marketing.example.test/', null],
+  ['*.example.test', null],
+  ['marketing.example.test.', null],
   ['-bad.example', null],
   ['a b.example', null],
   ['', null],

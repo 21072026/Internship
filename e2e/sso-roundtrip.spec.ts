@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { gotoSettled } from './helpers/auth';
+import { gotoSettled, MARKETING_HOST } from './helpers/auth';
 import { E2E_IDP_MOCK_PORT } from '../playwright.config';
 import { SSO_IMPLEMENTED_PROVIDERS, SSO_OIDC_UNSUPPORTED, validateSsoConfig } from '../src/lib/sso';
 
@@ -195,7 +195,7 @@ test(
 test('SAML: a sign-in started on the marketing host finishes there — login RelayState, IdP echo, ACS success (#2494)', async ({
   request,
 }) => {
-  const MARKETING = 'marketing.bcsit-gmbh.de';
+  const MARKETING = MARKETING_HOST;
   const AS_MARKETING = { 'x-forwarded-host': MARKETING, 'x-forwarded-proto': 'https' };
   const email = uniqueEmail('sso-mkt').toLowerCase();
   // A MARKETING org: under #2590 the ACS honours a started-on origin only when

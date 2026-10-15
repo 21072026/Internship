@@ -8,7 +8,10 @@ name: Android app bundle (TWA)
 #
 # Committed input: mobile/android/<app>/twa-manifest.json. The Gradle project is
 # generated from it on every run (mobile/android/generate-project.mjs) and never
-# committed.
+# committed. The committed config carries a `com.example.*` placeholder package
+# (#2926): the real Play package id names the publisher, so a release build takes
+# it from the TWA_PACKAGE_ID secret, and generate-project.mjs refuses a release
+# build (one with a versionCode) while the package is still the placeholder.
 #
 # Two triggers:
 #   - pull_request on mobile/android/** — an UNSIGNED build, as a guard that the
@@ -62,6 +65,9 @@ jobs:
       APP: ${{ matrix.app }}
       VERSION_CODE: ${{ inputs.version_code }}
       VERSION_NAME: ${{ inputs.version_name }}
+      # Only the release build needs the publisher's package id; a PR builds
+      # under the placeholder (no secret, so forks still run it).
+      TWA_PACKAGE_ID: ${{ github.event_name == 'workflow_dispatch' && secrets.TWA_PACKAGE_ID || '' }}
     steps:
       - uses: actions/checkout@v7
 

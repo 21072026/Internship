@@ -1,15 +1,15 @@
 // Operator CLI: map a public hostname to the tenant its sessionless forms write
 // into (#2569) — `Organization.publicHost`.
 //
-//   node prisma/set-public-host.mjs --org <slug|id> --host marketing.bcsit-gmbh.de
+//   node prisma/set-public-host.mjs --org <slug|id> --host marketing.example.com
 //   node prisma/set-public-host.mjs --org <slug|id> --clear
 //   node prisma/set-public-host.mjs --list
 //
 // Until a MARKETING host is mapped, the demo form on its landing is CLOSED
 // ("not available right now") — by design: an unmapped marketing host never
 // falls back to the internship tenant (src/lib/publicHostRule.ts). Run it once
-// per environment (prod: marketing.bcsit-gmbh.de, preview: marketing.bcsit-gmbh.dev)
-// after the MARKETING org exists; it is idempotent.
+// per environment, with that environment's own marketing host (one of its
+// MARKETING_HOSTS), after the MARKETING org exists; it is idempotent.
 //
 // Refusals, so a mistyped mapping fails loudly instead of matching nothing:
 //   • the host must be a bare hostname (no scheme, port, path or wildcard) —
@@ -111,7 +111,7 @@ async function main() {
     }
 
     const host = normalizeHost(arg('host'));
-    if (!host) throw new Error('--host must be a bare hostname, e.g. marketing.bcsit-gmbh.de');
+    if (!host) throw new Error('--host must be a bare hostname, e.g. marketing.example.com');
     const holder = await prisma.organization.findUnique({ where: { publicHost: host }, select: { id: true, slug: true } });
     if (holder && holder.id !== org.id) {
       throw new Error(`${host} already belongs to ${holder.slug} (${holder.id}); clear it there first`);

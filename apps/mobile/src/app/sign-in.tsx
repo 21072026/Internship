@@ -23,7 +23,7 @@ import { useAppTheme, type Palette } from '../lib/theme';
 export default function SignInScreen() {
   const { c } = useAppTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
-  const { product, origin, signedIn, clearProduct } = useSession();
+  const { product, origin, signedIn, clearProduct, canSwitchProduct } = useSession();
   const t = strings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -123,9 +123,11 @@ export default function SignInScreen() {
           <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(`${origin}/auth/forgot`)}>
             <Text style={styles.link}>{t.forgot}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => void clearProduct()}>
-            <Text style={styles.link}>{t.otherProduct}</Text>
-          </Pressable>
+          {canSwitchProduct && (
+            <Pressable accessibilityRole="button" onPress={() => void clearProduct()}>
+              <Text style={styles.link}>{t.otherProduct}</Text>
+            </Pressable>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

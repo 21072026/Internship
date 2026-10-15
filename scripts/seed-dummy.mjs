@@ -51,7 +51,9 @@ const STATUSES = [
   'INTERNSHIP_COMPLETED_490', 'JOB_SEEKING_500', 'HIREABLE_600', 'HIRED_660', 'EMPLOYED_700',
   'INTERNSHIP_FOUND_ELSEWHERE_800',
 ];
-const PROJECTS = ['BCS-IT', 'OKAY', 'NFC', 'Abics'];
+// Synthetic company names (#2926). Matched by name, so a re-run reuses them;
+// rows an earlier run created under other names are left as they are.
+const PROJECTS = ['Contoso', 'Fabrikam', 'Tailspin Toys', 'Wingtip Toys'];
 const INTERACTION_TYPES = ['Meeting', 'Feedback', 'Email'];
 const NOTES = ['İlk tanışma görüşmesi yapıldı.', 'CV birlikte gözden geçirildi.', 'Teknik mülakat hazırlığı.',
   'Haftalık ilerleme kontrolü.', 'Staj yeri ile görüşüldü.', 'Geri bildirim verildi.', 'Hedefler güncellendi.'];

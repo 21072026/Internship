@@ -9,15 +9,25 @@
 // avoid.
 //
 // One app per world (docs/worlds.md): the host a person opens decides the
-// product, and a TWA is bound to one host, so InternshipCRM and SaleVali are two
-// listings with two packages. The statement a host serves follows the host's
-// vertical, never a session — the verifier fetches it without cookies.
+// product, and a TWA is bound to one host, so the internship app and a
+// marketing app are two listings with two packages. The statement a host serves
+// follows the host's vertical, never a session — the verifier fetches it
+// without cookies.
 //
-// Pure and dependency-free so `npm run test:android-app-links` can pin it. The
-// fingerprints live HERE, in code, not in an env var: they are public by
-// definition (anyone can fetch the file), and a value that must be added to
-// infra/deploy-prod.sh's env list, topic-deploy.sh's and the server's env file
-// before it reaches the container is three places to forget it.
+// WHERE THE APPS COME FROM: the server env, ANDROID_APP_LINKS (#2926) — a JSON
+// object keyed by vertical:
+//
+//   ANDROID_APP_LINKS='{"INTERNSHIP":{"packageName":"com.example.crm","sha256CertFingerprints":["AB:CD:…"]}}'
+//
+// A package name and a signing certificate belong to whoever PUBLISHES the app,
+// i.e. to the deployment: this project is AGPL, and a package id written into
+// the source would make every other instance vouch for the original publisher's
+// app. The values themselves are public by definition (anyone can fetch the
+// file), so the env file is the right home, not a secret store. Unset or empty
+// means no app is associated with any host, and every host serves `[]` — what
+// every host served while no fingerprint existed.
+//
+// Pure and dependency-free so `npm run test:android-app-links` can pin it.
 
 import type { VerticalKey } from '@/lib/verticals';
 
@@ -25,7 +35,8 @@ export interface AndroidApp {
   /**
    * The Play package name. PERMANENT: Play never lets a published package be
    * renamed, so this is the one value here that cannot be corrected later. It
-   * must match `packageId` in mobile/android/<app>/twa-manifest.json.
+   * must match the `packageId` the app was built with
+   * (mobile/android/generate-project.mjs, TWA_PACKAGE_ID).
    */
   packageName: string;
   /**
@@ -33,17 +44,21 @@ export interface AndroidApp {
    * an installed copy may be signed with: the Play App Signing key (Play Console
    * → App integrity) and the upload key, so an internally-shared build verifies
    * too. Empty until the first upload — the endpoint then serves `[]`, which
-   * the verifier reads as "no association", i.e. today's behaviour.
+   * the verifier reads as "no association".
    */
   sha256CertFingerprints: readonly string[];
 }
 
-// Publisher: bcsit GmbH (maintainer decision, 2026-10-05), hence the reverse
-// domain of bcsit-gmbh.de. A hyphen is not legal in a Java package segment.
-export const ANDROID_APPS: Record<VerticalKey, AndroidApp> = {
-  INTERNSHIP: { packageName: 'de.bcsitgmbh.interncrm', sha256CertFingerprints: [] },
-  MARKETING: { packageName: 'de.bcsitgmbh.salevali', sha256CertFingerprints: [] },
-};
+export type AndroidApps = Partial<Record<VerticalKey, AndroidApp>>;
+
+// Every vertical, so a key in ANDROID_APP_LINKS that names no vertical (a typo
+// that would otherwise serve `[]` in silence) is refused. A Record, so adding a
+// vertical to src/lib/verticals.ts fails the type check until it is listed here.
+const VERTICAL_KEYS: Record<VerticalKey, true> = { INTERNSHIP: true, MARKETING: true };
+
+// A Java package name: two or more dot-separated identifiers. A hyphen is not
+// legal in a segment, which is why a reverse domain with one loses it.
+const PACKAGE_NAME = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
 
 const FINGERPRINT = /^[0-9A-F]{2}(?::[0-9A-F]{2}){31}$/;
 
@@ -52,21 +67,56 @@ export function isValidFingerprint(value: string): boolean {
   return FINGERPRINT.test(value);
 }
 
+/**
+ * The apps ANDROID_APP_LINKS configures, by vertical. Unset, empty or
+ * whitespace-only is "no app anywhere". Anything malformed THROWS — invalid
+ * JSON, an unknown vertical, a bad package name, a fingerprint list that is not
+ * a list of strings — for the same reason assetLinksFor() throws on a bad
+ * fingerprint: a statement the verifier rejects fails silently on the phone,
+ * while a 500 on /.well-known/assetlinks.json is in the server log.
+ */
+export function androidAppsFromEnv(raw: string | undefined = process.env.ANDROID_APP_LINKS): AndroidApps {
+  if (!raw || !raw.trim()) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('ANDROID_APP_LINKS is not valid JSON');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('ANDROID_APP_LINKS must be a JSON object keyed by vertical');
+  }
+  const out: AndroidApps = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!Object.prototype.hasOwnProperty.call(VERTICAL_KEYS, key)) {
+      throw new Error(`ANDROID_APP_LINKS names an unknown vertical: ${key}`);
+    }
+    const app = value as { packageName?: unknown; sha256CertFingerprints?: unknown } | null;
+    if (!app || typeof app !== 'object' || typeof app.packageName !== 'string' || !PACKAGE_NAME.test(app.packageName)) {
+      throw new Error(`ANDROID_APP_LINKS.${key}.packageName must be a Java package name`);
+    }
+    const fps = app.sha256CertFingerprints ?? [];
+    if (!Array.isArray(fps) || fps.some((fp) => typeof fp !== 'string')) {
+      throw new Error(`ANDROID_APP_LINKS.${key}.sha256CertFingerprints must be a list of strings`);
+    }
+    out[key as VerticalKey] = { packageName: app.packageName, sha256CertFingerprints: fps as string[] };
+  }
+  return out;
+}
+
 export interface AssetLinkStatement {
   relation: string[];
   target: { namespace: 'android_app'; package_name: string; sha256_cert_fingerprints: string[] };
 }
 
 /**
- * The assetlinks.json body for a host of the given vertical. Empty when the app
- * has no fingerprint yet. A malformed fingerprint throws rather than being
- * served: the verifier would reject the whole statement and the app would fall
- * back to a URL bar with nothing in any log saying why.
+ * The assetlinks.json body for a host of the given vertical. Empty when that
+ * vertical has no app, or its app has no fingerprint yet. A malformed
+ * fingerprint throws rather than being served: the verifier would reject the
+ * whole statement and the app would fall back to a URL bar with nothing in any
+ * log saying why.
  */
-export function assetLinksFor(
-  vertical: VerticalKey,
-  apps: Record<VerticalKey, AndroidApp> = ANDROID_APPS
-): AssetLinkStatement[] {
+export function assetLinksFor(vertical: VerticalKey, apps: AndroidApps = androidAppsFromEnv()): AssetLinkStatement[] {
   const app = apps[vertical];
   if (!app || app.sha256CertFingerprints.length === 0) return [];
   for (const fp of app.sha256CertFingerprints) {

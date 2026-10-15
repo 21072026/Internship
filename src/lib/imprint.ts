@@ -69,8 +69,8 @@ function addressLines(raw: string | undefined): string[] {
  */
 export function operatorIdentity(env: Env = process.env, world: 'INTERNSHIP' | 'MARKETING' = 'INTERNSHIP'): OperatorIdentity | null {
   // One container serves two products (docs/worlds.md), and they need not have
-  // the same provider: the marketing product's provider may differ from the
-  // internship product's operator (outreach-compliance.md § 6, open question 9 —
+  // the same provider: the marketing product may be offered by another company
+  // than the internship product (outreach-compliance.md § 6, open question 9 —
   // a marketing letter or page naming the wrong provider fails § 5 DDG and
   // § 7 Abs. 2 Nr. 3 UWG). So the marketing world reads its own complete set
   // under the MARKETING_ prefix (#2697). Without that set it falls back to
