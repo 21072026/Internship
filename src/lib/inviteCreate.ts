@@ -199,7 +199,9 @@ export async function deliverInvitation(
       orgId: input.orgId,
       locale: persisted.locale,
     });
-    return { emailSent: result === 'SENT', mailError: null };
+    // QUEUED is on its way (the mail queue retries it, #2944); only SKIPPED
+    // means nobody will receive it.
+    return { emailSent: result !== 'SKIPPED', mailError: null };
   } catch (err) {
     console.error('Invitation email failed (token still valid):', err);
     return { emailSent: false, mailError: err };

@@ -19,6 +19,7 @@ export function register() {
 
   startMailBridge();
   startCron();
+  startMailDrain();
 }
 
 const BOOT_DELAY_MS = 5000;
@@ -61,6 +62,59 @@ function startCron() {
     }
   };
   setTimeout(tryStart, BOOT_DELAY_MS).unref?.();
+}
+
+// Drains the outbound mail queue (#2944, src/lib/mailOutbox.ts): every 5 s,
+// on EVERY replica, POST /api/mail/drain. No lease anywhere — the route claims
+// rows with SKIP LOCKED, so replicas share the work instead of electing an
+// owner, and the shared send budget sets the pace. MAIL_WORKER_ENABLED=0 is the
+// kill switch (the deploy canary sets it: it shares production's database).
+//
+// The credential is CRON_SECRET where it exists. An environment without one
+// (a topic environment) still needs its queued mail delivered, so a random
+// MAIL_DRAIN_SECRET is minted here, in this process, and the route — same
+// process — accepts it; it never leaves the process.
+//
+// `running` keeps a slow tick (a drain may take up to ~25 s) from overlapping
+// the next one; the route's own claim makes an overlap harmless anyway, the
+// guard only saves the round trip.
+const MAIL_DRAIN_TICK_MS = 5000;
+
+function startMailDrain() {
+  const flag = (process.env.MAIL_WORKER_ENABLED || '').trim().toLowerCase();
+  if (['0', 'false', 'off', 'no'].includes(flag)) return;
+
+  if (!process.env.CRON_SECRET && !process.env.MAIL_DRAIN_SECRET) {
+    process.env.MAIL_DRAIN_SECRET = globalThis.crypto.randomUUID();
+  }
+  const secret = process.env.CRON_SECRET || process.env.MAIL_DRAIN_SECRET || '';
+
+  let running = false;
+  let lastError = 0;
+  const timer = setInterval(async () => {
+    if (running) return;
+    running = true;
+    try {
+      const res = await fetch(localUrl('/api/mail/drain'), {
+        method: 'POST',
+        headers: { 'x-cron-secret': secret },
+      });
+      if (!res.ok && Date.now() - lastError > 60_000) {
+        lastError = Date.now();
+        console.error('[MailDrain] drain returned', res.status);
+      }
+    } catch (e) {
+      // The server may still be coming up on the first ticks — not fatal, and
+      // logged at most once a minute so a dead listener cannot flood the log.
+      if (Date.now() - lastError > 60_000) {
+        lastError = Date.now();
+        console.error('[MailDrain] drain failed:', String(e));
+      }
+    } finally {
+      running = false;
+    }
+  }, MAIL_DRAIN_TICK_MS);
+  timer.unref?.();
 }
 
 // Drains the reply mailbox over IMAP. Started wherever the IMAP credentials are

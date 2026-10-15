@@ -60,7 +60,7 @@ export function prismaQueueStore(): QueueStore {
       return row ? toRecord(row) : null;
     },
 
-    claimDue: async ({ now, limit, workerId }) => {
+    claimDue: async ({ now, limit, workerId, names }) => {
       // Re-clamped here rather than trusted from the caller: this value is
       // interpolated into the SQL text (see below) and an integer is the only
       // thing that may ever be.
@@ -84,11 +84,19 @@ export function prismaQueueStore(): QueueStore {
         //
         // `Job` is backticked — table names are not quoted by Prisma in raw
         // SQL and the schema has no `@@map`, so the table is literally `Job`.
+        //
+        // `names` (#2944) narrows the claim to the job kinds the caller can
+        // run — the mail drain claims only 'email.send'. Each name is a bound
+        // parameter (`Prisma.join`), never interpolated text.
+        const nameFilter = names?.length
+          ? Prisma.sql`AND name IN (${Prisma.join(names.map((n) => n.slice(0, 64)))})`
+          : Prisma.empty;
         const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
           SELECT id
             FROM \`Job\`
            WHERE status = 'PENDING'
              AND runAt <= ${now}
+             ${nameFilter}
            ORDER BY priority DESC, runAt ASC
            LIMIT ${Prisma.raw(String(take))}
              FOR UPDATE SKIP LOCKED
@@ -122,7 +130,7 @@ export function prismaQueueStore(): QueueStore {
       });
     },
 
-    reapExpired: async ({ lockedBefore }) => {
+    reapExpired: async ({ lockedBefore, names }) => {
       // ONE conditional UPDATE, so two replicas reaping at the same moment
       // cannot both "win" a row — the same shape as `lease.ts`'s rule 2.
       // A RUNNING row with a null `lockedAt` is deliberately NOT matched: the
@@ -130,7 +138,11 @@ export function prismaQueueStore(): QueueStore {
       // apart, and a sweep that reset RUNNING rows with no timestamp would
       // requeue work the moment anything else ever sets RUNNING by hand.
       const { count } = await prisma.job.updateMany({
-        where: { status: 'RUNNING', lockedAt: { lt: lockedBefore } },
+        where: {
+          status: 'RUNNING',
+          lockedAt: { lt: lockedBefore },
+          ...(names?.length ? { name: { in: [...names] } } : {}),
+        },
         // `attempts` intentionally absent — a lease that expired is not an
         // attempt that failed. See `reapExpiredLeases()` in `./queue`.
         data: { status: 'PENDING', lockedAt: null, lockedBy: null },

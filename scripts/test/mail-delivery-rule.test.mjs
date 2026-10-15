@@ -264,7 +264,9 @@ test('config: values are read, clamped, and a typo never lifts the limit', () =>
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '0' }).ratePerMin, 1);
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '100000' }).ratePerMin, 600);
   assert.equal(R.budgetConfig({ MAIL_BURST: '1', MAIL_URGENT_RESERVE: '5' }).urgentReserve, 1, 'reserve ≤ burst');
-  assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforce' }).mode, 'observe', 'nothing enforces yet');
+  assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforce' }).mode, 'enforce', 'the queue drain enforces');
+  assert.equal(R.budgetConfig({ MAIL_METER_MODE: ' Enforce ' }).mode, 'enforce');
+  assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforcing' }).mode, 'observe', 'a typo observes');
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '7' }).intervalMs, 8572, 'interval rounds up');
 });
 

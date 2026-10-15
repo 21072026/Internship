@@ -508,6 +508,9 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
       });
+      // QUEUED (#2944): a temporary refusal put this recipient's issue on the
+      // mail queue, which retries it — counted as reached, like SENT. Its own
+      // QUEUED state on NewsletterSend is a later change.
       status = result === 'SKIPPED' ? 'SKIPPED' : 'SENT';
     } catch (e) {
       status = 'FAILED';
@@ -658,7 +661,7 @@ async function reportNewsletterQuotaHolds(
       // the server env, not a User row — there is no preference to read and no
       // unsubscribe token to mint for it.
     });
-    if (delivery !== 'SENT') {
+    if (delivery === 'SKIPPED') {
       logger.warning('Newsletter quota-hold alert was not delivered', { held: fresh.length, delivery });
     }
   } catch (e) {

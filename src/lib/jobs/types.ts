@@ -60,13 +60,36 @@ export interface JobPayloadMap {
   /// the dead-letter alert; the name is here so #1673's worker can take it
   /// over as a handler without inventing one.
   'audit.drain': Record<string, never>;
+  /// One queued mail (#2944, `src/lib/mailOutbox.ts`). The drain claims only
+  /// this name (`claim({ names })`), so no other job's rows are touched by it.
+  /// `box` is the whole prepared mail sealed with `secretBox` (purpose
+  /// 'mail-outbox') and is set to null on every terminal state; `rcpt` is the
+  /// sha256 of the address, never the address — it is what account erasure
+  /// deletes by. Everything else is metadata the drain needs before opening
+  /// the box: the lane, the deadline and the preference gate's inputs.
+  'email.send': {
+    v: number;
+    lane: 'CRITICAL' | 'TRANSACTIONAL' | 'BULK';
+    category: string | null;
+    group: string | null;
+    userId: string | null;
+    orgId: string | null;
+    world: string | null;
+    rcpt: string;
+    /// ISO instant after which the mail is no longer worth sending.
+    notAfter: string;
+    /// Why it was queued: 'retry' | 'inline_timeout' | 'breaker' | 'lane'.
+    reason: string;
+    ref: string | null;
+    box: string | null;
+  };
 }
 
 export type JobName = keyof JobPayloadMap;
 
 export type JobPayload<N extends JobName = JobName> = JobPayloadMap[N];
 
-export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain'] as const;
+export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain', 'email.send'] as const;
 
 export function isJobName(value: unknown): value is JobName {
   return typeof value === 'string' && (JOB_NAMES as readonly string[]).includes(value);

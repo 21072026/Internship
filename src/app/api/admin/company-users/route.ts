@@ -81,7 +81,7 @@ export async function POST(request: Request) {
         purpose: 'SET_INITIAL',
         orgId: user.orgId,
         locale: creator?.preferredLanguage,
-      })) === 'SENT';
+      })) !== 'SKIPPED';
   } catch (e) {
     console.error('Company-user set-password email failed:', e);
     emailSent = false;

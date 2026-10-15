@@ -151,6 +151,18 @@ export async function decayPause(name: string = SMTP_BUDGET): Promise<boolean> {
   return changed === 1;
 }
 
+/**
+ * How far the budget is ahead of the DATABASE clock, and the throttle rung —
+ * what the breaker (`breakerOpen()` in mailWorkerRule.ts) decides on. One
+ * SELECT; null when the row does not exist yet. Throws on a database error:
+ * the caller decides what an unreadable budget means for its lane.
+ */
+export async function readBudgetState(name: string = SMTP_BUDGET): Promise<{ aheadMs: number; pauseLevel: number } | null> {
+  const row = await readAhead(name);
+  if (!row) return null;
+  return { aheadMs: Number(row.ahead ?? 0) / 1000, pauseLevel: Number(row.pauseLevel ?? 0) };
+}
+
 /** The meter's state, for health views and tests. Null when never touched. */
 export async function readBudget(
   name: string = SMTP_BUDGET,

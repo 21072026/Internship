@@ -73,7 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         fullName: user.fullName,
         orgId: user.orgId,
         locale: user.preferredLanguage,
-      })) === 'SENT';
+      })) !== 'SKIPPED';
   } catch (e) {
     console.error('Admin reset email failed:', e);
     emailSent = false;

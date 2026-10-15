@@ -209,7 +209,7 @@ export async function POST(request: Request) {
                 // The language the invitation was created in (#1720) — a bulk
                 // resend must not flip a Turkish invitee to English.
                 locale: row.locale,
-              })) === 'SENT';
+              })) !== 'SKIPPED';
           } catch (mailErr) {
             // The token is still valid and the expiry is already refreshed, so a
             // failed send costs the batch nothing — it is reported as

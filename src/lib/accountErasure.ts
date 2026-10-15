@@ -4,6 +4,7 @@ import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
+import { forgetQueuedMail } from '@/lib/mailOutbox';
 import {
   accountlessTombstoneId,
   companyContactErasureData,
@@ -53,6 +54,10 @@ import {
 // account's own history, and there is no column that says which world sent
 // one. Once that account is erased too, its own sweep finds no holder and
 // clears them.
+//
+// The mail queue (#2944) holds mail not sent yet, sealed, with the address only
+// as a sha256 (`payload.rcpt`). It is deleted by that hash, under the same
+// two-world rule: only this account's own rows while the address lives on.
 async function forgetEmailLog(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
   if (!user?.email) return;
@@ -60,10 +65,12 @@ async function forgetEmailLog(userId: string): Promise<void> {
     (await runUnscoped(() => prisma.user.count({ where: { email: user.email, id: { not: userId } } }))) > 0;
   if (addressStillHeld) {
     await prisma.newsletterSend.deleteMany({ where: { userId } });
+    await forgetQueuedMail(user.email, { onlyUserId: userId });
     return;
   }
   await prisma.emailLog.deleteMany({ where: { to: user.email } });
   await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
+  await forgetQueuedMail(user.email);
 }
 
 // ── The person on a company record (#2434) ───────────────────────────────────

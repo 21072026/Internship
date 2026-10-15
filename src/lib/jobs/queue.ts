@@ -145,13 +145,13 @@ export interface QueueStore {
    * row another worker is claiming; returns fewer rows than `limit`, or none,
    * rather than waiting.
    */
-  claimDue(input: { now: Date; limit: number; workerId: string }): Promise<JobRecord[]>;
+  claimDue(input: { now: Date; limit: number; workerId: string; names?: readonly string[] }): Promise<JobRecord[]>;
   /**
    * `UPDATE Job SET status='PENDING', lockedAt=NULL, lockedBy=NULL WHERE
    * status='RUNNING' AND lockedAt < ?`. Returns how many rows moved. Must not
    * touch `attempts` — see `reapExpiredLeases()`.
    */
-  reapExpired(input: { lockedBefore: Date }): Promise<number>;
+  reapExpired(input: { lockedBefore: Date; names?: readonly string[] }): Promise<number>;
   /** `INSERT` the ledger row for one attempt; resolves its id. */
   insertRun(row: NewJobRun): Promise<string>;
   /** Stamp the finishing fields on a ledger row. */
@@ -275,6 +275,13 @@ export interface ClaimOptions extends QueueOptions {
    * jobs claimed afterwards.
    */
   leaseMs?: number;
+  /**
+   * Only jobs with one of these names. A worker that handles one kind of work
+   * (the mail drain, #2944) must never claim another kind's rows: a claimed
+   * row it cannot run would sit RUNNING until its lease expired. Omitted or
+   * empty: every name, as before.
+   */
+  names?: readonly JobName[];
 }
 
 export const DEFAULT_CLAIM_LIMIT = 5;
@@ -299,7 +306,8 @@ export async function claim(workerId: string, opts: ClaimOptions = {}): Promise<
   const now = clockOf(opts);
   const limit = Math.min(MAX_CLAIM_LIMIT, Math.max(1, Math.trunc(opts.limit ?? DEFAULT_CLAIM_LIMIT)));
   if (!workerId) throw new Error('claim() needs a worker id: the lease has to name a holder.');
-  return store.claimDue({ now: now(), limit, workerId });
+  const names = opts.names?.length ? opts.names : undefined;
+  return store.claimDue({ now: now(), limit, workerId, ...(names ? { names } : {}) });
 }
 
 // ── reapExpiredLeases ───────────────────────────────────────────────────────
@@ -322,12 +330,13 @@ export async function claim(workerId: string, opts: ClaimOptions = {}): Promise<
  */
 export async function reapExpiredLeases(
   leaseMs: number = DEFAULT_LEASE_MS,
-  opts: QueueOptions = {}
+  opts: QueueOptions & { names?: readonly JobName[] } = {}
 ): Promise<number> {
   const store = await resolveStore(opts);
   const now = clockOf(opts);
   const window = Math.max(1_000, Math.trunc(leaseMs));
-  return store.reapExpired({ lockedBefore: new Date(now().getTime() - window) });
+  const names = opts.names?.length ? opts.names : undefined;
+  return store.reapExpired({ lockedBefore: new Date(now().getTime() - window), ...(names ? { names } : {}) });
 }
 
 // ── recordRun ───────────────────────────────────────────────────────────────
@@ -530,10 +539,16 @@ export function createMemoryQueueStore(options: MemoryQueueOptions = {}): Memory
       return row ? { ...row } : null;
     },
 
-    claimDue: async ({ now, limit, workerId }) => {
+    claimDue: async ({ now, limit, workerId, names }) => {
       // Synchronous section — this is the FOR UPDATE SKIP LOCKED.
       const taken = jobs
-        .filter((j) => j.status === 'PENDING' && j.runAt.getTime() <= now.getTime() && !locked.has(j.id))
+        .filter(
+          (j) =>
+            j.status === 'PENDING' &&
+            j.runAt.getTime() <= now.getTime() &&
+            !locked.has(j.id) &&
+            (!names?.length || names.includes(j.name))
+        )
         .sort((a, b) => b.priority - a.priority || a.runAt.getTime() - b.runAt.getTime())
         .slice(0, limit);
       for (const row of taken) locked.add(row.id);
@@ -552,10 +567,11 @@ export function createMemoryQueueStore(options: MemoryQueueOptions = {}): Memory
       }
     },
 
-    reapExpired: async ({ lockedBefore }) => {
+    reapExpired: async ({ lockedBefore, names }) => {
       let moved = 0;
       for (const row of jobs) {
         if (row.status !== 'RUNNING') continue;
+        if (names?.length && !names.includes(row.name)) continue;
         if (!row.lockedAt || row.lockedAt.getTime() >= lockedBefore.getTime()) continue;
         row.status = 'PENDING';
         row.lockedAt = null;

@@ -134,7 +134,9 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
-           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
+           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY \
+           MAIL_RATE_PER_MIN MAIL_BURST MAIL_URGENT_RESERVE MAIL_BULK_RATE_PER_MIN MAIL_BULK_BURST MAIL_BULK_URGENT_RESERVE \
+           MAIL_METER_MODE MAIL_THROTTLE_LADDER_SEC MAIL_QUEUE_LANES MAIL_WORKER_ENABLED MAIL_INLINE_TIMEOUT_MS; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -331,6 +333,17 @@ app_env_args() {
     -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
     -e CRON_SECRET="${CRON_SECRET:-}" \
     -e CRON_ENABLED="${CRON_ENABLED:-}" \
+    -e MAIL_RATE_PER_MIN="${MAIL_RATE_PER_MIN:-}" \
+    -e MAIL_BURST="${MAIL_BURST:-}" \
+    -e MAIL_URGENT_RESERVE="${MAIL_URGENT_RESERVE:-}" \
+    -e MAIL_BULK_RATE_PER_MIN="${MAIL_BULK_RATE_PER_MIN:-}" \
+    -e MAIL_BULK_BURST="${MAIL_BULK_BURST:-}" \
+    -e MAIL_BULK_URGENT_RESERVE="${MAIL_BULK_URGENT_RESERVE:-}" \
+    -e MAIL_METER_MODE="${MAIL_METER_MODE:-}" \
+    -e MAIL_THROTTLE_LADDER_SEC="${MAIL_THROTTLE_LADDER_SEC:-}" \
+    -e MAIL_QUEUE_LANES="${MAIL_QUEUE_LANES:-}" \
+    -e MAIL_WORKER_ENABLED="${MAIL_WORKER_ENABLED:-}" \
+    -e MAIL_INLINE_TIMEOUT_MS="${MAIL_INLINE_TIMEOUT_MS:-}" \
     -e MT_ENFORCE_ISOLATION="${MT_ENFORCE_ISOLATION:-}" \
     -e MARKETING_HOSTS="${MARKETING_HOSTS:-}" \
     -e ANDROID_APP_LINKS="${ANDROID_APP_LINKS:-}" \
@@ -898,11 +911,13 @@ else
     CANARY_PORT_ARGS=()
   fi
   # The canary shares the production DATABASE_URL, so its background workers are
-  # switched OFF: a second cron would send the same reminder twice and a second
-  # IMAP poller would race the live one for the same inbox. These two flags are
-  # the documented kill switches (src/instrumentation.ts). They come AFTER the
-  # shared env list on purpose — docker takes the last `-e` for a given key, so
-  # these override whatever the env file set.
+  # switched OFF: a second cron would send the same reminder twice, a second
+  # IMAP poller would race the live one for the same inbox, and a mail drain
+  # would deliver production's queued mail from an image that has not passed its
+  # check yet (#2944). These three flags are the documented kill switches
+  # (src/instrumentation.ts). They come AFTER the shared env list on purpose —
+  # docker takes the last `-e` for a given key, so these override whatever the
+  # env file set.
   docker run -d \
     --name "$CANARY" \
     "${CANARY_NET_ARGS[@]}" \
@@ -910,6 +925,7 @@ else
     "${APP_ENV_ARGS[@]}" \
     -e CRON_ENABLED=0 \
     -e INBOUND_IMAP_ENABLED=0 \
+    -e MAIL_WORKER_ENABLED=0 \
     "$IMAGE" >/dev/null
 
   if ! check_health "http://127.0.0.1:$CANARY_PORT/api/health?db=1" "$CANARY" "${GIT_SHA:0:7}"; then

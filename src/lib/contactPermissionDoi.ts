@@ -64,10 +64,15 @@ export async function sendDoiConfirmation(input: {
   // demo mode sendEmail returns SKIPPED. Not sent, so not spent — give the
   // day's slot back — and not stamped: `marketingOptInMailSentAt` is evidence
   // that a confirmation mail went out, and must never say so falsely.
-  if (delivered !== 'SENT') {
+  if (delivered === 'SKIPPED' || delivered === 'FAILED') {
     await prisma.contactConfirmationMailCap.delete({ where: { key } }).catch(() => {});
     return 'failed';
   }
+  // QUEUED (#2944): a temporary refusal put the mail on the queue, which
+  // retries it. The day's slot stays spent (a second request must not mail
+  // twice) but the evidence stamp waits: it says the mail WENT OUT, and the
+  // EmailLog row of the queued delivery is what records that it did.
+  if (delivered === 'QUEUED') return 'sent';
   await prisma.companyInquiry.updateMany({
     where: { id: input.inquiryId, orgId: input.orgId },
     data: { marketingOptInMailSentAt: now },

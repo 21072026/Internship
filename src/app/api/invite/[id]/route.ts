@@ -63,7 +63,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
           role: invite.role,
           orgId: invite.orgId ?? resolveOrgId(session), // the invitation, not the resender, decides the product (#2590)
           locale: invite.locale,
-        })) === 'SENT';
+        })) !== 'SKIPPED';
       } catch (e) {
         console.error('Resend invitation email failed (token still valid):', e);
       }
