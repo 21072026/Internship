@@ -7,8 +7,7 @@ import { nextRuleOccurrence, parseDaysOfWeek } from '@/lib/meetingSeriesOccurren
 import { lastMeetingDay, type SeriesCadence } from '@/lib/seriesRule';
 import { resolveTimeZone } from '@/lib/timezone';
 import { weeklyRrule } from '@/lib/seriesRrule';
-import { worldOfOrg } from '@/lib/userWorld';
-import { productNameFor } from '@/lib/verticals';
+import { productNameForOrg } from '@/lib/orgBrand';
 
 /**
  * A recurring project meeting on its members' own Google Calendars (#2654).
@@ -121,7 +120,7 @@ export async function syncSeries(series: SyncableSeries): Promise<number> {
     // Named per RECIPIENT: the event lands in that person's calendar and must
     // name the product their account lives in (docs/worlds.md).
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
-    const product = productNameFor(await worldOfOrg(owner?.orgId));
+    const product = await productNameForOrg(owner?.orgId);
     const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
     const res = await calendarFetch(auth.token, path, {
       method: link ? 'PATCH' : 'POST',

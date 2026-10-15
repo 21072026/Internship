@@ -4,7 +4,7 @@
 // drift with a clear, actionable message. Run with Node's TS stripping:
 //   node --experimental-strip-types scripts/check-i18n.ts
 import { dictionaries } from '../src/i18n/dictionaries.ts';
-import { overlayEntries, applyVerticalOverlay } from '../src/i18n/verticalOverlays.ts';
+import { overlayEntries, applyVerticalOverlay, PRODUCT_PLACEHOLDER } from '../src/i18n/verticalOverlays.ts';
 import type { Locale } from '../src/i18n/config.ts';
 
 type AnyRec = Record<string, unknown>;
@@ -57,11 +57,18 @@ for (const { vertical, locale, overlay } of overlayEntries()) {
 // An overlay REPLACES a sentence the code interpolates, so it must carry the
 // same {placeholders} as the base value: a dropped `{menteeName}` would print
 // a sentence with a hole, an added one a literal "{x}" (#2558).
-const placeholderSet = (s: string) => [...new Set([...s.matchAll(/\{[a-zA-Z]+\}/g)].map((m) => m[0]))].sort().join(' ');
+//
+// One token is the overlay's own (#2936): `{product}` is filled by
+// applyVerticalOverlay() itself while it merges, so the code that renders the
+// string never sees it. An overlay may therefore carry it where the base does
+// not; where the base has it, the overlay must keep it like any other.
+const placeholderSet = (s: string, overlayOwn: string[] = []) =>
+  [...new Set([...s.matchAll(/\{[a-zA-Z]+\}/g)].map((m) => m[0]))].filter((p) => !overlayOwn.includes(p)).sort().join(' ');
 for (const { vertical, locale, overlay } of overlayEntries()) {
   const base = flatten(dictionaries[locale as keyof typeof dictionaries] as AnyRec);
   for (const [k, v] of Object.entries(flatten(overlay as AnyRec))) {
-    if (base[k] !== undefined && placeholderSet(base[k]) !== placeholderSet(v)) {
+    const overlayOwn = base[k] !== undefined && base[k].includes(PRODUCT_PLACEHOLDER) ? [] : [PRODUCT_PLACEHOLDER];
+    if (base[k] !== undefined && placeholderSet(base[k]) !== placeholderSet(v, overlayOwn)) {
       errors.push(`[overlay ${vertical}/${locale}] ${k} has placeholders {${placeholderSet(v)}} but the base has {${placeholderSet(base[k])}}`);
     }
   }

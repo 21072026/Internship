@@ -2,14 +2,14 @@ import { ImageResponse } from 'next/og';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { themeColorFor } from '@/lib/accent';
-import { productNameFor } from '@/lib/verticals';
-import { brandAssetDataUri, hostBrand } from '@/lib/hostBrand';
+import { brandAssetDataUri, hostBrand, requestProductName } from '@/lib/hostBrand';
 
 // The share cards (#1378): what a link to a public page shows on LinkedIn,
 // WhatsApp, Slack or X. One renderer for every page, modelled on the profile
 // card (src/app/p/[userId]/opengraph-image.tsx): 1200×630, rendered by next/og
 // on the server — no external fetch, so the CSP never sees it — and in the
-// request's vertical, so a marketing host's card names SaleVali in its colour.
+// request's vertical, so a marketing host's card names its own product in its
+// colour.
 //
 // What a card may carry is the page's own public copy and nothing else: no
 // live number (it would freeze into the image, landing honesty rule §4.3) and
@@ -28,7 +28,7 @@ const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0
 export async function renderCard(copy: CardCopy | null): Promise<ImageResponse> {
   const vertical = await resolveRequestVertical();
   let brand = themeColorFor(vertical);
-  let productName = productNameFor(vertical);
+  let productName = await requestProductName(vertical);
   // A card is fetched by a scraper, without cookies: a host mapped to an
   // organization with brand data (#2922) gets that organization's name and
   // colour, and its mark — read from the database as a data: URI, never

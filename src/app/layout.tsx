@@ -10,7 +10,6 @@ import { pageAlternates, socialMetadata } from '@/lib/pageMetadata';
 import { getDictionary, toClientDictionary } from '@/i18n/dictionaries';
 import { resolveRequestVertical } from '@/i18n/server';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
-import { productNameFor } from '@/lib/verticals';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
@@ -22,18 +21,18 @@ import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
 import { applyHostBrandMetadata } from '@/lib/brandMetadata';
-import { clientBrandOf, hostBrand, requestBrand } from '@/lib/hostBrand';
+import { clientBrandOf, hostBrand, requestBrand, requestProductName } from '@/lib/hostBrand';
 import { paletteCssVars, resolveAccentChoice } from '@/lib/brandRule';
 
 // Vertical-aware tab title / app name (#2498): a marketing host/tenant reads
-// its own product name instead of "Internship CRM". resolveRequestVertical is
+// its own product name instead of "Internship CRM" — the request brand's name
+// (#2936), else the vertical's default. resolveRequestVertical is
 // session-first, host-second, so it is right both signed-in (org vertical) and
 // signed-out (host vertical).
 export async function generateMetadata(): Promise<Metadata> {
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
-  const productName = productNameFor(vertical);
-  const { t } = await getServerDictionary();
+  const { t, product: productName } = await getServerDictionary();
   const metadata: Metadata = {
   // Absolute URLs for file-convention images (OG) follow the host that served
   // the page (#2488), never NEXTAUTH_URL.
@@ -132,8 +131,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // base does not have, so stripping first meant every server-only namespace
   // the overlay touches — `landing` above all — was merged back into the
   // browser payload on a marketing host.
+  // The overlay's `{product}` is filled with the request brand's name (#2936),
+  // exactly as getServerDictionary() fills it.
   const vertical = await resolveRequestVertical();
-  const dict = toClientDictionary(applyVerticalOverlay(getDictionary(locale), locale, vertical));
+  const product = await requestProductName(vertical);
+  const dict = toClientDictionary(applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }));
   const cookieStore = await cookies();
   // Inside the native app's web view (src/lib/embeddedApp.ts).
   const embeddedApp = isEmbeddedAppUserAgent((await headers()).get('user-agent'));

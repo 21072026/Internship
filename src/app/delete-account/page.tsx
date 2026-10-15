@@ -5,8 +5,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { pageMetadata } from '@/lib/pageMetadata';
 import { operatorIdentityForRequest } from '@/lib/imprintRequest';
-import { hostVertical } from '@/lib/hostVertical';
-import { productNameFor } from '@/lib/verticals';
+import { hostBrand } from '@/lib/hostBrand';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.deleteAccount.title, description: t.deleteAccount.description }));
@@ -29,10 +28,10 @@ export const dynamic = 'force-dynamic';
  * `/account` prefix, which would have hidden it from the crawler Play uses.
  */
 export default async function DeleteAccountPage() {
-  const [{ t }, operator, vertical] = await Promise.all([
+  const [{ t }, operator, brand] = await Promise.all([
     getServerDictionary(),
     operatorIdentityForRequest(),
-    hostVertical(),
+    hostBrand(),
   ]);
   const d = t.deleteAccount;
   const noAccess = operator ? d.noAccessBody.replace('{email}', operator.email) : d.noAccessUnset;
@@ -47,7 +46,7 @@ export default async function DeleteAccountPage() {
           </div>
 
           <div className="space-y-6 text-sm text-gray-600 dark:text-gray-300">
-            <p>{d.intro.replace('{product}', productNameFor(vertical))}</p>
+            <p>{d.intro.replace('{product}', brand.productName)}</p>
 
             <section>
               <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{d.selfTitle}</h2>

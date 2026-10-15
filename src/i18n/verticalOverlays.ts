@@ -24,6 +24,14 @@
 // and an overlay entry here that removes some means lowering the literal there.
 // E-mails read this same overlay through src/i18n/emailDictionary.ts, keyed on
 // the recipient's org; there is no second terminology layer for mail.
+//
+// THE PRODUCT NAME IS NEVER WRITTEN HERE (#2936). A sentence that names the
+// product says `{product}` — the same token, with the same meaning, the base
+// dictionary already uses — and applyVerticalOverlay() fills it while merging,
+// from the caller's brand: a page passes the request brand's name, a mail the
+// recipient organization's, llms.txt the host's (src/lib/hostBrand.ts). The
+// name is therefore data (an organization's brand, else the vertical default)
+// and one overlay serves every tenant of a vertical.
 
 import type { Locale } from './config';
 import type { Dictionary } from './dictionaries';
@@ -71,7 +79,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // #1376: the MARKETING home title comes from the root layout's own
       // branch; these keep the internship copy out of the resolved dictionary.
       seo: {
-        homeTitle: 'SaleVali — Marketing CRM',
+        homeTitle: '{product} — Marketing CRM',
         homeDescription: 'A CRM for tracking customers through a marketing pipeline — from first contact to close.',
         applyAsMentorTitle: 'Apply',
         applyAsMentorDescription: 'Apply to join the programme.',
@@ -176,12 +184,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // The suggested first messages in an empty thread (#2557). The rep's set
       // (welcome/introCall/goals) and the lead's set (hello/intro/question) keep
       // their `{name}` placeholder; the words are a sales conversation about a
-      // SaleVali demo and trial, not an internship.
+      // product demo and trial, not an internship.
       messages: {
         openers: {
           welcome: {
             label: '👋 Welcome',
-            text: 'Hi {name}, thanks for your interest in SaleVali! I am your contact from here on — write to me in this chat whenever something comes up.',
+            text: 'Hi {name}, thanks for your interest in {product}! I am your contact from here on — write to me in this chat whenever something comes up.',
           },
           introCall: {
             label: 'Book a demo',
@@ -227,11 +235,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
-        homeLink: 'SaleVali — go to the home page',
+        homeLink: '{product} — go to the home page',
         tagline: 'Leads, accounts and deals in one pipeline — from first contact to close.',
       },
       auth: {
-        signinSubtitle: 'Sign in to your SaleVali account',
+        signinSubtitle: 'Sign in to your {product} account',
         registerSubtitle: 'Register with your invitation',
         tokenHint: 'Paste the invitation token from your e-mail. Accounts on this product are created by invitation.',
         dataSharingTitle: 'How your data is shared',
@@ -533,7 +541,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         trans5T: 'Consent as a mechanism',
         trans5D: 'Customer data is shown to nobody outside your team; every consent is recorded with its version and revocable at any time. Email and phone never appear on any public page.',
         transBeta: 'And the honest part: the marketing product is in early access, built by a small team, with no customer testimonials yet. We would rather you read that here than find it out later.',
-        founderBody: 'SaleVali is built and maintained by {name} — one person, in the open, on the same core that runs a mentoring platform for hundreds of people. Questions and criticism are welcome.',
+        founderBody: '{product} is built and maintained by {name} — one person, in the open, on the same core that runs a mentoring platform for hundreds of people. Questions and criticism are welcome.',
         badge: 'Marketing CRM · Track leads · Close deals',
         heroTitle: 'Every lead, every conversation, every deal —',
         heroAccent: 'in one pipeline.',
@@ -547,7 +555,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // the frame plus the four core cards whose wording still said
       // "mentor"/"mentee"/"mentorship" although the feature itself is core CRM.
       featureCatalog: {
-        title: 'Everything SaleVali can do',
+        title: 'Everything {product} can do',
         subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
         categories: { collaboration: 'Working together' },
         items: {
@@ -570,7 +578,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // sections stay hidden there (see src/app/pricing/page.tsx) and these
       // strings frame the page for a sales team.
       pricing: {
-        heroBadge: 'SaleVali pricing',
+        heroBadge: '{product} pricing',
         heroTitle: 'One price per user, no surprises',
         heroSubtitle: 'Three plans for sales teams, billed per user. No hidden add-ons — and if you would rather run it yourself, the code is open source.',
         discountsTitle: 'What is already true',
@@ -607,16 +615,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // The public pages every footer links to (docs/worlds.md): the share
       // target, the public profile's wordmark and the legal/trust/accessibility
       // statements named "InternshipCRM" and described mentorships and
-      // internships to a SaleVali visitor. Only the sentences that name the
+      // internships to a MARKETING visitor. Only the sentences that name the
       // product or its relation model are replaced; the legal substance
       // (controller, rights, retention, subprocessors) is the same codebase's.
-      share: { title: 'Shared with SaleVali' },
-      publicProfile: { poweredBy: 'SaleVali', mentor: 'Sales rep' },
-      imprint: { intro: 'Who runs this SaleVali instance, and how to reach them.' },
+      share: { title: 'Shared with {product}' },
+      publicProfile: { poweredBy: '{product}', mentor: 'Sales rep' },
+      imprint: { intro: 'Who runs this {product} instance, and how to reach them.' },
       privacy: {
         intro: 'We store the information you provide in order to manage leads, accounts and deals. This notice explains what we process, why, who can see it, how long we keep it, and your rights (GDPR Arts. 13–15).',
-        controllerBody: 'The controller for the personal data processed here is {operator}, the operator of this SaleVali instance. The postal address and any further contact details are published in the imprint.',
-        controllerUnset: 'The controller is whoever operates this SaleVali instance; their details are published in this deployment’s imprint.',
+        controllerBody: 'The controller for the personal data processed here is {operator}, the operator of this {product} instance. The postal address and any further contact details are published in the imprint.',
+        controllerUnset: 'The controller is whoever operates this {product} instance; their details are published in this deployment’s imprint.',
         purposesBody: 'To operate the platform: tracking leads and accounts through the sales pipeline, assigning them to sales reps, logging interactions, scheduling and communication. When a sales rep copies this CRM’s address on an e-mail to you (BCC), or forwards your reply to it, the date, the subject and the e-mail addresses involved are recorded as an interaction on your account; the content and attachments are not stored.',
         legalBasisBody: 'Processing relies on your consent (Art. 6(1)(a)) and on the legitimate interest of running the sales process (Art. 6(1)(f)). Optional processing always requires separate consent.',
         recipientsBody: 'Depending on your role: a lead’s record and interaction history are visible to the sales rep who owns it and to administrators. Reps see only their own leads and accounts. We never sell your data. On the public home page, and only after you accept marketing cookies, the live chat is loaded from tawk.to — it receives your IP address and whatever you type into the chat. Decline, or leave the chat alone, and nothing is sent to them.',
@@ -624,31 +632,31 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         aiBody: 'One feature can send text to an AI provider: when an administrator assigns a lead to a sales rep, the rep suggestion sends the lead’s skills, position and interests and up to five reps’ skills, interests and current load, with no name or identifier on either side. It asks for no consent because nothing identifying anyone is sent, and an administrator can switch it off for the whole organisation. Neither the text sent nor the text generated is stored. What it sends, what it deliberately withholds and who the provider is are set out in full on the AI page.',
       },
       terms: {
-        intro: 'By using SaleVali you agree to these terms.',
+        intro: 'By using {product} you agree to these terms.',
         use: 'Use the platform only for lawful customer and sales management.',
       },
       trust: {
-        operatorUnset: 'This instance has not published an operator yet. SaleVali is open source and every deployment names its own operator in its own imprint.',
+        operatorUnset: 'This instance has not published an operator yet. {product} is open source and every deployment names its own operator in its own imprint.',
         posture: {
           dataD: 'Your data is not sold. There is no payment processor, no ad network and no data broker anywhere in the codebase.',
           crmD: 'Analytics and live chat are mounted from the public shell only, never from the application itself. A signed-in pageview would carry a lead’s name to a vendor, so it cannot happen.',
         },
-        residencySelfHost: 'SaleVali is licensed AGPL-3.0-or-later. You may run your own instance, on your own infrastructure, in your own jurisdiction, without asking permission and without paying anyone. That is the strongest data-residency guarantee this project can offer, because it removes us from the question entirely. Dual licensing is available from the rights holder, Mehmet Erşahin — a natural person, not a company.',
+        residencySelfHost: '{product} is licensed AGPL-3.0-or-later. You may run your own instance, on your own infrastructure, in your own jurisdiction, without asking permission and without paying anyone. That is the strongest data-residency guarantee this project can offer, because it removes us from the question entirely. Dual licensing is available from the rights holder, Mehmet Erşahin — a natural person, not a company.',
         freeNote: 'Nothing on this page is a paid add-on.',
       },
       accessibility: {
-        intro: 'We build SaleVali so that a sales rep, a manager or an administrator can use it with a keyboard, a screen reader, a magnifier, or a phone held at arm’s length. This statement says which standard we measure ourselves against, how we check, what does not work yet, and who to write to when you hit a barrier.',
-        scopeBody: 'The SaleVali web application served from this deployment: the public pages, the sign-in flow, and the rep and admin areas behind it. It does not cover files that users upload, e-mail as rendered by someone else’s mail client, or the third-party services named further down.',
+        intro: 'We build {product} so that a sales rep, a manager or an administrator can use it with a keyboard, a screen reader, a magnifier, or a phone held at arm’s length. This statement says which standard we measure ourselves against, how we check, what does not work yet, and who to write to when you hit a barrier.',
+        scopeBody: 'The {product} web application served from this deployment: the public pages, the sign-in flow, and the rep and admin areas behind it. It does not cover files that users upload, e-mail as rendered by someone else’s mail client, or the third-party services named further down.',
         evidence: {
           dragAlternative: 'The pipeline board can be operated without drag-and-drop: every card carries a stage select that moves the deal with the keyboard alone.',
         },
         limitations: {
-          thinFixture: 'The automated scan runs against the shared codebase in its default product configuration, so the screens and wording only SaleVali shows are not yet under the automated gate.',
+          thinFixture: 'The automated scan runs against the shared codebase in its default product configuration, so the screens and wording only {product} shows are not yet under the automated gate.',
         },
       },
       // /ai and the privacy notice's AI section described five features, four
       // of which live in the mentorship shells this vertical does not have.
-      // What a SaleVali tenant can reach is the rep suggestion on the leads
+      // What a MARKETING tenant can reach is the rep suggestion on the leads
       // list (AssignMentorInline → /api/admin/mentor-suggest), so that is the
       // one feature named. Arrays are replaced whole by the overlay merge.
       ai: {
@@ -693,7 +701,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       seo: {
-        homeTitle: 'SaleVali — Pazarlama CRM',
+        homeTitle: '{product} — Pazarlama CRM',
         homeDescription: 'Müşterileri ilk temastan kapanışa kadar bir pazarlama hattında izleyen CRM.',
         applyAsMentorTitle: 'Başvur',
         applyAsMentorDescription: 'Programa katılmak için başvurun.',
@@ -790,7 +798,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         openers: {
           welcome: {
             label: '👋 Hoş geldiniz',
-            text: 'Merhaba {name}, SaleVali\'ye gösterdiğiniz ilgi için teşekkürler! Bundan sonra muhatabınız benim — aklınıza takılan her şeyi bu sohbetten yazabilirsiniz.',
+            text: 'Merhaba {name}, {product}\'ye gösterdiğiniz ilgi için teşekkürler! Bundan sonra muhatabınız benim — aklınıza takılan her şeyi bu sohbetten yazabilirsiniz.',
           },
           introCall: {
             label: 'Demo ayarla',
@@ -826,11 +834,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkAssignOwner: 'Temsilci ata',
       },
       publicNav: {
-        homeLink: 'SaleVali — ana sayfaya git',
+        homeLink: '{product} — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
       },
       auth: {
-        signinSubtitle: 'SaleVali hesabınıza giriş yapın',
+        signinSubtitle: '{product} hesabınıza giriş yapın',
         registerSubtitle: 'Davetinizle kaydolun',
         tokenHint: 'E-postanızdaki davet kodunu yapıştırın. Bu üründe hesaplar davetle açılır.',
         dataSharingTitle: 'Verileriniz nasıl paylaşılır',
@@ -1044,7 +1052,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         trans5T: 'Mekanizma olarak onay',
         trans5D: 'Müşteri verisi ekibiniz dışında kimseye gösterilmez; her onay sürümüyle kaydedilir ve her an geri alınabilir. E-posta ve telefon hiçbir herkese açık sayfada görünmez.',
         transBeta: 'Ve dürüst kısmı: pazarlama ürünü erken erişimde, küçük bir ekip yazıyor, henüz müşteri referansı yok. Bunu sonradan öğrenmenizden burada okumanızı tercih ederiz.',
-        founderBody: 'SaleVali, yüzlerce kişiye mentorluk platformu çalıştıran aynı çekirdek üzerinde, {name} tarafından — tek kişi, açıkta — geliştiriliyor ve bakımı yapılıyor. Soru ve eleştiriye açığız.',
+        founderBody: '{product}, yüzlerce kişiye mentorluk platformu çalıştıran aynı çekirdek üzerinde, {name} tarafından — tek kişi, açıkta — geliştiriliyor ve bakımı yapılıyor. Soru ve eleştiriye açığız.',
         badge: 'Pazarlama CRM · Adayları takip et · Anlaşmaları kapat',
         heroTitle: 'Her aday, her görüşme, her anlaşma —',
         heroAccent: 'tek bir hatta.',
@@ -1053,7 +1061,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresSubtitle: 'Müşterileri takip etmek ve anlaşmaları ilerletmek için tasarlandı.',
       },
       featureCatalog: {
-        title: 'SaleVali neler yapabilir',
+        title: '{product} neler yapabilir',
         subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
         categories: { collaboration: 'Birlikte çalışma' },
         items: {
@@ -1065,7 +1073,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       pricing: {
-        heroBadge: 'SaleVali fiyatları',
+        heroBadge: '{product} fiyatları',
         heroTitle: 'Kullanıcı başına tek fiyat, sürpriz yok',
         heroSubtitle: 'Satış ekipleri için kullanıcı başına faturalanan üç paket. Gizli ek ücret yok — kendiniz çalıştırmak isterseniz kod açık kaynak.',
         discountsTitle: 'Şimdiden doğru olanlar',
@@ -1096,13 +1104,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       stageSla: {
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
       },
-      share: { title: 'SaleVali ile paylaşıldı' },
-      publicProfile: { poweredBy: 'SaleVali', mentor: 'Satış temsilcisi' },
-      imprint: { intro: 'Bu SaleVali kurulumunu kim işletiyor ve kendisine nasıl ulaşılır.' },
+      share: { title: '{product} ile paylaşıldı' },
+      publicProfile: { poweredBy: '{product}', mentor: 'Satış temsilcisi' },
+      imprint: { intro: 'Bu {product} kurulumunu kim işletiyor ve kendisine nasıl ulaşılır.' },
       privacy: {
         intro: 'Müşteri adaylarını, hesapları ve fırsatları yönetmek için sağladığın bilgileri saklarız. Bu bildirim; neyi, neden işlediğimizi, kimin görebileceğini, ne kadar sakladığımızı ve haklarını açıklar (GDPR Md. 13–15).',
-        controllerBody: 'Burada işlenen kişisel verilerin sorumlusu, bu SaleVali kurulumunu işleten {operator}. Posta adresi ve diğer iletişim bilgileri künyede yayınlanıyor.',
-        controllerUnset: 'Veri sorumlusu, bu SaleVali kurulumunu işleten taraftır; bilgileri bu dağıtımın künyesinde yayınlanır.',
+        controllerBody: 'Burada işlenen kişisel verilerin sorumlusu, bu {product} kurulumunu işleten {operator}. Posta adresi ve diğer iletişim bilgileri künyede yayınlanıyor.',
+        controllerUnset: 'Veri sorumlusu, bu {product} kurulumunu işleten taraftır; bilgileri bu dağıtımın künyesinde yayınlanır.',
         purposesBody: 'Platformu işletmek için: müşteri adaylarını ve hesapları satış hattında takip etme, satış temsilcilerine atama, etkileşimleri kaydetme, planlama ve iletişim. Bir satış temsilcisi size yazdığı e-postada bu CRM’in adresini gizli kopyaya (BCC) eklerse ya da sizin yanıtınızı bu adrese yönlendirirse, e-postanın tarihi, konusu ve ilgili e-posta adresleri hesabınızda bir etkileşim olarak kaydedilir; içerik ve ekler saklanmaz.',
         legalBasisBody: 'İşleme, rızana (Md. 6(1)(a)) ve satış sürecini yürütmenin meşru menfaatine (Md. 6(1)(f)) dayanır. İsteğe bağlı işlemeler her zaman ayrı bir rıza gerektirir.',
         recipientsBody: 'Rolüne göre: bir müşteri adayının kaydı ve etkileşim geçmişi, onu üstlenen satış temsilcisi ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Verini asla satmayız. Herkese açık ana sayfada, yalnızca pazarlama çerezlerini kabul edersen canlı sohbet tawk.to üzerinden yüklenir; IP adresini ve sohbete yazdıklarını alır. Kabul etmezsen ya da sohbete dokunmazsan onlara hiçbir şey gitmez.',
@@ -1110,26 +1118,26 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         aiBody: 'Bir özellik bir yapay zekâ sağlayıcısına metin gönderebilir: bir yönetici bir müşteri adayını bir satış temsilcisine atarken, temsilci önerisi müşteri adayının yetkinliklerini, pozisyonunu ve ilgi alanlarını, en fazla beş temsilcinin de yetkinliklerini, ilgi alanlarını ve mevcut yüklerini gönderir; iki tarafta da ad veya kimlik yoktur. Kimseyi tanımlayan hiçbir şey gönderilmediği için rıza istemez; bir yönetici onu tüm kurum için kapatabilir. Ne gönderilen ne de üretilen metin saklanır. Neyi gönderdiği, neyi bilerek göndermediği ve sağlayıcının kim olduğu yapay zekâ sayfasında tek tek yazılıdır.',
       },
       terms: {
-        intro: 'SaleVali kullanarak bu şartları kabul etmiş olursun.',
+        intro: '{product} kullanarak bu şartları kabul etmiş olursun.',
         use: 'Platformu yalnızca yasal müşteri ve satış yönetimi için kullan.',
       },
       trust: {
-        operatorUnset: 'Bu kurulum henüz bir işletici yayımlamadı. SaleVali açık kaynaktır ve her dağıtım kendi işleticisini kendi künyesinde belirtir.',
+        operatorUnset: 'Bu kurulum henüz bir işletici yayımlamadı. {product} açık kaynaktır ve her dağıtım kendi işleticisini kendi künyesinde belirtir.',
         posture: {
           dataD: 'Verin satılmaz. Kod tabanında ödeme sağlayıcısı, reklam ağı veya veri simsarı yok.',
           crmD: 'Analitik ve canlı sohbet yalnızca herkese açık kabuktan yüklenir, hiçbir zaman uygulamanın kendisinden değil. Oturum açılmış bir sayfa görüntülemesi bir müşteri adayının adını sağlayıcıya taşırdı; bu yüzden mümkün değil.',
         },
-        residencySelfHost: 'SaleVali AGPL-3.0-or-later lisanslıdır. Kendi kurulumunuzu, kendi altyapınızda, kendi yargı alanınızda, kimseden izin almadan ve kimseye ödeme yapmadan çalıştırabilirsiniz. Bu projenin sunabileceği en güçlü veri yerleşimi güvencesi budur, çünkü bizi sorunun dışına çıkarır. İkili lisanslama, hak sahibi Mehmet Erşahin’den alınabilir — bir şirket değil, gerçek bir kişi.',
+        residencySelfHost: '{product} AGPL-3.0-or-later lisanslıdır. Kendi kurulumunuzu, kendi altyapınızda, kendi yargı alanınızda, kimseden izin almadan ve kimseye ödeme yapmadan çalıştırabilirsiniz. Bu projenin sunabileceği en güçlü veri yerleşimi güvencesi budur, çünkü bizi sorunun dışına çıkarır. İkili lisanslama, hak sahibi Mehmet Erşahin’den alınabilir — bir şirket değil, gerçek bir kişi.',
         freeNote: 'Bu sayfadaki hiçbir şey ücretli bir eklenti değil.',
       },
       accessibility: {
-        intro: 'SaleVali’yi bir satış temsilcisinin, bir yöneticinin ya da bir sistem yöneticisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
-        scopeBody: 'Bu kurulumdan sunulan SaleVali web uygulaması: herkese açık sayfalar, giriş akışı ve arkasındaki temsilci ve yönetici alanları. Kullanıcıların yüklediği dosyaları, başkasının posta istemcisinde görüntülenen e-postaları ve aşağıda adı geçen üçüncü taraf hizmetleri kapsamaz.',
+        intro: '{product}’yi bir satış temsilcisinin, bir yöneticinin ya da bir sistem yöneticisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
+        scopeBody: 'Bu kurulumdan sunulan {product} web uygulaması: herkese açık sayfalar, giriş akışı ve arkasındaki temsilci ve yönetici alanları. Kullanıcıların yüklediği dosyaları, başkasının posta istemcisinde görüntülenen e-postaları ve aşağıda adı geçen üçüncü taraf hizmetleri kapsamaz.',
         evidence: {
           dragAlternative: 'Pipeline panosu sürükle-bırak olmadan da kullanılabiliyor: her kartta, fırsatı yalnızca klavyeyle taşıyan bir aşama seçici var.',
         },
         limitations: {
-          thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca SaleVali’nin gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
+          thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca {product}’nin gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
         },
       },
       ai: {
@@ -1175,7 +1183,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       seo: {
-        homeTitle: 'SaleVali — Marketing-CRM',
+        homeTitle: '{product} — Marketing-CRM',
         homeDescription: 'Ein CRM, das Kunden durch eine Marketing-Pipeline begleitet – vom ersten Kontakt bis zum Abschluss.',
         applyAsMentorTitle: 'Bewerben',
         applyAsMentorDescription: 'Bewerben Sie sich für das Programm.',
@@ -1270,7 +1278,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         openers: {
           welcome: {
             label: '👋 Willkommen',
-            text: 'Hallo {name}, danke für Ihr Interesse an SaleVali! Ich bin ab jetzt Ihr Ansprechpartner — schreiben Sie mir in diesem Chat, wann immer etwas ist.',
+            text: 'Hallo {name}, danke für Ihr Interesse an {product}! Ich bin ab jetzt Ihr Ansprechpartner — schreiben Sie mir in diesem Chat, wann immer etwas ist.',
           },
           introCall: {
             label: 'Demo vereinbaren',
@@ -1306,11 +1314,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
       },
       publicNav: {
-        homeLink: 'SaleVali — zur Startseite',
+        homeLink: '{product} — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
       },
       auth: {
-        signinSubtitle: 'Melden Sie sich bei Ihrem SaleVali-Konto an',
+        signinSubtitle: 'Melden Sie sich bei Ihrem {product}-Konto an',
         registerSubtitle: 'Mit Ihrer Einladung registrieren',
         tokenHint: 'Fügen Sie den Einladungscode aus Ihrer E-Mail ein. Konten in diesem Produkt werden per Einladung angelegt.',
         dataSharingTitle: 'Wie Ihre Daten geteilt werden',
@@ -1522,7 +1530,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         trans5T: 'Einwilligung als Mechanismus',
         trans5D: 'Kundendaten sieht niemand außerhalb Ihres Teams; jede Einwilligung wird mit Version erfasst und ist jederzeit widerrufbar. E-Mail und Telefon erscheinen auf keiner öffentlichen Seite.',
         transBeta: 'Und der ehrliche Teil: Das Marketing-Produkt ist im Early Access, von einem kleinen Team gebaut, noch ohne Kundenstimmen. Wir möchten, dass Sie das hier lesen und nicht später erfahren.',
-        founderBody: 'SaleVali wird von {name} gebaut und gepflegt — eine Person, offen, auf demselben Kern, der eine Mentoring-Plattform für Hunderte betreibt. Fragen und Kritik sind willkommen.',
+        founderBody: '{product} wird von {name} gebaut und gepflegt — eine Person, offen, auf demselben Kern, der eine Mentoring-Plattform für Hunderte betreibt. Fragen und Kritik sind willkommen.',
         badge: 'Marketing-CRM · Leads verfolgen · Abschlüsse erzielen',
         heroTitle: 'Jeder Lead, jedes Gespräch, jeder Abschluss —',
         heroAccent: 'in einer Pipeline.',
@@ -1531,7 +1539,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresSubtitle: 'Entwickelt, um Kunden zu verfolgen und Deals voranzutreiben.',
       },
       featureCatalog: {
-        title: 'Alles, was SaleVali kann',
+        title: 'Alles, was {product} kann',
         subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
         categories: { collaboration: 'Zusammenarbeit' },
         items: {
@@ -1543,7 +1551,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       pricing: {
-        heroBadge: 'SaleVali-Preise',
+        heroBadge: '{product}-Preise',
         heroTitle: 'Ein Preis pro Nutzer, keine Überraschungen',
         heroSubtitle: 'Drei Pläne für Vertriebsteams, abgerechnet pro Nutzer. Keine versteckten Zusatzkosten — und wer es selbst betreiben will: Der Code ist Open Source.',
         discountsTitle: 'Was schon heute gilt',
@@ -1574,13 +1582,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       stageSla: {
         subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',
       },
-      share: { title: 'Mit SaleVali geteilt' },
-      publicProfile: { poweredBy: 'SaleVali', mentor: 'Vertriebsmitarbeiter' },
-      imprint: { intro: 'Wer diese SaleVali-Instanz betreibt und wie man ihn erreicht.' },
+      share: { title: 'Mit {product} geteilt' },
+      publicProfile: { poweredBy: '{product}', mentor: 'Vertriebsmitarbeiter' },
+      imprint: { intro: 'Wer diese {product}-Instanz betreibt und wie man ihn erreicht.' },
       privacy: {
         intro: 'Wir speichern die von dir bereitgestellten Informationen, um Leads, Accounts und Deals zu verwalten. Dieser Hinweis erklärt, was wir verarbeiten, warum, wer es sehen kann, wie lange wir es aufbewahren und welche Rechte du hast (DSGVO Art. 13–15).',
-        controllerBody: 'Verantwortlicher für die hier verarbeiteten personenbezogenen Daten ist {operator}, Betreiber dieser SaleVali-Instanz. Anschrift und weitere Kontaktdaten stehen im Impressum.',
-        controllerUnset: 'Verantwortlicher ist, wer diese SaleVali-Instanz betreibt; die Angaben stehen im Impressum dieses Deployments.',
+        controllerBody: 'Verantwortlicher für die hier verarbeiteten personenbezogenen Daten ist {operator}, Betreiber dieser {product}-Instanz. Anschrift und weitere Kontaktdaten stehen im Impressum.',
+        controllerUnset: 'Verantwortlicher ist, wer diese {product}-Instanz betreibt; die Angaben stehen im Impressum dieses Deployments.',
         purposesBody: 'Zum Betrieb der Plattform: Verfolgung von Leads und Accounts durch die Vertriebs-Pipeline, Zuordnung zu Vertriebsmitarbeitern, Protokollierung von Interaktionen, Terminplanung und Kommunikation. Setzt ein Vertriebsmitarbeiter die Adresse dieses CRM in Blindkopie (BCC) auf eine E-Mail an Sie oder leitet er Ihre Antwort dorthin weiter, werden Datum, Betreff und die beteiligten E-Mail-Adressen als Interaktion an Ihrem Account festgehalten; Inhalt und Anhänge werden nicht gespeichert.',
         legalBasisBody: 'Die Verarbeitung stützt sich auf deine Einwilligung (Art. 6(1)(a)) und auf das berechtigte Interesse am Betrieb des Vertriebsprozesses (Art. 6(1)(f)). Optionale Verarbeitung erfordert stets eine gesonderte Einwilligung.',
         recipientsBody: 'Je nach Rolle: Datensatz und Interaktionsverlauf eines Leads sind für den zuständigen Vertriebsmitarbeiter und für Administratoren sichtbar. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Wir verkaufen deine Daten nicht. Auf der öffentlichen Startseite wird der Live-Chat nur nach Zustimmung zu Marketing-Cookies von tawk.to geladen; dabei erhält tawk.to deine IP-Adresse und alles, was du in den Chat schreibst. Lehnst du ab oder nutzt den Chat nicht, wird nichts an sie übermittelt.',
@@ -1588,26 +1596,26 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         aiBody: 'Eine Funktion kann Text an einen KI-Anbieter senden: Wenn ein Admin einen Lead einem Vertriebsmitarbeiter zuordnet, sendet der Vorschlag passender Vertriebsmitarbeiter Fähigkeiten, Position und Interessen des Leads sowie Fähigkeiten, Interessen und aktuelle Auslastung von bis zu fünf Vertriebsmitarbeitern — ohne Namen oder Kennung auf beiden Seiten. Sie braucht keine Einwilligung, weil nichts gesendet wird, was jemanden identifiziert, und ein Admin kann sie für die ganze Organisation abschalten. Weder der gesendete noch der erzeugte Text wird gespeichert. Was sie sendet, was sie bewusst zurückhält und wer der Anbieter ist, steht vollständig auf der KI-Seite.',
       },
       terms: {
-        intro: 'Mit der Nutzung von SaleVali stimmst du diesen Bedingungen zu.',
+        intro: 'Mit der Nutzung von {product} stimmst du diesen Bedingungen zu.',
         use: 'Nutze die Plattform nur für rechtmäßiges Kunden- und Vertriebsmanagement.',
       },
       trust: {
-        operatorUnset: 'Diese Instanz hat noch keinen Betreiber veröffentlicht. SaleVali ist Open Source, und jedes Deployment nennt seinen eigenen Betreiber im eigenen Impressum.',
+        operatorUnset: 'Diese Instanz hat noch keinen Betreiber veröffentlicht. {product} ist Open Source, und jedes Deployment nennt seinen eigenen Betreiber im eigenen Impressum.',
         posture: {
           dataD: 'Deine Daten werden nicht verkauft. Im Code gibt es keinen Zahlungsdienstleister, kein Werbenetzwerk und keinen Datenhändler.',
           crmD: 'Analytics und Live-Chat werden ausschließlich aus der öffentlichen Hülle geladen, nie aus der Anwendung selbst. Ein Seitenaufruf im eingeloggten Bereich würde den Namen eines Leads an einen Anbieter tragen — deshalb kann er dort nicht entstehen.',
         },
-        residencySelfHost: 'SaleVali steht unter AGPL-3.0-or-later. Ihr dürft eine eigene Instanz betreiben, auf eurer eigenen Infrastruktur, in eurer eigenen Rechtsordnung, ohne jemanden zu fragen und ohne jemanden zu bezahlen. Das ist die stärkste Standortgarantie, die dieses Projekt geben kann, weil sie uns vollständig aus der Frage nimmt. Eine Dual-Lizenz ist beim Rechteinhaber Mehmet Erşahin erhältlich — eine natürliche Person, kein Unternehmen.',
+        residencySelfHost: '{product} steht unter AGPL-3.0-or-later. Ihr dürft eine eigene Instanz betreiben, auf eurer eigenen Infrastruktur, in eurer eigenen Rechtsordnung, ohne jemanden zu fragen und ohne jemanden zu bezahlen. Das ist die stärkste Standortgarantie, die dieses Projekt geben kann, weil sie uns vollständig aus der Frage nimmt. Eine Dual-Lizenz ist beim Rechteinhaber Mehmet Erşahin erhältlich — eine natürliche Person, kein Unternehmen.',
         freeNote: 'Nichts auf dieser Seite ist ein kostenpflichtiges Add-on.',
       },
       accessibility: {
-        intro: 'Wir entwickeln SaleVali so, dass Vertriebsmitarbeiter, Vertriebsleitung oder Administration es mit Tastatur, Screenreader, Bildschirmlupe oder einem Handy auf Armlänge bedienen können. Diese Erklärung sagt, an welchem Standard wir uns messen, wie wir das prüfen, was noch nicht funktioniert und an wen du dich wendest, wenn du auf eine Barriere stößt.',
-        scopeBody: 'Für die aus dieser Installation ausgelieferte SaleVali-Webanwendung: die öffentlichen Seiten, den Anmeldeweg und die dahinterliegenden Bereiche für Vertrieb und Verwaltung. Nicht abgedeckt sind hochgeladene Dateien, E-Mails in der Darstellung fremder Mail-Programme sowie die weiter unten genannten Dienste Dritter.',
+        intro: 'Wir entwickeln {product} so, dass Vertriebsmitarbeiter, Vertriebsleitung oder Administration es mit Tastatur, Screenreader, Bildschirmlupe oder einem Handy auf Armlänge bedienen können. Diese Erklärung sagt, an welchem Standard wir uns messen, wie wir das prüfen, was noch nicht funktioniert und an wen du dich wendest, wenn du auf eine Barriere stößt.',
+        scopeBody: 'Für die aus dieser Installation ausgelieferte {product}-Webanwendung: die öffentlichen Seiten, den Anmeldeweg und die dahinterliegenden Bereiche für Vertrieb und Verwaltung. Nicht abgedeckt sind hochgeladene Dateien, E-Mails in der Darstellung fremder Mail-Programme sowie die weiter unten genannten Dienste Dritter.',
         evidence: {
           dragAlternative: 'Das Pipeline-Board lässt sich ohne Drag-and-drop bedienen: jede Karte hat ein Phasen-Auswahlfeld, das den Deal allein mit der Tastatur verschiebt.',
         },
         limitations: {
-          thinFixture: 'Der automatische Scan läuft gegen die gemeinsame Codebasis in ihrer Standard-Produktkonfiguration. Ansichten und Texte, die nur SaleVali zeigt, stehen daher noch nicht unter der automatischen Prüfung.',
+          thinFixture: 'Der automatische Scan läuft gegen die gemeinsame Codebasis in ihrer Standard-Produktkonfiguration. Ansichten und Texte, die nur {product} zeigt, stehen daher noch nicht unter der automatischen Prüfung.',
         },
       },
       ai: {
@@ -1658,18 +1666,65 @@ function deepMerge<T>(base: T, overlay: DeepPartial<T>): T {
   return out as T;
 }
 
+/** Values the overlay's own placeholders are filled with while it is merged. */
+export interface OverlayFill {
+  /** The product name `{product}` stands for — the caller's resolved brand. */
+  product?: string;
+}
+
+/** The placeholder an overlay uses for the product name (filled by applyVerticalOverlay). */
+export const PRODUCT_PLACEHOLDER = '{product}';
+
+// Fill `{product}` in every string of an overlay subtree (arrays included — an
+// overlay replaces an array whole). split/join rather than replace(): a brand
+// name is data, and a `$&` in it must print as written.
+function fillOverlay<T>(node: T, product: string): T {
+  if (typeof node === 'string') return node.split(PRODUCT_PLACEHOLDER).join(product) as unknown as T;
+  if (Array.isArray(node)) return node.map((n) => fillOverlay(n, product)) as unknown as T;
+  if (isPlainObject(node)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node)) out[k] = fillOverlay(v, product);
+    return out as T;
+  }
+  return node;
+}
+
 // Apply a vertical's overlay to an already-resolved base dictionary. Returns the
 // base unchanged when the vertical overrides nothing for this locale — so the
 // INTERNSHIP path and every not-yet-dressed locale cost nothing and stay
 // referentially identical.
+//
+// `fill.product` fills the overlay's `{product}` — in the OVERLAY's strings
+// only: a base string's `{product}` (wrongWorld, the mail subjects, …) is left
+// for the code that renders it, exactly as before. Without it the token stays
+// as written, which is what a structural check (check-i18n, the unit spec)
+// wants; every renderer passes it.
 export function applyVerticalOverlay<T extends object>(
   base: T,
   locale: Locale,
   vertical: VerticalKey | null | undefined,
+  fill?: OverlayFill,
 ): T {
   const v = vertical ?? DEFAULT_VERTICAL;
   if (v === DEFAULT_VERTICAL || !hasOverlay(v, locale)) return base;
-  return deepMerge(base, OVERLAYS[v][locale] as DeepPartial<T>);
+  const overlay = fill?.product !== undefined ? filledOverlay(v, locale, fill.product) : OVERLAYS[v][locale];
+  return deepMerge(base, overlay as DeepPartial<T>);
+}
+
+// A filled overlay is the same for every request of one vertical, locale and
+// product name, so it is built once. Bounded: product names are per
+// organization, and an evicted entry is merely rebuilt.
+const FILLED_MAX = 64;
+const filled = new Map<string, LocaleOverlay>();
+function filledOverlay(vertical: VerticalKey, locale: Locale, product: string): LocaleOverlay {
+  const key = `${vertical}\u0000${locale}\u0000${product}`;
+  let hit = filled.get(key);
+  if (!hit) {
+    if (filled.size >= FILLED_MAX) filled.delete(filled.keys().next().value as string);
+    hit = fillOverlay(OVERLAYS[vertical][locale], product);
+    filled.set(key, hit);
+  }
+  return hit;
 }
 
 // Exposed for two guards. scripts/check-i18n.ts (node, at the PR gate) flattens

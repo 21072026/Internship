@@ -38,7 +38,8 @@ export function feedFilename(product: string): string {
 }
 
 export function buildMeetingIcs(opts: {
-  // The product name of the world the file is produced for (`productNameFor`).
+  // The product name of the organization the file is produced for
+  // (`productNameForOrg`: its brand name, else its vertical's default).
   // Required, so no caller can fall back to one product's brand by omission.
   product: string;
   uid: string;
@@ -114,7 +115,7 @@ export function buildMeetingIcs(opts: {
 // The personal subscription feed (#915). Deliberately PII-minimal: title and
 // time only, no join links, no names — if the feed token leaks, this is all it
 // buys. X-WR-CALNAME labels the subscription in the calendar app, so it names
-// the feed owner's product (`productNameFor` of their world).
+// the feed owner's product (`productNameForOrg` of their organization).
 export function buildFeedIcs(product: string, events: { uid: string; title: string; start: Date; durationMinutes?: number | null }[]): string {
   const name = compactProduct(product);
   const lines = [

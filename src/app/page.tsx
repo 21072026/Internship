@@ -34,7 +34,7 @@ export default async function HomePage() {
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   if (session) redirect(roleHome(session.user.role));
 
-  const { t, locale } = await getServerDictionary();
+  const { t, locale, product } = await getServerDictionary();
   const L = t.landing;
 
   // Each audience now has a door of its own: mentors apply at /apply-as-mentor
@@ -108,7 +108,7 @@ export default async function HomePage() {
     { q: L.faqCompany3Q, a: L.faqCompany3A }, { q: L.faqCompany1Q, a: L.faqCompany1A },
   ];
   const marketingFaq = [
-    { q: L.faqMarketing1Q, a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
+    { q: L.faqMarketing1Q.replace('{product}', product), a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
     { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
     { q: L.faqMarketing5Q, a: L.faqMarketing5A.replace('{from}', formatEur(marketingFromSeatEur(), locale)) }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
   ];

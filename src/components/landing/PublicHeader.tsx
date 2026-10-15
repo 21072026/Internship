@@ -10,8 +10,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useT, useLocale } from '@/i18n/client';
 import { GITHUB_URL } from './links';
-import { useVertical } from '@/lib/verticalClient';
-import { productNameFor } from '@/lib/verticals';
+import { useProductName } from '@/lib/brandClient';
 import { localizeHref, splitLocalePrefix } from '@/lib/localePath';
 import type { Locale } from '@/i18n/config';
 
@@ -59,10 +58,10 @@ export function PublicHeader({
   const t = useT();
   const locale = useLocale();
   const n = t.publicNav;
-  // The wordmark is the vertical's product name (#2501): "SaleVali" on a
-  // marketing host, "Internship CRM" everywhere else — the footer, tab title
-  // and signed-in shell already read the same source.
-  const productName = productNameFor(useVertical());
+  // The wordmark is the product name (#2501): the request brand's (#2936), else
+  // the vertical's default — the footer, tab title and signed-in shell read
+  // the same source.
+  const productName = useProductName();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 

@@ -147,3 +147,79 @@ test('the notification rows a MARKETING org triggers do not read like the intern
     }
   }
 });
+
+// The product name is never written in an overlay (#2936): a sentence that
+// names the product carries `{product}`, filled by applyVerticalOverlay() from
+// the caller's brand. Fictional names only — the fill must not care what it is.
+type Leaf = { locale: 'en' | 'tr' | 'de'; key: string; value: string };
+function marketingOverlayLeaves(): Leaf[] {
+  const out: Leaf[] = [];
+  for (const { vertical, locale, overlay } of overlayEntries()) {
+    if (vertical !== 'MARKETING') continue;
+    for (const [key, value] of Object.entries(flatten(overlay as Record<string, unknown>))) {
+      out.push({ locale: locale as Leaf['locale'], key, value: JSON.stringify(value) });
+    }
+  }
+  return out;
+}
+
+test('a MARKETING overlay names the product in the same sentences in every locale', () => {
+  const named = marketingOverlayLeaves().filter((l) => l.value.includes('{product}'));
+  const keysOf = (loc: string) => named.filter((l) => l.locale === loc).map((l) => l.key).sort();
+  expect(keysOf('en').length).toBeGreaterThan(0);
+  expect(keysOf('tr')).toEqual(keysOf('en'));
+  expect(keysOf('de')).toEqual(keysOf('en'));
+});
+
+test('{product} is filled while merging, in the overlay strings only', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const base = dictionaries[locale];
+    const baseFlat = flatten(base as unknown as Record<string, unknown>);
+    const merged = applyVerticalOverlay(base, locale, 'MARKETING', { product: 'Acme Pipeline' });
+    const flat = flatten(merged as unknown as Record<string, unknown>);
+    // The overlay's own sentences carry the name and no token.
+    expect(flat['auth.signinSubtitle']).toContain('Acme Pipeline');
+    expect(flat['publicProfile.poweredBy']).toBe('Acme Pipeline');
+    expect(JSON.stringify(merged.messages)).not.toContain('{product}');
+    // A BASE string's {product} is the renderer's to fill, and stays as written.
+    expect(flat['auth.wrongWorld']).toBe(baseFlat['auth.wrongWorld']);
+    expect(flat['auth.wrongWorld']).toContain('{product}');
+    // The base is never mutated.
+    expect(JSON.stringify(base)).not.toContain('Acme Pipeline');
+  }
+});
+
+test('no overlay string keeps a {product} token once a name is given', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const merged = applyVerticalOverlay(dictionaries[locale], locale, 'MARKETING', { product: 'Northwind' });
+    const flat = flatten(merged as unknown as Record<string, unknown>);
+    for (const { key } of marketingOverlayLeaves().filter((l) => l.locale === locale)) {
+      expect(JSON.stringify(flat[key]), `${locale}: ${key}`).not.toContain('{product}');
+    }
+  }
+});
+
+test('two names never bleed into each other (the filled overlay is cached per name)', () => {
+  const a = applyVerticalOverlay(dictionaries.de, 'de', 'MARKETING', { product: 'Acme' });
+  const b = applyVerticalOverlay(dictionaries.de, 'de', 'MARKETING', { product: 'Northwind' });
+  expect((a.publicProfile as { poweredBy: string }).poweredBy).toBe('Acme');
+  expect((b.publicProfile as { poweredBy: string }).poweredBy).toBe('Northwind');
+});
+
+test('the fill is literal — a name with replacement patterns prints as written', () => {
+  const merged = applyVerticalOverlay(dictionaries.en, 'en', 'MARKETING', { product: 'A$&B' });
+  expect((merged.publicProfile as { poweredBy: string }).poweredBy).toBe('A$&B');
+});
+
+test('a name changes nothing about the INTERNSHIP no-op', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const base = dictionaries[locale];
+    expect(applyVerticalOverlay(base, locale, 'INTERNSHIP', { product: 'Acme' })).toBe(base);
+    expect(applyVerticalOverlay(base, locale, null, { product: 'Acme' })).toBe(base);
+  }
+});
+
+test('without a name the token is left as written (the 3-argument form)', () => {
+  const merged = applyVerticalOverlay(dictionaries.en, 'en', 'MARKETING');
+  expect((merged.publicProfile as { poweredBy: string }).poweredBy).toBe('{product}');
+});

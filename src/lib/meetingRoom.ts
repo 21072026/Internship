@@ -14,7 +14,8 @@ import { jaasConfig, jaasRoomUrl } from '@/lib/jaas';
 import { jaasRoomAllowed, projectedHeadCount } from '@/lib/jaasAllowance';
 import { recordVideoUsage } from '@/lib/metering';
 import { prisma } from '@/lib/prisma';
-import { productNameFor } from '@/lib/verticals';
+import { toVerticalKey } from '@/lib/verticals';
+import { brandForOrg, defaultBrand, productNameIn } from '@/lib/orgBrand';
 
 // Where a meeting's video room comes from. Server-only (node:crypto); the
 // client-side link *checks* live in @/lib/meetingLink so components can import
@@ -28,13 +29,15 @@ import { productNameFor } from '@/lib/verticals';
 // thing protecting a call on the public instance, and on JaaS it is what the
 // participant's token is scoped to.
 //
-// The prefix is the product of the organizer's world (docs/worlds.md): Jitsi
-// shows the room name as the call title, so a SaleVali demo call must not read
-// "InternshipCRM-…" to the customer. Omitted, it is the internship product —
-// which is what every room was. Nothing parses the prefix back
-// (parseJaasMeetingLink accepts any room name), so old rooms keep working.
-export function generateMeetingRoomName(vertical?: unknown): string {
-  const prefix = productNameFor(vertical).replace(/[^A-Za-z0-9]/g, '');
+// The prefix is the organizer's product (docs/worlds.md): Jitsi shows the room
+// name as the call title, so a MARKETING demo call must not read
+// "InternshipCRM-…" to the customer. `product` is the organizer org's resolved
+// name (its brand, #2936); without one it is the vertical's default, and with
+// neither the internship product — which is what every room was. Nothing parses
+// the prefix back (parseJaasMeetingLink accepts any room name), so old rooms
+// keep working.
+export function generateMeetingRoomName(vertical?: unknown, product?: string | null): string {
+  const prefix = (product ?? defaultBrand(toVerticalKey(vertical)).productName).replace(/[^A-Za-z0-9]/g, '');
   return `${prefix}-${randomBytes(8).toString('hex')}`;
 }
 
@@ -84,7 +87,8 @@ export function generateMeetingRoomName(vertical?: unknown): string {
  * direction — a caller that has not asked whether the allowance has room cannot
  * spend it — and it keeps this function pure and testable without a database.
  *
- * `vertical` is the organizer org's world and only picks the room-name prefix.
+ * `vertical` is the organizer org's world and `product` its resolved product
+ * name; they only pick the room-name prefix (`product` wins).
  *
  * `orgId` is metering only (#1750) and changes nothing about the link: this is
  * the one chokepoint every room creation passes through, so it is the only
@@ -97,8 +101,9 @@ export function generateMeetingLink(opts: {
   orgId?: string | null;
   jaasAllowed?: boolean;
   vertical?: string | null;
+  product?: string | null;
 }): string {
-  const room = generateMeetingRoomName(opts.vertical);
+  const room = generateMeetingRoomName(opts.vertical, opts.product);
   const config = opts.jaasAllowed ? jaasConfig() : null;
   // REPORTED, NEVER GATED. This is the tenant's own video volume (#1750), a
   // different question from the JaaS allowance above: one is "what did this
@@ -210,6 +215,11 @@ export async function resolveMeetingLink(opts: {
   if (choice.source === 'personal') return { ok: true, link: choice.link, source: 'personal' };
 
   const jaasAllowed = await jaasRoomAllowed(projectedHeadCount(opts.inviteeCount));
+  // The room is named after the organizer org's product: its brand name, else
+  // its vertical's default (#2936). A failed read names it by the vertical, as
+  // before.
+  const brand = org && opts.orgId ? await brandForOrg(opts.orgId).catch(() => null) : null;
+  const product = org && brand ? productNameIn(brand, toVerticalKey(org.vertical)) : null;
   return {
     ok: true,
     source: 'builtin',
@@ -218,6 +228,7 @@ export async function resolveMeetingLink(opts: {
       orgId: opts.orgId,
       jaasAllowed,
       vertical: org?.vertical ?? null,
+      product,
     }),
   };
 }
