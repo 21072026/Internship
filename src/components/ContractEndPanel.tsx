@@ -14,7 +14,7 @@ import { CONTRACT_STAGE_KEY, parseContractEndDate } from '@/lib/contractEndRule'
 // A won customer's notice period (#2841, PATCH /api/mentorship/[id]/contract-end).
 // Shown on a DEAL_WON record only. Setting the date is "the customer gave
 // notice"; clearing it is "they withdrew it". The record stays won either way —
-// a loss is a human's stage move (#2572 Q3).
+// a loss is a human's stage move.
 export function ContractEndPanel({
   relationId,
   pipelineStatus,

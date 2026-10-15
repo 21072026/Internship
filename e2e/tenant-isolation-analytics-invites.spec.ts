@@ -8,7 +8,7 @@ import { seedTwoTenants, signInAsTenantActor, type SeededTenant, type TwoTenants
  * **off** (leak audit WP3 + WP5, the #2542 pattern).
  *
  * Measured before the fix, on one database holding both products: every
- * analytics groupBy/count summed every organization, so a MARKETING (SaleVali)
+ * analytics groupBy/count summed every organization, so a MARKETING
  * admin's funnel, meeting and signup totals included the INTERNSHIP product's
  * rows; the aging report named the other product's candidates; `/api/cohorts`
  * listed every org's cohorts; and `GET /api/invite` gave an admin every

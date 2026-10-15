@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     // marketing account at once, and this form has no session to say which: the
     // host it was served from decides (the URL you are on is the product you are
     // in). An address with no account in that world gets no mail: the action
-    // stays in the world it was started in, so SaleVali never sends an
-    // Internship CRM reset (or the reverse). The response below is the same
+    // stays in the world it was started in, so the marketing product never
+    // sends an Internship CRM reset (or the reverse). The response below is the same
     // either way, so none of it is observable to the requester.
     const world = worldForHeaders((name) => request.headers.get(name));
     const targets = await findAccountsForMailedLink(email, world, RESET_TARGET_SELECT);

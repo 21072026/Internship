@@ -63,7 +63,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // (and is the "unowned leads" list, #2580) — both are the `companies` module.
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies' },
   // Outbound acquisition by letter (#2697) — the companies module, so both
-  // products have it: SaleVali writes to merchants, InternCRM to institutions.
+  // products have it: a marketing org writes to online sellers, InternCRM to institutions.
   { href: '/admin/acquisition', icon: Send, key: 'acquisition', capability: 'companies' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts and mentor/mentee success stories are

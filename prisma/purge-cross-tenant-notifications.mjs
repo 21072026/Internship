@@ -2,7 +2,7 @@
 // organization (#2647). Node 20 ESM, no TS imports.
 //
 // Until #2653 every "a new person signed up / asked for a mentor / applied"
-// notification went to every ADMIN of every tenant, so a MARKETING (SaleVali)
+// notification went to every ADMIN of every tenant, so a MARKETING
 // admin's bell still holds InternCRM names from before the fix. The fan-outs
 // are scoped now; this sweeps up what they already wrote. Notification rows
 // carry no subject id, so the rule reads the only subject they do carry — the

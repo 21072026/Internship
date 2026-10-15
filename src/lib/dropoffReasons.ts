@@ -29,7 +29,7 @@ export const MARKETING_DROPOFF_REASON_CODES = [
   'NOT_A_FIT',
   'BUSINESS_CLOSED',
   'TECHNICAL_ISSUE',
-  // A won customer who cancelled (#2841, decision #2572): the churn reason, not
+  // A won customer who cancelled (#2841): the churn reason, not
   // COMPANY_CANCELLED, which in the hiring list means "the company called the
   // internship off" — one code with two meanings would mix both breakdowns.
   'CUSTOMER_CANCELLED',

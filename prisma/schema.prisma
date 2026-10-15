@@ -2951,7 +2951,7 @@ model MentorshipRelation {
   // contractual date, and moving the record to another stage would erase it.
   trialStartedAt          DateTime?
   trialEndsAt             DateTime?
-  // A won customer's notice period (#2841, decision #2572 option C): the day
+  // A won customer's notice period (#2841): the day
   // their contract ends after they gave notice. Same class of date as
   // `trialEndsAt` — agreed, contractual, survives every stage change — so the
   // same reasoning against `stageDeadline` applies. Set only on a DEAL_WON

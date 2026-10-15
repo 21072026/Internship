@@ -85,8 +85,18 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
     await page.getByTestId('post-campaign-name').fill(`Herbst ${stamp}`);
     await page.getByTestId('post-campaign-code').fill(code);
     await page.getByTestId('post-campaign-data-source').fill(dataSource);
-    // The balancing note and the letter come pre-filled with the vertical's default.
-    await expect(page.getByTestId('post-campaign-letter')).toHaveValue(/SaleVali/);
+    // The balancing note and the letter come pre-filled with the vertical's
+    // built-in default — until the organization saves its own letter (#2927).
+    const letter = page.getByTestId('post-campaign-letter');
+    await expect(page.getByTestId('post-campaign-letter-source')).toHaveAttribute('data-source', 'builtin', { timeout: 20_000 });
+    await expect(letter).toHaveValue(/\{company\}/);
+    const ownLetter = `{salutation}\n\nUnser eigener Brief ${stamp} an {company}.\n\n{link}\n\nMit freundlichen Grüßen`;
+    await letter.fill(ownLetter);
+    await page.getByTestId('post-campaign-letter-save-default').click();
+    await expect(page.getByTestId('post-campaign-letter-source')).toHaveAttribute('data-source', 'org', { timeout: 20_000 });
+    expect((await prisma.setting.findFirst({ where: { orgId: org.id, key: 'postLetterTemplate' } }))?.value).toBe(ownLetter);
+    // The next form starts from the saved letter.
+    expect((await (await page.request.get('/api/admin/post-campaigns')).json()).defaults).toMatchObject({ letterBody: ownLetter, letterSource: 'org' });
     await page.getByTestId('post-campaign-create').click();
     await page.waitForURL('**/admin/acquisition/*');
     const campaign = await prisma.postCampaign.findFirstOrThrow({ where: { orgId: org.id, code } });
@@ -122,6 +132,7 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
     await expect(print.getByTestId('post-letter-address-line')).toHaveText([ok.name, 'z. Hd. Eva Weber', 'Hauptstraße 1', '10115 Berlin']);
     await expect(print.getByTestId('post-letter-body').first()).toContainText('Guten Tag Eva Weber,');
     await expect(print.getByTestId('post-letter-body').first()).toContainText(`/b/${code}`);
+    await expect(print.getByTestId('post-letter-body').first()).toContainText(`Unser eigener Brief ${stamp}`);
     await expect(print.getByText(dataSource)).toBeVisible();
     await expect(print.getByText('Widerspruchsrecht (Art. 21 Abs. 2 DSGVO):')).toBeVisible();
     await print.close();
@@ -166,9 +177,17 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
     await gotoSettled(page, `/admin/acquisition/${campaign.id}`);
     await expect(page.getByTestId('post-campaign-inquiries')).toHaveText('1');
 
+    // Back to the built-in letter: the org's row is emptied, the next form starts from the built-in one.
+    const reset = await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } });
+    expect(reset.status()).toBe(200);
+    expect((await reset.json()).defaults.letterSource).toBe('builtin');
+    // A letter too short to be one is refused.
+    expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: 'zu kurz' } })).status()).toBe(400);
+
     // Not for anyone but an admin.
     await signInAsFreshUser(page, menteeEmail, PW, '/portal');
     expect((await page.request.get('/api/admin/post-campaigns')).status()).toBe(401);
+    expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } })).status()).toBe(401);
   } finally {
     await cleanupOrg(org.id, [adminEmail, menteeEmail]);
   }

@@ -19,7 +19,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCount, formatDecimal, formatEur, formatEurCents, formatPercent } from '../../src/lib/money.ts';
+import { formatCount, formatDecimal, formatEur, formatEurCents, formatMinorPrice, formatPercent } from '../../src/lib/money.ts';
 
 // The non-breaking space that keeps "1.788 €" from wrapping in a plan column.
 const NBSP = ' ';
@@ -122,4 +122,22 @@ test('a fractional month count keeps its decimal instead of being rounded', () =
   assert.equal(formatDecimal(2.539, 'en'), '2.5');
   assert.equal(formatDecimal(2.04, 'en'), '2');
   assert.equal(formatDecimal(-2.5, 'de'), '-2,5');
+});
+
+test('a price held in minor units reads like the whole-euro constants did (#2927)', () => {
+  // The per-organization price list keeps integer minor units; a whole EUR
+  // amount must print byte-for-byte what formatEur printed for the constants.
+  for (const locale of ['en', 'de', 'tr']) {
+    for (const euros of [0, 99, 4500, 1234567]) {
+      assert.equal(formatMinorPrice(euros * 100, 'EUR', locale), formatEur(euros, locale), `${locale} ${euros}`);
+    }
+  }
+  // Cents keep both decimals, through the deal-value formatter.
+  assert.equal(formatMinorPrice(12350, 'EUR', 'en'), '€123.50');
+  assert.equal(formatMinorPrice(4990, 'CHF', 'de'), `49,90${NBSP}CHF`);
+  // Another currency: its ISO code where the symbol would go, no empty cents.
+  assert.equal(formatMinorPrice(9900, 'CHF', 'en'), `CHF${NBSP}99`);
+  assert.equal(formatMinorPrice(129900, 'chf', 'de'), `1.299${NBSP}CHF`);
+  assert.equal(formatMinorPrice(-48000, 'GBP', 'en'), `GBP${NBSP}-480`);
+  assert.equal(formatMinorPrice(-48000, 'GBP', 'tr'), `-480${NBSP}GBP`);
 });

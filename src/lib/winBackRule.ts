@@ -1,4 +1,4 @@
-// Winning a lost customer back (#2842, decision #2572 Q4) — the rule,
+// Winning a lost customer back (#2842) — the rule,
 // dependency-free and unit-tested (scripts/test/win-back.test.mjs).
 //
 // A customer whose journey ended in DEAL_LOST and who returns starts a NEW

@@ -219,7 +219,7 @@ export async function renderNewsletterFor(options: {
     html: renderNewsletterHtml({
       content,
       // A tenant that set no brand colour takes its world's mail accent, so a
-      // SaleVali copy is magenta rather than the internship blue.
+      // marketing copy takes the marketing accent rather than the internship blue.
       brand: { name: brand.name, accent: brand.color ?? mailAccentFor(brand.vertical), logoUrl: brand.logoUrl },
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),

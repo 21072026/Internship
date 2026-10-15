@@ -558,7 +558,7 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
 // must never land in another company's inbox), and it is cheap.
 // #2495: an invitation is read later, somewhere else, so its link cannot follow
 // a request — it follows the invited tenant's own host mapping. Before, every
-// register link was built from NEXT_PUBLIC_APP_URL and a SaleVali admin's
+// register link was built from NEXT_PUBLIC_APP_URL and a marketing admin's
 // invitation opened the internship product. Here the mapped host is served
 // (MARKETING_HOSTS' default), so the MARKETING admin's link lands on it; the
 // internship admin's, whose org maps nothing, is exactly what it always was.

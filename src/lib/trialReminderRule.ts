@@ -98,9 +98,8 @@ export const TRIAL_EXPIRED_STAGE_KEY = 'TRIAL_EXPIRED';
 
 /**
  * The code default of the `trialLengthDays` org setting (src/lib/settings.ts):
- * the free-use period of a trial. 30 days, which is what the product being
- * sold actually grants (the SaleVali trial; its separate decision window after
- * the free period is #2572, not this number).
+ * the free-use period of a trial. 30 days, a common free-use period; the
+ * separate decision window after it is `decisionWindowDays`, not this number.
  */
 export const DEFAULT_TRIAL_LENGTH_DAYS = 30;
 
@@ -389,42 +388,63 @@ export function planTrialEndChange({
   };
 }
 
-// ── The decision window (#2843, decision #2572 Q2) ───────────────────────────
+// ── The decision window (#2843, #2927) ───────────────────────────────────────
 //
 // `trialEndsAt` is the end of the FREE period. After it the record sits in
-// TRIAL_EXPIRED for the decision window, which closes DECISION_WINDOW_DAYS
-// later (SaleVali passivates the account then). Derived, never stored: one
-// constant, the same for a plain and an affiliate trial.
+// TRIAL_EXPIRED for the decision window — the time the account has to decide
+// before the offer behind the trial ends — which closes `decisionWindowDays`
+// later. The length is the organization's (the `decisionWindowDays` setting,
+// default 30); derived on read, never stored, so a change applies to every
+// expired trial at once.
 
-/** Days between the end of the free period and the end of the decision window. */
-export const DECISION_WINDOW_DAYS = 30;
+/** The code default of the `decisionWindowDays` org setting (src/lib/settings.ts). */
+export const DEFAULT_DECISION_WINDOW_DAYS = 30;
+
+/** Upper bound for `decisionWindowDays`: a year is no longer a decision window. */
+export const MAX_DECISION_WINDOW_DAYS = 365;
 
 /** How many days before the window closes its owner is warned. */
 export const DECISION_WINDOW_WARN_DAYS = 7;
 
 /**
  * The `TrialReminder.threshold` that claims the "window closing" bell — a
- * NEGATIVE number so it can never collide with the trial ladder (7/3/0): the
- * days relative to the trial end at which it is due (30 − 7 = 23 days after).
+ * NEGATIVE number so it can never collide with the trial ladder (7/3/0). A
+ * fixed MARKER, not a day count: it was derived from the 30-day window when
+ * the window was a constant (−(30 − 7)), and stays −23 now that the length is
+ * per organization, so the claims written before keep counting and a bell
+ * already rung is never rung again.
  */
-export const DECISION_WINDOW_CLAIM = -(DECISION_WINDOW_DAYS - DECISION_WINDOW_WARN_DAYS);
+export const DECISION_WINDOW_CLAIM = -23;
+
+/**
+ * The `decisionWindowDays` setting string as a number of days. Anything that is
+ * not a whole number in 1..MAX falls back to the default — a blank or corrupted
+ * row must not be able to close every window on arrival.
+ */
+export function parseDecisionWindowDays(raw: string | null | undefined): number {
+  const value = (raw ?? '').trim();
+  if (!/^\d{1,4}$/.test(value)) return DEFAULT_DECISION_WINDOW_DAYS;
+  const days = Number(value);
+  return days >= 1 && days <= MAX_DECISION_WINDOW_DAYS ? days : DEFAULT_DECISION_WINDOW_DAYS;
+}
 
 /** The day the decision window closes, or null when there is no trial end. */
-export function decisionWindowEndsAt(trialEndsAt: TrialEndValue): Date | null {
+export function decisionWindowEndsAt(trialEndsAt: TrialEndValue, windowDays: number = DEFAULT_DECISION_WINDOW_DAYS): Date | null {
   const end = asDate(trialEndsAt);
-  return end ? new Date(end.getTime() + DECISION_WINDOW_DAYS * 24 * 60 * 60 * 1000) : null;
+  return end ? new Date(end.getTime() + windowDays * 24 * 60 * 60 * 1000) : null;
 }
 
 /**
  * Is this expired trial's decision window about to close (or already closed,
  * with nobody having decided)? Shown as `decision_window_closing`; also what
- * makes the one bell due.
+ * makes the one bell due. `windowDays` is the org's resolved setting.
  */
 export function isDecisionWindowClosing(
   record: { pipelineStatus: string | null | undefined; trialEndsAt: TrialEndValue },
   now: Date,
+  windowDays: number = DEFAULT_DECISION_WINDOW_DAYS,
 ): boolean {
   if (record.pipelineStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
-  const closes = decisionWindowEndsAt(record.trialEndsAt);
+  const closes = decisionWindowEndsAt(record.trialEndsAt, windowDays);
   return !!closes && daysUntilUtcDay(closes, now) <= DECISION_WINDOW_WARN_DAYS;
 }

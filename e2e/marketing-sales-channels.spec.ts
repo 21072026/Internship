@@ -73,7 +73,7 @@ test('channels on the account page, and the campaign picker filters on them', as
       data: {
         name: `OTTO ${stamp}`,
         dataSource: 'Öffentliches Impressum der Shops, Oktober 2026',
-        balancingNote: 'Berechtigtes Interesse an Direktwerbung gegenüber OTTO-Händlern, abgewogen.',
+        balancingNote: 'Berechtigtes Interesse an Direktwerbung gegenüber Online-Händlern, abgewogen.',
         letterBody: '{salutation}\n\nText {link}',
       },
     });

@@ -12,11 +12,20 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT } from '@/i18n/client';
-import { useVertical } from '@/lib/verticalClient';
-import { defaultBalancingNote, defaultLetterBody } from '@/lib/postCampaignTemplates';
 
 // Postal campaigns (#2697): the list and the "new campaign" form. Design and
 // the legal frame: docs/marketing-vertical/postal-campaigns.md.
+//
+// The form starts from the texts the server answers with (`defaults`, #2927):
+// the organization's own saved letter, or the vertical's built-in one. The
+// admin can save the letter in the form as the organization's default, or go
+// back to the built-in one; a campaign already created keeps its own letter.
+
+interface CampaignDefaults {
+  letterBody: string;
+  letterSource: 'org' | 'builtin';
+  balancingNote: string;
+}
 
 interface CampaignRow {
   id: string;
@@ -36,27 +45,65 @@ const textarea =
 export default function PostCampaignsPage() {
   const t = useT();
   const c = t.postCampaigns;
-  const vertical = useVertical();
   const router = useRouter();
   const [rows, setRows] = useState<CampaignRow[] | null>(null);
+  const [defaults, setDefaults] = useState<CampaignDefaults | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [dataSource, setDataSource] = useState('');
-  const [balancingNote, setBalancingNote] = useState(() => defaultBalancingNote(vertical));
-  const [letterBody, setLetterBody] = useState(() => defaultLetterBody(vertical));
+  const [balancingNote, setBalancingNote] = useState('');
+  const [letterBody, setLetterBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateNote, setTemplateNote] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/post-campaigns');
     const data = res.ok ? await res.json() : { campaigns: [] };
     setRows(data.campaigns ?? []);
+    if (data.defaults) setDefaults(data.defaults as CampaignDefaults);
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Fill the form from the defaults once they arrive — never over what the
+  // admin has already typed.
+  useEffect(() => {
+    if (!defaults) return;
+    setBalancingNote((v) => v || defaults.balancingNote);
+    setLetterBody((v) => v || defaults.letterBody);
+  }, [defaults]);
+
+  // Save the letter in the form as the organization's default, or ('') go back
+  // to the built-in letter (#2927).
+  const saveTemplate = async (body: string) => {
+    setTemplateBusy(true);
+    setTemplateNote(null);
+    try {
+      const res = await fetch('/api/admin/post-campaigns/letter-template', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ letterBody: body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.defaults) {
+        setTemplateNote({ ok: false, text: c.letterDefaultFailed });
+        return;
+      }
+      const next = data.defaults as CampaignDefaults;
+      setDefaults(next);
+      if (body === '') setLetterBody(next.letterBody);
+      setTemplateNote({ ok: true, text: body === '' ? c.letterDefaultReset : c.letterDefaultSaved });
+    } catch {
+      setTemplateNote({ ok: false, text: c.letterDefaultFailed });
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,9 +168,37 @@ export default function PostCampaignsPage() {
             </label>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               {c.letterBody}
-              <textarea className={`${textarea} mt-1.5 font-mono`} rows={16} required minLength={20} maxLength={6000} value={letterBody} onChange={(e) => setLetterBody(e.target.value)} data-testid="post-campaign-letter" />
+              <textarea className={`${textarea} mt-1.5 font-mono`} rows={16} required minLength={20} maxLength={6000} value={letterBody} onChange={(e) => { setLetterBody(e.target.value); setTemplateNote(null); }} data-testid="post-campaign-letter" />
               <span className="mt-1 block text-xs font-normal text-gray-500">{c.letterHint}</span>
             </label>
+            <div className="flex flex-wrap items-center gap-2" data-testid="post-campaign-letter-template">
+              {defaults && letterBody === defaults.letterBody && (
+                <span className="text-xs text-gray-500" data-testid="post-campaign-letter-source" data-source={defaults.letterSource}>
+                  {defaults.letterSource === 'org' ? c.letterSourceOrg : c.letterSourceBuiltin}
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={templateBusy}
+                disabled={!defaults || letterBody.trim().length < 20 || (defaults.letterSource === 'org' && letterBody === defaults.letterBody)}
+                onClick={() => void saveTemplate(letterBody)}
+                data-testid="post-campaign-letter-save-default"
+              >
+                {c.letterSaveDefault}
+              </Button>
+              {defaults?.letterSource === 'org' && (
+                <Button type="button" variant="ghost" size="sm" disabled={templateBusy} onClick={() => void saveTemplate('')} data-testid="post-campaign-letter-reset-default">
+                  {c.letterResetDefault}
+                </Button>
+              )}
+              {templateNote && (
+                <span className={`text-xs ${templateNote.ok ? 'text-green-700' : 'text-red-700'}`} role="status" data-testid="post-campaign-letter-template-note">
+                  {templateNote.text}
+                </span>
+              )}
+            </div>
             {error && <p className="text-sm text-red-700" data-testid="post-campaign-error">{error}</p>}
             <div className="flex gap-2">
               <Button type="submit" loading={busy} data-testid="post-campaign-create">

@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
   const stamp = new Date().toISOString();
   try {
-    // The probe speaks for the admin's own product (docs/worlds.md): a SaleVali
+    // The probe speaks for the admin's own product (docs/worlds.md): a marketing
     // admin's test must not arrive as an Internship CRM mail. The default world
     // keeps the probe it always had. Inside the try, so a failed brand read is
     // reported like any other probe failure.

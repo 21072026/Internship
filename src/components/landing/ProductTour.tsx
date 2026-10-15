@@ -6,7 +6,7 @@ import { TourClip } from './TourClip';
 // The landing's product tour (#1399): three real screens, so a visitor sees
 // the product before deciding whether to sign up for it. Each product has its
 // own set: the internship landing shows the mentee, mentor and company screens;
-// the MARKETING (SaleVali) landing shows its pipeline board, a rep's dashboard
+// the MARKETING landing shows its pipeline board, a rep's dashboard
 // and the funnel analytics — never the other product's screens. The files are
 // produced by scripts/capture-landing-screenshots.mjs against the synthetic
 // demo seed — see public/screenshots/README.md before replacing one.

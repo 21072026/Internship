@@ -45,7 +45,7 @@ test('a new MARKETING org is provisioned with the marketing funnel, an INTERNSHI
       where: { orgId: mktId }, orderBy: { order: 'asc' }, select: { key: true, isTerminal: true, isOffPath: true },
     });
     expect(mktStages.map((s) => s.key)).toEqual([
-      // No proposal/negotiation stages since #2840 (#2572 Q1): the win comes
+      // No proposal/negotiation stages since #2840: the win comes
       // straight out of the trial's decision window.
       'LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'TRIAL_ACTIVE', 'TRIAL_EXPIRED',
       'DEAL_WON', 'DEAL_LOST',

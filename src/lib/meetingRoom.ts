@@ -29,8 +29,8 @@ import { productNameFor } from '@/lib/verticals';
 // participant's token is scoped to.
 //
 // The prefix is the product of the organizer's world (docs/worlds.md): Jitsi
-// shows the room name as the call title, so a SaleVali demo call must not read
-// "InternshipCRM-…" to the customer. Omitted, it is the internship product —
+// shows the room name as the call title, so a marketing org's demo call must
+// not read "InternshipCRM-…" to the prospect. Omitted, it is the internship product —
 // which is what every room was. Nothing parses the prefix back
 // (parseJaasMeetingLink accepts any room name), so old rooms keep working.
 export function generateMeetingRoomName(vertical?: unknown): string {

@@ -15,7 +15,7 @@ export default async function OfflinePage() {
         <p className="text-gray-500 text-sm mt-2">{t.offline.body}</p>
         {/* Relative on purpose (#2609). This page is precached PER ORIGIN, and
             since #2492 the marketing host installs as its own PWA — a hardcoded
-            https://interncrm.com sent a SaleVali user to a different product,
+            https://interncrm.com sent a marketing user to a different product,
             and target="_blank" opened it in a chrome-less window inside the
             installed app (the #2147 dead end). `/` is always the origin the app
             was installed from, which is the right answer on every host. */}

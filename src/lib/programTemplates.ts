@@ -559,9 +559,9 @@ const MARKETING_FUNNEL: ProgramTemplate = {
       labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' } },
     { key: TRIAL_EXPIRED_STAGE_KEY, order: 4, isTerminal: false, isOffPath: false, color: '#eab308',
       labels: { en: 'Trial expired', tr: 'Deneme süresi doldu', de: 'Testphase abgelaufen' } },
-    // No proposal/negotiation stages (#2572 Q1, #2840): SaleVali has no offer
-    // step — the win is the customer confirming the upgrade, straight out of
-    // the trial's decision window (TRIAL_EXPIRED).
+    // No proposal/negotiation stages (#2840): a trial-led product has no
+    // separate offer step — the win is the account choosing a paid plan,
+    // straight out of the trial's decision window (TRIAL_EXPIRED).
     { key: 'DEAL_WON', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a',
       labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' } },
     { key: 'DEAL_LOST', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280',
@@ -582,10 +582,11 @@ const MARKETING_FUNNEL: ProgramTemplate = {
     // owner twice about the same account, in different words, on different
     // days.
     // TRIAL_EXPIRED is the opposite case: the free period is over and the
-    // account is in its 30-day decision window (#2572 Q2) — waiting for a human
-    // contact that turns it into a win or a loss. Seven days is how long that
-    // first contact may wait before it is genuinely overdue; three read as
-    // "decide in three days" next to a thirty-day window.
+    // account is in its decision window (`decisionWindowDays`, 30 by default,
+    // #2843) — waiting for a human contact that turns it into a win or a loss.
+    // Seven days is how long that first contact may wait before it is
+    // genuinely overdue; three read as "decide in three days" next to a
+    // thirty-day window.
     { stageKey: TRIAL_EXPIRED_STAGE_KEY, days: 7 },
   ],
 };
@@ -632,7 +633,7 @@ export function programTemplate(key: string | null | undefined): ProgramTemplate
 // (no backfill — the rows are the tenant's), and its label must go on reading
 // back in the viewer's language.
 const RETIRED_STAGE_LABELS: readonly (readonly [string, LocalizedLabel])[] = [
-  // MARKETING_FUNNEL until #2840 (#2572 Q1).
+  // MARKETING_FUNNEL until #2840.
   ['DEAL_PROPOSAL', { en: 'Proposal sent', tr: 'Teklif gönderildi', de: 'Angebot gesendet' }],
   ['DEAL_NEGOTIATION', { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' }],
 ];

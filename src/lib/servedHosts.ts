@@ -156,7 +156,7 @@ export function resolveRedirectTarget(url: string, baseUrl: string): string {
 // no browser yet: the invitation, the password reset and the verification mail
 // are read later, somewhere else, and their link decides which PRODUCT the
 // recipient lands in. Every one of them used to read NEXT_PUBLIC_APP_URL — the
-// internship host — so a SaleVali admin's invitation said
+// internship host — so a marketing admin's invitation said
 // https://interncrm.com/auth/register?token=… and dropped the new sales rep
 // into the other product.
 //

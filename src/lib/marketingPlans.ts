@@ -1,16 +1,19 @@
-// The published price list of the MARKETING product (SaleVali).
+// The BUILT-IN price list of the MARKETING product — the fallback of the
+// per-organization price list (#2927).
+//
+// A marketing host shows the price list of the organization bound to it
+// (`Organization.publicHost`), held as data in that organization's
+// `marketingPriceList` setting (the rule: src/lib/marketingPriceListRule.ts).
+// This list is what /pricing and the landing FAQ show when no organization is
+// bound to the host or the bound one has no list of its own. It stays until the
+// data is in place everywhere; a later change removes it.
 //
 // Deliberately NOT part of src/lib/plans.ts: those plans are wired into
 // subscriptions, entitlements and the billing meter (docs/metering.md), and
-// the marketing product has no checkout and no plan gate. This list is what
-// /pricing on the marketing host shows and what the landing FAQ quotes; a paid
-// plan is invoiced after a conversation (SELF_SERVE_CHECKOUT is false), so a
-// price here is an offer we stand behind, never a button that charges.
-//
-// Positioned at the top of the market on purpose (maintainer decision
-// 2026-10-06): above Pipedrive (€14–99) and HubSpot Sales Hub Professional
-// (~$90–100), level with Salesforce Sales Cloud Enterprise/Unlimited
-// ($175–350). All prices are NET (plus VAT), per user per month.
+// the marketing product has no checkout and no plan gate. A paid plan is
+// invoiced after a conversation (SELF_SERVE_CHECKOUT is false), so a price here
+// is an offer, never a button that charges. All prices are NET (plus VAT), per
+// user per month.
 //
 // Dependency-free so the unit test can import it directly.
 

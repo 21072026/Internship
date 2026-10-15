@@ -9,14 +9,17 @@ import {
   decisionWindowEndsAt,
   isDecisionWindowClosing,
 } from '@/lib/trialReminderRule';
+import { decisionWindowDaysFor } from '@/lib/trialWindow';
 
 // The "decision window closing" bell (#2843); the rule is in
 // src/lib/trialReminderRule.ts. Run from the daily trial sweep, per MARKETING
-// org. One bell per record: the claim is a TrialReminder row at the negative
-// threshold DECISION_WINDOW_CLAIM — the same unique (relationId, threshold)
-// that keeps the trial ladder from ringing twice. Never moves a stage.
+// org, with that org's window length (`decisionWindowDays`, #2927). One bell
+// per record: the claim is a TrialReminder row at the negative threshold
+// DECISION_WINDOW_CLAIM — the same unique (relationId, threshold) that keeps
+// the trial ladder from ringing twice. Never moves a stage.
 
 export async function ringDecisionWindows(orgId: string, now: Date): Promise<number> {
+  const windowDays = await decisionWindowDaysFor(orgId);
   const candidates = await prisma.mentorshipRelation.findMany({
     where: {
       orgId,
@@ -36,7 +39,7 @@ export async function ringDecisionWindows(orgId: string, now: Date): Promise<num
       mentor: { select: { role: true } },
     },
   });
-  const due = candidates.filter((r) => isDecisionWindowClosing(r, now));
+  const due = candidates.filter((r) => isDecisionWindowClosing(r, now, windowDays));
   if (due.length === 0) return 0;
   const capabilities = await shellCapabilities(orgId);
   let rung = 0;
@@ -48,7 +51,7 @@ export async function ringDecisionWindows(orgId: string, now: Date): Promise<num
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue;
       throw e;
     }
-    const closes = decisionWindowEndsAt(r.trialEndsAt)!;
+    const closes = decisionWindowEndsAt(r.trialEndsAt, windowDays)!;
     const link = notificationLink(r.mentor.role as NotificationRole, 'relation', { relationId: r.id, menteeId: r.menteeId }, { capabilities });
     await notifyIfAllowed(
       r.mentorId,

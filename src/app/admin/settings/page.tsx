@@ -19,7 +19,7 @@ import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
 import { useSession } from 'next-auth/react';
 import { MarketingAccountImport } from '@/components/MarketingAccountImport';
-import { DEFAULT_TRIAL_LENGTH_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
+import { DEFAULT_DECISION_WINDOW_DAYS, DEFAULT_TRIAL_LENGTH_DAYS, MAX_DECISION_WINDOW_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { verticalHasCapability } from '@/lib/verticals';
 import { isValidWonTargetInput, SALES_TARGET_MAX } from '@/lib/salesTargetRule';
 import { TwoFactorCoverageCard } from '@/components/admin/TwoFactorCoverageCard';
@@ -102,6 +102,11 @@ export default function AdminSettingsPage() {
   const [trialLengthDays, setTrialLengthDays] = useState(String(DEFAULT_TRIAL_LENGTH_DAYS));
   const [loadedTrialLengthDays, setLoadedTrialLengthDays] = useState(String(DEFAULT_TRIAL_LENGTH_DAYS));
   const [trialLengthError, setTrialLengthError] = useState<string | null>(null);
+  // The decision window after an expired trial (#2927) — MARKETING only, same
+  // load/post dance as the trial length.
+  const [decisionWindowDays, setDecisionWindowDays] = useState(String(DEFAULT_DECISION_WINDOW_DAYS));
+  const [loadedDecisionWindowDays, setLoadedDecisionWindowDays] = useState(String(DEFAULT_DECISION_WINDOW_DAYS));
+  const [decisionWindowError, setDecisionWindowError] = useState<string | null>(null);
   // Default owner of a new lead (#2580, #2569) — MARKETING only, like the trial
   // length above. `''` = nobody: web requests wait in the unowned list.
   const [defaultLeadOwnerId, setDefaultLeadOwnerId] = useState('');
@@ -257,6 +262,9 @@ export default function AdminSettingsPage() {
     const trialDays = settings.trialLengthDays ?? String(DEFAULT_TRIAL_LENGTH_DAYS);
     setTrialLengthDays(trialDays);
     setLoadedTrialLengthDays(trialDays);
+    const windowDays = settings.decisionWindowDays ?? String(DEFAULT_DECISION_WINDOW_DAYS);
+    setDecisionWindowDays(windowDays);
+    setLoadedDecisionWindowDays(windowDays);
     setDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
     setLoadedDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
     setSalesWonTarget(settings.salesMonthlyWonTarget ?? '');
@@ -291,7 +299,7 @@ export default function AdminSettingsPage() {
       setStricterPending(true);
       return;
     }
-    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null); setTrialLengthError(null); setSalesWonTargetError(null);
+    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null); setTrialLengthError(null); setDecisionWindowError(null); setSalesWonTargetError(null);
     // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
     // payload on a miss, so an unusable number is caught here and reported on
     // the field instead — the rest of the form still saves.
@@ -324,6 +332,12 @@ export default function AdminSettingsPage() {
       setTrialLengthError(t.settings.trialLengthDaysInvalid);
       return;
     }
+    const windowDays = decisionWindowDays.trim();
+    const windowChanged = hasTrialStage && windowDays !== loadedDecisionWindowDays;
+    if (windowChanged && !(/^\d{1,3}$/.test(windowDays) && Number(windowDays) >= 1 && Number(windowDays) <= MAX_DECISION_WINDOW_DAYS)) {
+      setDecisionWindowError(t.settings.decisionWindowDaysInvalid);
+      return;
+    }
     const ownerChanged = hasTrialStage && defaultLeadOwnerId !== loadedDefaultLeadOwnerId;
     const wonTarget = salesWonTarget.trim();
     const wonTargetChanged = hasTrialStage && wonTarget !== loadedSalesWonTarget;
@@ -336,12 +350,12 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (windowChanged) setLoadedDecisionWindowDays(windowDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -556,6 +570,9 @@ export default function AdminSettingsPage() {
             <Input label={t.settings.broadcastQuota} type="text" inputMode="numeric" value={broadcastQuota} onChange={(e) => { setBroadcastQuota(e.target.value); setBroadcastQuotaError(null); }} hint={t.settings.broadcastQuotaHint} error={broadcastQuotaError ?? undefined} data-testid="broadcast-monthly-recipients" />
             {hasTrialStage && (
               <Input label={t.settings.trialLengthDays} type="number" min={1} max={MAX_TRIAL_LENGTH_DAYS} step={1} value={trialLengthDays} onChange={(e) => { setTrialLengthDays(e.target.value); setTrialLengthError(null); }} hint={t.settings.trialLengthDaysHint} error={trialLengthError ?? undefined} data-testid="trial-length-days" />
+            )}
+            {hasTrialStage && (
+              <Input label={t.settings.decisionWindowDays} type="number" min={1} max={MAX_DECISION_WINDOW_DAYS} step={1} value={decisionWindowDays} onChange={(e) => { setDecisionWindowDays(e.target.value); setDecisionWindowError(null); }} hint={t.settings.decisionWindowDaysHint} error={decisionWindowError ?? undefined} data-testid="decision-window-days" />
             )}
             {hasTrialStage && (
               <div>

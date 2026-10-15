@@ -7,7 +7,7 @@ import { E2E_GOOGLE_MOCK_PORT } from '../playwright.config';
 
 // Worlds (docs/worlds.md): whatever an action produces stays in the world it was
 // started from. Two surfaces that used to name the internship product for a
-// SaleVali account: the authenticator entry 2FA enrolment creates, and the
+// marketing account: the authenticator entry 2FA enrolment creates, and the
 // Google Calendar round-trip (its redirect_uri, where the callback lands, and
 // the "source" of every mirrored event). "Arriving on the marketing site" is the
 // forged proxy header the server reads first, as in worlds.spec.ts.
@@ -54,7 +54,7 @@ test('2FA enrolment files the authenticator entry under the account\'s own produ
   try {
     expect((await signInViaApi(marketingJar, mkt, PW, { host: MARKETING_HOST, headers: freshIp('worlds-2fa-m') })).error).toBeNull();
     const m = await (await marketingJar.post('/api/account/2fa', { headers: H, data: { action: 'setup' } })).json();
-    // A SaleVali-only account — no twin in the other world — is still SaleVali.
+    // A marketing-only account — no twin in the other world — keeps its product name.
     expect(m.otpauth.startsWith(`otpauth://totp/${encodeURIComponent(`SaleVali:${mkt}`)}?`)).toBe(true);
     expect(new URL(m.otpauth).searchParams.get('issuer')).toBe('SaleVali');
 

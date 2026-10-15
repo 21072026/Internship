@@ -7,7 +7,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
-import { MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
+import { MAX_DECISION_WINDOW_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { findLeadOwner } from '@/lib/leadOwner';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { salesTargetApplies } from '@/lib/salesTargetRule';
@@ -99,6 +99,14 @@ const schema = z.object({
     .string()
     .regex(/^\d{1,3}$/)
     .refine((v) => Number(v) >= 1 && Number(v) <= MAX_TRIAL_LENGTH_DAYS)
+    .optional(),
+  // The decision window after an expired trial (#2927). 1..MAX like the trial
+  // length: 0 would close every window on arrival (and would fall back to 30
+  // in the rule regardless).
+  decisionWindowDays: z
+    .string()
+    .regex(/^\d{1,3}$/)
+    .refine((v) => Number(v) >= 1 && Number(v) <= MAX_DECISION_WINDOW_DAYS)
     .optional(),
   // Default owner of a new lead (#2580). `''` clears it; any other value must
   // name an active ADMIN/MENTOR of the caller's own org — checked below against

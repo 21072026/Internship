@@ -24,7 +24,7 @@ function cnParam(name?: string | null): string {
   return `;CN="${trimmed.replace(/"/g, '')}"`;
 }
 
-// The product that produced the file (docs/worlds.md): a SaleVali invite or
+// The product that produced the file (docs/worlds.md): a marketing invite or
 // feed must not identify itself as the internship product. Written without
 // spaces, which keeps the internship values byte-identical to what every
 // existing subscription already shows ("InternshipCRM").
@@ -32,7 +32,7 @@ function compactProduct(product: string): string {
   return product.replace(/\s+/g, '');
 }
 
-/** The download filename for a product's feed: "internship-crm.ics", "salevali.ics". */
+/** The download filename for a product's feed: "internship-crm.ics", "acme-sales.ics". */
 export function feedFilename(product: string): string {
   return `${product.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.ics`;
 }

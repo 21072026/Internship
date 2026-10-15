@@ -92,6 +92,26 @@ export function formatMinorAmount(amountMinor: number, currency: string, locale:
 }
 
 /**
+ * A published PRICE held in minor units (#2927), in any two-decimal currency:
+ * a whole amount prints without decimals, anything with cents prints both
+ * (through `formatMinorAmount`). For EUR a whole amount goes through
+ * `formatEur`, so a price list kept in minor units reads exactly as the
+ * whole-euro constants always did — `formatMinorPrice(9900, 'EUR', 'de')` →
+ * `"99 €"`; `formatMinorPrice(9900, 'CHF', 'en')` → `"CHF 99"`;
+ * `formatMinorPrice(4990, 'CHF', 'de')` → `"49,90 CHF"`.
+ */
+export function formatMinorPrice(amountMinor: number, currency: string, locale: Locale): string {
+  const rounded = Math.round(amountMinor);
+  if (rounded % 100 !== 0) return formatMinorAmount(rounded, currency, locale);
+  const code = currency.trim().toUpperCase();
+  const whole = rounded / 100;
+  if (code === 'EUR') return formatEur(whole, locale);
+  const body = group(String(Math.abs(whole)), rules(locale).group);
+  const signed = whole < 0 ? `-${body}` : body;
+  return rules(locale).symbolFirst ? `${code}${NBSP}${signed}` : `${signed}${NBSP}${code}`;
+}
+
+/**
  * Money typed by a person or a spreadsheet → integer minor units (never a
  * float). Accepts `1.234,50` and `1,234.50` — the same file carries both when
  * Excel has seen two locales — by treating the LAST separator as the decimal

@@ -31,7 +31,7 @@ export const ENDED_REMATCHED: RelationLifecycleState = 'ENDED_REMATCHED';
 export const ENDED_REASSIGNED: RelationLifecycleState = 'ENDED_REASSIGNED';
 
 /**
- * A customer who was lost (DEAL_LOST) came back (#2842, decision #2572 Q4):
+ * A customer who was lost (DEAL_LOST) came back (#2842):
  * the lost journey closes with this state and a NEW journey starts, linked by
  * `previousRelationId`. Not COMPLETED-as-success, and not a mentor change —
  * the predecessor chain on the account page labels it as a win-back.

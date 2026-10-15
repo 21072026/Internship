@@ -537,8 +537,7 @@ export function relationChains<T extends ChainLink>(links: T[]): T[][] {
 }
 
 /**
- * Cut every chain link that is a WIN-BACK, not a handover (#2845, decision
- * #2572 Q4/Q6). A transfer chain is one journey; but a customer who was lost
+ * Cut every chain link that is a WIN-BACK, not a handover (#2845). A transfer chain is one journey; but a customer who was lost
  * (the predecessor closed as ENDED_CHURNED, #2842) and came back starts a NEW
  * journey — its return is a new entry and a new win, and the old journey's
  * loss stays a churn. So before chaining, a link whose predecessor churned

@@ -21,8 +21,12 @@ import {
   type Addon,
   type Plan,
 } from '@/lib/plans';
-import { formatCount, formatDecimal, formatEur, formatEurCents, formatPercent } from '@/lib/money';
-import { MARKETING_PLANS, type MarketingPlan } from '@/lib/marketingPlans';
+import { headers } from 'next/headers';
+import { formatCount, formatDecimal, formatEur, formatEurCents, formatMinorPrice, formatPercent } from '@/lib/money';
+import type { MarketingPlanKey } from '@/lib/marketingPlans';
+import type { PriceListPlan } from '@/lib/marketingPriceListRule';
+import { marketingPriceListForHost } from '@/lib/marketingPriceList';
+import { requestHostHeader } from '@/lib/publicHostOrg';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,6 +93,14 @@ export default async function PricingPage() {
   // first, request host second.
   const isMarketing = (await resolveRequestVertical()) === 'MARKETING';
 
+  // The marketing price list is DATA (#2927): the list of the organization
+  // bound to this host, or the built-in one (src/lib/marketingPriceList.ts).
+  // Looked up on a marketing page only, so the internship page — every number
+  // of which is a constant in src/lib/plans.ts — still renders without a
+  // database.
+  const priceList = isMarketing ? (await marketingPriceListForHost(requestHostHeader(await headers()))).list : null;
+  const price = (amountMinor: number) => formatMinorPrice(amountMinor, priceList?.currency ?? 'EUR', locale);
+
   // Published discounts are discounts ON PLANS. With no marketing plans, the
   // annual and education lines would be discounts off nothing; the self-host
   // line is a licence fact and holds for every vertical.
@@ -133,23 +145,24 @@ export default async function PricingPage() {
           <p className="text-lg text-gray-600 mt-4 leading-relaxed">{p.heroSubtitle}</p>
         </div>
 
-        {/* The MARKETING product's own price list (src/lib/marketingPlans.ts):
-            per user, invoiced after a conversation. Every number comes from
-            that file and goes through money.ts, like the internship plans. */}
-        {isMarketing && (
+        {/* The MARKETING price list (src/lib/marketingPriceListRule.ts): per
+            user, invoiced after a conversation. Every number comes from the
+            host's organization's list (or the built-in one) and goes through
+            money.ts, like the internship plans. */}
+        {priceList && (
           <section className="mt-12" data-testid="pricing-marketing-plans">
             <div className="text-center max-w-2xl mx-auto">
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{p.mktPlansTitle}</h2>
               <p className="mt-3 text-gray-600">{p.mktPlansSubtitle}</p>
             </div>
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-5">
-              {MARKETING_PLANS.map((plan, i) => (
+            <div className={`mt-10 grid grid-cols-1 gap-5 ${MKT_GRID[priceList.plans.length] ?? MKT_GRID[3]}`}>
+              {priceList.plans.map((plan, i) => (
                 <MarketingPlanCard
                   key={plan.key}
                   plan={plan}
-                  previous={i > 0 ? MARKETING_PLANS[i - 1] : null}
+                  previous={i > 0 ? priceList.plans[i - 1] : null}
                   p={p}
-                  eur={eur}
+                  price={price}
                   highlighted={plan.key === 'business'}
                 />
               ))}
@@ -393,16 +406,26 @@ const MKT_COPY = {
   team: { name: 'mktTeamName', desc: 'mktTeamDesc', f: ['mktTeamF1', 'mktTeamF2', 'mktTeamF3', 'mktTeamF4'] },
   business: { name: 'mktBusinessName', desc: 'mktBusinessDesc', f: ['mktBusinessF1', 'mktBusinessF2', 'mktBusinessF3', 'mktBusinessF4'] },
   enterprise: { name: 'mktEnterpriseName', desc: 'mktEnterpriseDesc', f: ['mktEnterpriseF1', 'mktEnterpriseF2', 'mktEnterpriseF3', 'mktEnterpriseF4'] },
-} as const satisfies Record<MarketingPlan['key'], { name: keyof PricingCopy; desc: keyof PricingCopy; f: readonly (keyof PricingCopy)[] }>;
+} as const satisfies Record<MarketingPlanKey, { name: keyof PricingCopy; desc: keyof PricingCopy; f: readonly (keyof PricingCopy)[] }>;
+
+// An organization's list may hold one, two or three plans (#2927); the grid
+// keeps each card the width it has in a three-plan list. Literal class names,
+// so Tailwind sees all three.
+const MKT_GRID: Record<number, string> = {
+  1: 'max-w-md mx-auto',
+  2: 'md:grid-cols-2 max-w-3xl mx-auto',
+  3: 'md:grid-cols-3',
+};
 
 /** One column of the marketing price list. Features stack: each plan lists what it adds. */
 function MarketingPlanCard({
-  plan, previous, p, eur, highlighted,
+  plan, previous, p, price, highlighted,
 }: {
-  plan: MarketingPlan;
-  previous: MarketingPlan | null;
+  plan: PriceListPlan;
+  previous: PriceListPlan | null;
   p: PricingCopy;
-  eur: (n: number) => string;
+  /** A minor-unit amount in the list's currency, formatted for the page's locale. */
+  price: (amountMinor: number) => string;
   highlighted: boolean;
 }) {
   const copy = MKT_COPY[plan.key];
@@ -416,15 +439,15 @@ function MarketingPlanCard({
       <p className="mt-1.5 text-sm text-gray-600 leading-relaxed min-h-[3rem]">{str(copy.desc)}</p>
       <div className="mt-4 pb-4 border-b border-gray-100">
         <p className="text-3xl font-bold text-gray-900">
-          {eur(plan.annualSeatEur)}
+          {price(plan.annualSeatMinor)}
           <span className="text-base font-medium text-gray-500">{p.mktPerSeat}</span>
         </p>
         <p className="mt-1 text-sm text-gray-500">
-          {plan.monthlySeatEur == null ? p.mktAnnualOnly : p.mktMonthly.replace('{amount}', eur(plan.monthlySeatEur))}
+          {plan.monthlySeatMinor == null ? p.mktAnnualOnly : p.mktMonthly.replace('{amount}', price(plan.monthlySeatMinor))}
         </p>
         <p className="mt-1 text-sm text-gray-500">{p.mktMinSeats.replace('{n}', String(plan.minSeats))}</p>
         <p className="mt-1 text-sm text-gray-500">
-          {plan.onboardingEur > 0 ? p.mktOnboarding.replace('{amount}', eur(plan.onboardingEur)) : p.mktOnboardingNone}
+          {plan.onboardingMinor > 0 ? p.mktOnboarding.replace('{amount}', price(plan.onboardingMinor)) : p.mktOnboardingNone}
         </p>
       </div>
       {previous && (

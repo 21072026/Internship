@@ -8,7 +8,7 @@ import { signInViaApi } from './helpers/auth';
 // The public intake routes bind no tenant context, and withTenantScope() does
 // not scope `User` while isolation is off — so `{ role: 'ADMIN' }` used to be
 // every admin of every tenant in both products: an internship self-registration
-// or mentor application rang the bell of every SaleVali admin, with the
+// or mentor application rang the bell of every marketing admin, with the
 // person's name. #2569 fixed the company-inquiry form; these pin the rest.
 
 const MARKETING_HOST = 'marketing.bcsit-gmbh.de';

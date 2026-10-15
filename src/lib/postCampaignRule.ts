@@ -68,7 +68,7 @@ export function postIneligibility(input: PostEligibilityInput): PostIneligibilit
 /** utm_campaign and the short path /b/<code>: lower-case letters, digits, dashes. */
 export const CAMPAIGN_CODE_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 
-/** A code from a campaign name: "Herbst 2026 – OTTO-Händler" → "herbst-2026-otto-handler". */
+/** A code from a campaign name: "Herbst 2026 – Shop-Händler" → "herbst-2026-shop-handler". */
 export function campaignCodeFrom(name: string): string {
   const code = name
     .normalize('NFKD')

@@ -15,6 +15,24 @@ import { revokeContactPermission } from '@/lib/contactPermission';
 import { CONTACT_CHANNELS } from '@/lib/contactPermissionRule';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { addressBlock, postIneligibility, suppressionKeys, type PostIneligibility } from '@/lib/postCampaignRule';
+import { defaultBalancingNote, resolveLetterBody } from '@/lib/postCampaignTemplates';
+import { getSetting } from '@/lib/settings';
+import { verticalFor } from '@/lib/verticalContext';
+
+/**
+ * What a new campaign of this org starts from (#2927): its own saved letter or
+ * the vertical's built-in one (`letterSource` says which), and the vertical's
+ * balancing note. `orgId` is the settings org (`settingsOrgOf(session)`).
+ */
+export async function campaignDefaultsFor(orgId: string): Promise<{
+  letterBody: string;
+  letterSource: 'org' | 'builtin';
+  balancingNote: string;
+}> {
+  const [vertical, stored] = await Promise.all([verticalFor(orgId), getSetting('postLetterTemplate', orgId)]);
+  const { letterBody, source } = resolveLetterBody(stored, vertical);
+  return { letterBody, letterSource: source, balancingNote: defaultBalancingNote(vertical) };
+}
 
 /**
  * The block-list hash of one key. Keyed with the server secret: an unkeyed hash

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Per-organization marketing data** (#2927). The MARKETING price list is org data: the `marketingPriceList` setting (integer minor units + a two-decimal ISO currency, rule and validation in `src/lib/marketingPriceListRule.ts`), read for the org bound to a marketing host (`Organization.publicHost`) by `/pricing` and the landing FAQ, falling back to the built-in list in `src/lib/marketingPlans.ts` (unset, unparseable or unreachable all read as the built-in list, so nothing changes until an org has one). Written by the dry-run-by-default operator CLI `prisma/set-org-pricing.mjs`; its plain-ESM validator is compared with the TS rule by `scripts/test/marketing-price-list.test.mjs`. `formatMinorPrice()` in `src/lib/money.ts` prints a whole EUR amount exactly as `formatEur` did. The postal-campaign letter is org data too: `postLetterTemplate`, saved or cleared from `/admin/acquisition` through `PUT /api/admin/post-campaigns/letter-template` (ADMIN, `companies` module), the vertical's built-in letter as fallback. The trial decision window is the org setting `decisionWindowDays` (default 30, 1–365, on the settings form for MARKETING orgs), read by the attention queue and the daily sweep; `DECISION_WINDOW_CLAIM` stays −23 so claims already written keep counting. Neutral comments and synthetic test data in the touched code and tests.",
+  "notes": {
+    "en": [
+      "Sales organizations can set how long the decision window after a trial lasts, and can save their own default letter for postal campaigns."
+    ],
+    "tr": [
+      "Satış organizasyonları denemeden sonraki karar penceresinin süresini ayarlayabilir ve posta kampanyaları için kendi varsayılan mektuplarını kaydedebilir."
+    ],
+    "de": [
+      "Vertriebsorganisationen können festlegen, wie lange das Entscheidungsfenster nach einer Testphase dauert, und einen eigenen Standardbrief für Briefkampagnen speichern."
+    ]
+  }
+}

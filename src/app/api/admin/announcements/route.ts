@@ -299,7 +299,7 @@ async function handlePost(request: Request) {
       ? [{ filename: emailImageFilename(image.type), content: imageData, contentType: image.type, cid: IMAGE_CID }]
       : undefined;
     // A reader outside the default world gets their own org's header — logo,
-    // accent — so a SaleVali broadcast does not look like an internship one
+    // accent — so a marketing broadcast does not look like an internship one
     // (docs/worlds.md); the default world keeps the bare heading it always had.
     // The sender name is sendEmail's job (it has `orgId`). The audience is one
     // tenant, so this is one lookup.

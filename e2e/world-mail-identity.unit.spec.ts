@@ -39,7 +39,7 @@ test.describe('From display name', () => {
 
   test('a name written into SMTP_FROM is only the default — a brand still wins', () => {
     // It used to be returned verbatim, which dropped every tenant's brand name:
-    // on such a deployment a SaleVali reader got the internship name on all mail.
+    // on such a deployment a marketing reader got the internship name on all mail.
     withEnv({ SMTP_FROM: '"Internship CRM" <noreply@example.test>', MAIL_FROM_NAME: undefined }, () => {
       expect(fromIdentity('SaleVali')).toEqual({ name: 'SaleVali', address: 'noreply@example.test' });
       expect(fromIdentity(null)).toEqual({ name: 'Internship CRM', address: 'noreply@example.test' });

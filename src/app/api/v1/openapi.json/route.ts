@@ -9,7 +9,8 @@ import { productNameFor } from '@/lib/verticals';
 // Swagger/Postman.
 //
 // The title names the product of the host it was fetched from (docs/worlds.md):
-// an integrator importing it from the SaleVali host gets a "SaleVali" collection.
+// an integrator importing it from a marketing host gets a collection named
+// after the marketing product.
 export function GET(request: Request) {
   const world = worldForHeaders((n) => request.headers.get(n));
   const spec = {

@@ -554,7 +554,7 @@ export async function runTrialReminders(
   }
 
   // An expired trial whose decision window is about to close (#2843): one bell
-  // to the owner, a week before SaleVali passivates the account.
+  // to the owner, a week before the window (the org's `decisionWindowDays`) closes.
   let decisionWindows = 0;
   for (const orgId of inScope) {
     try {

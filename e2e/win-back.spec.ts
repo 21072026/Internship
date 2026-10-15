@@ -3,7 +3,7 @@ import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
-// A lost customer comes back (#2842, decision #2572 Q4): the lost journey
+// A lost customer comes back (#2842): the lost journey
 // closes as churned and a new one opens, linked back — never an in-place
 // DEAL_LOST → DEAL_WON move.
 

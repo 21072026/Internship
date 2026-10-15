@@ -118,7 +118,7 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
     field: 'externalId',
     header: 'external_id',
     required: false,
-    aliases: ['external id', 'externalid', 'salevali_id', 'salevali id', 'externe_id', 'externe id', 'harici_id', 'harici id'],
+    aliases: ['external id', 'externalid', 'externe_id', 'externe id', 'harici_id', 'harici id'],
     target: 'Company.externalId',
   },
   // #2554. The funnel record's dates, so an imported trial is reminded about and
@@ -146,7 +146,7 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
     aliases: ['customer since', 'kunde_seit', 'kunde seit', 'musteri_tarihi', 'müşteri tarihi'],
     target: 'MentorshipRelation.startDate',
   },
-  // #2844 (decision #2572 Q7): a won customer who has already given notice
+  // #2844: a won customer who has already given notice
   // carries the day the contract ends. Only on a DEAL_WON row.
   {
     field: 'contractEndsAt',

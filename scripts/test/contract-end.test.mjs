@@ -1,5 +1,5 @@
 // Unit tests for src/lib/contractEndRule.ts — a won customer's notice period
-// (#2841, decision #2572 option C).
+// (#2841).
 //
 // Run: npm run test:unit  (node --test --experimental-strip-types)
 import { test } from 'node:test';
