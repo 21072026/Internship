@@ -6,11 +6,12 @@
 // the same reason given in e2e/email-groups-footer.unit.spec.ts.
 import { test, expect } from '@playwright/test';
 import { makeState, verifyState } from '../src/lib/googleOAuthState';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
 
 const NOW = 1_800_000_000_000;
-const ORIGIN = 'https://marketing.bcsit-gmbh.de';
+const ORIGIN = `https://${E2E_MARKETING_HOST}`;
 
 test('a state without an origin verifies exactly as before', () => {
   const s = makeState('user_1', 'nonce1', NOW);
@@ -22,7 +23,7 @@ test('a state with an origin carries it back, signed', () => {
   const s = makeState('user_1', 'nonce1', NOW, ORIGIN);
   expect(s.split('.')).toHaveLength(5);
   // The origin is encoded, so its dots cannot be mistaken for field separators.
-  expect(s).not.toContain('marketing.bcsit');
+  expect(s).not.toContain(E2E_MARKETING_HOST);
   expect(verifyState(s, NOW)).toEqual({ userId: 'user_1', nonce: 'nonce1', origin: ORIGIN });
 });
 

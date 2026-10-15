@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { callbackBody, classifySignInError, errorFromCallbackUrl, sessionUserFrom } from './authProtocol.ts';
-import { isSameOrigin, originFor, productById, PRODUCTS } from './products.ts';
+import { isSameOrigin, originFor, productById, productsFrom } from './products.ts';
 
 test('callback body carries the csrf token and asks for a JSON answer', () => {
   const body = new URLSearchParams(callbackBody({ email: 'a@b.c', password: 'p w&x' }, 'tok', 'https://interncrm.com/'));
@@ -34,11 +34,18 @@ test('a signed-out session body is no user', () => {
 });
 
 test('products: one host per product and environment, and the web view stays on it', () => {
-  assert.equal(PRODUCTS.length, 2);
-  const sv = productById('salevali')!;
-  assert.equal(originFor(sv, 'production'), 'https://marketing.bcsit-gmbh.de');
-  assert.equal(isSameOrigin('https://marketing.bcsit-gmbh.de/messages', 'https://marketing.bcsit-gmbh.de'), true);
-  assert.equal(isSameOrigin('https://interncrm.com/messages', 'https://marketing.bcsit-gmbh.de'), false);
+  // Synthetic extra product, as EXPO_PUBLIC_EXTRA_PRODUCTS would add it.
+  const products = productsFrom(
+    JSON.stringify([
+      { id: 'acme', name: 'Acme Sales', color: '#0F766E', hosts: { production: 'marketing.example.test', preview: 'marketing.preview.example.test' } },
+    ]),
+  );
+  assert.equal(products.length, 2);
+  const acme = productById('acme', products)!;
+  assert.equal(originFor(acme, 'production'), 'https://marketing.example.test');
+  assert.equal(originFor(acme, 'preview'), 'https://marketing.preview.example.test');
+  assert.equal(isSameOrigin('https://marketing.example.test/messages', 'https://marketing.example.test'), true);
+  assert.equal(isSameOrigin('https://interncrm.com/messages', 'https://marketing.example.test'), false);
   assert.equal(isSameOrigin('not a url', 'https://interncrm.com'), false);
-  assert.equal(productById('nope'), null);
+  assert.equal(productById('nope', products), null);
 });

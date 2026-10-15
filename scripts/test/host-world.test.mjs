@@ -8,7 +8,7 @@
 //   safe typechecks perfectly while being wrong:
 //
 //     • THE HOST MAY CHOOSE OR REFUSE, NEVER WIDEN. A look-alike name
-//       (`marketing.bcsit-gmbh.de.evil.example`) or a proxy list whose FIRST entry
+//       (`marketing.example.test.evil.example`) or a proxy list whose FIRST entry
 //       is not ours must not read as a marketing host, or a forged header would
 //       sign somebody into a world it was not theirs to pick;
 //     • PRECEDENCE. The proxy's X-Forwarded-Host is the one Caddy overwrites; Host
@@ -39,23 +39,26 @@ const {
 } = await import('../../src/lib/hostWorld.ts');
 const { VERTICAL_KEYS, DEFAULT_VERTICAL } = await import('../../src/lib/verticals.ts');
 
+// Reserved example names (RFC 2606): the marketing hosts are whatever
+// MARKETING_HOSTS says, and there is no built-in one (#2926).
+const MKT = 'marketing.example.test';
+const MKT_PREVIEW = 'marketing.preview.example.test';
+
 const ENV = ['NEXTAUTH_URL', 'NEXT_PUBLIC_APP_URL', 'MARKETING_HOSTS'];
 const ORIGINAL = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 function setEnv(vars) {
   for (const k of ENV) delete process.env[k];
   for (const [k, v] of Object.entries(vars)) process.env[k] = v;
 }
-beforeEach(() => setEnv({}));
+// Most tests run on a deployment whose marketing host is MKT; a test about
+// another configuration sets the whole environment itself.
+beforeEach(() => setEnv({ MARKETING_HOSTS: MKT }));
 after(() => {
   for (const k of ENV) {
     if (ORIGINAL[k] === undefined) delete process.env[k];
     else process.env[k] = ORIGINAL[k];
   }
 });
-
-// The production marketing host, spelled out on purpose: it is the one literal
-// these tests are about (`marketing.bcsit-gmbh.de` is the live site, #2540).
-const MKT = 'marketing.bcsit-gmbh.de';
 
 // ── worldForHostHeader ───────────────────────────────────────────────────────
 
@@ -74,7 +77,7 @@ test('worldForHostHeader: an unknown host is the DEFAULT world, never an error a
 });
 
 test('worldForHostHeader: a missing, empty or unparsable header is the default world', () => {
-  for (const h of [undefined, null, '', '   ', ',', ':3000', ' , marketing.bcsit-gmbh.de']) {
+  for (const h of [undefined, null, '', '   ', ',', ':3000', ` , ${MKT}`]) {
     assert.equal(worldForHostHeader(h), 'INTERNSHIP', JSON.stringify(h));
   }
 });
@@ -86,8 +89,8 @@ test('worldForHostHeader: a port is dropped before the comparison', () => {
 });
 
 test('worldForHostHeader: host names are case-insensitive', () => {
-  assert.equal(worldForHostHeader('Marketing.BCSIT-GmbH.de'), 'MARKETING');
-  assert.equal(worldForHostHeader('MARKETING.BCSIT-GMBH.DE:443'), 'MARKETING');
+  assert.equal(worldForHostHeader('Marketing.Example.Test'), 'MARKETING');
+  assert.equal(worldForHostHeader('MARKETING.EXAMPLE.TEST:443'), 'MARKETING');
 });
 
 test('worldForHostHeader: only the FIRST entry of a proxy list counts', () => {
@@ -109,17 +112,17 @@ test('worldForHostHeader: a look-alike name is not the marketing host (exact mat
     `x.${MKT}`,
     `${MKT}@evil.example`,
     `evil.example/${MKT}`,
-    'bcsit-gmbh.de',
+    'example.test',
     'marketing',
   ]) {
     assert.equal(worldForHostHeader(h), 'INTERNSHIP', h);
   }
 });
 
-test('worldForHostHeader: MARKETING_HOSTS replaces the default, it does not add to it', () => {
-  setEnv({ MARKETING_HOSTS: 'marketing.bcsit-gmbh.dev' });
-  assert.equal(worldForHostHeader('marketing.bcsit-gmbh.dev'), 'MARKETING');
-  assert.equal(worldForHostHeader(MKT), 'INTERNSHIP', 'the default is replaced, not merged');
+test('worldForHostHeader: MARKETING_HOSTS is the whole list — a host it does not name is not a marketing host', () => {
+  setEnv({ MARKETING_HOSTS: MKT_PREVIEW });
+  assert.equal(worldForHostHeader(MKT_PREVIEW), 'MARKETING');
+  assert.equal(worldForHostHeader(MKT), 'INTERNSHIP', 'another environment\'s marketing host is nothing here');
 });
 
 test('worldForHostHeader: every entry of a multi-host MARKETING_HOSTS is a marketing host', () => {
@@ -129,10 +132,12 @@ test('worldForHostHeader: every entry of a multi-host MARKETING_HOSTS is a marke
   assert.equal(worldForHostHeader('c.example'), 'INTERNSHIP');
 });
 
-test('worldForHostHeader: an EMPTY or whitespace MARKETING_HOSTS is "unset" — prod configures nothing (#2428)', () => {
-  for (const raw of ['', '   ', '\n']) {
-    setEnv({ MARKETING_HOSTS: raw });
-    assert.equal(worldForHostHeader(MKT), 'MARKETING', JSON.stringify(raw));
+test('worldForHostHeader: an unset, EMPTY or whitespace MARKETING_HOSTS means no marketing host at all (#2926)', () => {
+  // The deploy script passes '' for an env file without the variable (#2428).
+  // There is no built-in host to fall back to: every host is the default world.
+  for (const raw of [undefined, '', '   ', '\n']) {
+    setEnv(raw === undefined ? {} : { MARKETING_HOSTS: raw });
+    assert.equal(worldForHostHeader(MKT), 'INTERNSHIP', JSON.stringify(raw));
     assert.equal(worldForHostHeader('interncrm.com'), 'INTERNSHIP', JSON.stringify(raw));
   }
 });
@@ -237,12 +242,14 @@ test('worldForHeaderBag and worldForHeaders agree on the same request', () => {
 
 // ── primaryMarketingHost / originForWorld ────────────────────────────────────
 
-test('primaryMarketingHost: the default host, or the FIRST MARKETING_HOSTS entry', () => {
+test('primaryMarketingHost: the FIRST MARKETING_HOSTS entry, or null without one', () => {
   assert.equal(primaryMarketingHost(), MKT);
   setEnv({ MARKETING_HOSTS: 'Marketing.A.example:443, marketing.b.example' });
   assert.equal(primaryMarketingHost(), 'marketing.a.example');
   setEnv({ MARKETING_HOSTS: '' });
-  assert.equal(primaryMarketingHost(), MKT);
+  assert.equal(primaryMarketingHost(), null);
+  setEnv({});
+  assert.equal(primaryMarketingHost(), null);
 });
 
 test('originForWorld(INTERNSHIP): NEXT_PUBLIC_APP_URL, trailing slashes trimmed — what every mail builder used', () => {
@@ -278,27 +285,27 @@ test('originForWorld(INTERNSHIP): does not depend on MARKETING_HOSTS at all', ()
 });
 
 test('originForWorld(MARKETING): the marketing host on the deployment\'s own https scheme', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/', MARKETING_HOSTS: MKT });
   assert.equal(originForWorld('MARKETING'), `https://${MKT}`);
 });
 
 test('originForWorld(MARKETING): the scheme is inherited from the deployment, not assumed', () => {
-  setEnv({ NEXTAUTH_URL: 'https://preview.interncrm.com', MARKETING_HOSTS: 'marketing.bcsit-gmbh.dev' });
-  assert.equal(originForWorld('MARKETING'), 'https://marketing.bcsit-gmbh.dev');
+  setEnv({ NEXTAUTH_URL: 'https://preview.interncrm.com', MARKETING_HOSTS: MKT_PREVIEW });
+  assert.equal(originForWorld('MARKETING'), `https://${MKT_PREVIEW}`);
   setEnv({ NEXTAUTH_URL: 'http://staging.internal', MARKETING_HOSTS: 'marketing.staging.internal' });
   assert.equal(originForWorld('MARKETING'), 'http://marketing.staging.internal');
 });
 
 test('originForWorld(MARKETING): falls back to NEXT_PUBLIC_APP_URL for the scheme when NEXTAUTH_URL is unset', () => {
-  setEnv({ NEXT_PUBLIC_APP_URL: 'https://interncrm.com/' });
+  setEnv({ NEXT_PUBLIC_APP_URL: 'https://interncrm.com/', MARKETING_HOSTS: MKT });
   assert.equal(originForWorld('MARKETING'), `https://${MKT}`);
 });
 
 test('originForWorld(MARKETING): a real domain never inherits the deployment\'s port', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com:8443' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com:8443', MARKETING_HOSTS: MKT });
   assert.equal(originForWorld('MARKETING'), `https://${MKT}`);
-  setEnv({ NEXTAUTH_URL: 'http://localhost:3000' });
-  assert.equal(originForWorld('MARKETING'), `http://${MKT}`, 'the default marketing host is not localhost');
+  setEnv({ NEXTAUTH_URL: 'http://localhost:3000', MARKETING_HOSTS: MKT });
+  assert.equal(originForWorld('MARKETING'), `http://${MKT}`, 'a marketing host that is not the configured host');
 });
 
 test('originForWorld(MARKETING): the port is re-attached ONLY when the marketing host IS the configured host', () => {
@@ -323,15 +330,21 @@ test('originForWorld(MARKETING): a multi-entry MARKETING_HOSTS uses the FIRST en
   assert.equal(originForWorld('MARKETING'), 'https://marketing.primary.example');
 });
 
-test('originForWorld(MARKETING): an EMPTY MARKETING_HOSTS is the default host (#2428)', () => {
-  for (const raw of ['', '  ']) {
-    setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: raw });
-    assert.equal(originForWorld('MARKETING'), `https://${MKT}`, JSON.stringify(raw));
+test('originForWorld(MARKETING): without a marketing host it is the internship origin, never a made-up one (#2926)', () => {
+  // No host of this deployment opens the marketing product, so a link stays on
+  // the deployment rather than pointing at somebody else's domain or `https://null`.
+  for (const raw of [undefined, '', '  ', ' , ']) {
+    const env = { NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/' };
+    setEnv(raw === undefined ? env : { ...env, MARKETING_HOSTS: raw });
+    assert.equal(originForWorld('MARKETING'), 'https://interncrm.com', JSON.stringify(raw));
+    assert.equal(originForWorld('MARKETING'), originForWorld('INTERNSHIP'), JSON.stringify(raw));
   }
+  setEnv({});
+  assert.equal(originForWorld('MARKETING'), 'http://localhost:3000', 'a bare dev server');
 });
 
 test('originForWorld: a trailing slash never leaks into either origin (a path is appended to it)', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com/', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com/', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/', MARKETING_HOSTS: MKT });
   for (const w of VERTICAL_KEYS) {
     const o = originForWorld(w);
     assert.ok(!o.endsWith('/'), `${w}: ${o}`);
@@ -339,8 +352,8 @@ test('originForWorld: a trailing slash never leaks into either origin (a path is
   }
 });
 
-test('originForWorld: the two worlds get different origins on a normal deployment', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com' });
+test('originForWorld: the two worlds get different origins on a deployment with a marketing host', () => {
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
   assert.notEqual(originForWorld('INTERNSHIP'), originForWorld('MARKETING'));
 });
 
@@ -349,13 +362,12 @@ test('originForWorld: the two worlds get different origins on a normal deploymen
 // drifts, a marketing person's password-reset link opens the internship product.
 test('round trip: originForWorld(w) is a host that worldForHostHeader maps back to w', () => {
   const deployments = [
-    {},
-    { NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/' },
-    { NEXTAUTH_URL: 'https://preview.interncrm.com', MARKETING_HOSTS: 'marketing.bcsit-gmbh.dev' },
-    { NEXTAUTH_URL: 'https://pr123.interncrm.com' },
+    { MARKETING_HOSTS: MKT },
+    { NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/', MARKETING_HOSTS: MKT },
+    { NEXTAUTH_URL: 'https://preview.interncrm.com', MARKETING_HOSTS: MKT_PREVIEW },
+    { NEXTAUTH_URL: 'https://pr123.interncrm.com', MARKETING_HOSTS: 'pr123-m.interncrm.com' },
     { NEXTAUTH_URL: 'http://localhost:3000', MARKETING_HOSTS: 'localhost' },
     { NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: 'Marketing.A.example:443, b.example' },
-    { NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: '' },
   ];
   for (const env of deployments) {
     setEnv(env);
@@ -364,5 +376,11 @@ test('round trip: originForWorld(w) is a host that worldForHostHeader maps back 
       const url = new URL(originForWorld(w));
       assert.equal(worldForHostHeader(url.host), w, `${JSON.stringify(env)} → ${w} → ${url.host}`);
     }
+  }
+  // A deployment with no marketing host has one world to link into, and it holds.
+  for (const env of [{}, { NEXTAUTH_URL: 'https://pr123.interncrm.com' }, { NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: '' }]) {
+    setEnv(env);
+    const url = new URL(originForWorld('INTERNSHIP'));
+    assert.equal(worldForHostHeader(url.host), 'INTERNSHIP', JSON.stringify(env));
   }
 });

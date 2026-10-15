@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isOriginExempt, mimeOf, writeOriginVerdict } from '../../src/lib/writeOrigin.ts';
 
-const served = new Set(['interncrm.com', 'marketing.bcsit-gmbh.de']);
+const served = new Set(['interncrm.com', 'marketing.example.test']);
 const req = (over = {}) => ({
   method: 'POST',
   pathname: '/api/admin/api-keys',
@@ -22,7 +22,7 @@ const MEDIA = { ok: false, status: 415, code: 'unsupported_media_type' };
 test('our own pages pass: same-origin, or an Origin we serve', () => {
   assert.deepEqual(verdict({ secFetchSite: 'same-origin', origin: 'https://interncrm.com' }), { ok: true });
   // One container, several hosts: a page on the marketing host is ours too.
-  assert.deepEqual(verdict({ secFetchSite: 'same-site', origin: 'https://marketing.bcsit-gmbh.de' }), { ok: true });
+  assert.deepEqual(verdict({ secFetchSite: 'same-site', origin: 'https://marketing.example.test' }), { ok: true });
   // No Sec-Fetch-* (an old Safari): the Origin decides.
   assert.deepEqual(verdict({ origin: 'https://interncrm.com' }), { ok: true });
   // The request's own host counts even if it is missing from the list.

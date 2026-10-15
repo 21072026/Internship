@@ -26,6 +26,7 @@ import {
 import { NOTIFICATION_CATEGORIES, emailAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
 import { verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import fs from 'node:fs';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 import path from 'node:path';
 
 // The footer mints tokens with requireServerSecret(), which throws when
@@ -108,7 +109,7 @@ test.describe('the unsubscribe footer', () => {
   });
 
   test('follows the recipient tenant’s host when one is given, and the token does not change (#2495)', () => {
-    const origin = 'https://marketing.bcsit-gmbh.de';
+    const origin = `https://${E2E_MARKETING_HOST}`;
     const [unsub, manage] = hrefs(unsubscribeFooterHtml('user_1', 'digests', null, origin));
     expect(new URL(unsub).origin).toBe(origin);
     expect(new URL(manage).origin).toBe(origin);
@@ -125,7 +126,7 @@ test.describe('the unsubscribe footer', () => {
     // (docs/worlds.md), never a tenant's own host, so one list does not split
     // into one per tenant.
     const listId = unsubscribeHeaders('user_1', 'digests', origin)['List-Id'];
-    expect(listId).toContain('digests.marketing.bcsit-gmbh.de');
+    expect(listId).toContain(`digests.${E2E_MARKETING_HOST}`);
     const tenantHost = unsubscribeHeaders('user_1', 'digests', 'https://crm.some-tenant.example')['List-Id'];
     expect(tenantHost).not.toContain('some-tenant');
   });

@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getSession, resumeSession, signOut as signOutRemote } from './authClient';
 import type { SessionUser } from './authProtocol';
-import { originFor, productById, type AppEnv, type Product } from './products';
+import { originFor, productById, PRODUCTS, type AppEnv, type Product } from './products';
 import { markFreshSignIn, unregisterPush } from './pushDevice';
 
 // App-wide state (#2775): the chosen product and the signed-in user. The
@@ -23,11 +23,18 @@ interface SessionState {
   user: SessionUser | null;
   chooseProduct: (id: Product['id']) => Promise<void>;
   clearProduct: () => Promise<void>;
+  /** False when the build serves one product only: there is nothing to switch to. */
+  canSwitchProduct: boolean;
   signedIn: (user: SessionUser) => void;
   signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<SessionState | null>(null);
+
+// A build with a single product (no EXPO_PUBLIC_EXTRA_PRODUCTS, products.ts)
+// has no choice to offer: it goes straight to that product's sign-in.
+const ONLY_PRODUCT: Product | null = PRODUCTS.length === 1 ? PRODUCTS[0] : null;
+const CAN_SWITCH_PRODUCT = PRODUCTS.length > 1;
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
@@ -38,7 +45,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Launch: the stored product, then a live session, then a remembered device.
   useEffect(() => {
     (async () => {
-      const stored = productById(await AsyncStorage.getItem(PRODUCT_KEY).catch(() => null));
+      const stored = productById(await AsyncStorage.getItem(PRODUCT_KEY).catch(() => null)) ?? ONLY_PRODUCT;
       if (!stored) {
         setStatus('no-product');
         return;
@@ -97,7 +104,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [origin, product]);
 
   const value = useMemo(
-    () => ({ status, product, origin, user, chooseProduct, clearProduct, signedIn, signOut }),
+    () => ({ status, product, origin, user, chooseProduct, clearProduct, canSwitchProduct: CAN_SWITCH_PRODUCT, signedIn, signOut }),
     [status, product, origin, user, chooseProduct, clearProduct, signedIn, signOut],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

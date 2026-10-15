@@ -244,6 +244,7 @@ jobs:
           DEPLOY_SHA: ${{ needs.gate.outputs.sha }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MARKETING_PROBE_HOST: ${{ secrets.MARKETING_PROBE_HOST_PREVIEW }}
         run: |
           chmod +x infra/deploy-prod.sh
           ENV_FILE="${ENV_FILE:-/etc/internship-crm/preview.env}"
@@ -274,10 +275,10 @@ jobs:
           #   production uses, so the two environments now agree (#2166).
           # FORWARD_ONLY is deliberately unset — preview must stay able to deploy
           #   arbitrary/older refs on demand.
-          # MARKETING_PROBE_HOST: the host this env must serve as marketing (#2579);
-          #   named here, not read from the env file the check is validating.
+          # MARKETING_PROBE_HOST (step env, from the MARKETING_PROBE_HOST_PREVIEW secret): the
+          #   host this env must serve as marketing (#2579) — named outside the
+          #   env file the check is validating, and outside the repository (#2926).
           CONTAINER=internship-crm-preview \
-          MARKETING_PROBE_HOST=marketing.bcsit-gmbh.dev \
           PORT=3201 \
           NETWORK=host \
           ENV_FILE="$ENV_FILE" \

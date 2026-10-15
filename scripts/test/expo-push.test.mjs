@@ -55,8 +55,8 @@ test('isExpoPushToken: both prefixes, a bounded safe alphabet, nothing else', ()
 });
 
 test('buildMessages: data carries the relative url and the ROW host; channel and collapse key set', () => {
-  const [m] = buildMessages([{ id: 'r', token: 'ExponentPushToken[aaaaaaaa]', host: 'marketing.bcsit-gmbh.de' }], payload);
-  assert.deepEqual(m.data, { url: '/messages/c/abc', host: 'marketing.bcsit-gmbh.de' });
+  const [m] = buildMessages([{ id: 'r', token: 'ExponentPushToken[aaaaaaaa]', host: 'marketing.example.test' }], payload);
+  assert.deepEqual(m.data, { url: '/messages/c/abc', host: 'marketing.example.test' });
   assert.equal(m.to, 'ExponentPushToken[aaaaaaaa]');
   assert.equal(m.channelId, 'messages');
   assert.equal(m.priority, 'high');

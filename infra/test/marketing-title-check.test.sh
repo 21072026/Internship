@@ -173,7 +173,9 @@ printf '\nThe deploy check end to end, with curl stubbed\n'
   never_names_a_host 'MARKETING_PROBE_HOST' "$out"
 
   out="$(scenario 'SHOP.acme.test' '')"
-  eq 'an empty MARKETING_HOSTS is the app default: noted, not warned' '1 2 0' "$(count "$out" '^LOG MARKETING_HOSTS is empty') $(count "$out" 'OK$') $(count "$out" '^WARN')"
+  # No built-in marketing host any more (#2926): an empty MARKETING_HOSTS serves
+  # none, so a caller-named host is missing from it like from any other list.
+  eq 'an empty MARKETING_HOSTS serves no marketing host: the caller-named host is called out' '1 1' "$(count "$out" '^WARN the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS') $(count "$out" '^WARN')"
 
   out="$(scenario 'gone.acme.test' 'gone.acme.test')"
   eq 'a host that does not answer warns' '2' "$(count "$out" '^WARN marketing host 1 on :32[01]0: no <title> in the landing')"

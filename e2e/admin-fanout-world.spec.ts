@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { freshIp } from './helpers/rateLimit';
-import { signInViaApi } from './helpers/auth';
+import { signInViaApi, MARKETING_HOST } from './helpers/auth';
 
 // Admin fan-outs stay in the org the event belongs to (docs/worlds.md).
 //
@@ -11,7 +11,6 @@ import { signInViaApi } from './helpers/auth';
 // or mentor application rang the bell of every SaleVali admin, with the
 // person's name. #2569 fixed the company-inquiry form; these pin the rest.
 
-const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
 const PW = 'AdminFanout123!';
 const emails: string[] = [];
 let marketingOrgId = '';

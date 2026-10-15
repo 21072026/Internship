@@ -7,10 +7,10 @@
 //
 //   The URL you signed in on decides which application you are using.
 //
-// So one person (one e-mail) can hold an account in each world, and
-// marketing.bcsit-gmbh.de shows them the marketing product while interncrm.com
-// shows the internship one — the same way they are already two separate
-// tenants with two separate data sets.
+// So one person (one e-mail) can hold an account in each world, and a
+// marketing host (MARKETING_HOSTS) shows them the marketing product while the
+// internship host shows the internship one — the same way they are already two
+// separate tenants with two separate data sets.
 //
 // PURE ON PURPOSE (imports only the two zero-dependency catalogue/host modules,
 // relatively, so `node --test --experimental-strip-types` can load it). The
@@ -63,9 +63,13 @@ export function worldForHeaderBag(bag: HeaderBag): World {
   return worldForHeaders(pick);
 }
 
-/** The first configured marketing host — the one links into the marketing product point at. */
-export function primaryMarketingHost(): string {
-  return [...marketingHosts()][0];
+/**
+ * The first configured marketing host — the one links into the marketing
+ * product point at — or null when this deployment serves no marketing host
+ * (MARKETING_HOSTS unset or empty; there is no built-in default, #2926).
+ */
+export function primaryMarketingHost(): string | null {
+  return [...marketingHosts()][0] ?? null;
 }
 
 /**
@@ -76,7 +80,10 @@ export function primaryMarketingHost(): string {
  * (NEXT_PUBLIC_APP_URL, else the configured origin), so choosing it is a no-op.
  * MARKETING is the first MARKETING_HOSTS entry on the deployment's own scheme;
  * a port is re-attached only when the marketing host IS the configured host
- * (a developer's `localhost`), never for a real domain.
+ * (a developer's `localhost`), never for a real domain. A deployment with no
+ * marketing host answers the internship origin for MARKETING too: no host of
+ * this deployment opens the marketing product, and a link that leaves the
+ * deployment (or reads `https://null`) would be worse than one that stays.
  */
 export function originForWorld(world: World): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -89,6 +96,7 @@ export function originForWorld(world: World): string {
     return internship;
   }
   const host = primaryMarketingHost();
+  if (!host) return internship;
   const port = base.hostname === host && base.port ? `:${base.port}` : '';
   return `${base.protocol}//${host}${port}`;
 }

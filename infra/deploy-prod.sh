@@ -333,6 +333,7 @@ app_env_args() {
     -e CRON_ENABLED="${CRON_ENABLED:-}" \
     -e MT_ENFORCE_ISOLATION="${MT_ENFORCE_ISOLATION:-}" \
     -e MARKETING_HOSTS="${MARKETING_HOSTS:-}" \
+    -e ANDROID_APP_LINKS="${ANDROID_APP_LINKS:-}" \
     -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
     -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
     -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
@@ -1017,12 +1018,11 @@ log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS
 # check is skipped. A caller-named host comes from OUTSIDE the env file on
 # purpose — whatever MARKETING_HOSTS names gets the marketing page by
 # construction, so only a host named elsewhere can catch an env file that lost
-# it — and it must also be in MARKETING_HOSTS when that is set (an empty
-# MARKETING_HOSTS means the app's built-in default, which this script does not
-# repeat). MARKETING_PROBE=0 skips the check. Only the caller-named host can
-# catch a lost host, so when the hostnames leave the workflow files the caller
-# must keep passing MARKETING_PROBE_HOST from a runner-side variable or a
-# secret; dropping it leaves a check that compares MARKETING_HOSTS with itself.
+# it — and it must also be in MARKETING_HOSTS (an empty MARKETING_HOSTS means
+# the container serves no marketing host at all, #2926). MARKETING_PROBE=0 skips the check. Only the caller-named host can
+# catch a lost host, so the workflows pass MARKETING_PROBE_HOST from a secret
+# (the hostnames are not in the repository, #2926); dropping it leaves a check
+# that compares MARKETING_HOSTS with itself.
 
 # The document's <title> from the HTML on stdin, entity-decoded and with its
 # whitespace collapsed. The FIRST <title> is the document's (an inline <svg>
@@ -1072,14 +1072,10 @@ marketing_content_check() {
   fi
   if [ -n "${MARKETING_PROBE_HOST:-}" ]; then
     effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]//g')"
-    if [ -z "$effective" ]; then
-      log "MARKETING_HOSTS is empty, so the app's built-in marketing host applies — not checking that the probe host is in it"
-    else
-      case ",${effective}," in
-        *",${hosts},"*) ;;
-        *) warn "the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS — this container will serve it the internship landing; check $ENV_FILE" ;;
-      esac
-    fi
+    case ",${effective}," in
+      *",${hosts},"*) ;;
+      *) warn "the marketing host named by MARKETING_PROBE_HOST is NOT in MARKETING_HOSTS — this container will serve it the internship landing; check $ENV_FILE" ;;
+    esac
   fi
   n=0
   for host in $hosts; do

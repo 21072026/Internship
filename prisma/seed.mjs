@@ -5,8 +5,12 @@ import { assignDefaultOrg } from './backfill-organization.mjs';
 
 const prisma = new PrismaClient();
 
-// Partner companies / projects from the original spreadsheet.
-const SEED_COMPANIES = ['BCS-IT', 'OKAY', 'NFC', 'Abics'];
+// Sample partner companies for a FRESH database (synthetic names, #2926): the
+// original spreadsheet's real company names used to be seeded here. Added only
+// when the database has no company at all, so a re-run against a database that
+// already holds companies — the old sample rows included — creates nothing and
+// renames nothing (Company.name is not unique, so rows are matched by name).
+const SEED_COMPANIES = ['Contoso', 'Fabrikam', 'Tailspin Toys', 'Wingtip Toys'];
 
 // The users of the INTERNSHIP world (#2590), as a Prisma `where` fragment: every
 // user whose organization is not a marketing one — org-less rows included, since
@@ -75,12 +79,15 @@ async function main() {
   // until these rows exist, so a fresh database gets them with the first seed.
   await seedContributorTerms(prisma);
 
-  // Idempotent company seed (Company.name is not unique, so check first).
-  for (const name of SEED_COMPANIES) {
-    const found = await prisma.company.findFirst({ where: { name } });
-    if (!found) {
-      await prisma.company.create({ data: { name } });
-      console.log(`Created company: ${name}`);
+  // Sample companies, on a fresh database only (see SEED_COMPANIES). Idempotent
+  // within one run too: Company.name is not unique, so check by name first.
+  if ((await prisma.company.count()) === 0) {
+    for (const name of SEED_COMPANIES) {
+      const found = await prisma.company.findFirst({ where: { name } });
+      if (!found) {
+        await prisma.company.create({ data: { name } });
+        console.log(`Created company: ${name}`);
+      }
     }
   }
 }

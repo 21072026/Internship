@@ -76,7 +76,7 @@ test('campaign codes are URL-safe and derived from the name', () => {
 });
 
 test('the short link lands on the demo form with the letter as its source', () => {
-  assert.equal(campaignShortLink('https://marketing.bcsit-gmbh.de/', 'q4'), 'https://marketing.bcsit-gmbh.de/b/q4');
+  assert.equal(campaignShortLink('https://marketing.example.test/', 'q4'), 'https://marketing.example.test/b/q4');
   assert.equal(campaignLandingPath('q4'), '/?utm_source=brief&utm_medium=post&utm_campaign=q4#demo');
 });
 

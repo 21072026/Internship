@@ -70,25 +70,32 @@ tutulmaz.
 
 **Paket adları kalıcıdır.** Play yayımlanmış bir paketin adını değiştirtmez. Ad,
 yayıncının (operatör şirketi) ters alan adından gelir; Java paket segmentinde geçersiz
-olan karakterler düşer. Paket adı iki yerde duruyor
-(`src/lib/androidAppLinks.ts` ve `twa-manifest.json`), ve
-`npm run test:android-app-links` ikisini karşılaştırır.
+olan karakterler düşer. Paket adı repoda **durmaz** (#2926), çünkü yayıncıyı adlandırır
+ve AGPL projenin her kurulumu kendi adıyla yayımlar. İki yerde ortamdan gelir ve iki
+yerde aynı değer olmalıdır: derlemede `TWA_PACKAGE_ID` (`generate-project.mjs`), sunucuda
+`ANDROID_APP_LINKS`'teki `packageName` (`src/lib/androidAppLinks.ts`). Commit edilen
+manifest `com.example.*` yer tutucusunu taşır; bu yer tutucuyla bir release build'ini
+(versionCode verilmiş) üretici reddeder.
 
 **Kapsam dışı:** kendi alan adındaki white-label tenant'lar (#546). Bir mağaza
 uygulaması tek bir origin'e kefalet alır. Bu tenant'lar PWA'yı kullanmaya devam eder.
 
 ### Repoda olanlar
 
-- `src/lib/androidAppLinks.ts`: paket adları, SHA-256 parmak izleri ve
-  `assetLinksFor(vertical)`. Saf fonksiyon, birim testli. Parmak izleri **kodda**
-  durur, env'de değil. Bunlar zaten herkese açık bilgi, ve env'e konan bir değerin
-  `infra/deploy-prod.sh`, `topic-deploy.sh` ve sunucudaki env dosyası olmak üzere üç
-  ayrı yerde unutulma riski var. Bozuk biçimli bir parmak izi sunulmak yerine
-  **hata fırlatır**, çünkü doğrulayıcı bütün ifadeyi sessizce reddederdi.
+- `src/lib/androidAppLinks.ts`: `assetLinksFor(vertical)` ve sunucu env'i
+  `ANDROID_APP_LINKS`'in okunması (#2926). Değer, vertical'e göre anahtarlanmış bir JSON
+  nesnesidir: her girdi bir `packageName` ve `sha256CertFingerprints` listesi taşır
+  (biçim dosyanın başında). Saf fonksiyon, birim testli. Paket adları ve parmak izleri
+  herkese açık bilgidir, ama yayıncıya aittir, kodun kendisine değil. Bu yüzden
+  deployment'ın env dosyasında dururlar. Boş ya da tanımsız değer her host'ta `[]` demektir.
+  Bozuk bir değer ya da bozuk biçimli bir parmak izi sunulmak yerine **hata fırlatır**,
+  çünkü doğrulayıcı bütün ifadeyi sessizce reddederdi. Değişkeni
+  `infra/deploy-prod.sh` konteynere iletir (`app_env_args`).
 - `src/app/.well-known/assetlinks.json/route.ts`: host'un vertical'ine göre ifade
   döner (`hostVertical()`, çerezsiz). Parmak izi yokken `[]` döner; bu "ilişki yok"
   demektir, yani bugünkü davranışla aynıdır.
-- `mobile/android/<app>/twa-manifest.json`: Bubblewrap yapılandırması. Değerler canlı
+- `mobile/android/<app>/twa-manifest.json`: Bubblewrap yapılandırması (paket adı
+  hariç, o `TWA_PACKAGE_ID`'den gelir). Değerler canlı
   manifest'ten türetildi: aynı ikonlar, kısayollar, `share_target`, tema rengi
   (`THEME_COLOR`, `src/lib/accent.ts`) ve `orientation: any` (#2084). Ayrıca
   `enableNotifications: true` açık: Web Push bildirimleri Chrome'un değil
@@ -97,11 +104,14 @@ uygulaması tek bir origin'e kefalet alır. Bu tenant'lar PWA'yı kullanmaya dev
 - `mobile/android/generate-project.mjs`: manifest'ten Gradle projesini üretir
   (`@bubblewrap/core`). Gradle projesi **commit edilmez**, her build'de yeniden
   üretilir. Bubblewrap şablonundaki bir güncelleme böylece 40 dosyalık bir diff
-  olmadan uygulamaya ulaşır.
+  olmadan uygulamaya ulaşır. Uygulama klasörünün adı yerine repo dışında tutulan bir
+  `twa-manifest.json`'un yolunu da kabul eder: bir deployment'ın kendi uygulaması böyle
+  derlenir.
 - `.github/workflows/android-build.yml`: `ubuntu-latest` üzerinde çalışır (sunucuda
-  derleme yok). `mobile/android/**`'a dokunan PR'larda iki uygulamanın imzasız
-  bundle'ını derler (kırılma koruması). `workflow_dispatch` ile seçilen uygulamayı
-  upload key ile imzalar ve `.aab`'yi artifact olarak yükler.
+  derleme yok). `mobile/android/**`'a dokunan PR'larda uygulamanın imzasız
+  bundle'ını yer tutucu paket adıyla derler (kırılma koruması). `workflow_dispatch`
+  ile seçilen uygulamayı upload key ile imzalar ve `.aab`'yi artifact olarak yükler;
+  bunun için `TWA_PACKAGE_ID` secret'ı gerekir.
 
 Doğrulama (2026-10-05, bu ortamda): her iki manifest `TwaManifest.validate()`'ten
 geçti. Üretilen proje (targetSdk 36, Gradle 8.11.1) `bundleRelease` ile derlendi.
@@ -167,8 +177,9 @@ bir parmak iziyle yalnızca o host'un paketini listeledi.
    değerden **kesin büyük** bir tamsayı) ve isteğe bağlı `version_name`.
 2. Artifact'taki `.aab`'yi Play Console → Internal testing'e yükle.
 3. Play Console → *App integrity*'den iki SHA-256'yı al: **app signing key** ve
-   **upload key**. Bunları `ANDROID_APPS[...].sha256CertFingerprints`'e ekleyen bir PR
-   aç. Merge olunca prod deploy'u ile `assetlinks.json` canlıya çıkar.
+   **upload key**. Bunları prod env dosyasındaki `ANDROID_APP_LINKS`'te uygulamanın
+   `sha256CertFingerprints` listesine ekle. Bir sonraki deploy ile `assetlinks.json`
+   canlıya çıkar.
 4. Telefonda doğrula: URL çubuğu yoksa kefalet çalışıyor. Ayrıca
    `https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://interncrm.com&relation=delegate_permission/common.handle_all_urls`
    ile kontrol edilebilir.
