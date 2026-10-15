@@ -117,7 +117,10 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  const summary = { SENT: 0, FAILED: 0, SKIPPED: 0 };
+  // DEFERRED (#2941): a temporary refusal that was put back to be retried.
+  // Nothing writes it until the mail outbox lands; counted so the summary
+  // stays total over the enum.
+  const summary = { SENT: 0, FAILED: 0, SKIPPED: 0, DEFERRED: 0 };
   for (const row of counts) summary[row.status] = row._count._all;
 
   const last24h = { primary: 0, bulk: 0 };
