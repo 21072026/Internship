@@ -7,8 +7,7 @@ import { ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurren
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { worldOfOrg } from '@/lib/userWorld';
-import { productNameFor } from '@/lib/verticals';
+import { productNameForOrg } from '@/lib/orgBrand';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Overall event cap, kept from #915 and applied to the whole fan-out, not per query. */
@@ -175,8 +174,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     .slice(0, MAX_EVENTS);
 
   // Named after the owner's product, read from the user row: a subscription is
-  // fetched by a calendar app, so there is no host or session to ask.
-  const product = productNameFor(await worldOfOrg(user.orgId));
+  // fetched by a calendar app, so there is no host or session to ask. The
+  // owner org's brand name, else its vertical's default (#2936).
+  const product = await productNameForOrg(user.orgId);
   const ics = buildFeedIcs(product, events);
   return new NextResponse(ics, {
     headers: {

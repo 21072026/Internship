@@ -1,22 +1,28 @@
 import { NextResponse } from 'next/server';
 import { WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { API_SCOPES } from '@/lib/apiScopes';
-import { worldForHeaders } from '@/lib/hostWorld';
-import { productNameFor } from '@/lib/verticals';
+import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 
 // Minimal OpenAPI 3.1 description of the public, key-authenticated API.
 // Served publicly so integrators can discover the surface and import it into
 // Swagger/Postman.
 //
 // The title names the product of the host it was fetched from (docs/worlds.md):
+<<<<<<< HEAD
 // an integrator importing it from a marketing host gets a collection named
 // after the marketing product.
 export function GET(request: Request) {
   const world = worldForHeaders((n) => request.headers.get(n));
+=======
+// an integrator importing it from a product's host gets a collection named
+// after that product — the host's brand (#2936), else the vertical default.
+export async function GET(request: Request) {
+  const brand = await hostBrandFor(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
+>>>>>>> origin/main
   const spec = {
     openapi: '3.1.0',
     info: {
-      title: `${productNameFor(world)} Public API`,
+      title: `${brandProductName(brand)} Public API`,
       version: '1.0.0',
       description:
         'Read-only candidate access (Bearer API key) plus outgoing webhooks. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',

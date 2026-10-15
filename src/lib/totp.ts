@@ -74,7 +74,19 @@ export function verifyTotp(secretB32: string, code: string, atMs = Date.now()): 
 // `issuer` is required on purpose: it is the product the entry is filed under,
 // and a default would silently brand every world's factor as one product.
 export function otpauthUrl(secretB32: string, account: string, issuer: string): string {
+  issuer = otpauthIssuer(issuer);
   const label = encodeURIComponent(`${issuer}:${account}`);
   const params = new URLSearchParams({ secret: secretB32, issuer, algorithm: 'SHA1', digits: '6', period: '30' });
   return `otpauth://totp/${label}?${params.toString()}`;
+}
+
+/**
+ * An issuer the Key URI format accepts: no colon (apps split the label at the
+ * first one, so "A: B:alice@x" would disagree with `issuer=`), whitespace
+ * collapsed, trimmed. The issuer can be an organization's brand name (#2936),
+ * so it is cleaned here rather than trusted. Empty after cleaning → `fallback`.
+ */
+export function otpauthIssuer(issuer: string, fallback = 'Authenticator'): string {
+  const clean = issuer.replace(/:/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean || fallback;
 }

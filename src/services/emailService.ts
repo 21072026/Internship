@@ -64,8 +64,8 @@ import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/l
 // lives in. The pure host/world rule and the org → world read are the two
 // foundation modules; this file only ever asks them, it keeps no second copy.
 import { originForWorld, worldForHostHeader, type World } from '@/lib/hostWorld';
-import { DEFAULT_VERTICAL, productNameFor, toVerticalKey } from '@/lib/verticals';
-import { worldOfOrg } from '@/lib/userWorld';
+import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
+import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
@@ -1400,7 +1400,7 @@ export async function sendMeetingGuestInviteEmail({
   const ics =
     scheduledAt && icsUid
       ? meetingIcsAttachment({
-          product: productNameFor(await worldOfOrg(orgId)),
+          product: await productNameForOrg(orgId),
           uid: icsUid,
           title,
           start: scheduledAt,
@@ -1477,7 +1477,8 @@ function bareAddress(header: string): string {
 // body, not by iTIP. Both sides are optional: with no SMTP identity configured
 // there is nothing to send anyway, and the file degrades to what it was before.
 function meetingIcsAttachment(opts: {
-  // The product of the world the mail is sent in (`productNameFor`).
+  // The product the mail is sent in: the org's brand name, else its vertical's
+  // default (`productNameForOrg`).
   product: string;
   uid: string;
   title: string;
@@ -1641,7 +1642,7 @@ async function productNameForRecipient(orgId?: string | null, userId?: string | 
     const row = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
     orgId = row?.orgId ?? null;
   }
-  return productNameFor(await worldOfOrg(orgId));
+  return productNameForOrg(orgId);
 }
 
 /**

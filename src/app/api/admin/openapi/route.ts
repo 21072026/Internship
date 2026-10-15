@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { APP_VERSION } from '@/lib/version';
-import { worldForHeaders } from '@/lib/hostWorld';
-import { productNameFor } from '@/lib/verticals';
+import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 
 // The OpenAPI description of the ENTIRE internal API, for the admin API
 // explorer at /admin/api-explorer.
@@ -85,8 +84,9 @@ export async function GET(request: Request) {
   // caching the full internal route inventory is not a risk worth taking for a
   // document that costs nothing to re-serve.
   // The build-time title names one product; the cached spec is shared by every
-  // host, so the world's product name is applied per request (docs/worlds.md).
-  const world = worldForHeaders((n) => request.headers.get(n));
-  const title = `${productNameFor(world)} - internal API`;
+  // host, so the host's product name is applied per request (docs/worlds.md):
+  // the host's brand (#2936), else its vertical's default.
+  const brand = await hostBrandFor(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
+  const title = `${brandProductName(brand)} - internal API`;
   return NextResponse.json({ ...spec, info: { ...spec.info, title } }, { headers: { 'Cache-Control': 'no-store' } });
 }

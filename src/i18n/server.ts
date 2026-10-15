@@ -10,6 +10,7 @@ import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
+import { hostBrand, productNameIn, requestProductName } from '@/lib/hostBrand';
 
 // Read the active locale, in this order (#1384, #1386):
 //   0. the language of the URL — `/tr/…` and `/de/…` are rewritten by
@@ -137,8 +138,26 @@ export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => {
   }
 });
 
+// The page's dictionary: the base translation with the request's vertical
+// overlay, the overlay's `{product}` filled with the product name this page
+// prints (#2936) — the request brand's (the signed-in person's organization,
+// else the host's), never another vertical's. `product` is returned too, for a
+// base string that carries the same token (the landing FAQ, wrongWorld, …).
 export async function getServerDictionary() {
   const locale = await getLocale();
   const vertical = await resolveRequestVertical();
-  return { locale, t: applyVerticalOverlay(getDictionary(locale), locale, vertical) };
+  const product = await requestProductName(vertical);
+  return { locale, product, t: applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }) };
+}
+
+// A share card's dictionary (src/lib/ogCard.tsx, the profile card): the same
+// overlay, but `{product}` is filled from the HOST's brand only. A card image
+// goes out publicly cacheable under one URL for every viewer, so it must never
+// carry the signed-in viewer's own organization name — only what a cookieless
+// scraper of that host would get.
+export async function getCardDictionary() {
+  const locale = await getLocale();
+  const vertical = await resolveRequestVertical();
+  const product = productNameIn(await hostBrand(), vertical);
+  return { locale, product, t: applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }) };
 }

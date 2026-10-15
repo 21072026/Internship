@@ -17,7 +17,8 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
 import { sameOriginPath } from '@/lib/safeRedirect';
 import { useVertical } from '@/lib/verticalClient';
-import { productNameFor, verticalHasCapability } from '@/lib/verticals';
+import { verticalHasCapability } from '@/lib/verticals';
+import { useProductName } from '@/lib/brandClient';
 
 // Whether the "keep me signed in" box was ticked last time, per browser. A UI
 // preference only: the credential itself is the httpOnly cookie the server
@@ -41,6 +42,7 @@ export interface DemoQuickLogin {
 export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const t = useT();
   const vertical = useVertical();
+  const productName = useProductName();
   // Mirrors the page's own gate (requireVerticalCapability('mentorship')), so
   // no vertical is ever offered a link that 404s for it.
   const offersMentorApplication = verticalHasCapability(vertical, 'mentorship');
@@ -174,7 +176,7 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
         // The account lives in the other product (#2590). Everything a page
         // says stays in its own world (docs/worlds.md), so this names only the
         // product we are in — never the other one, and never links there.
-        setError(t.auth.wrongWorld.replace('{product}', productNameFor(vertical)));
+        setError(t.auth.wrongWorld.replace('{product}', productName));
       } else if (INTENTIONAL_AUTH_ERRORS.has(result.error)) {
         setError(result.error);
       } else {

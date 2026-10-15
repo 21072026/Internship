@@ -3,7 +3,7 @@ import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { headers } from 'next/headers';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
-import { productNameFor } from '@/lib/verticals';
+import { requestProductName } from '@/lib/hostBrand';
 import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, languageAlternates, localizePath } from '@/lib/localePath';
 
 // Every public page's own tab title and search snippet, in the reader's
@@ -72,7 +72,7 @@ export async function socialMetadata(
   return {
     openGraph: {
       type: 'website',
-      siteName: productNameFor(vertical),
+      siteName: await requestProductName(vertical),
       locale: OG_LOCALE[locale],
       // og:url = the canonical URL (root layout): this page on the host that
       // served it, in the language it was served in, without the query string.

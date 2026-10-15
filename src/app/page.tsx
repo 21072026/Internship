@@ -35,7 +35,7 @@ export default async function HomePage() {
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   if (session) redirect(roleHome(session.user.role));
 
-  const { t, locale } = await getServerDictionary();
+  const { t, locale, product } = await getServerDictionary();
   const L = t.landing;
 
   // Each audience now has a door of its own: mentors apply at /apply-as-mentor
@@ -114,7 +114,7 @@ export default async function HomePage() {
   const priceList = isMarketing ? (await marketingPriceListForHost(requestHostHeader(await headers()))).list : null;
   const fromPrice = priceList ? formatMinorPrice(priceListFromSeatMinor(priceList), priceList.currency, locale) : '';
   const marketingFaq = [
-    { q: L.faqMarketing1Q, a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
+    { q: L.faqMarketing1Q.replace('{product}', product), a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
     { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
     { q: L.faqMarketing5Q, a: L.faqMarketing5A.replace('{from}', fromPrice) }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
   ];

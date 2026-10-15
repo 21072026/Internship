@@ -2468,7 +2468,7 @@ const en = {
     faqCompany5Q: 'How many candidates are there?',
     faqCompany5A: 'Ask and we will tell you the real number. It is a small one — and a small real number is worth more than a large vague one.',
     // The marketing landing's own FAQ (the per-role FAQ above is internship-only).
-    faqMarketing1Q: 'What exactly is SaleVali?',
+    faqMarketing1Q: 'What exactly is {product}?',
     faqMarketing1A: 'A CRM for sales teams: every lead moves through one pipeline from first contact to won or lost, next to its account, its contacts, every message and meeting, and the numbers that show where deals get stuck.',
     faqMarketing2Q: 'Can we bring the leads we already have?',
     faqMarketing2A: 'Yes. Add a lead by hand or import a CSV file — the import shows you what it will do before anything is written — and export your leads to Excel whenever you like. Duplicates are detected and can be merged in one click.',
@@ -10219,7 +10219,7 @@ const tr: Dict = {
     faqCompany5Q: 'Kaç aday var?',
     faqCompany5A: 'Sorun, gerçek sayıyı söyleyelim. Küçük bir sayı — ve küçük ama gerçek bir sayı, büyük ama belirsiz olandan daha değerlidir.',
     // The marketing landing's own FAQ (the per-role FAQ above is internship-only).
-    faqMarketing1Q: 'SaleVali tam olarak nedir?',
+    faqMarketing1Q: '{product} tam olarak nedir?',
     faqMarketing1A: 'Satış ekipleri için bir CRM: her potansiyel müşteri ilk temastan kazanılan ya da kaybedilen anlaşmaya kadar tek bir hattan geçer; yanında firması, kişileri, her mesaj ve toplantı ve anlaşmaların nerede takıldığını gösteren rakamlar durur.',
     faqMarketing2Q: 'Elimizdeki müşteri adaylarını getirebilir miyiz?',
     faqMarketing2A: 'Evet. Bir adayı elle ekleyin ya da CSV dosyası içe aktarın — içe aktarma, hiçbir şey yazılmadan önce ne yapacağını gösterir — ve adaylarınızı istediğiniz zaman Excel\'e aktarın. Mükerrer kayıtlar tespit edilir ve tek tıkla birleştirilebilir.',
@@ -17855,7 +17855,7 @@ const de: Dict = {
     faqCompany5Q: 'Wie viele Bewerber gibt es?',
     faqCompany5A: 'Fragen Sie uns, wir nennen die echte Zahl. Sie ist klein — und eine kleine echte Zahl ist mehr wert als eine große vage.',
     // The marketing landing's own FAQ (the per-role FAQ above is internship-only).
-    faqMarketing1Q: 'Was genau ist SaleVali?',
+    faqMarketing1Q: 'Was genau ist {product}?',
     faqMarketing1A: 'Ein CRM für Vertriebsteams: Jeder Lead läuft durch eine Pipeline vom ersten Kontakt bis zum gewonnenen oder verlorenen Deal — daneben sein Account, seine Kontakte, jede Nachricht und jeder Termin und die Zahlen, die zeigen, wo Deals hängen bleiben.',
     faqMarketing2Q: 'Können wir unsere bestehenden Leads mitbringen?',
     faqMarketing2A: 'Ja. Legen Sie einen Lead von Hand an oder importieren Sie eine CSV-Datei — der Import zeigt Ihnen vorher, was er tun wird, bevor etwas geschrieben wird — und exportieren Sie Ihre Leads jederzeit nach Excel. Dubletten werden erkannt und lassen sich mit einem Klick zusammenführen.',

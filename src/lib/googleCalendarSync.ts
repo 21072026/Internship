@@ -1,8 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
-import { worldOfOrg } from '@/lib/userWorld';
-import { productNameFor } from '@/lib/verticals';
+import { productNameForOrg } from '@/lib/orgBrand';
 import { meetingEnd } from '@/lib/meetingDuration';
 
 /**
@@ -81,7 +80,7 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
     // Named per RECIPIENT, not per meeting: the event lands in that person's
     // calendar and must name the product their account lives in.
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
-    const product = productNameFor(await worldOfOrg(owner?.orgId));
+    const product = await productNameForOrg(owner?.orgId);
     const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
 
     const res = await calendarFetch(auth.token, path, {
