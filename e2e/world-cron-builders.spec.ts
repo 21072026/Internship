@@ -65,10 +65,13 @@ const position = `Cron Position ${STAMP}`;
 const logsTo = (to: string, category: string) =>
   prisma.emailLog.findMany({ where: { to, category }, select: { subject: true } });
 
+// A synthetic brand colour for the MARKETING org: its mail wears its own accent.
+const MKT_COLOR = '#0e7490';
+
 test.beforeAll(async () => {
   mktOrgId = (
     await prisma.organization.create({
-      data: { name: `World Cron MKT ${STAMP}`, slug: `world-cron-mkt-${STAMP}`, vertical: 'MARKETING', brandName: BRAND },
+      data: { name: `World Cron MKT ${STAMP}`, slug: `world-cron-mkt-${STAMP}`, vertical: 'MARKETING', brandName: BRAND, brandColor: MKT_COLOR },
     })
   ).id;
   intOrgId = (
@@ -152,7 +155,7 @@ test.afterAll(async () => {
 });
 
 test.describe('the header a pre-branding builder renders', () => {
-  test('the default world keeps its markup; another world gets its org header, never the internship blue', async () => {
+  test('the default world keeps its markup; another world gets its own org header and accent', async () => {
     const legacy = '<h2 style="color:#2563eb;">Heading</h2>';
     const internship = await emailBrand(intOrgId);
     expect(worldHeading(internship, 'Heading', legacy)).toBe(legacy);
@@ -161,8 +164,9 @@ test.describe('the header a pre-branding builder renders', () => {
     const marketing = await emailBrand(mktOrgId);
     const header = worldHeading(marketing, 'Heading', legacy);
     expect(header).toContain('Heading');
-    expect(header).not.toContain('#2563eb');
-    expect(worldAccent(marketing)).not.toBe('#2563eb');
+    expect(header).not.toBe(legacy);
+    expect(header).toContain(MKT_COLOR);
+    expect(worldAccent(marketing)).toBe(MKT_COLOR);
   });
 });
 

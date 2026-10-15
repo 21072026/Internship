@@ -1529,7 +1529,7 @@ export function ctaBlock(brand: { accent: string }, url: string, label: string):
 // For the builders that predate per-org branding (#546): a default-world reader
 // keeps the markup that mail always had, byte for byte (the same line the
 // sender name draws, recipientSenderName); a reader of another world gets their
-// own org's header and accent, never the internship blue (docs/worlds.md).
+// own org's header and accent (docs/worlds.md).
 function worldHeading(brand: Awaited<ReturnType<typeof emailBrand>>, heading: string, legacy: string): string {
   return brand.vertical === DEFAULT_VERTICAL ? legacy : brandHeader(brand, heading);
 }
