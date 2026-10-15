@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding, type OrgBranding } from '@/lib/orgBranding';
+import { brandAssetPath } from '@/lib/brandRule';
 import { mailAccentFor } from '@/lib/accent';
 import { getSetting } from '@/lib/settings';
 import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
@@ -220,7 +221,12 @@ export async function renderNewsletterFor(options: {
       content,
       // A tenant that set no brand colour takes its world's mail accent, so a
       // SaleVali copy is magenta rather than the internship blue.
-      brand: { name: brand.name, accent: brand.color ?? mailAccentFor(brand.vertical), logoUrl: brand.logoUrl },
+      // An uploaded mark (#2922) stands in for a logo URL the tenant never set.
+      brand: {
+        name: brand.name,
+        accent: brand.color ?? mailAccentFor(brand.vertical),
+        logoUrl: brand.logoUrl ?? (brand.markVersion ? `${origin}${brandAssetPath(brand.markVersion, 'mark-128')}` : null),
+      },
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),
       imageSrc: imageSrc ?? null,

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import webpush from 'web-push';
+import { marketingHosts } from './src/lib/servedHosts';
+import { BRAND_E2E_HOST } from './e2e/helpers/hosts';
 
 /**
  * E2E config.
@@ -309,6 +311,12 @@ export default defineConfig({
           // Breached-password screening (#1544) against the local stub above.
           HIBP_RANGE_URL: `http://127.0.0.1:${E2E_HIBP_MOCK_PORT}/range`,
           HIBP_ALLOW_INSECURE_STUB: '1',
+          // The marketing hosts this server serves: the default list FIRST
+          // (unchanged, so it stays the primary marketing host every link and
+          // spec already uses) plus one host of the suite's own (#2922), which
+          // e2e/host-brand.spec.ts maps to a test organization without taking
+          // the shared host away from the specs that map that one.
+          MARKETING_HOSTS: [...marketingHosts(), BRAND_E2E_HOST].join(','),
         },
       },
       ] : []),

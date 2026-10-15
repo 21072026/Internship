@@ -14,23 +14,29 @@ import type { Locale } from '@/i18n/config';
 import type { ClientDictionary } from '@/i18n/dictionaries';
 import type { VerticalKey } from '@/lib/verticals';
 import { VerticalProvider } from '@/lib/verticalClient';
+import { BrandProvider } from '@/lib/brandClient';
+import type { ClientBrand } from '@/lib/brandRule';
 
 export function Providers({
   children,
   locale,
   dict,
   vertical,
+  brand = null,
 }: {
   children: React.ReactNode;
   locale: Locale;
   dict: ClientDictionary;
   /** The request's vertical (#2501), resolved by the root layout. */
   vertical: VerticalKey;
+  /** The request's organization brand (#2922); null = the vertical default. */
+  brand?: ClientBrand | null;
 }) {
   return (
     <SessionProvider>
       <LocaleProvider locale={locale} dict={dict}>
       <VerticalProvider vertical={vertical}>
+      <BrandProvider brand={brand}>
         {/* WCAG 4.1.3: one live region for the whole app, mounted empty above
             every page shell so it is already in the accessibility tree when the
             first status message arrives (see ui/LiveRegion.tsx). */}
@@ -50,6 +56,7 @@ export function Providers({
             <TimezoneSync />
           </ToastProvider>
         </LiveRegionProvider>
+      </BrandProvider>
       </VerticalProvider>
       </LocaleProvider>
     </SessionProvider>

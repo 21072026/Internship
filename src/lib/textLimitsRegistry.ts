@@ -278,5 +278,18 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     vatId: { exempt: 'written by the billing flow, not typed into this form' },
     billingCountry: ENUMERATED,
     publicHost: { exempt: 'written only by prisma/set-public-host.mjs, which accepts a bare hostname of at most 253 characters (normalizePublicHost); no request path writes it' },
+    brandTileColor: { limit: 'orgBrandTileColor', files: ORG_WRITERS },
+    brandAccent: { limit: 'orgBrandAccent', files: ORG_WRITERS },
+    brandPalette: { limit: 'orgBrandPalette', files: ORG_WRITERS },
+    brandMarkVersion: { exempt: 'a 16-character hash written by src/lib/brandAssets.ts after an upload, never typed into a form' },
+  },
+  // An organization's generated brand icons (#2922): every column is set by the
+  // renderer in src/lib/brandAssets.ts, none by a person.
+  BrandAsset: {
+    id: ID,
+    orgId: ID,
+    version: SERVER_SET,
+    kind: ENUMERATED,
+    contentType: SERVER_SET,
   },
 };

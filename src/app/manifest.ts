@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { hostVertical } from '@/lib/hostVertical';
 import { themeColorFor } from '@/lib/accent';
+import { hostBrand, type ResolvedBrand } from '@/lib/hostBrand';
+import { brandAssetPath } from '@/lib/brandRule';
 
 // Web app manifest (served at /manifest.webmanifest) — makes the app
 // installable on desktop and mobile.
@@ -14,7 +16,42 @@ import { themeColorFor } from '@/lib/accent';
 // cookies, so the only vertical signal is the host — hostVertical(), never the
 // session. A marketing host installs as "SaleVali" with the brand icon and tint;
 // everything else is byte-identical to the internship manifest below.
+//
+// Per-organization brand (#2922): a host mapped to an organization that carries
+// brand data installs under that organization's name, tint and generated icon
+// set — the vertical's manifest below with those fields replaced, and nothing
+// else. A default brand returns the vertical's manifest untouched.
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const base = await verticalManifest();
+  const brand = await hostBrand();
+  return brand.source === 'org' ? withOrgBrand(base, brand) : base;
+}
+
+/** The vertical's manifest with an organization's name, tint and (when it has one) icon set. */
+function withOrgBrand(base: MetadataRoute.Manifest, brand: ResolvedBrand): MetadataRoute.Manifest {
+  const v = brand.markVersion;
+  return {
+    ...base,
+    name: brand.productName,
+    short_name: brand.productName,
+    theme_color: brand.themeColor,
+    ...(v
+      ? {
+          icons: [
+            { src: brandAssetPath(v, 'icon-192'), sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: brandAssetPath(v, 'icon-512'), sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: brandAssetPath(v, 'icon-512-maskable'), sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          ],
+          shortcuts: (base.shortcuts ?? []).map((s) => {
+            const name = s.url.replace(/^\//, '');
+            return { ...s, icons: [{ src: brandAssetPath(v, `shortcut-${name}-96`), sizes: '96x96', type: 'image/png' }] };
+          }),
+        }
+      : {}),
+  };
+}
+
+async function verticalManifest(): Promise<MetadataRoute.Manifest> {
   const marketing = (await hostVertical()) === 'MARKETING';
   if (marketing) {
     return {

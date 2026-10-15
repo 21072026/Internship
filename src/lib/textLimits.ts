@@ -205,6 +205,22 @@ export const TEXT_LIMITS = {
   orgBrandColor: 40,
   /** Organization.supportEmail — VARCHAR(191) (see companyContactEmail on RFC 5321) */
   orgSupportEmail: 191,
+  /**
+   * Organization.brandTileColor — VARCHAR(191), a hex colour (#2922). Same
+   * shape and the same cap as `orgBrandColor`.
+   */
+  orgBrandTileColor: 40,
+  /**
+   * Organization.brandAccent — VARCHAR(191): an accent key or 'brand' (#2922).
+   * The route checks it against the list; the cap only stops a paste.
+   */
+  orgBrandAccent: 20,
+  /**
+   * Organization.brandPalette — @db.Text: ten hexes joined by commas (#2922).
+   * Ten `#rrggbb` plus separators and a space each is under 100; 200 leaves
+   * room for spacing without letting a paragraph reach the parser.
+   */
+  orgBrandPalette: 200,
   /** Organization.ssoIssuer — VARCHAR(191) */
   orgSsoIssuer: 191,
   /**

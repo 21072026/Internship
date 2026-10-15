@@ -3,6 +3,7 @@ import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { themeColorFor } from '@/lib/accent';
 import { productNameFor } from '@/lib/verticals';
+import { brandAssetDataUri, hostBrand } from '@/lib/hostBrand';
 
 // The share cards (#1378): what a link to a public page shows on LinkedIn,
 // WhatsApp, Slack or X. One renderer for every page, modelled on the profile
@@ -26,8 +27,21 @@ const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0
 /** Render one card. `copy` null → the generic brand card (no page content). */
 export async function renderCard(copy: CardCopy | null): Promise<ImageResponse> {
   const vertical = await resolveRequestVertical();
-  const brand = themeColorFor(vertical);
-  const productName = productNameFor(vertical);
+  let brand = themeColorFor(vertical);
+  let productName = productNameFor(vertical);
+  // A card is fetched by a scraper, without cookies: a host mapped to an
+  // organization with brand data (#2922) gets that organization's name and
+  // colour, and its mark — read from the database as a data: URI, never
+  // fetched over the network — on its own tile instead of the initial. A
+  // default brand keeps the card above.
+  let mark: { src: string; tile: string } | null = null;
+  const host = await hostBrand();
+  if (host.source === 'org') {
+    brand = host.themeColor;
+    productName = host.productName;
+    const src = await brandAssetDataUri(host.markVersion, 'mark-128');
+    if (src) mark = { src, tile: host.tileColor };
+  }
 
   return new ImageResponse(
     (
@@ -50,7 +64,7 @@ export async function renderCard(copy: CardCopy | null): Promise<ImageResponse> 
               width: 48,
               height: 48,
               borderRadius: 12,
-              background: brand,
+              background: mark ? mark.tile : brand,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -59,7 +73,8 @@ export async function renderCard(copy: CardCopy | null): Promise<ImageResponse> 
               fontWeight: 700,
             }}
           >
-            {productName.slice(0, 1)}
+            {/* eslint-disable-next-line @next/next/no-img-element -- satori renders a plain <img> from a data: URI */}
+            {mark ? <img src={mark.src} width={34} height={34} alt="" /> : productName.slice(0, 1)}
           </div>
           <div style={{ color: brand, fontSize: 30, fontWeight: 700 }}>{productName}</div>
         </div>

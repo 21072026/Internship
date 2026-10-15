@@ -73,3 +73,16 @@ export function appleSplashLinks(variant: SplashVariant = ''): { rel: string; ur
     media: splashMedia(d),
   }));
 }
+
+/**
+ * The same entries for an organization's GENERATED set (#2922): one launch
+ * image per device under `assetBase` (`/brand/<version>`), named
+ * `splash-<w>x<h>.png` — the kind `splashKind()` in src/lib/brandRule.ts gives
+ * it when the upload renders it. Same devices, same media queries.
+ */
+export function brandSplashLinks(assetBase: string): { rel: string; url: string; media: string }[] {
+  return APPLE_SPLASH_DEVICES.map((d) => {
+    const { w, h } = splashPixels(d);
+    return { rel: 'apple-touch-startup-image', url: `${assetBase}/splash-${w}x${h}.png`, media: splashMedia(d) };
+  });
+}
