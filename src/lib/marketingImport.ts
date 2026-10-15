@@ -118,7 +118,7 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
     field: 'externalId',
     header: 'external_id',
     required: false,
-    aliases: ['external id', 'externalid', 'externe_id', 'externe id', 'harici_id', 'harici id'],
+    aliases: ['external id', 'externalid', 'salevali_id', 'salevali id', 'externe_id', 'externe id', 'harici_id', 'harici id'],
     target: 'Company.externalId',
   },
   // #2554. The funnel record's dates, so an imported trial is reminded about and
