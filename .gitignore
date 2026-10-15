@@ -200,3 +200,6 @@ playwright.repro.config.ts
 # and the maintainer's password manager, never in the tree.
 *.jks
 *.keystore
+
+# Session handoff notes are local working notes, never project files.
+.HANDOFF-*
