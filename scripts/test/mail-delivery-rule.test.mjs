@@ -172,6 +172,57 @@ test('errors: rate wording without any code is a throttle; nothing recognisable 
   assert.equal(R.classifySmtpError({ responseCode: 999, message: 'x' }).kind, 'retry');
 });
 
+test('errors: a refusal before the message is about the session, whatever its code', () => {
+  // nodemailer's real shapes: a relay blocking our IP at the greeting, and a
+  // sender the account may not use at MAIL FROM. Both fail every message.
+  const greeting = R.classifySmtpError(
+    Object.assign(new Error('Invalid greeting. response=554 5.7.1 blocked: 554 5.7.1 blocked'), {
+      code: 'EPROTOCOL',
+      command: 'CONN',
+      responseCode: 554,
+      response: '554 5.7.1 blocked',
+    }),
+  );
+  assert.equal(greeting.kind, 'relay');
+  assert.equal(greeting.relayWide, true);
+  assert.equal(greeting.retryable, true);
+  assert.equal(greeting.reason, 'smtp_554_5.7.1@CONN');
+  const sender = R.classifySmtpError({
+    code: 'EENVELOPE',
+    command: 'MAIL FROM',
+    responseCode: 553,
+    response: '553 5.7.1 Sender address rejected: not owned by user',
+  });
+  assert.equal(sender.kind, 'relay');
+  assert.equal(sender.reason, 'smtp_553_5.7.1@MAIL_FROM');
+  for (const command of ['EHLO', 'HELO', 'LHLO', 'STARTTLS', 'RSET', 'AUTH PLAIN', 'auth login']) {
+    assert.equal(R.classifySmtpError({ code: 'EPROTOCOL', command, responseCode: 502, response: '502 no' }).kind, 'relay', command);
+  }
+  // A non-throttle 4xx at the session stage is relay-wide too; a throttle stays a throttle.
+  assert.equal(R.classifySmtpError({ command: 'MAIL FROM', responseCode: 452, response: '452 4.3.1 Insufficient storage' }).kind, 'relay');
+  assert.equal(R.classifySmtpError({ command: 'MAIL FROM', responseCode: 450, response: '450 4.7.1 too much mail' }).kind, 'throttle');
+  assert.equal(R.classifySmtpError({ command: 'CONN', responseCode: 421, response: '421 4.7.0 try later' }).kind, 'throttle');
+  // After MAIL FROM the reply is about this message again.
+  assert.equal(R.classifySmtpError({ code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550, response: '550 5.1.1 User unknown' }).kind, 'permanent');
+  assert.equal(R.classifySmtpError({ code: 'EMESSAGE', command: 'DATA', responseCode: 450, response: '450 4.2.1 busy' }).kind, 'retry');
+});
+
+test('errors: what nodemailer refuses itself, with no reply, is final', () => {
+  for (const [code, command, message] of [
+    ['EMESSAGE', 'MAIL FROM', 'Message size larger than allowed 10485760'],
+    ['EMESSAGE', 'API', 'Empty message'],
+    ['EENVELOPE', 'API', 'No recipients defined'],
+    ['EENVELOPE', 'API', 'Invalid recipient "x"'],
+    ['EREQUIRETLS', 'MAIL FROM', 'REQUIRETLS can only be used over TLS connections (RFC 8689)'],
+  ]) {
+    const c = R.classifySmtpError(Object.assign(new Error(message), { code, command }));
+    assert.equal(c.kind, 'permanent', `${code} ${message}`);
+    assert.equal(c.retryable, false);
+    assert.equal(c.relayWide, false);
+    assert.equal(c.reason, code);
+  }
+});
+
 // ── Backoff ──────────────────────────────────────────────────────────────────
 
 test('backoff: exponential, capped per lane, never zero', () => {
@@ -215,6 +266,22 @@ test('config: values are read, clamped, and a typo never lifts the limit', () =>
   assert.equal(R.budgetConfig({ MAIL_BURST: '1', MAIL_URGENT_RESERVE: '5' }).urgentReserve, 1, 'reserve ≤ burst');
   assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforce' }).mode, 'observe', 'nothing enforces yet');
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '7' }).intervalMs, 8572, 'interval rounds up');
+});
+
+test('config: each SMTP channel has its own row and may have its own numbers', () => {
+  assert.equal(R.budgetNameFor('primary'), 'smtp');
+  assert.equal(R.budgetNameFor('bulk'), 'smtp:bulk');
+  const env = { MAIL_RATE_PER_MIN: '5', MAIL_BURST: '2', MAIL_URGENT_RESERVE: '1', MAIL_METER_MODE: 'off' };
+  // Unset bulk values fall back to the primary ones.
+  assert.deepEqual(R.budgetConfig(env, 'bulk'), R.budgetConfig(env, 'primary'));
+  const both = { ...env, MAIL_BULK_RATE_PER_MIN: '20', MAIL_BULK_BURST: ' ', MAIL_BULK_URGENT_RESERVE: '0' };
+  const bulk = R.budgetConfig(both, 'bulk');
+  assert.equal(bulk.ratePerMin, 20);
+  assert.equal(bulk.burst, 2, 'blank falls back');
+  assert.equal(bulk.urgentReserve, 0);
+  assert.equal(bulk.mode, 'off', 'the mode is shared');
+  assert.equal(R.budgetConfig(both, 'primary').ratePerMin, 5, 'bulk values never leak into the primary budget');
+  assert.equal(R.budgetConfig(both).ratePerMin, 5, 'primary is the default channel');
 });
 
 test('config: the pause ladder parses, drops junk and falls back', () => {

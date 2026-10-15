@@ -5434,15 +5434,16 @@ model JobLease {
 
 // ── Mail send budget ─────────────────────────────────────────────────────────
 // The shared send budget of ONE environment (every replica and every lane of
-// it): a GCRA meter in a single row. Rules — lanes, tolerance, the critical
-// reserve, the throttle ladder — in src/lib/mailDeliveryRule.ts (pure,
+// it): a GCRA meter in one row per SMTP channel. Rules — lanes, tolerance, the
+// critical reserve, the throttle ladder — in src/lib/mailDeliveryRule.ts (pure,
 // unit-tested in scripts/test/mail-delivery-rule.test.mjs); the row operations
-// in src/lib/mailBudgetStore.ts, each ONE conditional UPDATE on NOW(3).
+// in src/lib/mailBudgetStore.ts, each ONE conditional UPDATE on UTC_TIMESTAMP(3).
 // No `orgId`: like JobLease, this is operational state about the relay, not
 // tenant data, and it is shared by every tenant and both worlds on purpose.
 // This is a meter, not a lease: nothing holds it and nobody is elected.
 model MailBudget {
-  /// The budget's name — 'smtp' today. Primary key: one meter per name.
+  /// The budget's name — 'smtp' (primary channel) or 'smtp:bulk' (the
+  /// optional bulk server, budgetNameFor()). Primary key: one meter per name.
   name String @id @db.VarChar(64)
 
   /// Theoretical arrival time: a send is allowed while `tat - now` is within

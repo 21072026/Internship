@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
+import nodemailer from 'nodemailer';
 import { budgetConfig } from '@/lib/mailDeliveryRule';
 import { chargeToken, decayPause, pauseBudget, readBudget, spendToken } from '@/lib/mailBudgetStore';
+import { createMeterObserver } from '@/lib/mailMeterObserver';
+import { sendPrepared, type PreparedEmail } from '@/services/emailService';
 import { getEmailHealth } from '@/lib/emailHealth';
 import { prisma } from './helpers/db';
 
@@ -77,4 +80,101 @@ test('e-mail health reports deferred24h beside the failure count', async () => {
   const health = await getEmailHealth();
   expect(typeof health.deferred24h).toBe('number');
   expect(health.deferred24h).toBeGreaterThanOrEqual(0);
+});
+
+// ── The observer beside a real send ─────────────────────────────────────────
+// The send path runs through `sendPrepared()` with a JSON transport (nodemailer's
+// own, no network) and a meter on this run's own budget row, so it exercises the
+// exact code `sendEmail()` runs after `prepareEmail()` without an SMTP server.
+
+function prepared(to: string, i: number): PreparedEmail {
+  return {
+    to,
+    subject: `meter e2e ${i}`,
+    category: 'digest',
+    transport: 'primary',
+    lane: 'BULK',
+    message: { from: 'noreply@example.com', to, subject: `meter e2e ${i}`, text: 'x' },
+  };
+}
+
+const jsonTransport = nodemailer.createTransport({ jsonTransport: true });
+
+test('observe mode: sends beyond the burst all go out, and the meter is charged for each', async () => {
+  test.skip(!local, 'reads and writes MailBudget and EmailLog directly — local DB only');
+  const name = `${NAME}-observe`;
+  const to = `meter-observe-${Date.now().toString(36)}@example.com`;
+  const env = { MAIL_RATE_PER_MIN: '1', MAIL_BURST: '1', MAIL_URGENT_RESERVE: '1', MAIL_METER_MODE: 'observe' };
+  const observer = createMeterObserver({ env, nameFor: () => name });
+  try {
+    const N = 5;
+    const results = await Promise.all(
+      Array.from({ length: N }, (_, i) => sendPrepared(prepared(to, i), { via: jsonTransport, observer })),
+    );
+    expect(results).toEqual(Array(N).fill('SENT'));
+    await observer.idle();
+    expect(await prisma.emailLog.count({ where: { to, status: 'SENT' } })).toBe(N);
+    // Every send moved the meter one interval, refused or not.
+    const row = (await readBudget(name))!;
+    const aheadMs = row.tat.getTime() - Date.now();
+    expect(aheadMs).toBeGreaterThan((N - 1) * 60_000);
+    expect(aheadMs).toBeLessThanOrEqual(N * 60_000 + 1_000);
+  } finally {
+    await prisma.emailLog.deleteMany({ where: { to } }).catch(() => {});
+    await prisma.mailBudget.deleteMany({ where: { name } }).catch(() => {});
+  }
+});
+
+test('observe mode: a meter that fails, or is switched off, never stops a send', async () => {
+  test.skip(!local, 'reads and writes MailBudget and EmailLog directly — local DB only');
+  const name = `${NAME}-off`;
+  const to = `meter-off-${Date.now().toString(36)}@example.com`;
+  const off = createMeterObserver({ env: { MAIL_METER_MODE: 'off' }, nameFor: () => name });
+  const boom = async (): Promise<never> => {
+    throw new Error('meter down');
+  };
+  const broken = createMeterObserver({
+    env: { MAIL_RATE_PER_MIN: '1', MAIL_BURST: '1' },
+    nameFor: () => name,
+    store: { spendToken: boom, chargeToken: boom, pauseBudget: boom, decayPause: boom },
+  });
+  try {
+    expect(await sendPrepared(prepared(to, 0), { via: jsonTransport, observer: off })).toBe('SENT');
+    expect(await sendPrepared(prepared(to, 1), { via: jsonTransport, observer: broken })).toBe('SENT');
+    await Promise.all([off.idle(), broken.idle()]);
+    expect(await prisma.emailLog.count({ where: { to, status: 'SENT' } })).toBe(2);
+    // `off` touched nothing, and the broken store never got as far as a row.
+    expect(await readBudget(name)).toBeNull();
+  } finally {
+    await prisma.emailLog.deleteMany({ where: { to } }).catch(() => {});
+    await prisma.mailBudget.deleteMany({ where: { name } }).catch(() => {});
+  }
+});
+
+test('observe mode: meter work runs one at a time and a burst past the backlog is dropped', async () => {
+  let inFlight = 0;
+  let peak = 0;
+  let calls = 0;
+  const slow = async () => {
+    calls++;
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    await new Promise((r) => setTimeout(r, 2));
+    inFlight--;
+    return { allowed: true, reason: 'spent' as const, waitMs: 0 };
+  };
+  const observer = createMeterObserver({
+    env: {},
+    nameFor: () => `${NAME}-stub`,
+    maxBacklog: 4,
+    store: { spendToken: slow, chargeToken: async () => {}, pauseBudget: async () => {}, decayPause: async () => false },
+  });
+  for (let i = 0; i < 50; i++) observer.spend({ lane: 'BULK', category: 'digest', transport: 'primary' });
+  await observer.idle();
+  expect(peak).toBe(1);
+  expect(calls).toBe(4);
+  // A delivery with no pause seen costs no statement at all.
+  observer.outcome({ lane: 'BULK', category: 'digest', transport: 'primary' }, null);
+  await observer.idle();
+  expect(calls).toBe(4);
 });

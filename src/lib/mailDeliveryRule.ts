@@ -103,11 +103,14 @@ export const LANE_MAX_AGE_MS: Record<MailLane, number> = {
  * throttle  — the relay is rate-limiting this client. Relay-wide: pause the
  *             budget, put the mail back, charge the message nothing.
  * relay     — the relay is unreachable or refuses our credentials (connection,
- *             timeout, TLS, DNS, EAUTH). Relay-wide for the same reason: the
- *             next message would fail the same way.
+ *             timeout, TLS, DNS, EAUTH), or refuses the session before any
+ *             message (any reply at the greeting, EHLO, STARTTLS, AUTH or MAIL
+ *             FROM). Relay-wide for the same reason: the next message would
+ *             fail the same way.
  * retry     — a temporary refusal about THIS message (a 4xx that is not a
  *             throttle). Retried with backoff; counts as an attempt.
- * permanent — a 5xx about this message. Final.
+ * permanent — a 5xx about this message, or a message nodemailer itself
+ *             refuses (too large, no valid recipient). Final.
  */
 export type SmtpErrorKind = 'throttle' | 'relay' | 'retry' | 'permanent';
 
@@ -138,10 +141,41 @@ export interface SmtpErrorLike {
   responseCode?: unknown;
   response?: unknown;
   message?: unknown;
+  /** nodemailer's name for the SMTP step that failed: 'CONN', 'EHLO',
+   *  'STARTTLS', 'AUTH PLAIN', 'MAIL FROM', 'RCPT TO', 'DATA', 'API'… */
+  command?: unknown;
 }
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
+}
+
+// Failures nodemailer raises itself before the relay said anything about the
+// message: an oversized message, an envelope with no or malformed recipients, a
+// REQUIRETLS the connection cannot honour. Sending the same message again can
+// never succeed, so they are final — but only WITHOUT a reply code: the same
+// codes also wrap the relay's own answers to RCPT TO and DATA, read below.
+const LOCAL_PERMANENT_CODES = new Set(['EMESSAGE', 'EENVELOPE', 'EREQUIRETLS']);
+
+/**
+ * SMTP steps that come before anything about one message: the connection and
+ * greeting, EHLO/HELO/LHLO, STARTTLS, AUTH, RSET and our own MAIL FROM (the
+ * sender is the account's, the same for every mail). A refusal there — even a
+ * 5xx, such as `554 5.7.1` at the greeting for a blocked IP, or `553` for a
+ * sender the account may not use — fails every message the same way, so it is
+ * about the relay: pause and keep the queue, never drop it message by message.
+ */
+function isSessionStage(command: string): boolean {
+  return (
+    command === 'CONN' ||
+    command === 'EHLO' ||
+    command === 'HELO' ||
+    command === 'LHLO' ||
+    command === 'STARTTLS' ||
+    command === 'RSET' ||
+    command === 'MAIL FROM' ||
+    command.startsWith('AUTH')
+  );
 }
 
 /** The three-digit reply code, from `responseCode` or — for a wrapped error
@@ -155,6 +189,7 @@ function replyCodeOf(e: SmtpErrorLike): number | null {
 export function classifySmtpError(err: unknown): SmtpErrorClass {
   const e: SmtpErrorLike = err && typeof err === 'object' ? (err as SmtpErrorLike) : { message: String(err) };
   const code = str(e.code).toUpperCase();
+  const command = str(e.command).trim().toUpperCase();
   const text = `${str(e.response)} ${str(e.message)}`;
   const reply = replyCodeOf(e);
   const enhanced = text.match(/\b([245])\.(\d{1,3})\.(\d{1,3})\b/);
@@ -164,13 +199,24 @@ export function classifySmtpError(err: unknown): SmtpErrorClass {
   // about the message — every message after it would fail the same way.
   if (RELAY_CODES.has(code)) return { kind: 'relay', relayWide: true, retryable: true, reason: code };
 
-  if (reply !== null && reply >= 400 && reply < 500) {
+  // Raised locally, with no reply from the relay: this message can never go.
+  if (LOCAL_PERMANENT_CODES.has(code) && typeof e.responseCode !== 'number') {
+    return { kind: 'permanent', relayWide: false, retryable: false, reason: code };
+  }
+
+  const fourxx = reply !== null && reply >= 400 && reply < 500;
+  if (fourxx) {
     const policy = enhanced?.[1] === '4' && enhanced[2] === '7';
     if (reply === 421 || (reply >= 450 && reply < 460 && (policy || RATE_TEXT.test(text)))) {
       return { kind: 'throttle', relayWide: true, retryable: true, reason: label };
     }
-    return { kind: 'retry', relayWide: false, retryable: true, reason: label };
   }
+  // Any refusal before the message (greeting, EHLO, STARTTLS, AUTH, MAIL FROM)
+  // is about the session, whatever its reply code — see isSessionStage().
+  if (isSessionStage(command)) {
+    return { kind: 'relay', relayWide: true, retryable: true, reason: `${label}@${command.replace(/\s+/g, '_')}` };
+  }
+  if (fourxx) return { kind: 'retry', relayWide: false, retryable: true, reason: label };
   if (reply !== null && reply >= 500) return { kind: 'permanent', relayWide: false, retryable: false, reason: label };
   if (RATE_TEXT.test(text)) return { kind: 'throttle', relayWide: true, retryable: true, reason: 'rate_text' };
   // Nothing recognisable (a bug in a builder, an attachment that would not
@@ -202,7 +248,7 @@ export function retryDelayMs(attempt: number, lane: MailLane, random: () => numb
 
 // ── The shared budget (GCRA) ─────────────────────────────────────────────────
 //
-// One row per environment holds a single instant, the theoretical arrival time
+// One row per environment and SMTP channel holds a single instant, the theoretical arrival time
 // (`tat`). With an emission interval I = 60s / R and a burst of C, a send is
 // allowed when `tat − now ≤ τ`, and moves `tat` to `max(tat, now) + I`. That is
 // a token bucket in one column, and spending a token is one conditional UPDATE.
@@ -217,6 +263,20 @@ export function retryDelayMs(attempt: number, lane: MailLane, random: () => numb
 // Worst case in any 60 s window: about R + C − 1 sends.
 
 export type MeterMode = 'off' | 'observe';
+
+/** The two outbound SMTP channels (`transportFor()` in emailService.ts). */
+export type MailChannel = 'primary' | 'bulk';
+
+/**
+ * The `MailBudget` row a channel spends from. Each SMTP server meters its own
+ * client, so each channel has its own row: a newsletter run on the bulk server
+ * must not make the primary relay's password resets look throttled, and a bulk
+ * server outage must not pause the primary relay. The primary row keeps the
+ * plain name.
+ */
+export function budgetNameFor(channel: MailChannel): string {
+  return channel === 'bulk' ? 'smtp:bulk' : 'smtp';
+}
 
 export interface BudgetConfig {
   ratePerMin: number;
@@ -253,11 +313,24 @@ export function parseLadder(v: string | undefined): readonly number[] {
  * removing the limit. `MAIL_METER_MODE`: `observe` (default) meters and logs
  * what it would have refused but never refuses; `off` does not touch the
  * meter at all.
+ *
+ * `channel`: the optional bulk server (`SMTP_BULK_HOST`, #1203) is a different
+ * server with its own allowance, so it has its own budget row
+ * (`budgetNameFor`) and may have its own numbers — `MAIL_BULK_RATE_PER_MIN`,
+ * `MAIL_BULK_BURST`, `MAIL_BULK_URGENT_RESERVE`, each falling back to the
+ * primary value. The mode and the throttle ladder are shared.
  */
-export function budgetConfig(env: Record<string, string | undefined>): BudgetConfig {
-  const ratePerMin = intEnv(env.MAIL_RATE_PER_MIN, 2, 1, 600);
-  const burst = intEnv(env.MAIL_BURST, 2, 1, 100);
-  const urgentReserve = Math.min(burst, intEnv(env.MAIL_URGENT_RESERVE, 1, 0, 100));
+export function budgetConfig(env: Record<string, string | undefined>, channel: MailChannel = 'primary'): BudgetConfig {
+  const pick = (name: string): string | undefined => {
+    if (channel === 'bulk') {
+      const own = env[`MAIL_BULK_${name}`];
+      if (own !== undefined && own.trim() !== '') return own;
+    }
+    return env[`MAIL_${name}`];
+  };
+  const ratePerMin = intEnv(pick('RATE_PER_MIN'), 2, 1, 600);
+  const burst = intEnv(pick('BURST'), 2, 1, 100);
+  const urgentReserve = Math.min(burst, intEnv(pick('URGENT_RESERVE'), 1, 0, 100));
   const rawMode = (env.MAIL_METER_MODE ?? '').trim().toLowerCase();
   const mode: MeterMode = rawMode === 'off' ? 'off' : 'observe';
   return {

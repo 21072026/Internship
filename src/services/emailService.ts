@@ -51,8 +51,8 @@ import { bulkMissingRequirements } from '@/lib/documentRequirements';
 import { utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
-import { budgetConfig, classifySmtpError, laneFor, type BudgetConfig, type MailLane } from '@/lib/mailDeliveryRule';
-import { chargeToken, decayPause, pauseBudget, spendToken } from '@/lib/mailBudgetStore';
+import { laneFor, type MailLane } from '@/lib/mailDeliveryRule';
+import { createMeterObserver, type MeterObserver } from '@/lib/mailMeterObserver';
 import {
   BULK_GROUP_CATEGORIES,
   emailGroupAllowed,
@@ -267,58 +267,12 @@ function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter 
 // ── The shared send budget, observe mode (#2941) ────────────────────────────
 //
 // MAIL_METER_MODE=observe (the default) runs the meter beside every real send
-// and logs what it WOULD have refused — `mail_meter.would_refuse` with the lane
-// and the wait — without ever refusing, delaying or failing a mail. `off`
-// leaves the meter untouched. Every call here is fire-and-forget and swallows
-// its own errors: in this mode the meter is an instrument, and an instrument
-// that breaks must not break the thing it measures.
-//
-// Log lines carry the lane, the category and numbers — never an address.
-let meterConfig: BudgetConfig | null = null;
-function meter(): BudgetConfig {
-  meterConfig ??= budgetConfig(process.env);
-  return meterConfig;
-}
-
-async function observeMeterSpend(prepared: { lane: MailLane; category?: string }): Promise<void> {
-  const cfg = meter();
-  if (cfg.mode === 'off') return;
-  try {
-    const outcome = await spendToken(prepared.lane, cfg);
-    if (outcome.allowed && outcome.reason === 'spent') return;
-    if (outcome.reason === 'db_error') {
-      logger.warning('mail_meter.unavailable', { lane: prepared.lane, category: prepared.category, wouldSend: outcome.allowed });
-      return;
-    }
-    logger.info('mail_meter.would_refuse', { lane: prepared.lane, category: prepared.category, waitMs: outcome.waitMs });
-    // The mail goes anyway, so the meter is charged for it: it must describe
-    // what the relay actually received, or every later line would understate.
-    await chargeToken(cfg);
-  } catch (e) {
-    logger.warning('mail_meter.error', { error: String(e) });
-  }
-}
-
-async function observeMeterOutcome(prepared: { lane: MailLane; category?: string }, error: unknown): Promise<void> {
-  const cfg = meter();
-  if (cfg.mode === 'off') return;
-  try {
-    if (!error) {
-      await decayPause();
-      return;
-    }
-    const cls = classifySmtpError(error);
-    logger.info('mail_meter.failure_class', {
-      lane: prepared.lane,
-      category: prepared.category,
-      kind: cls.kind,
-      reason: cls.reason,
-    });
-    if (cls.relayWide) await pauseBudget(cfg);
-  } catch (e) {
-    logger.warning('mail_meter.error', { error: String(e) });
-  }
-}
+// and logs what it WOULD have refused, without ever refusing, delaying or
+// failing a mail; `off` leaves the meter untouched. The observer
+// (src/lib/mailMeterObserver.ts) is fire-and-forget, swallows its own errors,
+// keeps one budget row per SMTP channel and runs at most one meter statement at
+// a time per process, so a broadcast cannot turn it into pool pressure.
+const meterObserver = createMeterObserver();
 
 // Best-effort HTML → plain text for the multipart alternative. A message with
 // only an HTML part scores worse with spam filters (e.g. Gmail); shipping a
@@ -1028,15 +982,22 @@ export async function prepareEmail({
  * `mode` picks the transport: `request` (the default, and the only one any
  * caller uses today) is the per-message connection every send has always used;
  * `drain` and `urgent` exist for the outbox (#2941) and are not used yet.
+ * `via` and `observer` replace the transport and the meter observer — the
+ * outbox's drain hands in its own, and the e2e spec a JSON transport and a
+ * meter on a budget row of its own.
  */
 export async function deliverPrepared(
   prepared: PreparedEmail,
-  { mode = 'request' }: { mode?: DeliveryMode } = {},
+  {
+    mode = 'request',
+    via,
+    observer = meterObserver,
+  }: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
 ): Promise<'SENT'> {
   const { to, subject, category, transport } = prepared;
-  const via = smtpTransport(transport, mode);
+  const transporterFor = via ?? smtpTransport(transport, mode);
   try {
-    await via.sendMail(prepared.message);
+    await transporterFor.sendMail(prepared.message);
   } catch (e) {
     // Record, then rethrow unchanged: callers that already catch (and the ones
     // that deliberately don't) keep behaving exactly as before.
@@ -1044,23 +1005,43 @@ export async function deliverPrepared(
     logger.error('Email send failed', { to, subject, category, transport, error: message });
     await recordEmail(to, subject, category, 'FAILED', transport, message);
     void maybeAlertEmailFailures(category).catch(() => {});
-    void observeMeterOutcome(prepared, e);
+    observeSafely(() => observer.outcome(prepared, e));
     throw e;
   }
 
   await recordEmail(to, subject, category, 'SENT', transport);
-  void observeMeterOutcome(prepared, null);
+  observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
+}
+
+/** The meter is an instrument: nothing it does may change a send's outcome. */
+function observeSafely(fn: () => void): void {
+  try {
+    fn();
+  } catch {
+    // Deliberately silent — the observer logs its own failures.
+  }
+}
+
+/**
+ * A prepared mail through the meter and onto the wire: what `sendEmail()` does
+ * after `prepareEmail()`. Shadow mode (#2941): the meter sees every real send
+ * and says what it WOULD have refused. Never awaited and never consulted — the
+ * mail goes out exactly as it always did, whatever the meter answers.
+ */
+export async function sendPrepared(
+  prepared: PreparedEmail,
+  opts: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
+): Promise<'SENT'> {
+  const observer = opts.observer ?? meterObserver;
+  observeSafely(() => observer.spend(prepared));
+  return deliverPrepared(prepared, { ...opts, observer });
 }
 
 export async function sendEmail(args: SendEmailArgs): Promise<'SENT' | 'SKIPPED'> {
   const result = await prepareEmail(args);
   if (result.status === 'SKIPPED') return 'SKIPPED';
-  // Shadow mode (#2941): the meter sees every real send and says what it
-  // WOULD have refused. Not awaited and never consulted — the mail below goes
-  // out exactly as it always did, whatever the meter answers.
-  void observeMeterSpend(result.prepared);
-  return deliverPrepared(result.prepared);
+  return sendPrepared(result.prepared);
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
