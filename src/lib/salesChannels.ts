@@ -37,8 +37,7 @@ export const SALES_CHANNELS: readonly SalesChannel[] = [
   { key: 'hood', label: 'Hood', kind: 'MARKETPLACE', aliases: ['hood.de'] },
   { key: 'shop-apotheke', label: 'Shop Apotheke', kind: 'MARKETPLACE', aliases: ['shopapotheke'] },
   { key: 'avocadostore', label: 'Avocadostore', kind: 'MARKETPLACE' },
-  // Where many Turkish online sellers work (the sample import file carries
-  // it) — knowing it is the point.
+  // The largest marketplace for sellers who also trade in Turkey.
   { key: 'trendyol', label: 'Trendyol', kind: 'MARKETPLACE' },
   // Shop systems
   { key: 'shopify', label: 'Shopify', kind: 'SHOP' },

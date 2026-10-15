@@ -13,8 +13,7 @@ import { AlreadyMentoredError, alreadyMentoredBody } from '@/lib/activeMentorshi
 import { planWinBack } from '@/lib/winBackRule';
 import { winBack, WinBackConflictError } from '@/lib/winBack';
 
-// POST /api/mentorship/<id>/win-back — a lost customer came back (#2842,
-// decision #2572 Q4). Body `{ toStage: 'TRIAL_ACTIVE' | 'DEAL_WON' }`.
+// POST /api/mentorship/<id>/win-back — a lost customer came back (#2842). Body `{ toStage: 'TRIAL_ACTIVE' | 'DEAL_WON' }`.
 // The lost journey closes as COMPLETED + ENDED_CHURNED and a new one opens,
 // linked by previousRelationId (src/lib/winBack.ts). WHO: the record's owner
 // or an ADMIN of its tenant, like every other edit of a funnel record.

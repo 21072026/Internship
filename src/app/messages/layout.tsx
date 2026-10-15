@@ -22,7 +22,7 @@ export const metadata = NO_INDEX;
  *
  * A nested export replaces the root one for these routes, so the root's fields
  * are repeated here rather than inherited — including the vertical-aware tint
- * (#2492): a static '#1D4ED8' here painted a SaleVali install's status bar
+ * (#2492): a static '#1D4ED8' here painted a marketing install's status bar
  * internship blue on exactly the screen its manifest shortcut opens.
  */
 export async function generateViewport(): Promise<Viewport> {

@@ -7,7 +7,8 @@ import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { scoreRelation } from '@/lib/relationHealth';
 import { menteesWithOpenTodo } from '@/lib/openWork';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
-import { decisionWindowEndsAt, isDecisionWindowClosing, isTrialMissingEndDate } from '@/lib/trialReminderRule';
+import { DEFAULT_DECISION_WINDOW_DAYS, decisionWindowEndsAt, isDecisionWindowClosing, isTrialMissingEndDate, parseDecisionWindowDays } from '@/lib/trialReminderRule';
+import { settingByOrg } from '@/lib/settingsOrg';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 import { isCancellationPending } from '@/lib/contractEndRule';
@@ -127,6 +128,10 @@ export async function getAttentionItems(
     ? await usageSignalsFor(options.orgId, relations, new Date(now))
     : null;
 
+  // The decision window is per organization (#2927): read once per org, and
+  // only for a record that has a trial end at all.
+  const decisionWindowRaw = settingByOrg('decisionWindowDays');
+
   const items: AttentionItem[] = [];
   let dormantCount = 0;
   for (const r of relations) {
@@ -203,7 +208,8 @@ export async function getAttentionItems(
     if (isCancellationPending(r)) reasons.push('cancellation_pending');
     // An expired trial a week from the end of its decision window (#2843).
     const nowDate = new Date(now);
-    if (isDecisionWindowClosing(r, nowDate)) reasons.push('decision_window_closing');
+    const windowDays = r.trialEndsAt ? parseDecisionWindowDays(await decisionWindowRaw(r.orgId)) : DEFAULT_DECISION_WINDOW_DAYS;
+    if (isDecisionWindowClosing(r, nowDate, windowDays)) reasons.push('decision_window_closing');
     const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
     if (kept.length > 0) {
       items.push({
@@ -213,7 +219,7 @@ export async function getAttentionItems(
         reasons: kept,
         daysSinceLastInteraction: daysSince,
         contractEndsAt: r.contractEndsAt,
-        decisionWindowEndsAt: decisionWindowEndsAt(r.trialEndsAt),
+        decisionWindowEndsAt: decisionWindowEndsAt(r.trialEndsAt, windowDays),
       });
     }
   }

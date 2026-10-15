@@ -1081,15 +1081,15 @@ test('dates: only ISO dates are accepted, and a trial cannot end before it start
 test('dates and external_id: German/Turkish header aliases are the same columns', () => {
   const validate = makeMarketingValidator({ stageKeys: TRIAL_STAGES });
   const table = parseDelimited(
-    'Firma;Land;SaleVali ID;Testbeginn;Testende;Kunde seit\nAlpha GmbH;DE;64f0c0ffee;2026-04-01;2026-05-01;2025-11-15\n',
+    'Firma;Land;Externe ID;Testbeginn;Testende;Kunde seit\nAlpha GmbH;DE;ACME-0042;2026-04-01;2026-05-01;2025-11-15\n',
   );
   const row = validate(table.rows[0], table.header);
   assert.equal(row.ok, true);
-  assert.equal(row.value.externalId, '64f0c0ffee');
+  assert.equal(row.value.externalId, 'ACME-0042');
   assert.equal(row.value.trialStartedAt.toISOString(), '2026-04-01T00:00:00.000Z');
   assert.equal(row.value.trialEndsAt.toISOString(), '2026-05-01T00:00:00.000Z');
   assert.equal(row.value.customerSince.toISOString(), '2025-11-15T00:00:00.000Z');
-  assert.equal(row.key, 'ext:64f0c0ffee', 'the external id is the first half of the match key');
+  assert.equal(row.key, 'ext:acme-0042', 'the external id is the first half of the match key');
   const tr = parseDelimited('firma adi,ulke,harici id,deneme bitiş,müşteri tarihi\nBeta,TR,X1,2026-06-01,2024-01-01\n');
   const trRow = validate(tr.rows[0], tr.header);
   assert.equal(trRow.value.externalId, 'X1');
@@ -1100,7 +1100,7 @@ test('dates and external_id: German/Turkish header aliases are the same columns'
 test('the file writes external_id and the funnel-record dates; the second apply is UNCHANGED', async () => {
   const store = memoryStore({ now: D_NOW });
   const text = datedFile({
-    name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', ext: '64f0c0ffee00112233445566',
+    name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', ext: 'ACME-0043',
     trialStart: '2026-04-20', trialEnd: '2026-05-20', since: '2026-04-20',
   });
   const dry = await runFile(text, store, { stageKeys: TRIAL_STAGES });
@@ -1108,7 +1108,7 @@ test('the file writes external_id and the funnel-record dates; the second apply 
   assert.deepEqual(dry.rows.map((r) => [r.status, r.reason]), first.rows.map((r) => [r.status, r.reason]));
   assert.equal(first.counts.CREATE, 1);
   assert.equal(first.rows[0].reason, undefined, 'explicit dates: no default-window warning');
-  assert.equal(store.accounts[0].externalId, '64f0c0ffee00112233445566');
+  assert.equal(store.accounts[0].externalId, 'ACME-0043');
   const relation = store.relations[0];
   assert.equal(relation.trialStartedAt.toISOString(), '2026-04-20T00:00:00.000Z');
   assert.equal(relation.trialEndsAt.toISOString(), '2026-05-20T00:00:00.000Z', 'the file date wins over the stamp');
@@ -1204,25 +1204,25 @@ test('dates on a row that places no funnel record are reported, not dropped sile
 });
 
 test('external_id beats VAT and name: a renamed merchant with a new VAT is still one account', async () => {
-  const store = memoryStore({ accounts: [account({ externalId: 'SV-1' })] });
-  const report = await runFile(datedFile({ name: 'Omega AG', country: 'AT', ext: 'sv-1' }), store, { apply: true });
+  const store = memoryStore({ accounts: [account({ externalId: 'EXT-1' })] });
+  const report = await runFile(datedFile({ name: 'Omega AG', country: 'AT', ext: 'ext-1' }), store, { apply: true });
   // Matched although name AND country differ; the file only fills gaps, so it
   // says what it left alone instead of creating a second account.
   assert.equal(report.rows[0].status, 'UNCHANGED');
   assert.match(report.rows[0].reason, /left alone: name, country/);
   assert.equal(report.rows[0].targetId, 'co-a');
   assert.equal(store.accounts.length, 1);
-  assert.equal(store.accounts[0].externalId, 'SV-1', 'another spelling of the same key is not a change');
-  assert.equal(normalizeExternalIdKey(' SV-1 '), 'sv-1');
+  assert.equal(store.accounts[0].externalId, 'EXT-1', 'another spelling of the same key is not a change');
+  assert.equal(normalizeExternalIdKey(' EXT-1 '), 'ext-1');
 });
 
 test('an external id nobody carries yet is filled in on the account the VAT id finds', async () => {
   const store = memoryStore({ accounts: [account({ vatId: 'DE811234567' })] });
-  const text = datedFile({ name: 'Alpha GmbH', vat: 'DE811234567', ext: 'SV-9' });
+  const text = datedFile({ name: 'Alpha GmbH', vat: 'DE811234567', ext: 'EXT-9' });
   const first = await runFile(text, store, { apply: true });
   assert.equal(first.rows[0].status, 'UPDATE');
   assert.deepEqual(first.rows[0].changed, ['externalId']);
-  assert.equal(store.accounts[0].externalId, 'SV-9');
+  assert.equal(store.accounts[0].externalId, 'EXT-9');
   const second = await runFile(text, store, { apply: true });
   assert.equal(second.counts.UNCHANGED, 1);
 });
@@ -1230,33 +1230,33 @@ test('an external id nobody carries yet is filled in on the account the VAT id f
 test('a conflicting external_id is an ERROR on its row, in the dry run too — never a guess', async () => {
   const store = memoryStore({
     accounts: [
-      account({ id: 'co-a', name: 'Alpha GmbH', vatId: 'DE111111111', externalId: 'SV-A' }),
-      account({ id: 'co-b', name: 'Beta GmbH', vatId: 'DE222222222', externalId: 'SV-B' }),
-      account({ id: 'co-d1', name: 'Dup One', externalId: 'SV-DUP' }),
-      account({ id: 'co-d2', name: 'Dup Two', externalId: 'SV-DUP' }),
+      account({ id: 'co-a', name: 'Alpha GmbH', vatId: 'DE111111111', externalId: 'EXT-A' }),
+      account({ id: 'co-b', name: 'Beta GmbH', vatId: 'DE222222222', externalId: 'EXT-B' }),
+      account({ id: 'co-d1', name: 'Dup One', externalId: 'EXT-DUP' }),
+      account({ id: 'co-d2', name: 'Dup Two', externalId: 'EXT-DUP' }),
     ],
   });
   const text = datedFile(
     // the id names A, the VAT id names B
-    { name: 'Alpha GmbH', vat: 'DE222222222', ext: 'SV-A' },
+    { name: 'Alpha GmbH', vat: 'DE222222222', ext: 'EXT-A' },
     // the VAT finds B, which carries another id
-    { name: 'Beta GmbH', vat: 'DE222222222', ext: 'SV-OTHER' },
+    { name: 'Beta GmbH', vat: 'DE222222222', ext: 'EXT-OTHER' },
     // two accounts of the org already carry the id
-    { name: 'Dup', ext: 'SV-DUP' },
+    { name: 'Dup', ext: 'EXT-DUP' },
     // a new id twice in the file, for two different accounts
-    { name: 'New One', vat: 'DE333333333', ext: 'SV-NEW' },
-    { name: 'New Two', vat: 'DE444444444', ext: 'SV-NEW' },
+    { name: 'New One', vat: 'DE333333333', ext: 'EXT-NEW' },
+    { name: 'New Two', vat: 'DE444444444', ext: 'EXT-NEW' },
   );
   for (const apply of [false, true]) {
     const report = await runFile(text, store, { apply });
     const byRow = report.rows.map((r) => [r.row, r.status]);
     assert.deepEqual(byRow, [[1, 'ERROR'], [2, 'ERROR'], [3, 'ERROR'], [4, 'CREATE'], [5, 'ERROR']], `apply=${apply}`);
-    assert.match(report.rows[0].reason, /external_id "SV-A" and vat_id name two different accounts/);
-    assert.match(report.rows[1].reason, /differs from the external id "SV-B"/);
+    assert.match(report.rows[0].reason, /external_id "EXT-A" and vat_id name two different accounts/);
+    assert.match(report.rows[1].reason, /differs from the external id "EXT-B"/);
     assert.match(report.rows[2].reason, /carried by 2 accounts of this organization/);
     assert.match(report.rows[4].reason, /is given to row 4 with a different vat_id/);
   }
-  assert.equal(store.accounts.find((a) => a.id === 'co-b').externalId, 'SV-B', 'nothing was re-pointed');
+  assert.equal(store.accounts.find((a) => a.id === 'co-b').externalId, 'EXT-B', 'nothing was re-pointed');
 });
 
 test('customer_since reaches back to 1900; a trial date keeps 2000–2100, and the error names the range', () => {
@@ -1378,14 +1378,14 @@ test('cutover numbers: counted off the report, PII-free, and the second run read
 test('cutover numbers: SKIP and ERROR rows count toward nothing; a trial with no end is "missing"', async () => {
   const store = memoryStore({
     now: D_NOW,
-    accounts: [account({ id: 'co-a', contactEmail: 'a@alpha.example', externalId: 'SV-A' })],
+    accounts: [account({ id: 'co-a', contactEmail: 'a@alpha.example', externalId: 'EXT-A' })],
     leads: [{ id: 'lead-a', email: standIn('a@alpha.example'), fullName: 'A', phone: null, city: null, country: 'DE', preferredLanguage: null, referralSource: null, companyId: 'co-a', role: 'MENTEE' }],
     relations: [{ id: 'rel-a', mentorId: OWNER.id, menteeId: 'lead-a', companyId: 'co-a', pipelineStatus: 'TRIAL_ACTIVE', status: 'ACTIVE', trialStartedAt: null, trialEndsAt: null, startDate: D_NOW }],
   });
   const report = await runFile(
     datedFile(
-      { name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', ext: 'SV-A' },
-      { name: 'Alpha GmbH', ext: 'SV-A' },
+      { name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', ext: 'EXT-A' },
+      { name: 'Alpha GmbH', ext: 'EXT-A' },
       { name: 'Broken', trialEnd: 'soon' },
     ),
     store,
@@ -1401,7 +1401,7 @@ test('cutover numbers: SKIP and ERROR rows count toward nothing; a trial with no
   });
 });
 
-// ── contract_ends_at (#2844, decision #2572 Q7) ──────────────────────────────
+// ── contract_ends_at (#2844) ──────────────────────────────
 
 const CONTRACT_HEADER = `${HEADER},contract_ends_at`;
 const contractFile = (stage, end) =>

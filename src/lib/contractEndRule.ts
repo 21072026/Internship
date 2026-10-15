@@ -1,4 +1,4 @@
-// A won customer's notice period (#2841, decision #2572 option C) — the rule,
+// A won customer's notice period (#2841) — the rule,
 // dependency-free and unit-tested (scripts/test/contract-end.test.mjs).
 //
 // The funnel ends at DEAL_WON. What happens to a customer after that is not a
@@ -7,7 +7,7 @@
 // shows `cancellation_pending` in its owner's attention queue, and gets one
 // bell on the end day. Nothing moves it to DEAL_LOST by itself — a lost
 // customer is too expensive an event for an unattended write to record
-// wrongly (#2572 Q3). Clearing the date is the customer withdrawing notice:
+// wrongly. Clearing the date is the customer withdrawing notice:
 // no stage move, no churn.
 
 import { daysUntilUtcDay, parseTrialEndDate } from './trialReminderRule';

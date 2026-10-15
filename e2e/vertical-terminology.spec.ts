@@ -313,7 +313,7 @@ test('an INTERNSHIP mentor\'s empty thread keeps the mentorship welcome (#2557)'
   }
 });
 
-// #2558: the screens a SaleVali admin uses to bring the sales team in. Only
+// #2558: the screens a MARKETING admin uses to bring the sales team in. Only
 // the words change (the Role enum is frozen): MENTOR is a rep, MENTEE a lead.
 for (const path of ['/admin/invite', '/admin/users', '/admin/analytics', '/admin/settings']) {
   test(`a MARKETING admin reads ${path} with no mentorship word (#2558)`, async ({ page }) => {

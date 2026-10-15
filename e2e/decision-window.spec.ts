@@ -3,9 +3,10 @@ import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
-// The decision window (#2843, decision #2572 Q2): an expired trial's window
-// closes trialEndsAt + 30 days. A week before, it shows in the owner's queue
-// and the daily sweep rings them once — never a stage move.
+// The decision window (#2843, #2927): an expired trial's window closes
+// trialEndsAt + the org's `decisionWindowDays` (30 by default). A week before,
+// it shows in the owner's queue and the daily sweep rings them once — never a
+// stage move.
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -57,6 +58,50 @@ test('a closing decision window is in the queue and rings once', async ({ page }
     await prisma.notification.deleteMany({ where: { userId: rep.id } }).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } }).catch(() => {});
     for (const e of emails) await cleanupByEmail(e);
+    await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test("the organization's own window length decides when it is closing", async ({ page }) => {
+  test.setTimeout(150_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const org = await prisma.organization.create({ data: { name: `Short Window ${stamp}`, slug: `short-window-${stamp}`, vertical: 'MARKETING' } });
+  await prisma.pipelineStage.createMany({
+    data: templateStagePayload(defaultTemplateForVertical('MARKETING')!).stages.map((s) => ({ ...s, orgId: org.id })),
+  });
+  // A ten-day window: a trial that ended four days ago has six days left.
+  await prisma.setting.create({ data: { orgId: org.id, key: 'decisionWindowDays', value: '10' } });
+  const emails = ['admin', 'rep', 'lead'].map((k) => uniqueEmail(`short-window-${k}`));
+  await seedUser(emails[0], PW, 'ADMIN', 'Short Window Admin');
+  const rep = await seedUser(emails[1], PW, 'MENTOR', 'Short Window Rep');
+  const lead = await seedUser(emails[2], PW, 'MENTEE', `Short Window Lead ${stamp}`);
+  await prisma.user.updateMany({ where: { id: { in: [rep.id, lead.id] } }, data: { orgId: org.id } });
+  const today = new Date();
+  const ended = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - 4 * DAY);
+  await prisma.mentorshipRelation.create({
+    data: { orgId: org.id, mentorId: rep.id, menteeId: lead.id, pipelineStatus: 'TRIAL_EXPIRED', trialEndsAt: ended },
+  });
+
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+    await signInAndSettle(page, emails[1], PW, '/sales');
+    await gotoSettled(page, '/sales');
+    // With the default 30 days this record would have 26 days left and not show.
+    await expect(
+      page.getByTestId('attention-queue').locator('a', { hasText: `Short Window Lead ${stamp}` }),
+    ).toContainText('Decision window closes', { timeout: 20_000 });
+
+    await page.context().clearCookies();
+    await page.context().setExtraHTTPHeaders({});
+    await signInAndSettle(page, emails[0], PW, '/admin');
+    const run = await page.request.get(`/api/cron?job=trial-reminders&orgId=${org.id}`);
+    expect((await run.json()).trialReminders).toMatchObject({ decisionWindows: 1 });
+  } finally {
+    await prisma.notification.deleteMany({ where: { userId: rep.id } }).catch(() => {});
+    await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    for (const e of emails) await cleanupByEmail(e);
+    await prisma.setting.deleteMany({ where: { orgId: org.id } }).catch(() => {});
     await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } }).catch(() => {});
     await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }

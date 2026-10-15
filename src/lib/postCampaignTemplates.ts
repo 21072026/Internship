@@ -2,6 +2,14 @@
 // starts from, the balancing-of-interests note, and the Art. 14 DSGVO notice
 // printed on the back of every letter.
 //
+// The letter is per-organization DATA first (#2927): an organization that saved
+// its own letter (the `postLetterTemplate` setting, written from the
+// acquisition page) starts every new campaign from it — `resolveLetterBody()`.
+// The built-in letters below are the fallback for an organization that has
+// not. The MARKETING one is a placeholder kept only until every marketing
+// organization has its own letter; a later change replaces it with neutral
+// text.
+//
 // German on purpose, whatever the admin's UI language: the recipients are
 // businesses in Germany, and the Art. 14 notice is a legal text addressed to
 // them. The letter body is a starting point the admin edits; the notice is not
@@ -18,7 +26,12 @@ import { POST_COOLDOWN_DAYS } from '@/lib/postCampaignRule';
 /** How long a prospect's address is kept without a reply, stated on the notice. */
 export const PROSPECT_RETENTION_MONTHS = 24;
 
-const SALEVALI_LETTER = `{salutation}
+/** The bounds of a letter body — the campaign form's own (`campaignFields.letterBody`). */
+export const LETTER_BODY_MIN = 20;
+export const LETTER_BODY_MAX = 6000;
+
+// The MARKETING fallback letter (see the header): to be replaced, not extended.
+const MARKETING_BUILTIN_LETTER = `{salutation}
 
 Sie verkaufen als {company} online — und vermutlich kostet nicht der Verkauf selbst die meiste Zeit, sondern alles danach: Bestellungen aus mehreren Kanälen zusammenführen, Rechnungen und Gutschriften schreiben, Bestände abgleichen.
 
@@ -46,8 +59,31 @@ Wenn das für Sie interessant ist, sehen Sie es sich unter dem Link unten an ode
 
 Mit freundlichen Grüßen`;
 
+/** The built-in letter of a vertical — the fallback of `resolveLetterBody()`. */
 export function defaultLetterBody(vertical: VerticalKey): string {
-  return vertical === 'MARKETING' ? SALEVALI_LETTER : INTERNCRM_LETTER;
+  return vertical === 'MARKETING' ? MARKETING_BUILTIN_LETTER : INTERNCRM_LETTER;
+}
+
+/** Is this a letter body an organization may save as its own default? */
+export function isStorableLetterBody(value: string): boolean {
+  const text = value.trim();
+  return text.length >= LETTER_BODY_MIN && text.length <= LETTER_BODY_MAX;
+}
+
+/**
+ * The letter a new campaign starts from (#2927): the organization's own
+ * (`postLetterTemplate`) when it saved one, the vertical's built-in letter
+ * otherwise. A stored value outside the form's bounds — nothing writes one, but
+ * a hand-edited row could — reads as unset rather than as a broken letter.
+ */
+export function resolveLetterBody(
+  stored: string | null | undefined,
+  vertical: VerticalKey,
+): { letterBody: string; source: 'org' | 'builtin' } {
+  const own = (stored ?? '').trim();
+  return own && isStorableLetterBody(own)
+    ? { letterBody: own, source: 'org' }
+    : { letterBody: defaultLetterBody(vertical), source: 'builtin' };
 }
 
 /** The written balancing of interests (Art. 6 Abs. 1 lit. f) a campaign starts from. */

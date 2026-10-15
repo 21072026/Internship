@@ -224,13 +224,35 @@ export const SETTING_DEFAULTS = {
   // Length of a MARKETING funnel trial, in days (#2551): when a record enters
   // the TRIAL_ACTIVE stage without a trial window, it is stamped
   // `trialStartedAt = entry` and `trialEndsAt = entry + this` — the date the
-  // reminder ladder and the expiry sweep count from. 30 = the free-use period
-  // of the product being sold; the decision window after it is #2572. Changing
+  // reminder ladder and the expiry sweep count from. 30 = a common free-use
+  // period; the decision window after it is `decisionWindowDays`. Changing
   // it never moves a window already stamped (trialWindowFor() in
   // src/lib/trialReminderRule.ts refuses to overwrite one), and a blank,
   // zero or unparseable value falls back to 30 rather than stamping trials
   // that are over on arrival. On the settings form for MARKETING tenants only.
   trialLengthDays: '30',
+  // The decision window of an expired MARKETING trial, in days (#2843, #2927):
+  // after `trialEndsAt` the record waits in TRIAL_EXPIRED for a human to decide,
+  // and the window closes this many days later — the owner is warned a week
+  // before (src/lib/trialReminderRule.ts, parseDecisionWindowDays()). Derived on
+  // read, never stamped, so a change applies to every expired trial at once. A
+  // blank, zero or unparseable value falls back to 30; at most 365. On the
+  // settings form for MARKETING tenants only.
+  decisionWindowDays: '30',
+  // The organization's own price list for the MARKETING /pricing page and the
+  // landing FAQ (#2927): one JSON document, integer minor units + an ISO
+  // currency, validated by src/lib/marketingPriceListRule.ts. Read for the org
+  // bound to a marketing host (`Organization.publicHost`) only. `''` (default)
+  // = the built-in list in src/lib/marketingPlans.ts; a value that does not
+  // parse reads as that too (and is logged). Written by the operator CLI
+  // `prisma/set-org-pricing.mjs` (dry run by default), not by the settings form:
+  // it is a published price, and the CLI validates it before it is stored.
+  marketingPriceList: '',
+  // The letter a new postal campaign of this org starts from (#2697, #2927).
+  // `''` (default) = the vertical's built-in letter
+  // (src/lib/postCampaignTemplates.ts). Set from the acquisition page ("save
+  // as our default letter"), through PUT /api/admin/post-campaigns/letter-template.
+  postLetterTemplate: '',
   // Who owns a new MARKETING lead nobody named an owner for (#2580 item 3,
   // #2569): a User id of this org (ADMIN or MENTOR, active). Read by the
   // marketing landing's demo form (the request lands straight on this person's

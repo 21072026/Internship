@@ -12,7 +12,7 @@ import { seedTwoTenants, signInAsTenantActor, putOnWorld, type SeededTenant, typ
  * relation scope in src/lib/authzScope.ts was `{}` ("admins see the whole
  * tenant"), and the meeting and calendar routes had their own
  * `role === 'ADMIN' ? {}` branches. With the tenant middleware dormant that was
- * the whole DATABASE: a SaleVali (MARKETING) admin's `GET /api/mentorship`
+ * the whole DATABASE: a MARKETING admin's `GET /api/mentorship`
  * listed the INTERNSHIP tenant's relations and mentee e-mails, `/api/meetings`
  * and `/api/calendar-events` its meetings and project calls, and the by-id
  * routes (timeline, person card, meeting move) opened them.

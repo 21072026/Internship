@@ -87,7 +87,7 @@ test.beforeAll(async () => {
 
   // Both mentees are in the consenting talent pool and match both companies'
   // open position: the INTERNSHIP company may be alerted about its own tenant's
-  // candidate only, the SaleVali company (no placements) about nobody.
+  // candidate only, the MARKETING company (no placements) about nobody.
   for (const id of [ids.mktLead, ids.intMentee]) {
     await prisma.user.update({
       where: { id },

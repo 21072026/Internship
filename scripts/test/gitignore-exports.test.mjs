@@ -34,7 +34,7 @@ function ignored(path) {
 test('a spreadsheet export anywhere in the checkout is ignored, in any letter case', () => {
   for (const path of [
     'accounts.csv',
-    'salevali-kunden.CSV',
+    'acme-customers.CSV',
     'Kunden.Xlsx',
     'export.xls',
     'export.ods',

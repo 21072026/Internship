@@ -11,7 +11,7 @@ import { seedTwoTenants, signInAsTenantActor, putOnWorld, TENANT_PASSWORD, type 
  *
  * Measured before the fix: every admin fan-out in the tree read
  * `user.findMany({ where: { role: 'ADMIN', isActive: true } })` with no org at
- * all, so a SaleVali (MARKETING) admin's bell filled with the InternCRM
+ * all, so a MARKETING admin's bell filled with the InternCRM
  * (INTERNSHIP) tenant's sign-ups, mentorship requests and mentor applications,
  * and the other way round. The recipient list is now `tenantAdminIds(orgId)` /
  * `tenantAdminWhere(orgId)` (src/lib/tenantAdmins.ts): the subject's own org,

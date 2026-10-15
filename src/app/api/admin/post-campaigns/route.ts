@@ -10,11 +10,14 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { campaignCodeFrom } from '@/lib/postCampaignRule';
 import { campaignCreateSchema } from '@/lib/postCampaignInput';
-import { campaignResults } from '@/lib/postCampaign';
+import { campaignDefaultsFor, campaignResults } from '@/lib/postCampaign';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 /**
  * Postal campaigns (#2697, docs/marketing-vertical/postal-campaigns.md).
- * GET — the tenant's campaigns with recipient counts and results.
+ * GET — the tenant's campaigns with recipient counts and results, plus the
+ * texts a new campaign starts from (`defaults`: the org's own letter or the
+ * built-in one, #2927).
  * POST — a new DRAFT campaign. The data source and the balancing note are
  * REQUIRED: without them the letter has no Art. 14 notice to print and the
  * campaign no Art. 6(1)(f) record — a campaign that cannot answer "where did
@@ -56,7 +59,9 @@ export async function GET(request: Request) {
         },
       });
       const results = await Promise.all(campaigns.map((c) => campaignResults(tenant, c.code)));
+      const defaults = await campaignDefaultsFor(await settingsOrgOf(session));
       return NextResponse.json({
+        defaults,
         campaigns: campaigns.map((c, i) => ({
           id: c.id,
           name: c.name,

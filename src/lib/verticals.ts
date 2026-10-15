@@ -51,8 +51,8 @@ export interface VerticalDefinition {
   // to read (#2498). A signed-in tenant always overrides this with its own
   // `Organization.brandName`; this is only the public-landing / no-org fallback,
   // so a marketing host stops reading "Internship CRM" in its wordmark and tab
-  // title. One marketing customer today (SaleVali); a second would move this to
-  // host→org branding (see issue #2457).
+  // title. A brand that belongs to one organization rather than to the
+  // vertical is that organization's data, resolved per host (issue #2457).
   productName: string;
 }
 

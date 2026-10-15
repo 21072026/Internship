@@ -24,7 +24,7 @@ export const metadata = NO_INDEX;
 // purpose: the admin shell's sidebar and padding have no place on a letter.
 //
 // The sender is the identity this deployment publishes for the campaign's OWN
-// world (MARKETING_OPERATOR_* for SaleVali, src/lib/imprint.ts), never the
+// world (MARKETING_OPERATOR_* for the marketing world, src/lib/imprint.ts), never the
 // host the admin happens to be on; the link is that world's origin.
 
 const MM = (n: number) => `${n}mm`;

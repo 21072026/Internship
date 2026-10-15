@@ -167,7 +167,7 @@ export const MARKETING_DEMO_ACCOUNTS = [
   { key: 'harz-holzwerk', name: 'Harzer Holzwerk GmbH (Demo)', vatId: 'DE900000019', city: 'Goslar', industry: 'E-Commerce · Holz', size: '10-50', contactName: 'Stefan Wernicke', stage: 'TRIAL_EXPIRED', openedAt: 74, inStage: 4, owner: 0, trialDays: 30 },
   { key: 'donau-buerobedarf', name: 'Donau Bürobedarf GmbH (Demo)', vatId: 'DE900000020', city: 'Regensburg', industry: 'B2B · Bürobedarf', size: '50-100', contactName: 'Petra Vogl', stage: 'TRIAL_EXPIRED', openedAt: 81, inStage: 9, owner: 1, trialDays: 30 },
 
-  // ── Decision window (trial expired, #2572) ───────────────────────────────
+  // ── Decision window (trial expired) ───────────────────────────────
   { key: 'elbland-weine', name: 'Elbland Weinhandel GmbH (Demo)', vatId: 'DE900000021', city: 'Dresden', industry: 'E-Commerce · Wein', size: '10-50', contactName: 'Konstantin Gräf', stage: 'TRIAL_EXPIRED', openedAt: 88, inStage: 5, owner: 2, trialDays: 30 },
   { key: 'westfalen-leuchten', name: 'Westfalen Leuchtenhandel GmbH (Demo)', vatId: 'DE900000022', city: 'Dortmund', industry: 'E-Commerce · Beleuchtung', size: '50-100', contactName: 'Britta Schulte', stage: 'TRIAL_EXPIRED', openedAt: 94, inStage: 10, owner: 0, trialDays: 30 },
   { key: 'allgaeu-milchhof', name: 'Allgäuer Milchhof Direkt GmbH (Demo)', vatId: 'DE900000023', city: 'Kempten', industry: 'E-Commerce · Lebensmittel', size: '50-100', contactName: 'Josef Wiedemann', stage: 'TRIAL_EXPIRED', openedAt: 99, inStage: 15, owner: 1, trialDays: 30 },

@@ -48,7 +48,7 @@ export async function createPasswordResetToken(userId: string, purpose: ResetPur
  *
  * NO CROSS-WORLD RESCUE. This used to fall back to the address's account in the
  * OTHER world when this one had none, and mail that account a link into its own
- * product: "forgot password" on SaleVali produced an Internship CRM mail with an
+ * product: "forgot password" on a marketing host produced an Internship CRM mail with an
  * interncrm.com link. The product rule is that an action stays in the world it
  * was started in — brand, links and the account it touches — so an address with
  * no account in this world gets no mail at all.

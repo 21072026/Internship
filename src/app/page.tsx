@@ -25,8 +25,9 @@ import { buildLiveStripPieces } from '@/lib/liveStrip';
 import { headers } from 'next/headers';
 import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
 import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
-import { formatEur } from '@/lib/money';
-import { marketingFromSeatEur } from '@/lib/marketingPlans';
+import { formatMinorPrice } from '@/lib/money';
+import { marketingPriceListForHost } from '@/lib/marketingPriceList';
+import { priceListFromSeatMinor } from '@/lib/marketingPriceListRule';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -107,10 +108,15 @@ export default async function HomePage() {
     { q: L.faqMentor2Q, a: L.faqMentor2A }, { q: L.faqMentor3Q, a: L.faqMentor3A },
     { q: L.faqCompany3Q, a: L.faqCompany3A }, { q: L.faqCompany1Q, a: L.faqCompany1A },
   ];
+  // The "from" price is the cheapest annual seat of the list /pricing shows on
+  // this host — the bound organization's own, or the built-in one (#2927).
+  // Looked up for a marketing host only, like the demo form above.
+  const priceList = isMarketing ? (await marketingPriceListForHost(requestHostHeader(await headers()))).list : null;
+  const fromPrice = priceList ? formatMinorPrice(priceListFromSeatMinor(priceList), priceList.currency, locale) : '';
   const marketingFaq = [
     { q: L.faqMarketing1Q.replace('{product}', product), a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
     { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
-    { q: L.faqMarketing5Q, a: L.faqMarketing5A.replace('{from}', formatEur(marketingFromSeatEur(), locale)) }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
+    { q: L.faqMarketing5Q, a: L.faqMarketing5A.replace('{from}', fromPrice) }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
   ];
   const faq = isMarketing ? marketingFaq : internshipFaq;
 
@@ -268,7 +274,7 @@ export default async function HomePage() {
       </section>
 
       {/* Product tour (#1399): each host shows its own product's screens — the
-          internship set here, SaleVali's pipeline, rep and analytics screens on
+          internship set here, the sales pipeline, rep and analytics screens on
           a MARKETING host (ProductTour picks by `marketing`). */}
       <ProductTour t={t} locale={locale} marketing={isMarketing} />
 

@@ -9,7 +9,7 @@ import { CONTRACT_STAGE_KEY, contractEndReminderDue } from '@/lib/contractEndRul
 // org. One bell per record and date: the claim is a conditional UPDATE on
 // `contractEndRemindedAt IS NULL`, so an overlapping tick cannot ring twice,
 // and moving the date (PATCH …/contract-end) clears the claim. It NEVER moves
-// the stage — the bell asks a human to decide (#2572 Q3).
+// the stage — the bell asks a human to decide.
 
 export async function ringContractEnds(orgId: string, now: Date): Promise<number> {
   const candidates = await prisma.mentorshipRelation.findMany({

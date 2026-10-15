@@ -16,6 +16,7 @@
 import { getSetting } from './settings';
 import {
   TRIAL_ACTIVE_STAGE_KEY,
+  parseDecisionWindowDays,
   parseTrialLengthDays,
   trialWindowFor,
   type ExistingTrialWindow,
@@ -25,6 +26,11 @@ import {
 /** The tenant's trial length in days: org row → global row → 30. */
 export async function trialLengthDaysFor(orgId: string | null | undefined): Promise<number> {
   return parseTrialLengthDays(await getSetting('trialLengthDays', orgId ?? null));
+}
+
+/** The tenant's decision window after a trial, in days: org row → global row → 30 (#2927). */
+export async function decisionWindowDaysFor(orgId: string | null | undefined): Promise<number> {
+  return parseDecisionWindowDays(await getSetting('decisionWindowDays', orgId ?? null));
 }
 
 export interface StageTrialWindowInput {

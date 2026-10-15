@@ -3,7 +3,7 @@ import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
-// A won customer's notice period (#2841, decision #2572 option C):
+// A won customer's notice period (#2841):
 //   1. the owner records the notice on the lead page; the record stays won and
 //      shows `cancellation_pending` in their queue;
 //   2. only a won record takes a date, never one in the past;

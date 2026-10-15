@@ -7,8 +7,8 @@ import { seedTwoTenants, signInAsTenantActor, putOnWorld, type SeededTenant, typ
  * A MARKETING admin must not read the INTERNSHIP tenant's people or companies,
  * and the other way round (#2542) — with MT_ENFORCE_ISOLATION **off**.
  *
- * Measured before the fix, on one database holding both products: a SaleVali
- * (MARKETING) admin's `GET /api/users?role=MENTEE` and `GET /api/companies`
+ * Measured before the fix, on one database holding both products: a MARKETING
+ * admin's `GET /api/users?role=MENTEE` and `GET /api/companies`
  * returned the INTERNSHIP tenant's rows, and `GET /api/users/<id>` opened one
  * of its mentees. The central tenant middleware would have scoped all three,
  * but it only engages with the flag on, and the flag is off in every

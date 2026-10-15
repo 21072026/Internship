@@ -4,7 +4,7 @@ import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStages } from '../src/lib/programTemplates';
 import { DROPOFF_REASON_CODES, MARKETING_DROPOFF_REASON_CODES } from '../src/lib/dropoffReasons';
 
-// Lost-deal reasons per vertical (#2573). A SaleVali rep moving a lead to
+// Lost-deal reasons per vertical (#2573). A MARKETING rep moving a lead to
 // DEAL_LOST was offered hiring reasons ("Skill mismatch", "Location"), so every
 // loss was filed as OTHER and the breakdown said nothing. The org's vertical
 // now decides the list — on the write path (validateDropoffReason) and in the

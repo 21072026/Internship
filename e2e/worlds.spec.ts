@@ -242,7 +242,7 @@ test('forgot-password on the marketing host never mails an internship-only accou
     data: { email },
   });
   expect(onMarketing.status()).toBe(200);
-  // No SaleVali account for this address, so nothing is minted — and nothing is
+  // No marketing account for this address, so nothing is minted — and nothing is
   // mailed from the internship product either.
   expect(await tokensOf(internship.id)).toBe(0);
 
@@ -296,7 +296,7 @@ test('an invitation of the other world is refused on this host like an unknown t
   const unknown = await register(crypto.randomBytes(32).toString('hex'), freshIp('worlds-reg-cross-u'));
   const unknownBody = await unknown.json();
 
-  // A SaleVali invitation used on the internship host.
+  // A marketing invitation used on the internship host.
   const mktToken = await mint(org.id);
   const onDefault = await register(mktToken, freshIp('worlds-reg-cross-d'));
   expect(onDefault.status()).toBe(400);

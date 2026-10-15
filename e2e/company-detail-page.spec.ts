@@ -23,7 +23,7 @@ const chainRelationIds: string[] = [];
 const stamp = Date.now();
 const CONTACT_NAME = `Detail Contact ${stamp}`;
 const CONTACT_PHONE = '+49 30 1234 5678';
-const EXTERNAL_ID = `sv-merchant-${stamp}`;
+const EXTERNAL_ID = `ext-account-${stamp}`;
 const NEXT_ACTION = `Call back about the renewal ${stamp}`;
 const SUBJECT = `Detail check-in ${stamp}`;
 

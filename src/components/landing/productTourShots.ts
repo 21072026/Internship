@@ -27,7 +27,7 @@ export const PRODUCT_TOUR_SHOTS: TourShot[] = [
   { name: 'company', path: '/company/candidates' },
 ];
 
-/** The MARKETING (SaleVali) landing's three screens, captured on the marketing host against the `demo-marketing` tenant. */
+/** The MARKETING landing's three screens, captured on the marketing host against the `demo-marketing` tenant. */
 export const MARKETING_TOUR_SHOTS: TourShot[] = [
   { name: 'mkt-pipeline', path: '/admin/board' },
   { name: 'mkt-rep', path: '/sales' },

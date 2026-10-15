@@ -67,7 +67,7 @@ test('a recorded objection locks the contact-permission row like the opt-out lin
 });
 
 test('campaign codes are URL-safe and derived from the name', () => {
-  assert.equal(campaignCodeFrom('Herbst 2026 – OTTO-Händler'), 'herbst-2026-otto-handler');
+  assert.equal(campaignCodeFrom('Herbst 2026 – Shop-Händler'), 'herbst-2026-shop-handler');
   assert.equal(campaignCodeFrom('Straße & Söhne'), 'strasse-sohne');
   assert.equal(campaignCodeFrom('!!!'), 'kampagne');
   assert.equal(campaignCodeFrom('x'.repeat(80)).length, 60);

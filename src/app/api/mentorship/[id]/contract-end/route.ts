@@ -11,7 +11,7 @@ import { logActivity } from '@/lib/activity';
 import { parseContractEndDate, planContractEndChange } from '@/lib/contractEndRule';
 
 // PATCH /api/mentorship/<id>/contract-end — a won customer gave notice, or
-// withdrew it (#2841, decision #2572 option C). Body: `{ contractEndsAt:
+// withdrew it (#2841). Body: `{ contractEndsAt:
 // 'YYYY-MM-DD' }` to set the day the contract ends, `{ contractEndsAt: null }`
 // to clear it.
 //
@@ -21,7 +21,7 @@ import { parseContractEndDate, planContractEndChange } from '@/lib/contractEndRu
 // WHAT IT WRITES: the date (and clears the end-day bell's claim with it, so a
 // moved date rings on its new day). It NEVER moves the stage: the customer
 // pays until the end, so the record stays DEAL_WON; DEAL_LOST is a human's
-// move (#2572 Q3). AUDIT: an ActivityLog entry, `contract.end_changed`.
+// move. AUDIT: an ActivityLog entry, `contract.end_changed`.
 
 const bodySchema = z.object({ contractEndsAt: z.string().max(20).nullable() });
 

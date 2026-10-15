@@ -128,7 +128,7 @@ export async function POST(request: Request) {
             userId: rel.mentee.id,
             locale: rel.mentee.preferredLanguage,
             // The relation's org: outside the default world sendEmail names the
-            // sender after it, so a SaleVali lead never hears "from Internship CRM".
+            // sender after it, so a marketing lead never hears "from Internship CRM".
             orgId: rel.orgId,
           });
         } catch (e) {
