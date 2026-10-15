@@ -226,7 +226,12 @@ const SCREENS = {
     base: MARKETING_BASE_URL,
     email: 'owner.lena@demo.example.com',
     landing: '/sales',
-    open: (page, base) => page.goto(`${base}/sales`),
+    // The screen IS the landing page: sign-in already lands here, and a second
+    // goto can race the post-sign-in redirect ("interrupted by another
+    // navigation"). Navigate only when the page is somewhere else.
+    open: async (page, base) => {
+      if (new URL(page.url()).pathname !== '/sales') await page.goto(`${base}/sales`);
+    },
     ready: (page) => page.getByTestId('sales-dashboard'),
     scroll: { distance: 480, seconds: 2.2, hold: 1.2 },
   },
