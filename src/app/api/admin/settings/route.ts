@@ -119,6 +119,9 @@ const schema = z.object({
   // leaderboard switch (leaderboards are a non-goal there).
   salesMonthlyWonTarget: z.string().regex(/^\d{1,4}$/).or(z.literal('')).optional(),
   salesLeaderboardForReps: z.enum(['true', 'false']).optional(),
+  // Extra `external_id` header spellings for the marketing import (comma- or
+  // newline-separated; parseHeaderAliases() in src/lib/marketingImport.ts).
+  importExternalIdAliases: z.string().max(700).optional(),
   // Evaluation due dates (#1891). The stage is checked below against the
   // tenant's resolved stages — a key it does not have would silently never fire.
   evaluationInterimStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
@@ -126,7 +129,10 @@ const schema = z.object({
   evaluationFinalStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
 });
 
-const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] as const;
+// Keys that only exist in a vertical with the sales surface (pipeline, no
+// mentorship): the sales target and leaderboard, and the marketing import's
+// extra header aliases. Refused for any other vertical.
+const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps', 'importExternalIdAliases'] as const;
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.
 //

@@ -26,11 +26,12 @@
 // listed in key order, each key at most once, because the cards stack
 // ("Everything in Team, plus").
 //
-// The FALLBACK is the built-in list in src/lib/marketingPlans.ts: an unset
-// setting, or a stored value that no longer parses, reads as the built-in list
-// — a public page never renders an empty or half-parsed price list. The
-// resolver says which of the two it returned, so the caller can log a broken
-// row instead of hiding it.
+// There is NO built-in list: prices are a tenant's business, so they live only
+// as that tenant's data. An unset setting reads as "no list" (`source: 'none'`)
+// and a stored value that no longer parses as `invalid`, also without a list —
+// the page then shows its neutral "contact us for pricing" state, never an
+// empty or half-parsed price list. The resolver says which case it returned, so
+// the caller can log a broken row instead of hiding it.
 //
 // The one writer is the operator CLI `prisma/set-org-pricing.mjs`; its plain-ESM
 // validator mirrors `priceListSchema` below (the server runs Node 20, which
@@ -40,7 +41,7 @@
 // No `@/` imports, so the unit test can load this file directly.
 
 import { z } from 'zod';
-import { MARKETING_PLANS, MARKETING_PLAN_KEYS, type MarketingPlanKey } from './marketingPlans';
+import { MARKETING_PLAN_KEYS, type MarketingPlanKey } from './marketingPlans';
 
 /** Two-decimal currencies only — the same closed list deal values use. */
 export const PRICE_LIST_CURRENCIES = ['EUR', 'CHF', 'GBP', 'USD', 'TRY'] as const;
@@ -123,31 +124,21 @@ export function parsePriceList(raw: string | null | undefined): PriceListParse {
   return { ok: true, value: parsed.data as PriceList };
 }
 
-/** The built-in list (src/lib/marketingPlans.ts) in the stored shape: EUR, minor units. */
-export function builtinPriceList(): PriceList {
-  return {
-    currency: 'EUR',
-    plans: MARKETING_PLANS.map((p) => ({
-      key: p.key,
-      annualSeatMinor: p.annualSeatEur * 100,
-      monthlySeatMinor: p.monthlySeatEur == null ? null : p.monthlySeatEur * 100,
-      minSeats: p.minSeats,
-      onboardingMinor: p.onboardingEur * 100,
-    })),
-  };
-}
+export type PriceListSource = 'org' | 'none' | 'invalid';
 
-export type PriceListSource = 'org' | 'builtin' | 'invalid';
+export type ResolvedPriceList =
+  | { source: 'org'; list: PriceList }
+  | { source: 'none' | 'invalid'; list: null };
 
 /**
  * The list a page shows for a stored setting value: the stored one when it
- * parses, the built-in one otherwise. `source` is `builtin` for an unset value
- * and `invalid` for a value that is set but does not parse (the caller logs it).
+ * parses, else none. `source` is `none` for an unset value and `invalid` for a
+ * value that is set but does not parse (the caller logs it).
  */
-export function resolvePriceList(raw: string | null | undefined): { source: PriceListSource; list: PriceList } {
-  if (!(raw ?? '').trim()) return { source: 'builtin', list: builtinPriceList() };
+export function resolvePriceList(raw: string | null | undefined): ResolvedPriceList {
+  if (!(raw ?? '').trim()) return { source: 'none', list: null };
   const parsed = parsePriceList(raw);
-  return parsed.ok ? { source: 'org', list: parsed.value } : { source: 'invalid', list: builtinPriceList() };
+  return parsed.ok ? { source: 'org', list: parsed.value } : { source: 'invalid', list: null };
 }
 
 /** The "from" price the landing FAQ quotes: the cheapest annual seat. */

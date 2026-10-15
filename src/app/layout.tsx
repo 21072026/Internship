@@ -73,19 +73,19 @@ export async function generateMetadata(): Promise<Metadata> {
   icons: {
     icon: isMarketing
       ? [
-          { url: '/icon-salevali.svg', type: 'image/svg+xml' },
-          { url: '/icon-salevali-192.png', type: 'image/png', sizes: '192x192' },
+          { url: '/icon-core.svg', type: 'image/svg+xml' },
+          { url: '/icon-core-192.png', type: 'image/png', sizes: '192x192' },
         ]
       : [
           { url: '/icon.svg', type: 'image/svg+xml' },
           { url: '/favicon.ico', sizes: 'any' },
         ],
-    apple: isMarketing ? '/apple-touch-icon-salevali.png' : '/apple-touch-icon.png',
+    apple: isMarketing ? '/apple-touch-icon-core.png' : '/apple-touch-icon.png',
     // iOS launch screens for the installed app (#2084). Safari ignores the
     // manifest here and wants one media-matched <link> per device resolution,
     // so the list — and the images under public/splash/ — are both generated
     // from the device table in lib/appleSplash.ts. One set per product mark.
-    other: appleSplashLinks(isMarketing ? 'salevali' : ''),
+    other: appleSplashLinks(isMarketing ? 'core' : ''),
   },
   };
   // A host mapped to an organization that carries brand data (#2922) wears that

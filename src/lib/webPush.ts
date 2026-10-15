@@ -60,7 +60,7 @@ export interface PushPayload {
 // A Record over every vertical, so a new one cannot ship without its own icon.
 const PUSH_ICON: Record<VerticalKey, string> = {
   INTERNSHIP: '/icon-192.png',
-  MARKETING: '/icon-salevali-192.png',
+  MARKETING: '/icon-core-192.png',
 };
 
 // The recipient organization's own icon (#2922) when it uploaded a mark — the

@@ -6,9 +6,7 @@
 // its own letter (the `postLetterTemplate` setting, written from the
 // acquisition page) starts every new campaign from it — `resolveLetterBody()`.
 // The built-in letters below are the fallback for an organization that has
-// not. The MARKETING one is a placeholder kept only until every marketing
-// organization has its own letter; a later change replaces it with neutral
-// text.
+// not; the MARKETING one is a short generic text about "unser Produkt".
 //
 // German on purpose, whatever the admin's UI language: the recipients are
 // businesses in Germany, and the Art. 14 notice is a legal text addressed to
@@ -30,18 +28,17 @@ export const PROSPECT_RETENTION_MONTHS = 24;
 export const LETTER_BODY_MIN = 20;
 export const LETTER_BODY_MAX = 6000;
 
-// The MARKETING fallback letter (see the header): to be replaced, not extended.
+// The MARKETING fallback letter: deliberately generic. What a marketing
+// tenant sells is its own business, so its real letter is its own data
+// (`postLetterTemplate`); this text only gives a new campaign a sensible,
+// editable shape with the same placeholders.
 const MARKETING_BUILTIN_LETTER = `{salutation}
 
-Sie verkaufen als {company} online — und vermutlich kostet nicht der Verkauf selbst die meiste Zeit, sondern alles danach: Bestellungen aus mehreren Kanälen zusammenführen, Rechnungen und Gutschriften schreiben, Bestände abgleichen.
+wir möchten {company} kurz unser Produkt vorstellen. Es nimmt Ihrem Team wiederkehrende Arbeit ab und bündelt, was heute auf mehrere Werkzeuge verteilt ist.
 
-Genau dafür gibt es SaleVali, eine cloudbasierte Warenwirtschaft für Online-Händler, die auf Amazon, eBay, OTTO oder im eigenen Shop verkaufen. Drei Dinge, die Sie wissen sollten:
+Gern zeigen wir Ihnen in einem kurzen Gespräch, wie das an Ihren eigenen Abläufen aussieht — unverbindlich und ohne Abo.
 
-1. Bis zu 10 Vorgänge im Monat kosten nichts. Darüber zahlen Sie nach Vorgängen, ab 9,90 € im Monat — die Staffel steht offen auf unserer Website.
-2. Sie können SaleVali 30 Tage kostenlos testen. Der Test endet von selbst; es entsteht kein Abo, das Sie kündigen müssten.
-3. Wir zeigen es Ihnen gern an Ihren eigenen Abläufen, in 20 Minuten.
-
-Wenn das für Sie interessant ist, fordern Sie die Demo unter dem Link unten an oder antworten Sie formlos auf diesen Brief — wir melden uns, wie es Ihnen passt.
+Wenn das für Sie interessant ist, finden Sie alles Weitere unter dem Link unten, oder Sie antworten formlos auf diesen Brief.
 
 {link}
 
@@ -88,7 +85,7 @@ export function resolveLetterBody(
 
 /** The written balancing of interests (Art. 6 Abs. 1 lit. f) a campaign starts from. */
 export function defaultBalancingNote(vertical: VerticalKey): string {
-  const audience = vertical === 'MARKETING' ? 'Online-Händler' : 'Einrichtungen mit Praktikums- oder Mentoringprogrammen';
+  const audience = vertical === 'MARKETING' ? 'die angeschriebenen Unternehmen' : 'Einrichtungen mit Praktikums- oder Mentoringprogrammen';
   return `Berechtigtes Interesse: Direktwerbung für ein Produkt, das für ${audience} fachlich einschlägig ist (ErwG 47 S. 7 DSGVO).
 Verarbeitet werden nur Firmenname, Ansprechperson und Geschäftsanschrift aus öffentlich zugänglichen Quellen (Impressum nach § 5 DDG).
 Interessen der Betroffenen: einmaliger Brief, keine elektronische Ansprache, keine Profilbildung; Art.-14-Hinweis und Widerspruchsrecht auf jedem Brief; Widerspruch führt zur dauerhaften Sperre; höchstens ein Brief je ${POST_COOLDOWN_DAYS} Tage.

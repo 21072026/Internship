@@ -128,7 +128,7 @@ test('every vertical has a non-empty product name, and productNameFor resolves i
     assert.ok(v.productName.trim().length > 0, `${v.key} has an empty productName`);
   }
   assert.equal(productNameFor('INTERNSHIP'), 'Internship CRM');
-  assert.equal(productNameFor('MARKETING'), 'SaleVali');
+  assert.equal(productNameFor('MARKETING'), 'coreCRM');
   // Total function: an unknown key falls back to the default vertical's name.
   assert.equal(productNameFor('nope'), productNameFor(DEFAULT_VERTICAL));
 });

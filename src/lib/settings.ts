@@ -243,16 +243,22 @@ export const SETTING_DEFAULTS = {
   // landing FAQ (#2927): one JSON document, integer minor units + an ISO
   // currency, validated by src/lib/marketingPriceListRule.ts. Read for the org
   // bound to a marketing host (`Organization.publicHost`) only. `''` (default)
-  // = the built-in list in src/lib/marketingPlans.ts; a value that does not
-  // parse reads as that too (and is logged). Written by the operator CLI
-  // `prisma/set-org-pricing.mjs` (dry run by default), not by the settings form:
-  // it is a published price, and the CLI validates it before it is stored.
+  // = no list: /pricing shows "pricing on request" and the FAQ names no figure;
+  // a value that does not parse reads as that too (and is logged). Written by
+  // the operator CLI `prisma/set-org-pricing.mjs` (dry run by default), not by
+  // the settings form: it is a published price, and the CLI validates it before it is stored.
   marketingPriceList: '',
   // The letter a new postal campaign of this org starts from (#2697, #2927).
   // `''` (default) = the vertical's built-in letter
   // (src/lib/postCampaignTemplates.ts). Set from the acquisition page ("save
   // as our default letter"), through PUT /api/admin/post-campaigns/letter-template.
   postLetterTemplate: '',
+  // Extra header spellings of the marketing import's `external_id` column
+  // (src/lib/marketingImport.ts, parseHeaderAliases()): a comma- or
+  // newline-separated list, e.g. the name the tenant's own export gives its
+  // account id. `''` (default) = none — the canonical header and the generic
+  // aliases always work. MARKETING only; written through PUT /api/admin/settings.
+  importExternalIdAliases: '',
   // Who owns a new MARKETING lead nobody named an owner for (#2580 item 3,
   // #2569): a User id of this org (ADMIN or MENTOR, active). Read by the
   // marketing landing's demo form (the request lands straight on this person's

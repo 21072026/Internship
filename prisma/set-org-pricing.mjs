@@ -4,7 +4,7 @@
 //
 //   node prisma/set-org-pricing.mjs --org <slug|id> --file <price-list.json>           # dry run
 //   node prisma/set-org-pricing.mjs --org <slug|id> --file <price-list.json> --apply   # write
-//   node prisma/set-org-pricing.mjs --org <slug|id> --clear [--apply]                  # back to the built-in list
+//   node prisma/set-org-pricing.mjs --org <slug|id> --clear [--apply]                  # back to "pricing on request"
 //   node prisma/set-org-pricing.mjs --org <slug|id>                                    # show what is stored
 //
 // DRY RUN BY DEFAULT: without --apply it validates the file, prints the list it
@@ -153,15 +153,15 @@ async function main() {
 
     const row = await prisma.setting.findFirst({ where: { orgId: org.id, key: SETTING_KEY }, select: { id: true, value: true } });
     const current = row ? parsePriceListText(row.value) : null;
-    console.log(`Organization: ${org.slug} (${org.id}), public host: ${org.publicHost ?? 'none — /pricing shows the built-in list on every host'}`);
-    if (!row || !row.value.trim()) console.log('Stored today: nothing (the built-in list applies).');
+    console.log(`Organization: ${org.slug} (${org.id}), public host: ${org.publicHost ?? 'none — /pricing shows no price list on any host'}`);
+    if (!row || !row.value.trim()) console.log('Stored today: nothing (/pricing shows "pricing on request").');
     else if (current?.ok) console.log(`Stored today:\n${describePriceList(current.value)}`);
-    else console.log(`Stored today: a value that does not parse (the built-in list applies): ${current?.errors.join('; ')}`);
+    else console.log(`Stored today: a value that does not parse (/pricing shows "pricing on request"): ${current?.errors.join('; ')}`);
 
     if (!file && !clear) return;
 
     if (clear) {
-      console.log('Would remove the stored list (the built-in list applies again).');
+      console.log('Would remove the stored list (/pricing shows "pricing on request" again).');
     } else {
       console.log(`Would store:\n${describePriceList(next)}`);
     }

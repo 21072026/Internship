@@ -121,6 +121,18 @@ the default takes **exactly the code path it took before #2922** — that is how
 a deployment where no organization carries brand data renders byte-identical
 pages, manifests and mail.
 
+**The vertical defaults are neutral** (#2939). INTERNSHIP is *Internship CRM*,
+the graduation cap on blue. MARKETING is *coreCRM*: the product blue
+(`DEFAULT_ACCENT`, theme-color `#1D4ED8`, mail accent `#2563eb`) and a lucide
+trend-line glyph on a slate tile (`#1e293b`, `public/icon-core.svg` and the
+`-core` PNG/splash set `scripts/generate-pwa-images.ts` cuts from it). No
+tenant's name, mark, colours, prices or letter live in the code: a marketing
+tenant's brand is its organization's data, and a marketing host bound to no
+branded organization shows coreCRM. Without a stored price list
+(`marketingPriceList`) `/pricing` shows "pricing on request" and the landing FAQ
+names no figure; without a saved letter (`postLetterTemplate`) a postal
+campaign starts from a short generic German text.
+
 A worked, synthetic example: an organization *Acme Sales* (MARKETING) mapped to
 `acme.example.test`, with `brandColor` `#0e7490`, tile `#1e293b`, accent
 *Organization colour* and an uploaded mark. A visitor on `acme.example.test`

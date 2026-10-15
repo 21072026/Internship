@@ -4,7 +4,7 @@
 // The landing used to describe the product in words only: a visitor read
 // "pipeline tracking" and had to sign up for the demo to see what that meant.
 // This script drives real screens against the LOCAL demo seed — three for the
-// internship landing, three `mkt-*` ones for the MARKETING (SaleVali) landing,
+// internship landing, three `mkt-*` ones for the MARKETING landing (the neutral coreCRM default),
 // captured on marketing.localhost — and writes
 // them into public/screenshots/, where src/components/landing/ProductTour.tsx
 // shows them:
@@ -43,7 +43,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-// The MARKETING product (SaleVali) is the same server on another host name:
+// The MARKETING product is the same server on another host name:
 // the URL a person signs in on picks the product (docs/worlds.md). Locally that
 // is marketing.localhost, which must be listed in the server's MARKETING_HOSTS.
 const MARKETING_BASE_URL = process.env.MARKETING_BASE_URL || BASE_URL.replace(/\/\/(localhost|127\.0\.0\.1)/, '//marketing.localhost');
@@ -155,7 +155,7 @@ async function dragGhost(page, card, target, ms = 1300) {
  * One entry per landing screen. `open` navigates and `ready` is the element
  * whose arrival means it has rendered. `play` is the clip's one action. `base`
  * is the host it is captured on — the internship host unless it says otherwise.
- * The `mkt-*` screens are the MARKETING landing's tour (SaleVali), captured on
+ * The `mkt-*` screens are the MARKETING landing's tour (neutral default brand), captured on
  * the marketing host against the seeded `demo-marketing` tenant.
  */
 const SCREENS = {
@@ -205,7 +205,7 @@ const SCREENS = {
       await note.pressSequentially(TEXT.note, { delay: 45 });
     },
   },
-  // ── MARKETING (SaleVali) ──────────────────────────────────────────────────
+  // ── MARKETING (neutral default brand) ──────────────────────────────────────────────────
   'mkt-pipeline': {
     base: MARKETING_BASE_URL,
     email: 'admin.marketing@demo.example.com',

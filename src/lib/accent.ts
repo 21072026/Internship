@@ -7,10 +7,9 @@
 import { IS_PREVIEW } from '@/lib/appEnv';
 import type { VerticalKey } from '@/lib/verticals';
 
-// 'magenta' is SaleVali's brand (#2492): the MARKETING vertical's default, and
-// pickable by anyone. Its 600 (#b929cf) sits between the brand primary #cc33e5
-// (kept at 500, fills only) and the brand dark #9b1dbd (700) so white button
-// text clears WCAG AA (4.9:1) — the primary itself is 4.1:1 and does not.
+// 'magenta' is a pickable accent on Tailwind's fuchsia ramp; its 600 (#c026d3)
+// gives white button text 4.71:1, so it clears WCAG AA. The key keeps its name
+// because people have it saved.
 export const ACCENT_COLORS = ['blue', 'green', 'purple', 'rose', 'teal', 'amber', 'magenta'] as const;
 export type AccentColor = (typeof ACCENT_COLORS)[number];
 
@@ -24,7 +23,7 @@ export const ACCENT_SWATCH: Record<AccentColor, string> = {
   rose: '#e11d48',
   teal: '#0d9488',
   amber: '#d97706',
-  magenta: '#b929cf',
+  magenta: '#c026d3',
 };
 
 export function isAccentColor(value: unknown): value is AccentColor {
@@ -36,27 +35,27 @@ export function isAccentColor(value: unknown): value is AccentColor {
 export const DEFAULT_ACCENT: AccentColor = IS_PREVIEW ? 'green' : 'blue';
 
 // The browser-UI tint (`theme-color` meta, manifest `theme_color`) per vertical
-// (#2492): SaleVali magenta-600 on a marketing host, the internship blue-700
-// everywhere else. Read by both viewport exports (root + /messages) and the
-// manifest, so the three cannot drift — a SaleVali install whose Messages
-// shortcut painted the status bar blue was the drift this closes.
-export const THEME_COLOR: Record<VerticalKey, string> = { INTERNSHIP: '#1D4ED8', MARKETING: '#b929cf' };
+// (#2492). Both worlds wear the product blue-700 by default: the worlds are told
+// apart by their name, and an organization's own tint is data (`brandColor`,
+// src/lib/brandRule.ts). Read by both viewport exports (root + /messages) and
+// the manifest, so the three cannot drift.
+export const THEME_COLOR: Record<VerticalKey, string> = { INTERNSHIP: '#1D4ED8', MARKETING: '#1D4ED8' };
 export function themeColorFor(vertical?: VerticalKey | null): string {
   return vertical === 'MARKETING' ? THEME_COLOR.MARKETING : THEME_COLOR.INTERNSHIP;
 }
 
-// The accent a vertical wears when nobody chose one (#2492): SaleVali's magenta
-// for MARKETING, the environment default (blue; green on preview) otherwise.
-export function defaultAccentFor(vertical?: VerticalKey | null): AccentColor {
-  return vertical === 'MARKETING' ? 'magenta' : DEFAULT_ACCENT;
+// The accent a vertical wears when nobody chose one: the environment default
+// (blue; green on preview) in every vertical. An organization's own default
+// accent is data (`brandAccent`).
+export function defaultAccentFor(_vertical?: VerticalKey | null): AccentColor {
+  return DEFAULT_ACCENT;
 }
 
-// The accent a MAIL wears when its tenant set no brand colour: SaleVali magenta
-// for MARKETING, the product blue otherwise. Never the preview green — a mail
-// outlives the environment that sent it, and the internship default has always
-// been this blue.
-export function mailAccentFor(vertical?: VerticalKey | null): string {
-  return vertical === 'MARKETING' ? ACCENT_SWATCH.magenta : ACCENT_SWATCH.blue;
+// The accent a MAIL wears when its tenant set no brand colour: the product
+// blue in every vertical. Never the preview green — a mail outlives the
+// environment that sent it.
+export function mailAccentFor(_vertical?: VerticalKey | null): string {
+  return ACCENT_SWATCH.blue;
 }
 
 // Resolve the accent to apply: an explicit user preference wins, otherwise the

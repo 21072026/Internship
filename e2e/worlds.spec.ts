@@ -419,7 +419,7 @@ test('the sign-in page on the marketing host answers an internship-only person i
   await submitSignInForm(page, email, INTERNSHIP_PW);
 
   const box = page.getByTestId('signin-error');
-  await expect(box).toHaveText('There is no SaleVali account with these details.', { timeout: 15_000 });
+  await expect(box).toHaveText('There is no coreCRM account with these details.', { timeout: 15_000 });
   // The other product is neither named nor linked, and the raw code is not printed.
   await expect(box).not.toContainText('Internship CRM');
   await expect(box.locator('a')).toHaveCount(0);
@@ -432,6 +432,6 @@ test('the marketing register page names only its own product', async ({ page }) 
   await gotoSettled(page, '/auth/register');
   const hint = page.getByTestId('separate-account-hint');
   await expect(hint).toBeVisible({ timeout: 15_000 });
-  await expect(hint).toContainText('SaleVali');
+  await expect(hint).toContainText('coreCRM');
   await expect(hint).not.toContainText('Internship CRM');
 });

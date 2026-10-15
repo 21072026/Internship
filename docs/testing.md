@@ -25,7 +25,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
-| **Forbidden terms** | No name from a secret term list on the visible surface: added lines, new file names, commit messages and authors, branch name, PR title and body; the whole tree on `main` | `scripts/check-forbidden-terms.mjs` | `forbidden-terms.yml`: blocking on every PR and on every push to `main`, warn-only tree scan on `main` + daily ([below](#forbidden-terms-guard-2919)) |
+| **Forbidden terms** | No name from a secret term list on the visible surface: added lines, new file names, commit messages and authors, branch name, PR title and body; the whole tree on `main` | `scripts/check-forbidden-terms.mjs` | `forbidden-terms.yml`: blocking on every PR and on every push to `main`, blocking tree scan on `main` + daily ([below](#forbidden-terms-guard-2919)) |
 
 Every row above the two load rows is a **functional / correctness** test: given an input,
 is the output right? The two load rows are **non-functional**: the app may be correct yet
@@ -851,8 +851,9 @@ too (#2719).
 - **`--tree` scans everything** that is tracked: every path, and every text file's
   content. Binary files cannot be read as text, so they are reported as an
   "unscannable binary" count; images and video need a person's eye. The scan runs on
-  every push to `main`, daily and on demand. It stays **warn-only** until the existing
-  tree is clean. The one switch is the `continue-on-error` line on its step.
+  every push to `main`, daily and on demand. It is **blocking** since the tree was
+  cleaned (#2939); the one switch back to warn-only is the `continue-on-error` line on
+  its step.
 - **Fail closed where the secret exists.** Every run that gets this repository's secrets
   (a PR from a branch here, a push, the tree scan) sets `REQUIRE_TERMS=1`, so an unset
   or emptied `FORBIDDEN_TERMS` is a red check, not a pass. Only a **fork PR** and a

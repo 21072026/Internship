@@ -573,14 +573,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
         },
       },
-      // /pricing (#2475). The marketing product's price list lives in
-      // src/lib/marketingPlans.ts (published 2026-10-06); the internship
+      // /pricing (#2475). The marketing price list is the host organization's
+      // data (#2927, src/lib/marketingPriceList.ts); the internship
       // sections stay hidden there (see src/app/pricing/page.tsx) and these
       // strings frame the page for a sales team.
       pricing: {
         heroBadge: '{product} pricing',
         heroTitle: 'One price per user, no surprises',
-        heroSubtitle: 'Three plans for sales teams, billed per user. No hidden add-ons — and if you would rather run it yourself, the code is open source.',
+        heroSubtitle: 'Plans for sales teams, billed per user. No hidden add-ons — and if you would rather run it yourself, the code is open source.',
         discountsTitle: 'What is already true',
       },
       bulkInvite: { roleMentee: 'Lead', roleMentor: 'Sales rep' },
@@ -798,7 +798,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         openers: {
           welcome: {
             label: '👋 Hoş geldiniz',
-            text: 'Merhaba {name}, {product}\'ye gösterdiğiniz ilgi için teşekkürler! Bundan sonra muhatabınız benim — aklınıza takılan her şeyi bu sohbetten yazabilirsiniz.',
+            text: 'Merhaba {name}, {product} ile ilgilendiğiniz için teşekkürler! Bundan sonra muhatabınız benim — aklınıza takılan her şeyi bu sohbetten yazabilirsiniz.',
           },
           introCall: {
             label: 'Demo ayarla',
@@ -1075,7 +1075,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       pricing: {
         heroBadge: '{product} fiyatları',
         heroTitle: 'Kullanıcı başına tek fiyat, sürpriz yok',
-        heroSubtitle: 'Satış ekipleri için kullanıcı başına faturalanan üç paket. Gizli ek ücret yok — kendiniz çalıştırmak isterseniz kod açık kaynak.',
+        heroSubtitle: 'Satış ekipleri için kullanıcı başına faturalanan paketler. Gizli ek ücret yok — kendiniz çalıştırmak isterseniz kod açık kaynak.',
         discountsTitle: 'Şimdiden doğru olanlar',
       },
       bulkInvite: { roleMentee: 'Müşteri adayı', roleMentor: 'Satış temsilcisi' },
@@ -1131,13 +1131,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         freeNote: 'Bu sayfadaki hiçbir şey ücretli bir eklenti değil.',
       },
       accessibility: {
-        intro: '{product}’yi bir satış temsilcisinin, bir yöneticinin ya da bir sistem yöneticisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
+        intro: '{product} uygulamasını bir satış temsilcisinin, bir yöneticinin ya da bir sistem yöneticisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
         scopeBody: 'Bu kurulumdan sunulan {product} web uygulaması: herkese açık sayfalar, giriş akışı ve arkasındaki temsilci ve yönetici alanları. Kullanıcıların yüklediği dosyaları, başkasının posta istemcisinde görüntülenen e-postaları ve aşağıda adı geçen üçüncü taraf hizmetleri kapsamaz.',
         evidence: {
           dragAlternative: 'Pipeline panosu sürükle-bırak olmadan da kullanılabiliyor: her kartta, fırsatı yalnızca klavyeyle taşıyan bir aşama seçici var.',
         },
         limitations: {
-          thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca {product}’nin gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
+          thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca {product} uygulamasının gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
         },
       },
       ai: {
@@ -1553,7 +1553,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       pricing: {
         heroBadge: '{product}-Preise',
         heroTitle: 'Ein Preis pro Nutzer, keine Überraschungen',
-        heroSubtitle: 'Drei Pläne für Vertriebsteams, abgerechnet pro Nutzer. Keine versteckten Zusatzkosten — und wer es selbst betreiben will: Der Code ist Open Source.',
+        heroSubtitle: 'Pläne für Vertriebsteams, abgerechnet pro Nutzer. Keine versteckten Zusatzkosten — und wer es selbst betreiben will: Der Code ist Open Source.',
         discountsTitle: 'Was schon heute gilt',
       },
       bulkInvite: { roleMentee: 'Lead', roleMentor: 'Vertriebsmitarbeiter' },

@@ -39,6 +39,7 @@ import { resolvePipelineStages } from './pipelineStages';
 import { startStageKey } from './pipeline';
 import { statusChangeData } from './stageChange';
 import { trialLengthDaysFor } from './trialWindow';
+import { getSetting } from './settings';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
 import { normalizeEmailKey } from './duplicateDetection';
 import { findUsersByEmail, worldOfOrg } from './userWorld';
@@ -59,6 +60,7 @@ import {
   funnelRelationUpdateData,
   leadStandInEmail,
   makeMarketingValidator,
+  parseHeaderAliases,
   manualAccountTable,
   previewWriter,
   type ManualAccountFields,
@@ -660,7 +662,8 @@ async function runMarketingRows(core: MarketingRunCore) {
     const stageKeys = stages.map((s) => s.key);
     const offPathStages = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
 
-    const validate = makeMarketingValidator({ stageKeys });
+    const externalIdAliases = parseHeaderAliases(await getSetting('importExternalIdAliases', orgId));
+    const validate = makeMarketingValidator({ stageKeys, externalIdAliases });
     const trialLengthDays = await trialLengthDaysFor(orgId);
     const database = databaseWriter({
       orgId,

@@ -70,7 +70,7 @@ export async function PublicShell({
     '@type': 'Organization',
     name: await requestProductName(vertical),
     url: `${origin}/`,
-    logo: `${origin}${isMarketing ? '/icon-salevali-192.png' : '/apple-touch-icon.png'}`,
+    logo: `${origin}${isMarketing ? '/icon-core-192.png' : '/apple-touch-icon.png'}`,
     sameAs: [GITHUB_URL],
     founder: { '@type': 'Person', name: FOUNDER_NAME, url: FOUNDER_URL },
   };

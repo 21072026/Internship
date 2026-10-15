@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { hostVertical } from '@/lib/hostVertical';
 import { themeColorFor } from '@/lib/accent';
+import { productNameFor } from '@/lib/verticals';
 import { hostBrand, type ResolvedBrand } from '@/lib/hostBrand';
 import { brandAssetPath } from '@/lib/brandRule';
 
@@ -14,7 +15,7 @@ import { brandAssetPath } from '@/lib/brandRule';
 // dictionaries as usual.
 // Two products, one manifest route (#2492): a manifest is fetched without
 // cookies, so the only vertical signal is the host — hostVertical(), never the
-// session. A marketing host installs as "SaleVali" with the brand icon and tint;
+// session. A marketing host installs as the neutral "coreCRM" with its own icon and tint;
 // everything else is byte-identical to the internship manifest below.
 //
 // Per-organization brand (#2922): a host mapped to an organization that carries
@@ -56,8 +57,8 @@ async function verticalManifest(): Promise<MetadataRoute.Manifest> {
   if (marketing) {
     return {
       id: '/',
-      name: 'SaleVali',
-      short_name: 'SaleVali',
+      name: productNameFor('MARKETING'),
+      short_name: productNameFor('MARKETING'),
       description: 'Leads, accounts and deals in one pipeline',
       lang: 'en',
       dir: 'ltr',
@@ -70,18 +71,18 @@ async function verticalManifest(): Promise<MetadataRoute.Manifest> {
       theme_color: themeColorFor('MARKETING'),
       orientation: 'any',
       icons: [
-        { src: '/icon-salevali.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-        { src: '/icon-salevali-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-        { src: '/icon-salevali-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-        { src: '/icon-salevali-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: '/icon-core.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        { src: '/icon-core-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/icon-core-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icon-core-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
       // Role-neutral destinations that exist for a marketing tenant too. The
-      // glyphs sit on the brand's purple tile (scripts/generate-pwa-images.ts),
+      // glyphs sit on the neutral slate tile (scripts/generate-pwa-images.ts),
       // not the internship blue one.
       shortcuts: [
-        { name: 'Messages', short_name: 'Messages', description: 'Open your conversations', url: '/messages', icons: [{ src: '/shortcut-messages-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
-        { name: 'To-dos', short_name: 'To-dos', description: 'Everything on your list', url: '/todos', icons: [{ src: '/shortcut-todos-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
-        { name: 'Notifications', short_name: 'Alerts', description: 'What happened while you were away', url: '/notifications', icons: [{ src: '/shortcut-notifications-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'Messages', short_name: 'Messages', description: 'Open your conversations', url: '/messages', icons: [{ src: '/shortcut-messages-core-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'To-dos', short_name: 'To-dos', description: 'Everything on your list', url: '/todos', icons: [{ src: '/shortcut-todos-core-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'Notifications', short_name: 'Alerts', description: 'What happened while you were away', url: '/notifications', icons: [{ src: '/shortcut-notifications-core-96.png', sizes: '96x96', type: 'image/png' }] },
       ],
       share_target: { action: '/share', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
     };

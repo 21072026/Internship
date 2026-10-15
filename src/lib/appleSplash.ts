@@ -49,10 +49,10 @@ export function splashPixels(d: AppleSplashDevice): { w: number; h: number } {
 
 /**
  * Image variants, one per product mark (#2492): '' is the internship cap,
- * 'salevali' the SaleVali tile. The suffix is part of the file name so both
+ * 'core' the neutral MARKETING default tile. The suffix is part of the file name so both
  * sets sit side by side under public/splash/.
  */
-export type SplashVariant = '' | 'salevali';
+export type SplashVariant = '' | 'core';
 
 /** Public path of the generated image for a device. */
 export function splashHref(d: AppleSplashDevice, variant: SplashVariant = ''): string {

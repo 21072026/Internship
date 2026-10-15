@@ -109,14 +109,14 @@ export default async function HomePage() {
     { q: L.faqCompany3Q, a: L.faqCompany3A }, { q: L.faqCompany1Q, a: L.faqCompany1A },
   ];
   // The "from" price is the cheapest annual seat of the list /pricing shows on
-  // this host — the bound organization's own, or the built-in one (#2927).
-  // Looked up for a marketing host only, like the demo form above.
+  // this host — the bound organization's own (#2927). Without a list the answer
+  // names no figure. Looked up for a marketing host only, like the demo form above.
   const priceList = isMarketing ? (await marketingPriceListForHost(requestHostHeader(await headers()))).list : null;
   const fromPrice = priceList ? formatMinorPrice(priceListFromSeatMinor(priceList), priceList.currency, locale) : '';
   const marketingFaq = [
     { q: L.faqMarketing1Q.replace('{product}', product), a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
     { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
-    { q: L.faqMarketing5Q, a: L.faqMarketing5A.replace('{from}', fromPrice) }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
+    { q: L.faqMarketing5Q, a: fromPrice ? L.faqMarketing5A.replace('{from}', fromPrice) : L.faqMarketing5AOnRequest }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
   ];
   const faq = isMarketing ? marketingFaq : internshipFaq;
 

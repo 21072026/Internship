@@ -28,9 +28,8 @@ name: Forbidden terms
 #           check after the fact, not a gate: with no branch protection nothing
 #           stops a push, so the PR job is where a name is meant to be caught.
 #   tree  — every push to main, daily, and by hand: the whole tracked tree.
-#           WARN-ONLY while the cleanup of the existing tree is in progress; the
-#           `continue-on-error` line on its step is the one switch that makes it
-#           blocking.
+#           BLOCKING since the tree was cleaned (#2939); the `continue-on-error`
+#           line on its step is the one switch back to warn-only.
 #
 # NO PATH FILTER, on purpose: a docs-only change can carry a name as easily as
 # code, and a path-filtered workflow reports nothing at all for the PRs it
@@ -121,10 +120,10 @@ jobs:
           persist-credentials: false
 
       - name: Scan every tracked file and path
-        # THE SWITCH: true = warn only (findings show in the log and the job
-        # summary, the run stays green). Set it to false once the tree is clean,
-        # and the tree scan blocks like the PR scan.
-        continue-on-error: true
+        # THE SWITCH: false = blocking, like the PR scan (the tree has been
+        # clean since #2939). true = warn only (findings show in the log and the
+        # job summary, the run stays green).
+        continue-on-error: false
         env:
           FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
           REQUIRE_TERMS: '1'

@@ -344,17 +344,16 @@ html[data-accent="amber"] {
   --accent-800:#92400e; --accent-900:#78350f;
   --accent-tint:rgba(120,53,15,0.25); --accent-tint-hover:rgba(120,53,15,0.35);
 }
-/* SaleVali magenta (#2492) — the MARKETING vertical's default. Anchored on the
-   brand: 50/100 = brand light/mid tints, 500 = brand primary #cc33e5 (fills,
-   progress bars, rings — never text on it), 600 = #b929cf so white text on
-   primary buttons is 4.9:1 and the link colour is 4.7:1 on the gray-50 body,
-   700 = brand dark #9b1dbd. 800/900 extend the ramp at Tailwind's own
-   lightness steps; tint = the 900 shade at .25/.35 like every other accent. */
+/* Magenta — a pickable accent, on Tailwind's fuchsia ramp (600 = #c026d3:
+   4.71:1 for white button text, 4.51:1 on the gray-50 body, so it passes AA).
+   The key keeps its name because people have it saved; 500 is for fills,
+   progress bars and rings — never text on it. Tint = the 900 shade at
+   .25/.35 like every other accent. */
 html[data-accent="magenta"] {
-  --accent-50:#f8e9fd; --accent-100:#eedcfb; --accent-200:#eaccfd; --accent-300:#e4affe;
-  --accent-400:#dd83fc; --accent-500:#cc33e5; --accent-600:#b929cf; --accent-700:#9b1dbd;
-  --accent-800:#7c25a4; --accent-900:#60248b;
-  --accent-tint:rgba(96,36,139,0.25); --accent-tint-hover:rgba(96,36,139,0.35);
+  --accent-50:#fdf4ff; --accent-100:#fae8ff; --accent-200:#f5d0fe; --accent-300:#f0abfc;
+  --accent-400:#e879f9; --accent-500:#d946ef; --accent-600:#c026d3; --accent-700:#a21caf;
+  --accent-800:#86198f; --accent-900:#701a75;
+  --accent-tint:rgba(112,26,117,0.25); --accent-tint-hover:rgba(112,26,117,0.35);
 }
 /* An organization's own palette (#2922). Its values are DATA, not CSS: the
    root layout writes them as --brand-50 … --brand-900 and --brand-tint(-hover)
@@ -413,7 +412,7 @@ html[data-accent] .text-blue-600 { color: var(--accent-600); }
 html.dark .text-blue-600 { color: #93c5fd; } /* blue-300 — 8.6:1 on gray-950 */
 /* …and with an accent, that accent's own -300: every -300 in the palettes above
    is a light shade (blue's is the same #93c5fd), so contrast holds, and the
-   MARKETING landing's magenta hero accent no longer turns blue in dark mode. */
+   landing's accented hero line no longer turns blue in dark mode. */
 html.dark[data-accent] .text-blue-600 { color: var(--accent-300); }
 html[data-accent] .text-blue-700 { color: var(--accent-700); }
 html[data-accent] .text-blue-800 { color: var(--accent-800); }

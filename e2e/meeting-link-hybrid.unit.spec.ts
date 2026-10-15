@@ -60,13 +60,13 @@ test.describe('generateMeetingLink — the room is named after the organizer wor
     }
   });
 
-  test('a marketing org gets a SaleVali room, which Jitsi shows as the call title', () => {
+  test('a marketing org gets a room named after its product (coreCRM by default), which Jitsi shows as the call title', () => {
     const link = withJaasEnv({}, () => generateMeetingLink({ inviteeCount: 1, vertical: 'MARKETING' }));
-    expect(link).toMatch(/^https:\/\/meet\.jit\.si\/SaleVali-[0-9a-f]{16}$/);
+    expect(link).toMatch(/^https:\/\/meet\.jit\.si\/coreCRM-[0-9a-f]{16}$/);
     const jaas = withJaasEnv(FAKE_ENV, () =>
       generateMeetingLink({ inviteeCount: 1, jaasAllowed: true, vertical: 'MARKETING' }),
     );
-    expect(parseJaasMeetingLink(jaas)?.room).toMatch(/^SaleVali-[0-9a-f]{16}$/);
+    expect(parseJaasMeetingLink(jaas)?.room).toMatch(/^coreCRM-[0-9a-f]{16}$/);
   });
 });
 

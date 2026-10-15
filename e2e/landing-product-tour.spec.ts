@@ -120,7 +120,7 @@ test.describe('dark mode on a phone', () => {
   });
 });
 
-test('a marketing host gets its own tour — SaleVali screens, never the internship ones', async ({ page }) => {
+test('a marketing host gets its own tour — marketing screens, never the internship ones', async ({ page }) => {
   const fetched: string[] = [];
   page.on('response', (r) => {
     if (r.url().includes('/screenshots/')) fetched.push(new URL(r.url()).pathname.split('/').pop()!);
