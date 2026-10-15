@@ -63,6 +63,14 @@ const TEST_DIR = 'scripts/test';
 // act on is a gate that gets deleted.
 const FLOORS = new Map([
   [
+    'src/lib/mailDeliveryRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a relay throttle pauses every lane instead of losing the mail, a 5xx is final, the critical reserve is never spent by bulk mail (#2941)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,

@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
+import type Mail from 'nodemailer/lib/mailer';
 import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -49,6 +51,8 @@ import { bulkMissingRequirements } from '@/lib/documentRequirements';
 import { utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { budgetConfig, classifySmtpError, laneFor, type BudgetConfig, type MailLane } from '@/lib/mailDeliveryRule';
+import { chargeToken, decayPause, pauseBudget, spendToken } from '@/lib/mailBudgetStore';
 import {
   BULK_GROUP_CATEGORIES,
   emailGroupAllowed,
@@ -202,6 +206,118 @@ export type MailTransport = 'primary' | 'bulk';
 
 export function transportFor(category?: string): MailTransport {
   return bulkTransporter && category && BULK_CATEGORIES.has(category) ? 'bulk' : 'primary';
+}
+
+// ---------------------------------------------------------------------------
+// Delivery modes (#2941).
+//
+// `request` is the transport every send has always used: one SMTP connection
+// per message, opened inside the caller's request or cron tick. Two more exist
+// for the mail outbox that follows this change, and NOTHING uses them yet:
+//   • `drain`  — pooled, ONE connection (`maxConnections: 1`), reused for up to
+//                50 messages. The queue drain sends through it, so a burst is one
+//                session at the relay instead of a dozen handshakes, and its
+//                pace is the budget's, never the pool's.
+//   • `urgent` — short timeouts (3 s connect, 3 s greeting, 5 s socket) for the
+//                critical lane sent inline: a person waiting at a sign-in screen
+//                gets an answer quickly, and a slow relay sends the mail to the
+//                queue instead of holding the request.
+// Built on first use, per channel, so a process that never drains opens no pool.
+// ---------------------------------------------------------------------------
+export type DeliveryMode = 'request' | 'drain' | 'urgent';
+
+const URGENT_TIMEOUTS = {
+  connectionTimeout: 3_000,
+  greetingTimeout: 3_000,
+  socketTimeout: 5_000,
+} as const;
+
+function channelServer(channel: MailTransport) {
+  const bulk = channel === 'bulk';
+  const port = bulk ? bulkSmtpPort : smtpPort;
+  return {
+    host: bulk ? process.env.SMTP_BULK_HOST : process.env.SMTP_HOST,
+    port,
+    secure: port === 465,
+    auth: {
+      user: bulk ? process.env.SMTP_BULK_USER : process.env.SMTP_USER,
+      pass: bulk ? process.env.SMTP_BULK_PASS : process.env.SMTP_PASS,
+    },
+  };
+}
+
+const modeTransports = new Map<string, Transporter>();
+
+function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter {
+  // `transportFor()` only ever answers 'bulk' when the bulk channel exists.
+  const ch: MailTransport = channel === 'bulk' && bulkTransporter ? 'bulk' : 'primary';
+  if (mode === 'request') return ch === 'bulk' ? bulkTransporter! : transporter;
+  const key = `${ch}:${mode}`;
+  let t = modeTransports.get(key);
+  if (!t) {
+    t =
+      mode === 'drain'
+        ? nodemailer.createTransport({ ...channelServer(ch), pool: true, maxConnections: 1, maxMessages: 50, ...SMTP_TIMEOUTS })
+        : nodemailer.createTransport({ ...channelServer(ch), ...URGENT_TIMEOUTS });
+    modeTransports.set(key, t);
+  }
+  return t;
+}
+
+// ── The shared send budget, observe mode (#2941) ────────────────────────────
+//
+// MAIL_METER_MODE=observe (the default) runs the meter beside every real send
+// and logs what it WOULD have refused — `mail_meter.would_refuse` with the lane
+// and the wait — without ever refusing, delaying or failing a mail. `off`
+// leaves the meter untouched. Every call here is fire-and-forget and swallows
+// its own errors: in this mode the meter is an instrument, and an instrument
+// that breaks must not break the thing it measures.
+//
+// Log lines carry the lane, the category and numbers — never an address.
+let meterConfig: BudgetConfig | null = null;
+function meter(): BudgetConfig {
+  meterConfig ??= budgetConfig(process.env);
+  return meterConfig;
+}
+
+async function observeMeterSpend(prepared: { lane: MailLane; category?: string }): Promise<void> {
+  const cfg = meter();
+  if (cfg.mode === 'off') return;
+  try {
+    const outcome = await spendToken(prepared.lane, cfg);
+    if (outcome.allowed && outcome.reason === 'spent') return;
+    if (outcome.reason === 'db_error') {
+      logger.warning('mail_meter.unavailable', { lane: prepared.lane, category: prepared.category, wouldSend: outcome.allowed });
+      return;
+    }
+    logger.info('mail_meter.would_refuse', { lane: prepared.lane, category: prepared.category, waitMs: outcome.waitMs });
+    // The mail goes anyway, so the meter is charged for it: it must describe
+    // what the relay actually received, or every later line would understate.
+    await chargeToken(cfg);
+  } catch (e) {
+    logger.warning('mail_meter.error', { error: String(e) });
+  }
+}
+
+async function observeMeterOutcome(prepared: { lane: MailLane; category?: string }, error: unknown): Promise<void> {
+  const cfg = meter();
+  if (cfg.mode === 'off') return;
+  try {
+    if (!error) {
+      await decayPause();
+      return;
+    }
+    const cls = classifySmtpError(error);
+    logger.info('mail_meter.failure_class', {
+      lane: prepared.lane,
+      category: prepared.category,
+      kind: cls.kind,
+      reason: cls.reason,
+    });
+    if (cls.relayWide) await pauseBudget(cfg);
+  } catch (e) {
+    logger.warning('mail_meter.error', { error: String(e) });
+  }
 }
 
 // Best-effort HTML → plain text for the multipart alternative. A message with
@@ -607,21 +723,7 @@ async function recipientSenderName(
   }
 }
 
-export async function sendEmail({
-  to,
-  subject,
-  html,
-  replyTo,
-  attachments,
-  fromName,
-  category,
-  userId,
-  group,
-  locale,
-  prefs,
-  headers,
-  orgId,
-}: {
+export interface SendEmailArgs {
   to: string;
   subject: string;
   html: string;
@@ -706,7 +808,46 @@ export async function sendEmail({
   // skips that read) should hand over `orgId` too; without it each recipient
   // costs one small extra read.
   orgId?: string | null;
-}) {
+}
+
+/**
+ * One mail, fully built and ready for the wire (#2941): everything
+ * `prepareEmail()` decided (consent, footer, headers, sender, channel, lane)
+ * and nothing that still needs the database. The outbox (a later PR) seals it
+ * into a queued row and hands it back to `deliverPrepared()`.
+ */
+export interface PreparedEmail {
+  to: string;
+  subject: string;
+  category?: string;
+  transport: MailTransport;
+  lane: MailLane;
+  message: Mail.Options;
+}
+
+export type PrepareResult = { status: 'SKIPPED' } | { status: 'READY'; prepared: PreparedEmail };
+
+/**
+ * The first half of `sendEmail()`: every decision that is not the SMTP
+ * conversation — the central opt-out gate, demo mode, an unconfigured SMTP,
+ * the footer and List-* headers, the From identity. Writes the same SKIPPED /
+ * FAILED `EmailLog` rows it always did and throws where it always threw.
+ */
+export async function prepareEmail({
+  to,
+  subject,
+  html,
+  replyTo,
+  attachments,
+  fromName,
+  category,
+  userId,
+  group,
+  locale,
+  prefs,
+  headers,
+  orgId,
+}: SendEmailArgs): Promise<PrepareResult> {
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
   // user who simply never replied (#1194) — the whole reason a batch of
@@ -715,7 +856,6 @@ export async function sendEmail({
   // Which channel carries this one (#1203). Resolves to 'primary' whenever the
   // bulk transport is not configured, so a single-SMTP setup is unchanged.
   const transport = transportFor(category);
-  const via = transport === 'bulk' ? bulkTransporter! : transporter;
 
   const groupId = group ?? groupForCategory(category);
   const gated = unsubscribable(groupId, userId);
@@ -773,7 +913,7 @@ export async function sendEmail({
       // as "was delivered". A suppressed send is the newest way for a mail not
       // to arrive, so it owes callers the same honest answer as the demo-mode
       // and no-SMTP paths below.
-      return 'SKIPPED';
+      return { status: 'SKIPPED' };
     }
   }
 
@@ -786,13 +926,13 @@ export async function sendEmail({
   if (IS_DEMO_MODE) {
     logger.info('Email not sent: demo mode', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
-    return 'SKIPPED';
+    return { status: 'SKIPPED' };
   }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
-    return 'SKIPPED';
+    return { status: 'SKIPPED' };
   }
 
   // The footer and the headers ride together and only on gated (non-essential,
@@ -855,21 +995,48 @@ export async function sendEmail({
   const senderName = fromName || (await recipientSenderName(orgId, userId, storedOrg));
   const sender = fromIdentity(senderName || null, transport);
 
-  try {
-    await via.sendMail({
-      // `false`: the recipient's world could not be read — a bare address names
-      // no product, where the default name might name the wrong one. An object,
-      // not a formatted string, so a tenant brand with a comma or a quote in it
-      // is encoded by nodemailer instead of splitting the header.
-      from: !sender.address ? '' : senderName === false ? sender.address : { name: sender.name, address: sender.address },
+  return {
+    status: 'READY',
+    prepared: {
       to,
       subject,
-      html: body,
-      text: htmlToText(body),
-      ...(replyTo ? { replyTo } : {}),
-      ...(attachments?.length ? { attachments } : {}),
-      ...(mergedHeaders && Object.keys(mergedHeaders).length ? { headers: mergedHeaders } : {}),
-    });
+      category,
+      transport,
+      lane: laneFor(category),
+      message: {
+        // `false`: the recipient's world could not be read — a bare address names
+        // no product, where the default name might name the wrong one. An object,
+        // not a formatted string, so a tenant brand with a comma or a quote in it
+        // is encoded by nodemailer instead of splitting the header.
+        from: !sender.address ? '' : senderName === false ? sender.address : { name: sender.name, address: sender.address },
+        to,
+        subject,
+        html: body,
+        text: htmlToText(body),
+        ...(replyTo ? { replyTo } : {}),
+        ...(attachments?.length ? { attachments } : {}),
+        ...(mergedHeaders && Object.keys(mergedHeaders).length ? { headers: mergedHeaders } : {}),
+      },
+    },
+  };
+}
+
+/**
+ * The second half of `sendEmail()`: the SMTP conversation and its ledger row.
+ * Records SENT or FAILED exactly as before and rethrows a failure unchanged.
+ *
+ * `mode` picks the transport: `request` (the default, and the only one any
+ * caller uses today) is the per-message connection every send has always used;
+ * `drain` and `urgent` exist for the outbox (#2941) and are not used yet.
+ */
+export async function deliverPrepared(
+  prepared: PreparedEmail,
+  { mode = 'request' }: { mode?: DeliveryMode } = {},
+): Promise<'SENT'> {
+  const { to, subject, category, transport } = prepared;
+  const via = smtpTransport(transport, mode);
+  try {
+    await via.sendMail(prepared.message);
   } catch (e) {
     // Record, then rethrow unchanged: callers that already catch (and the ones
     // that deliberately don't) keep behaving exactly as before.
@@ -877,11 +1044,23 @@ export async function sendEmail({
     logger.error('Email send failed', { to, subject, category, transport, error: message });
     await recordEmail(to, subject, category, 'FAILED', transport, message);
     void maybeAlertEmailFailures(category).catch(() => {});
+    void observeMeterOutcome(prepared, e);
     throw e;
   }
 
   await recordEmail(to, subject, category, 'SENT', transport);
+  void observeMeterOutcome(prepared, null);
   return 'SENT';
+}
+
+export async function sendEmail(args: SendEmailArgs): Promise<'SENT' | 'SKIPPED'> {
+  const result = await prepareEmail(args);
+  if (result.status === 'SKIPPED') return 'SKIPPED';
+  // Shadow mode (#2941): the meter sees every real send and says what it
+  // WOULD have refused. Not awaited and never consulted — the mail below goes
+  // out exactly as it always did, whatever the meter answers.
+  void observeMeterSpend(result.prepared);
+  return deliverPrepared(result.prepared);
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the

@@ -21,6 +21,11 @@ export interface EmailHealth {
   // Real attempts (SENT + FAILED) in the last 24h; SKIPPED rows are an
   // unconfigured-SMTP marker, not an attempt.
   attempts24h: number;
+  // Mails put back to be retried in the last 24h (a relay throttle, a timeout,
+  // a temporary refusal) — #2941. Deliberately NOT a failure: failuresSinceOk
+  // counts FAILED only, so a throttled burst that is later delivered never
+  // trips the delivery alert. Always 0 until the mail outbox writes the status.
+  deferred24h: number;
 }
 
 // Kept as an alias: the address rule this used to own now lives in the shared
@@ -29,10 +34,11 @@ export const sanitizeEmailError = sanitizeError;
 
 export async function getEmailHealth(): Promise<EmailHealth> {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [lastOk, lastFail, attempts24h] = await Promise.all([
+  const [lastOk, lastFail, attempts24h, deferred24h] = await Promise.all([
     prisma.emailLog.findFirst({ where: { status: 'SENT' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
     prisma.emailLog.findFirst({ where: { status: 'FAILED' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true, error: true } }),
     prisma.emailLog.count({ where: { status: { in: ['SENT', 'FAILED'] }, createdAt: { gt: dayAgo } } }),
+    prisma.emailLog.count({ where: { status: 'DEFERRED', createdAt: { gt: dayAgo } } }),
   ]);
   const failuresSinceOk = await prisma.emailLog.count({
     where: { status: 'FAILED', ...(lastOk ? { createdAt: { gt: lastOk.createdAt } } : {}) },
@@ -43,5 +49,6 @@ export async function getEmailHealth(): Promise<EmailHealth> {
     lastError: sanitizeError(lastFail?.error),
     failuresSinceOk,
     attempts24h,
+    deferred24h,
   };
 }
