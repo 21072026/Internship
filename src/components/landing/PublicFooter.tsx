@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { BrandMark } from '@/components/BrandMark';
 import { getServerDictionary, resolveRequestVertical, urlLocale } from '@/i18n/server';
 import { localizeHref } from '@/lib/localePath';
-import { productNameFor } from '@/lib/verticals';
+import { requestProductName } from '@/lib/hostBrand';
 import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
 import { GITHUB_URL } from './links';
@@ -24,11 +24,12 @@ export async function PublicFooter() {
   // On a language URL (#1386) the footer's own links stay in that language.
   const lang = await urlLocale();
   const n = t.publicNav;
-  // Vertical product name (#2498): a marketing host's footer wordmark and
-  // copyright read "SaleVali", not "InternshipCRM". INTERNSHIP is unchanged.
+  // The product name (#2498): a marketing host's footer wordmark and copyright
+  // read its own product, not "InternshipCRM" — the request brand's name
+  // (#2936), else the vertical's default. INTERNSHIP is unchanged.
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
-  const productName = productNameFor(vertical);
+  const productName = await requestProductName(vertical);
 
   const columns = [
     {

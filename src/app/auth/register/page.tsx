@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Suspense } from 'react';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { browserTimeZone } from '@/lib/timezone';
-import { productNameFor } from '@/lib/verticals';
+import { useProductName } from '@/lib/brandClient';
 import { useMemo } from 'react';
 import { PasswordRules } from '@/components/auth/PasswordRules';
 import { passwordPolicyError, passwordRefusalText, usePasswordPolicy, type PasswordPolicyDict } from '@/lib/passwordPolicyClient';
@@ -53,6 +53,7 @@ function RegisterForm() {
   // A marketing host is invitation-only (#2501): the token field is open by
   // default and the mentor application is not offered.
   const vertical = useVertical();
+  const productName = useProductName();
   const isMarketing = vertical === 'MARKETING';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -208,7 +209,7 @@ function RegisterForm() {
                 world, so the hint names only this product, never the other one. */}
             {isMarketing && (
               <p data-testid="separate-account-hint" className="-mt-2 text-xs text-gray-500">
-                {t.auth.separateAccountHint.replace('{product}', productNameFor(vertical))}
+                {t.auth.separateAccountHint.replace('{product}', productName)}
               </p>
             )}
             <Input

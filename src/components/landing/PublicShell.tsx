@@ -9,8 +9,7 @@ import { AnalyticsScripts } from '@/components/AnalyticsScripts';
 import { JsonLd } from '@/components/JsonLd';
 import { getServerDictionary, urlLocale } from '@/i18n/server';
 import { requestSiteUrl } from '@/lib/siteUrl';
-import { productNameFor } from '@/lib/verticals';
-import { hostBrand } from '@/lib/hostBrand';
+import { hostBrand, requestProductName } from '@/lib/hostBrand';
 import { brandAssetPath } from '@/lib/brandRule';
 import { GITHUB_URL, FOUNDER_NAME, FOUNDER_URL } from './links';
 
@@ -69,7 +68,7 @@ export async function PublicShell({
   const organization = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: productNameFor(vertical),
+    name: await requestProductName(vertical),
     url: `${origin}/`,
     logo: `${origin}${isMarketing ? '/icon-salevali-192.png' : '/apple-touch-icon.png'}`,
     sameAs: [GITHUB_URL],

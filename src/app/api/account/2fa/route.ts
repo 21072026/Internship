@@ -3,12 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { generateSecret, verifyTotp, otpauthUrl } from '@/lib/totp';
+import { generateSecret, verifyTotp, otpauthUrl, otpauthIssuer } from '@/lib/totp';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
-import { worldOfOrg } from '@/lib/userWorld';
 import { sendSecurityNotice } from '@/lib/securityNotices';
-import { productNameFor } from '@/lib/verticals';
+import { productNameForOrg } from '@/lib/orgBrand';
+import { DEFAULT_VERTICAL, productNameFor } from '@/lib/verticals';
 import {
   clearRecoveryCodes,
   generateRecoveryCodes,
@@ -72,12 +72,15 @@ export async function POST(request: Request) {
     const secret = generateSecret();
     await prisma.user.update({ where: { id: session.user.id }, data: { twoFactorSecret: secret, twoFactorEnabled: false } });
     // The authenticator entry is filed under the account's OWN product
-    // (docs/worlds.md): a SaleVali factor must never sit in the phone as
+    // (docs/worlds.md): a MARKETING factor must never sit in the phone as
     // "Internship CRM: <address>", and one address holding an account in each
     // world (#2590) gets two distinguishable entries instead of two with the
-    // same label and different secrets. INTERNSHIP (and a null org) resolves to
-    // 'Internship CRM', so those URIs are byte-identical to before.
-    const issuer = productNameFor(await worldOfOrg(user.orgId));
+    // same label and different secrets. The product is the org's brand name,
+    // else its vertical's default (#2936); INTERNSHIP (and a null org) resolves
+    // to 'Internship CRM', so those URIs are byte-identical to before.
+    // A brand name is tenant data: cleaned to what the Key URI format accepts,
+    // falling back to the default product when nothing usable is left.
+    const issuer = otpauthIssuer(await productNameForOrg(user.orgId), productNameFor(DEFAULT_VERTICAL));
     return NextResponse.json({ secret, otpauth: otpauthUrl(secret, user.email, issuer) });
   }
 

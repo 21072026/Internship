@@ -1,10 +1,9 @@
 import { getDictionary } from '@/i18n/dictionaries';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
 import { GITHUB_URL } from '@/components/landing/links';
-import { hostVertical } from '@/lib/hostVertical';
 import { PUBLIC_ROUTES, routeListedFor } from '@/lib/publicRoutes';
 import { requestSiteUrl } from '@/lib/siteUrl';
-import { productNameFor } from '@/lib/verticals';
+import { brandProductName, hostBrand } from '@/lib/hostBrand';
 
 // /llms.txt (https://llmstxt.org): a plain-markdown map of the public site for
 // language-model agents — the same pages the sitemap lists, with one line each
@@ -28,9 +27,12 @@ function linkLabel(path: string): string {
 }
 
 export async function GET(): Promise<Response> {
-  const [base, vertical] = await Promise.all([requestSiteUrl(), hostVertical()]);
-  const t = applyVerticalOverlay(getDictionary('en'), 'en', vertical);
-  const product = productNameFor(vertical);
+  // The host's brand (#2936): its product name heads the file and fills the
+  // overlay's `{product}`; its vertical is the host's (hostVertical's rule).
+  const [base, brand] = await Promise.all([requestSiteUrl(), hostBrand()]);
+  const { vertical } = brand;
+  const product = brandProductName(brand);
+  const t = applyVerticalOverlay(getDictionary('en'), 'en', vertical, { product });
 
   const pages = PUBLIC_ROUTES.filter((r) => routeListedFor(vertical, r.needs)).map(
     (r) => `- [${linkLabel(r.path)}](${base}${r.path}): ${r.llms}`
