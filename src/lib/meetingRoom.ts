@@ -29,15 +29,6 @@ import { brandForOrg, defaultBrand, productNameIn } from '@/lib/orgBrand';
 // thing protecting a call on the public instance, and on JaaS it is what the
 // participant's token is scoped to.
 //
-<<<<<<< HEAD
-// The prefix is the product of the organizer's world (docs/worlds.md): Jitsi
-// shows the room name as the call title, so a marketing org's demo call must
-// not read "InternshipCRM-…" to the prospect. Omitted, it is the internship product —
-// which is what every room was. Nothing parses the prefix back
-// (parseJaasMeetingLink accepts any room name), so old rooms keep working.
-export function generateMeetingRoomName(vertical?: unknown): string {
-  const prefix = productNameFor(vertical).replace(/[^A-Za-z0-9]/g, '');
-=======
 // The prefix is the organizer's product (docs/worlds.md): Jitsi shows the room
 // name as the call title, so a MARKETING demo call must not read
 // "InternshipCRM-…" to the customer. `product` is the organizer org's resolved
@@ -54,7 +45,6 @@ const roomPrefix = (name: string) => name.replace(/[^A-Za-z0-9]/g, '').slice(0, 
 
 export function generateMeetingRoomName(vertical?: unknown, product?: string | null): string {
   const prefix = (product && roomPrefix(product)) || roomPrefix(defaultBrand(toVerticalKey(vertical)).productName);
->>>>>>> origin/main
   return `${prefix}-${randomBytes(8).toString('hex')}`;
 }
 

@@ -30,11 +30,7 @@ export async function BrandWordmark({ className, oneLine = false }: { className?
       {/* Keep the mobile wordmark on one line; the regular sidebar/desktop
           wordmark may still wrap as before. A name too long for the bar ends in
           an ellipsis instead of running under the bar's buttons — `shrink-0` let
-<<<<<<< HEAD
-          a tenant name like "Acme Sales Demo (Marketing)" overlap the messages
-=======
           a long tenant name overlap the messages
->>>>>>> origin/main
           icon on a phone. A short name never reaches the limit, so it is not
           squeezed. */}
       <span className={`font-bold text-gray-900 dark:text-gray-100 ${oneLine ? 'min-w-0 truncate' : ''}`} title={oneLine ? brand.name : undefined}>{brand.name}</span>

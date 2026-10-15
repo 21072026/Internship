@@ -8,17 +8,10 @@ import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 // Swagger/Postman.
 //
 // The title names the product of the host it was fetched from (docs/worlds.md):
-<<<<<<< HEAD
-// an integrator importing it from a marketing host gets a collection named
-// after the marketing product.
-export function GET(request: Request) {
-  const world = worldForHeaders((n) => request.headers.get(n));
-=======
 // an integrator importing it from a product's host gets a collection named
 // after that product — the host's brand (#2936), else the vertical default.
 export async function GET(request: Request) {
   const brand = await hostBrandFor(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
->>>>>>> origin/main
   const spec = {
     openapi: '3.1.0',
     info: {

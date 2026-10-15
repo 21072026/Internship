@@ -72,11 +72,7 @@ export async function POST(request: Request) {
     const secret = generateSecret();
     await prisma.user.update({ where: { id: session.user.id }, data: { twoFactorSecret: secret, twoFactorEnabled: false } });
     // The authenticator entry is filed under the account's OWN product
-<<<<<<< HEAD
-    // (docs/worlds.md): a marketing factor must never sit in the phone as
-=======
     // (docs/worlds.md): a MARKETING factor must never sit in the phone as
->>>>>>> origin/main
     // "Internship CRM: <address>", and one address holding an account in each
     // world (#2590) gets two distinguishable entries instead of two with the
     // same label and different secrets. The product is the org's brand name,
