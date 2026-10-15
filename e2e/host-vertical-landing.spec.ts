@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 // Host → vertical landing (#2355, epic #2348). Two urls serve two products'
 // landing copy from one deployment: interncrm.com (default) shows the internship
-// hero, marketing.bcsit-gmbh.de the marketing one. The signal on a public, sessionless
-// page is the request host (x-forwarded-host, set by the reverse proxy). The
-// default MARKETING_HOSTS is 'marketing.bcsit-gmbh.de', so forging that header routes
-// the marketing overlay without any env change.
+// hero, a marketing host the marketing one. The signal on a public, sessionless
+// page is the request host (x-forwarded-host, set by the reverse proxy).
+// playwright.config.ts sets MARKETING_HOSTS to the suite's marketing host, so
+// forging that header routes the marketing overlay without any env change.
 
 test('the default host shows the internship hero — a no-op for the current product', async ({ page }) => {
   await page.goto('/');
@@ -15,7 +16,7 @@ test('the default host shows the internship hero — a no-op for the current pro
 });
 
 test('the marketing host shows the marketing hero', async ({ page }) => {
-  await page.setExtraHTTPHeaders({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' });
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': E2E_MARKETING_HOST });
   await page.goto('/');
   await expect(page.getByText('Every lead, every conversation', { exact: false })).toBeVisible();
   await expect(page.getByText('Marketing CRM · Track leads', { exact: false })).toBeVisible();

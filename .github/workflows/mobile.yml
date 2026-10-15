@@ -8,7 +8,13 @@ name: Mobile app
 #            (`expo export`), which is what catches a broken import or a
 #            route that no longer resolves. No secrets, so it runs on forks.
 #   eas    — workflow_dispatch only: queue an EAS cloud build. Needs the
-#            EXPO_TOKEN secret and an EAS project id (apps/mobile/README.md).
+#            EXPO_TOKEN secret and an EAS project id (apps/mobile/README.md),
+#            plus the publisher of the app (#2926): the secrets EXPO_OWNER,
+#            APP_BUNDLE_ID and APP_ANDROID_PACKAGE, which app.config.ts reads
+#            on this runner. The EAS build server evaluates app.config.ts again
+#            with ITS environment, so the same three — and any
+#            EXPO_PUBLIC_EXTRA_PRODUCTS — must also exist as EAS environment
+#            variables; app.config.ts refuses an EAS build without them.
 on:
   pull_request:
     paths:
@@ -62,6 +68,9 @@ jobs:
     timeout-minutes: 20
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
+      APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+      APP_ANDROID_PACKAGE: ${{ secrets.APP_ANDROID_PACKAGE }}
       PROFILE: ${{ inputs.profile }}
       PLATFORM: ${{ inputs.platform }}
     steps:
@@ -78,4 +87,10 @@ jobs:
             echo "::error::EXPO_TOKEN is not set — see apps/mobile/README.md § Building."
             exit 1
           fi
+          for v in EXPO_OWNER APP_BUNDLE_ID APP_ANDROID_PACKAGE; do
+            if [ -z "${!v}" ]; then
+              echo "::error::The $v secret is not set — see apps/mobile/README.md § Building."
+              exit 1
+            fi
+          done
           npx eas-cli@latest build --platform "$PLATFORM" --profile "$PROFILE" --non-interactive --no-wait

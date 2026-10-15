@@ -3,9 +3,9 @@
 // A signed-in user's vertical comes from their organization (verticalContext).
 // But the landing page and every other public page has no session, and the whole
 // point of #2355 is that TWO urls serve TWO products from ONE deployment:
-// interncrm.com shows the internship landing, marketing.bcsit-gmbh.de the
-// marketing one. The only per-request signal a public page has is the Host header, so that
-// is what decides the vertical there.
+// the internship host shows the internship landing, a marketing host
+// (MARKETING_HOSTS) the marketing one. The only per-request signal a public
+// page has is the Host header, so that is what decides the vertical there.
 //
 // Kept as a tiny, env-driven map rather than hard-coded hostnames: the marketing
 // host is deployment configuration (it differs between prod, preview and a

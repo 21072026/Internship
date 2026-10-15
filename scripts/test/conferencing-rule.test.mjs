@@ -10,7 +10,7 @@ const { checkExternalMeetingLink, chooseMeetingLinkSource, conferencingPolicyOf 
 );
 const { meetingProviderName, isEmbeddableMeetingLink } = await import('../../src/lib/meetingLink.ts');
 
-const OWN = new Set(['interncrm.com', 'preview.interncrm.com', 'marketing.bcsit-gmbh.de']);
+const OWN = new Set(['interncrm.com', 'preview.interncrm.com', 'marketing.example.test']);
 const MAX = 191;
 
 test('a plain https link on a foreign host is accepted as typed', () => {
@@ -40,7 +40,7 @@ test('a link back at one of our own hosts is refused — exact match, any case, 
   assert.deepEqual(checkExternalMeetingLink('https://interncrm.com/auth/signin', OWN, MAX), { ok: false, reason: 'own_host' });
   assert.deepEqual(checkExternalMeetingLink('https://INTERNCRM.com/x', OWN, MAX), { ok: false, reason: 'own_host' });
   assert.deepEqual(checkExternalMeetingLink('https://interncrm.com./x', OWN, MAX), { ok: false, reason: 'own_host' });
-  assert.deepEqual(checkExternalMeetingLink('https://marketing.bcsit-gmbh.de/', OWN, MAX), { ok: false, reason: 'own_host' });
+  assert.deepEqual(checkExternalMeetingLink('https://marketing.example.test/', OWN, MAX), { ok: false, reason: 'own_host' });
   // A subdomain nobody serves is not ours — the served set has no wildcard.
   assert.equal(checkExternalMeetingLink('https://evil.interncrm.com/x', OWN, MAX).ok, true);
 });

@@ -1,5 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   hostnameOf,
   marketingHosts,
@@ -15,6 +16,11 @@ import {
 // (#2488): a redirect NextAuth hands the browser, or a server-side Location,
 // may go to a host this deployment serves and nowhere else. Pinned here where no
 // browser is needed, like recoveryCodeFormat / lastContactRule.
+//
+// Every hostname below is a reserved example name (RFC 2606): the marketing
+// hosts are whatever MARKETING_HOSTS says, and there is no built-in one (#2926).
+const MKT = 'marketing.example.test';
+const MKT_PREVIEW = 'marketing.preview.example.test';
 
 const ENV = ['NEXTAUTH_URL', 'NEXT_PUBLIC_APP_URL', 'MARKETING_HOSTS'];
 function setEnv(vars) {
@@ -24,48 +30,48 @@ function setEnv(vars) {
 beforeEach(() => setEnv({}));
 
 test('hostnameOf: first entry of a proxy list, lowercased, port dropped', () => {
-  assert.equal(hostnameOf(' Marketing.bcsit-gmbh.dev:443 , evil.example'), 'marketing.bcsit-gmbh.dev');
+  assert.equal(hostnameOf(' Marketing.Preview.Example.Test:443 , evil.example'), 'marketing.preview.example.test');
   assert.equal(hostnameOf('localhost:3000'), 'localhost');
   assert.equal(hostnameOf(''), null);
   assert.equal(hostnameOf(null), null);
   assert.equal(hostnameOf(':3000'), null);
 });
 
-test('marketingHosts: the single default when unset, the env list when set', () => {
-  assert.deepEqual([...marketingHosts()], ['marketing.bcsit-gmbh.de']);
-  setEnv({ MARKETING_HOSTS: ' marketing.bcsit-gmbh.dev:443, Other.Example ,' });
-  assert.deepEqual([...marketingHosts()].sort(), ['marketing.bcsit-gmbh.dev', 'other.example']);
-  assert.ok(!marketingHosts().has('marketing.bcsit-gmbh.de'), 'the default is replaced, not merged');
-});
-
-// The one assertion here that is not a literal moving with the code (#2540).
-// Every other case asserts the host the default HAPPENS to be, so renaming the
-// constant and the test together keeps them green whatever the value is. The
-// marketing product moved off the ersah.in subdomains on 2026-09-23 and that
-// apex now serves mail only: a default that lands back there would point the
-// live marketing site at a name nobody operates, which is exactly the shape of
-// a bad revert or a stale merge resolution.
-test('marketingHosts: the default never falls back onto the retired ersah.in apex (#2540)', () => {
-  for (const raw of [undefined, '', '   ']) {
-    setEnv({ MARKETING_HOSTS: raw });
-    for (const host of marketingHosts()) {
-      assert.ok(!/(^|\.)ersah\.in$/.test(host), `default marketing host must not be on ersah.in: ${host}`);
-    }
-  }
-});
-
-test('marketingHosts: an EMPTY or whitespace-only MARKETING_HOSTS is "unset", not an empty list (#2428)', () => {
-  // infra/deploy-prod.sh passes `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, so a
-  // prod env file with no value yields '' in the container. Prod's marketing
-  // domain served the internship landing for as long as '' counted as configured.
-  for (const raw of ['', '   ', '\n']) {
-    setEnv({ MARKETING_HOSTS: raw });
-    assert.deepEqual([...marketingHosts()], ['marketing.bcsit-gmbh.de'], `raw=${JSON.stringify(raw)}`);
-    assert.ok(isServedHost('marketing.bcsit-gmbh.de'), 'the default marketing host is a served host');
-  }
-  // A list of only separators is still "nothing configured" → default applies.
-  setEnv({ MARKETING_HOSTS: ' , ' });
+test('marketingHosts: nothing when unset, exactly the env list when set (#2926)', () => {
   assert.deepEqual([...marketingHosts()], []);
+  setEnv({ MARKETING_HOSTS: ` ${MKT_PREVIEW}:443, Other.Example ,` });
+  assert.deepEqual([...marketingHosts()].sort(), [MKT_PREVIEW, 'other.example']);
+  setEnv({ MARKETING_HOSTS: `${MKT},${MKT_PREVIEW}` });
+  assert.deepEqual([...marketingHosts()], [MKT, MKT_PREVIEW], 'in the order given — the first is the primary');
+});
+
+test('marketingHosts: an EMPTY, whitespace-only or separator-only MARKETING_HOSTS is no marketing host at all (#2428, #2926)', () => {
+  // infra/deploy-prod.sh passes `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, so an
+  // env file with no value yields '' in the container. That used to fall back to
+  // a production hostname written into servedHosts.ts; now it means what it says.
+  for (const raw of [undefined, '', '   ', '\n', ' , ']) {
+    setEnv(raw === undefined ? { NEXTAUTH_URL: 'https://interncrm.com' } : { NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: raw });
+    assert.deepEqual([...marketingHosts()], [], `raw=${JSON.stringify(raw)}`);
+    assert.deepEqual([...servedHosts()], ['interncrm.com'], `raw=${JSON.stringify(raw)}: only the configured host is served`);
+    assert.equal(isServedHost(MKT), false);
+  }
+});
+
+// The default this file used to carry was one deployment's live domain, so a
+// revert or a stale merge resolution would quietly make every other deployment
+// claim it again. Guard the source itself: no string literal in servedHosts.ts
+// may be a hostname (the local dev origin is a URL, not a bare host).
+test('servedHosts.ts carries no hostname literal (#2926)', () => {
+  const src = readFileSync(new URL('../../src/lib/servedHosts.ts', import.meta.url), 'utf8');
+  const code = src
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+  const literals = [...code.matchAll(/(['"`])((?:(?!\1)[^\\\n])*)\1/g)].map((m) => m[2]);
+  assert.ok(literals.length > 0, 'the scan found the string literals');
+  for (const lit of literals) {
+    assert.ok(!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(lit.trim()), `hostname literal in servedHosts.ts: ${lit}`);
+  }
 });
 
 test('configuredOrigin: NEXTAUTH_URL first, then NEXT_PUBLIC_APP_URL, then the dev default — always a bare origin', () => {
@@ -79,23 +85,25 @@ test('configuredOrigin: NEXTAUTH_URL first, then NEXT_PUBLIC_APP_URL, then the d
 });
 
 test('servedHosts per environment shape', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com' });
-  assert.deepEqual([...servedHosts()].sort(), ['interncrm.com', 'marketing.bcsit-gmbh.de'], 'prod');
-  setEnv({ NEXTAUTH_URL: 'https://preview.interncrm.com', NEXT_PUBLIC_APP_URL: 'https://preview.interncrm.com', MARKETING_HOSTS: 'marketing.bcsit-gmbh.dev' });
-  assert.deepEqual([...servedHosts()].sort(), ['marketing.bcsit-gmbh.dev', 'preview.interncrm.com'], 'preview');
-  // A topic env is covered by its OWN NEXTAUTH_URL — no wildcard, no per-PR list.
-  setEnv({ NEXTAUTH_URL: 'https://pr123.interncrm.com', NEXT_PUBLIC_APP_URL: 'https://pr123.interncrm.com' });
-  assert.deepEqual([...servedHosts()].sort(), ['marketing.bcsit-gmbh.de', 'pr123.interncrm.com'], 'topic');
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
+  assert.deepEqual([...servedHosts()].sort(), ['interncrm.com', MKT], 'prod');
+  setEnv({ NEXTAUTH_URL: 'https://preview.interncrm.com', NEXT_PUBLIC_APP_URL: 'https://preview.interncrm.com', MARKETING_HOSTS: MKT_PREVIEW });
+  assert.deepEqual([...servedHosts()].sort(), [MKT_PREVIEW, 'preview.interncrm.com'], 'preview');
+  // A topic env is covered by its OWN NEXTAUTH_URL — no wildcard, no per-PR list —
+  // and topic-deploy.sh gives it its own marketing host on the same wildcard.
+  setEnv({ NEXTAUTH_URL: 'https://pr123.interncrm.com', NEXT_PUBLIC_APP_URL: 'https://pr123.interncrm.com', MARKETING_HOSTS: 'pr123-m.interncrm.com' });
+  assert.deepEqual([...servedHosts()].sort(), ['pr123-m.interncrm.com', 'pr123.interncrm.com'], 'topic');
   assert.ok(!servedHosts().has('pr124.interncrm.com'), 'a sibling topic host is NOT served');
+  assert.ok(!servedHosts().has(MKT), 'nor is any other deployment\'s marketing host');
   setEnv({});
-  assert.deepEqual([...servedHosts()].sort(), ['localhost', 'marketing.bcsit-gmbh.de'], 'dev');
+  assert.deepEqual([...servedHosts()].sort(), ['localhost'], 'dev without MARKETING_HOSTS');
 });
 
 test('isServedHost: exact match on the header hostname, nothing else', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
   assert.equal(isServedHost('interncrm.com'), true);
   assert.equal(isServedHost('INTERNCRM.COM:443'), true);
-  assert.equal(isServedHost('marketing.bcsit-gmbh.de'), true);
+  assert.equal(isServedHost('marketing.example.test'), true);
   assert.equal(isServedHost('interncrm.com.evil.example'), false);
   assert.equal(isServedHost('evil.example'), false);
   assert.equal(isServedHost(''), false);
@@ -103,20 +111,23 @@ test('isServedHost: exact match on the header hostname, nothing else', () => {
 });
 
 test('requestOrigin: the served request host wins; anything else is the configured origin', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
   const H = (m) => (n) => m[n] ?? null;
-  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de', 'x-forwarded-proto': 'https' })), 'https://marketing.bcsit-gmbh.de');
-  assert.equal(requestOrigin(H({ host: 'marketing.bcsit-gmbh.de' })), 'https://marketing.bcsit-gmbh.de', 'Host alone works, protocol from config');
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.example.test', 'x-forwarded-proto': 'https' })), 'https://marketing.example.test');
+  assert.equal(requestOrigin(H({ host: 'marketing.example.test' })), 'https://marketing.example.test', 'Host alone works, protocol from config');
   assert.equal(requestOrigin(H({ 'x-forwarded-host': 'evil.example' })), 'https://interncrm.com');
   assert.equal(requestOrigin(H({})), 'https://interncrm.com');
   // Never downgrade, never trust a received port.
-  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de:99999', 'x-forwarded-proto': 'http' })), 'https://marketing.bcsit-gmbh.de');
-  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de, evil.example' })), 'https://marketing.bcsit-gmbh.de', 'first entry of a proxy list');
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.example.test:99999', 'x-forwarded-proto': 'http' })), 'https://marketing.example.test');
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.example.test, evil.example' })), 'https://marketing.example.test', 'first entry of a proxy list');
   // Dev: the configured port is re-attached for the configured host only.
-  setEnv({ NEXTAUTH_URL: 'http://localhost:3000' });
+  setEnv({ NEXTAUTH_URL: 'http://localhost:3000', MARKETING_HOSTS: MKT });
   assert.equal(requestOrigin(H({ host: 'localhost:3000' })), 'http://localhost:3000');
-  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' })), 'http://marketing.bcsit-gmbh.de');
-  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de', 'x-forwarded-proto': 'https' })), 'https://marketing.bcsit-gmbh.de', 'an http deployment may upgrade');
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.example.test' })), 'http://marketing.example.test');
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.example.test', 'x-forwarded-proto': 'https' })), 'https://marketing.example.test', 'an http deployment may upgrade');
+  // Without MARKETING_HOSTS a marketing host is just another unknown host.
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': MKT, 'x-forwarded-proto': 'https' })), 'https://interncrm.com');
 });
 
 test('resolveRedirectTarget: NextAuth-default parity on the internship host', () => {
@@ -128,31 +139,31 @@ test('resolveRedirectTarget: NextAuth-default parity on the internship host', ()
 });
 
 test('resolveRedirectTarget: a served host is kept, re-assembled; everything else is baseUrl', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
   const B = 'https://interncrm.com';
-  assert.equal(resolveRedirectTarget('https://marketing.bcsit-gmbh.de/auth/signin', B), 'https://marketing.bcsit-gmbh.de/auth/signin');
-  assert.equal(resolveRedirectTarget('https://MARKETING.bcsit-gmbh.de/a?b=1#c', B), 'https://marketing.bcsit-gmbh.de/a?b=1#c');
-  assert.equal(resolveRedirectTarget('https://marketing.bcsit-gmbh.de:8443/a', B), 'https://marketing.bcsit-gmbh.de/a', 'a received port is dropped');
+  assert.equal(resolveRedirectTarget('https://marketing.example.test/auth/signin', B), 'https://marketing.example.test/auth/signin');
+  assert.equal(resolveRedirectTarget('https://MARKETING.example.test/a?b=1#c', B), 'https://marketing.example.test/a?b=1#c');
+  assert.equal(resolveRedirectTarget('https://marketing.example.test:8443/a', B), 'https://marketing.example.test/a', 'a received port is dropped');
   for (const bad of [
     'https://evil.example/',
     'https://interncrm.com.evil.example/',
     'https://interncrm.com@evil.example/',
-    'https://marketing.bcsit-gmbh.de,evil.example/',
+    'https://marketing.example.test,evil.example/',
     'https://interncrm.com,x/',
-    'http://marketing.bcsit-gmbh.de/',
+    'http://marketing.example.test/',
     'javascript:alert(1)',
-    'ftp://marketing.bcsit-gmbh.de/',
+    'ftp://marketing.example.test/',
     'not a url',
     '',
   ]) assert.equal(resolveRedirectTarget(bad, B), B, `${JSON.stringify(bad)} must fall back to baseUrl`);
 });
 
 test('resolveRedirectTarget on a dev (http) base accepts the base protocol and https', () => {
-  setEnv({ NEXTAUTH_URL: 'http://localhost:3000' });
+  setEnv({ NEXTAUTH_URL: 'http://localhost:3000', MARKETING_HOSTS: MKT });
   const B = 'http://localhost:3000';
   assert.equal(resolveRedirectTarget('http://localhost:3000/auth/signin', B), 'http://localhost:3000/auth/signin');
-  assert.equal(resolveRedirectTarget('http://marketing.bcsit-gmbh.de/auth/signin', B), 'http://marketing.bcsit-gmbh.de/auth/signin');
-  assert.equal(resolveRedirectTarget('https://marketing.bcsit-gmbh.de/auth/signin', B), 'https://marketing.bcsit-gmbh.de/auth/signin');
+  assert.equal(resolveRedirectTarget('http://marketing.example.test/auth/signin', B), 'http://marketing.example.test/auth/signin');
+  assert.equal(resolveRedirectTarget('https://marketing.example.test/auth/signin', B), 'https://marketing.example.test/auth/signin');
   assert.equal(resolveRedirectTarget('http://evil.example/', B), B);
 });
 
@@ -160,44 +171,44 @@ test('resolveRedirectTarget on a dev (http) base accepts the base protocol and h
 // origin a sign-in started on through a third party and back. RelayState is
 // signed by nobody, so this is the open-redirect boundary for both flows.
 test('servedOrigin: a bare origin of a served host is returned, normalised', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
-  assert.equal(servedOrigin('https://marketing.bcsit-gmbh.de'), 'https://marketing.bcsit-gmbh.de');
-  assert.equal(servedOrigin('https://MARKETING.bcsit-gmbh.de/'), 'https://marketing.bcsit-gmbh.de', 'case and a bare trailing slash');
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
+  assert.equal(servedOrigin('https://marketing.example.test'), 'https://marketing.example.test');
+  assert.equal(servedOrigin('https://MARKETING.example.test/'), 'https://marketing.example.test', 'case and a bare trailing slash');
   assert.equal(servedOrigin('https://interncrm.com'), 'https://interncrm.com');
   assert.equal(servedOrigin('https://interncrm.com:443'), 'https://interncrm.com', 'the default port is no port');
 });
 
 test('servedOrigin: anything that is not a bare served origin is refused, never repaired', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: MKT });
   for (const bad of [
     null,
     undefined,
     '',
     'not a url',
     '/relative',
-    '//marketing.bcsit-gmbh.de',
+    '//marketing.example.test',
     'https://evil.example',
-    'https://marketing.bcsit-gmbh.de.evil.example',
-    'https://marketing.bcsit-gmbh.de@evil.example',
-    'https://user:pw@marketing.bcsit-gmbh.de',
-    'https://marketing.bcsit-gmbh.de,evil.example',
-    'https://marketing.bcsit-gmbh.de/auth/signin',
-    'https://marketing.bcsit-gmbh.de/?next=https://evil.example',
-    'https://marketing.bcsit-gmbh.de/#x',
-    'https://marketing.bcsit-gmbh.de:8443',
-    'http://marketing.bcsit-gmbh.de',
+    'https://marketing.example.test.evil.example',
+    'https://marketing.example.test@evil.example',
+    'https://user:pw@marketing.example.test',
+    'https://marketing.example.test,evil.example',
+    'https://marketing.example.test/auth/signin',
+    'https://marketing.example.test/?next=https://evil.example',
+    'https://marketing.example.test/#x',
+    'https://marketing.example.test:8443',
+    'http://marketing.example.test',
     'javascript:alert(1)',
-    'ftp://marketing.bcsit-gmbh.de',
-    'https://marketing.bcsit-gmbh.de.',
+    'ftp://marketing.example.test',
+    'https://marketing.example.test.',
   ]) assert.equal(servedOrigin(bad), null, `${JSON.stringify(bad)} must be refused`);
 });
 
 test('servedOrigin on a dev (http) configured origin: its own port on its own host only', () => {
-  setEnv({ NEXTAUTH_URL: 'http://localhost:3143' });
+  setEnv({ NEXTAUTH_URL: 'http://localhost:3143', MARKETING_HOSTS: MKT });
   assert.equal(servedOrigin('http://localhost:3143'), 'http://localhost:3143');
   assert.equal(servedOrigin('http://localhost:3143/'), 'http://localhost:3143');
   assert.equal(servedOrigin('http://localhost:9999'), null, 'another port on the same host is not ours');
-  assert.equal(servedOrigin('http://marketing.bcsit-gmbh.de'), 'http://marketing.bcsit-gmbh.de', 'the base protocol is accepted');
-  assert.equal(servedOrigin('https://marketing.bcsit-gmbh.de'), 'https://marketing.bcsit-gmbh.de');
-  assert.equal(servedOrigin('http://marketing.bcsit-gmbh.de:3143'), null, 'the configured port is not re-attached to another host');
+  assert.equal(servedOrigin('http://marketing.example.test'), 'http://marketing.example.test', 'the base protocol is accepted');
+  assert.equal(servedOrigin('https://marketing.example.test'), 'https://marketing.example.test');
+  assert.equal(servedOrigin('http://marketing.example.test:3143'), null, 'the configured port is not re-attached to another host');
 });

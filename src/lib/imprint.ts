@@ -69,9 +69,9 @@ function addressLines(raw: string | undefined): string[] {
  */
 export function operatorIdentity(env: Env = process.env, world: 'INTERNSHIP' | 'MARKETING' = 'INTERNSHIP'): OperatorIdentity | null {
   // One container serves two products (docs/worlds.md), and they need not have
-  // the same provider: the marketing product is BCS-IT GmbH's, the internship
-  // product its own operator's (outreach-compliance.md § 6, open question 9 —
-  // a SaleVali letter or page naming the wrong provider fails § 5 DDG and
+  // the same provider: the marketing product may be offered by another company
+  // than the internship product (outreach-compliance.md § 6, open question 9 —
+  // a marketing letter or page naming the wrong provider fails § 5 DDG and
   // § 7 Abs. 2 Nr. 3 UWG). So the marketing world reads its own complete set
   // under the MARKETING_ prefix (#2697). Without that set it falls back to
   // the deployment's identity — what every host showed before — rather than to

@@ -4,10 +4,14 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { appLinkOrigin } from '../../src/lib/servedHosts.ts';
 
+// Reserved example names (RFC 2606) for the marketing hosts (#2926).
+const MKT = 'marketing.example.test';
+const MKT_PREVIEW = 'marketing.preview.example.test';
+
 beforeEach(() => {
   process.env.NEXTAUTH_URL = 'https://interncrm.com';
   process.env.NEXT_PUBLIC_APP_URL = 'https://interncrm.com';
-  process.env.MARKETING_HOSTS = '';
+  process.env.MARKETING_HOSTS = MKT;
 });
 
 test('an org with no host mapping keeps the link every mail had before', () => {
@@ -17,9 +21,13 @@ test('an org with no host mapping keeps the link every mail had before', () => {
 });
 
 test('a MARKETING org mapped to the marketing host gets links on that host', () => {
-  // Prod configures no MARKETING_HOSTS; the default is the live marketing domain.
-  assert.equal(appLinkOrigin('marketing.bcsit-gmbh.de'), 'https://marketing.bcsit-gmbh.de');
-  assert.equal(appLinkOrigin('Marketing.BCSIT-GmbH.de'), 'https://marketing.bcsit-gmbh.de');
+  assert.equal(appLinkOrigin(MKT), `https://${MKT}`);
+  assert.equal(appLinkOrigin('Marketing.Example.Test'), `https://${MKT}`);
+});
+
+test('without MARKETING_HOSTS a mapped marketing host is not served, so the link stays put (#2926)', () => {
+  process.env.MARKETING_HOSTS = '';
+  assert.equal(appLinkOrigin(MKT), 'https://interncrm.com');
 });
 
 test('a mapping this deployment does not serve never leaves it', () => {
@@ -27,10 +35,10 @@ test('a mapping this deployment does not serve never leaves it', () => {
   // must not send its reader to a host this container does not answer on.
   process.env.NEXTAUTH_URL = 'https://pr2495.interncrm.com';
   process.env.NEXT_PUBLIC_APP_URL = 'https://pr2495.interncrm.com';
-  process.env.MARKETING_HOSTS = 'marketing.bcsit-gmbh.dev';
-  assert.equal(appLinkOrigin('marketing.bcsit-gmbh.de'), 'https://pr2495.interncrm.com');
+  process.env.MARKETING_HOSTS = MKT_PREVIEW;
+  assert.equal(appLinkOrigin(MKT), 'https://pr2495.interncrm.com');
   assert.equal(appLinkOrigin('evil.example'), 'https://pr2495.interncrm.com');
-  assert.equal(appLinkOrigin('marketing.bcsit-gmbh.dev'), 'https://marketing.bcsit-gmbh.dev');
+  assert.equal(appLinkOrigin(MKT_PREVIEW), `https://${MKT_PREVIEW}`);
 });
 
 test('the configured host itself is returned verbatim, port included', () => {
@@ -38,5 +46,5 @@ test('the configured host itself is returned verbatim, port included', () => {
   process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
   assert.equal(appLinkOrigin('localhost'), 'http://localhost:3000');
   // Local dev is http, so a mapped host stays http — and never inherits :3000.
-  assert.equal(appLinkOrigin('marketing.bcsit-gmbh.de'), 'http://marketing.bcsit-gmbh.de');
+  assert.equal(appLinkOrigin(MKT), `http://${MKT}`);
 });

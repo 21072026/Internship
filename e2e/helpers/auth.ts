@@ -1,4 +1,5 @@
 import type { APIRequestContext, Page } from '@playwright/test';
+import { E2E_MARKETING_HOST } from './marketingHost';
 
 /**
  * Sign in through the UI and wait until the post-login redirect chain has
@@ -171,13 +172,15 @@ export async function settleStreamedSuspense(page: Page, timeout = 15_000) {
 }
 
 /**
- * The marketing product's public host (MARKETING_HOSTS' default). One container
- * serves it next to interncrm.com, and the app tells them apart by the proxy's
- * `X-Forwarded-Host` — which a spec forges to stand in for "the browser is on
- * marketing.bcsit-gmbh.de" (#2590). The host decides which of a person's
- * accounts they sign into, so it is the one header a two-world spec cannot omit.
+ * The marketing product's public host in this suite — the one MARKETING_HOSTS
+ * entry playwright.config.ts gives the app server (e2e/helpers/marketingHost.ts,
+ * #2926). One container serves it next to the internship host, and the app tells
+ * them apart by the proxy's `X-Forwarded-Host` — which a spec forges to stand in
+ * for "the browser is on the marketing site" (#2590). The host decides which of a
+ * person's accounts they sign into, so it is the one header a two-world spec
+ * cannot omit.
  */
-export const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
+export const MARKETING_HOST = E2E_MARKETING_HOST;
 
 /** The header that makes a request arrive "on" `host`, for `request.*` calls and `setExtraHTTPHeaders`. */
 export function asHost(host: string): Record<string, string> {

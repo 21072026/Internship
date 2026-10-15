@@ -8,7 +8,7 @@ test('page title loses the product suffix the site template adds', () => {
   assert.equal(pageTitle('Internship CRM', 'Internship CRM'), '');
   // The site's default title is not a page name: keep the menu label instead.
   assert.equal(pageTitle('Internship CRM — mentoring from first contact to first job', 'Internship CRM'), '');
-  assert.equal(pageTitle('Board · SaleVali', 'SaleVali'), 'Board');
+  assert.equal(pageTitle('Board · Acme Sales', 'Acme Sales'), 'Board');
 });
 
 test('page colours: rgb → hex, transparent → none, dark detection', () => {

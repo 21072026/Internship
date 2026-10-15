@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { E2E_MARKETING_HOST } from './helpers/marketingHost';
 
 // The pre-launch checklist items the 2026-10 site audit found missing, on both
 // products (interncrm.com and the marketing host, forged through
@@ -12,7 +13,7 @@ import { test, expect } from '@playwright/test';
 // Anonymous by design — a crawler or an agent has no cookies.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const MARKETING = { 'x-forwarded-host': 'marketing.bcsit-gmbh.de' };
+const MARKETING = { 'x-forwarded-host': E2E_MARKETING_HOST };
 
 test('llms.txt describes the internship product and its public pages', async ({ request }) => {
   const res = await request.get('/llms.txt');
@@ -29,7 +30,7 @@ test('llms.txt on the marketing host lists only marketing pages', async ({ reque
   expect(res.status()).toBe(200);
   const body = await res.text();
   expect(body.startsWith('# SaleVali\n')).toBe(true);
-  expect(body).toContain('://marketing.bcsit-gmbh.de/privacy)');
+  expect(body).toContain(`://${E2E_MARKETING_HOST}/privacy)`);
   // Internship-only pages 404 on this host; the map must not send an agent there.
   expect(body).not.toContain('/apply-as-mentor');
   expect(body).not.toContain('/for-companies');
@@ -48,7 +49,7 @@ test('the canonical URL follows the marketing host', async ({ page }) => {
   await page.setExtraHTTPHeaders(MARKETING);
   await page.goto('/trust?ref=x');
   const canonical = new URL((await page.locator('link[rel="canonical"]').getAttribute('href'))!);
-  expect(canonical.host).toBe('marketing.bcsit-gmbh.de');
+  expect(canonical.host).toBe(E2E_MARKETING_HOST);
   expect(canonical.pathname + canonical.search).toBe('/trust');
 });
 

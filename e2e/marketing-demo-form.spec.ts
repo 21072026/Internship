@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
 import { doiMailCapKey, makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
@@ -22,7 +22,7 @@ import { __testable as emailInternals } from '@/services/emailService';
 //   4. a marketing host NO org claims is a closed form (fail-closed), never the
 //      internship tenant's inbox.
 //
-// `MARKETING_HOSTS` defaults to marketing.bcsit-gmbh.de, so forging
+// playwright.config.ts sets `MARKETING_HOSTS` to MARKETING_HOST, so forging
 // `x-forwarded-host` routes the marketing vertical without an env change (the
 // host-vertical-* specs use the same trick). Every test also gets its own
 // `x-forwarded-for`, because the form's rate limit (3/hour) is per client IP.
@@ -34,7 +34,6 @@ import { __testable as emailInternals } from '@/services/emailService';
 
 test.describe.configure({ mode: 'serial' });
 
-const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
 const PW = 'DemoForm123!';
 
 let ipSeq = 0;
@@ -560,7 +559,7 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
 // a request — it follows the invited tenant's own host mapping. Before, every
 // register link was built from NEXT_PUBLIC_APP_URL and a SaleVali admin's
 // invitation opened the internship product. Here the mapped host is served
-// (MARKETING_HOSTS' default), so the MARKETING admin's link lands on it; the
+// (it is the suite's MARKETING_HOSTS), so the MARKETING admin's link lands on it; the
 // internship admin's, whose org maps nothing, is exactly what it always was.
 test('an invitation link opens the invited tenant’s own product host', async ({ browser }) => {
   const invitees: string[] = [];
