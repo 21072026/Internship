@@ -72,11 +72,11 @@ const FLOORS = new Map([
   ],
   [
     'src/lib/svgMark.ts',
-    { floor: 95, measured: 100.0, why: 'an uploaded SVG mark must not make the rasterizer read a file, fetch a URL or expand entities (#2922)' },
+    { floor: 95, measured: 100.0, why: 'an uploaded SVG mark must not make the rasterizer read a file, fetch a URL, expand entities or render forever (#2922)' },
   ],
   [
     'src/lib/brandRender.ts',
-    { floor: 95, measured: 100.0, why: 'every icon kind at its size, opaque full-bleed corners, one launch image per device (#2922)' },
+    { floor: 95, measured: 98.71, why: 'every icon kind at its size, opaque full-bleed corners, one launch image per device, a hostile render killed at its deadline (#2922)' },
   ],
   [
     'src/lib/mentorImpactRule.ts',

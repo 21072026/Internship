@@ -1367,7 +1367,6 @@ model NewsletterSend {
   @@index([sentAt])
 }
 
-// A user's profile picture, stored in the database (same approach as CvFile).
 // One generated image of an organization's brand icon set (#2922). An upload
 // renders ~27 of these under one `version` — every served kind (the bare mark,
 // manifest icons, maskable icon, apple-touch icon, favicon, shortcut icons, one
@@ -1395,6 +1394,7 @@ model BrandAsset {
   @@index([orgId])
 }
 
+// A user's profile picture, stored in the database (same approach as CvFile).
 model AvatarFile {
   id          String   @id @default(cuid())
   userId      String   @unique

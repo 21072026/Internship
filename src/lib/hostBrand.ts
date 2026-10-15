@@ -25,8 +25,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { headers } from 'next/headers';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requestSession } from '@/lib/requestSession';
 import { prisma } from '@/lib/prisma';
 import { runWithOrg } from '@/lib/orgContext';
 import { hasSessionCookie } from '@/lib/sessionCookie';
@@ -105,22 +104,23 @@ export function defaultBrand(vertical: VerticalKey): ResolvedBrand {
 // once per server layer (a route handler and a page are bundled separately),
 // and an upload in one must clear the cache the other reads.
 const TTL_MS = 60_000;
+const FAILURE_TTL_MS = 10_000;
 const MAX_ENTRIES = 500;
-type Entry = { at: number; row: BrandRow | null };
+type Entry = { at: number; ttl: number; row: BrandRow | null };
 const brandCacheGlobal = globalThis as unknown as { __orgBrandCache?: { byHost: Map<string, Entry>; byOrg: Map<string, Entry> } };
 brandCacheGlobal.__orgBrandCache ??= { byHost: new Map(), byOrg: new Map() };
 const { byHost, byOrg } = brandCacheGlobal.__orgBrandCache;
 
 function cached(map: Map<string, Entry>, key: string): Entry | undefined {
   const hit = map.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit;
+  if (hit && Date.now() - hit.at < hit.ttl) return hit;
   if (hit) map.delete(key);
   return undefined;
 }
 
-function remember(map: Map<string, Entry>, key: string, row: BrandRow | null): void {
+function remember(map: Map<string, Entry>, key: string, row: BrandRow | null, ttl = TTL_MS): void {
   if (map.size >= MAX_ENTRIES) map.delete(map.keys().next().value as string);
-  map.set(key, { at: Date.now(), row });
+  map.set(key, { at: Date.now(), ttl, row });
 }
 
 /** Forget every cached brand row in this process — called after any brand write. */
@@ -134,7 +134,17 @@ async function rowForHost(host: string): Promise<BrandRow | null> {
   if (hit) return hit.row;
   // `Organization` is not a tenant model, so no bound context rewrites this
   // lookup; the exact-match `where` is the whole rule (publicHostOrg.ts).
-  const row = await prisma.organization.findUnique({ where: { publicHost: host }, select: BRAND_SELECT });
+  let row: BrandRow | null;
+  try {
+    row = await prisma.organization.findUnique({ where: { publicHost: host }, select: BRAND_SELECT });
+  } catch (e) {
+    // A failed lookup is remembered as "no organization" for a few seconds:
+    // during a database outage every public page and the manifest would
+    // otherwise wait out the connection timeout first, and log it, on every
+    // view — for an answer (the default brand) they get either way.
+    remember(byHost, host, null, FAILURE_TTL_MS);
+    throw e;
+  }
   remember(byHost, host, row);
   return row;
 }
@@ -192,7 +202,7 @@ export async function brandForOrg(orgId: string | null | undefined): Promise<Res
 export const requestBrand = cache(async (): Promise<ResolvedBrand> => {
   if (!(await hasSessionCookie())) return hostBrand();
   try {
-    const session = await getServerSession(authOptions);
+    const session = await requestSession();
     if (!session?.user?.id) return hostBrand();
     return await brandForOrg(resolveOrgId(session));
   } catch {

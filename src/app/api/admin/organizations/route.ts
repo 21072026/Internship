@@ -27,7 +27,6 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { isAccentColor } from '@/lib/accent';
 import { BRAND_ACCENT, normalizeHex, paletteIsReadable, parsePalette } from '@/lib/brandRule';
 import { invalidateBrandCache } from '@/lib/hostBrand';
-import { rerenderBrandMark, tileFor } from '@/lib/brandAssets';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -588,10 +587,14 @@ export async function PATCH(request: Request) {
   // The brand changed: every cached read of it in this process is stale, and a
   // generated icon set painted on the old tile colour is re-rendered from its
   // stored original on the new one (a no-op when the tile did not move).
+  // brandAssets is imported HERE, not at the top: it pulls in the native image
+  // library, and SSO, plan and the rest of this route must keep loading on a
+  // host where that library cannot.
   if (touchesBranding) {
     invalidateBrandCache();
-    if (organization.brandMarkVersion && tileFor(organization) !== tileFor(existing)) {
-      await rerenderBrandMark(id).catch(() => null);
+    const assets = organization.brandMarkVersion ? await import('@/lib/brandAssets').catch(() => null) : null;
+    if (assets && assets.tileFor(organization) !== assets.tileFor(existing)) {
+      await assets.rerenderBrandMark(id).catch(() => null);
     }
   }
 

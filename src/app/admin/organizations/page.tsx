@@ -457,8 +457,10 @@ export default function AdminOrganizationsPage() {
     const e = t.organizations.brandMarkErrors;
     if (reason === 'too_large') return e.tooLarge;
     if (reason === 'too_small') return e.tooSmall;
+    if (reason === 'busy') return e.busy;
+    if (['too_complex', 'too_many_elements', 'too_many_path_commands', 'use_nesting', 'too_many_uses'].includes(reason ?? '')) return e.tooComplex;
     if (reason === 'not_square' || reason === 'viewbox_not_square' || reason === 'viewbox_missing') return e.notSquare;
-    if (['unsupported', 'mismatch', 'not_svg', 'not_utf8', 'unreadable', 'empty', 'missing'].includes(reason ?? '')) return e.unsupported;
+    if (['unsupported', 'mismatch', 'not_svg', 'not_utf8', 'encoding', 'malformed', 'unreadable', 'empty', 'missing'].includes(reason ?? '')) return e.unsupported;
     return reason ? e.unsafe : t.common.error;
   };
 
@@ -470,7 +472,7 @@ export default function AdminOrganizationsPage() {
       form.append('file', markFile);
       const res = await fetch(`/api/admin/organizations/${brandOrgId}/brand-mark`, { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
-      setBrandMsg(res.ok ? t.organizations.brandMarkUploaded : markRefusalText(data.code, data.reason));
+      setBrandMsg(res.ok ? t.organizations.brandMarkUploaded : markRefusalText(data.code, res.status === 429 ? 'busy' : data.reason));
       if (res.ok) { setMarkFile(null); setMarkInputKey((k) => k + 1); await load(); }
     } finally {
       setSaving(false);

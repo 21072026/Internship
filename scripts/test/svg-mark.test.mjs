@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SVG_MARK_MAX_BYTES, SVG_MARK_MAX_USES, validateSvgMark } from '../../src/lib/svgMark.ts';
+import { SVG_MARK_MAX_BYTES, SVG_MARK_MAX_ELEMENTS, SVG_MARK_MAX_PATH_COMMANDS, SVG_MARK_MAX_USES, validateSvgMark } from '../../src/lib/svgMark.ts';
 
 // The SVG an admin uploads as an organization's mark (#2922) is rasterized by
 // librsvg on the production host. It is never served, so this is not about
@@ -106,7 +106,7 @@ test('every href must point inside the document', () => {
   refused(wrap('<a:use xmlns:a="http://www.w3.org/1999/xlink" a:href="https://example.test"/>'), 'external_reference');
   // An unquoted value is not well-formed XML, and is not let through unread.
   refused(wrap('<use href=https://example.test/x />'), 'external_reference');
-  refused(wrap('<pattern id="p" href="https://example.test/p.svg"/>'), 'external_reference');
+  refused(wrap('<linearGradient id="p" href="https://example.test/p.svg"/>'), 'external_reference');
   refused(wrap('<textPath href="//example.test/x"/>'), 'external_reference');
 });
 
@@ -162,4 +162,81 @@ test('bytes and strings are judged the same, a BOM is tolerated', () => {
   assert.equal(validateSvgMark(new TextEncoder().encode(svg)).ok, true);
   assert.equal(validateSvgMark(`﻿${svg}`).ok, true);
   assert.deepEqual(validateSvgMark(svg), { ok: true, viewBox: [0, 0, 64, 64] });
+});
+
+// ── Render cost: filters, patterns, markers, nesting, budgets ────────────────
+// A file can be harmless to READ and still cost minutes to RENDER: chained
+// filter primitives run as one uninterruptible librsvg call each, and nested
+// <use> references multiply. These are refused before rendering; the child
+// process deadline in brandRender.ts bounds whatever is left.
+
+test('filters are refused in every spelling', () => {
+  const dilate = Array.from({ length: 6 }, () => '<feMorphology operator="dilate" radius="1000000"/>').join('');
+  refused(wrap(`<filter id="f">${dilate}</filter><rect width="64" height="64" filter="url(#f)"/>`), 'forbidden_element');
+  refused(wrap('<defs><feGaussianBlur stdDeviation="99"/></defs>'), 'forbidden_element');
+  refused(wrap('<svg:feTurbulence xmlns:svg="http://www.w3.org/2000/svg"/>'), 'forbidden_element');
+  refused(wrap('<rect width="1" height="1" filter="url(#f)"/>'), 'filter');
+  refused(wrap('<rect width="1" height="1" FILTER = "url(#f)"/>'), 'filter');
+  refused(wrap('<rect width="1" height="1" style="filter: blur(40px)"/>'), 'filter');
+  refused(wrap('<style>rect{ filter : drop-shadow(0 0 9px #000) }</style>'), 'filter');
+  refused(wrap('<rect width="1" height="1" style="backdrop-filter:blur(2px)"/>'), 'filter');
+});
+
+test('patterns and markers are refused', () => {
+  refused(wrap('<pattern id="p" width="1" height="1"><rect width="1" height="1"/></pattern>'), 'forbidden_element');
+  refused(wrap('<marker id="m"><path d="M0 0h1z"/></marker>'), 'forbidden_element');
+});
+
+test('a <use> may not point at anything that contains a <use>', () => {
+  // The doubling chain: each level references the previous one twice.
+  const chain = ['<path id="l0" d="M0 0h1v1z"/>'];
+  for (let n = 1; n <= 5; n++) chain.push(`<g id="l${n}"><use href="#l${n - 1}"/><use href="#l${n - 1}"/></g>`);
+  refused(wrap(`<defs>${chain.join('')}</defs><use href="#l5"/>`), 'use_nesting');
+  refused(wrap('<defs><use id="u" href="#p"/><path id="p" d="M0 0h1z"/></defs><use href="#u"/>'), 'use_nesting');
+  refused(wrap('<defs><symbol id="s"><g><use href="#p"/></g></symbol><path id="p" d="M0 0h1z"/></defs><use xlink:href="#s"/>'), 'use_nesting');
+  refused(wrap('<g id="self"><use href="#self"/></g>'), 'use_nesting');
+  // One level is fine, as many times as the count allows.
+  ok(wrap('<defs><symbol id="s"><path d="M0 0h1z"/><circle r="2"/></symbol></defs><use href="#s"/><use href="#s" x="8"/>'));
+});
+
+test('the element and path-command budgets are enforced', () => {
+  const many = Array.from({ length: SVG_MARK_MAX_ELEMENTS }, () => '<g/>').join('');
+  refused(wrap(many), 'too_many_elements');
+  ok(wrap(Array.from({ length: SVG_MARK_MAX_ELEMENTS - 1 }, () => '<g/>').join('')));
+  const segments = 'l1 1'.repeat(SVG_MARK_MAX_PATH_COMMANDS);
+  refused(wrap(`<path d="M0 0${segments}"/>`), 'too_many_path_commands');
+  const points = Array.from({ length: SVG_MARK_MAX_PATH_COMMANDS + 1 }, (_, n) => `${n},${n}`).join(' ');
+  refused(wrap(`<polygon points="${points}"/>`), 'too_many_path_commands');
+  // Exponents are numbers, not commands.
+  ok(wrap('<path d="M1e2 1e-2L2E1 2z"/>'));
+});
+
+test('a refused element hides behind no namespace prefix, ASCII or not', () => {
+  refused(wrap('<é:foreignObject xmlns:é="http://www.w3.org/2000/svg"/>'), 'forbidden_element');
+  refused(wrap('<é:image xmlns:é="http://www.w3.org/2000/svg" href="#r"/>'), 'forbidden_element');
+  refused(wrap('<é:include xmlns:é="http://www.w3.org/2001/XInclude" href="#r" parse="text"/>'), 'forbidden_element');
+  refused(wrap('<ns·1:script xmlns:ns·1="http://www.w3.org/2000/svg"/>'), 'forbidden_element');
+});
+
+test('an XML declaration may only name UTF-8 or ASCII', () => {
+  refused(`<?xml version="1.0" encoding="UTF-7"?>${wrap('+ADw-image href+AD0AIg-x+ACI-/+AD4-')}`, 'encoding');
+  refused(`<?xml version="1.0" encoding='ISO-8859-1'?>${wrap('')}`, 'encoding');
+  refused(`<?xml version="1.0" encoding="utf-16"?>${wrap('')}`, 'encoding');
+  ok(`<?xml version="1.0" encoding="utf-8"?>${wrap('<circle r="1"/>')}`);
+  ok(`<?xml version="1.0" encoding="US-ASCII" standalone="no"?>${wrap('<circle r="1"/>')}`);
+  ok(`<?xml version="1.0"?>${wrap('<circle r="1"/>')}`);
+});
+
+test('a document whose tags do not parse or nest is refused', () => {
+  refused(wrap('<g><path d="M0 0h1z"/>'), 'malformed');
+  refused(wrap('</g>'), 'malformed');
+  refused(wrap('<g></rect>'), 'malformed');
+  refused(wrap('<rect width=1/>'), 'malformed');
+  refused(wrap('<rect width="1"height="1"/>'), 'malformed');
+  refused(wrap('<text>a < b</text>'), 'malformed');
+  refused(wrap('<!-- unterminated'), 'malformed');
+  refused(new TextEncoder().encode(wrap('<g>\u0000</g>')), 'not_utf8');
+  // A `>` inside a quoted value and inside text is fine.
+  ok(wrap('<g class="a>b"><text>a &gt; b > c</text></g>'));
+  ok(wrap('<style>g > path { fill: #123456 }</style><g><path d="M0 0h1z"/></g>'));
 });

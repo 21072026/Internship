@@ -29,11 +29,30 @@
 //     predefined XML entities — an escape is how a refused word is spelled so a
 //     pattern does not see it;
 //   - a square `viewBox` on the root, so every icon size is the same shape;
-//   - at most SVG_MARK_MAX_USES `<use>` elements (reference chains are how a
-//     tiny file renders millions of shapes).
+//   - at most SVG_MARK_MAX_USES `<use>` elements, and a `<use>` may not point
+//     at anything that itself contains a `<use>` (reference chains are how a
+//     tiny file renders millions of shapes);
+//   - no filter of any kind (`<filter>`, every `fe*` primitive, the `filter`
+//     attribute or CSS property), no `<pattern>`, no `<marker>`: one filter
+//     primitive is a single uninterruptible call inside librsvg, and a few of
+//     them chained in a 400-byte file kept a core busy for minutes;
+//   - at most SVG_MARK_MAX_ELEMENTS elements and SVG_MARK_MAX_PATH_COMMANDS
+//     path commands / polygon points in the whole document;
+//   - the document is well-formed as far as its tags go (every `<` opens a
+//     comment or a tag with quoted attributes, tags nest), and an XML
+//     declaration names UTF-8 or ASCII if it names an encoding at all — the
+//     bytes judged here must be the bytes the parser reads.
+//
+// Elements are matched on their LOCAL name, whatever namespace prefix they
+// carry (`<é:image xmlns:é="…svg">` is an image), both by the pattern below
+// and by the tag walk; the rasterizer itself runs in a child process with a
+// hard deadline (src/lib/brandRender.ts), so these rules bound the work a
+// file can ask for and the deadline bounds whatever slips past them.
 
 export const SVG_MARK_MAX_BYTES = 512 * 1024;
 export const SVG_MARK_MAX_USES = 32;
+export const SVG_MARK_MAX_ELEMENTS = 2000;
+export const SVG_MARK_MAX_PATH_COMMANDS = 20000;
 
 export type SvgMarkRefusal =
   | 'too_large'
@@ -51,6 +70,12 @@ export type SvgMarkRefusal =
   | 'script_url'
   | 'escape'
   | 'too_many_uses'
+  | 'use_nesting'
+  | 'filter'
+  | 'too_many_elements'
+  | 'too_many_path_commands'
+  | 'malformed'
+  | 'encoding'
   | 'viewbox_missing'
   | 'viewbox_not_square';
 
@@ -84,11 +109,34 @@ const FORBIDDEN_ELEMENTS = [
   'link',
   'meta',
   'base',
+  // Expensive to render rather than dangerous to read: see the header.
+  'filter',
+  'pattern',
+  'marker',
 ];
+const FORBIDDEN_SET = new Set(FORBIDDEN_ELEMENTS);
+
+/** Whether an element's local name (prefix dropped, any case) is refused. */
+function isForbiddenLocalName(local: string): boolean {
+  return FORBIDDEN_SET.has(local) || /^fe[a-z]/.test(local);
+}
+
+// A namespace prefix is any run of name characters before a colon — XML allows
+// letters far beyond ASCII there, so the prefix is everything that cannot end a
+// name rather than a list of what may start one.
+const PREFIX = `(?:[^\\s<>/:="']+:)?`;
 // `<` + optional `/` + optional namespace prefix + the name, then anything that
 // is not a name character (so `<fontsize` is not `<font`, but `<font-face` and
 // `<font ` both are).
-const FORBIDDEN_RE = new RegExp(`<\\s*/?\\s*(?:[a-z_][\\w.-]*:)?(?:${FORBIDDEN_ELEMENTS.join('|')})(?![\\w.-])`, 'i');
+const FORBIDDEN_RE = new RegExp(`<\\s*/?\\s*${PREFIX}(?:${FORBIDDEN_ELEMENTS.join('|')}|fe[a-z][\\w.-]*)(?![\\w.-])`, 'i');
+const USE_RE = new RegExp(`<\\s*${PREFIX}use(?![\\w.-])`, 'gi');
+
+// One tag: `<`, optional `/`, a name, quoted attributes, optional `/`, `>`.
+// Sticky, so it is tried exactly at each `<` of the document.
+const TAG_RE = /<(\/?)([^\s/>="'<]+)((?:\s+[^\s=/>"'<]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/y;
+const ATTR_RE = /([^\s=/>"'<]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+const XML_DECL_RE = /^\s*<\?xml\s([^?]*)\?>/;
+const ALLOWED_ENCODINGS = new Set(['utf-8', 'utf8', 'us-ascii', 'ascii']);
 
 const PREDEFINED_ENTITY = /^&(?:amp|lt|gt|quot|apos);/;
 
@@ -115,6 +163,70 @@ function parseViewBox(rootTag: string): [number, number, number, number] | null 
 }
 
 /**
+ * Walk every tag of the document (comments blanked, declaration stripped) and
+ * judge what the patterns cannot: that the tags are well-formed and nest, that
+ * no element is refused under any prefix, the element and path-command budget,
+ * and that no `<use>` points at something that itself contains a `<use>`.
+ * Returns the refusal, or null.
+ */
+function walkTags(doc: string): SvgMarkRefusal | null {
+  const src = doc.replace(/<!--[\s\S]*?-->/g, (c) => ' '.repeat(c.length));
+  if (src.includes('<!--')) return 'malformed';
+  const stack: { name: string; id: string | null; containsUse: boolean }[] = [];
+  const idContainsUse = new Map<string, boolean>();
+  const useTargets: string[] = [];
+  let elements = 0;
+  let commands = 0;
+  let i = src.indexOf('<');
+  while (i !== -1) {
+    TAG_RE.lastIndex = i;
+    const m = TAG_RE.exec(src);
+    if (!m) return 'malformed';
+    const [, closing, name, attrs, selfClosing] = m;
+    if (closing) {
+      if (attrs || selfClosing) return 'malformed';
+      const open = stack.pop();
+      if (!open || open.name !== name) return 'malformed';
+      if (open.id !== null) idContainsUse.set(open.id, open.containsUse);
+      if (open.containsUse && stack.length) stack[stack.length - 1].containsUse = true;
+    } else {
+      elements += 1;
+      if (elements > SVG_MARK_MAX_ELEMENTS) return 'too_many_elements';
+      const local = name.slice(name.lastIndexOf(':') + 1).toLowerCase();
+      if (isForbiddenLocalName(local)) return 'forbidden_element';
+      const isUse = local === 'use';
+      let id: string | null = null;
+      for (const a of attrs.matchAll(ATTR_RE)) {
+        const attrLocal = a[1].slice(a[1].lastIndexOf(':') + 1).toLowerCase();
+        const value = a[2] ?? a[3] ?? '';
+        if (attrLocal === 'filter') return 'filter';
+        if (attrLocal === 'id') id = value.trim();
+        if (attrLocal === 'd') commands += value.match(/[mlhvcsqtaz]/gi)?.length ?? 0;
+        if (attrLocal === 'points') commands += Math.ceil((value.match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi)?.length ?? 0) / 2);
+        if (isUse && attrLocal === 'href') useTargets.push(value.trim().slice(1));
+      }
+      if (commands > SVG_MARK_MAX_PATH_COMMANDS) return 'too_many_path_commands';
+      if (selfClosing) {
+        if (isUse) {
+          if (id !== null) idContainsUse.set(id, true);
+          if (stack.length) stack[stack.length - 1].containsUse = true;
+        } else if (id !== null && !idContainsUse.has(id)) {
+          idContainsUse.set(id, false);
+        }
+      } else {
+        stack.push({ name, id, containsUse: isUse });
+      }
+    }
+    i = src.indexOf('<', i + m[0].length);
+  }
+  if (stack.length) return 'malformed';
+  // A `<use>` whose target contains a `<use>` (or is one) multiplies instead
+  // of adding: refused at depth two, whatever the count.
+  for (const target of useTargets) if (idContainsUse.get(target)) return 'use_nesting';
+  return null;
+}
+
+/**
  * Judge an uploaded SVG mark. Accepts the raw bytes (the upload) or a string
  * (tests); a string is measured in UTF-8 bytes like the upload would be.
  */
@@ -124,11 +236,21 @@ export function validateSvgMark(input: Uint8Array | string): SvgMarkVerdict {
   const decoded = decodeUtf8(bytes);
   if (decoded === null) return fail('not_utf8');
   const text = decoded.replace(/^﻿/, '');
+  if (text.includes('\u0000')) return fail('not_utf8');
 
   // Declarations and processing instructions, anywhere in the file.
   if (/<!\s*doctype/i.test(text)) return fail('doctype');
   if (/<!(?!--)/.test(text)) return fail('declaration');
-  const withoutXmlDecl = text.replace(/^\s*<\?xml\s[^?]*\?>/, '');
+  // The declaration may name an encoding, and the parser obeys it: a file
+  // that is valid UTF-8 here but declares UTF-7 (or any other charset) reads as
+  // different characters there, so every pattern below would judge the wrong
+  // text. Only an encoding that reads these bytes as these characters passes.
+  const decl = text.match(XML_DECL_RE);
+  if (decl) {
+    const enc = decl[1].match(/encoding\s*=\s*(["'])([^"']*)\1/i);
+    if (enc && !ALLOWED_ENCODINGS.has(enc[2].trim().toLowerCase())) return fail('encoding');
+  }
+  const withoutXmlDecl = text.replace(XML_DECL_RE, '');
   if (/<\?/.test(withoutXmlDecl)) return fail('processing_instruction');
 
   // Character references: only the five predefined entities. A numeric
@@ -171,7 +293,14 @@ export function validateSvgMark(input: Uint8Array | string): SvgMarkVerdict {
   const localUrls = text.match(/url\s*\(\s*(["']?)\s*#[A-Za-z_][\w.-]*\s*\1\s*\)/gi)?.length ?? 0;
   if (allUrls !== localUrls) return fail('external_url');
 
-  if ((text.match(/<\s*(?:[a-z_][\w.-]*:)?use(?![\w.-])/gi)?.length ?? 0) > SVG_MARK_MAX_USES) return fail('too_many_uses');
+  // Filters in any spelling: the attribute, the CSS property (`filter:` in a
+  // style attribute or a <style> block). Whitespace is already squashed out.
+  if (/filter[:=]/.test(squashed)) return fail('filter');
+
+  if ((text.match(USE_RE)?.length ?? 0) > SVG_MARK_MAX_USES) return fail('too_many_uses');
+
+  const structure = walkTags(withoutXmlDecl);
+  if (structure) return fail(structure);
 
   const rootTag = body.slice(0, body.indexOf('>') + 1);
   const viewBox = parseViewBox(rootTag);

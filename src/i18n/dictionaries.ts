@@ -4503,7 +4503,9 @@ const en = {
       tooSmall: 'The image is too small: at least 512 × 512 px.',
       notSquare: 'The mark must be square (an SVG needs a square viewBox).',
       unsupported: 'Upload an SVG, PNG or WebP file.',
-      unsafe: 'This SVG uses features a logo mark may not contain (scripts, external references, embedded images or fonts). Export it as plain shapes, or upload a PNG.',
+      unsafe: 'This SVG uses features a logo mark may not contain (scripts, filters, external references, embedded images or fonts). Export it as plain shapes, or upload a PNG.',
+      tooComplex: 'This file is too complex to render as a logo mark. Simplify it (fewer shapes, no nested references) or upload a PNG.',
+      busy: 'Another mark is being rendered right now. Try again in a moment.',
     },
     // Conferencing policy (#2007).
     conferencing: 'Video conferencing',
@@ -12194,7 +12196,9 @@ const tr: Dict = {
       tooSmall: 'Görsel çok küçük: en az 512 × 512 px.',
       notSquare: 'İşaret kare olmalı (SVG\'nin viewBox\'ı kare olmalı).',
       unsupported: 'SVG, PNG ya da WebP dosyası yükle.',
-      unsafe: 'Bu SVG bir logo işaretinde bulunamayacak öğeler içeriyor (betik, dış bağlantı, gömülü görsel ya da yazı tipi). Düz şekiller olarak dışa aktar ya da PNG yükle.',
+      unsafe: 'Bu SVG bir logo işaretinde bulunamayacak öğeler içeriyor (betik, filtre, dış bağlantı, gömülü görsel ya da yazı tipi). Düz şekiller olarak dışa aktar ya da PNG yükle.',
+      tooComplex: 'Bu dosya bir logo işareti olarak işlenemeyecek kadar karmaşık. Sadeleştir (daha az şekil, iç içe referans yok) ya da PNG yükle.',
+      busy: 'Şu anda başka bir işaret işleniyor. Birazdan yeniden dene.',
     },
     // Konferans politikası (#2007).
     conferencing: 'Video konferans',
@@ -19819,7 +19823,9 @@ const de: Dict = {
       tooSmall: 'Das Bild ist zu klein: mindestens 512 × 512 px.',
       notSquare: 'Das Zeichen muss quadratisch sein (eine SVG braucht eine quadratische viewBox).',
       unsupported: 'Bitte eine SVG-, PNG- oder WebP-Datei hochladen.',
-      unsafe: 'Diese SVG enthält Elemente, die ein Logo-Zeichen nicht enthalten darf (Skripte, externe Verweise, eingebettete Bilder oder Schriften). Als einfache Formen exportieren oder ein PNG hochladen.',
+      unsafe: 'Diese SVG enthält Elemente, die ein Logo-Zeichen nicht enthalten darf (Skripte, Filter, externe Verweise, eingebettete Bilder oder Schriften). Als einfache Formen exportieren oder ein PNG hochladen.',
+      tooComplex: 'Diese Datei ist zu komplex, um als Logo-Zeichen gerendert zu werden. Bitte vereinfachen (weniger Formen, keine verschachtelten Verweise) oder ein PNG hochladen.',
+      busy: 'Gerade wird ein anderes Zeichen gerendert. Bitte gleich noch einmal versuchen.',
     },
     // Konferenzrichtlinie (#2007).
     conferencing: 'Videokonferenz',

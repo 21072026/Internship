@@ -103,8 +103,11 @@ async function writeSet(
 export async function storeBrandMark(
   org: OrgForMark,
   upload: { bytes: Buffer; kind: 'svg' | 'raster'; contentType: string },
+  opts: { wait?: boolean } = {},
 ): Promise<{ ok: true; version: string } | { ok: false; reason: MarkRefusal }> {
-  const glyph = await glyphMaster({ kind: upload.kind, bytes: upload.bytes });
+  // The upload does not queue behind a render already running (it answers
+  // 'busy'); a re-render of a stored mark does (glyphMaster, brandRender.ts).
+  const glyph = await glyphMaster({ kind: upload.kind, bytes: upload.bytes }, { wait: opts.wait });
   if (!glyph.ok) return glyph;
   const tile = tileFor(org);
   const rendered = await renderBrandSet({
@@ -139,7 +142,7 @@ export async function rerenderBrandMark(orgId: string): Promise<string | null> {
   const bytes = Buffer.from(source.data);
   if (brandVersion(org.id, bytes, tileFor(org)) === org.brandMarkVersion) return org.brandMarkVersion;
   const kind = source.contentType === SVG_TYPE ? 'svg' : 'raster';
-  const stored = await storeBrandMark(org, { bytes, kind, contentType: source.contentType });
+  const stored = await storeBrandMark(org, { bytes, kind, contentType: source.contentType }, { wait: true });
   return stored.ok ? stored.version : null;
 }
 

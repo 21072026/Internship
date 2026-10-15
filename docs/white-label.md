@@ -85,9 +85,24 @@ the *rasterizer*: it refuses DOCTYPE/ENTITY, processing instructions, script,
 foreignObject, image, feImage, XInclude, fonts and animation elements, event
 handlers, any `href` that is not `#id`, any `url(…)` that is not `url(#id)`,
 `@import`, `javascript:`/`data:` URLs, character references and backslash
-escapes, more than 32 `<use>`, and a non-square `viewBox`. Rasterizing runs
-under a pixel limit and a timeout. `scripts/test/svg-mark.test.mjs` keeps a
-corpus of hostile files.
+escapes, more than 32 `<use>`, and a non-square `viewBox` — matching elements
+by their local name under any namespace prefix, and refusing an XML declaration
+that names an encoding other than UTF-8/ASCII. It also bounds what a file may
+ask the renderer to *do*: no filters (`<filter>`, `fe*`, the `filter`
+attribute or CSS property), no `<pattern>` or `<marker>`, no `<use>` that
+points at something containing a `<use>`, at most 2,000 elements and 20,000
+path commands, and tags that parse and nest.
+`scripts/test/svg-mark.test.mjs` keeps a corpus of hostile files.
+
+**Why rendering is bounded anyway.** The rules bound the work; the deadline
+bounds whatever slips past them. An upload is decoded in a separate Node
+process (`glyphMaster`, `src/lib/brandRender.ts`) under a pixel limit, with no
+environment secrets, and SIGKILLed after 15 seconds (`too_complex`) — sharp's
+own timeout is checked only between strips, and librsvg renders one filtered
+element in a single uninterruptible call, so an in-process timeout is not a
+bound. Only one upload renders at a time per process (a second one answers
+`503 busy`), and each admin may upload 10 marks per 10 minutes. Every icon
+and launch image is then cut, in process, from the PNG the child returned.
 
 ### Which brand a request wears
 

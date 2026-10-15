@@ -14,6 +14,7 @@
 // An organization uploads only the GLYPH (transparent background) and picks a
 // tile colour; `composeMark` rebuilds that drawing from the two, and everything
 // downstream treats the result exactly like a committed mark SVG.
+import { spawn } from 'node:child_process';
 import sharp from 'sharp';
 
 /** Bumped when the generated output changes shape, so every stored set gets a new version. */
@@ -30,8 +31,12 @@ export const MASTER_SIZE = 1024;
 /** Upper bound on the pixels sharp will decode from an upload (a 4096² image). */
 export const MAX_INPUT_PIXELS = 4096 * 4096;
 
-/** A libvips operation that runs longer than this is abandoned (a hostile file, not a logo). */
-const RENDER_TIMEOUT_SECONDS = 20;
+/**
+ * Wall-clock budget for normalizing one uploaded glyph. Past it the child
+ * process doing the work is SIGKILLed — see glyphMaster for why that, and not
+ * sharp's own timeout, is the bound.
+ */
+export const GLYPH_DEADLINE_MS = 15_000;
 
 function hex(colour: string): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(colour)) throw new Error(`not a #rrggbb colour: ${colour}`);
@@ -103,47 +108,148 @@ export async function splashPng(logo: Buffer, w: number, h: number): Promise<Buf
 
 export type GlyphInput = { kind: 'svg' | 'raster'; bytes: Buffer };
 
-export type GlyphRefusal = 'unreadable' | 'not_square' | 'too_small' | 'too_large' | 'empty';
+export type GlyphRefusal = 'unreadable' | 'not_square' | 'too_small' | 'too_large' | 'empty' | 'too_complex' | 'busy';
 
 /** Raster uploads must be at least this wide (and as tall). */
 export const MIN_RASTER_SIZE = 512;
+
+// The child's whole program. It reads the upload from stdin, normalizes it
+// exactly as described on glyphMaster, writes the PNG to stdout and exits 0 —
+// or exits with one of GLYPH_EXIT's codes. Plain CommonJS on purpose: it runs
+// as `node -e`, so no file of ours has to exist next to the build output, and
+// `require('sharp')` resolves from the app's working directory like the app's
+// own import does. One libvips thread, no cache: it renders one image and dies.
+const GLYPH_EXIT = { unreadable: 10, not_square: 11, too_small: 12, too_large: 13, empty: 14 } as const;
+const GLYPH_CHILD_SOURCE = `
+'use strict';
+const sharp = require('sharp');
+sharp.concurrency(1);
+sharp.cache(false);
+const kind = process.env.GLYPH_KIND;
+const MAX = Number(process.env.GLYPH_MAX_PIXELS);
+const MASTER = Number(process.env.GLYPH_MASTER_SIZE);
+const MIN_RASTER = Number(process.env.GLYPH_MIN_RASTER);
+const chunks = [];
+process.stdin.on('data', (c) => chunks.push(c));
+process.stdin.on('end', async () => {
+  const bytes = Buffer.concat(chunks);
+  try {
+    let density = 72;
+    if (kind === 'raster') {
+      const meta = await sharp(bytes, { limitInputPixels: MAX }).metadata();
+      if (!meta.width || !meta.height) process.exit(${GLYPH_EXIT.unreadable});
+      if (meta.width !== meta.height) process.exit(${GLYPH_EXIT.not_square});
+      if (meta.width < MIN_RASTER) process.exit(${GLYPH_EXIT.too_small});
+    } else {
+      const meta = await sharp(bytes, { density: 72, limitInputPixels: MAX }).metadata();
+      const side = Math.max(meta.width || 0, meta.height || 0);
+      if (!side) process.exit(${GLYPH_EXIT.unreadable});
+      density = Math.min(4800, Math.max(1, (72 * MASTER) / side));
+    }
+    const png = await sharp(bytes, { density, limitInputPixels: MAX })
+      .resize(MASTER, MASTER, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .ensureAlpha()
+      .png()
+      .toBuffer();
+    const alpha = (await sharp(png).stats()).channels[3];
+    if (!alpha || alpha.max === 0) process.exit(${GLYPH_EXIT.empty});
+    process.stdout.write(png, () => process.exit(0));
+  } catch (e) {
+    process.exit(/pixel limit|exceeds/i.test(String((e && e.message) || e)) ? ${GLYPH_EXIT.too_large} : ${GLYPH_EXIT.unreadable});
+  }
+});
+`;
+
+/** The largest PNG the child may hand back (a 1024² RGBA PNG is far below it). */
+const GLYPH_MAX_OUTPUT = 16 * 1024 * 1024;
+
+type GlyphResult = { ok: true; png: Buffer } | { ok: false; reason: GlyphRefusal };
+
+function runGlyphChild(input: GlyphInput, deadlineMs: number): Promise<GlyphResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (r: GlyphResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(r);
+    };
+    // A minimal environment: the child needs no secret of the app's, and gets
+    // none (no DATABASE_URL, no NEXTAUTH_SECRET, no SMTP password).
+    const child = spawn(process.execPath, ['--max-old-space-size=256', '-e', GLYPH_CHILD_SOURCE], {
+      cwd: process.cwd(),
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        PATH: process.env.PATH ?? '',
+        GLYPH_KIND: input.kind,
+        GLYPH_MAX_PIXELS: String(MAX_INPUT_PIXELS),
+        GLYPH_MASTER_SIZE: String(MASTER_SIZE),
+        GLYPH_MIN_RASTER: String(MIN_RASTER_SIZE),
+      } as NodeJS.ProcessEnv,
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      done({ ok: false, reason: 'too_complex' });
+    }, deadlineMs);
+    const out: Buffer[] = [];
+    let outBytes = 0;
+    child.stdout.on('data', (c: Buffer) => {
+      outBytes += c.length;
+      if (outBytes > GLYPH_MAX_OUTPUT) {
+        child.kill('SIGKILL');
+        done({ ok: false, reason: 'unreadable' });
+        return;
+      }
+      out.push(c);
+    });
+    child.on('error', () => done({ ok: false, reason: 'unreadable' }));
+    child.on('close', (code) => {
+      if (code === 0 && outBytes > 0) return done({ ok: true, png: Buffer.concat(out) });
+      const reason = (Object.keys(GLYPH_EXIT) as (keyof typeof GLYPH_EXIT)[]).find((k) => GLYPH_EXIT[k] === code);
+      done({ ok: false, reason: reason ?? 'unreadable' });
+    });
+    // The child may die before it has read everything (a kill, a crash); a
+    // write to its closed stdin must not become an unhandled error here.
+    child.stdin.on('error', () => {});
+    child.stdin.end(input.bytes);
+  });
+}
+
+// One normalization at a time per process: a hostile file costs at most one
+// core for GLYPH_DEADLINE_MS, never all of them, and never the libuv threadpool
+// the rest of the app shares (the work is in another process entirely).
+let glyphSlot: Promise<unknown> | null = null;
 
 /**
  * The uploaded glyph normalized to a MASTER_SIZE² transparent PNG, or the
  * reason it cannot be. An SVG is assumed to have passed validateSvgMark()
  * already (src/lib/svgMark.ts) — this function only rasterizes it, at a density
  * that makes its intrinsic size land on the master size instead of upscaling a
- * 64px rendering. Both paths decode under `limitInputPixels` and a timeout.
+ * 64px rendering. Both paths decode under `limitInputPixels`.
+ *
+ * WHY A CHILD PROCESS. The upload is the one place untrusted bytes reach the
+ * decoder, and neither of the in-process bounds holds there: sharp's
+ * `.timeout()` is checked between libvips strips, while librsvg renders a
+ * filtered element in one call, and a worker thread cannot be stopped in the
+ * middle of native code either. So the decode runs in a separate Node process
+ * that is SIGKILLed at GLYPH_DEADLINE_MS ('too_complex'). Everything after
+ * this — every icon and launch image — is cut from the PNG it returns, in
+ * process, from our own markup.
+ *
+ * `wait: false` (the upload) answers 'busy' instead of queueing behind a render
+ * already running; `wait: true` (re-rendering a stored mark after a tile-colour
+ * change) queues. `deadlineMs` exists for the unit test; the app never passes it.
  */
-export async function glyphMaster(input: GlyphInput): Promise<{ ok: true; png: Buffer } | { ok: false; reason: GlyphRefusal }> {
+export async function glyphMaster(input: GlyphInput, opts: { wait?: boolean; deadlineMs?: number } = {}): Promise<GlyphResult> {
+  if (glyphSlot && !opts.wait) return { ok: false, reason: 'busy' };
+  while (glyphSlot) await glyphSlot.catch(() => {});
+  const run = runGlyphChild(input, opts.deadlineMs ?? GLYPH_DEADLINE_MS);
+  glyphSlot = run;
   try {
-    if (input.kind === 'raster') {
-      const meta = await sharp(input.bytes, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
-      if (!meta.width || !meta.height) return { ok: false, reason: 'unreadable' };
-      if (meta.width !== meta.height) return { ok: false, reason: 'not_square' };
-      if (meta.width < MIN_RASTER_SIZE) return { ok: false, reason: 'too_small' };
-    }
-    let density = 72;
-    if (input.kind === 'svg') {
-      const meta = await sharp(input.bytes, { density: 72, limitInputPixels: MAX_INPUT_PIXELS }).metadata();
-      const side = Math.max(meta.width ?? 0, meta.height ?? 0);
-      if (!side) return { ok: false, reason: 'unreadable' };
-      density = Math.min(4800, Math.max(1, (72 * MASTER_SIZE) / side));
-    }
-    const png = await sharp(input.bytes, { density, limitInputPixels: MAX_INPUT_PIXELS })
-      .timeout({ seconds: RENDER_TIMEOUT_SECONDS })
-      .resize(MASTER_SIZE, MASTER_SIZE, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .ensureAlpha()
-      .png()
-      .toBuffer();
-    const stats = await sharp(png).stats();
-    const alpha = stats.channels[3];
-    if (!alpha || alpha.max === 0) return { ok: false, reason: 'empty' };
-    return { ok: true, png };
-  } catch (e) {
-    const message = String((e as Error)?.message ?? e);
-    if (/pixel limit|exceeds/i.test(message)) return { ok: false, reason: 'too_large' };
-    return { ok: false, reason: 'unreadable' };
+    return await run;
+  } finally {
+    if (glyphSlot === run) glyphSlot = null;
   }
 }
 

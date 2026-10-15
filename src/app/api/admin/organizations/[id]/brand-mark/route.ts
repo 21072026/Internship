@@ -7,6 +7,7 @@ import { orgAdminRefusal } from '@/lib/orgAdminGate';
 import { orgPlanHasFeature, planIncludingFeature } from '@/lib/orgPlans';
 import { BRAND_MARK_MAX_BYTES, classifyMarkUpload, removeBrandMark, storeBrandMark } from '@/lib/brandAssets';
 import { brandAssetPath } from '@/lib/brandRule';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // /api/admin/organizations/[id]/brand-mark (#2922) — an organization's logo
 // mark, from which every app icon, launch image and the in-app mark are
@@ -22,6 +23,12 @@ import { brandAssetPath } from '@/lib/brandRule';
 // WHAT: one square mark — SVG (strictly validated, rasterized, never served),
 // or PNG/WebP of at least 512 px — at most 2 MB. The bytes decide the type;
 // the declared type only has to agree with them.
+//
+// COST: rendering an upload is the most expensive thing an admin can ask of the
+// server, so it is bounded three ways — a per-admin rate limit here, one render
+// at a time per process (a second concurrent upload answers 503 'busy'), and a
+// hard wall-clock deadline on the child process that decodes the file
+// (glyphMaster, src/lib/brandRender.ts).
 
 const ROUTE = '/api/admin/organizations/[id]/brand-mark';
 
@@ -49,6 +56,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const refusal = await orgAdminRefusal(session, id, `POST ${ROUTE}`);
   if (refusal) return refusal;
+  const limited = enforceRateLimit(request, 'brand-mark-upload', { limit: 10, windowMs: 10 * 60 * 1000, subject: session.user.id });
+  if (limited) return limited;
 
   const org = await prisma.organization.findUnique({
     where: { id },
@@ -75,7 +84,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!kind.ok) return refused(kind.reason, kind.reason === 'too_large' ? 413 : 400);
 
   const stored = await storeBrandMark(org, { bytes, kind: kind.kind, contentType: kind.contentType });
-  if (!stored.ok) return refused(stored.reason);
+  if (!stored.ok) {
+    if (stored.reason === 'busy') {
+      return NextResponse.json(
+        { code: 'mark_refused', reason: 'busy', error: 'Another mark is being rendered; try again in a moment.' },
+        { status: 503, headers: { 'Retry-After': '15' } },
+      );
+    }
+    return refused(stored.reason);
+  }
 
   await logActivity({
     action: 'org.brand_mark_uploaded',

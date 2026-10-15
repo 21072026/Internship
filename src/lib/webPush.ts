@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger';
 import { sendNativePushToUser } from '@/lib/expoPush';
 import { notificationCategoryAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
 import { worldOfOrg } from '@/lib/userWorld';
-import type { VerticalKey } from '@/lib/verticals';
+import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 
 /**
@@ -66,13 +66,19 @@ const PUSH_ICON: Record<VerticalKey, string> = {
 // The recipient organization's own icon (#2922) when it uploaded a mark — the
 // 192px tile of its generated set, relative like PUSH_ICON — else its world's
 // built-in tile above. Never throws: a push must not fail over its icon.
+// One read for both answers: the mark version and the vertical (the same rule
+// as verticalFor — a missing row is the default world). Only if that read fails
+// does it fall back to the world lookup it always made.
 async function pushIconFor(orgId: string | null | undefined): Promise<string> {
   if (orgId) {
     const org = await prisma.organization
-      .findUnique({ where: { id: orgId }, select: { brandMarkVersion: true } })
-      .catch(() => null);
-    const version = org?.brandMarkVersion;
-    if (isBrandVersion(version)) return brandAssetPath(version, 'icon-192');
+      .findUnique({ where: { id: orgId }, select: { vertical: true, brandMarkVersion: true } })
+      .catch(() => undefined);
+    if (org !== undefined) {
+      const version = org?.brandMarkVersion;
+      if (isBrandVersion(version)) return brandAssetPath(version, 'icon-192');
+      return PUSH_ICON[toVerticalKey(org?.vertical)];
+    }
   }
   return PUSH_ICON[await worldOfOrg(orgId)];
 }

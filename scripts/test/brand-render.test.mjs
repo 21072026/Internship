@@ -157,6 +157,35 @@ test('a decompression bomb is refused by the pixel limit', async () => {
   assert.ok(['too_large', 'unreadable'].includes(v.reason), v.reason);
 });
 
+// A file the validator would refuse (src/lib/svgMark.ts) but that reaches the
+// renderer anyway — the deadline is the bound for whatever slips past the rules.
+// Six chained dilations of a huge radius: one uninterruptible librsvg call
+// each, which sharp's own timeout never interrupts.
+const SLOW_SVG = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><filter id="f" x="-50%" y="-50%" width="200%" height="200%">' +
+    '<feMorphology operator="dilate" radius="1000000"/>'.repeat(6) +
+    '</filter><rect width="64" height="64" fill="#0e7490" filter="url(#f)"/></svg>',
+);
+
+test('a render that outlives its deadline is killed, not waited for', async () => {
+  const started = Date.now();
+  const v = await glyphMaster({ kind: 'svg', bytes: SLOW_SVG }, { deadlineMs: 1000 });
+  const elapsed = Date.now() - started;
+  // A fast machine may finish inside a second; then the file simply renders.
+  if (!v.ok) assert.equal(v.reason, 'too_complex');
+  assert.ok(elapsed < 5000, `took ${elapsed} ms`);
+});
+
+test('one render at a time: an upload answers busy, a re-render queues', async () => {
+  const first = glyphMaster({ kind: 'svg', bytes: SLOW_SVG }, { deadlineMs: 800 });
+  assert.deepEqual(await glyphMaster({ kind: 'svg', bytes: GLYPH_SVG }), { ok: false, reason: 'busy' });
+  const queued = glyphMaster({ kind: 'svg', bytes: GLYPH_SVG }, { wait: true });
+  await first;
+  assert.equal((await queued).ok, true);
+  // And the slot is free again afterwards.
+  assert.equal((await glyphMaster({ kind: 'svg', bytes: GLYPH_SVG })).ok, true);
+});
+
 test('the same glyph and tile render the same bytes — a re-upload is the same version', async () => {
   const a = await glyphMaster({ kind: 'svg', bytes: GLYPH_SVG });
   const b = await glyphMaster({ kind: 'svg', bytes: GLYPH_SVG });
