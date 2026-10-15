@@ -34,6 +34,27 @@ export function normalizeHost(value) {
   return HOST_RE.test(host) ? host : null;
 }
 
+/**
+ * One mapped org's brand completeness (#2922), from plain facts so the unit test
+ * runs it without a database. A mapped host serves its org's brand once the org
+ * carries any brand field (src/lib/brandRule.ts hasAnyBrand); until then the
+ * host shows the product default. Says only set / not set and the mark's
+ * version — never the values.
+ */
+export function brandReport(org) {
+  const set = (v) => typeof v === 'string' && v.trim() !== '';
+  const fields = [org.brandName, org.brandColor, org.brandTileColor, org.brandAccent, org.brandPalette, org.brandMarkVersion];
+  const summary =
+    `brand: name=${set(org.brandName) ? 'set' : '—'} mark=${set(org.brandMarkVersion) ? org.brandMarkVersion : '—'} ` +
+    `colour=${set(org.brandColor) ? 'set' : '—'} tile=${set(org.brandTileColor) ? 'set' : '—'} ` +
+    `accent=${set(org.brandAccent) ? org.brandAccent : '—'} palette=${set(org.brandPalette) ? 'set' : '—'}`;
+  const warning = fields.some(set)
+    ? null
+    : `WARNING: ${org.slug} (${org.id}) is mapped to ${org.publicHost} but carries no brand data — ` +
+      'that host shows the product default name, colour and icons. Set them in Admin → Organizations → White-label branding.';
+  return { summary, warning };
+}
+
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
@@ -45,10 +66,19 @@ async function main() {
     if (process.argv.includes('--list')) {
       const rows = await prisma.organization.findMany({
         where: { publicHost: { not: null } },
-        select: { id: true, slug: true, vertical: true, publicHost: true },
+        select: {
+          id: true, slug: true, vertical: true, publicHost: true,
+          brandName: true, brandColor: true, brandTileColor: true, brandAccent: true, brandPalette: true, brandMarkVersion: true,
+        },
       });
       if (rows.length === 0) console.log('No public hosts are mapped.');
-      for (const r of rows) console.log(`${r.publicHost}\t→ ${r.slug} (${r.id}, ${r.vertical})`);
+      for (const r of rows) {
+        console.log(`${r.publicHost}\t→ ${r.slug} (${r.id}, ${r.vertical})`);
+        // What that host will wear (#2922): report only, never the values.
+        const { summary, warning } = brandReport(r);
+        console.log(`\t  ${summary}`);
+        if (warning) console.log(warning);
+      }
       // The rollout gap made visible (#2569 review): a MARKETING org that claims
       // no host means its landing's demo form is closed. Printed with the exact
       // command, so the deploy log (infra/deploy-prod.sh runs --list, report

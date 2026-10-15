@@ -7,6 +7,7 @@ import {
   FOREIGN_COMPANY_ID_PARAM,
   FOREIGN_USER_ID_PARAM,
   MATRIX,
+  ORG_SETUP_WRITES,
   SUPER_ADMIN_ONLY,
   TARGET_ORG_ID_PARAM,
   type MatrixUser,
@@ -47,6 +48,11 @@ const emails: Record<Role, string> = {
 // The "other side": a second mentor/mentee pair nobody above may see.
 const otherMentorEmail = uniqueEmail('mx-other-mentor');
 const otherMenteeEmail = uniqueEmail('mx-other-mentee');
+// The foreign org's app icon set (#2922): seeded so a refused upload OR delete
+// is visible — the version must still be this one afterwards, and its row
+// still there. Synthetic bytes; the public route never needs to decode them.
+const FOREIGN_MARK_VERSION = 'aaaaaaaaaaaaaaaa';
+const MARK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#0e7490"/></svg>';
 // A COMPANY user that IS assigned to a company. `users.COMPANY` above is
 // deliberately unassigned (the #807 `/api/mentorship` contract probe), which
 // makes its company scope `{ id: '__none__' }` — so its matrix `own` cells pass
@@ -143,6 +149,10 @@ test.beforeAll(async () => {
     data: { name: `Matrix Foreign Org ${Date.now()}`, slug: `matrix-foreign-${Date.now()}`, vertical: 'MARKETING' },
   });
   foreignOrgId = foreignOrg.id;
+  await prisma.brandAsset.create({
+    data: { orgId: foreignOrgId, version: FOREIGN_MARK_VERSION, kind: 'icon-192', contentType: 'image/png', size: 8, data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) },
+  });
+  await prisma.organization.update({ where: { id: foreignOrgId }, data: { brandMarkVersion: FOREIGN_MARK_VERSION } });
   const [foreignMentee, foreignAdmin, foreignCompany] = await Promise.all([
     seedUser(foreignMenteeEmail, 'x', 'MENTEE', 'Matrix Foreign Mentee'),
     seedUser(foreignAdminEmail, 'x', 'ADMIN', 'Matrix Foreign Admin'),
@@ -294,6 +304,28 @@ for (const role of Object.keys(LANDING) as Role[]) {
       await prisma.invitationToken.count({ where: { orgId: foreignOrgId } }),
       `${role} minted an invitation into another org`
     ).toBe(0);
+
+    // One organization's own setup (#2922): the foreign org for every role, the
+    // caller's own org for every role but ADMIN. A real mark is sent, so a
+    // refusal is the authorization and not a malformed body.
+    for (const probe of ORG_SETUP_WRITES) {
+      const targets = [foreignOrgId, ...(probe.ownToo && role !== 'ADMIN' ? [orgId] : [])];
+      for (const target of targets) {
+        const path = probe.path.replace(TARGET_ORG_ID_PARAM, target);
+        const res = await page.request.fetch(path, {
+          method: probe.method,
+          ...(probe.upload
+            ? { multipart: { file: { name: 'mark.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(MARK_SVG) } } }
+            : {}),
+        });
+        expect([401, 403], `${role} ${probe.method} ${path} must be refused (${probe.why})`).toContain(res.status());
+      }
+    }
+    const foreign = await prisma.organization.findUnique({ where: { id: foreignOrgId }, select: { brandMarkVersion: true } });
+    expect(foreign?.brandMarkVersion, `${role} changed another org's icon set`).toBe(FOREIGN_MARK_VERSION);
+    expect(await prisma.brandAsset.count({ where: { orgId: foreignOrgId } }), `${role} touched another org's icons`).toBe(1);
+    const own = await prisma.organization.findUnique({ where: { id: orgId }, select: { brandMarkVersion: true } });
+    expect(own?.brandMarkVersion ?? null, `${role} changed its org's icon set`).toBeNull();
   });
 }
 

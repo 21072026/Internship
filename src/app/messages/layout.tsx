@@ -8,6 +8,7 @@ import { MessagesShell } from '@/components/MessagesShell';
 import { RoleShell } from '@/components/RoleShell';
 import { resolveRequestVertical } from '@/i18n/server';
 import { themeColorFor } from '@/lib/accent';
+import { requestBrand } from '@/lib/hostBrand';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -26,8 +27,11 @@ export const metadata = NO_INDEX;
  */
 export async function generateViewport(): Promise<Viewport> {
   const vertical = await resolveRequestVertical();
+  // Same rule as the root viewport (#2922): an organization brand's colour,
+  // else the vertical's.
+  const brand = await requestBrand();
   return {
-    themeColor: themeColorFor(vertical),
+    themeColor: brand.source === 'org' ? brand.themeColor : themeColorFor(vertical),
     interactiveWidget: 'resizes-content',
     viewportFit: 'cover',
   };

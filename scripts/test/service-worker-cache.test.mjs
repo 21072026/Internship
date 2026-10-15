@@ -247,6 +247,23 @@ test('the public shell IS still cached (the offline page depends on it)', async 
   ]);
 });
 
+// An organization's generated icons (#2922) are public bytes at a versioned
+// path (/brand/<version>/<kind>.png): the worker caches them like any other
+// shell asset — no worker change was needed, and none must be made that would
+// treat them as private. A new upload is a new path, so a cached one is never
+// stale.
+test('a versioned organization icon is cached like any public shell asset', async () => {
+  const sw = loadWorker();
+  await sw.fetch({
+    url: '/brand/0123456789abcdef/icon-192.png',
+    respond: () =>
+      new Response('png', {
+        headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' },
+      }),
+  });
+  assert.deepEqual(sw.caches._urls().map((u) => new URL(u).pathname), ['/brand/0123456789abcdef/icon-192.png']);
+});
+
 test('an error response is not cached', async () => {
   const sw = loadWorker();
   await sw.fetch({ url: '/nope', respond: () => new Response('gone', { status: 404 }) });

@@ -1,11 +1,14 @@
 import { prisma } from '@/lib/prisma';
 import { resolveBranding, type ResolvedBranding } from '@/lib/branding';
 import { DEFAULT_VERTICAL, toVerticalKey, type VerticalKey } from '@/lib/verticals';
+import { isBrandVersion } from '@/lib/brandRule';
 
 // The org's world rides along because the same read already has it, and a mail
 // needs it for the defaults a tenant left unset (sender name, accent colour).
 // No org is the default world (docs/worlds.md).
-export type OrgBranding = ResolvedBranding & { vertical: VerticalKey };
+// `markVersion` is the organization's generated icon set (#2922), or null: a
+// mail with no logo URL shows the uploaded mark instead (emailBrand).
+export type OrgBranding = ResolvedBranding & { vertical: VerticalKey; markVersion: string | null };
 
 // Server-side: resolve a tenant's white-label branding (#546) for the given org,
 // falling back to the product defaults when the org has no overrides (or no org
@@ -18,14 +21,19 @@ export async function getOrgBranding(
   // tenant's own brandName always wins.
   noOrgFallbackName?: string | null,
 ): Promise<OrgBranding> {
-  if (!orgId) return { ...resolveBranding(null, noOrgFallbackName), vertical: DEFAULT_VERTICAL };
+  if (!orgId) return { ...resolveBranding(null, noOrgFallbackName), vertical: DEFAULT_VERTICAL, markVersion: null };
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
-    select: { brandName: true, brandLogoUrl: true, brandColor: true, supportEmail: true, vertical: true, name: true },
+    select: { brandName: true, brandLogoUrl: true, brandColor: true, supportEmail: true, vertical: true, name: true, brandMarkVersion: true },
   });
   // A non-INTERNSHIP vertical is a different product, so its unbranded fallback
   // is the org's own name — never "Internship CRM" (#2355 follow-up). INTERNSHIP
   // keeps the product default.
   const fallbackName = org && org.vertical && org.vertical !== 'INTERNSHIP' ? org.name : undefined;
-  return { ...resolveBranding(org, fallbackName), vertical: toVerticalKey(org?.vertical) };
+  const markVersion = org?.brandMarkVersion;
+  return {
+    ...resolveBranding(org, fallbackName),
+    vertical: toVerticalKey(org?.vertical),
+    markVersion: isBrandVersion(markVersion) ? markVersion : null,
+  };
 }

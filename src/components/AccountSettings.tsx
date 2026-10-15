@@ -14,8 +14,10 @@ import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
-import { ACCENT_COLORS, ACCENT_SWATCH, defaultAccentFor, resolveAccent } from '@/lib/accent';
+import { ACCENT_COLORS, ACCENT_SWATCH, defaultAccentFor, isAccentColor, resolveAccent } from '@/lib/accent';
 import { useVertical } from '@/lib/verticalClient';
+import { useBrand } from '@/lib/brandClient';
+import { BRAND_ACCENT, PALETTE_STEPS, resolveAccentChoice } from '@/lib/brandRule';
 import { applyTheme, readStoredTheme, resolveTheme, type Theme } from '@/lib/theme';
 import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@/lib/density';
 import { durationSince, formatDateTime } from '@/lib/relativeTime';
@@ -162,7 +164,11 @@ export function AccountSettings() {
   const vertical = useVertical();
   const [theme, setTheme] = useState<Theme>('system');
   const [density, setDensity] = useState<Density>('comfortable');
-  const [accent, setAccent] = useState<string>(defaultAccentFor(vertical));
+  // An organization brand (#2922) brings its own default accent and, when it
+  // has a palette, one more swatch: "Organization colour". Null = the default
+  // brand, and the picker is exactly what it was.
+  const brand = useBrand();
+  const [accent, setAccent] = useState<string>(brand?.defaultAccent ?? defaultAccentFor(vertical));
   const [role, setRole] = useState('');
   // A list, not a comma-joined string (@/lib/skills, #2314).
   const [skills, setSkills] = useState<string[]>([]);
@@ -242,7 +248,11 @@ export function AccountSettings() {
         // (The helpers fall back to the account preference themselves.)
         setTheme(readStoredTheme());
         setDensity(readStoredDensity());
-        setAccent(resolveAccent(user.accentColor, vertical));
+        setAccent(
+          brand
+            ? resolveAccentChoice(user.accentColor, { accent: brand.defaultAccent, palette: brand.palette }, isAccentColor)
+            : resolveAccent(user.accentColor, vertical),
+        );
         setRole(user.role ?? '');
         setTimezone(user.timezone ?? '');
         setPersonalRoom(user.personalMeetingUrl ?? '');
@@ -1557,6 +1567,22 @@ export function AccountSettings() {
                 </button>
               );
             })}
+            {brand?.palette && (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={accent === BRAND_ACCENT}
+                aria-label={t.account.accentBrand}
+                title={t.account.accentBrand}
+                onClick={() => changeAccent(BRAND_ACCENT)}
+                data-accent-swatch
+                data-testid="accent-brand"
+                className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${accent === BRAND_ACCENT ? 'ring-2 ring-gray-500' : 'ring-1 ring-gray-200 hover:ring-gray-300'}`}
+                style={{ backgroundColor: brand.palette[PALETTE_STEPS.indexOf(600)] }}
+              >
+                {accent === BRAND_ACCENT && <span className="flex items-center justify-center text-white text-sm leading-none">✓</span>}
+              </button>
+            )}
           </div>
         </div>
       </Card>

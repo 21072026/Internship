@@ -11,6 +11,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
+import { ACCENT_COLORS } from '@/lib/accent';
+import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
 
@@ -26,6 +28,11 @@ interface Organization {
     brandLogoUrl: string | null;
     brandColor: string | null;
     supportEmail: string | null;
+    // The per-organization brand (#2922).
+    brandTileColor: string | null;
+    brandAccent: string | null;
+    brandPalette: string | null;
+    brandMarkVersion: string | null;
   };
   sso: {
     ssoEnabled: boolean;
@@ -397,6 +404,11 @@ export default function AdminOrganizationsPage() {
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
   const [brandColor, setBrandColor] = useState('');
   const [brandSupport, setBrandSupport] = useState('');
+  const [brandTile, setBrandTile] = useState('');
+  const [brandAccent, setBrandAccent] = useState('');
+  const [brandPalette, setBrandPalette] = useState('');
+  const [markFile, setMarkFile] = useState<File | null>(null);
+  const [markInputKey, setMarkInputKey] = useState(0);
   const [brandMsg, setBrandMsg] = useState<string | null>(null);
 
   const selectBrandOrg = (id: string) => {
@@ -407,6 +419,11 @@ export default function AdminOrganizationsPage() {
     setBrandLogoUrl(o?.branding.brandLogoUrl ?? '');
     setBrandColor(o?.branding.brandColor ?? '');
     setBrandSupport(o?.branding.supportEmail ?? '');
+    setBrandTile(o?.branding.brandTileColor ?? '');
+    setBrandAccent(o?.branding.brandAccent ?? '');
+    setBrandPalette(o?.branding.brandPalette ?? '');
+    setMarkFile(null);
+    setMarkInputKey((k) => k + 1);
   };
 
   const saveBranding = async (e: React.FormEvent) => {
@@ -416,11 +433,58 @@ export default function AdminOrganizationsPage() {
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: brandOrgId, brandName, brandLogoUrl, brandColor, supportEmail: brandSupport }),
+        body: JSON.stringify({
+          id: brandOrgId, brandName, brandLogoUrl, brandColor, supportEmail: brandSupport,
+          brandTileColor: brandTile, brandAccent,
+          // The palette is the operator's (#2922): only a super admin sends it,
+          // so a tenant admin's save never clears one they cannot see change.
+          ...(superAdmin ? { brandPalette } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       const failure = data.code === 'feature_locked' ? t.organizations.featureLocked : data.error || t.common.error;
       setBrandMsg(res.ok ? t.organizations.brandingSaved : failure);
+      if (res.ok) await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // The logo mark (#2922): its own request, multipart, because the server
+  // renders the whole icon set from it. Removing it is never plan-gated.
+  const markRefusalText = (code: string | undefined, reason: string | undefined) => {
+    if (code === 'feature_locked') return t.organizations.featureLocked;
+    const e = t.organizations.brandMarkErrors;
+    if (reason === 'too_large') return e.tooLarge;
+    if (reason === 'too_small') return e.tooSmall;
+    if (reason === 'busy') return e.busy;
+    if (['too_complex', 'too_many_elements', 'too_many_path_commands', 'use_nesting', 'too_many_uses'].includes(reason ?? '')) return e.tooComplex;
+    if (reason === 'not_square' || reason === 'viewbox_not_square' || reason === 'viewbox_missing') return e.notSquare;
+    if (['unsupported', 'mismatch', 'not_svg', 'not_utf8', 'encoding', 'malformed', 'unreadable', 'empty', 'missing'].includes(reason ?? '')) return e.unsupported;
+    return reason ? e.unsafe : t.common.error;
+  };
+
+  const uploadMark = async () => {
+    if (!brandOrgId || !markFile) return;
+    setSaving(true); setBrandMsg(null);
+    try {
+      const form = new FormData();
+      form.append('file', markFile);
+      const res = await fetch(`/api/admin/organizations/${brandOrgId}/brand-mark`, { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      setBrandMsg(res.ok ? t.organizations.brandMarkUploaded : markRefusalText(data.code, res.status === 429 ? 'busy' : data.reason));
+      if (res.ok) { setMarkFile(null); setMarkInputKey((k) => k + 1); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeMark = async () => {
+    if (!brandOrgId) return;
+    setSaving(true); setBrandMsg(null);
+    try {
+      const res = await fetch(`/api/admin/organizations/${brandOrgId}/brand-mark`, { method: 'DELETE' });
+      setBrandMsg(res.ok ? t.organizations.brandMarkRemoved : t.common.error);
       if (res.ok) await load();
     } finally {
       setSaving(false);
@@ -483,7 +547,10 @@ export default function AdminOrganizationsPage() {
   // certificate PDF until someone removes it, and a dead SSO switch left on is
   // the thing an admin most wants to turn off.
   const brandStored = !!(brandOrg && (brandOrg.branding.brandName || brandOrg.branding.brandLogoUrl
-    || brandOrg.branding.brandColor || brandOrg.branding.supportEmail));
+    || brandOrg.branding.brandColor || brandOrg.branding.supportEmail
+    || brandOrg.branding.brandTileColor || brandOrg.branding.brandAccent
+    || brandOrg.branding.brandPalette || brandOrg.branding.brandMarkVersion));
+  const markVersion = brandOrg?.branding.brandMarkVersion ?? null;
 
   const clearBranding = async () => {
     if (!brandOrgId) return;
@@ -491,11 +558,22 @@ export default function AdminOrganizationsPage() {
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: brandOrgId, brandName: '', brandLogoUrl: '', brandColor: '', supportEmail: '' }),
+        body: JSON.stringify({
+          id: brandOrgId, brandName: '', brandLogoUrl: '', brandColor: '', supportEmail: '',
+          brandTileColor: '', brandAccent: '', brandPalette: '',
+        }),
       });
       const data = await res.json().catch(() => ({}));
+      // The mark goes with the rest (#2922); removing it is never plan-gated.
+      if (res.ok && brandOrg?.branding.brandMarkVersion) {
+        await fetch(`/api/admin/organizations/${brandOrgId}/brand-mark`, { method: 'DELETE' }).catch(() => null);
+      }
       setBrandMsg(res.ok ? t.organizations.brandingSaved : (data.error || t.common.error));
-      if (res.ok) { setBrandName(''); setBrandLogoUrl(''); setBrandColor(''); setBrandSupport(''); await load(); }
+      if (res.ok) {
+        setBrandName(''); setBrandLogoUrl(''); setBrandColor(''); setBrandSupport('');
+        setBrandTile(''); setBrandAccent(''); setBrandPalette('');
+        await load();
+      }
     } finally {
       setSaving(false);
     }
@@ -648,6 +726,80 @@ export default function AdminOrganizationsPage() {
                 <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandColor} value={brandColor} disabled={brandLocked} onChange={(e) => setBrandColor(e.target.value)} placeholder="#2563eb" /></div>
                 <div className="flex-1 min-w-[220px]"><Input label={t.organizations.brandLogoUrl} value={brandLogoUrl} disabled={brandLocked} onChange={(e) => setBrandLogoUrl(e.target.value)} placeholder="https://…/logo.svg" /></div>
                 <div className="flex-1 min-w-[200px]"><Input label={t.organizations.brandSupportEmail} type="email" value={brandSupport} disabled={brandLocked} onChange={(e) => setBrandSupport(e.target.value)} placeholder="help@acme.com" /></div>
+              </div>
+            )}
+            {brandOrgId && (
+              <div className="flex flex-wrap gap-3">
+                <div className="flex-1 min-w-[160px]">
+                  <Input label={t.organizations.brandTileColor} value={brandTile} disabled={brandLocked} onChange={(e) => setBrandTile(e.target.value)} placeholder="#1e293b" data-testid="brand-tile" />
+                </div>
+                <div className="flex-1 min-w-[160px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="brand-accent">{t.organizations.brandAccent}</label>
+                  <select
+                    id="brand-accent"
+                    data-testid="brand-accent"
+                    value={brandAccent}
+                    disabled={brandLocked}
+                    onChange={(e) => setBrandAccent(e.target.value)}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                  >
+                    <option value="">{t.organizations.brandAccentDefault}</option>
+                    {ACCENT_COLORS.map((c) => (
+                      <option key={c} value={c}>{(t.account.accentColors as Record<string, string>)[c] ?? c}</option>
+                    ))}
+                    <option value={BRAND_ACCENT}>{t.organizations.brandAccentBrand}</option>
+                  </select>
+                </div>
+                {superAdmin && (
+                  <div className="w-full">
+                    <Input
+                      label={t.organizations.brandPalette}
+                      value={brandPalette}
+                      disabled={brandLocked}
+                      onChange={(e) => setBrandPalette(e.target.value)}
+                      placeholder="#eff6ff,#dbeafe,#bfdbfe,#93c5fd,#60a5fa,#3b82f6,#2563eb,#1d4ed8,#1e40af,#1e3a8a"
+                      data-testid="brand-palette"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">{t.organizations.brandPaletteHint}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {brandOrgId && (
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3" data-testid="brand-mark-section">
+                <p className="text-sm font-medium text-gray-700 mb-1">{t.organizations.brandMark}</p>
+                <p className="text-xs text-gray-500 mb-3">{t.organizations.brandMarkHint}</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  {isBrandVersion(markVersion) ? (
+                    <span
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: brandTile || brandColor || undefined }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a generated, versioned PNG served by /brand/<v>/… */}
+                      <img src={brandAssetPath(markVersion, 'mark-128')} alt={t.organizations.brandMark} className="h-9 w-9" data-testid="brand-mark-preview" />
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-500">{t.organizations.brandMarkNone}</span>
+                  )}
+                  <input
+                    key={markInputKey}
+                    type="file"
+                    accept=".svg,image/svg+xml,image/png,image/webp"
+                    disabled={brandLocked}
+                    aria-label={t.organizations.brandMark}
+                    data-testid="brand-mark-file"
+                    onChange={(e) => setMarkFile(e.target.files?.[0] ?? null)}
+                    className="text-sm"
+                  />
+                  <Button type="button" variant="outline" loading={saving} disabled={brandLocked || !markFile} onClick={uploadMark} data-testid="brand-mark-upload">
+                    {t.organizations.brandMarkUpload}
+                  </Button>
+                  {isBrandVersion(markVersion) && (
+                    <Button type="button" variant="outline" loading={saving} onClick={removeMark} data-testid="brand-mark-remove">
+                      {t.organizations.brandMarkRemove}
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             {brandOrgId && <Button type="submit" loading={saving} disabled={brandLocked} data-testid="brand-save">{t.common.save}</Button>}

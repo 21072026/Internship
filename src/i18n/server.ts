@@ -1,7 +1,6 @@
 import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requestSession } from '@/lib/requestSession';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { defaultLocale, isLocale, LOCALE_COOKIE, locales, type Locale } from './config';
@@ -50,7 +49,7 @@ export async function getLocale(): Promise<Locale> {
   if (!(await hasSessionCookie())) return browserLocale();
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await requestSession();
     if (session?.user?.id) {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -120,7 +119,7 @@ export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => {
   // deployment (#2355). No query.
   if (!(await hasSessionCookie())) return hostVertical();
   try {
-    const session = await getServerSession(authOptions);
+    const session = await requestSession();
     // No VALID identity (a stale/expired/revoked cookie decodes to no user) is
     // still "signed out" for this purpose, so the vertical is a host signal —
     // otherwise a marketing-host visitor with a leftover cookie sees the

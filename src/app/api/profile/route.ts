@@ -9,6 +9,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { ACCENT_COLORS } from '@/lib/accent';
+import { BRAND_ACCENT } from '@/lib/brandRule';
 import { checkPastedMeetingLink } from '@/lib/meetingRoom';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
@@ -89,7 +90,10 @@ const updateProfileSchema = z.object({
   density: z.enum(['comfortable', 'compact']).optional(),
   // Read from the one list (#2492): a colour added to ACCENT_COLORS is
   // otherwise pickable in the UI and rejected here with a 400 — 'magenta' was.
-  accentColor: z.enum(ACCENT_COLORS).optional(),
+  // 'brand' (#2922) is the organization's own palette. Stored like any key;
+  // the root layout paints it only while the person's organization has a
+  // palette and falls back to the default otherwise (resolveAccentChoice).
+  accentColor: z.union([z.enum(ACCENT_COLORS), z.literal(BRAND_ACCENT)]).optional(),
 });
 
 const PROFILE_FIELDS = new Set(Object.keys(updateProfileSchema.shape));

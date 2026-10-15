@@ -70,6 +70,7 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/avatar(\/|$)/, 'uploads a file'],
   [/^\/api\/documents(\/|$)/, 'uploads a file'],
   [/^\/api\/support\/attachments(\/|$)/, 'uploads a file'],
+  [/^\/api\/admin\/organizations\/[^\/]+\/brand-mark$/, 'uploads a file every visitor then sees as the app icon'],
   [/^\/api\/announcements\/[^\/]+\/image$/, 'uploads a file'],
 ];
 

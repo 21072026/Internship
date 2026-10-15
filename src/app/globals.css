@@ -356,6 +356,22 @@ html[data-accent="magenta"] {
   --accent-800:#7c25a4; --accent-900:#60248b;
   --accent-tint:rgba(96,36,139,0.25); --accent-tint-hover:rgba(96,36,139,0.35);
 }
+/* An organization's own palette (#2922). Its values are DATA, not CSS: the
+   root layout writes them as --brand-50 … --brand-900 and --brand-tint(-hover)
+   in <html style> (validated hexes, src/lib/brandRule.ts paletteCssVars) and
+   this block bridges them onto the accent ramp. They get their own names on
+   purpose — an inline --accent-* would beat every data-accent block above and
+   break switching accents live in the account settings. The fallbacks are the
+   blue ramp, so a "brand" attribute without a palette is the product default. */
+html[data-accent="brand"] {
+  --accent-50:var(--brand-50, #eff6ff); --accent-100:var(--brand-100, #dbeafe);
+  --accent-200:var(--brand-200, #bfdbfe); --accent-300:var(--brand-300, #93c5fd);
+  --accent-400:var(--brand-400, #60a5fa); --accent-500:var(--brand-500, #3b82f6);
+  --accent-600:var(--brand-600, #2563eb); --accent-700:var(--brand-700, #1d4ed8);
+  --accent-800:var(--brand-800, #1e40af); --accent-900:var(--brand-900, #1e3a8a);
+  --accent-tint:var(--brand-tint, rgba(30,58,138,0.25));
+  --accent-tint-hover:var(--brand-tint-hover, rgba(30,58,138,0.35));
+}
 
 /* --- Utility remap (written once; references the palette vars above). --- */
 /* Backgrounds */

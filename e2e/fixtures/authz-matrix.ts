@@ -291,6 +291,41 @@ export const SUPER_ADMIN_ONLY: SuperAdminProbe[] = [
 ];
 
 /**
+ * Writes into ONE organization's own setup (#2922): only that organization's
+ * ADMIN or a super admin of its world may make them — the door of PATCH
+ * /api/admin/organizations (src/lib/orgAdminGate.ts). Probed against the
+ * FOREIGN org (`:orgId`), so every role in the matrix is refused, the plain
+ * tenant ADMIN included: it administers a different tenant. The spec seeds the
+ * foreign org WITH a mark first, so a delete that got through would show too.
+ * `ownToo` probes the caller's own org as well, for every role but ADMIN (who
+ * may — the plan, not the role, decides there).
+ */
+export interface OrgSetupWriteProbe {
+  method: 'POST' | 'DELETE';
+  path: string;
+  /** Send a real, valid mark as multipart — a refusal must not be a parse error. */
+  upload?: boolean;
+  ownToo?: boolean;
+  why: string;
+}
+
+export const ORG_SETUP_WRITES: OrgSetupWriteProbe[] = [
+  {
+    method: 'POST',
+    path: `/api/admin/organizations/${TARGET_ORG_ID_PARAM}/brand-mark`,
+    upload: true,
+    ownToo: true,
+    why: "replace an organization's app icon set (#2922)",
+  },
+  {
+    method: 'DELETE',
+    path: `/api/admin/organizations/${TARGET_ORG_ID_PARAM}/brand-mark`,
+    ownToo: true,
+    why: "remove an organization's app icon set (#2922)",
+  },
+];
+
+/**
  * The MARKETING sales rep (#2580): a MENTOR of a MARKETING org, on the sales
  * surface. Everything above is an INTERNSHIP-shaped tenant; this block is the
  * same statement for the rep, consumed by `e2e/marketing-sales-surface.spec.ts`

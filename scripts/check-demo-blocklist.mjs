@@ -66,6 +66,7 @@ const MUST_BE_BLOCKED = [
   ['/api/cv', 'uploads a file'],
   ['/api/avatar', 'uploads a file'],
   ['/api/documents', 'uploads a file'],
+  ['/api/admin/organizations/SEGMENT/brand-mark', 'uploads the logo every visitor would then see as the app icon'],
 ];
 
 const routes = routePaths(API_DIR);
