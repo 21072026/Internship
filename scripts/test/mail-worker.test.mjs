@@ -5,7 +5,9 @@
 // What is pinned here, and why each matters:
 //   SETTLE     — the drain's whole decision table: a 250 settles, a relay-wide
 //                failure (throttle, refused session, timeout) is RELEASED with
-//                its attempt count untouched and waits out the pause, a 4xx
+//                its attempt count untouched and waits out the pause — but every
+//                RELAY_RELEASES_PER_ATTEMPT-th release of one row counts, so no
+//                row is released forever — a 4xx
 //                about the message retries with backoff and costs an attempt,
 //                a 5xx is final, attempts run out into DEAD_LETTER, and a retry
 //                that would land after `notAfter` is cancelled as expired.
@@ -13,7 +15,10 @@
 //                CRITICAL can never be listed; the inline cap is clamped; the
 //                worker is on unless switched off.
 //   LIFETIME   — a caller may shorten a mail's life, never extend it.
-//   BREAKER    — only a PAUSED budget (rung > 0) opens it, never a busy one.
+//   BREAKER    — only a pause that has not run out opens it, never a busy
+//                meter: in observe mode `tat` carries every send and can sit
+//                hours ahead with no pause at all (a reset link would expire
+//                behind it).
 //   ENVELOPE   — attachments survive the JSON round trip as bytes; an
 //                oversized one is not queueable; garbage decodes to null.
 import { test } from 'node:test';
@@ -47,7 +52,44 @@ test('settle: a relay throttle releases the row without charging an attempt', ()
   const a = settle(throttle, { attempts: 3 });
   assert.equal(a.kind, 'release');
   assert.equal(a.runAt.getTime(), NOW.getTime() + 60_000, 'at least the first rung of the ladder');
-  assert.ok(!('attempts' in a), 'no attempt is charged');
+  assert.equal(a.attempts, 3, 'no attempt is charged');
+  assert.equal(a.releases, 1);
+});
+
+test('settle: every RELAY_RELEASES_PER_ATTEMPT-th release costs one attempt, and the row can die of it', () => {
+  const n = W.RELAY_RELEASES_PER_ATTEMPT;
+  assert.ok(n >= 2);
+  // Releases below the threshold are free.
+  for (let r = 0; r < n - 1; r++) {
+    const a = settle(timeout, { attempts: 1, releases: r });
+    assert.equal(a.kind, 'release');
+    assert.equal(a.attempts, 1, `release ${r + 1} is free`);
+    assert.equal(a.releases, r + 1);
+  }
+  const charged = settle(timeout, { attempts: 1, releases: n - 1 });
+  assert.equal(charged.kind, 'release');
+  assert.equal(charged.attempts, 2, 'the n-th release counts');
+  // A row that only ever fails "relay-wide" is not released without limit.
+  const dead = settle(timeout, { attempts: 4, maxAttempts: 5, releases: n - 1 });
+  assert.equal(dead.kind, 'dead');
+  assert.equal(dead.status, 'DEAD_LETTER');
+  assert.match(dead.reason, /:releases$/);
+  // Walked from zero: dead after exactly maxAttempts × n relay-wide failures.
+  let attempts = 0;
+  let releases = 0;
+  let steps = 0;
+  for (;;) {
+    const a = settle(throttle, { attempts, releases, maxAttempts: 5 });
+    steps++;
+    if (a.kind !== 'release') {
+      assert.equal(a.kind, 'dead');
+      break;
+    }
+    attempts = a.attempts;
+    releases = a.releases;
+    assert.ok(steps < 1000);
+  }
+  assert.equal(steps, 5 * n);
 });
 
 test('settle: a release waits out the paused budget when it is longer', () => {
@@ -163,16 +205,28 @@ test('isExpired: past, future, missing and unreadable', () => {
 
 // ── Breaker ─────────────────────────────────────────────────────────────────
 
-test('breaker: opens only on a paused budget beyond the lane tolerance', () => {
+test('breaker: opens only while a relay pause runs, never on a busy meter', () => {
   const cfg = R.budgetConfig({ MAIL_RATE_PER_MIN: '2', MAIL_BURST: '2', MAIL_URGENT_RESERVE: '1' });
+  assert.equal(cfg.mode, 'observe');
   assert.equal(W.breakerOpen(null, cfg), false, 'no row: closed');
-  assert.equal(W.breakerOpen({ aheadMs: 600_000, pauseLevel: 0 }, cfg), false, 'busy, not paused: closed');
-  assert.equal(W.breakerOpen({ aheadMs: 60_000, pauseLevel: 1 }, cfg), true, 'paused for a minute: open');
-  assert.equal(W.breakerOpen({ aheadMs: 10_000, pauseLevel: 1 }, cfg), false, 'within the critical tolerance (30 s)');
-  assert.equal(W.breakerOpen({ aheadMs: 60_000, pauseLevel: 1 }, { ...cfg, mode: 'off' }), false, 'off never opens');
-  assert.equal(W.breakerWaitMs({ aheadMs: 60_000, pauseLevel: 1 }, cfg, 'CRITICAL'), 30_000);
-  assert.equal(W.breakerWaitMs({ aheadMs: 60_000, pauseLevel: 1 }, cfg, 'BULK'), 60_000, 'the waiting lanes have no tolerance here');
-  assert.equal(W.breakerWaitMs({ aheadMs: 60_000, pauseLevel: 0 }, cfg, 'BULK'), 0);
+  assert.equal(W.breakerOpen({ aheadMs: 600_000, pausedMs: 0, pauseLevel: 0 }, cfg), false, 'busy, not paused: closed');
+  assert.equal(W.breakerOpen({ aheadMs: 60_000, pausedMs: 60_000, pauseLevel: 1 }, cfg), true, 'paused for a minute: open');
+  assert.equal(W.breakerOpen({ aheadMs: 60_000, pausedMs: 60_000, pauseLevel: 1 }, { ...cfg, mode: 'off' }), false, 'off never opens');
+  assert.equal(W.breakerWaitMs({ aheadMs: 60_000, pausedMs: 45_000, pauseLevel: 1 }, cfg), 45_000, 'waits the pause, not tat');
+  assert.equal(W.breakerWaitMs({ aheadMs: 60_000, pausedMs: 0, pauseLevel: 0 }, cfg), 0);
+});
+
+test('breaker: observe mode, tat hours ahead after a burst, rung raised, pause over → closed (the critical send is tried)', () => {
+  // A 300-mail burst at 2/min puts tat ~150 min ahead; a later throttle raised
+  // the rung. Once the pause itself has run out, a password reset must be tried
+  // inline — it must not wait out the meter's 150 minutes and expire.
+  const cfg = R.budgetConfig({});
+  const state = { aheadMs: 150 * 60_000, pausedMs: -5_000, pauseLevel: 1 };
+  assert.equal(W.breakerOpen(state, cfg), false);
+  assert.equal(W.breakerWaitMs(state, cfg), 0);
+  // While the pause runs, it waits the pause (a minute), not tat.
+  assert.equal(W.breakerWaitMs({ ...state, pausedMs: 60_000 }, cfg), 60_000);
+  assert.equal(W.breakerOpen({ ...state, pausedMs: Number.NaN }, cfg), false, 'an unreadable pause is closed');
 });
 
 // ── Envelope ────────────────────────────────────────────────────────────────

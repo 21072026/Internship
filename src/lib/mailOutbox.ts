@@ -62,9 +62,10 @@ import type { PreparedEmail } from '@/services/emailService';
 // PER ROW, IN THIS ORDER
 //   1. open the box (unreadable → DEAD_LETTER: nothing can ever send it);
 //   2. `notAfter` passed → CANCELLED, "expired";
-//   3. budget: `enforce` spends a token or releases the row and stops the tick;
-//      `observe` only stops behind an open breaker (a paused relay) and charges
-//      the meter; `off` does neither;
+//   3. budget: the breaker first in every mode but `off` — a relay pause that
+//      has not run out (`MailBudget.pausedUntil`) releases the row to its end
+//      and stops the tick; then `enforce` spends a token or releases the row
+//      and stops, `observe` charges the meter; `off` does neither;
 //   4. the preference gate again — a queued mail may be hours old, and the
 //      reader may have switched the group off since;
 //   5. deliver through the pooled drain transport;
@@ -72,8 +73,11 @@ import type { PreparedEmail } from '@/services/emailService';
 //      `updateMany` on `{ id, status: RUNNING, lockedBy: me }`: a row the
 //      reaper handed to somebody else is not written over.
 //   A relay-wide failure is not charged to the message: the row goes back to
-//   PENDING with `attempts` unchanged, the budget is paused, the rest of the
-//   claimed batch is released and the tick stops.
+//   PENDING with `attempts` unchanged (every RELAY_RELEASES_PER_ATTEMPT-th
+//   release does count, so no row is released forever), the budget is paused,
+//   the rest of the claimed batch is released to the pause's end, the failed
+//   row a moment later — behind them, so the next tick does not lead with the
+//   same row — and the tick stops.
 //
 // DELIVERY IS AT-LEAST-ONCE (src/lib/jobs/queue.ts): a container killed between
 // the relay's 250 and the settle sends that mail again after the lease expires.
@@ -83,6 +87,9 @@ import type { PreparedEmail } from '@/services/emailService';
 // a subject or the relay's text (which can echo an address).
 
 const SEAL_PURPOSE = 'mail-outbox';
+
+/** A relay-wide release puts the failed row this long behind its batch. */
+const RELEASE_STAGGER_MS = 1_000;
 
 // The Prisma half of the queue, passed explicitly rather than left to
 // `queue.ts`'s lazy import: this module is server-only anyway, and an explicit
@@ -226,7 +233,8 @@ export interface DrainDeps {
   record(envelope: Envelope, status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED', error?: string): Promise<void>;
   /** Observe mode: the meter sees the send (charged, `would_refuse` logged). */
   observe(envelope: Envelope): void;
-  /** A final failure: the delivery-health alert's trigger. */
+  /** A final failure, or a relay-wide one: the delivery-health alert's
+   *  trigger (it decides itself whether the ledger warrants an alert). */
   finalFailure(envelope: Envelope): void;
 }
 
@@ -364,6 +372,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   if (isExpired(payload.notAfter, now)) {
     await settle(row, workerId, { status: 'CANCELLED', lastError: 'expired', payload: clearedPayload(payload) });
     await deps.record(envelope, 'FAILED', 'Expired in the mail queue before it could be delivered');
+    deps.finalFailure(envelope);
     logger.warning('mail_outbox.expired', meta);
     summary.expired++;
     return null;
@@ -372,6 +381,19 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   // ── The budget ────────────────────────────────────────────────────────────
   const cfg = ctx.configFor(envelope.transport);
   const budget = ctx.nameFor(envelope.transport);
+  if (cfg.mode !== 'off') {
+    // A PAUSED relay (a throttle or a refused session whose pause has not run
+    // out) would refuse this session too. The pause alone decides — never
+    // `tat`, which observe mode charges for every send (breakerOpen()).
+    const state = await budgetStore.readBudgetState(budget).catch(() => null);
+    const wait = breakerWaitMs(state, cfg);
+    if (wait > 0) {
+      const runAt = new Date(now.getTime() + Math.max(1_000, wait));
+      await release(row, workerId, runAt);
+      summary.released++;
+      return { reason: 'breaker', runAt };
+    }
+  }
   if (cfg.mode === 'enforce') {
     const spent = await budgetStore.spendToken(envelope.lane, cfg, budget);
     if (!spent.allowed) {
@@ -381,17 +403,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
       return { reason: 'budget', runAt };
     }
   } else if (cfg.mode === 'observe') {
-    // Observe mode never refuses on rate — but a PAUSED relay (a throttle or a
-    // refused session, not yet followed by a delivery) would refuse this
-    // session too, so the breaker holds the drain in every mode but `off`.
-    const state = await budgetStore.readBudgetState(budget).catch(() => null);
-    const wait = breakerWaitMs(state, cfg, envelope.lane);
-    if (wait > 0) {
-      const runAt = new Date(now.getTime() + Math.max(1_000, wait));
-      await release(row, workerId, runAt);
-      summary.released++;
-      return { reason: 'breaker', runAt };
-    }
+    // Observe mode never refuses on rate: the meter only sees the send.
     deps.observe(envelope);
   }
 
@@ -420,7 +432,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
       try {
         await budgetStore.pauseBudget(cfg, budget);
         const state = await budgetStore.readBudgetState(budget);
-        if (state) pausedUntil = new Date(now.getTime() + Math.max(0, state.aheadMs));
+        if (state) pausedUntil = new Date(now.getTime() + Math.max(0, state.pausedMs));
       } catch {
         // The ladder's first rung (settleAction's floor) stands in.
       }
@@ -431,6 +443,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     error,
     lane: envelope.lane,
     attempts: row.attempts,
+    releases: payload.releases ?? 0,
     maxAttempts: row.maxAttempts,
     notAfter: payload.notAfter,
     now,
@@ -450,9 +463,24 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
       summary.sent++;
       return null;
     case 'release':
-      await settle(row, workerId, { status: 'PENDING', runAt: action.runAt, lastError: action.reason });
+      // This row a moment after the rest of its batch: with the same priority
+      // the next tick then leads with another row, so a failure that only
+      // looks relay-wide does not hold the whole queue on one mail.
+      await settle(row, workerId, {
+        status: 'PENDING',
+        runAt: new Date(action.runAt.getTime() + RELEASE_STAGGER_MS),
+        attempts: action.attempts,
+        lastError: action.reason,
+        payload: { ...payload, releases: action.releases } as Prisma.InputJsonValue,
+      });
       await deps.record(envelope, 'DEFERRED', errorText(error));
-      logger.warning('mail_outbox.relay_paused', { ...meta, reason: action.reason, runAt: action.runAt.toISOString() });
+      deps.finalFailure(envelope);
+      logger.warning('mail_outbox.relay_paused', {
+        ...meta,
+        reason: action.reason,
+        releases: action.releases,
+        runAt: action.runAt.toISOString(),
+      });
       summary.released++;
       return { reason: 'relay', runAt: action.runAt };
     case 'retry':
@@ -486,6 +514,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
         payload: clearedPayload(payload),
       });
       await deps.record(envelope, 'FAILED', `Expired in the mail queue: ${errorText(error)}`);
+      deps.finalFailure(envelope);
       logger.warning('mail_outbox.expired', { ...meta, reason: action.reason });
       summary.expired++;
       return null;

@@ -182,6 +182,7 @@ test.describe('mail queue', () => {
     const released = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
     expect(released.status).toBe('PENDING');
     expect(released.attempts).toBe(0);
+    expect((released.payload as Record<string, unknown>).releases).toBe(1);
     expect(released.runAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
     // …and the budget is paused for everybody.
     const budget = await prisma.mailBudget.findUnique({ where: { name: 'smtp' } });
@@ -191,7 +192,13 @@ test.describe('mail queue', () => {
   test('an open breaker queues critical mail without an SMTP attempt', async () => {
     const to = addr('breaker');
     await prisma.mailBudget.create({
-      data: { name: 'smtp', tat: new Date(Date.now() + 10 * 60_000), pauseLevel: 2, dayCount: 0 },
+      data: {
+        name: 'smtp',
+        tat: new Date(Date.now() + 10 * 60_000),
+        pausedUntil: new Date(Date.now() + 10 * 60_000),
+        pauseLevel: 2,
+        dayCount: 0,
+      },
     });
     const before = smtp.connections;
     expect(await sendEmail({ to, subject: 'breaker', html: '<p>b</p>', category: 'verification' })).toBe('QUEUED');
@@ -203,6 +210,29 @@ test.describe('mail queue', () => {
     await dueNow(to);
     expect((await drainOnce({ maxMs: 5_000, deps: mailDrainDeps() })).stoppedBy).toBe('breaker');
     expect((await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('PENDING');
+  });
+
+  test('observe mode: a meter hours ahead does not hold critical mail once the pause is over', async () => {
+    // After a large burst the observe-mode meter sits far ahead, and an earlier
+    // throttle left the rung raised — but the pause itself has run out. The
+    // critical mail is tried inline (and is the probe that walks the ladder down).
+    const to = addr('probe');
+    await prisma.mailBudget.create({
+      data: {
+        name: 'smtp',
+        tat: new Date(Date.now() + 150 * 60_000),
+        pausedUntil: new Date(Date.now() - 5_000),
+        pauseLevel: 1,
+        dayCount: 0,
+      },
+    });
+    const before = smtp.connections;
+    expect(await sendEmail({ to, subject: 'probe', html: '<p>p</p>', category: 'verification' })).toBe('SENT');
+    expect(smtp.connections).toBeGreaterThan(before);
+    expect(await jobsFor(to)).toHaveLength(0);
+    await expect
+      .poll(async () => (await prisma.mailBudget.findUnique({ where: { name: 'smtp' } }))?.pauseLevel, { timeout: 5_000 })
+      .toBe(0);
   });
 
   test('a critical send past its inline cap is queued and the request answered', async () => {

@@ -72,9 +72,14 @@ async function conditionalSpend(name: string, lane: MailLane, cfg: BudgetConfig)
   return changed === 1;
 }
 
-async function readAhead(name: string): Promise<{ ahead: bigint | number | null; pauseLevel: number } | null> {
-  const rows = await prisma.$queryRaw<{ ahead: bigint | number | null; pauseLevel: number }[]>(Prisma.sql`
-    SELECT TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), tat) AS ahead, pauseLevel FROM \`MailBudget\` WHERE name = ${name}
+type AheadRow = { ahead: bigint | number | null; paused: bigint | number | null; pauseLevel: number };
+
+async function readAhead(name: string): Promise<AheadRow | null> {
+  const rows = await prisma.$queryRaw<AheadRow[]>(Prisma.sql`
+    SELECT TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), tat) AS ahead,
+           TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), pausedUntil) AS paused,
+           pauseLevel
+      FROM \`MailBudget\` WHERE name = ${name}
   `);
   return rows[0] ?? null;
 }
@@ -122,10 +127,12 @@ export async function chargeToken(cfg: BudgetConfig, name: string = SMTP_BUDGET)
 }
 
 /**
- * A relay throttle: push `tat` out by the current rung of the ladder and climb
- * one rung, in one statement. MySQL evaluates single-table SET assignments left
- * to right, so `tat` reads the OLD `pauseLevel` — the same order
- * `applyThrottle()` uses.
+ * A relay throttle: push `tat` out by the current rung of the ladder, mark the
+ * pause's end in `pausedUntil`, and climb one rung, in one statement. MySQL
+ * evaluates single-table SET assignments left to right, so `tat` and
+ * `pausedUntil` read the OLD `pauseLevel` — the same order `applyThrottle()`
+ * uses. `pausedUntil` is what the breaker reads (#2944): unlike `tat` it says
+ * how long the RELAY is paused, never how much mail was metered.
  */
 export async function pauseBudget(cfg: BudgetConfig, name: string = SMTP_BUDGET): Promise<void> {
   const ladder = cfg.ladderSec.map((s) => Math.trunc(s));
@@ -134,6 +141,7 @@ export async function pauseBudget(cfg: BudgetConfig, name: string = SMTP_BUDGET)
   await prisma.$executeRaw(Prisma.sql`
     UPDATE \`MailBudget\`
        SET tat = GREATEST(tat, UTC_TIMESTAMP(3) + INTERVAL CAST(ELT(LEAST(pauseLevel, ${Prisma.raw(String(top))}) + 1, ${Prisma.raw(ladder.join(', '))}) AS UNSIGNED) SECOND),
+           pausedUntil = GREATEST(COALESCE(pausedUntil, UTC_TIMESTAMP(3)), UTC_TIMESTAMP(3) + INTERVAL CAST(ELT(LEAST(pauseLevel, ${Prisma.raw(String(top))}) + 1, ${Prisma.raw(ladder.join(', '))}) AS UNSIGNED) SECOND),
            pauseLevel = LEAST(pauseLevel + 1, ${Prisma.raw(String(top))}),
            updatedAt = UTC_TIMESTAMP(3)
      WHERE name = ${name}
@@ -152,15 +160,23 @@ export async function decayPause(name: string = SMTP_BUDGET): Promise<boolean> {
 }
 
 /**
- * How far the budget is ahead of the DATABASE clock, and the throttle rung —
- * what the breaker (`breakerOpen()` in mailWorkerRule.ts) decides on. One
- * SELECT; null when the row does not exist yet. Throws on a database error:
- * the caller decides what an unreadable budget means for its lane.
+ * The budget against the DATABASE clock: how far `tat` is ahead (the meter),
+ * how long the relay pause still runs (`pausedMs`, ≤ 0 when it is over or there
+ * never was one — what the breaker, `breakerOpen()` in mailWorkerRule.ts,
+ * decides on) and the throttle rung. One SELECT; null when the row does not
+ * exist yet. Throws on a database error: the caller decides what an unreadable
+ * budget means for its lane.
  */
-export async function readBudgetState(name: string = SMTP_BUDGET): Promise<{ aheadMs: number; pauseLevel: number } | null> {
+export async function readBudgetState(
+  name: string = SMTP_BUDGET,
+): Promise<{ aheadMs: number; pausedMs: number; pauseLevel: number } | null> {
   const row = await readAhead(name);
   if (!row) return null;
-  return { aheadMs: Number(row.ahead ?? 0) / 1000, pauseLevel: Number(row.pauseLevel ?? 0) };
+  return {
+    aheadMs: Number(row.ahead ?? 0) / 1000,
+    pausedMs: row.paused === null || row.paused === undefined ? 0 : Number(row.paused) / 1000,
+    pauseLevel: Number(row.pauseLevel ?? 0),
+  };
 }
 
 /** The meter's state, for health views and tests. Null when never touched. */

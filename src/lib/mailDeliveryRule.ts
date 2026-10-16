@@ -206,7 +206,13 @@ export function classifySmtpError(err: unknown): SmtpErrorClass {
 
   const fourxx = reply !== null && reply >= 400 && reply < 500;
   if (fourxx) {
-    const policy = enhanced?.[1] === '4' && enhanced[2] === '7';
+    // A 4.7.x policy code reads as relay-wide — except at RCPT TO and DATA,
+    // where the relay is answering about ONE recipient or ONE message (a
+    // greylisted or policy-refused mailbox). There only a 421 or rate wording
+    // is about the relay; the rest is a retry of that message, so one
+    // recipient's refusal cannot pause every lane (#2944).
+    const perMessage = command === 'RCPT TO' || command === 'DATA';
+    const policy = enhanced?.[1] === '4' && enhanced[2] === '7' && !perMessage;
     if (reply === 421 || (reply >= 450 && reply < 460 && (policy || RATE_TEXT.test(text)))) {
       return { kind: 'throttle', relayWide: true, retryable: true, reason: label };
     }

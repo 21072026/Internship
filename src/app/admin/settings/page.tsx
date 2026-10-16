@@ -167,7 +167,7 @@ export default function AdminSettingsPage() {
   const [emailLogAllowed, setEmailLogAllowed] = useState(true);
   const [emailLog, setEmailLog] = useState<{
     entries: { id: string; to: string; subject: string; category: string | null; transport: string | null; status: string; error: string | null; createdAt: string }[];
-    summary: { SENT: number; FAILED: number; SKIPPED: number };
+    summary: { SENT: number; FAILED: number; SKIPPED: number; DEFERRED?: number };
     last24h: { primary: number; bulk: number };
     byCategory: { category: string; transport: string; count: number }[];
   } | null>(null);
@@ -785,6 +785,11 @@ export default function AdminSettingsPage() {
                   <span className={emailLog.summary.SKIPPED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
                     {t.settings.emailLogSkipped.replace('{n}', String(emailLog.summary.SKIPPED))}
                   </span>
+                  {/* Queued for a retry after a temporary refusal (#2944): not a failure. */}
+                  {' · '}
+                  <span className={(emailLog.summary.DEFERRED ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-400'}>
+                    {t.settings.emailLogDeferred.replace('{n}', String(emailLog.summary.DEFERRED ?? 0))}
+                  </span>
                 </p>
               )}
 
@@ -832,10 +837,12 @@ export default function AdminSettingsPage() {
                               className={
                                 e.status === 'SENT'
                                   ? 'text-green-700 dark:text-green-400'
-                                  : 'text-red-600 dark:text-red-400'
+                                  : e.status === 'DEFERRED'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-red-600 dark:text-red-400'
                               }
                             >
-                              ● {e.status}
+                              ● {e.status === 'DEFERRED' ? t.settings.emailLogStatusDeferred : e.status}
                             </span>
                           </td>
                           <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400">

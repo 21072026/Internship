@@ -26,6 +26,12 @@ export interface EmailHealth {
   // counts FAILED only, so a throttled burst that is later delivered never
   // trips the delivery alert. Always 0 until the mail outbox writes the status.
   deferred24h: number;
+  // DEFERRED rows after the latest success, and when the first of them was
+  // written (#2944). A relay outage writes only these — the outbox keeps the
+  // mail — so they are how an outage reaches the alert: many deferrals and no
+  // delivery for long enough is an outage, a short throttle is not.
+  deferredSinceOk: number;
+  firstDeferredSinceOkAt: string | null;
 }
 
 // Kept as an alias: the address rule this used to own now lives in the shared
@@ -40,9 +46,16 @@ export async function getEmailHealth(): Promise<EmailHealth> {
     prisma.emailLog.count({ where: { status: { in: ['SENT', 'FAILED'] }, createdAt: { gt: dayAgo } } }),
     prisma.emailLog.count({ where: { status: 'DEFERRED', createdAt: { gt: dayAgo } } }),
   ]);
-  const failuresSinceOk = await prisma.emailLog.count({
-    where: { status: 'FAILED', ...(lastOk ? { createdAt: { gt: lastOk.createdAt } } : {}) },
-  });
+  const sinceOk = lastOk ? { createdAt: { gt: lastOk.createdAt } } : {};
+  const [failuresSinceOk, deferredSinceOk, firstDeferred] = await Promise.all([
+    prisma.emailLog.count({ where: { status: 'FAILED', ...sinceOk } }),
+    prisma.emailLog.count({ where: { status: 'DEFERRED', ...sinceOk } }),
+    prisma.emailLog.findFirst({
+      where: { status: 'DEFERRED', ...sinceOk },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    }),
+  ]);
   return {
     lastOkAt: lastOk?.createdAt.toISOString() ?? null,
     lastErrorAt: lastFail?.createdAt.toISOString() ?? null,
@@ -50,5 +63,7 @@ export async function getEmailHealth(): Promise<EmailHealth> {
     failuresSinceOk,
     attempts24h,
     deferred24h,
+    deferredSinceOk,
+    firstDeferredSinceOkAt: firstDeferred?.createdAt.toISOString() ?? null,
   };
 }

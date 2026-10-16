@@ -54,7 +54,7 @@ import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { RESET_TOKEN_TTL_MS } from '@/lib/passwordReset';
 import { budgetConfig, budgetNameFor, classifySmtpError, laneFor, recipientHash, type MailLane } from '@/lib/mailDeliveryRule';
 import { createMeterObserver, type MeterObserver } from '@/lib/mailMeterObserver';
-import { readBudgetState } from '@/lib/mailBudgetStore';
+import { decayPause, readBudgetState } from '@/lib/mailBudgetStore';
 import { INLINE_FALLBACK_DELAY_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
 import { canQueue, cancelQueuedMail, enqueueMail, type DrainDeps, type EnqueueMailOptions } from '@/lib/mailOutbox';
 import {
@@ -441,6 +441,7 @@ async function alertEmailHealth(reason: 'consecutive_failures' | 'stale', health
   const detail = JSON.stringify({
     reason,
     failuresSinceOk: health.failuresSinceOk,
+    deferredSinceOk: health.deferredSinceOk,
     lastOkAt: health.lastOkAt,
     lastError: health.lastError?.slice(0, 80) ?? null,
   }).slice(0, 191);
@@ -452,12 +453,23 @@ async function alertEmailHealth(reason: 'consecutive_failures' | 'stale', health
     await sendEmail({
       to: alertTo,
       subject: `[CRM] E-mail delivery ${reason === 'stale' ? 'stalled' : 'failing'} — ${health.failuresSinceOk} failures since last success`,
-      html: `<p>E-mail delivery health alert (<b>${reason}</b>).</p><ul><li>Failures since last success: ${health.failuresSinceOk}</li><li>Last success: ${health.lastOkAt ?? 'never'}</li><li>Last error: ${health.lastError ?? '-'}</li></ul><p>Watch /api/health (detail view) for the live state.</p>`,
+      html: `<p>E-mail delivery health alert (<b>${reason}</b>).</p><ul><li>Failures since last success: ${health.failuresSinceOk}</li><li>Deferred (queued for retry) since last success: ${health.deferredSinceOk}</li><li>Last success: ${health.lastOkAt ?? 'never'}</li><li>Last error: ${health.lastError ?? '-'}</li></ul><p>Watch /api/health (detail view) for the live state.</p>`,
       category: EMAIL_ALERT_CATEGORY,
     });
   } catch (e) {
     logger.error('Email health alert could not be delivered', { error: String(e) });
   }
+}
+
+// The mail outbox (#2944) keeps a mail through a relay outage, so an outage no
+// longer writes FAILED rows — it writes DEFERRED ones. A throttled burst that
+// is delivered a few minutes later must not alert; a relay that has accepted
+// nothing for half an hour while mail keeps being deferred (a revoked password,
+// a dead host) must.
+const EMAIL_ALERT_DEFERRED_STALL_MS = 30 * 60 * 1000;
+function relayDeferralsStalled(health: EmailHealth): boolean {
+  if (health.deferredSinceOk < EMAIL_ALERT_MIN_FAILURES || !health.firstDeferredSinceOkAt) return false;
+  return Date.now() - Date.parse(health.firstDeferredSinceOkAt) >= EMAIL_ALERT_DEFERRED_STALL_MS;
 }
 
 // Fired after every FAILED attempt (never for the alert channel itself — the
@@ -466,7 +478,9 @@ async function maybeAlertEmailFailures(category?: string) {
   if (category === EMAIL_ALERT_CATEGORY) return;
   try {
     const health = await getEmailHealth();
-    if (health.failuresSinceOk >= EMAIL_ALERT_MIN_FAILURES) await alertEmailHealth('consecutive_failures', health);
+    if (health.failuresSinceOk >= EMAIL_ALERT_MIN_FAILURES || relayDeferralsStalled(health)) {
+      await alertEmailHealth('consecutive_failures', health);
+    }
   } catch (e) {
     logger.error('Email health evaluation failed', { error: String(e) });
   }
@@ -477,7 +491,10 @@ async function maybeAlertEmailFailures(category?: string) {
 export async function runEmailHealthCheck(): Promise<EmailHealth> {
   const health = await getEmailHealth();
   const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
-  const stale = (!health.lastOkAt || new Date(health.lastOkAt).getTime() < sixHoursAgo) && health.attempts24h > 0 && health.failuresSinceOk > 0;
+  const stale =
+    (!health.lastOkAt || new Date(health.lastOkAt).getTime() < sixHoursAgo) &&
+    health.attempts24h + health.deferred24h > 0 &&
+    health.failuresSinceOk + health.deferredSinceOk > 0;
   if (stale) await alertEmailHealth('stale', health);
   return health;
 }
@@ -1054,7 +1071,10 @@ export async function deliverPrepared(
     // Record, then rethrow unchanged: callers that already catch (and the ones
     // that deliberately don't) keep behaving exactly as before.
     const message = e instanceof Error ? e.message : String(e);
-    logger.error('Email send failed', { to, subject, category, transport, error: message });
+    // Never the address or the subject (#2944): the recipient's hash and the
+    // failure class are enough to correlate with the EmailLog row.
+    const cls = classifySmtpError(e);
+    logger.error('Email send failed', { category, transport, kind: cls.kind, reason: cls.reason, rcpt: recipientHash(to).slice(0, 16) });
     await recordEmail(to, subject, category, 'FAILED', transport, message);
     void maybeAlertEmailFailures(category).catch(() => {});
     observeSafely(() => observer.outcome(prepared, e));
@@ -1076,18 +1096,19 @@ function observeSafely(fn: () => void): void {
 }
 
 /**
- * A prepared mail through the meter and onto the wire: what `sendEmail()` does
- * after `prepareEmail()`. Shadow mode (#2941): the meter sees every real send
- * and says what it WOULD have refused. Never awaited and never consulted — the
- * mail goes out exactly as it always did, whatever the meter answers.
+ * A prepared mail through the meter and onto the wire: exactly what `sendEmail()`
+ * does after `prepareEmail()` — the same `dispatchPrepared()` (inline send, the
+ * critical cap, the breaker, a temporary failure to the queue) — with an
+ * optional transport and meter observer of the caller's own. The e2e meter spec
+ * runs the real send path through it with a JSON transport.
  */
 export async function sendPrepared(
   prepared: PreparedEmail,
-  opts: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
-): Promise<'SENT'> {
-  const observer = opts.observer ?? meterObserver;
-  observeSafely(() => observer.spend(prepared));
-  return deliverPrepared(prepared, { ...opts, observer });
+  opts: { via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
+): Promise<'SENT' | 'QUEUED'> {
+  const now = new Date();
+  const html = typeof prepared.message.html === 'string' ? prepared.message.html : prepared.subject;
+  return dispatchPrepared(prepared, { ref: fallbackRef(now, html), now }, { via: opts.via, observer: opts.observer });
 }
 
 /**
@@ -1112,6 +1133,10 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
 type QueueOpts = Omit<EnqueueMailOptions, 'reason' | 'runAt' | 'priority'>;
 
+/** Test seams: a transport (`via`) and a meter observer of the caller's own.
+ *  `sendEmail()` passes none. */
+type SendSeams = { via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver };
+
 /**
  * The delivery decision for one prepared mail (#2944):
  *
@@ -1132,14 +1157,16 @@ type QueueOpts = Omit<EnqueueMailOptions, 'reason' | 'runAt' | 'priority'>;
  * A mail that cannot be queued (attachments over the cap, no server secret, the
  * database down) falls back to exactly the old behaviour.
  */
-async function dispatchPrepared(prepared: PreparedEmail, queue: QueueOpts): Promise<'SENT' | 'QUEUED'> {
+async function dispatchPrepared(prepared: PreparedEmail, queue: QueueOpts, seams: SendSeams = {}): Promise<'SENT' | 'QUEUED'> {
   const policy = mailPolicy(process.env);
+  const observer = seams.observer ?? meterObserver;
 
   if (prepared.lane !== 'CRITICAL' && policy.queueLanes.has(prepared.lane) && canQueue(prepared)) {
     if (await tryEnqueue(prepared, { ...queue, reason: 'lane' })) return 'QUEUED';
   }
 
-  if (prepared.lane === 'CRITICAL' && canQueue(prepared) && (await relayPaused(prepared.transport))) {
+  const relay = prepared.lane === 'CRITICAL' ? await relayState(prepared.transport) : null;
+  if (prepared.lane === 'CRITICAL' && canQueue(prepared) && relay?.open) {
     if (await tryEnqueue(prepared, { ...queue, reason: 'breaker', priority: 100 })) {
       logger.warning('mail_outbox.breaker_open', { lane: prepared.lane, category: prepared.category, transport: prepared.transport });
       await recordEmail(prepared.to, prepared.subject, prepared.category, 'DEFERRED', prepared.transport, 'Relay paused — queued without an attempt');
@@ -1147,16 +1174,22 @@ async function dispatchPrepared(prepared: PreparedEmail, queue: QueueOpts): Prom
     }
   }
 
-  observeSafely(() => meterObserver.spend(prepared));
-  if (prepared.lane === 'CRITICAL') return sendCriticalCapped(prepared, policy.inlineTimeoutMs, queue);
+  observeSafely(() => observer.spend(prepared));
+  if (prepared.lane === 'CRITICAL') {
+    const outcome = await sendCriticalCapped(prepared, policy.inlineTimeoutMs, queue, seams);
+    // The pause ran out and this send was its probe: a delivery walks the
+    // ladder down here too, not only in a process that saw the pause itself.
+    if (outcome === 'SENT' && relay?.raised) void decayPause(budgetNameFor(prepared.transport)).catch(() => false);
+    return outcome;
+  }
 
   try {
-    await transmit(prepared, { mode: 'request' });
+    await transmit(prepared, { mode: 'request', via: seams.via });
   } catch (e) {
-    return onInlineFailure(prepared, e, queue);
+    return onInlineFailure(prepared, e, queue, seams);
   }
   await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
-  observeSafely(() => meterObserver.outcome(prepared, null));
+  observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
 }
 
@@ -1175,22 +1208,25 @@ async function tryEnqueue(prepared: PreparedEmail, opts: EnqueueMailOptions) {
 }
 
 /** The breaker: is this channel's relay paused (a throttle or a refused session
- *  not yet followed by a delivery)? An unreadable budget is a closed breaker. */
-async function relayPaused(transport: MailTransport): Promise<boolean> {
+ *  whose pause has not run out)? `raised`: the ladder is above rung 0, so a
+ *  delivery should walk it down. An unreadable budget is a closed breaker. */
+async function relayState(transport: MailTransport): Promise<{ open: boolean; raised: boolean } | null> {
   const cfg = budgetConfig(process.env, transport);
-  if (cfg.mode === 'off') return false;
+  if (cfg.mode === 'off') return null;
   try {
-    return breakerOpen(await readBudgetState(budgetNameFor(transport)), cfg, 'CRITICAL');
+    const state = await readBudgetState(budgetNameFor(transport));
+    return { open: breakerOpen(state, cfg), raised: (state?.pauseLevel ?? 0) > 0 };
   } catch {
-    return false;
+    return null;
   }
 }
 
 /** A temporary failure goes to the queue; a permanent one is recorded and
  *  rethrown exactly as before #2944. */
-async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: QueueOpts): Promise<'QUEUED'> {
+async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: QueueOpts, seams: SendSeams = {}): Promise<'QUEUED'> {
   const { to, subject, category, transport, lane } = prepared;
-  observeSafely(() => meterObserver.outcome(prepared, e));
+  const observer = seams.observer ?? meterObserver;
+  observeSafely(() => observer.outcome(prepared, e));
   const cls = classifySmtpError(e);
   const message = e instanceof Error ? e.message : String(e);
   if (cls.retryable && canQueue(prepared)) {
@@ -1205,10 +1241,21 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
         rcpt: recipientHash(to).slice(0, 16),
       });
       await recordEmail(to, subject, category, 'DEFERRED', transport, message);
+      // A relay-wide failure is the outage signal: nothing goes FAILED while
+      // the queue keeps it, so the health check reads the deferrals too.
+      if (cls.relayWide) void maybeAlertEmailFailures(category).catch(() => {});
       return 'QUEUED';
     }
   }
-  logger.error('Email send failed', { to, subject, category, transport, error: message });
+  // Never the address or the subject (the relay's text can echo the address
+  // too): the recipient's hash and the failure class are enough to correlate.
+  logger.error('Email send failed', {
+    category,
+    transport,
+    kind: cls.kind,
+    reason: cls.reason,
+    rcpt: recipientHash(to).slice(0, 16),
+  });
   await recordEmail(to, subject, category, 'FAILED', transport, message);
   void maybeAlertEmailFailures(category).catch(() => {});
   throw e;
@@ -1221,8 +1268,14 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
  * answered; the send still in flight then settles the copy — cancels it when
  * it went through, leaves it as the retry when it failed temporarily.
  */
-async function sendCriticalCapped(prepared: PreparedEmail, capMs: number, queue: QueueOpts): Promise<'SENT' | 'QUEUED'> {
-  const inflight: Promise<{ error: unknown } | null> = transmit(prepared, { mode: 'urgent' }).then(
+async function sendCriticalCapped(
+  prepared: PreparedEmail,
+  capMs: number,
+  queue: QueueOpts,
+  seams: SendSeams = {},
+): Promise<'SENT' | 'QUEUED'> {
+  const observer = seams.observer ?? meterObserver;
+  const inflight: Promise<{ error: unknown } | null> = transmit(prepared, { mode: 'urgent', via: seams.via }).then(
     () => null,
     (error: unknown) => ({ error }),
   );
@@ -1234,9 +1287,9 @@ async function sendCriticalCapped(prepared: PreparedEmail, capMs: number, queue:
   clearTimeout(timer);
 
   const finish = async (outcome: { error: unknown } | null): Promise<'SENT' | 'QUEUED'> => {
-    if (outcome) return onInlineFailure(prepared, outcome.error, queue);
+    if (outcome) return onInlineFailure(prepared, outcome.error, queue, seams);
     await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
-    observeSafely(() => meterObserver.outcome(prepared, null));
+    observeSafely(() => observer.outcome(prepared, null));
     return 'SENT';
   };
   if (first !== 'cap') return finish(first);
@@ -1263,7 +1316,7 @@ async function sendCriticalCapped(prepared: PreparedEmail, capMs: number, queue:
   );
   void inflight
     .then(async (outcome) => {
-      observeSafely(() => meterObserver.outcome(prepared, outcome ? outcome.error : null));
+      observeSafely(() => observer.outcome(prepared, outcome ? outcome.error : null));
       if (outcome) {
         // The queued copy is the retry — unless the relay said no for good.
         if (classifySmtpError(outcome.error).retryable) return;

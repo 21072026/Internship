@@ -101,9 +101,11 @@ Per row, in order:
 1. Open the box. A row that cannot be opened (corrupt, or sealed under a
    rotated secret) is DEAD_LETTER.
 2. Past `notAfter` → CANCELLED (`expired`), EmailLog FAILED.
-3. The budget. `MAIL_METER_MODE=enforce` spends a token for the lane or puts
-   the row back and ends the tick. `observe` (the default) never holds on rate,
-   only behind an open breaker, and charges the meter. `off` does neither.
+3. The budget. First the breaker (every mode but `off`): while a relay pause
+   runs, the row goes back to the pause's end and the tick ends. Then
+   `MAIL_METER_MODE=enforce` spends a token for the lane or puts the row back
+   and ends the tick; `observe` (the default) never holds on rate and only
+   charges the meter; `off` does neither.
 4. The opt-out gate again — a queued mail may be hours old, and the recipient
    may have switched the group off since. Opted out → CANCELLED, EmailLog
    SKIPPED.
@@ -114,17 +116,27 @@ Per row, in order:
 | Outcome | Job | attempts | EmailLog |
 |---|---|---|---|
 | 250 | SUCCEEDED, box cleared | +1 | SENT |
-| relay-wide (throttle, refused session, timeout, auth) | PENDING after the pause; **the rest of the batch is released too and the tick stops** | unchanged | DEFERRED |
+| relay-wide (throttle, refused session, timeout, auth) | PENDING after the pause, one second behind **the rest of the batch, which is released too; the tick stops** | unchanged (every 4th release of the same row: +1) | DEFERRED |
 | 4xx about the message | PENDING after a backoff (exponential, jittered, per lane) | +1 | DEFERRED |
 | 5xx | FAILED, box cleared | +1 | FAILED |
-| attempts exhausted (5) | DEAD_LETTER, box cleared | 5 | FAILED |
+| attempts exhausted (5), retries and counted releases together | DEAD_LETTER, box cleared | 5 | FAILED |
 | the next try would land after `notAfter` | CANCELLED, box cleared | — | FAILED |
 
-A relay-wide failure is never charged to the message: it says nothing about the
+A relay-wide failure is not charged to the message: it says nothing about the
 message, and charging it would dead-letter healthy mail during an outage. It
 pauses the budget instead, on an escalating ladder (1, 2, 5, 15, 30 minutes by
 default, `MAIL_THROTTLE_LADDER_SEC`); each delivered mail walks it one rung back
-down.
+down. Two limits keep a failure that only *looks* relay-wide from holding the
+whole queue on one mail:
+
+- a released row goes back one second behind the rest of its batch, so the
+  next tick leads with another row of the same priority;
+- every fourth relay-wide release of the same row (`payload.releases`) counts
+  as one attempt, so a row is dead after at most 5 × 4 relay-wide failures.
+
+And a 4.7.x policy reply at `RCPT TO` or `DATA` is read as being about that
+recipient or that message (a retry), not the relay — only a `421` or rate
+wording there pauses everybody.
 
 Delivery is at least once: a container killed between the relay's 250 and the
 settle sends that mail again once the claim expires (5 minutes). That window is
@@ -132,13 +144,30 @@ one statement wide.
 
 ## The breaker
 
-The budget is *paused* when a throttle or a refused session has pushed it out
-and no delivery has walked it back down yet (`pauseLevel > 0`). While it is
-paused beyond what even critical mail may spend, a critical send skips the SMTP
+A throttle or a refused session sets `MailBudget.pausedUntil` to the end of the
+current rung. While that moment has not passed, a critical send skips the SMTP
 attempt (it would only cost the person waiting its timeout) and goes straight to
 the queue at priority 100, and the drain holds its rows until the pause runs out.
-A budget that is merely busy never opens the breaker. `MAIL_METER_MODE=off`
-never opens it.
+
+The breaker reads the pause and nothing else — never `tat`. In observe mode the
+meter charges `tat` for every send, so after a large burst it can sit hours
+ahead with no pause at all; a breaker reading it would hold a password reset
+until its link expired. A budget that is merely busy never opens the breaker,
+and `MAIL_METER_MODE=off` never opens it.
+
+When the pause runs out the breaker closes even though the rung is still raised:
+the next mail is the probe. Delivered (inline critical or by the drain), it
+walks the ladder one rung down; refused, it pauses again one rung higher.
+
+## Delivery health
+
+An outage no longer writes FAILED rows — the queue keeps the mail and writes
+DEFERRED. So the delivery-health alert (`getEmailHealth()`) also counts the
+DEFERRED rows since the last delivery: it fires when at least three were
+written and the first of them is 30 minutes old with nothing delivered since (a
+short throttle that clears does not alert), and the hourly stale check counts
+deferrals as activity. A relay-wide deferral, inline or in the drain, and a
+mail that expires in the queue both run the check.
 
 ## Erasure and retention
 

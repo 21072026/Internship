@@ -82,6 +82,9 @@ export interface JobPayloadMap {
     reason: string;
     ref: string | null;
     box: string | null;
+    /// Relay-wide releases so far (mailWorkerRule.ts RELAY_RELEASES_PER_ATTEMPT).
+    /// Optional: absent on a fresh row.
+    releases?: number;
   };
 }
 

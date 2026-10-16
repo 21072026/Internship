@@ -17,7 +17,6 @@ import { createHash } from 'node:crypto';
 import {
   LANE_MAX_AGE_MS,
   classifySmtpError,
-  laneToleranceMs,
   pauseSeconds,
   retryDelayMs,
   type BudgetConfig,
@@ -31,8 +30,22 @@ export const MAIL_JOB_NAME = 'email.send';
 /** `Job.payload.v` — bumped if the payload shape ever changes. */
 export const MAIL_PAYLOAD_VERSION = 1;
 
-/** Attempts a queued mail gets before it is dead (relay-wide failures are not attempts). */
+/** Attempts a queued mail gets before it is dead (relay-wide failures are not
+ *  attempts — but see `RELAY_RELEASES_PER_ATTEMPT`). */
 export const MAIL_MAX_ATTEMPTS = 5;
+
+/**
+ * A relay-wide failure is not the message's fault, so it costs no attempt —
+ * but not without limit: every this-many relay-wide releases of the SAME row
+ * count as one attempt. A failure that is really about one row and only LOOKS
+ * relay-wide (a timeout on one slow message, a relay that answers one
+ * recipient with a policy code) could otherwise be released forever, pausing
+ * everybody each time; this way it goes dead after
+ * `MAIL_MAX_ATTEMPTS × RELAY_RELEASES_PER_ATTEMPT` releases at most. A real
+ * outage rotates the releases over the queue (the released row goes behind
+ * the rest of its batch), so no single row pays for all of it.
+ */
+export const RELAY_RELEASES_PER_ATTEMPT = 4;
 
 /**
  * Attachments above this many bytes (in total) are never queued: the envelope
@@ -112,29 +125,39 @@ export function isExpired(notAfter: string | null | undefined, now: Date): boole
 // ── The breaker ─────────────────────────────────────────────────────────────
 
 export interface BudgetState {
-  /** How far the budget's `tat` is ahead of the database clock, ms. */
+  /** How far the budget's `tat` is ahead of the database clock, ms (the meter). */
   aheadMs: number;
+  /** How long the relay pause still runs, ms (`MailBudget.pausedUntil`); ≤ 0
+   *  when it is over or there never was one. */
+  pausedMs: number;
   /** The throttle ladder's rung (0 = no throttle seen since the last delivery). */
   pauseLevel: number;
 }
 
 /**
- * The relay is paused: a throttle or a relay-wide failure pushed the budget
- * further out than even this lane may spend. A critical mail then goes straight
- * to the queue — an SMTP attempt would only cost the person its timeout — and
- * the drain stops taking rows until the pause runs out. A budget that is merely
- * busy (rung 0) never opens the breaker: that is the meter's job, not the
- * breaker's. `off` mode never opens it.
+ * The relay is paused: a throttle or a relay-wide failure set a pause that has
+ * not run out yet. A critical mail then goes straight to the queue — an SMTP
+ * attempt would only cost the person its timeout — and the drain stops taking
+ * rows until the pause ends.
+ *
+ * Decided on the PAUSE alone (`pausedUntil`), never on `tat`: in observe mode
+ * every send is charged to `tat`, so after a burst it can sit hours ahead with
+ * no pause at all, and a breaker reading it would hold a password reset past
+ * its link's expiry. A budget that is merely busy never opens the breaker —
+ * that is the meter's job. When the pause runs out the breaker closes even
+ * though the rung is still raised, so the next mail is the probe: delivered, it
+ * walks the ladder down; refused, it pauses again one rung higher. `off` mode
+ * never opens it.
  */
-export function breakerOpen(state: BudgetState | null, cfg: BudgetConfig, lane: MailLane = 'CRITICAL'): boolean {
+export function breakerOpen(state: BudgetState | null, cfg: Pick<BudgetConfig, 'mode'>): boolean {
   if (cfg.mode === 'off' || !state) return false;
-  return state.pauseLevel > 0 && state.aheadMs > laneToleranceMs(lane, cfg);
+  return Number.isFinite(state.pausedMs) && state.pausedMs > 0;
 }
 
-/** How long a lane waits behind an open breaker (0 when it is closed). */
-export function breakerWaitMs(state: BudgetState | null, cfg: BudgetConfig, lane: MailLane): number {
-  if (!breakerOpen(state, cfg, lane)) return 0;
-  return Math.max(0, Math.round(state!.aheadMs - laneToleranceMs(lane, cfg)));
+/** How long a mail waits behind an open breaker (0 when it is closed). */
+export function breakerWaitMs(state: BudgetState | null, cfg: Pick<BudgetConfig, 'mode'>): number {
+  if (!breakerOpen(state, cfg)) return 0;
+  return Math.max(0, Math.round(state!.pausedMs));
 }
 
 // ── Inline failure → queue ──────────────────────────────────────────────────
@@ -162,9 +185,11 @@ export function firstQueuedRunAt(
  * What the drain writes after one delivery attempt of a queued mail.
  *
  *   sent     → SUCCEEDED, envelope cleared, EmailLog SENT.
- *   release  → PENDING again at `runAt`, `attempts` UNCHANGED, and the tick
- *              stops: the relay refused the session, so the next row would fail
- *              the same way. EmailLog DEFERRED.
+ *   release  → PENDING again at `runAt`, `releases` + 1, and the tick stops:
+ *              the relay refused the session, so the next row would fail the
+ *              same way. `attempts` is unchanged except on every
+ *              `RELAY_RELEASES_PER_ATTEMPT`-th release, and a row whose
+ *              attempts run out that way is dead instead. EmailLog DEFERRED.
  *   retry    → PENDING at `runAt` (backoff), `attempts` + 1. EmailLog DEFERRED.
  *   dead     → FAILED (a 5xx: final) or DEAD_LETTER (attempts exhausted),
  *              envelope cleared. EmailLog FAILED.
@@ -173,7 +198,7 @@ export function firstQueuedRunAt(
  */
 export type SettleAction =
   | { kind: 'sent' }
-  | { kind: 'release'; runAt: Date; reason: string }
+  | { kind: 'release'; runAt: Date; attempts: number; releases: number; reason: string }
   | { kind: 'retry'; runAt: Date; attempts: number; reason: string }
   | { kind: 'dead'; status: 'FAILED' | 'DEAD_LETTER'; attempts: number; reason: string }
   | { kind: 'expired'; attempts: number; reason: string };
@@ -184,6 +209,8 @@ export interface SettleInput {
   lane: MailLane;
   /** `Job.attempts` before this attempt. */
   attempts: number;
+  /** Relay-wide releases of this row so far (`payload.releases`). */
+  releases?: number;
   maxAttempts: number;
   notAfter?: string | null;
   now: Date;
@@ -203,12 +230,19 @@ export function settleAction(input: SettleInput): SettleAction {
     const floor = now + pauseSeconds(0, input.ladderSec) * 1000;
     const until = input.pausedUntil instanceof Date ? input.pausedUntil.getTime() : NaN;
     const runAt = Number.isFinite(until) ? Math.max(floor, until) : floor;
-    // Released, never charged — but a mail whose life ends before the relay
-    // comes back is not kept waiting for nothing.
-    if (Number.isFinite(notAfter) && runAt > notAfter) {
-      return { kind: 'expired', attempts: input.attempts, reason: `${cls.reason}:expired` };
+    // Released, not charged — except every RELAY_RELEASES_PER_ATTEMPT-th time,
+    // so a row cannot be released forever. A mail whose life ends before the
+    // relay comes back is not kept waiting for nothing.
+    const prior = Math.max(0, Math.floor(input.attempts));
+    const releases = Math.max(0, Math.floor(input.releases ?? 0)) + 1;
+    const attempts = releases % RELAY_RELEASES_PER_ATTEMPT === 0 ? prior + 1 : prior;
+    if (attempts > prior && attempts >= Math.max(1, input.maxAttempts)) {
+      return { kind: 'dead', status: 'DEAD_LETTER', attempts, reason: `${cls.reason}:releases` };
     }
-    return { kind: 'release', runAt: new Date(runAt), reason: cls.reason };
+    if (Number.isFinite(notAfter) && runAt > notAfter) {
+      return { kind: 'expired', attempts, reason: `${cls.reason}:expired` };
+    }
+    return { kind: 'release', runAt: new Date(runAt), attempts, releases, reason: cls.reason };
   }
 
   const attempts = Math.max(0, Math.floor(input.attempts)) + 1;
