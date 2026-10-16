@@ -58,13 +58,21 @@ const DOMAIN = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](
 const ADDRESS = /^[^\s@<>(),;:"]+@[a-z0-9.-]+\.[a-z0-9-]+$/;
 
 /**
- * The bare addresses a `to` names: `a@b.c`, `Name <a@b.c>`, or a comma list of
- * either. Lowercased. A part with no address in it yields nothing.
+ * The bare addresses a `to` names: `a@b.c`, `Name <a@b.c>`, or a comma or
+ * semicolon list of either. Lowercased. A part with no address in it yields
+ * nothing.
+ *
+ * This is the conservative reading for a raw string; `emailService.ts` hands
+ * `mailRouteFor()` the addresses nodemailer's own parser extracts instead, so
+ * the route is judged on exactly the addresses the mail is sent to. Either way
+ * a part that is not ONE clean address (`a@x.test b@y.test`, which nodemailer
+ * sends to `a@x.test`) is returned whole and fails `addressAllowed()`'s shape
+ * check — an ambiguous recipient goes to the sink, never to the relay.
  */
 export function recipientsOf(to: string | null | undefined): string[] {
   if (!to) return [];
   const out: string[] = [];
-  for (const raw of to.split(',')) {
+  for (const raw of to.split(/[,;]/)) {
     const part = raw.trim();
     if (!part) continue;
     const angled = part.match(/<([^>]+)>/);
@@ -74,8 +82,11 @@ export function recipientsOf(to: string | null | undefined): string[] {
   return out;
 }
 
+/** Only a value that is exactly one address (one `@`, no whitespace, no list
+ *  or angle punctuation) can be allowlisted; anything else is not. */
 export function addressAllowed(address: string, list: RecipientAllowlist): boolean {
   const a = address.trim().toLowerCase();
+  if (!ADDRESS.test(a)) return false;
   if (list.addresses.has(a)) return true;
   const at = a.lastIndexOf('@');
   return at > 0 && list.domains.has(a.slice(at + 1));
@@ -84,13 +95,17 @@ export function addressAllowed(address: string, list: RecipientAllowlist): boole
 /**
  * Which way one mail goes. No sink configured → the relay, always. With a sink:
  * the relay only when there is at least one recipient and EVERY recipient is
- * allowlisted — one address off the list sends the whole mail to the sink,
+ * allowlisted (`to` is a raw header value, or the parsed address list) — one address off the list sends the whole mail to the sink,
  * because a mail cannot be split between two servers here and the sink is the
  * side that cannot reach a stranger.
  */
-export function mailRouteFor(to: string | null | undefined, sinkHost: string | null | undefined, list: RecipientAllowlist): MailRoute {
+export function mailRouteFor(
+  to: string | readonly string[] | null | undefined,
+  sinkHost: string | null | undefined,
+  list: RecipientAllowlist,
+): MailRoute {
   if (!sinkHost || !sinkHost.trim()) return 'relay';
-  const rcpts = recipientsOf(to);
+  const rcpts = Array.isArray(to) ? to.map((r) => String(r ?? '').trim().toLowerCase()) : recipientsOf(to as string | null | undefined);
   if (rcpts.length === 0) return 'sink';
   return rcpts.every((r) => addressAllowed(r, list)) ? 'relay' : 'sink';
 }

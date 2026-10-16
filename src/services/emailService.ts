@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
+import addressparser from 'nodemailer/lib/addressparser';
 import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -68,7 +69,7 @@ import { decayPause, readBudgetState, spendToken } from '@/lib/mailBudgetStore';
 import { INLINE_FALLBACK_DELAY_MS, INLINE_PACE_MAX_WAIT_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
 import { canQueue, cancelQueuedMail, enqueueMail, type DrainDeps, type EnqueueMailOptions } from '@/lib/mailOutbox';
 import { mailRouteFor, parseRecipientAllowlist, type MailRoute, type RecipientAllowlist } from '@/lib/mailSinkRule';
-import { isAuthRejection } from '@/lib/mailOpsRule';
+import { isAuthRejection, smtpReplyCodeOf } from '@/lib/mailOpsRule';
 import { noteRelayAuthRejected } from '@/lib/mailOpsSignal';
 import {
   BULK_GROUP_CATEGORIES,
@@ -327,20 +328,32 @@ function recipientAllowlist(): RecipientAllowlist {
   return allowlistMemo.list;
 }
 
-/** Every address a prepared mail is addressed to — to, cc and bcc — as one
- *  comma list, so a copy to a stranger cannot ride an allowlisted `to`. */
-function envelopeRecipients(prepared: Pick<PreparedEmail, 'to' | 'message'>): string {
-  const parts: string[] = [prepared.to];
-  const add = (v: unknown) => {
+/** Every address a prepared mail is addressed to — to, cc, bcc and an explicit
+ *  envelope — parsed by nodemailer's OWN address parser, so the route is
+ *  judged on exactly the addresses nodemailer will hand the server (it splits
+ *  on `;` too, and reads `a@x b@y` as the single address `a@x`). A copy to a
+ *  stranger cannot ride an allowlisted `to`. */
+function envelopeRecipients(prepared: Pick<PreparedEmail, 'to' | 'message'>): string[] {
+  const out: string[] = [];
+  const collect = (v: unknown): void => {
     if (!v) return;
-    if (typeof v === 'string') parts.push(v);
-    else if (Array.isArray(v)) v.forEach(add);
-    else if (typeof v === 'object' && typeof (v as { address?: unknown }).address === 'string') parts.push((v as { address: string }).address);
+    if (typeof v === 'string') {
+      for (const a of addressparser(v, { flatten: true })) out.push(typeof a.address === 'string' ? a.address : '');
+    } else if (Array.isArray(v)) v.forEach(collect);
+    else if (typeof v === 'object' && typeof (v as { address?: unknown }).address === 'string') out.push((v as { address: string }).address);
+    else out.push(''); // unreadable: counts as a recipient that is not allowlisted
   };
-  add(prepared.message?.to);
-  add(prepared.message?.cc);
-  add(prepared.message?.bcc);
-  return parts.join(', ');
+  collect(prepared.to);
+  collect(prepared.message?.to);
+  collect(prepared.message?.cc);
+  collect(prepared.message?.bcc);
+  const envelope = prepared.message?.envelope as { to?: unknown; cc?: unknown; bcc?: unknown } | undefined;
+  if (envelope) {
+    collect(envelope.to);
+    collect(envelope.cc);
+    collect(envelope.bcc);
+  }
+  return out;
 }
 
 /** Which way this mail goes: the relay, or the environment's sink. */
@@ -375,8 +388,8 @@ function transportForMail(prepared: PreparedEmail, mode: DeliveryMode): Transpor
 }
 
 /** The relay rejected our credentials: the operator alert's signal (#2953). */
-function noteAuthFailure(reason: string): void {
-  if (isAuthRejection(reason)) noteRelayAuthRejected();
+function noteAuthFailure(reason: string, err: unknown): void {
+  if (isAuthRejection(reason, smtpReplyCodeOf(err))) noteRelayAuthRejected();
 }
 
 // ── The shared send budget, observe mode (#2941) ────────────────────────────
@@ -1189,7 +1202,7 @@ export async function deliverPrepared(
     // Never the address or the subject (#2944): the recipient's hash and the
     // failure class are enough to correlate with the EmailLog row.
     const cls = classifySmtpError(e);
-    noteAuthFailure(cls.reason);
+    noteAuthFailure(cls.reason, e);
     logger.error('Email send failed', { category, transport, kind: cls.kind, reason: cls.reason, rcpt: recipientHash(to).slice(0, 16) });
     await recordEmail(to, subject, category, 'FAILED', transport, message);
     void maybeAlertEmailFailures(category).catch(() => {});
@@ -1395,7 +1408,7 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
   const observer = seams.observer ?? meterObserver;
   observeSafely(() => observer.outcome(prepared, e));
   const cls = classifySmtpError(e);
-  noteAuthFailure(cls.reason);
+  noteAuthFailure(cls.reason, e);
   const message = e instanceof Error ? e.message : String(e);
   if (cls.retryable && canQueue(prepared)) {
     const runAt = firstQueuedRunAt(cls, lane, new Date(), budgetConfig(process.env, transport));

@@ -22,7 +22,12 @@ import { BREAKER_OPEN_ALERT_MS, CRITICAL_PENDING_ALERT_MS, mailOpsAlertsDue, typ
 //   mail-relay-auth       — the relay rejected our credentials (EAUTH): nothing
 //                           will leave until somebody fixes the secret.
 //
-// Run by the drain route after every tick (`evaluateMailOps()`). The auth flag
+// Run by the drain route after every tick, and after a tick that failed
+// (`evaluateMailOps()`). It rides on the drain's own timer, so it cannot report
+// a drain that does not run at all (MAIL_WORKER_ENABLED=0, a dead process):
+// that shows as a growing `oldestPendingAgeSec` in the health endpoint's `mail`
+// block instead. A retried row's wait starts
+// at the retry (the Queue tab resets its `createdAt`). The auth flag
 // is read every time (in memory); the two database facts at most once a minute
 // per process. The durable signals are the `mail_ops.alert` log line and the
 // ActivityLog row, written FIRST: the alert travels by the very channel it
@@ -48,7 +53,7 @@ function channels(): MailChannel[] {
 const TEXT: Record<MailOpsAlertKind, { subject: string; body: string }> = {
   'mail-critical-waiting': {
     subject: '[CRM] Critical mail has been waiting for more than 5 minutes',
-    body: 'A sign-in link, password reset or other critical mail has been on the mail queue for more than 5 minutes. The relay is paused, refusing, or the drain is not running.',
+    body: 'A sign-in link, password reset or other critical mail has been on the mail queue for more than 5 minutes. The relay is paused or refusing, or the drain is failing.',
   },
   'mail-breaker-open': {
     subject: '[CRM] Mail relay has been refusing for more than 15 minutes',

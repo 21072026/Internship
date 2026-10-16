@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { JobStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { seal, open } from '@/lib/secretBox';
@@ -41,7 +41,7 @@ import {
   type Envelope,
 } from '@/lib/mailWorkerRule';
 import * as budgetStore from '@/lib/mailBudgetStore';
-import { isAuthRejection } from '@/lib/mailOpsRule';
+import { isAuthRejection, smtpReplyCodeOf } from '@/lib/mailOpsRule';
 import { noteRelayAuthRejected } from '@/lib/mailOpsSignal';
 import type { PreparedEmail } from '@/services/emailService';
 
@@ -625,7 +625,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     error = e;
   }
 
-  if (error && isAuthRejection(classifySmtpError(error).reason)) {
+  if (error && isAuthRejection(classifySmtpError(error).reason, smtpReplyCodeOf(error))) {
     summary.authRejected = true;
     noteRelayAuthRejected();
   }
@@ -736,31 +736,39 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
 /**
  * A FAILED or DEAD_LETTER mail keeps its sealed envelope only while it could
  * still be retried (#2953): once its `notAfter` has passed, the envelope goes.
- * Run with the reaper, once a minute per process. Reads only rows that changed
- * in the last four days (the longest lane lives 72 h), at most 200 a run; each
- * clear is guarded on the state it read, so a row an operator just retried is
- * left alone.
+ * Run with the reaper, once a minute per process.
+ *
+ * The SELECTION is done in SQL — only rows that still carry a box AND whose
+ * deadline has passed (or is unreadable) — so a backlog of dead BULK mail that
+ * may still be retried for days never hides a dead sign-in link behind it, and
+ * no row ages out of a window unread: there is no window. `notAfter` is the
+ * ISO-8601 UTC string `toISOString()` wrote, so it orders as text. At most 200
+ * rows a run; each clear is guarded on the state it read and re-checks the
+ * deadline in JS, so a row an operator just retried is left alone.
  */
 export async function clearExpiredEnvelopes(now: Date = new Date()): Promise<number> {
-  const rows = await prisma.job.findMany({
-    where: {
-      name: MAIL_JOB_NAME,
-      status: { in: ['FAILED', 'DEAD_LETTER'] },
-      updatedAt: { gt: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000) },
-    },
-    select: { id: true, status: true, payload: true },
-    orderBy: { updatedAt: 'asc' },
-    take: 200,
-  });
+  const nowIso = now.toISOString();
+  const rows = await prisma.$queryRaw<{ id: string; status: JobStatus }[]>`
+    SELECT id, status FROM \`Job\`
+    WHERE name = ${MAIL_JOB_NAME}
+      AND status IN ('FAILED', 'DEAD_LETTER')
+      AND JSON_TYPE(JSON_EXTRACT(payload, '$.box')) = 'STRING'
+      AND (
+        JSON_TYPE(JSON_EXTRACT(payload, '$.notAfter')) IS NULL
+        OR JSON_TYPE(JSON_EXTRACT(payload, '$.notAfter')) <> 'STRING'
+        OR JSON_UNQUOTE(JSON_EXTRACT(payload, '$.notAfter')) <= ${nowIso}
+      )
+    LIMIT 200`;
   let cleared = 0;
-  for (const row of rows) {
-    const p = row.payload as { box?: unknown; notAfter?: unknown } | null;
+  for (const { id, status } of rows) {
+    const row = await prisma.job.findFirst({ where: { id, status }, select: { payload: true } });
+    const p = row?.payload as { box?: unknown; notAfter?: unknown } | null | undefined;
     if (!p || typeof p.box !== 'string') continue;
     // No readable deadline means no retry either (queueActionAllowed): clear.
     const until = typeof p.notAfter === 'string' ? Date.parse(p.notAfter) : NaN;
     if (Number.isFinite(until) && until > now.getTime()) continue;
     const { count } = await prisma.job.updateMany({
-      where: { id: row.id, status: row.status },
+      where: { id, status },
       data: { payload: clearedPayload(p) },
     });
     cleared += count;

@@ -91,3 +91,33 @@ export async function settleMailRef(ref: string | null | undefined, outcome: Mai
     return false;
   }
 }
+
+/** The client `reopenMailRef()` writes through: Prisma, or a transaction. */
+type RefClient = Pick<typeof prisma, 'newsletterSend' | 'newsletter'>;
+
+/**
+ * Undo a FAILED settle because an operator put the mail back on the queue
+ * (#2953, the Queue tab's retry): the sender's record goes back to QUEUED and
+ * the issue's tally back to "reached", exactly reversing what `settleMailRef()`
+ * moved — so the drain's eventual SENT (or a second FAILED) settles it again
+ * and the archive says what really happened. Called INSIDE the retry's
+ * transaction with that transaction's client: the queue row and the record
+ * move together or not at all. One guarded statement on a record still
+ * FAILED; a ref with no record of its own (every non-newsletter mail) changes
+ * nothing. True when a record changed.
+ */
+export async function reopenMailRef(ref: string | null | undefined, client: RefClient = prisma): Promise<boolean> {
+  if (!ref) return false;
+  const nl = parseNewsletterRef(ref);
+  if (!nl) return false;
+  const { count } = await client.newsletterSend.updateMany({
+    where: { newsletterId: nl.newsletterId, userId: nl.userId, status: 'FAILED' },
+    data: { status: 'QUEUED', error: null },
+  });
+  if (count !== 1) return false;
+  await client.newsletter.updateMany({
+    where: { id: nl.newsletterId },
+    data: { sentCount: { increment: 1 }, failedCount: { decrement: 1 } },
+  });
+  return true;
+}

@@ -355,11 +355,17 @@ the whole deployment's, both products and every tenant:
 | Caller | Rows | Today's count vs. the cap |
 |---|---|---|
 | super admin | every row of an organization in their world, plus the rows with no organization when their world is the default one | yes |
-| ADMIN of the deployment's default organization | that organization's rows and the rows with no organization (operator alerts, mail to an address with no account yet) | no |
+| ADMIN of the deployment's default organization | that organization's rows only | no |
 | any other ADMIN, every other role | none — 403 `mail_queue_operator_only`, and no tab | — |
 
+A row with no organization is **not** the default organization's: a send that
+names neither an org nor a user (an account or consent mail, a public form's
+reply, an operator alert) is queued without one whatever tenant it concerns, so
+only a super admin of the default world sees those.
+
 A row is its lane, category, product, state, attempts, a reason **code**
-(`reasonCodeOf()`: anything that is not code-shaped shows as `other`) and the
+(`reasonCodeOf()`: anything that is not code-shaped, or that reads like an
+address, shows as `other`) and the
 first 12 hex characters of the recipient's sha256 — enough to match a log
 line's `rcpt`, nothing an address can be read back from. The sealed envelope
 never leaves the server. A row outside the caller's scope answers 404, the
@@ -368,10 +374,14 @@ same as a row that does not exist.
 **The two actions** (`applyQueueAction()` in `src/lib/mailQueueAdmin.ts`):
 
 - **Retry** — a FAILED or DEAD_LETTER mail goes back to PENDING, due now, with
-  `attempts` and the relay-release counter reset. Only while its `notAfter` has
-  not passed (`409 expired`) and its envelope is still on the row
-  (`409 no_envelope`). A newsletter copy's `NewsletterSend` row was already
-  settled FAILED; the retry delivers the mail but does not re-open that tally.
+  `attempts` and the relay-release counter reset and `createdAt` set to the
+  retry (it is re-enqueued: the waiting ages and the critical-waiting alert
+  measure from there; the original time is in the AuditLog). Only while its
+  `notAfter` has not passed (`409 expired`) and its envelope is still on the
+  row (`409 no_envelope`). A newsletter copy's `NewsletterSend` row, settled
+  FAILED when the mail died, is re-opened to QUEUED in the same transaction
+  (`reopenMailRef()`, which also reverses the issue's sent/failed tally), so
+  the delivery settles it SENT — or FAILED again.
 - **Cancel** — a PENDING mail becomes CANCELLED (`cancelled_by_operator`), its
   envelope cleared; a newsletter copy's record settles FAILED and the ledger
   gets a SKIPPED row. A RUNNING row is a drain's and is never touched.
@@ -385,7 +395,8 @@ follows.
 
 ### Alerts
 
-`evaluateMailOps()` (`src/lib/mailOpsAlert.ts`) runs after every drain tick:
+`evaluateMailOps()` (`src/lib/mailOpsAlert.ts`) runs after every drain tick,
+including one that failed:
 the credentials flag every time (in memory), the two database facts at most
 once a minute per process. Each alert is raised at most once per hour — its
 mail is queued under `ops:<kind>:<hour>`, and the process remembers the key —
@@ -393,14 +404,17 @@ and writes a `mail_ops.alert` log line and ActivityLog row first:
 
 | Kind | Fires when | Read from |
 |---|---|---|
-| `mail-critical-waiting` | the oldest CRITICAL mail still PENDING was queued more than 5 minutes ago | `Job` (priority ≥ 100) |
+| `mail-critical-waiting` | the oldest CRITICAL mail still PENDING was queued (or retried) more than 5 minutes ago | `Job` (priority ≥ 100) |
 | `mail-breaker-open` | a relay pause is running and the outage began more than 15 minutes ago | `MailBudget.pausedSince` |
-| `mail-relay-auth` | the relay rejected our credentials (`EAUTH`, `ENOAUTH`, or a refusal at the AUTH step) | the inline sender and the drain |
+| `mail-relay-auth` | the relay rejected our credentials (`ENOAUTH`; `EAUTH` unless the reply was a 4xx, such as a 454 temporary failure; a 5xx at the AUTH step) | the inline sender and the drain |
 
 `MailBudget.pausedSince` is set by the first pause after a quiet spell, kept
 while pauses follow each other within the ladder's top rung, and cleared by a
 delivered mail. During an outage the alert mail itself waits on the queue with
 everything else; the log line and the ActivityLog row are the durable signal.
+The alerts ride on the drain's timer, so a drain that does not run at all
+(`MAIL_WORKER_ENABLED=0`, a dead process) raises none: it shows as a growing
+`oldestPendingAgeSec` in the health endpoint's `mail` block.
 
 The daily dead-letter alert (`src/lib/jobs/dlqAlert.ts`) already counts every
 job name; for `email.send` it now also says how many of them are mail and that
@@ -415,7 +429,10 @@ private docker network for a bridge-mode container — no public port) and gives
 every topic container `MAIL_SINK_HOST`/`MAIL_SINK_PORT`.
 
 With `MAIL_SINK_HOST` set, `emailService` sends every mail to the sink —
-unless **every** recipient (to, cc and bcc) is on `MAIL_RECIPIENT_ALLOWLIST`
+unless **every** recipient (to, cc, bcc and an explicit envelope, read with
+nodemailer's own address parser so the check sees exactly the addresses the
+mail is sent to; a value that is not one clean address never matches) is on
+`MAIL_RECIPIENT_ALLOWLIST`
 (comma list of addresses and exact domains; `TOPIC_MAIL_RECIPIENT_ALLOWLIST` in
 the env file overrides it for topic environments), which still goes through the
 real relay (`mailRouteFor()` in `src/lib/mailSinkRule.ts`). The choice is made

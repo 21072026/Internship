@@ -28,7 +28,16 @@ const jobIds: string[] = [];
 
 async function mkJob(
   label: string,
-  data: { status: 'PENDING' | 'DEAD_LETTER' | 'FAILED'; orgId: string | null; lane?: string; priority?: number; notAfterMs?: number; box?: string | null; world?: string },
+  data: {
+    status: 'PENDING' | 'DEAD_LETTER' | 'FAILED';
+    orgId: string | null;
+    lane?: string;
+    priority?: number;
+    notAfterMs?: number;
+    box?: string | null;
+    world?: string;
+    ref?: string | null;
+  },
 ) {
   const notAfter = new Date(Date.now() + (data.notAfterMs ?? 60 * 60 * 1000)).toISOString();
   const job = await prisma.job.create({
@@ -53,7 +62,7 @@ async function mkJob(
         rcpt: HASH(label.length % 2 ? 'a' : 'b'),
         notAfter,
         reason: 'retry',
-        ref: null,
+        ref: data.ref ?? null,
         box: data.box === undefined ? `sealed-envelope-${RUN}` : data.box,
       },
     },
@@ -67,6 +76,9 @@ let tenantDeadRaw = '';
 let defaultPending = '';
 let defaultDeadExpired = '';
 let marketingDead = '';
+let orglessDead = '';
+let superAdminId = '';
+const newsletterIds: string[] = [];
 
 test.beforeAll(async () => {
   const def = await prisma.organization.upsert({
@@ -83,6 +95,7 @@ test.beforeAll(async () => {
 
   const superAdmin = await seedUser(superAdminEmail, PW, 'ADMIN', 'MQ Super', defaultOrgId);
   await prisma.user.update({ where: { id: superAdmin.id }, data: { isSuperAdmin: true } });
+  superAdminId = superAdmin.id;
   await seedUser(defaultAdminEmail, PW, 'ADMIN', 'MQ Default Admin', defaultOrgId);
   await seedUser(tenantAdminEmail, PW, 'ADMIN', 'MQ Tenant Admin', tenantOrgId);
 
@@ -91,12 +104,16 @@ test.beforeAll(async () => {
   defaultPending = (await mkJob('default-pending', { status: 'PENDING', orgId: defaultOrgId, lane: 'CRITICAL', priority: 100 })).id;
   defaultDeadExpired = (await mkJob('default-expired', { status: 'DEAD_LETTER', orgId: defaultOrgId, notAfterMs: -60_000 })).id;
   marketingDead = (await mkJob('mkt-dead', { status: 'DEAD_LETTER', orgId: marketingOrgId, world: 'MARKETING', lane: 'BULK', priority: 0 })).id;
+  // A send that named neither an org nor a user is queued without one — it may
+  // be any tenant's mail, so it is the super admin's, not the default org's.
+  orglessDead = (await mkJob('orgless-dead', { status: 'DEAD_LETTER', orgId: null })).id;
 });
 
 test.afterAll(async () => {
   await prisma.auditLog.deleteMany({ where: { targetId: { in: jobIds } } });
   await prisma.activityLog.deleteMany({ where: { targetId: { in: jobIds } } });
   await prisma.job.deleteMany({ where: { id: { in: jobIds } } });
+  await prisma.newsletter.deleteMany({ where: { id: { in: newsletterIds } } });
   for (const e of [superAdminEmail, defaultAdminEmail, tenantAdminEmail]) await cleanupByEmail(e);
   await prisma.organization.deleteMany({ where: { id: { in: [tenantOrgId, marketingOrgId] } } }).catch(() => {});
   await prisma.$disconnect();
@@ -149,10 +166,14 @@ test(
     expect(own.body!.waiting.map((r) => r.id)).toContain(defaultPending);
     expect(own.text).not.toContain(tenantDead);
     expect(own.text).not.toContain(marketingDead);
+    expect(own.text).not.toContain(orglessDead);
     expect(own.body!.day).toBeUndefined();
     // Another tenant's id reads exactly like a missing one.
     expect((await page.request.post(`/api/admin/mail-queue/${tenantDead}/retry`)).status()).toBe(404);
     expect((await page.request.post(`/api/admin/mail-queue/nope-${RUN}/retry`)).status()).toBe(404);
+    expect((await page.request.post(`/api/admin/mail-queue/${orglessDead}/cancel`)).status()).toBe(404);
+    expect((await page.request.post(`/api/admin/mail-queue/${orglessDead}/retry`)).status()).toBe(404);
+    expect((await prisma.job.findUniqueOrThrow({ where: { id: orglessDead } })).status).toBe('DEAD_LETTER');
     expect((await prisma.job.findUniqueOrThrow({ where: { id: tenantDead } })).status).toBe('DEAD_LETTER');
   },
 );
@@ -164,7 +185,7 @@ test('a super admin sees the world, never an address; retry and cancel are guard
   const body = v.body!;
   expect(body.scope).toBe('world');
   const deadIds = body.dead.map((r) => r.id);
-  expect(deadIds).toEqual(expect.arrayContaining([tenantDead, tenantDeadRaw, defaultDeadExpired]));
+  expect(deadIds).toEqual(expect.arrayContaining([tenantDead, tenantDeadRaw, defaultDeadExpired, orglessDead]));
   // The other product's mail is the other world's operator's.
   expect(v.text).not.toContain(marketingDead);
   // No address, no envelope, no relay text: a code or `other`, and a 12-char fingerprint.
@@ -209,6 +230,43 @@ test('a super admin sees the world, never an address; retry and cancel are guard
   expect(await prisma.auditLog.count({ where: { targetId: defaultPending, action: 'MAIL_QUEUE_CANCEL' } })).toBe(1);
   // A super admin of THIS world cannot reach the other world's row.
   expect((await page.request.post(`/api/admin/mail-queue/${marketingDead}/retry`)).status()).toBe(404);
+});
+
+test('retrying a dead newsletter copy re-opens its record and its tally', async ({ page }) => {
+  // The drain settled this copy FAILED when it died: NewsletterSend FAILED and
+  // the issue's tally moved from sent to failed. A retry puts the mail back on
+  // the queue, so the record must say QUEUED again — or a delivery after the
+  // retry could never settle it SENT (the settle only moves QUEUED records).
+  const nl = await prisma.newsletter.create({
+    data: {
+      subject: `MQ newsletter ${RUN}`,
+      content: {},
+      status: 'SENT',
+      sentAt: new Date(),
+      createdById: superAdminId,
+      orgId: tenantOrgId,
+      recipientCount: 1,
+      sentCount: 0,
+      failedCount: 1,
+    },
+  });
+  newsletterIds.push(nl.id);
+  await prisma.newsletterSend.create({
+    data: { newsletterId: nl.id, userId: superAdminId, email: superAdminEmail, locale: 'en', status: 'FAILED', error: 'smtp_550_5.1.1' },
+  });
+  const dead = await mkJob('nl-dead', { status: 'DEAD_LETTER', orgId: tenantOrgId, lane: 'BULK', priority: 0, ref: `nlsend:${nl.id}:${superAdminId}` });
+
+  await signInAsFreshUser(page, superAdminEmail, PW, '/admin');
+  const res = await page.request.post(`/api/admin/mail-queue/${dead.id}/retry`);
+  expect(res.status()).toBe(200);
+  const send = await prisma.newsletterSend.findFirstOrThrow({ where: { newsletterId: nl.id } });
+  expect(send.status).toBe('QUEUED');
+  expect(send.error).toBeNull();
+  const tally = await prisma.newsletter.findUniqueOrThrow({ where: { id: nl.id }, select: { sentCount: true, failedCount: true } });
+  expect(tally).toEqual({ sentCount: 1, failedCount: 0 });
+  // The retried row's wait starts at the retry, not at its first enqueue.
+  const row = await prisma.job.findUniqueOrThrow({ where: { id: dead.id } });
+  expect(Date.now() - row.createdAt.getTime()).toBeLessThan(60_000);
 });
 
 test('the Queue tab lists the dead mail and retries it from the screen', async ({ page }) => {

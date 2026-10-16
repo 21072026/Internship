@@ -63,6 +63,9 @@ async function handlePost(request: Request) {
     return NextResponse.json({ ok: true, ...summary });
   } catch (e) {
     logger.error('mail_outbox.drain_failed', { error: e instanceof Error ? e.name : 'unknown' });
+    // A drain that fails every tick is one of the things the critical-waiting
+    // alert is for: evaluate here too, so a broken drain still raises it.
+    await evaluateMailOps();
     return NextResponse.json({ error: 'Drain failed' }, { status: 502 });
   }
 }

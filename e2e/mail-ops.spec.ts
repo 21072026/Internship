@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { recipientHash } from '@/lib/mailDeliveryRule';
-import { drainOnce, resetDrainStateForTests } from '@/lib/mailOutbox';
+import { clearExpiredEnvelopes, drainOnce, resetDrainStateForTests } from '@/lib/mailOutbox';
 import { evaluateMailOps, resetMailOpsAlertsForTests } from '@/lib/mailOpsAlert';
 import { noteRelayAuthRejected, takeRelayAuthRejected } from '@/lib/mailOpsSignal';
 import { mailDrainDeps, mailMeterIdleForTests, resetMailTransportsForTests, sendEmail } from '@/services/emailService';
@@ -225,5 +225,44 @@ test.describe('mail sink and operator alerts', () => {
     const quiet = await evaluateMailOps({ force: true });
     expect(quiet.raised).not.toContain('mail-breaker-open');
     expect(quiet.raised).not.toContain('mail-relay-auth');
+  });
+
+  test('expired envelopes leave dead rows even behind a backlog that may still be retried', async () => {
+    // 210 dead BULK rows whose deadline is days away — more than one sweep
+    // reads — touched BEFORE the dead critical row, so an oldest-first scan
+    // would read only them and never reach it.
+    const future = new Date(Date.now() + 72 * 3_600_000).toISOString();
+    const backlog = Array.from({ length: 210 }, (_, i) => ({
+      name: 'email.send',
+      status: 'DEAD_LETTER' as const,
+      priority: 0,
+      attempts: 5,
+      lastError: 'smtp_550_5.1.1',
+      idempotencyKey: `e2e-mops:${RUN}:backlog:${i}`,
+      payload: { v: 1, lane: 'BULK', category: 'newsletter', rcpt: 'd'.repeat(64), notAfter: future, box: `sealed-${RUN}` },
+    }));
+    await prisma.job.createMany({ data: backlog });
+    const critical = await prisma.job.create({
+      data: {
+        name: 'email.send',
+        status: 'DEAD_LETTER',
+        priority: 100,
+        attempts: 5,
+        lastError: 'smtp_550_5.1.1',
+        idempotencyKey: `e2e-mops:${RUN}:dead-critical`,
+        payload: { v: 1, lane: 'CRITICAL', category: 'password-reset', rcpt: 'e'.repeat(64), notAfter: new Date(Date.now() - 60_000).toISOString(), box: `sealed-${RUN}` },
+      },
+    });
+    try {
+      const cleared = await clearExpiredEnvelopes();
+      expect(cleared).toBeGreaterThanOrEqual(1);
+      const row = await prisma.job.findUniqueOrThrow({ where: { id: critical.id } });
+      expect((row.payload as { box?: unknown }).box ?? null).toBeNull();
+      // The backlog still may be retried: its envelopes stay.
+      const kept = await prisma.job.findFirstOrThrow({ where: { idempotencyKey: `e2e-mops:${RUN}:backlog:0` } });
+      expect((kept.payload as { box?: unknown }).box).toBe(`sealed-${RUN}`);
+    } finally {
+      await prisma.job.deleteMany({ where: { idempotencyKey: { startsWith: `e2e-mops:${RUN}:` } } });
+    }
   });
 });

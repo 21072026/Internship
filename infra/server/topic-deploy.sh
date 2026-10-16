@@ -362,8 +362,20 @@ MAIL_SINK_NETWORK="${MAIL_SINK_NETWORK:-internship-mail-sink}"
 docker network inspect "$MAIL_SINK_NETWORK" >/dev/null 2>&1 \
   || docker network create "$MAIL_SINK_NETWORK" >/dev/null 2>&1 \
   || echo "WARN: could not create the docker network ${MAIL_SINK_NETWORK}"
-if [ "$(docker inspect -f '{{.State.Running}}' "$MAIL_SINK_CONTAINER" 2>/dev/null)" != "true" ]; then
-  docker rm -f "$MAIL_SINK_CONTAINER" >/dev/null 2>&1 || true
+# Never removed here: two topic deploys can run at once, and one that found the
+# sink briefly not running (restarting, or just being created by the other)
+# must not wipe it and its messages. An existing container is started; only a
+# missing one is created — and losing that name race to a concurrent deploy is
+# fine, the other one created it.
+MAIL_SINK_STATE="$(docker inspect -f '{{.State.Running}}' "$MAIL_SINK_CONTAINER" 2>/dev/null | tr -d '[:space:]' || true)"
+[ -n "$MAIL_SINK_STATE" ] || MAIL_SINK_STATE=missing
+if [ "$MAIL_SINK_STATE" = "true" ]; then
+  echo "==> Mail sink running (${MAIL_SINK_CONTAINER})"
+elif [ "$MAIL_SINK_STATE" != "missing" ]; then
+  docker start "$MAIL_SINK_CONTAINER" >/dev/null 2>&1 \
+    && echo "==> Mail sink started again (${MAIL_SINK_CONTAINER})" \
+    || echo "WARN: mail sink exists but could not be started — this environment's mail will wait on its queue"
+else
   # MP_MAX_MESSAGES bounds the store: the sink is a window, not an archive.
   docker run -d \
     --name "$MAIL_SINK_CONTAINER" \
@@ -374,9 +386,9 @@ if [ "$(docker inspect -f '{{.State.Running}}' "$MAIL_SINK_CONTAINER" 2>/dev/nul
     -e MP_MAX_MESSAGES=2000 \
     "$MAIL_SINK_IMAGE" >/dev/null \
     && echo "==> Mail sink started (${MAIL_SINK_CONTAINER}, ${MAIL_SINK_IMAGE})" \
+    || { [ "$(docker inspect -f '{{.State.Running}}' "$MAIL_SINK_CONTAINER" 2>/dev/null || true)" = "true" ] \
+         && echo "==> Mail sink running (${MAIL_SINK_CONTAINER}, started by a concurrent deploy)"; } \
     || echo "WARN: mail sink could not be started — this environment's mail will wait on its queue"
-else
-  echo "==> Mail sink running (${MAIL_SINK_CONTAINER})"
 fi
 if [ "$NETWORK" = host ]; then
   TOPIC_MAIL_SINK_HOST=127.0.0.1

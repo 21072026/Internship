@@ -14,7 +14,7 @@ import { toVerticalKey } from '@/lib/verticals';
 import { HIGHER_LANE_MIN_PRIORITY, budgetConfig, budgetNameFor, type MailChannel, type MailLane } from '@/lib/mailDeliveryRule';
 import { MAIL_JOB_NAME, decodeEnvelope } from '@/lib/mailWorkerRule';
 import { readBudgetHealth, type BudgetHealth } from '@/lib/mailBudgetStore';
-import { settleMailRef } from '@/lib/mailRefHooks';
+import { reopenMailRef, settleMailRef } from '@/lib/mailRefHooks';
 import {
   emptyLaneCounts,
   foldLaneCounts,
@@ -167,7 +167,7 @@ export async function mailQueueHealth(now: Date = new Date()): Promise<MailQueue
 
 /** The Prisma filter for a scope's rows (the `Job.orgId` half). */
 async function scopeWhere(scope: QueueScope): Promise<Prisma.JobWhereInput> {
-  if (scope.kind === 'org') return { OR: [{ orgId: scope.orgId }, { orgId: null }] };
+  if (scope.kind === 'org') return { orgId: scope.orgId };
   const orgs = await runUnscoped(() =>
     prisma.organization.findMany({ where: orgWorldWhere(toVerticalKey(scope.world)), select: { id: true } }),
   );
@@ -359,6 +359,12 @@ export async function applyQueueAction(
           status: 'PENDING',
           attempts: 0,
           runAt: now,
+          // A retry re-enqueues the mail: its wait starts now. The waiting
+          // ages (the health block, the "critical mail waiting" alert) read
+          // `createdAt`, and the original enqueue time would make a retried
+          // sign-in mail look five minutes overdue the moment it is back. The
+          // retry itself is in the AuditLog row written with it.
+          createdAt: now,
           lastError: 'retried_by_operator',
           lockedAt: null,
           lockedBy: null,
@@ -381,6 +387,9 @@ export async function applyQueueAction(
     prisma.$transaction(async (tx) => {
       const { count } = await tx.job.updateMany({ where: { id: row.id, name: MAIL_JOB_NAME, status: row.status }, data });
       if (count !== 1) return false;
+      // The dead mail's sender record (a newsletter copy) was settled FAILED;
+      // back on the queue, it is QUEUED again so the delivery can settle it.
+      if (action === 'retry') await reopenMailRef(typeof base.ref === 'string' ? base.ref : null, tx);
       await tx.auditLog.create({
         data: { actorId: actor.id, action: AUDIT_ACTION[action], targetId: row.id, orgId: auditOrgId, detail },
       });

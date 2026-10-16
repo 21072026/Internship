@@ -16,7 +16,8 @@
 //                passed and whose envelope is still there; cancel only PENDING
 //                (never RUNNING, which a drain holds).
 //   SCOPE      — a super admin sees their world, the default organization's
-//                ADMIN its own rows, every other admin nothing.
+//                ADMIN its own rows (never the org-less ones), every other
+//                admin nothing.
 //   NO PII     — a reason that is not code-shaped is shown as `other`, and only
 //                a 12-character prefix of a real hex hash leaves.
 //   SINK       — the allowlist parses addresses and domains (exact, never a
@@ -24,7 +25,9 @@
 //                when EVERY recipient is allowlisted; with no sink, always relay.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { register, createRequire } from 'node:module';
+
+const addressparser = createRequire(import.meta.url)('nodemailer/lib/addressparser');
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 const O = await import('../../src/lib/mailOpsRule.ts');
@@ -83,14 +86,23 @@ test('all three can be due at once, in a fixed order', () => {
 
 test('auth rejection: EAUTH, ENOAUTH and a refusal at the AUTH step — nothing else', () => {
   assert.equal(O.isAuthRejection('EAUTH'), true);
+  assert.equal(O.isAuthRejection('EAUTH', 535), true);
+  assert.equal(O.isAuthRejection('EAUTH', 530), true);
   assert.equal(O.isAuthRejection('ENOAUTH'), true);
   assert.equal(O.isAuthRejection('smtp_535_5.7.8@AUTH_PLAIN'), true);
   assert.equal(O.isAuthRejection('smtp_535@AUTH'), true);
+  // A temporary authentication failure is the relay's trouble, not our secret.
+  assert.equal(O.isAuthRejection('EAUTH', 454), false);
+  assert.equal(O.isAuthRejection('smtp_454_4.7.0@AUTH_PLAIN'), false);
+  assert.equal(O.isAuthRejection('smtp_454@AUTH'), false);
   assert.equal(O.isAuthRejection('smtp_550_5.1.1'), false);
   assert.equal(O.isAuthRejection('ECONNREFUSED'), false);
   assert.equal(O.isAuthRejection('smtp_421@EHLO'), false);
   assert.equal(O.isAuthRejection(null), false);
   assert.equal(O.isAuthRejection(''), false);
+  assert.equal(O.smtpReplyCodeOf({ code: 'EAUTH', responseCode: 454 }), 454);
+  assert.equal(O.smtpReplyCodeOf({ code: 'EAUTH' }), null);
+  assert.equal(O.smtpReplyCodeOf(null), null);
 });
 
 // ── LANES AND COUNTS ─────────────────────────────────────────────────────────
@@ -131,6 +143,10 @@ test('a reason is a code or `other`, never free text', () => {
   assert.equal(O.reasonCodeOf('EAUTH:releases'), 'EAUTH:releases');
   assert.equal(O.reasonCodeOf('smtp_535_5.7.8@AUTH_PLAIN'), 'smtp_535_5.7.8@AUTH_PLAIN');
   assert.equal(O.reasonCodeOf('550 <someone@example.com> no such user'), 'other');
+  // Code-shaped, but an address: never shown as itself.
+  assert.equal(O.reasonCodeOf('someone@example.com'), 'other');
+  assert.equal(O.reasonCodeOf('EAUTH:someone@mail.example.org'), 'other');
+  assert.equal(O.reasonCodeOf('smtp_421@EHLO'), 'smtp_421@EHLO');
   assert.equal(O.reasonCodeOf('x'.repeat(65)), 'other');
   assert.equal(O.reasonCodeOf(null), null);
 });
@@ -182,11 +198,12 @@ test('who sees which rows', () => {
     world: 'MARKETING',
     includeOrgless: false,
   });
-  // The default organization's ADMIN: its own rows and the org-less ones.
+  // The default organization's ADMIN: its own rows only — an org-less row may
+  // be any tenant's mail (a send that named no org and no user).
   assert.deepEqual(O.queueScopeFor({ ...base, role: 'ADMIN', superAdminWorld: null, orgId: 'org-default' }), {
     kind: 'org',
     orgId: 'org-default',
-    includeOrgless: true,
+    includeOrgless: false,
   });
   // Any other tenant's ADMIN, an org-less ADMIN, and every other role: nothing.
   assert.equal(O.queueScopeFor({ ...base, role: 'ADMIN', superAdminWorld: null, orgId: 'org-tenant' }), null);
@@ -209,13 +226,19 @@ test('allowlist: addresses and exact domains; junk is ignored', () => {
   // A subdomain is a different mail system.
   assert.equal(S.addressAllowed('anyone@sub.example.org', l), false);
   assert.equal(S.addressAllowed('anyone@example.org.evil.test', l), false);
+  // Only one clean address can match: a list or a name smuggled into the value never does.
+  assert.equal(S.addressAllowed('stranger@evil.test owner@example.com', l), false);
+  assert.equal(S.addressAllowed('stranger@evil.test;owner@example.com', l), false);
+  assert.equal(S.addressAllowed('<owner@example.com>', l), false);
+  assert.equal(S.addressAllowed('', l), false);
   assert.equal(S.parseRecipientAllowlist('').addresses.size, 0);
   assert.equal(S.parseRecipientAllowlist(undefined).domains.size, 0);
 });
 
-test('recipients: bare, named and comma lists', () => {
+test('recipients: bare, named, comma and semicolon lists', () => {
   assert.deepEqual(S.recipientsOf('a@x.test'), ['a@x.test']);
   assert.deepEqual(S.recipientsOf('Some One <A@X.test>, b@y.test'), ['a@x.test', 'b@y.test']);
+  assert.deepEqual(S.recipientsOf('a@x.test; b@y.test'), ['a@x.test', 'b@y.test']);
   assert.deepEqual(S.recipientsOf('no address here'), []);
   assert.deepEqual(S.recipientsOf(''), []);
 });
@@ -233,4 +256,29 @@ test('route: relay only when every recipient is allowlisted; no sink means relay
   assert.equal(S.mailRouteFor('', '127.0.0.1', l), 'sink');
   // An empty allowlist: everything to the sink.
   assert.equal(S.mailRouteFor('owner@example.com', '127.0.0.1', S.parseRecipientAllowlist('')), 'sink');
+  // Parsed address lists (what emailService passes): the same rule.
+  assert.equal(S.mailRouteFor(['owner@example.com', 'x@example.org'], '127.0.0.1', l), 'relay');
+  assert.equal(S.mailRouteFor(['owner@example.com', ''], '127.0.0.1', l), 'sink');
+  assert.equal(S.mailRouteFor([], '127.0.0.1', l), 'sink');
+});
+
+test('route: a recipient string nodemailer reads differently never reaches the relay', () => {
+  // nodemailer splits on `;` and reads `a b` as the address `a` named `b`:
+  // the check must judge the address the mail is actually sent to.
+  const l = S.parseRecipientAllowlist('allowed.example.com');
+  const tricky = [
+    'stranger@evil.test owner@allowed.example.com',
+    'stranger@evil.test; owner@allowed.example.com',
+    'owner@allowed.example.com; stranger@evil.test',
+    'owner@allowed.example.com <stranger@evil.test>',
+  ];
+  for (const to of tricky) {
+    // The raw-string reading (conservative on its own)…
+    assert.equal(S.mailRouteFor(to, '127.0.0.1', l), 'sink', `raw: ${to}`);
+    // …and the reading emailService uses: nodemailer's own parser.
+    const parsed = addressparser(to, { flatten: true }).map((a) => a.address);
+    assert.ok(parsed.some((a) => a === 'stranger@evil.test'), `parser sees the stranger in: ${to}`);
+    assert.equal(S.mailRouteFor(parsed, '127.0.0.1', l), 'sink', `parsed: ${to}`);
+  }
+  assert.equal(S.mailRouteFor(addressparser('Owner <owner@allowed.example.com>', { flatten: true }).map((a) => a.address), '127.0.0.1', l), 'relay');
 });

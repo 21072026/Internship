@@ -53,14 +53,27 @@ export function mailOpsAlertsDue(f: MailOpsFacts): MailOpsAlertKind[] {
 }
 
 /**
- * Is this failure the relay rejecting our credentials? nodemailer raises
- * `EAUTH` for a refused AUTH (535) and `ENOAUTH` when it has none to offer;
- * `classifySmtpError()` names both by their code. A 5xx at the AUTH step that
- * arrived without nodemailer's code carries `@AUTH` in its reason.
+ * Is this failure the relay rejecting our credentials — for good, not for a
+ * moment? nodemailer raises `ENOAUTH` when it has no credentials to offer and
+ * `EAUTH` for a refused AUTH; but it raises `EAUTH` for a 454 "temporary
+ * authentication failure" too, which is the relay's own trouble and clears by
+ * itself. So `EAUTH` counts only when the reply was not a 4xx (a 535/530, or no
+ * reply code at all), and a reason carrying `@AUTH` (a refusal at the AUTH step
+ * that arrived without nodemailer's code, `smtp_<code>…@AUTH…`) only when its
+ * code is a 5xx. `replyCode` is the error's `responseCode`.
  */
-export function isAuthRejection(reason: string | null | undefined): boolean {
+export function isAuthRejection(reason: string | null | undefined, replyCode?: number | null): boolean {
   if (!reason) return false;
-  return reason === 'EAUTH' || reason === 'ENOAUTH' || /@AUTH(?:_|$)/.test(reason);
+  if (reason === 'ENOAUTH') return true;
+  if (reason === 'EAUTH') return !(typeof replyCode === 'number' && replyCode >= 400 && replyCode < 500);
+  const m = reason.match(/^smtp_(\d{3})(?=[_@]).*@AUTH(?:_|$)/);
+  return !!m && Number(m[1]) >= 500;
+}
+
+/** The numeric SMTP reply code a nodemailer error carries, if any. */
+export function smtpReplyCodeOf(err: unknown): number | null {
+  const code = err && typeof err === 'object' ? (err as { responseCode?: unknown }).responseCode : null;
+  return typeof code === 'number' && code >= 200 && code < 600 ? code : null;
 }
 
 // ── Lanes as an operator reads them ─────────────────────────────────────────
@@ -109,13 +122,16 @@ export function foldLaneCounts(rows: { lane: unknown; status: string; count: num
 }
 
 /** `Job.lastError` of a mail row is a reason code (`smtp_550_5.1.1`,
- *  `EAUTH:releases`, `expired`…). Anything that is not code-shaped — an older
- *  row, a handler's free text that might echo an address — is shown as
- *  `other`, never as itself. */
+ *  `EAUTH:releases`, `smtp_535@AUTH_PLAIN`, `expired`…). Anything that is not
+ *  code-shaped — an older row, a handler's free text — is shown as `other`,
+ *  never as itself; and so is a code-shaped value that reads like an address
+ *  (`someone@example.com`): a real code's `@` names an SMTP step, which has no
+ *  dot after it. */
 const CODE = /^[A-Za-z0-9_.:@-]{1,64}$/;
+const ADDRESS_LIKE = /[^@\s]+@[a-z0-9-]+\.[a-z]/i;
 export function reasonCodeOf(lastError: string | null | undefined): string | null {
   if (!lastError) return null;
-  return CODE.test(lastError) ? lastError : 'other';
+  return CODE.test(lastError) && !ADDRESS_LIKE.test(lastError) ? lastError : 'other';
 }
 
 /** How much of the recipient hash the screen shows: enough to tell two rows
@@ -170,8 +186,10 @@ export function queueActionAllowed(action: QueueAction, row: QueueRowFacts, now:
  *   • a super admin: every row of their own world (rows whose organization is
  *     in that world; rows with no organization belong to the default world);
  *   • an ADMIN of the deployment's default organization: that organization's
- *     rows and the rows with no organization (operator alerts, mail to an
- *     address with no account yet), and nothing of any other tenant;
+ *     rows only. NOT the rows with no organization: a send that names neither
+ *     an org nor a user (an account or consent mail, a public form's reply) is
+ *     queued without one whatever tenant it belongs to, so "no organization"
+ *     is not "ours" — those rows are the super admin's;
  *   • any other ADMIN, and every other role: nothing (403).
  *
  * The relay-wide facts (the breaker) are shown to both; today's count against
@@ -180,7 +198,7 @@ export function queueActionAllowed(action: QueueAction, row: QueueRowFacts, now:
  */
 export type QueueScope =
   | { kind: 'world'; world: string; includeOrgless: boolean }
-  | { kind: 'org'; orgId: string; includeOrgless: true };
+  | { kind: 'org'; orgId: string; includeOrgless: false };
 
 export function queueScopeFor(facts: {
   role: string | null | undefined;
@@ -193,6 +211,6 @@ export function queueScopeFor(facts: {
   if (facts.superAdminWorld) {
     return { kind: 'world', world: facts.superAdminWorld, includeOrgless: facts.superAdminWorld === facts.defaultWorld };
   }
-  if (facts.orgId && facts.orgId === facts.defaultOrgId) return { kind: 'org', orgId: facts.orgId, includeOrgless: true };
+  if (facts.orgId && facts.orgId === facts.defaultOrgId) return { kind: 'org', orgId: facts.orgId, includeOrgless: false };
   return null;
 }
