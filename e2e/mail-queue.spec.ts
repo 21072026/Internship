@@ -16,9 +16,9 @@ import { prisma } from './helpers/db';
 //
 // WHY IN-PROCESS. The app server Playwright boots runs with SMTP_USER blank on
 // purpose (no spec may ever deliver real mail), so every mail it would send is
-// SKIPPED before a transport is touched — and its own drain tick stands down
-// for the same reason ("unconfigured"). So this spec points ITS OWN process at
-// the fake server and calls the same functions the routes call
+// SKIPPED before a transport is touched — and it starts no drain tick for the
+// same reason, so it never races this spec for a row. So this spec points ITS
+// OWN process at the fake server and calls the same functions the routes call
 // (`sendPasswordResetEmail()` is exactly what POST /api/auth/forgot awaits
 // before it answers its 200) and the same `drainOnce()` POST /api/mail/drain
 // runs. The rows, the sealed envelope, the guarded settle and the EmailLog

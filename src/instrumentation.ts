@@ -83,6 +83,9 @@ const MAIL_DRAIN_TICK_MS = 5000;
 function startMailDrain() {
   const flag = (process.env.MAIL_WORKER_ENABLED || '').trim().toLowerCase();
   if (['0', 'false', 'off', 'no'].includes(flag)) return;
+  // No SMTP here (the demo, the e2e server): sendEmail() skips every mail, so
+  // nothing is ever queued and a tick would only knock on an empty door.
+  if (!process.env.SMTP_USER) return;
 
   if (!process.env.CRON_SECRET && !process.env.MAIL_DRAIN_SECRET) {
     process.env.MAIL_DRAIN_SECRET = globalThis.crypto.randomUUID();

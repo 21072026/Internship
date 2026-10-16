@@ -90,8 +90,9 @@ A queued mail is a `Job` row named `email.send` on the existing job queue
   queue and nobody outside the process knows the value.
 - **Kill switch.** `MAIL_WORKER_ENABLED=0` stops the tick and makes the route a
   no-op. The deploy canary runs with it, because it shares production's
-  database. An environment with no SMTP configured also does nothing: every
-  queued row would only fail there.
+  database. An environment with no SMTP configured (`SMTP_USER` unset) starts
+  no tick at all, and the route does nothing there: nothing is ever queued on
+  such an environment, and every queued row would only fail.
 - **A tick** claims up to 5 rows at a time and runs for at most 25 seconds; the
   instrumentation timer never overlaps two ticks in one process.
 

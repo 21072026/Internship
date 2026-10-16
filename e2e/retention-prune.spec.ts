@@ -118,6 +118,20 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     const pending = await prisma.job.create({
       data: { name: `${marker}-pending`, payload: {}, status: 'PENDING' },
     });
+    // The mail queue's own, shorter windows (#2944): a delivered mail row goes
+    // after 7 days, a dead one after 30 — and a mail still on its way never.
+    const mailSent = await prisma.job.create({
+      data: { name: 'email.send', payload: {}, status: 'SUCCEEDED', createdAt: ancient(), updatedAt: new Date(Date.now() - 8 * DAY) },
+    });
+    const mailDead = await prisma.job.create({
+      data: { name: 'email.send', payload: {}, status: 'DEAD_LETTER', createdAt: ancient(), updatedAt: new Date(Date.now() - 31 * DAY) },
+    });
+    const mailDeadRecent = await prisma.job.create({
+      data: { name: 'email.send', payload: {}, status: 'FAILED', createdAt: ancient(), updatedAt: new Date(Date.now() - 8 * DAY) },
+    });
+    const mailWaiting = await prisma.job.create({
+      data: { name: 'email.send', payload: {}, status: 'PENDING', createdAt: ancient(), updatedAt: ancient() },
+    });
 
     // Notification (#1646): the two rails no setting can lower, against a real
     // database. They are the half of this feature that cannot be undone — a
@@ -240,6 +254,11 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     // Kept although out of window, each for its own stated reason.
     expect(await gone('job', deadLettered.id)).toBe(false); // the operator still needs these
     expect(await gone('job', failing.id)).toBe(false); // mid-retry, or a diagnosis
+    expect(await gone('job', mailSent.id)).toBe(true);
+    expect(await gone('job', mailDead.id)).toBe(true);
+    expect(await gone('job', mailDeadRecent.id)).toBe(false);
+    expect(await gone('job', mailWaiting.id)).toBe(false);
+    await prisma.job.deleteMany({ where: { id: { in: [mailDeadRecent.id, mailWaiting.id] } } });
     expect(await gone('pushSubscription', activeSub.id)).toBe(false); // owner is live
     expect(await gone('notification', oldUnreadNotif.id)).toBe(false); // rail 1: never an unread row
     expect(await gone('notification', oldConsentNotif.id)).toBe(false); // the subject's only copy of the ask

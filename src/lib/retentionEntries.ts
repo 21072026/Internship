@@ -265,7 +265,7 @@ export const MAIL_DEAD_RETENTION_DAYS = 30;
 
 async function pruneMailOutbox(ctx: RetentionContext) {
   const deadCutoff = new Date(
-    Math.min(ctx.cutoff.getTime(), Date.now() - MAIL_DEAD_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    Math.min(ctx.cutoff.getTime(), ctx.now.getTime() - MAIL_DEAD_RETENTION_DAYS * 24 * 60 * 60 * 1000)
   );
   let deleted = 0;
   let capped = false;
