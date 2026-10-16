@@ -12,7 +12,9 @@
 // FAILS TO "NO LIST", never to an error page: no host, no bound org, a bound
 // org of the other vertical, an unset or unparseable setting, or a database
 // that cannot be reached all read as no list, and the page shows its neutral
-// "contact us for pricing" state. There is no built-in price list in the code.
+// "contact us for pricing" state — except that an unreachable database first
+// falls back to the last list this process read for the host (below). There is
+// no built-in price list in the code.
 // A stored value that does not parse is logged, so a broken row is visible
 // rather than silently replaced.
 //
@@ -24,6 +26,25 @@ import { hostnameOf } from '@/lib/hostVertical';
 import { toVerticalKey } from '@/lib/verticals';
 import { logger } from '@/lib/logger';
 import { resolvePriceList, type ResolvedPriceList } from '@/lib/marketingPriceListRule';
+
+// SERVE STALE ON ERROR: the last list a host resolved to, per process. A
+// database blip then keeps showing that host's figures instead of flipping the
+// page to "prices on request" for the length of the blip. Only a successful
+// lookup writes it (a host that resolves to no list clears it), so it can never
+// show a list the database no longer holds once the database answers again.
+const LAST_GOOD_MAX = 200;
+const lastGoodGlobal = globalThis as unknown as { __marketingPriceListLastGood?: Map<string, ResolvedPriceList> };
+lastGoodGlobal.__marketingPriceListLastGood ??= new Map();
+const lastGood = lastGoodGlobal.__marketingPriceListLastGood;
+
+function rememberGood(host: string, resolved: ResolvedPriceList): void {
+  if (!resolved.list) {
+    lastGood.delete(host);
+    return;
+  }
+  if (!lastGood.has(host) && lastGood.size >= LAST_GOOD_MAX) lastGood.delete(lastGood.keys().next().value as string);
+  lastGood.set(host, resolved);
+}
 
 export async function marketingPriceListForHost(hostHeader: string | null | undefined): Promise<ResolvedPriceList> {
   const host = hostnameOf(hostHeader);
@@ -39,12 +60,14 @@ export async function marketingPriceListForHost(hostHeader: string | null | unde
       raw = await getSetting('marketingPriceList', org.id);
     }
   } catch (error) {
-    logger.warning('marketing price list: lookup failed, showing no price list', {
+    const stale = lastGood.get(host);
+    logger.warning(stale ? 'marketing price list: lookup failed, showing the last list read' : 'marketing price list: lookup failed, showing no price list', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { source: 'none', list: null };
+    return stale ?? { source: 'none', list: null };
   }
   const resolved = resolvePriceList(raw);
+  rememberGood(host, resolved);
   if (resolved.source === 'invalid') {
     logger.warning('marketing price list: the stored value does not parse, showing no price list', { orgId });
   }

@@ -73,3 +73,19 @@ test("the host's organization publishes its own list; without one the page names
   await expect(page.getByTestId('pricing-marketing-on-request')).toBeVisible();
   await expect(page.getByTestId('pricing-marketing-plans')).toHaveCount(0);
 });
+
+test("the landing FAQ's price answer follows the same list", async ({ page }) => {
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
+
+  // No usable list (the previous test left one that does not parse): no figure.
+  await page.goto('/');
+  const faq = page.getByTestId('landing-faq');
+  await expect(faq).toContainText('Prices are on request');
+  await expect(faq).not.toContainText('Plans start at');
+
+  // A list: the cheapest annual seat is the "from" figure — never an empty one.
+  await prisma.setting.updateMany({ where: { orgId, key: 'marketingPriceList' }, data: { value: JSON.stringify(LIST) } });
+  await page.goto('/');
+  await expect(faq).toContainText('Plans start at CHF 45 per user per month');
+  await expect(faq).not.toContainText('Prices are on request');
+});
