@@ -284,4 +284,39 @@ test.describe('mail pacing', () => {
       if (stray.length) await prisma.job.deleteMany({ where: { id: { in: stray.map((j) => j.id) } } });
     }
   });
+
+  test('an unread digest the mailbox refuses for good is settled, not retried every hour', async () => {
+    let gone: SeededRelation | null = null;
+    const since = new Date();
+    const lanes = process.env.MAIL_QUEUE_LANES;
+    try {
+      gone = await seedMenteeWithRelation(`mailp-gone-${RUN}`, 'MailPacing123!');
+      const line = await prisma.message.create({
+        data: { relationId: gone.relationId, senderId: gone.mentorId, body: 'Old line to a dead mailbox', createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+      });
+      // Inline (the default lanes): the relay answers a permanent 5xx, so the
+      // send throws instead of queueing.
+      process.env.MAIL_QUEUE_LANES = '';
+      smtp.mode = { kind: 'refuse', stage: 'RCPT', reply: '550 5.1.1 No such mailbox' };
+
+      await sendUnreadMessageDigests();
+
+      const after = await prisma.message.findUniqueOrThrow({ where: { id: line.id }, select: { digestedAt: true } });
+      // Stamped: the next hourly run must not build a fresh digest for the same
+      // dead mailbox under a new hour key.
+      expect(after.digestedAt).not.toBeNull();
+      expect(await jobsFor([gone.menteeEmail])).toHaveLength(0);
+    } finally {
+      process.env.MAIL_QUEUE_LANES = lanes;
+      smtp.mode = { kind: 'accept' };
+      if (gone) {
+        await forget(gone.emails);
+        await cleanupMenteeWithRelation(gone);
+      }
+      const stray = (await prisma.job.findMany({ where: { name: 'email.send', createdAt: { gte: since } } })).filter(
+        (j) => (j.payload as { category?: string } | null)?.category === 'unread-digest',
+      );
+      if (stray.length) await prisma.job.deleteMany({ where: { id: { in: stray.map((j) => j.id) } } });
+    }
+  });
 });
