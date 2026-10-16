@@ -4,11 +4,10 @@ name: Nightly Stress Test
 # the team if any latency/error-rate threshold is breached. Can also be run
 # on demand from the Actions tab (with an optional target URL override).
 on:
-  # Un-paused 2026-07-29, when the repo went public and hosted runners were free
+  # Un-paused 2026-07-29: the repo is public, so hosted runners are free again
   # (the schedule had been disabled while the private-repo Actions quota was
-  # exhausted). The repo is private again since 2026-10, so each run spends
-  # metered minutes (#2910). The load itself is small — 25 concurrent for 30s,
-  # once a week.
+  # exhausted; private again 2026-10-08..14, public since 2026-10-14, #2949).
+  # The load itself is small — 25 concurrent for 30s, once a week.
   workflow_dispatch:
     inputs:
       base_url:

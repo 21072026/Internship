@@ -43,13 +43,10 @@ sharp 0.34.5 sabitliyor, yani majöre çıkmak bu bulguları kapatmıyordu.
 
 ## Kod taraması (CodeQL)
 
-> **2026-10-12'den beri kapalı (#2903).** Repo bilinçli olarak private yapıldı ve
-> private bir repoda code scanning ücretli GitHub Code Security ister. Analiz
-> koşuyor, ama sonucu yüklerken *"Advanced Security must be enabled"* hatasıyla
-> düşüyordu. Bu yüzden `.github/workflows/codeql.yml` silindi. Aşağıdaki kararlar
-> o tarihe kadarki taramaların kaydıdır. Repo public olursa ya da Code Security
-> alınırsa dosyayı git geçmişinden geri getirmek yeter; tetikleyiciler ve
-> `security-extended` sorgu seti dosyanın içinde duruyor.
+> **2026-10-12..14 arası kapalıydı (#2903).** Repo o aralıkta private'tı ve private
+> bir repoda code scanning ücretli GitHub Code Security ister, bu yüzden
+> `.github/workflows/codeql.yml` silinmişti. Repo 2026-10-14'ten beri yine public;
+> dosya aynen geri getirildi (#2949) ve tarama yeniden çalışıyor.
 
 ### `js/xss-through-dom` — object-URL önizlemeleri (#1005)
 
