@@ -206,7 +206,13 @@ export function classifySmtpError(err: unknown): SmtpErrorClass {
 
   const fourxx = reply !== null && reply >= 400 && reply < 500;
   if (fourxx) {
-    const policy = enhanced?.[1] === '4' && enhanced[2] === '7';
+    // A 4.7.x policy code reads as relay-wide — except at RCPT TO and DATA,
+    // where the relay is answering about ONE recipient or ONE message (a
+    // greylisted or policy-refused mailbox). There only a 421 or rate wording
+    // is about the relay; the rest is a retry of that message, so one
+    // recipient's refusal cannot pause every lane (#2944).
+    const perMessage = command === 'RCPT TO' || command === 'DATA';
+    const policy = enhanced?.[1] === '4' && enhanced[2] === '7' && !perMessage;
     if (reply === 421 || (reply >= 450 && reply < 460 && (policy || RATE_TEXT.test(text)))) {
       return { kind: 'throttle', relayWide: true, retryable: true, reason: label };
     }
@@ -262,7 +268,13 @@ export function retryDelayMs(attempt: number, lane: MailLane, random: () => numb
 // before they send, which is the reserve when the burst is a single token.
 // Worst case in any 60 s window: about R + C − 1 sends.
 
-export type MeterMode = 'off' | 'observe';
+/**
+ * off     — the meter is not touched at all.
+ * observe — every send is metered and a refusal is only logged (`would_refuse`).
+ * enforce — the queue drain (src/lib/mailOutbox.ts) waits for a token before it
+ *           sends a queued mail; inline sends are still only observed.
+ */
+export type MeterMode = 'off' | 'observe' | 'enforce';
 
 /** The two outbound SMTP channels (`transportFor()` in emailService.ts). */
 export type MailChannel = 'primary' | 'bulk';
@@ -311,7 +323,8 @@ export function parseLadder(v: string | undefined): readonly number[] {
  * The budget from the environment. Conservative when unset (2/min, burst 2,
  * reserve 1); every value is clamped, so a typo slows mail down rather than
  * removing the limit. `MAIL_METER_MODE`: `observe` (default) meters and logs
- * what it would have refused but never refuses; `off` does not touch the
+ * what it would have refused but never refuses; `enforce` makes the queue drain
+ * wait for a token (inline sends stay observed); `off` does not touch the
  * meter at all.
  *
  * `channel`: the optional bulk server (`SMTP_BULK_HOST`, #1203) is a different
@@ -332,7 +345,7 @@ export function budgetConfig(env: Record<string, string | undefined>, channel: M
   const burst = intEnv(pick('BURST'), 2, 1, 100);
   const urgentReserve = Math.min(burst, intEnv(pick('URGENT_RESERVE'), 1, 0, 100));
   const rawMode = (env.MAIL_METER_MODE ?? '').trim().toLowerCase();
-  const mode: MeterMode = rawMode === 'off' ? 'off' : 'observe';
+  const mode: MeterMode = rawMode === 'off' ? 'off' : rawMode === 'enforce' ? 'enforce' : 'observe';
   return {
     ratePerMin,
     burst,

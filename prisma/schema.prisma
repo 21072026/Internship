@@ -5455,6 +5455,13 @@ model MailBudget {
   /// relay throttle, decays by one on every delivered mail.
   pauseLevel Int @default(0)
 
+  /// When the current relay pause ends (#2944). Written only by a throttle or
+  /// a relay-wide failure, never by a send: the breaker that holds critical
+  /// mail and the queue drain decides on THIS, not on `tat`, which in observe
+  /// mode also carries every metered send and can run hours ahead of any real
+  /// pause. Null = never paused. Nullable, so adding it is an expand-only push.
+  pausedUntil DateTime? @db.DateTime(3)
+
   /// UTC day (YYYY-MM-DD) `dayCount` belongs to — the optional bulk daily cap.
   dayKey   String? @db.VarChar(10)
   dayCount Int     @default(0)

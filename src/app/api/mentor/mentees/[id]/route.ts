@@ -122,7 +122,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           purpose: 'SET_INITIAL',
           orgId: mentee.orgId,
           locale: activationLocale,
-        })) === 'SENT';
+        })) !== 'SKIPPED';
       } catch (e) {
         console.error('Mentee activation email failed:', e);
         emailSent = false;

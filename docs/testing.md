@@ -48,6 +48,16 @@ array in `playwright.config.ts`:
 |------|--------|-----------|
 | `e2e/support/google-mock.mjs` | Google's OAuth token/revoke endpoints and the Calendar API | `e2e/google-calendar.spec.ts` (endpoints are redirected with env vars) |
 | `e2e/support/idp-mock.mjs` | SAML 2.0 (redirect + HTTP-POST bindings, signed assertions) and OIDC (discovery, JWKS, authorize, token) | `e2e/sso-roundtrip.spec.ts` (the IdP endpoint is per-tenant config, so the spec seeds it into the org row) |
+| `e2e/helpers/fakeSmtp.ts` | Just enough SMTP for nodemailer (greeting, EHLO, MAIL, RCPT, DATA; no TLS, no AUTH), answering each step as the test says: accept, refuse with a given reply at a given step (`450 4.7.1`, `452`, `550`, `421`), or hang | `e2e/mail-queue.spec.ts` (#2944) |
+
+The fake SMTP server is the exception to "started by `webServer`": the app server
+Playwright boots runs with `SMTP_USER` blank so that no spec can ever deliver
+mail, which also means it never reaches a transport. So `mail-queue.spec.ts`
+starts the server itself on a random port, points **its own** process at it
+(`resetMailTransportsForTests()` in `src/services/emailService.ts` rebuilds the
+transports from the changed environment) and drives the same functions the routes
+call — `sendPasswordResetEmail()` and `drainOnce()` — against the real database.
+It runs locally only (`BASE_URL` unset). See [`docs/mail-queue.md`](mail-queue.md).
 
 Rules of thumb when adding one:
 

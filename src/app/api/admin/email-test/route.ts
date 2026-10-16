@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const brand = await emailBrand(orgId);
     const ownWorld = brand.vertical !== DEFAULT_VERTICAL;
     const productName = ownWorld ? brand.name : 'Internship CRM';
-    await sendEmail({
+    const result = await sendEmail({
       to: parsed.data.to,
       category: 'test',
       subject: `${productName} deliverability test — ${stamp}`,
@@ -90,6 +90,19 @@ export async function POST(request: Request) {
       targetType: 'email',
       targetId: parsed.data.to,
     });
+    // A temporary refusal no longer throws (#2944): the probe mail is on the
+    // mail queue and will be retried. That is not a passed probe — the relay
+    // did not take it — so say so; the email log row carries the reason.
+    if (result === 'QUEUED') {
+      return NextResponse.json(
+        {
+          ok: false,
+          queued: true,
+          error: 'The relay refused the test mail temporarily or did not answer in time. It was queued and will be retried; the email log shows the reason.',
+        },
+        { status: 200 }
+      );
+    }
     return NextResponse.json({ ok: true, sentAt: stamp });
   } catch (e) {
     // Surface the SMTP error verbatim — this is the whole point of the probe.

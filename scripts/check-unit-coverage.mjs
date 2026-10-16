@@ -71,6 +71,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/mailWorkerRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a relay-wide failure is released without charging an attempt, a 4xx about the message retries with backoff, a 5xx is final, an attachment survives the queue as bytes (#2944)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,

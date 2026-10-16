@@ -26,7 +26,8 @@ import { worldUserWhere } from '@/lib/userWorld';
 // in neither. The one exception is the 24h relay quota (`last24h`): both
 // worlds send through the same SMTP allowance, so it stays installation-wide
 // and carries no address.
-const STATUSES = ['SENT', 'FAILED', 'SKIPPED'] as const;
+// DEFERRED (#2944): a temporary failure the mail queue is retrying.
+const STATUSES = ['SENT', 'FAILED', 'SKIPPED', 'DEFERRED'] as const;
 // The reason every honoured opt-out row carries — sendEmail()'s central check
 // and recordOptOuts() write the same shape (#2054).
 const OPT_OUT_PREFIX = 'Unsubscribed:';
@@ -117,9 +118,7 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  // DEFERRED (#2941): a temporary refusal that was put back to be retried.
-  // Nothing writes it until the mail outbox lands; counted so the summary
-  // stays total over the enum.
+  // DEFERRED (#2941/#2944): a temporary refusal the mail queue is retrying.
   const summary = { SENT: 0, FAILED: 0, SKIPPED: 0, DEFERRED: 0 };
   for (const row of counts) summary[row.status] = row._count._all;
 

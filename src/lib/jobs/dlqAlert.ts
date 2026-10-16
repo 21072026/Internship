@@ -154,7 +154,9 @@ export async function runDeadLetterAlert(): Promise<DeadLetterAlertRun> {
     return { sent: false, total: summary.total, delivery: 'FAILED', reason: 'send_failed' };
   }
 
-  if (delivery !== 'SENT') {
+  // QUEUED (#2944) is on its way: a temporary refusal put it on the mail queue,
+  // which retries it. Only SKIPPED means the alert will never arrive.
+  if (delivery === 'SKIPPED') {
     // The queue is unhealthy AND the alert about it never left. The EmailLog row
     // records why; this line and the ActivityLog row above are what an operator
     // can find without reading the ledger.

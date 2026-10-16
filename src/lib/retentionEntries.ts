@@ -251,6 +251,49 @@ async function pruneFinishedJobs(ctx: RetentionContext) {
 }
 
 /**
+ * Settled mail-queue rows (#2944). A queued mail carries no address in the
+ * clear and its sealed envelope is cleared the moment it settles, but the row
+ * still holds the recipient's hash and the category, and the queue is the
+ * busiest corner of `Job`. So mail rows get their own, shorter windows than the
+ * generic job entry: SUCCEEDED and CANCELLED after this entry's window (7 days),
+ * FAILED and DEAD_LETTER after `MAIL_DEAD_RETENTION_DAYS` — long enough for the
+ * daily dead-letter alert and an operator to have looked. A row still PENDING or
+ * RUNNING is never touched, whatever its age: it is mail on its way.
+ */
+const MAIL_JOB = 'email.send';
+export const MAIL_DEAD_RETENTION_DAYS = 30;
+
+async function pruneMailOutbox(ctx: RetentionContext) {
+  const deadCutoff = new Date(
+    Math.min(ctx.cutoff.getTime(), ctx.now.getTime() - MAIL_DEAD_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+  );
+  let deleted = 0;
+  let capped = false;
+  for (const [statuses, cutoff] of [
+    [['SUCCEEDED', 'CANCELLED'], ctx.cutoff],
+    [['FAILED', 'DEAD_LETTER'], deadCutoff],
+  ] as const) {
+    const run = await pruneInBatches({
+      batchSize: ctx.batchSize,
+      budget: Math.max(0, ctx.budget - deleted),
+      selectIds: async (take) =>
+        (
+          await prisma.job.findMany({
+            where: { name: MAIL_JOB, status: { in: [...statuses] }, updatedAt: { lt: cutoff } },
+            orderBy: { updatedAt: 'asc' },
+            select: { id: true },
+            take,
+          })
+        ).map((r) => r.id),
+      handleBatch: async (ids) => (await prisma.job.deleteMany({ where: { id: { in: ids } } })).count,
+    });
+    deleted += run.processed;
+    capped = capped || run.capped;
+  }
+  return { deleted, capped };
+}
+
+/**
  * Trial reminder claim rows (#2414, story #2392).
  *
  * WHY THIS ONE IS PRUNED AT ALL, when the three claim tables it was copied from
@@ -740,6 +783,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A finished job is read for debugging within days, and the queue is the highest-churn table in the product. Thirty days covers "what ran last month?" and keeps the table small enough that the claim query stays fast. DEAD_LETTER and FAILED rows are never pruned.',
     run: pruneFinishedJobs,
+  },
+  {
+    key: 'mailOutbox',
+    // No setting: the windows are part of the mail queue's design (#2944,
+    // docs/mail-queue.md), not an operator knob.
+    defaultDays: 7,
+    reason:
+      'A delivered or withdrawn mail is only ever looked at while somebody asks "did it go out?", which the EmailLog row answers for 90 days anyway; the queue row adds the recipient hash and a reason code and nothing else, so a week is plenty. A FAILED or DEAD_LETTER mail row is kept 30 days, past the daily dead-letter alert. Rows still on their way are never touched.',
+    run: pruneMailOutbox,
   },
   {
     key: 'orphanApplicant',

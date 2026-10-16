@@ -207,6 +207,24 @@ test('errors: a refusal before the message is about the session, whatever its co
   assert.equal(R.classifySmtpError({ code: 'EMESSAGE', command: 'DATA', responseCode: 450, response: '450 4.2.1 busy' }).kind, 'retry');
 });
 
+test('errors: a 4.7.x policy refusal at RCPT TO or DATA is about that message, not the relay', () => {
+  // One recipient's policy refusal must not pause every lane (#2944).
+  const rcpt = R.classifySmtpError({
+    code: 'EENVELOPE',
+    command: 'RCPT TO',
+    responseCode: 450,
+    response: '450 4.7.1 <x@example.test>: Recipient address rejected: policy',
+  });
+  assert.equal(rcpt.kind, 'retry');
+  assert.equal(rcpt.relayWide, false);
+  assert.equal(R.classifySmtpError({ command: 'DATA', responseCode: 451, response: '451 4.7.0 content policy' }).kind, 'retry');
+  // Rate wording or a 421 there is still the relay talking.
+  assert.equal(R.classifySmtpError({ command: 'RCPT TO', responseCode: 450, response: '450 4.7.1 Error: too much mail' }).kind, 'throttle');
+  assert.equal(R.classifySmtpError({ command: 'DATA', responseCode: 421, response: '421 4.7.0 try later' }).kind, 'throttle');
+  // With no command known, a 4.7.x stays relay-wide (the production throttle above).
+  assert.equal(R.classifySmtpError({ responseCode: 451, response: '451 4.7.0 Temporary policy' }).kind, 'throttle');
+});
+
 test('errors: what nodemailer refuses itself, with no reply, is final', () => {
   for (const [code, command, message] of [
     ['EMESSAGE', 'MAIL FROM', 'Message size larger than allowed 10485760'],
@@ -264,7 +282,9 @@ test('config: values are read, clamped, and a typo never lifts the limit', () =>
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '0' }).ratePerMin, 1);
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '100000' }).ratePerMin, 600);
   assert.equal(R.budgetConfig({ MAIL_BURST: '1', MAIL_URGENT_RESERVE: '5' }).urgentReserve, 1, 'reserve ≤ burst');
-  assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforce' }).mode, 'observe', 'nothing enforces yet');
+  assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforce' }).mode, 'enforce', 'the queue drain enforces');
+  assert.equal(R.budgetConfig({ MAIL_METER_MODE: ' Enforce ' }).mode, 'enforce');
+  assert.equal(R.budgetConfig({ MAIL_METER_MODE: 'enforcing' }).mode, 'observe', 'a typo observes');
   assert.equal(R.budgetConfig({ MAIL_RATE_PER_MIN: '7' }).intervalMs, 8572, 'interval rounds up');
 });
 

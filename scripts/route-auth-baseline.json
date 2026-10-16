@@ -98,6 +98,10 @@
     "methods": ["POST"],
     "why": "Stamps openedAt when an invitee opens their registration link — by definition before they have an account. Idempotent, writes one timestamp, and ignores used or expired invitations."
   },
+  "src/app/api/mail/drain/route.ts": {
+    "methods": ["POST"],
+    "why": "One tick of the outbound mail queue drain (#2944), fired every 5 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process MAIL_DRAIN_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only delivers mail that is already queued and never takes input from the request."
+  },
   "src/app/api/mentor-applications/route.ts": {
     "methods": ["POST"],
     "why": "The public 'become a mentor' application (#904): anyone may apply without an account, and no User is created until an admin approves (#905/#933). GET in the same file is the admin review queue and does take a session."

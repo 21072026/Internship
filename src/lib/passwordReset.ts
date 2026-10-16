@@ -8,7 +8,9 @@ export type ResetPurpose = 'RESET' | 'SET_INITIAL';
 
 // TTL per purpose: short-lived for self-service resets, longer for the
 // "set your initial password" link a new mentee receives by email.
-const TTL_MS: Record<ResetPurpose, number> = {
+// Exported for the mail queue (#2944): a queued reset mail is not worth
+// sending after its link has expired, so this is its `notAfter`.
+export const RESET_TOKEN_TTL_MS: Record<ResetPurpose, number> = {
   RESET: 60 * 60 * 1000, // 1 hour
   SET_INITIAL: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
@@ -30,7 +32,7 @@ export async function createPasswordResetToken(userId: string, purpose: ResetPur
       token,
       userId,
       purpose,
-      expiresAt: new Date(Date.now() + TTL_MS[purpose]),
+      expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS[purpose]),
     },
   });
   return token;

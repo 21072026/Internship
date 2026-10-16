@@ -169,6 +169,24 @@ test.describe('claim', () => {
     expect(await claim('worker', { store, now: clock('2026-09-14T04:00:00Z') })).toHaveLength(1);
   });
 
+  test('a names filter claims only those jobs and leaves every other kind PENDING (#2944)', async () => {
+    const store = createMemoryQueueStore();
+    const base = '2026-09-14T03:00:00Z';
+    await enqueue('jobs.pruneRuns', {}, { store, runAt: at('2026-09-14T01:00:00Z'), priority: 100 });
+    await enqueue('audit.drain', {}, { store, runAt: at('2026-09-14T02:00:00Z') });
+    await enqueue('jobs.deadLetterAlert', {}, { store, runAt: at('2026-09-14T02:30:00Z') });
+
+    const only = await claim('drain', { store, names: ['audit.drain'], limit: 10, now: clock(base) });
+    expect(only.map((j) => j.name)).toEqual(['audit.drain']);
+    // The higher-priority row of another kind was not touched.
+    expect(store.jobs.filter((j) => j.status === 'PENDING').map((j) => j.name).sort()).toEqual([
+      'jobs.deadLetterAlert',
+      'jobs.pruneRuns',
+    ]);
+    // An empty list means every name, as before.
+    expect(await claim('any', { store, names: [], limit: 10, now: clock(base) })).toHaveLength(2);
+  });
+
   test('an empty worker id is refused: a lease has to name a holder', async () => {
     const store = createMemoryQueueStore();
     await expect(claim('', { store })).rejects.toThrow(/worker id/i);
@@ -209,6 +227,18 @@ test.describe('reapExpiredLeases', () => {
     const again = await claim('live-worker', { store, now: clock('2026-09-14T03:10:01Z') });
     expect(again).toHaveLength(1);
     expect(again[0].lockedBy).toBe('live-worker');
+  });
+
+  test('a names filter reaps only those jobs (#2944)', async () => {
+    const store = createMemoryQueueStore();
+    await enqueue('jobs.pruneRuns', {}, { store, now: clock('2026-09-14T03:00:00Z') });
+    await enqueue('audit.drain', {}, { store, now: clock('2026-09-14T03:00:00Z') });
+    await claim('dead-worker', { store, limit: 10, now: clock('2026-09-14T03:00:00Z') });
+    expect(
+      await reapExpiredLeases(60_000, { store, names: ['audit.drain'], now: clock('2026-09-14T03:10:00Z') })
+    ).toBe(1);
+    expect(store.jobs.find((j) => j.name === 'audit.drain')?.status).toBe('PENDING');
+    expect(store.jobs.find((j) => j.name === 'jobs.pruneRuns')?.status).toBe('RUNNING');
   });
 
   test('PENDING and finished jobs are never touched', async () => {
@@ -438,6 +468,10 @@ test.describe('the claim statement', () => {
     expect(source).toContain('prisma.$transaction');
     expect(source).toMatch(/ORDER BY priority DESC, runAt ASC/);
     expect(source).toMatch(/status = 'PENDING'/);
+  });
+
+  test('the names filter is bound, never interpolated (#2944)', () => {
+    expect(source).toMatch(/name IN \(\$\{Prisma\.join\(/);
   });
 
   test('the MySQL 8.0.1 minimum is written down where the SQL is', () => {

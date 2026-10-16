@@ -307,6 +307,11 @@ jobs:
       # scheduled run hours after the merge. This fails the PR instead.
       - name: e2e rate-limit budget (#2158)
         run: npm run check:e2e-rate-limits
+      # Every mail shares one relay allowance, one send budget, one retry queue
+      # and one opt-out gate, all behind sendEmail() (#2944). A transporter's
+      # sendMail() anywhere else compiles and delivers while skipping all four.
+      - name: mail leaves through one door (#2944)
+        run: npm run check:direct-sendmail
       # The admin API explorer publishes what scripts/openapi-generate.cjs
       # derives from src/app/api. A static analyser degrades silently: a route
       # in a shape it does not recognise simply vanishes from the document, and
