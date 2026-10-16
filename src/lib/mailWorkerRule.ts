@@ -54,6 +54,13 @@ export const RELAY_RELEASES_PER_ATTEMPT = 4;
  */
 export const MAX_QUEUED_ATTACHMENT_BYTES = 256 * 1024;
 
+/**
+ * How long one inline mail of a paced lane (one that could not take the queue,
+ * e.g. an image over `MAX_QUEUED_ATTACHMENT_BYTES`) may wait for its budget
+ * token under enforce mode before it goes anyway (#2951).
+ */
+export const INLINE_PACE_MAX_WAIT_MS = 120_000;
+
 /** How long a critical mail may hold the request before it goes to the queue. */
 export const DEFAULT_INLINE_TIMEOUT_MS = 5_000;
 
@@ -99,6 +106,35 @@ export function mailPolicy(env: Record<string, string | undefined>): MailPolicy 
   const inlineTimeoutMs = Number.isFinite(t) ? Math.min(30_000, Math.max(1_000, Math.floor(t))) : DEFAULT_INLINE_TIMEOUT_MS;
   const w = (env.MAIL_WORKER_ENABLED ?? '').trim().toLowerCase();
   return { queueLanes: lanes, inlineTimeoutMs, workerEnabled: !['0', 'false', 'off', 'no'].includes(w) };
+}
+
+// ── An admin's fan-out (#2951) ──────────────────────────────────────────────
+//
+// A send that mails many people (an announcement, a newsletter, a bulk invite
+// or resend) runs in the admin's request. When its lane is queued, each mail is
+// one enqueue and the drain paces the relay, so the fan-out goes one at a time.
+// When it is NOT (`MAIL_QUEUE_LANES` unset — the default and the documented
+// rollback), every mail is an inline SMTP conversation, and the bounded width
+// the fan-outs always had keeps a large send from holding the request four
+// times as long as before.
+
+/** In-flight mails of a fan-out whose lane is still sent inline. */
+export const INLINE_FANOUT_WIDTH = 4;
+
+/** How many mails of `lane` a fan-out keeps in flight under this policy. */
+export function fanOutWidth(policy: Pick<MailPolicy, 'queueLanes'>, lane: MailLane): number {
+  return policy.queueLanes.has(lane) ? 1 : INLINE_FANOUT_WIDTH;
+}
+
+/**
+ * The lane a bulk invitation (a pasted roster, a bulk resend) is sent on: the
+ * TRANSACTIONAL lane when that lane is queued — a paste of 300 addresses is not
+ * 300 people at a sign-in screen and must not spend the critical reserve —
+ * and the invitation's own lane (undefined = CRITICAL, capped inline and then
+ * queued) when it is not, so the default keeps the behaviour it always had.
+ */
+export function bulkInvitationLane(policy: Pick<MailPolicy, 'queueLanes'>): MailLane | undefined {
+  return policy.queueLanes.has('TRANSACTIONAL') ? 'TRANSACTIONAL' : undefined;
 }
 
 // ── Lifetime ────────────────────────────────────────────────────────────────

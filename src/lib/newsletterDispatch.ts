@@ -17,6 +17,8 @@ import { appUrlFor, sendEmail } from '@/services/emailService';
 import { dedupeKeyFor, opsAlertWindow } from '@/lib/mailDeliveryRule';
 import { newsletterSendRef } from '@/lib/mailRefHooks';
 import { reconcileQueuedMail } from '@/lib/mailOutbox';
+import { fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
+import { mapWithConcurrency } from '@/lib/bulkInvite';
 import { renderNewsletterHtml, type NewsletterEmailLabels } from '@/lib/newsletterEmail';
 import { nextUnusedTemplate } from '@/lib/newsletterContent';
 import { verticalFor } from '@/lib/verticalContext';
@@ -62,11 +64,13 @@ import {
  *      lock.
  */
 
-// One recipient at a time (#2951). This used to keep four sends in flight to
-// save wall clock; with BULK on the mail queue (`MAIL_QUEUE_LANES`) each
-// recipient is one enqueue, the drain paces the relay, and parallel sends
-// would only race each other for the budget row. Inline (BULK not queued),
-// sequential is also the gentlest thing to do to the relay.
+// How many sends are in flight at once follows `MAIL_QUEUE_LANES` (#2951,
+// `fanOutWidth`): with BULK on the mail queue each recipient is one enqueue,
+// the drain paces the relay, and the fan-out goes one at a time. With BULK
+// still inline it keeps the four it always had — small, because this rides the
+// bulk SMTP channel, but not sequential: a large issue would then outlast the
+// 15-minute cron tick that resumes a SENDING issue, and an overlapping resume
+// mails the not-yet-recorded recipients twice.
 
 export interface NewsletterDispatchResult {
   newsletterId: string;
@@ -452,7 +456,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // One memo for the whole fan-out; see NewsletterBrandCache.
   const brandCache = newNewsletterBrandCache();
 
-  for (const user of recipients) {
+  await mapWithConcurrency(recipients, fanOutWidth(mailPolicy(process.env), 'BULK'), async (user) => {
     // The group check, not the bare legacy key. They agree today — 'newsletter'
     // is the `newsletter` group's own legacy key — but only this form honours an
     // explicit opt-back-IN: someone who used the newsletter's own unsubscribe
@@ -462,7 +466,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     // That mismatch is the same one this PR removed from ten other call sites.
     if (!emailGroupAllowedForCategory(user, 'newsletter')) {
       skipped++;
-      continue;
+      return;
     }
 
     const { subject, html, locale } = await renderNewsletterFor({
@@ -544,7 +548,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       // which is the guarantee working, not a problem.
       logger.warning('Newsletter send row not written', { newsletterId, error: String(e) });
     }
-  }
+  });
 
   await prisma.newsletter.update({
     where: { id: newsletterId },

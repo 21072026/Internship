@@ -280,7 +280,7 @@ async function handlePost(request: Request) {
       users.filter((u) => u.email && !toMail.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)' })),
     );
 
-    // One recipient at a time (#2951) — see src/lib/announcementMail.ts. The
+    // A bounded fan-out (#2951) — see src/lib/announcementMail.ts. The
     // list the quota was checked against, not a second filter over `users`:
     // two copies of "who gets mailed" is how a metered count and a delivered
     // count start disagreeing.
@@ -308,7 +308,7 @@ async function handlePost(request: Request) {
       imageUrl: imageData ? announcementImageUrl(announcement.id) : null,
       // How many wait on the mail queue and roughly how long they take at this
       // environment's pace (#2951) — the composer says so.
-      ...(queued > 0 ? { mailQueue: await mailQueueNotice(queued, { channel: 'bulk' }) } : {}),
+      ...(queued > 0 ? { mailQueue: await mailQueueNotice(queued, { orgId: resolveOrgId(session), channel: 'bulk' }) } : {}),
     },
     { status: 201 }
   );

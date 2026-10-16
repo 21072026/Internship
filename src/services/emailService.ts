@@ -64,8 +64,8 @@ import {
   type MailLane,
 } from '@/lib/mailDeliveryRule';
 import { createMeterObserver, type MeterObserver } from '@/lib/mailMeterObserver';
-import { decayPause, readBudgetState } from '@/lib/mailBudgetStore';
-import { INLINE_FALLBACK_DELAY_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
+import { decayPause, readBudgetState, spendToken } from '@/lib/mailBudgetStore';
+import { INLINE_FALLBACK_DELAY_MS, INLINE_PACE_MAX_WAIT_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
 import { canQueue, cancelQueuedMail, enqueueMail, type DrainDeps, type EnqueueMailOptions } from '@/lib/mailOutbox';
 import {
   BULK_GROUP_CATEGORIES,
@@ -1213,6 +1213,12 @@ async function dispatchPrepared(
   if ((queuedLane || opts.queueOnly) && canQueue(prepared)) {
     if (await tryEnqueue(prepared, { ...queue, reason: 'lane' })) return 'QUEUED';
   }
+  // A paced lane's mail that could not take the queue (an image over the
+  // queue's attachment cap, the queue unreachable) still waits for its token
+  // under enforce mode, here in the caller: a broadcast of a large photo would
+  // otherwise be N unpaced back-to-back sends while the admin is told the send
+  // is paced (#2951).
+  const pacedInline = queuedLane && (await paceInline(prepared));
 
   const relay = prepared.lane === 'CRITICAL' ? await relayState(prepared.transport) : null;
   if (prepared.lane === 'CRITICAL' && canQueue(prepared) && relay?.open) {
@@ -1223,7 +1229,7 @@ async function dispatchPrepared(
     }
   }
 
-  observeSafely(() => observer.spend(prepared));
+  if (!pacedInline) observeSafely(() => observer.spend(prepared));
   if (prepared.lane === 'CRITICAL') {
     const outcome = await sendCriticalCapped(prepared, policy.inlineTimeoutMs, queue, seams);
     // The pause ran out and this send was its probe: a delivery walks the
@@ -1240,6 +1246,41 @@ async function dispatchPrepared(
   await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
   observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
+}
+
+/**
+ * Wait, in the caller, for a budget token for a mail of a paced lane that is
+ * being sent inline (#2951). Enforce mode only — observe and off return false
+ * at once and the observer charges the meter as before. True when this call
+ * spent the token (the observer must not charge it a second time).
+ *
+ * Bounded by `INLINE_PACE_MAX_WAIT_MS` per mail: past it, or on a refusal that
+ * would last longer (the daily cap until midnight), or when the meter cannot be
+ * read, the mail goes — a request is not held for hours, and the meter is
+ * charged for the send so it keeps describing what the relay saw.
+ */
+async function paceInline(prepared: PreparedEmail): Promise<boolean> {
+  const cfg = budgetConfig(process.env, prepared.transport);
+  if (cfg.mode !== 'enforce') return false;
+  const name = budgetNameFor(prepared.transport);
+  const deadline = Date.now() + INLINE_PACE_MAX_WAIT_MS;
+  for (;;) {
+    const outcome = await spendToken(prepared.lane, cfg, name);
+    if (outcome.allowed) return outcome.reason === 'spent';
+    if (outcome.reason === 'db_error') return false;
+    const left = deadline - Date.now();
+    if (outcome.waitMs > left) {
+      logger.warning('mail_inline.pace_overrun', {
+        lane: prepared.lane,
+        category: prepared.category,
+        channel: prepared.transport,
+        reason: outcome.reason,
+        waitMs: outcome.waitMs,
+      });
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.max(250, outcome.waitMs)));
+  }
 }
 
 async function tryEnqueue(prepared: PreparedEmail, opts: EnqueueMailOptions) {
@@ -5513,7 +5554,20 @@ export async function sendUnreadMessageDigests() {
       if (delivery !== 'SKIPPED') stampIds.push(...ids);
       if (delivery !== 'SKIPPED') sent++;
     } catch (e) {
-      console.error('Unread message digest failed:', e);
+      // A permanent refusal (a 5xx for this mailbox) is final: stamp the lines,
+      // or the next hourly run builds a fresh digest under a new hour key and
+      // bounces off the same mailbox again for the whole lookback week — the
+      // reputation damage this queue exists to prevent. Only a failure that a
+      // later run could get past leaves them unstamped. Never the relay's text:
+      // it can echo the address.
+      const cls = classifySmtpError(e);
+      if (!cls.retryable) stampIds.push(...ids);
+      logger.error('Unread message digest failed', {
+        kind: cls.kind,
+        reason: cls.reason,
+        settled: !cls.retryable,
+        rcpt: recipientHash(recipient.email ?? '').slice(0, 16),
+      });
     }
   }
 

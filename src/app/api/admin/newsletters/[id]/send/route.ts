@@ -21,6 +21,7 @@ import {
   renderNewsletterFor,
 } from '@/lib/newsletterDispatch';
 import { mailQueueNotice } from '@/lib/mailOutbox';
+import { resolveOrgId } from '@/lib/orgScope';
 
 const schema = z.object({
   // 'now' sends the issue to its audience. 'test' sends one copy to the admin
@@ -180,6 +181,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     ok: !dispatch.noop,
     dispatch,
     // Copies on the mail queue and the rough time they take (#2951).
-    ...(dispatch.queued ? { mailQueue: await mailQueueNotice(dispatch.queued, { channel: 'bulk' }) } : {}),
+    ...(dispatch.queued ? { mailQueue: await mailQueueNotice(dispatch.queued, { orgId: resolveOrgId(session), channel: 'bulk' }) } : {}),
   });
 }

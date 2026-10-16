@@ -277,3 +277,27 @@ export function summarizeBulkInvite(rows: readonly BulkInviteReportRow[]): BulkI
     unsent: invited.filter((r) => r.emailSent === false).length,
   };
 }
+
+/**
+ * Run `worker` over `items` with at most `limit` in flight.
+ *
+ * NOT `Promise.all` over 300 addresses: that hands the SMTP relay 300
+ * simultaneous connections, which is how one paste takes the mail transport
+ * (and every other email the app sends) down with it.
+ */
+export async function mapWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  const width = Math.max(1, Math.min(limit, items.length));
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await worker(items[index]);
+      }
+    }),
+  );
+}

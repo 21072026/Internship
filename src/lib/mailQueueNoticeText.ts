@@ -7,7 +7,6 @@
 
 export interface MailQueueNoticeData {
   queued: number;
-  backlog: number;
   etaMinutes: number;
   paced?: boolean;
 }

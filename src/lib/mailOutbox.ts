@@ -206,9 +206,8 @@ async function worldOfOrg(orgId: string | null): Promise<string | null> {
 export interface MailQueueNotice {
   /** Mails this action put on the queue. */
   queued: number;
-  /** Mails waiting in total, this action's included. */
-  backlog: number;
-  /** Rough minutes until the backlog has left (see `queueEtaMinutes`). */
+  /** Rough minutes until the caller's organization's queued mail has left
+   *  (see `queueEtaMinutes`). */
   etaMinutes: number;
   /** True when the drain is paced by the budget (enforce mode). */
   paced: boolean;
@@ -219,10 +218,17 @@ export interface MailQueueNotice {
  * bulk channel's numbers fall back to the primary ones when it has none of its
  * own. Never throws: a backlog that cannot be read falls back to this
  * action's own mails.
+ *
+ * The estimate counts the CALLER's organization's waiting mail only (`orgId`),
+ * and the raw count never leaves the server: the queue is shared by every
+ * tenant of the environment, and an org admin polling a send's response must
+ * not be able to read another tenant's mailing volume from it. Other tenants'
+ * mail ahead of this one can make the real wait longer — it is a rough figure
+ * either way.
  */
 export async function mailQueueNotice(
   queued: number,
-  opts: { channel?: MailChannel; env?: Record<string, string | undefined> } = {},
+  opts: { orgId: string | null; channel?: MailChannel; env?: Record<string, string | undefined> },
 ): Promise<MailQueueNotice> {
   const cfg = budgetConfig(opts.env ?? process.env, opts.channel ?? 'primary');
   let backlog = queued;
@@ -230,13 +236,15 @@ export async function mailQueueNotice(
     try {
       backlog = Math.max(
         queued,
-        await runUnscoped(() => prisma.job.count({ where: { name: MAIL_JOB_NAME, status: { in: ['PENDING', 'RUNNING'] } } })),
+        await runUnscoped(() =>
+          prisma.job.count({ where: { name: MAIL_JOB_NAME, orgId: opts.orgId, status: { in: ['PENDING', 'RUNNING'] } } }),
+        ),
       );
     } catch {
       // The estimate falls back to this action's own mails.
     }
   }
-  return { queued, backlog, etaMinutes: queueEtaMinutes(backlog, cfg), paced: cfg.mode === 'enforce' };
+  return { queued, etaMinutes: queueEtaMinutes(backlog, cfg), paced: cfg.mode === 'enforce' };
 }
 
 /**
@@ -377,16 +385,26 @@ const HIGHER_LANES: ClaimFilter = { minPriority: HIGHER_LANE_MIN_PRIORITY };
 const BULK_LANE: ClaimFilter = { maxPriority: HIGHER_LANE_MIN_PRIORITY - 1 };
 
 /**
- * One round's rows. At most three claims, and an idle queue costs exactly
- * three: the higher lanes, the preferred world's bulk, any bulk. The second
+ * One round's rows. A plain, non-locking probe first reads the priority of the
+ * most urgent due row, so an idle queue costs that one SELECT and no claim
+ * transaction at all. Then at most three claims: the higher lanes (only when
+ * the probe saw one due), the preferred world's bulk, any bulk. The second
  * world in `bulkWorldOrder` is reached through the last, unfiltered claim —
  * when the preferred world has nothing due, any bulk row is the other world's
  * (or one with no world).
  */
 async function claimRound(workerId: string): Promise<{ rows: JobRecord[]; bulk: boolean; capped: boolean }> {
+  const due = await prisma.job.findFirst({
+    where: { name: MAIL_JOB_NAME, status: 'PENDING', runAt: { lte: new Date() } },
+    orderBy: [{ priority: 'desc' }],
+    select: { priority: true },
+  });
+  if (!due) return { rows: [], bulk: false, capped: false };
   const common = { names: [...JOB_NAMES], leaseMs: DEFAULT_LEASE_MS, store: store() };
-  const higher = await claim(workerId, { ...common, limit: DRAIN_BATCH, filter: HIGHER_LANES });
-  if (higher.length) return { rows: higher, bulk: false, capped: false };
+  if (due.priority >= HIGHER_LANE_MIN_PRIORITY) {
+    const higher = await claim(workerId, { ...common, limit: DRAIN_BATCH, filter: HIGHER_LANES });
+    if (higher.length) return { rows: higher, bulk: false, capped: false };
+  }
   if (Date.now() < bulkBlockedUntil) return { rows: [], bulk: true, capped: true };
   const [preferred] = bulkWorldOrder(lastBulkWorld);
   const mine = await claim(workerId, { ...common, limit: 1, filter: { ...BULK_LANE, payload: { key: 'world', value: preferred } } });
@@ -448,16 +466,21 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
         summary.stoppedBy = capped ? 'daily_cap' : 'empty';
         return summary;
       }
-      if (bulk) {
-        const world = (rows[0].payload as { world?: unknown } | null)?.world;
-        lastBulkWorld = typeof world === 'string' ? world : null;
-      }
       summary.claimed += rows.length;
       for (let i = 0; i < rows.length; i++) {
         const rest = rows.slice(i + 1);
         let stop: Stop;
+        const sentBefore = summary.sent;
         try {
           stop = await drainRow(rows[i], { workerId, clock, deps, configFor, nameFor, summary });
+          // The alternation turns on a SEND, never on a claim: a bulk row the
+          // budget refused and released must not flip the preferred world, or
+          // under enforce mode the flip follows the 5 s tick instead of the
+          // token and one world can win every slot.
+          if (bulk && summary.sent > sentBefore) {
+            const world = (rows[i].payload as { world?: unknown } | null)?.world;
+            lastBulkWorld = typeof world === 'string' ? world : null;
+          }
         } catch (e) {
           // A database error mid-row (the settle, the budget): put this row and
           // the rest of the batch back rather than leave them RUNNING until
@@ -512,6 +535,9 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     // A corrupt row, or one sealed under a server secret that has since been
     // rotated: nothing can ever send it. Dead, envelope gone.
     await settle(row, workerId, { status: 'DEAD_LETTER', lastError: 'unreadable_envelope', payload: clearedPayload(row.payload) });
+    // A sender's own record (a newsletter copy) must not stay QUEUED forever.
+    const ref = (row.payload as { ref?: unknown } | null)?.ref;
+    if (typeof ref === 'string') await settleMailRef(ref, 'FAILED', 'unreadable_envelope');
     logger.error('mail_outbox.unreadable', log);
     summary.dead++;
     return null;

@@ -437,11 +437,30 @@ export const UNPACED_SENDS_PER_MIN = 30;
  * over about 2 h" — never a promise: a relay pause or the daily cap can make
  * it longer, a quiet queue shorter.
  */
-export function queueEtaMinutes(backlog: number, cfg: Pick<BudgetConfig, 'mode' | 'ratePerMin'>): number {
+export function queueEtaMinutes(
+  backlog: number,
+  cfg: Pick<BudgetConfig, 'mode' | 'ratePerMin'> & Partial<Pick<BudgetConfig, 'burst' | 'urgentReserve'>>,
+): number {
   const n = Math.max(0, Math.floor(backlog));
   if (n === 0) return 0;
-  const rate = cfg.mode === 'enforce' ? Math.max(1, cfg.ratePerMin) : UNPACED_SENDS_PER_MIN;
+  const rate = cfg.mode === 'enforce' ? effectiveLaneRatePerMin(cfg) : UNPACED_SENDS_PER_MIN;
   return Math.max(1, Math.ceil(n / rate));
+}
+
+/**
+ * The sustained sends per minute a non-critical lane really gets under enforce
+ * mode. A reserve that swallows the whole burst (BURST 1 with RESERVE 1) makes
+ * the lane's τ negative: each send then waits one extra interval after the
+ * previous one, which halves the configured rate — the estimate must say so.
+ */
+export function effectiveLaneRatePerMin(
+  cfg: Pick<BudgetConfig, 'ratePerMin'> & Partial<Pick<BudgetConfig, 'burst' | 'urgentReserve'>>,
+): number {
+  const rate = Math.max(1, cfg.ratePerMin);
+  const burst = cfg.burst ?? 2;
+  const reserve = Math.min(burst, cfg.urgentReserve ?? 0);
+  const deficit = Math.max(0, -(burst - 1 - reserve));
+  return rate / (1 + deficit);
 }
 
 /** τ for a lane, in milliseconds (may be negative — see above). */

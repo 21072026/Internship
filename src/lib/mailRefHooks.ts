@@ -70,11 +70,15 @@ export async function settleMailRef(ref: string | null | undefined, outcome: Mai
       data: { status: outcome, error: outcome === 'SENT' ? null : (error ?? null)?.slice(0, 2000) ?? null },
     });
     if (count !== 1) return false;
-    // The issue's tally counted this recipient as reached when it was queued;
+    // The issue's tally counts this recipient as reached when it was queued;
     // a queued copy that did not arrive moves to the column it belongs in.
+    // Unguarded on purpose: during a first run the dispatch adds its tally only
+    // at the end, so a copy settled mid-run takes sentCount to -1 for a moment
+    // and the final increment nets it out — a `sentCount > 0` guard here lost
+    // the correction instead.
     if (outcome !== 'SENT') {
       await prisma.newsletter.updateMany({
-        where: { id: nl.newsletterId, sentCount: { gt: 0 } },
+        where: { id: nl.newsletterId },
         data: {
           sentCount: { decrement: 1 },
           ...(outcome === 'FAILED' ? { failedCount: { increment: 1 } } : { skippedCount: { increment: 1 } }),

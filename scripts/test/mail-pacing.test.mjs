@@ -200,9 +200,9 @@ test('estimate: minutes at the configured rate when paced, rough otherwise', () 
 test('estimate: the sentence, in minutes under an hour and whole hours above', () => {
   const copy = { queuedNotice: '{n} queued, about {eta}.', minutes: '{n} min', hours: '{n} h' };
   assert.equal(T.mailQueueNoticeText(null, copy), null);
-  assert.equal(T.mailQueueNoticeText({ queued: 0, backlog: 0, etaMinutes: 0 }, copy), null);
-  assert.equal(T.mailQueueNoticeText({ queued: 30, backlog: 30, etaMinutes: 6 }, copy), '30 queued, about 6 min.');
-  assert.equal(T.mailQueueNoticeText({ queued: 200, backlog: 400, etaMinutes: 400 }, copy), '200 queued, about 7 h.');
+  assert.equal(T.mailQueueNoticeText({ queued: 0, etaMinutes: 0 }, copy), null);
+  assert.equal(T.mailQueueNoticeText({ queued: 30, etaMinutes: 6 }, copy), '30 queued, about 6 min.');
+  assert.equal(T.mailQueueNoticeText({ queued: 200, etaMinutes: 400 }, copy), '200 queued, about 7 h.');
   assert.equal(T.etaText(0.2, copy), '1 min');
   assert.equal(T.etaText(60, copy), '1 h');
 });
@@ -257,4 +257,38 @@ test('keys: an ops alert is one per window, across replicas and restarts', () =>
   const c = R.dedupeKeyFor({ kind: 'ops', alert: 'email-stale', at: R.opsAlertWindow(new Date('2026-10-16T12:00:00Z'), 6) });
   assert.equal(a, b);
   assert.notEqual(b, c);
+});
+
+// ── Review follow-ups ───────────────────────────────────────────────────────
+
+test('estimate: a reserve as large as the burst halves the lane rate, and the estimate says so', () => {
+  assert.equal(R.effectiveLaneRatePerMin({ ratePerMin: 5, burst: 2, urgentReserve: 1 }), 5);
+  assert.equal(R.effectiveLaneRatePerMin({ ratePerMin: 1, burst: 1, urgentReserve: 0 }), 1);
+  assert.equal(R.effectiveLaneRatePerMin({ ratePerMin: 1, burst: 1, urgentReserve: 1 }), 0.5);
+  assert.equal(R.effectiveLaneRatePerMin({ ratePerMin: 6, burst: 2, urgentReserve: 2 }), 3);
+  // The same figure the GCRA twin produces: a tolerance of minus one interval
+  // means each send waits one extra interval after the previous one.
+  const cfg = R.budgetConfig({ MAIL_RATE_PER_MIN: '1', MAIL_BURST: '1', MAIL_URGENT_RESERVE: '1', MAIL_METER_MODE: 'enforce' });
+  assert.equal(R.laneToleranceMs('BULK', cfg), -cfg.intervalMs);
+  assert.equal(R.queueEtaMinutes(30, cfg), 60);
+  assert.equal(R.queueEtaMinutes(30, { ...cfg, urgentReserve: 0 }), 30);
+});
+
+test('fan-out: one at a time when the lane is queued, the old four when it is not', () => {
+  const queued = W.mailPolicy({ MAIL_QUEUE_LANES: 'TRANSACTIONAL,BULK' });
+  const inline = W.mailPolicy({});
+  assert.equal(W.fanOutWidth(queued, 'BULK'), 1);
+  assert.equal(W.fanOutWidth(inline, 'BULK'), W.INLINE_FANOUT_WIDTH);
+  assert.equal(W.INLINE_FANOUT_WIDTH, 4);
+  assert.equal(W.fanOutWidth(W.mailPolicy({ MAIL_QUEUE_LANES: 'BULK' }), 'TRANSACTIONAL'), 4);
+});
+
+test('bulk invitations: TRANSACTIONAL only while that lane is queued, else their own lane', () => {
+  assert.equal(W.bulkInvitationLane(W.mailPolicy({ MAIL_QUEUE_LANES: 'TRANSACTIONAL' })), 'TRANSACTIONAL');
+  assert.equal(W.bulkInvitationLane(W.mailPolicy({ MAIL_QUEUE_LANES: 'BULK' })), undefined);
+  assert.equal(W.bulkInvitationLane(W.mailPolicy({})), undefined, 'unset keeps the earlier lane');
+});
+
+test('inline pacing: a mail that cannot take the queue waits at most two minutes for its token', () => {
+  assert.equal(W.INLINE_PACE_MAX_WAIT_MS, 120_000);
 });

@@ -5,17 +5,19 @@ import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
 import { resolveAnnouncementText } from '@/lib/announcementText';
+import { fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
+import { mapWithConcurrency } from '@/lib/bulkInvite';
 
 // The e-mail half of an announcement broadcast (#2951): one mail per recipient,
-// handed to `sendEmail()` ONE AT A TIME.
+// handed to `sendEmail()` with a bounded width (`fanOutWidth`).
 //
 // It used to be a single unbounded `Promise.all` over every recipient — the
 // largest burst the product made: N simultaneous SMTP conversations, and the
 // relay's per-minute limit lost the tail of it. With BULK on the mail queue
 // (`MAIL_QUEUE_LANES`) each call is one enqueue that returns in milliseconds,
-// and the drain paces the relay; with BULK still inline, sequential is the
-// gentlest thing to do to the relay. Either way the request no longer holds N
-// connections open at once.
+// one at a time, and the drain paces the relay; with BULK still inline, four in
+// flight — never N, and not one either, which would hold the admin's request
+// four times as long (and invite a resend that broadcasts twice).
 //
 // Split out of `POST /api/admin/announcements` so the fan-out is one function
 // the route and the e2e spec both call — the spec drives it against a fake SMTP
@@ -87,7 +89,7 @@ export async function mailAnnouncement(input: AnnouncementMailInput): Promise<An
     return hit;
   };
 
-  for (const u of recipients) {
+  await mapWithConcurrency(recipients, fanOutWidth(mailPolicy(process.env), 'BULK'), async (u) => {
     const preferredLanguage = u.preferredLanguage ?? undefined;
     const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
     const t = getDictionary(locale);
@@ -129,6 +131,6 @@ export async function mailAnnouncement(input: AnnouncementMailInput): Promise<An
       result.failed++;
       logger.error('Failed to send announcement email', { error: e instanceof Error ? e.name : 'unknown' });
     }
-  }
+  });
   return result;
 }

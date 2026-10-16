@@ -297,7 +297,7 @@ export async function POST(request: Request) {
       ...(dispatch ? { dispatch } : {}),
       // How many copies wait on the mail queue and roughly how long they take
       // at this environment's pace (#2951) — the composer says so.
-      ...(dispatch?.queued ? { mailQueue: await mailQueueNotice(dispatch.queued, { channel: 'bulk' }) } : {}),
+      ...(dispatch?.queued ? { mailQueue: await mailQueueNotice(dispatch.queued, { orgId: resolveOrgId(session), channel: 'bulk' }) } : {}),
     },
     { status: 201 }
   );

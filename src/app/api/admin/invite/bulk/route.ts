@@ -13,9 +13,11 @@ import { createInvitation, discardInvitation, invitationOrgWhere } from '@/lib/i
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { locales } from '@/i18n/config';
 import { mailQueueNotice } from '@/lib/mailOutbox';
+import { bulkInvitationLane, fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
 import {
   BULK_INVITE_MAX_CHARS,
   BULK_INVITE_ROLES,
+  mapWithConcurrency,
   parseBulkInvite,
   summarizeBulkInvite,
   validateBulkInvite,
@@ -168,11 +170,15 @@ export async function POST(request: Request) {
       let created = 0;
       // Of the mailed invitations, the ones waiting on the mail queue (#2951).
       let queued = 0;
-      // One row at a time (#2951). Four used to be in flight to the relay at
-      // once; now every mail goes through the TRANSACTIONAL lane — a paste of
-      // 300 addresses is not 300 people at a sign-in screen, so it must not
-      // spend the critical reserve — and the mail queue paces the relay.
-      for (const entry of toSend as BulkInviteReportRow[]) {
+      // The lane and the width follow MAIL_QUEUE_LANES (#2951): with the
+      // TRANSACTIONAL lane queued, every invitation goes through it — a paste
+      // of 300 addresses is not 300 people at a sign-in screen, so it must not
+      // spend the critical reserve — one enqueue at a time, and the mail
+      // queue paces the relay. Without it, the invitation's own lane and the
+      // four in flight it always had (fanOutWidth).
+      const policy = mailPolicy(process.env);
+      const lane = bulkInvitationLane(policy);
+      await mapWithConcurrency(toSend as BulkInviteReportRow[], fanOutWidth(policy, lane ?? 'CRITICAL'), async (entry) => {
         const raw = byRowNumber.get(entry.row);
         try {
           const result = await createInvitation({
@@ -183,7 +189,7 @@ export async function POST(request: Request) {
             role: entry.role,
             locale: inviteLocale,
             request,
-            lane: 'TRANSACTIONAL',
+            lane,
           });
           if (result.mailError) {
             // Not half-created: the token goes away with the failed send, so
@@ -191,7 +197,7 @@ export async function POST(request: Request) {
             await discardInvitation(result.invitationId);
             entry.status = 'error';
             entry.reason = 'send_failed';
-            continue;
+            return;
           }
           if (result.emailQueued) queued++;
           // "The transport did not throw" is NOT "the mail was delivered"
@@ -211,7 +217,7 @@ export async function POST(request: Request) {
           entry.status = 'error';
           entry.reason = 'send_failed';
         }
-      }
+      });
 
       const outcome = summarizeBulkInvite(report);
 
@@ -231,7 +237,7 @@ export async function POST(request: Request) {
         rows: report,
         // How many wait on the mail queue and roughly how long they take at
         // this environment's pace (#2951) — the board says so.
-        ...(queued > 0 ? { mailQueue: await mailQueueNotice(queued) } : {}),
+        ...(queued > 0 ? { mailQueue: await mailQueueNotice(queued, { orgId }) } : {}),
       });
     });
   } catch (error) {
