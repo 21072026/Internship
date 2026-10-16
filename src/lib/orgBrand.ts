@@ -112,6 +112,8 @@ export function invalidateBrandCache(): void {
 }
 
 async function rowForHost(host: string): Promise<BrandRow | null> {
+  // Read before `cached()` drops an expired entry: it is the last good answer.
+  const previous = byHost.get(host);
   const hit = cached(byHost, host);
   if (hit) return hit.row;
   // `Organization` is not a tenant model, so no bound context rewrites this
@@ -120,10 +122,18 @@ async function rowForHost(host: string): Promise<BrandRow | null> {
   try {
     row = await prisma.organization.findUnique({ where: { publicHost: host }, select: BRAND_SELECT });
   } catch (e) {
-    // A failed lookup is remembered as "no organization" for a few seconds:
-    // during a database outage every public page and the manifest would
-    // otherwise wait out the connection timeout first, and log it, on every
-    // view — for an answer (the default brand) they get either way.
+    // SERVE STALE ON ERROR: a host that resolved to an organization before
+    // keeps that organization's brand through a database blip. Falling back to
+    // the default brand there would hand an installed app the default name and
+    // icons for as long as the blip lasts. Re-remembered for a few seconds so a
+    // whole outage does not wait out the connection timeout on every view.
+    if (previous?.row) {
+      remember(byHost, host, previous.row, FAILURE_TTL_MS);
+      return previous.row;
+    }
+    // Never resolved (or resolved to nothing): remembered as "no organization"
+    // for a few seconds, for the same reason — the answer is the default
+    // brand either way.
     remember(byHost, host, null, FAILURE_TTL_MS);
     throw e;
   }

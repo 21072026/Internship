@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**A database blip no longer swaps a bound host's brand or prices for the defaults (#2939 follow-up):** `rowForHost()` in `src/lib/orgBrand.ts` now serves the last organization a host resolved to when a refresh throws (re-cached for the 10-second failure TTL), and only a host that never resolved is cached as \"no organization\". `marketingPriceListForHost()` keeps the last list each host read in-process and shows it when the lookup fails, instead of flipping `/pricing` and the landing FAQ to \"prices on request\". `e2e/marketing-price-list.spec.ts` now also pins both branches of the landing FAQ's price answer."
+}
