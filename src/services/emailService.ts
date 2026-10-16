@@ -813,8 +813,7 @@ export interface SendEmailArgs {
   // temporary failure, a critical send past its inline cap, a paused relay):
   //   dedupeKey — the mail's natural identity (`dedupeKeyFor()` in
   //               mailDeliveryRule.ts), so the same logical mail is queued once;
-  //               without it the key is a hash of the category, the recipient,
-  //               the subject, the body and the minute.
+  //               without it every call is its own mail (`fallbackRef()`).
   //   notAfter  — the moment the mail stops being worth sending (a token's
   //               expiry, a meeting's start). The lane's maximum age caps it.
   dedupeKey?: string;

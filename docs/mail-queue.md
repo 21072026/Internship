@@ -65,9 +65,10 @@ A queued mail is a `Job` row named `email.send` on the existing job queue
   address. It is what account erasure deletes by.
 - **De-duplicated.** `Job.idempotencyKey` is the mail's natural key when the
   caller passes one (`dedupeKey`), otherwise a hash of the category, the
-  recipient, the subject, the body and the minute: the same mail asked for twice
-  in a minute is one row; a second reset link is a different body, so a
-  different row.
+  recipient, the subject and a per-call nonce: one `sendEmail()` call queues at
+  most one row, and two calls are two mails, as they were before the queue. The
+  body is never hashed onto the row — a reset or sign-in mail's body carries
+  its link.
 - **Bounded in time.** `payload.notAfter` is the lane's maximum age (critical
   24 h, transactional 12 h, bulk 72 h) or the caller's own deadline when that is
   earlier — a password reset passes its token's expiry. Past it, the mail is
