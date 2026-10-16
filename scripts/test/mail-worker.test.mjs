@@ -298,12 +298,12 @@ test('envelope: attachments over the cap are not queueable', () => {
 
 // ── Identity ────────────────────────────────────────────────────────────────
 
-test('fallbackRef: same body in the same minute is one mail; a new link is another', () => {
-  const a = W.fallbackRef(NOW, '<a href="https://x/reset?t=1">reset</a>');
-  assert.equal(a, W.fallbackRef(new Date(NOW.getTime() + 20_000), '<a href="https://x/reset?t=1">reset</a>'));
-  assert.notEqual(a, W.fallbackRef(NOW, '<a href="https://x/reset?t=2">reset</a>'));
-  assert.notEqual(a, W.fallbackRef(new Date(NOW.getTime() + 60_000), '<a href="https://x/reset?t=1">reset</a>'));
-  assert.ok(!a.includes('reset'), 'the body is hashed, never carried');
+test('fallbackRef: never derived from the body; two calls are two mails', () => {
+  const a = W.fallbackRef(NOW);
+  const b = W.fallbackRef(NOW);
+  assert.notEqual(a, b);
+  assert.match(a, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:[0-9a-f]{24}$/);
+  assert.equal(W.fallbackRef.length, 1);
   // And the key built from it is bounded and carries no address.
   const key = R.dedupeKeyFor({ kind: 'fallback', category: 'password-reset', to: 'person@example.test', subject: 's', ref: a, at: NOW });
   assert.ok(key.length <= 191 && !key.includes('@'));

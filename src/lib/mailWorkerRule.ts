@@ -13,7 +13,7 @@
 //   No Prisma, no `@/` alias, no I/O, no secrets. Sealing the envelope needs the
 //   server secret, so it happens in `mailOutbox.ts`; this file only turns a
 //   prepared mail into the JSON that is sealed, and back.
-import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   LANE_MAX_AGE_MS,
   classifySmtpError,
@@ -366,10 +366,13 @@ export function decodeEnvelope(json: string | null | undefined): Envelope | null
 
 /**
  * The `ref` a mail without a natural de-duplication key is keyed by: the minute
- * it was asked for and a hash of its body. The same mail asked for twice in one
- * minute (a retried request) is one mail; a second password reset in the same
- * minute has a different link, so a different body, so a second mail.
+ * it was asked for and a random id. Deliberately NOT derived from the mail's
+ * content: a body can carry a sign-in or reset token, and a hash of it would sit
+ * in the job's idempotency key for no gain. Two calls are therefore always two
+ * mails; a sender that must not send twice passes a natural key
+ * (`dedupeKeyFor()`), which the one call reuses across its inline attempt and
+ * its queued retry.
  */
-export function fallbackRef(now: Date, html: string): string {
-  return `${now.toISOString().slice(0, 16)}:${createHash('sha256').update(html).digest('hex').slice(0, 24)}`;
+export function fallbackRef(now: Date): string {
+  return `${now.toISOString().slice(0, 16)}:${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 }

@@ -1107,8 +1107,7 @@ export async function sendPrepared(
   opts: { via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
 ): Promise<'SENT' | 'QUEUED'> {
   const now = new Date();
-  const html = typeof prepared.message.html === 'string' ? prepared.message.html : prepared.subject;
-  return dispatchPrepared(prepared, { ref: fallbackRef(now, html), now }, { via: opts.via, observer: opts.observer });
+  return dispatchPrepared(prepared, { ref: fallbackRef(now), now }, { via: opts.via, observer: opts.observer });
 }
 
 /**
@@ -1126,7 +1125,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   return dispatchPrepared(result.prepared, {
     dedupeKey: args.dedupeKey ?? null,
     notAfter: args.notAfter ?? null,
-    ref: fallbackRef(now, args.html),
+    ref: fallbackRef(now),
     now,
   });
 }
