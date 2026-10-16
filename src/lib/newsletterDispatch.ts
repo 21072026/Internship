@@ -14,6 +14,9 @@ import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newslett
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, type Locale } from '@/i18n/config';
 import { appUrlFor, sendEmail } from '@/services/emailService';
+import { dedupeKeyFor, opsAlertWindow } from '@/lib/mailDeliveryRule';
+import { newsletterSendRef } from '@/lib/mailRefHooks';
+import { reconcileQueuedMail } from '@/lib/mailOutbox';
 import { renderNewsletterHtml, type NewsletterEmailLabels } from '@/lib/newsletterEmail';
 import { nextUnusedTemplate } from '@/lib/newsletterContent';
 import { verticalFor } from '@/lib/verticalContext';
@@ -59,12 +62,11 @@ import {
  *      lock.
  */
 
-// How many messages are in flight at once. Deliberately small: this rides the
-// bulk SMTP channel, and opening 500 concurrent connections to it is how a
-// send gets the whole server rate-limited. Sequential would be safest but a
-// 500-recipient issue would then take minutes of wall clock inside one cron
-// tick.
-const SEND_CONCURRENCY = 4;
+// One recipient at a time (#2951). This used to keep four sends in flight to
+// save wall clock; with BULK on the mail queue (`MAIL_QUEUE_LANES`) each
+// recipient is one enqueue, the drain paces the relay, and parallel sends
+// would only race each other for the budget row. Inline (BULK not queued),
+// sequential is also the gentlest thing to do to the relay.
 
 export interface NewsletterDispatchResult {
   newsletterId: string;
@@ -73,6 +75,12 @@ export interface NewsletterDispatchResult {
   sent: number;
   failed: number;
   skipped: number;
+  /**
+   * Of `sent`, how many are on the mail queue rather than already handed to
+   * the relay (#2951) — each recipient's NewsletterSend row says QUEUED until
+   * the drain settles it. Absent on a no-op.
+   */
+  queued?: number;
   /** True when the issue was already sent, canceled, or still a draft. */
   noop?: boolean;
   reason?: string;
@@ -128,9 +136,9 @@ interface Recipient {
  * recipient; this keeps the correctness and pays one query per *tenant* — the
  * 400 members of one org cost one lookup.
  *
- * It caches the promise rather than the value, so the recipients the pool has in
- * flight at once (SEND_CONCURRENCY) share a single query instead of racing to
- * issue the same one.
+ * It caches the promise rather than the value, so concurrent renders (the
+ * preview, a test send) share a single query instead of racing to issue the
+ * same one.
  *
  * Created per run and never at module scope: branding edited between two issues
  * must show up in the second one.
@@ -235,13 +243,6 @@ export async function renderNewsletterFor(options: {
       unsubscribeUrl: userId ? newsletterUnsubscribeUrl(userId, origin) : null,
     }),
   };
-}
-
-/** Run `task` over `items` with a small fixed concurrency, in order. */
-async function pooled<T>(items: T[], task: (item: T) => Promise<void>): Promise<void> {
-  for (let i = 0; i < items.length; i += SEND_CONCURRENCY) {
-    await Promise.all(items.slice(i, i + SEND_CONCURRENCY).map(task));
-  }
 }
 
 /**
@@ -441,6 +442,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     : undefined;
 
   let sent = 0;
+  let queued = 0;
   let failed = 0;
   // Opted out, or SMTP is not configured on this environment. Counted, but an
   // opt-out deliberately leaves NO NewsletterSend row: storing the address of
@@ -450,7 +452,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // One memo for the whole fan-out; see NewsletterBrandCache.
   const brandCache = newNewsletterBrandCache();
 
-  await pooled(recipients, async (user) => {
+  for (const user of recipients) {
     // The group check, not the bare legacy key. They agree today — 'newsletter'
     // is the `newsletter` group's own legacy key — but only this form honours an
     // explicit opt-back-IN: someone who used the newsletter's own unsubscribe
@@ -460,7 +462,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     // That mismatch is the same one this PR removed from ten other call sites.
     if (!emailGroupAllowedForCategory(user, 'newsletter')) {
       skipped++;
-      return;
+      continue;
     }
 
     const { subject, html, locale } = await renderNewsletterFor({
@@ -480,8 +482,11 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     // render is: a failed lookup is a failed run, not one recipient marked FAILED.
     const origin = await originFor(user.orgId, brandCache);
 
-    let status: 'SENT' | 'FAILED' | 'SKIPPED' = 'SENT';
+    let status: 'SENT' | 'QUEUED' | 'FAILED' | 'SKIPPED' = 'SENT';
     let error: string | null = null;
+    // The queued copy's identity and the record it settles (#2951).
+    const dedupeKey = dedupeKeyFor({ kind: 'newsletter', newsletterId, recipient: user.email });
+    const ref = newsletterSendRef(newsletterId, user.id);
     try {
       const result = await sendEmail({
         to: user.email,
@@ -500,6 +505,8 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
         // default world (sendEmail), matching the brand the body wears.
         orgId: user.orgId,
         attachments,
+        dedupeKey,
+        ref,
         headers: {
           // Both halves matter: the URL alone gets a "click to unsubscribe"
           // link in Gmail, the One-Click pair gets the native control that
@@ -508,10 +515,11 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
       });
-      // QUEUED (#2944): a temporary refusal put this recipient's issue on the
-      // mail queue, which retries it — counted as reached, like SENT. Its own
-      // QUEUED state on NewsletterSend is a later change.
-      status = result === 'SKIPPED' ? 'SKIPPED' : 'SENT';
+      // QUEUED (#2951): on the mail queue — BULK queued outright, or a
+      // temporary refusal being retried. Counted as reached (like SENT) and
+      // recorded as QUEUED; the drain's settle hook moves the row to SENT,
+      // FAILED or SKIPPED, and corrects the issue's tally if it did not arrive.
+      status = result;
     } catch (e) {
       status = 'FAILED';
       error = e instanceof Error ? e.message : String(e);
@@ -519,20 +527,24 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       // decides this recipient's row.
     }
 
-    if (status === 'SENT') sent++;
+    if (status === 'SENT' || status === 'QUEUED') sent++;
     else if (status === 'FAILED') failed++;
     else skipped++;
+    if (status === 'QUEUED') queued++;
 
     try {
       await prisma.newsletterSend.create({
         data: { newsletterId, userId: user.id, email: user.email, locale, status, error },
       });
+      // A drain quicker than this insert settled the queued mail before its
+      // record existed: settle the record now.
+      if (status === 'QUEUED') await reconcileQueuedMail(dedupeKey, ref);
     } catch (e) {
       // A unique-constraint hit here means a concurrent run got there first —
       // which is the guarantee working, not a problem.
       logger.warning('Newsletter send row not written', { newsletterId, error: String(e) });
     }
-  });
+  }
 
   await prisma.newsletter.update({
     where: { id: newsletterId },
@@ -556,7 +568,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     detail: JSON.stringify({ sent, failed, skipped, recipients: recipients.length }).slice(0, 191),
   });
 
-  return { newsletterId, recipients: recipients.length, sent, failed, skipped };
+  return { newsletterId, recipients: recipients.length, sent, failed, skipped, queued };
 }
 
 /** The ActivityLog action a held issue writes, once per broadcast month. */
@@ -657,6 +669,8 @@ async function reportNewsletterQuotaHolds(
       subject: message.subject,
       html: message.html,
       category: OPS_ALERT_CATEGORY,
+      // One per hour if it ends up on the queue (#2951).
+      dedupeKey: dedupeKeyFor({ kind: 'ops', alert: 'newsletter-hold', at: opsAlertWindow(now) }),
       // no-user-row: ALERT_EMAIL_TO is an operator alert address configured in
       // the server env, not a User row — there is no preference to read and no
       // unsubscribe token to mint for it.

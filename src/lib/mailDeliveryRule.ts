@@ -81,6 +81,14 @@ export function effectiveLane(category?: string | null, requested?: MailLane | n
   return LANE_RANK[requested] < LANE_RANK[natural] ? requested : natural;
 }
 
+/**
+ * The highest priority a BULK row is ever given. Every other lane sits at or
+ * above `HIGHER_LANE_MIN_PRIORITY`, so the drain can claim "everything that is
+ * not bulk" and "bulk only" by priority band alone (#2951).
+ */
+export const BULK_PRIORITY_MAX = 20;
+export const HIGHER_LANE_MIN_PRIORITY = 50;
+
 /** Job priority for a queued mail (higher drains first). */
 export function lanePriority(lane: MailLane, category?: string | null): number {
   if (lane === 'CRITICAL') return 100;
@@ -298,6 +306,13 @@ export interface BudgetConfig {
   mode: MeterMode;
   /** Pause ladder for a throttle, seconds, escalating. */
   ladderSec: readonly number[];
+  /**
+   * `MAIL_DAILY_CAP`: mails per UTC day this environment's channel should
+   * carry; 0 (the default, unset) = no cap. BULK stops at
+   * `BULK_DAILY_SHARE` of it — the rest is kept for the higher lanes, which
+   * the cap never stops (a counter must not hold a password reset).
+   */
+  dailyCap: number;
 }
 
 export const DEFAULT_LADDER_SEC: readonly number[] = [60, 120, 300, 900, 1800];
@@ -353,7 +368,80 @@ export function budgetConfig(env: Record<string, string | undefined>, channel: M
     intervalMs: Math.ceil(60_000 / ratePerMin),
     mode,
     ladderSec: parseLadder(env.MAIL_THROTTLE_LADDER_SEC),
+    dailyCap: intEnv(pick('DAILY_CAP'), 0, 0, 10_000_000),
   };
+}
+
+// ── The daily cap (#2951) ────────────────────────────────────────────────────
+//
+// One counter per budget row (`MailBudget.dayKey` + `dayCount`), against the
+// DATABASE's UTC day: every metered send of the channel counts, whatever its
+// lane, so the number is what the relay saw today. BULK may only spend while
+// the count is below 90 % of the cap; the last 10 % is the higher lanes'.
+// TRANSACTIONAL and CRITICAL are counted but never refused by it.
+
+/** The share of `MAIL_DAILY_CAP` bulk mail may use. */
+export const BULK_DAILY_SHARE = 0.9;
+
+/** How many sends today still let a BULK mail through: floor(90 % of the
+ *  cap), at least 1 for any cap; null when there is no cap. */
+export function bulkDailyLimit(cfg: Pick<BudgetConfig, 'dailyCap'>): number | null {
+  if (!cfg.dailyCap || cfg.dailyCap <= 0) return null;
+  return Math.max(1, Math.floor(cfg.dailyCap * BULK_DAILY_SHARE));
+}
+
+/** The UTC day a counter belongs to: 'YYYY-MM-DD'. */
+export function utcDayKey(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/** Milliseconds until the next UTC midnight (never 0). */
+export function msUntilNextUtcDay(now: Date): number {
+  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.max(1, next - now.getTime());
+}
+
+/**
+ * May a mail of this lane be counted against today's cap? The in-memory twin
+ * of the conditional UPDATE in `mailBudgetStore.ts`: a stored count from
+ * another day reads as zero; only BULK is ever refused.
+ */
+export function dailyCapAllows(
+  lane: MailLane,
+  counter: { dayKey: string | null; dayCount: number },
+  today: string,
+  cfg: Pick<BudgetConfig, 'dailyCap'>,
+): boolean {
+  if (lane !== 'BULK') return true;
+  const limit = bulkDailyLimit(cfg);
+  if (limit === null) return true;
+  const used = counter.dayKey === today ? counter.dayCount : 0;
+  return used < limit;
+}
+
+/** The counter after one more send today. */
+export function countSend(counter: { dayKey: string | null; dayCount: number }, today: string): { dayKey: string; dayCount: number } {
+  return { dayKey: today, dayCount: counter.dayKey === today ? counter.dayCount + 1 : 1 };
+}
+
+// ── What an admin is told about a large send (#2951) ────────────────────────
+
+/** How fast the drain moves mail when nothing paces it (observe or off mode):
+ *  a deliberately rough figure for the estimate below, not a limit. */
+export const UNPACED_SENDS_PER_MIN = 30;
+
+/**
+ * Rough minutes until `backlog` queued mails have left, at the configured
+ * rate in enforce mode (or an unpaced drain's rough speed otherwise). At least
+ * 1 for any backlog, 0 for none. An estimate shown to a person — "delivered
+ * over about 2 h" — never a promise: a relay pause or the daily cap can make
+ * it longer, a quiet queue shorter.
+ */
+export function queueEtaMinutes(backlog: number, cfg: Pick<BudgetConfig, 'mode' | 'ratePerMin'>): number {
+  const n = Math.max(0, Math.floor(backlog));
+  if (n === 0) return 0;
+  const rate = cfg.mode === 'enforce' ? Math.max(1, cfg.ratePerMin) : UNPACED_SENDS_PER_MIN;
+  return Math.max(1, Math.ceil(n / rate));
 }
 
 /** τ for a lane, in milliseconds (may be negative — see above). */
@@ -407,6 +495,25 @@ export function decayPauseLevel(level: number): number {
   return Math.max(0, Math.floor(level) - 1);
 }
 
+// ── Fair sharing between the two worlds (#2951) ─────────────────────────────
+
+/** The products one deployment serves (`docs/worlds.md`). */
+export const MAIL_WORLDS = ['INTERNSHIP', 'MARKETING'] as const;
+export type MailWorld = (typeof MAIL_WORLDS)[number];
+
+/**
+ * The order the drain asks for BULK rows in, given the world of the bulk row
+ * it sent last: the OTHER world first, then that one again. So a long
+ * campaign in one product cannot starve the other product's digests — each
+ * world gets every second bulk slot while both have mail waiting, and either
+ * gets all of them when the other has none. (A row with no world, and every
+ * row once both preferred claims come back empty, is taken by the fallback
+ * claim that names no world.)
+ */
+export function bulkWorldOrder(last: string | null | undefined): MailWorld[] {
+  return last === 'INTERNSHIP' ? ['MARKETING', 'INTERNSHIP'] : ['INTERNSHIP', 'MARKETING'];
+}
+
 // ── Identity and de-duplication ──────────────────────────────────────────────
 
 /** sha256 of the normalised address: what a log line or a queued row may carry
@@ -435,18 +542,48 @@ function part(v: string | number): string {
  */
 export type DedupeInput =
   | { kind: 'reset'; tokenId: string }
-  | { kind: 'meeting-reminder'; meetingId: string; userId: string }
+  // `at`: the meeting's start. A moved meeting is reminded again for its new
+  // time, so the start is part of the key when given (#2951).
+  | { kind: 'meeting-reminder'; meetingId: string; userId: string; at?: Date }
+  | { kind: 'guest-reminder'; meetingId: string; guest: string; at?: Date }
+  | { kind: 'series-reminder'; seriesId: string; userId: string; at: Date; lead: string }
+  | { kind: 'survey'; invitationId: string; round: number }
   | { kind: 'digest'; digest: string; userId: string; day: string }
   | { kind: 'newsletter'; newsletterId: string; recipient: string }
   | { kind: 'ops'; alert: string; at: Date }
   | { kind: 'fallback'; category?: string | null; to: string; subject: string; ref?: string | null; at: Date };
+
+/**
+ * The start of the `hours`-long UTC window `now` falls in — what an operator
+ * alert's `ops:<kind>:<hour>` key is stamped with, so one alert of a kind per
+ * window leaves, across every replica and restart (#2951). `hours` is clamped
+ * to 1…24 and should divide 24.
+ */
+export function opsAlertWindow(now: Date, hours = 1): Date {
+  const h = Math.min(24, Math.max(1, Math.floor(hours)));
+  const size = h * 60 * 60 * 1000;
+  return new Date(Math.floor(now.getTime() / size) * size);
+}
+
+/** A Date as whole minutes since the epoch: a key part with no ':' in it. */
+function minuteOf(at: Date): string {
+  const t = at.getTime();
+  if (!Number.isFinite(t)) throw new Error('dedupeKeyFor: an invalid date');
+  return String(Math.floor(t / 60_000));
+}
 
 export function dedupeKeyFor(input: DedupeInput): string {
   switch (input.kind) {
     case 'reset':
       return `reset:${part(input.tokenId)}`;
     case 'meeting-reminder':
-      return `mrem:${part(input.meetingId)}:${part(input.userId)}`;
+      return `mrem:${part(input.meetingId)}:${part(input.userId)}${input.at ? `:${minuteOf(input.at)}` : ''}`;
+    case 'guest-reminder':
+      return `mgrem:${part(input.meetingId)}:${recipientHash(input.guest).slice(0, 32)}${input.at ? `:${minuteOf(input.at)}` : ''}`;
+    case 'series-reminder':
+      return `srem:${part(input.seriesId)}:${part(input.userId)}:${minuteOf(input.at)}:${part(input.lead)}`;
+    case 'survey':
+      return `survey:${part(input.invitationId)}:${part(Math.max(0, Math.floor(input.round)))}`;
     case 'digest':
       return `digest:${part(input.digest)}:${part(input.userId)}:${part(input.day)}`;
     case 'newsletter':

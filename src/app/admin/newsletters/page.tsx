@@ -20,6 +20,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
+import { mailQueueNoticeText } from '@/lib/mailQueueNoticeText';
 import { formatDateTime } from '@/lib/relativeTime';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { locales, type Locale } from '@/i18n/config';
@@ -235,12 +236,19 @@ export default function AdminNewslettersPage() {
       if (action === 'draft') setResult(n.savedDraft);
       else if (action === 'schedule') setResult(n.scheduled.replace('{when}', formatDateTime(scheduleAt, locale)));
       else if (data.dispatch) {
+        // How many copies wait on the mail queue and roughly for how long (#2951).
+        const queuedLine = mailQueueNoticeText(data.mailQueue, t.mailQueue);
         setResult(
-          n.sentResult
-            .replace('{sent}', String(data.dispatch.sent))
-            .replace('{recipients}', String(data.dispatch.recipients))
-            .replace('{skipped}', String(data.dispatch.skipped))
-            .replace('{failed}', String(data.dispatch.failed))
+          [
+            n.sentResult
+              .replace('{sent}', String(data.dispatch.sent))
+              .replace('{recipients}', String(data.dispatch.recipients))
+              .replace('{skipped}', String(data.dispatch.skipped))
+              .replace('{failed}', String(data.dispatch.failed)),
+            queuedLine,
+          ]
+            .filter(Boolean)
+            .join(' ')
         );
       }
       await Promise.all([fetchHistory(), refreshQuota()]);
@@ -283,6 +291,11 @@ export default function AdminNewslettersPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setError(quotaMessage(data) ?? data?.error ?? n.errorGeneric);
+      else {
+        // A send from the history row: say how much waits on the mail queue (#2951).
+        const queuedLine = mailQueueNoticeText(data?.mailQueue, t.mailQueue);
+        if (queuedLine) setResult(queuedLine);
+      }
       await Promise.all([fetchHistory(), refreshQuota()]);
     } finally {
       setRowBusy(false);

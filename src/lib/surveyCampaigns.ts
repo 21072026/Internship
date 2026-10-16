@@ -36,6 +36,7 @@ import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { formatDate } from '@/lib/relativeTime';
 import { emailBrand, sendEmail } from '@/services/emailService';
+import { dedupeKeyFor } from '@/lib/mailDeliveryRule';
 
 export const SWEEP_BATCH = 50;
 export const LOOKBACK_DAYS = 7;
@@ -203,7 +204,7 @@ export async function dispatchDueSurveyCampaigns(now = new Date(), opts: { orgId
     // stands (so it is not retried), and nobody gets a second link.
     if (!invite) continue;
     await prisma.surveyCampaignSend.update({ where: { id: claim.id }, data: { invitationId: invite.invitationId } });
-    await sendInvite(user, campaign, invite.token, now);
+    await sendInvite(user, campaign, invite.token, now, invite.invitationId);
     result.sent++;
   }
 
@@ -213,7 +214,7 @@ export async function dispatchDueSurveyCampaigns(now = new Date(), opts: { orgId
   return result;
 }
 
-async function sendInvite(user: Person, campaign: SurveyCampaign, token: string, now: Date) {
+async function sendInvite(user: Person, campaign: SurveyCampaign, token: string, now: Date, invitationId: string) {
   const locale: Locale = isLocale(user.preferredLanguage ?? undefined) ? (user.preferredLanguage as Locale) : defaultLocale;
   const org = await settingsOrgOfRow(campaign.orgId ?? user.orgId);
   const t = await emailDictionary(locale, org);
@@ -226,6 +227,10 @@ async function sendInvite(user: Person, campaign: SurveyCampaign, token: string,
     category: 'survey-invite',
     userId: user.id,
     orgId: user.orgId,
+    // One invitation mail per invitation on the queue (#2951), and none once
+    // its link has expired.
+    dedupeKey: dedupeKeyFor({ kind: 'survey', invitationId, round: 0 }),
+    notAfter: new Date(now.getTime() + SURVEY_INVITE_TTL_DAYS * DAY),
     locale,
     to: user.email,
     subject: t.programSurvey.invite.subject,

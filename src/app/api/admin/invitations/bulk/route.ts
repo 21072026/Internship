@@ -37,9 +37,10 @@ const bodySchema = z.object({
   action: z.enum(['resend', 'revoke', 'delete']),
 });
 
-// Bulk resend fans out mail. Four at a time keeps the SMTP connection pool and
-// the request itself bounded; the batch cap above bounds the total.
-const SEND_CONCURRENCY = 4;
+// Bulk resend fans out mail: one row at a time, on the TRANSACTIONAL lane
+// (#2951) — a resend of 200 invitations is not 200 people waiting, so it goes
+// through the paced mail queue rather than spending the critical reserve. The
+// batch cap above bounds the total.
 
 type Outcome =
   | 'resent'
@@ -59,12 +60,10 @@ interface RowResult {
   label: string | null;
 }
 
-/** Run `task` over `items` with a small fixed concurrency, in order. */
-async function pooled<T, R>(items: T[], task: (item: T) => Promise<R>): Promise<R[]> {
+/** Run `task` over `items` one at a time, in order (#2951). */
+async function inOrder<T, R>(items: T[], task: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
-  for (let i = 0; i < items.length; i += SEND_CONCURRENCY) {
-    out.push(...(await Promise.all(items.slice(i, i + SEND_CONCURRENCY).map(task))));
-  }
+  for (const item of items) out.push(await task(item));
   return out;
 }
 
@@ -189,7 +188,7 @@ export async function POST(request: Request) {
           eligible.push(row);
         }
 
-        const sent = await pooled(eligible, async (row): Promise<RowResult> => {
+        const sent = await inOrder(eligible, async (row): Promise<RowResult> => {
           // The expiry is refreshed for every eligible row, mailed or not: an
           // email-less shareable link (#670) has no delivery path at all, and a
           // synthetic demo address must not be mailed — but "give it another
@@ -209,6 +208,7 @@ export async function POST(request: Request) {
                 // The language the invitation was created in (#1720) — a bulk
                 // resend must not flip a Turkish invitee to English.
                 locale: row.locale,
+                lane: 'TRANSACTIONAL',
               })) !== 'SKIPPED';
           } catch (mailErr) {
             // The token is still valid and the expiry is already refreshed, so a

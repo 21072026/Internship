@@ -17,6 +17,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { locales } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { BULK_INVITE_MAX_CHARS, type BulkInviteReason, type BulkInviteRole } from '@/lib/bulkInvite';
+import { mailQueueNoticeText, type MailQueueNoticeData } from '@/lib/mailQueueNoticeText';
 
 interface ReportRow {
   row: number;
@@ -42,6 +43,8 @@ interface Report {
   emailed: number;
   unsent: number;
   rows: ReportRow[];
+  /** Real run: invitations waiting on the mail queue (#2951). */
+  mailQueue?: MailQueueNoticeData;
 }
 
 export default function BulkInvitePage() {
@@ -258,6 +261,14 @@ export default function BulkInvitePage() {
                 </div>
               )}
 
+              {result && mailQueueNoticeText(result.mailQueue, t.mailQueue) && (
+                <div
+                  className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm"
+                  data-testid="bulk-invite-queued"
+                >
+                  {mailQueueNoticeText(result.mailQueue, t.mailQueue)}
+                </div>
+              )}
               {result &&
                 (result.unsent > 0 ? (
                   // Never "{n} invitations sent." when nothing was mailed (#1431):

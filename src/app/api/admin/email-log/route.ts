@@ -120,7 +120,8 @@ export async function GET(request: Request) {
 
   // DEFERRED (#2941/#2944): a temporary refusal the mail queue is retrying.
   const summary = { SENT: 0, FAILED: 0, SKIPPED: 0, DEFERRED: 0 };
-  for (const row of counts) summary[row.status] = row._count._all;
+  // QUEUED belongs to NewsletterSend only and never reaches EmailLog (#2951).
+  for (const row of counts) if (row.status !== 'QUEUED') summary[row.status] = row._count._all;
 
   const last24h = { primary: 0, bulk: 0 };
   for (const row of dayByTransport) {

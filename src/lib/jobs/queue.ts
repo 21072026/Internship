@@ -145,7 +145,13 @@ export interface QueueStore {
    * row another worker is claiming; returns fewer rows than `limit`, or none,
    * rather than waiting.
    */
-  claimDue(input: { now: Date; limit: number; workerId: string; names?: readonly string[] }): Promise<JobRecord[]>;
+  claimDue(input: {
+    now: Date;
+    limit: number;
+    workerId: string;
+    names?: readonly string[];
+    filter?: ClaimFilter;
+  }): Promise<JobRecord[]>;
   /**
    * `UPDATE Job SET status='PENDING', lockedAt=NULL, lockedBy=NULL WHERE
    * status='RUNNING' AND lockedAt < ?`. Returns how many rows moved. Must not
@@ -282,6 +288,39 @@ export interface ClaimOptions extends QueueOptions {
    * empty: every name, as before.
    */
   names?: readonly JobName[];
+  /**
+   * A narrower claim (#2951, the mail drain's lanes): a priority band and/or
+   * one top-level string field of the payload. Omitted: every due row, as
+   * before.
+   */
+  filter?: ClaimFilter;
+}
+
+/**
+ * Narrows a claim. `minPriority` / `maxPriority` are inclusive bounds on
+ * `Job.priority`; `payload` matches ONE top-level string field of the JSON
+ * payload exactly (the mail drain's `world`). The key is checked against a
+ * plain identifier pattern before it reaches the SQL, and the value is bound.
+ */
+export interface ClaimFilter {
+  minPriority?: number;
+  maxPriority?: number;
+  payload?: { key: string; value: string };
+}
+
+/** A payload key a claim filter may name: a plain identifier, nothing else. */
+export const CLAIM_PAYLOAD_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
+
+/** True when `row` passes `filter` — the in-memory twin of the store's SQL. */
+export function matchesClaimFilter(row: Pick<JobRecord, 'priority' | 'payload'>, filter?: ClaimFilter): boolean {
+  if (!filter) return true;
+  if (typeof filter.minPriority === 'number' && row.priority < filter.minPriority) return false;
+  if (typeof filter.maxPriority === 'number' && row.priority > filter.maxPriority) return false;
+  if (filter.payload) {
+    const p = row.payload as Record<string, unknown> | null;
+    if (!p || typeof p !== 'object' || p[filter.payload.key] !== filter.payload.value) return false;
+  }
+  return true;
 }
 
 export const DEFAULT_CLAIM_LIMIT = 5;
@@ -307,7 +346,16 @@ export async function claim(workerId: string, opts: ClaimOptions = {}): Promise<
   const limit = Math.min(MAX_CLAIM_LIMIT, Math.max(1, Math.trunc(opts.limit ?? DEFAULT_CLAIM_LIMIT)));
   if (!workerId) throw new Error('claim() needs a worker id: the lease has to name a holder.');
   const names = opts.names?.length ? opts.names : undefined;
-  return store.claimDue({ now: now(), limit, workerId, ...(names ? { names } : {}) });
+  if (opts.filter?.payload && !CLAIM_PAYLOAD_KEY.test(opts.filter.payload.key)) {
+    throw new Error('claim(): a payload filter key must be a plain identifier.');
+  }
+  return store.claimDue({
+    now: now(),
+    limit,
+    workerId,
+    ...(names ? { names } : {}),
+    ...(opts.filter ? { filter: opts.filter } : {}),
+  });
 }
 
 // ── reapExpiredLeases ───────────────────────────────────────────────────────
@@ -539,7 +587,7 @@ export function createMemoryQueueStore(options: MemoryQueueOptions = {}): Memory
       return row ? { ...row } : null;
     },
 
-    claimDue: async ({ now, limit, workerId, names }) => {
+    claimDue: async ({ now, limit, workerId, names, filter }) => {
       // Synchronous section — this is the FOR UPDATE SKIP LOCKED.
       const taken = jobs
         .filter(
@@ -547,7 +595,8 @@ export function createMemoryQueueStore(options: MemoryQueueOptions = {}): Memory
             j.status === 'PENDING' &&
             j.runAt.getTime() <= now.getTime() &&
             !locked.has(j.id) &&
-            (!names?.length || names.includes(j.name))
+            (!names?.length || names.includes(j.name)) &&
+            matchesClaimFilter(j, filter)
         )
         .sort((a, b) => b.priority - a.priority || a.runAt.getTime() - b.runAt.getTime())
         .slice(0, limit);

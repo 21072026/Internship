@@ -125,6 +125,9 @@ export function createMeterObserver(opts: MeterObserverOptions = {}): MeterObser
           category: subject.category,
           channel: subject.transport,
           waitMs: outcome.waitMs,
+          // 'refused' (the rate) or 'daily_cap' (a BULK mail past 90 % of
+          // MAIL_DAILY_CAP, #2951).
+          reason: outcome.reason,
         });
         // The mail goes anyway, so the meter is charged for it: it must describe
         // what the relay actually received, or every later line would understate.

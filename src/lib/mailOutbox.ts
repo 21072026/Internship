@@ -3,21 +3,27 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { seal, open } from '@/lib/secretBox';
 import { runUnscoped } from '@/lib/tenantAmbient';
-import { claim, enqueue, reapExpiredLeases, DEFAULT_LEASE_MS, type JobRecord } from '@/lib/jobs/queue';
+import { claim, enqueue, reapExpiredLeases, DEFAULT_LEASE_MS, type ClaimFilter, type JobRecord } from '@/lib/jobs/queue';
 import { prismaQueueStore } from '@/lib/jobs/queueStore';
 import type { JobPayloadMap } from '@/lib/jobs/types';
 import { replicaId } from '@/lib/jobs/lease';
 import { emailGroupAllowed, isEmailGroupId, isEssentialGroup } from '@/lib/emailGroups';
 import {
+  HIGHER_LANE_MIN_PRIORITY,
   budgetConfig,
   budgetNameFor,
+  bulkWorldOrder,
   classifySmtpError,
   dedupeKeyFor,
   lanePriority,
+  queueEtaMinutes,
   recipientHash,
   type BudgetConfig,
   type MailChannel,
 } from '@/lib/mailDeliveryRule';
+import { outcomeOfJob, settleMailRef, type MailRefOutcome } from '@/lib/mailRefHooks';
+import { verticalFor } from '@/lib/verticalContext';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import {
   DRAIN_BATCH,
   DRAIN_MAX_MS,
@@ -137,6 +143,7 @@ export async function enqueueMail(prepared: PreparedEmail, opts: EnqueueMailOpti
   if (!canQueue(prepared)) throw new Error('mail_outbox: attachments too large to queue');
   const now = opts.now ?? new Date();
   const notAfter = notAfterFor(prepared.lane, now, opts.notAfter);
+  const world = prepared.world ?? (await worldOfOrg(prepared.orgId ?? null));
   const payload: MailJobPayload = {
     v: MAIL_PAYLOAD_VERSION,
     lane: prepared.lane,
@@ -144,7 +151,7 @@ export async function enqueueMail(prepared: PreparedEmail, opts: EnqueueMailOpti
     group: prepared.group ?? null,
     userId: prepared.userId ?? null,
     orgId: prepared.orgId ?? null,
-    world: prepared.world ?? null,
+    world,
     rcpt: recipientHash(prepared.to),
     notAfter: notAfter.toISOString(),
     reason: opts.reason,
@@ -166,6 +173,89 @@ export async function enqueueMail(prepared: PreparedEmail, opts: EnqueueMailOpti
       orgId: prepared.orgId ?? null,
     }),
   );
+}
+
+// The world a queued mail belongs to (#2951): the BULK drain alternates
+// between the two products by this field, so it is filled in on every row —
+// from the recipient's organization when the preference read did not already
+// learn it, the default world for a mail with no organization (an operator
+// alert, a guest of the default product). Memoised per process for a minute:
+// a 500-recipient broadcast is one tenant, and must cost one read, not 500.
+const WORLD_TTL_MS = 60_000;
+const worldMemo = new Map<string, { world: string; at: number }>();
+
+async function worldOfOrg(orgId: string | null): Promise<string | null> {
+  if (!orgId) return DEFAULT_VERTICAL;
+  const hit = worldMemo.get(orgId);
+  if (hit && Date.now() - hit.at < WORLD_TTL_MS) return hit.world;
+  try {
+    const world = await verticalFor(orgId);
+    if (worldMemo.size > 1000) worldMemo.clear();
+    worldMemo.set(orgId, { world, at: Date.now() });
+    return world;
+  } catch {
+    // Unknown is honest: the drain's fallback claim takes a row with no world.
+    return null;
+  }
+}
+
+/**
+ * How long the queue in front of a large send is, and roughly how long until
+ * it has left (#2951): what an admin who just queued N mails is told.
+ */
+export interface MailQueueNotice {
+  /** Mails this action put on the queue. */
+  queued: number;
+  /** Mails waiting in total, this action's included. */
+  backlog: number;
+  /** Rough minutes until the backlog has left (see `queueEtaMinutes`). */
+  etaMinutes: number;
+  /** True when the drain is paced by the budget (enforce mode). */
+  paced: boolean;
+}
+
+/**
+ * The notice for `queued` mails. `channel` picks whose budget paces them — the
+ * bulk channel's numbers fall back to the primary ones when it has none of its
+ * own. Never throws: a backlog that cannot be read falls back to this
+ * action's own mails.
+ */
+export async function mailQueueNotice(
+  queued: number,
+  opts: { channel?: MailChannel; env?: Record<string, string | undefined> } = {},
+): Promise<MailQueueNotice> {
+  const cfg = budgetConfig(opts.env ?? process.env, opts.channel ?? 'primary');
+  let backlog = queued;
+  if (queued > 0) {
+    try {
+      backlog = Math.max(
+        queued,
+        await runUnscoped(() => prisma.job.count({ where: { name: MAIL_JOB_NAME, status: { in: ['PENDING', 'RUNNING'] } } })),
+      );
+    } catch {
+      // The estimate falls back to this action's own mails.
+    }
+  }
+  return { queued, backlog, etaMinutes: queueEtaMinutes(backlog, cfg), paced: cfg.mode === 'enforce' };
+}
+
+/**
+ * A sender that wrote its own record as QUEUED (the newsletter) asks, right
+ * after, whether the drain already settled the mail — a quick drain can beat
+ * the record's own insert, and the settle hook then found nothing to update.
+ * Applies the hook when the row is already terminal; a no-op otherwise.
+ */
+export async function reconcileQueuedMail(idempotencyKey: string, ref: string): Promise<MailRefOutcome | null> {
+  try {
+    const row = await runUnscoped(() =>
+      prisma.job.findUnique({ where: { idempotencyKey }, select: { status: true, lastError: true } }),
+    );
+    const outcome = row ? outcomeOfJob(row.status, row.lastError) : null;
+    if (outcome) await settleMailRef(ref, outcome, row?.lastError ?? null);
+    return outcome;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -221,8 +311,12 @@ export interface DrainSummary {
   expired: number;
   unsubscribed: number;
   reaped: number;
-  /** Why the tick ended: no due rows, the budget, the breaker, the relay, the clock. */
-  stoppedBy: 'empty' | 'budget' | 'breaker' | 'relay' | 'deadline' | 'error' | 'disabled' | 'unconfigured';
+  /** BULK rows put back to the next UTC day by `MAIL_DAILY_CAP` (enforce mode). */
+  capped: number;
+  /** Why the tick ended: no due rows, the budget, the breaker, the relay, the
+   *  clock — or `daily_cap`: nothing left but BULK, and today's bulk share is
+   *  spent. */
+  stoppedBy: 'empty' | 'budget' | 'breaker' | 'relay' | 'deadline' | 'error' | 'disabled' | 'unconfigured' | 'daily_cap';
 }
 
 /** The delivery half a drain uses: the transport and the ledger —
@@ -251,6 +345,56 @@ export interface DrainOptions {
 
 let lastReapAt = 0;
 
+// ── Which rows a round claims (#2951) ───────────────────────────────────────
+//
+// Every round first claims the higher lanes (CRITICAL, TRANSACTIONAL — every
+// row at or above HIGHER_LANE_MIN_PRIORITY), a batch at a time, so a backlog
+// of bulk mail never stands in front of a message notification. Only when
+// none is due does it take BULK — ONE row per round, so the next round looks
+// at the higher lanes again — alternating between the two worlds
+// (`bulkWorldOrder`), and falling back to any bulk row when neither preferred
+// world has one due.
+
+/** The world of the bulk row this process sent last (fair sharing). */
+let lastBulkWorld: string | null = null;
+
+/** Until when this process takes no BULK rows: today's bulk share of
+ *  `MAIL_DAILY_CAP` is spent (the database said so on a spend). */
+let bulkBlockedUntil = 0;
+
+/** Tests: forget the in-process drain state between cases. */
+export function resetDrainStateForTests(): void {
+  lastBulkWorld = null;
+  bulkBlockedUntil = 0;
+  lastReapAt = 0;
+}
+
+// The two bands partition every priority: at or above HIGHER_LANE_MIN_PRIORITY
+// is the higher lanes, everything below it the bulk band (bulk rows are at
+// most BULK_PRIORITY_MAX), so no row — a hand-set priority included — is ever
+// unreachable.
+const HIGHER_LANES: ClaimFilter = { minPriority: HIGHER_LANE_MIN_PRIORITY };
+const BULK_LANE: ClaimFilter = { maxPriority: HIGHER_LANE_MIN_PRIORITY - 1 };
+
+/**
+ * One round's rows. At most three claims, and an idle queue costs exactly
+ * three: the higher lanes, the preferred world's bulk, any bulk. The second
+ * world in `bulkWorldOrder` is reached through the last, unfiltered claim —
+ * when the preferred world has nothing due, any bulk row is the other world's
+ * (or one with no world).
+ */
+async function claimRound(workerId: string): Promise<{ rows: JobRecord[]; bulk: boolean; capped: boolean }> {
+  const common = { names: [...JOB_NAMES], leaseMs: DEFAULT_LEASE_MS, store: store() };
+  const higher = await claim(workerId, { ...common, limit: DRAIN_BATCH, filter: HIGHER_LANES });
+  if (higher.length) return { rows: higher, bulk: false, capped: false };
+  if (Date.now() < bulkBlockedUntil) return { rows: [], bulk: true, capped: true };
+  const [preferred] = bulkWorldOrder(lastBulkWorld);
+  const mine = await claim(workerId, { ...common, limit: 1, filter: { ...BULK_LANE, payload: { key: 'world', value: preferred } } });
+  if (mine.length) return { rows: mine, bulk: true, capped: false };
+  const any = await claim(workerId, { ...common, limit: 1, filter: BULK_LANE });
+  return { rows: any, bulk: true, capped: false };
+}
+
 /**
  * One tick of the drain: claim due 'email.send' rows and deliver them until the
  * queue is empty, the budget or the relay says stop, or `maxMs` runs out.
@@ -271,6 +415,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     expired: 0,
     unsubscribed: 0,
     reaped: 0,
+    capped: 0,
     stoppedBy: 'empty',
   };
   // Nothing to send with (demo, an environment without SMTP, the e2e server):
@@ -298,10 +443,14 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     }
 
     while (Date.now() < deadline) {
-      const rows = await claim(workerId, { names: [...JOB_NAMES], limit: DRAIN_BATCH, leaseMs: DEFAULT_LEASE_MS, store: store() });
+      const { rows, bulk, capped } = await claimRound(workerId);
       if (rows.length === 0) {
-        summary.stoppedBy = 'empty';
+        summary.stoppedBy = capped ? 'daily_cap' : 'empty';
         return summary;
+      }
+      if (bulk) {
+        const world = (rows[0].payload as { world?: unknown } | null)?.world;
+        lastBulkWorld = typeof world === 'string' ? world : null;
       }
       summary.claimed += rows.length;
       for (let i = 0; i < rows.length; i++) {
@@ -372,6 +521,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   if (isExpired(payload.notAfter, now)) {
     await settle(row, workerId, { status: 'CANCELLED', lastError: 'expired', payload: clearedPayload(payload) });
     await deps.record(envelope, 'FAILED', 'Expired in the mail queue before it could be delivered');
+    await settleMailRef(payload.ref, 'FAILED', 'expired');
     deps.finalFailure(envelope);
     logger.warning('mail_outbox.expired', meta);
     summary.expired++;
@@ -396,6 +546,17 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   }
   if (cfg.mode === 'enforce') {
     const spent = await budgetStore.spendToken(envelope.lane, cfg, budget);
+    if (!spent.allowed && spent.reason === 'daily_cap') {
+      // Today's bulk share is spent (#2951): this row waits for the next UTC
+      // day, and this process takes no more BULK rows until then — the higher
+      // lanes keep draining, so the tick goes on.
+      const runAt = new Date(now.getTime() + Math.max(1_000, spent.waitMs));
+      bulkBlockedUntil = Date.now() + Math.max(1_000, spent.waitMs);
+      await release(row, workerId, runAt);
+      logger.info('mail_outbox.daily_cap', { ...meta, runAt: runAt.toISOString() });
+      summary.capped++;
+      return null;
+    }
     if (!spent.allowed) {
       const runAt = new Date(now.getTime() + Math.max(1_000, spent.reason === 'db_error' ? 5_000 : spent.waitMs));
       await release(row, workerId, runAt);
@@ -411,6 +572,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   if (!(await stillWanted(payload.group, payload.userId))) {
     await settle(row, workerId, { status: 'CANCELLED', lastError: 'unsubscribed', payload: clearedPayload(payload) });
     await deps.record(envelope, 'SKIPPED', `Unsubscribed: ${payload.group}`);
+    await settleMailRef(payload.ref, 'SKIPPED', 'unsubscribed');
     summary.unsubscribed++;
     return null;
   }
@@ -460,6 +622,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
         payload: clearedPayload(payload),
       });
       await deps.record(envelope, 'SENT');
+      await settleMailRef(payload.ref, 'SENT');
       summary.sent++;
       return null;
     case 'release':
@@ -502,6 +665,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
         payload: clearedPayload(payload),
       });
       await deps.record(envelope, 'FAILED', errorText(error));
+      await settleMailRef(payload.ref, 'FAILED', action.reason);
       deps.finalFailure(envelope);
       logger.error('mail_outbox.dead', { ...meta, status: action.status, reason: action.reason });
       summary.dead++;
@@ -514,6 +678,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
         payload: clearedPayload(payload),
       });
       await deps.record(envelope, 'FAILED', `Expired in the mail queue: ${errorText(error)}`);
+      await settleMailRef(payload.ref, 'FAILED', action.reason);
       deps.finalFailure(envelope);
       logger.warning('mail_outbox.expired', { ...meta, reason: action.reason });
       summary.expired++;

@@ -6,18 +6,16 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
-import { brandHeader, emailBrand, sendEmail, recordOptOuts } from '@/services/emailService';
-import { logger } from '@/lib/logger';
+import { recordOptOuts } from '@/services/emailService';
+import { mailAnnouncement } from '@/lib/announcementMail';
+import { mailQueueNotice } from '@/lib/mailOutbox';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { checkBroadcastQuota, broadcastQuotaError } from '@/lib/broadcastQuota';
 import { withRequestScope } from '@/lib/requestContext';
-import { defaultLocale, isLocale } from '@/i18n/config';
-import { getDictionary } from '@/i18n/dictionaries';
 import {
   validateAnnouncementImage,
   announcementImageUrl,
@@ -49,15 +47,6 @@ const schema = z.object({
   email: z.boolean().optional(),
 });
 
-// Content-ID the announcement email's <img> references.
-const IMAGE_CID = 'announcement-image';
-
-// Derived from the (already allow-listed) MIME type rather than taken from the
-// upload: an attacker-supplied filename has no business landing in a mail header.
-function emailImageFilename(contentType: string) {
-  const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[contentType] ?? 'img';
-  return `announcement.${ext}`;
-}
 
 const IMAGE_ERROR: Record<string, string> = {
   unsupported: 'Only PNG, JPEG, WebP or GIF images are allowed',
@@ -278,93 +267,32 @@ async function handlePost(request: Request) {
   });
 
   let emailed = 0;
+  // Of `emailed`, the mails waiting on the mail queue (#2951).
+  let queued = 0;
   // The people the broadcast honoured an opt-out for (#2054): one SKIPPED
   // EmailLog row each, from the preference row this handler already loaded —
   // one batched insert, no extra read — so "show me this person's opt-out was
   // honoured on this announcement" has an answer.
   let skipped = 0;
   if (email) {
-    const mailed = new Set(mailRecipients.map((u) => u.id));
+    const toMail = new Set(mailRecipients.map((u) => u.id));
     skipped = await recordOptOuts(
-      users.filter((u) => u.email && !mailed.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)' })),
+      users.filter((u) => u.email && !toMail.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)' })),
     );
 
-    const escapeHtml = (value: string) =>
-      value.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-    // The image is attached inline (cid:) rather than linked: /api/announcements/
-    // <id>/image requires a session, so an <img src="https://…"> would render as
-    // a broken image in every mail client.
-    const imageHtml = imageData ? `<p><img src="cid:${IMAGE_CID}" alt="" style="max-width:100%;height:auto"></p>` : '';
-    const attachments = imageData && image
-      ? [{ filename: emailImageFilename(image.type), content: imageData, contentType: image.type, cid: IMAGE_CID }]
-      : undefined;
-    // A reader outside the default world gets their own org's header — logo,
-    // accent — so a marketing broadcast does not look like an internship one
-    // (docs/worlds.md); the default world keeps the bare heading it always had.
-    // The sender name is sendEmail's job (it has `orgId`). The audience is one
-    // tenant, so this is one lookup.
-    const brands = new Map<string, ReturnType<typeof emailBrand>>();
-    const brandOf = (orgId: string | null) => {
-      const key = orgId ?? '';
-      let hit = brands.get(key);
-      if (!hit) brands.set(key, (hit = emailBrand(orgId)));
-      return hit;
-    };
-    await Promise.all(
-      // The list the quota was checked against, not a second filter over
-      // `users`: two copies of "who gets mailed" is how a metered count and a
-      // delivered count start disagreeing. Both conjuncts of that filter (see
-      // above) are what make `emailed` truthful once people can unsubscribe
-      // from announcements — without the group check the counter would keep
-      // counting mails that sendEmail() then declines to deliver.
-      mailRecipients
-        .map((u) => {
-          const preferredLanguage = u.preferredLanguage ?? undefined;
-          const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-          const t = getDictionary(locale);
-          // The body follows the recipient's language too, not just the shell
-          // around it — before #1163 only the subject and the link label were
-          // translated while the message itself went out in one language.
-          const safe = escapeHtml(resolveAnnouncementText({ text, translations }, u.preferredLanguage));
-          const bodyHtml = `<p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${t.announcements.emailOpenLink}</a></p>` : ''}`;
-          // Inside the per-recipient chain, so a failed brand read is one
-          // logged failure like a failed send, not a rejected broadcast.
-          return brandOf(u.orgId).then((brand) => sendEmail({
-            to: u.email,
-            category: 'announcement',
-            subject: t.announcements.emailSubject,
-            html: `${
-              brand.vertical === DEFAULT_VERTICAL
-                ? `<h2>${t.announcements.emailSubject}</h2>`
-                : brandHeader(brand, t.announcements.emailSubject)
-            }${bodyHtml}`,
-            attachments,
-            // One mail per recipient in the broadcast, each with its own
-            // unsubscribe token — this is the highest-volume mail the product
-            // sends and the one people most want a working opt-out for. The
-            // footer takes the same language the body was just rendered in.
-            userId: u.id,
-            locale: u.preferredLanguage,
-            // The preference columns this handler already selected for all of
-            // them, handed to the central check so it does not re-read the same
-            // two values once per recipient. On a thousand-user broadcast that
-            // was a thousand extra queries riding alongside a thousand EmailLog
-            // inserts inside this one Promise.all — the pool-timeout window the
-            // largest send in the product could least afford.
-            //
-            // Data, not a bypass: `sendEmail` still runs the same check on it,
-            // and the filter above uses the very same row, so the two cannot
-            // disagree about what this person chose.
-            prefs: u,
-            // Handed over with `prefs`, which skips the read that would have
-            // learned it.
-            orgId: u.orgId,
-          })).then(
-            () => { emailed++; },
-            (e) => logger.error('Failed to send announcement email', { error: String(e) })
-          );
-        })
-    );
+    // One recipient at a time (#2951) — see src/lib/announcementMail.ts. The
+    // list the quota was checked against, not a second filter over `users`:
+    // two copies of "who gets mailed" is how a metered count and a delivered
+    // count start disagreeing.
+    const mailed = await mailAnnouncement({
+      recipients: mailRecipients,
+      text,
+      translations,
+      link: link || null,
+      image: imageData && image ? { data: imageData, contentType: image.type } : null,
+    });
+    emailed = mailed.emailed;
+    queued = mailed.queued;
   }
 
   if (emailed > 0) {
@@ -373,7 +301,15 @@ async function handlePost(request: Request) {
 
   await logActivity({ action: 'announcement.broadcast', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json(
-    { recipients: users.length, emailed, skipped, imageUrl: imageData ? announcementImageUrl(announcement.id) : null },
+    {
+      recipients: users.length,
+      emailed,
+      skipped,
+      imageUrl: imageData ? announcementImageUrl(announcement.id) : null,
+      // How many wait on the mail queue and roughly how long they take at this
+      // environment's pace (#2951) — the composer says so.
+      ...(queued > 0 ? { mailQueue: await mailQueueNotice(queued, { channel: 'bulk' }) } : {}),
+    },
     { status: 201 }
   );
   });

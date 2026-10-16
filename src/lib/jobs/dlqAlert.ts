@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { sendEmail, type EmailDeliveryResult } from '@/services/emailService';
+import { dedupeKeyFor, opsAlertWindow } from '@/lib/mailDeliveryRule';
 import {
   buildDeadLetterAlert,
   normalizeReason,
@@ -145,6 +146,9 @@ export async function runDeadLetterAlert(): Promise<DeadLetterAlertRun> {
       subject: message.subject,
       html: message.html,
       category: ALERT_CATEGORY,
+      // One per hour if it ends up on the queue (#2951): a second run in the
+      // same hour (a manual one) does not queue a second copy.
+      dedupeKey: dedupeKeyFor({ kind: 'ops', alert: 'dead-letter', at: opsAlertWindow(new Date()) }),
       // no-user-row: ALERT_EMAIL_TO is an operator alert address configured in
       // the server env, not a User row — there is no preference to read and no
       // unsubscribe token to mint for it.

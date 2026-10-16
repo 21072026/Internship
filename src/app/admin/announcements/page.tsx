@@ -12,6 +12,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
+import { mailQueueNoticeText } from '@/lib/mailQueueNoticeText';
 import { DraftFromBrief, TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
 import { afterEdit } from '@/lib/machineTranslation';
 import {
@@ -178,7 +179,9 @@ export default function AdminAnnouncementsPage() {
         throw new Error(data.error ?? t.common.error);
       }
       setBodies({}); setMachine([]); setLink(''); setEmail(false); clearImage();
-      setResult(t.announcements.sent.replace('{n}', String(data.recipients)));
+      // How many mails wait on the queue and roughly for how long (#2951).
+      const queuedLine = mailQueueNoticeText(data.mailQueue, t.mailQueue);
+      setResult([t.announcements.sent.replace('{n}', String(data.recipients)), queuedLine].filter(Boolean).join(' '));
       await Promise.all([fetchHistory(), refreshQuota()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);

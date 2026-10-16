@@ -1,7 +1,8 @@
 # The mail queue
 
 How outbound mail survives a relay that says "not now" (#2944, building on the
-lane rules and send budget of #2941).
+lane rules and send budget of #2941), and how transactional and bulk mail are
+paced through it instead of being sent in bursts (#2951).
 
 ## The problem
 
@@ -43,13 +44,20 @@ nowhere else — `laneFor()` in `src/lib/mailDeliveryRule.ts`:
   verification, security notices, invitations, operator alerts. Always tried
   inline first, never for longer than the inline cap.
 - **TRANSACTIONAL** — written to or about one person: messages, meeting invites
-  and reminders, lifecycle and pipeline mail. Inline today.
+  and reminders, lifecycle and pipeline mail. Should arrive within seconds.
 - **BULK** — automated volume: digests, task nudges, reports, newsletters,
-  announcements, surveys. Inline today.
+  announcements, surveys. May take hours.
 
 `MAIL_QUEUE_LANES=TRANSACTIONAL,BULK` moves those two lanes onto the queue
-outright; it is empty by default, and setting it back to empty restores inline
-sending (with the retry path kept).
+outright (#2951): the sender's call returns `QUEUED` as soon as the row is
+written, and the drain sends it. It is empty by default — every lane inline, as
+before — and setting it back to empty is the rollback (the retry path stays).
+CRITICAL is never queued outright: a person is waiting for it.
+
+A caller may move a mail to a **lower** lane, never a higher one
+(`effectiveLane()`): a bulk invitation run passes `lane: 'TRANSACTIONAL'`, so a
+paste of 300 addresses rides the paced lane instead of spending the critical
+reserve inline. A single invitation stays CRITICAL.
 
 ## The queue
 
@@ -94,8 +102,27 @@ A queued mail is a `Job` row named `email.send` on the existing job queue
   database. An environment with no SMTP configured (`SMTP_USER` unset) starts
   no tick at all, and the route does nothing there: nothing is ever queued on
   such an environment, and every queued row would only fail.
-- **A tick** claims up to 5 rows at a time and runs for at most 25 seconds; the
-  instrumentation timer never overlaps two ticks in one process.
+- **A tick** runs for at most 25 seconds; the instrumentation timer never
+  overlaps two ticks in one process.
+
+### Which rows a round claims (#2951)
+
+Each round of a tick claims in bands, by `Job.priority` (`claim({ filter })`):
+
+1. **The higher lanes** — every row at or above priority 50 (CRITICAL 100,
+   TRANSACTIONAL 50), up to 5 at a time. A bulk backlog never stands in front
+   of a message notification or a meeting reminder.
+2. Only when none is due, **one BULK row** (priority below 50), and the next
+   round looks at the higher lanes again.
+3. **Fair sharing between the two worlds.** The bulk claim first asks for the
+   world the last bulk row was *not* from (`bulkWorldOrder()`), then for any
+   bulk row. While both products have bulk mail waiting, each gets every second
+   slot; either gets all of them when the other has none. Every queued row
+   carries its `payload.world`, read from the recipient's organization when the
+   send did not already know it.
+
+An idle queue costs three claims per tick: the higher lanes, the preferred
+world's bulk, any bulk.
 
 Per row, in order:
 
@@ -106,7 +133,10 @@ Per row, in order:
    runs, the row goes back to the pause's end and the tick ends. Then
    `MAIL_METER_MODE=enforce` spends a token for the lane or puts the row back
    and ends the tick; `observe` (the default) never holds on rate and only
-   charges the meter; `off` does neither.
+   charges the meter; `off` does neither. In enforce mode a BULK row past
+   today's bulk share of `MAIL_DAILY_CAP` goes back to the next UTC midnight,
+   and this process takes no more bulk rows until then — the higher lanes keep
+   draining (see *The daily cap*).
 4. The opt-out gate again — a queued mail may be hours old, and the recipient
    may have switched the group off since. Opted out → CANCELLED, EmailLog
    SKIPPED.
@@ -142,6 +172,81 @@ wording there pauses everybody.
 Delivery is at least once: a container killed between the relay's 250 and the
 settle sends that mail again once the claim expires (5 minutes). That window is
 one statement wide.
+
+## The daily cap (#2951)
+
+`MAIL_DAILY_CAP` (optional; unset = no cap) is how many mails this
+environment's channel should carry per UTC day. `MailBudget.dayKey` and
+`dayCount` count **every metered send** of the channel, whatever its lane —
+inline and drained, granted or only observed — against the database's UTC day,
+in the same statement that spends or charges the token.
+
+- **BULK** may only spend while the count is below **90 %** of the cap
+  (`bulkDailyLimit()`). The spend's conditional UPDATE carries the condition,
+  so two replicas cannot both take the last slot.
+- **TRANSACTIONAL and CRITICAL** are counted but never stopped: a counter must
+  not hold a password reset. The last 10 % is theirs.
+- In enforce mode a capped BULK row is released to the next UTC midnight
+  (`mail_outbox.daily_cap`); in observe mode the cap is only logged
+  (`mail_meter.would_refuse` with `reason: 'daily_cap'`).
+- `MAIL_BULK_DAILY_CAP` is the bulk channel's own (`SMTP_BULK_*`), falling back
+  to `MAIL_DAILY_CAP`. A topic environment may set `TOPIC_MAIL_DAILY_CAP`.
+
+## Natural keys and deadlines (#2951)
+
+A queued mail's `Job.idempotencyKey` is its natural key when the sender has
+one (`dedupeKeyFor()`), so a cron tick that fires twice, or two replicas
+running the same schedule, queue it once; its `notAfter` is when it stops being
+worth sending:
+
+| Mail | Key | `notAfter` |
+|---|---|---|
+| Meeting reminder | `mrem:<meeting>:<user>:<start minute>` | the meeting's start |
+| Guest reminder | `mgrem:<meeting>:<sha256(guest)>:<start minute>` | the meeting's start |
+| Series reminder | `srem:<series>:<user>:<occurrence minute>:<lead>` | the occurrence's start |
+| Unread digest | `digest:unread:<user>:<UTC hour>` | the lane's 72 h |
+| Activity / mentor digests | `digest:activity-…:<user>:<UTC day>`, `digest:mentor-weekly:…` | the lane's 72 h |
+| Weekly report reminder | `digest:weekly-report:<mentee>:<week start>` | the end of that week |
+| Survey invitation / reminder n | `survey:<invitation>:<n>` | the link's expiry |
+| Newsletter | `nl:<issue>:<sha256(address)>` | the lane's 72 h |
+| Operator alerts | `ops:<kind>:<window start>` | the lane's 24 h |
+
+The start minute is part of a reminder's key on purpose: a meeting moved to
+another time is reminded again for the new one. A reminder still queued when
+its meeting starts is CANCELLED (`expired`), never sent late.
+
+**Operator alerts.** The delivery-health alert used to be throttled by a
+per-process timestamp, so every replica and every restart sent its own. It is
+now queued (`queueOnly`) under `ops:email-<reason>:<six-hour window>`: one copy
+per window leaves, however many processes raise it. The dead-letter and
+newsletter-hold alerts carry an hourly key.
+
+**The unread digest** stamps `digestedAt` only on the lines of recipients whose
+digest was SENT or QUEUED (and on muted lines, as before). A recipient whose
+digest did not go out — opted out, or a send that failed for good — keeps the
+lines for a later run; the digest looks back 7 days, which bounds both what is
+re-read and the backlog a later digest can carry. An environment that never
+delivers (demo, no SMTP) stamps everything, as before.
+
+## Mass sends (#2951)
+
+- **Newsletters** go one recipient at a time (the four-way parallelism is
+  gone). A queued copy writes its `NewsletterSend` row as **QUEUED** and names
+  it in the queued mail's `ref` (`nlsend:<issue>:<user>`); when the drain
+  settles the mail, `settleMailRef()` (`src/lib/mailRefHooks.ts`) moves the row
+  to SENT, FAILED or SKIPPED and moves the issue's tally from *sent* to *failed*
+  or *skipped* when the copy did not arrive. A drain faster than the row's own
+  insert is caught by `reconcileQueuedMail()` right after the insert.
+- **Announcements** (`src/lib/announcementMail.ts`): the single unbounded
+  `Promise.all` over every recipient is now one `sendEmail()` after another —
+  with BULK queued, N enqueues in a row.
+- **Bulk invitations** and bulk resends: one row at a time, on the
+  TRANSACTIONAL lane.
+- **What the admin is told.** Each of the three answers with a `mailQueue`
+  block (`mailQueueNotice()`): how many mails this action queued, the backlog
+  in front of them and a rough estimate — at the configured rate in enforce
+  mode — which the screen renders as "N e-mails are queued and will be
+  delivered over about X" (EN/TR/DE).
 
 ## The breaker
 
@@ -198,9 +303,26 @@ the EmailLog row.
 | `MAIL_RATE_PER_MIN`, `MAIL_BURST`, `MAIL_URGENT_RESERVE` | 2, 2, 1 | the budget (see `.env.example`) |
 | `MAIL_BULK_*` | the primary values | the optional bulk channel's own budget |
 | `MAIL_THROTTLE_LADDER_SEC` | `60,120,300,900,1800` | the pause ladder |
+| `MAIL_DAILY_CAP`, `MAIL_BULK_DAILY_CAP` | unset (no cap) | mails per UTC day; BULK stops at 90 % |
 
 The deploy scripts (`infra/deploy-prod.sh`, `infra/server/topic-deploy.sh`)
 forward all of them from the environment file.
+
+### Recommended per environment (#2951)
+
+Production and preview use separate SMTP accounts, and each environment drains
+its own queue against its own budget, so the numbers are per environment:
+
+| | `MAIL_QUEUE_LANES` | `MAIL_METER_MODE` | rate | burst | reserve | `MAIL_DAILY_CAP` |
+|---|---|---|---|---|---|---|
+| production | `TRANSACTIONAL,BULK` | `enforce` | 5 | 2 | 1 | 2000 |
+| preview | `TRANSACTIONAL,BULK` | `enforce` | 1 | 1 | 0 | 200 |
+| topic `pr<N>` | `TRANSACTIONAL,BULK` | `enforce` | 1 | 1 | 1 | 50 |
+
+Roll out on preview first, then production. Before switching production to
+`enforce`, watch a few days of `observe` (below). Rollback: `MAIL_QUEUE_LANES=`
+(empty) sends every lane inline again; `MAIL_METER_MODE=observe` stops the
+drain from waiting for tokens.
 
 ## What to watch
 
@@ -219,7 +341,13 @@ an address, a subject or the relay's text:
   at-least-once window was hit; one mail may have gone out twice.
 - `mail_outbox.enqueue_failed` — a mail could not be queued and fell back to
   FAILED.
-- `mail_meter.would_refuse` (observe mode) — what `enforce` would have held.
+- `mail_meter.would_refuse` (observe mode) — what `enforce` would have held;
+  `reason` is `refused` (the rate) or `daily_cap` (a BULK mail past 90 % of
+  the cap).
+- `mail_outbox.daily_cap` — enforce mode put a BULK row back to the next UTC
+  day.
+- `mail_outbox.ref_settle_failed` — a queued newsletter copy settled, but its
+  `NewsletterSend` row could not be updated (the mail itself is fine).
 
 ## Tests
 
@@ -230,3 +358,10 @@ an address, a subject or the relay's text:
   the spec controls (accept, refuse at a given step with a given reply, or
   hang). The smoke case: a password reset sent while the relay answers
   `450 4.7.1` returns in under a second and is delivered after the retry.
+- `scripts/test/mail-pacing.test.mjs` — lane routing, the claim bands and their
+  in-memory twin, world alternation, the daily cap, the estimate and the
+  natural keys (#2951).
+- `e2e/mail-pacing.spec.ts` — a 30-recipient announcement is queued whole and
+  delivered at a test rate; a meeting reminder past its start is cancelled; the
+  unread digest does not stamp a skipped recipient. The smoke case: a password
+  reset still goes inline, at once, behind a full bulk backlog.

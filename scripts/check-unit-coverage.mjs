@@ -79,6 +79,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/mailQueueNoticeText.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'an admin who queued a large send is told how many mails wait and roughly how long they take, never a blank or a zero estimate (#2951)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,
