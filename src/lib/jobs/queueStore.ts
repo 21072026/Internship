@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { setQueueLogger, type JobRecord, type QueueStore } from './queue';
+import { CLAIM_PAYLOAD_KEY, setQueueLogger, type JobRecord, type QueueStore } from './queue';
 
 // The Prisma half of the queue engine (#1671): the seven row operations
 // `./queue` needs, and nothing else.
@@ -60,7 +60,7 @@ export function prismaQueueStore(): QueueStore {
       return row ? toRecord(row) : null;
     },
 
-    claimDue: async ({ now, limit, workerId, names }) => {
+    claimDue: async ({ now, limit, workerId, names, filter }) => {
       // Re-clamped here rather than trusted from the caller: this value is
       // interpolated into the SQL text (see below) and an integer is the only
       // thing that may ever be.
@@ -91,12 +91,26 @@ export function prismaQueueStore(): QueueStore {
         const nameFilter = names?.length
           ? Prisma.sql`AND name IN (${Prisma.join(names.map((n) => n.slice(0, 64)))})`
           : Prisma.empty;
+        // `filter` (#2951): the mail drain claims by lane (a priority band) and
+        // BULK by world (one payload field). Bounds and the value are bound
+        // parameters; the JSON path is built from a key that has just been
+        // checked against a plain-identifier pattern, never from free text.
+        const parts: Prisma.Sql[] = [];
+        if (typeof filter?.minPriority === 'number') parts.push(Prisma.sql`AND priority >= ${Math.trunc(filter.minPriority)}`);
+        if (typeof filter?.maxPriority === 'number') parts.push(Prisma.sql`AND priority <= ${Math.trunc(filter.maxPriority)}`);
+        if (filter?.payload) {
+          if (!CLAIM_PAYLOAD_KEY.test(filter.payload.key)) throw new Error('claimDue: unsafe payload key');
+          const path = `$.${filter.payload.key}`;
+          parts.push(Prisma.sql`AND JSON_UNQUOTE(JSON_EXTRACT(payload, ${path})) = ${filter.payload.value}`);
+        }
+        const extra = parts.length ? Prisma.join(parts, ' ') : Prisma.empty;
         const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
           SELECT id
             FROM \`Job\`
            WHERE status = 'PENDING'
              AND runAt <= ${now}
              ${nameFilter}
+             ${extra}
            ORDER BY priority DESC, runAt ASC
            LIMIT ${Prisma.raw(String(take))}
              FOR UPDATE SKIP LOCKED

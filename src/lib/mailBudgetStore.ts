@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { budgetNameFor, laneToleranceMs, type BudgetConfig, type MailLane } from '@/lib/mailDeliveryRule';
+import { budgetNameFor, bulkDailyLimit, laneToleranceMs, type BudgetConfig, type MailLane } from '@/lib/mailDeliveryRule';
 
 // The `MailBudget` half of the shared send budget (#2941): the row operations
 // and nothing else. The arithmetic — lanes, tolerance, the critical reserve,
@@ -35,7 +35,9 @@ import { budgetNameFor, laneToleranceMs, type BudgetConfig, type MailLane } from
 /** The primary channel's row; the bulk channel's is `budgetNameFor('bulk')`. */
 export const SMTP_BUDGET = budgetNameFor('primary');
 
-export type SpendReason = 'spent' | 'refused' | 'db_error';
+/** `daily_cap`: a BULK mail refused because today's count reached 90 % of
+ *  `MAIL_DAILY_CAP` (#2951); its `waitMs` runs to the next UTC midnight. */
+export type SpendReason = 'spent' | 'refused' | 'daily_cap' | 'db_error';
 
 export interface SpendOutcome {
   /** May this mail go now? On a database error: CRITICAL true, others false. */
@@ -61,24 +63,52 @@ async function ensureRow(name: string): Promise<boolean> {
   return inserted === 1;
 }
 
+// The database's UTC day, as the 'YYYY-MM-DD' `dayKey` stores it (#2951).
+const TODAY = Prisma.raw(`DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-%d')`);
+
+// One more send counted against today. MySQL and MariaDB evaluate a
+// single-table SET left to right, so `dayCount` reads the OLD `dayKey` before
+// the second assignment moves it to today — `countSend()` is the twin.
+const COUNT_TODAY = Prisma.sql`dayCount = IF(dayKey = ${TODAY}, dayCount + 1, 1), dayKey = ${TODAY}`;
+
 async function conditionalSpend(name: string, lane: MailLane, cfg: BudgetConfig): Promise<boolean> {
+  // The daily cap (#2951) rides the same statement as the token, so a BULK
+  // mail is refused by either without a read in between: only BULK carries the
+  // condition, and only when a cap is set.
+  const limit = lane === 'BULK' ? bulkDailyLimit(cfg) : null;
+  const cap =
+    limit === null
+      ? Prisma.empty
+      : Prisma.sql`AND (dayKey IS NULL OR dayKey <> ${TODAY} OR dayCount < ${Prisma.raw(String(Math.trunc(limit)))})`;
   const changed = await prisma.$executeRaw(Prisma.sql`
     UPDATE \`MailBudget\`
        SET tat = GREATEST(tat, UTC_TIMESTAMP(3)) + INTERVAL ${micros(cfg.intervalMs)} MICROSECOND,
+           ${COUNT_TODAY},
            updatedAt = UTC_TIMESTAMP(3)
      WHERE name = ${name}
        AND tat <= UTC_TIMESTAMP(3) + INTERVAL ${micros(laneToleranceMs(lane, cfg))} MICROSECOND
+       ${cap}
   `);
   return changed === 1;
 }
 
-type AheadRow = { ahead: bigint | number | null; paused: bigint | number | null; pauseLevel: number };
+type AheadRow = {
+  ahead: bigint | number | null;
+  paused: bigint | number | null;
+  pauseLevel: number;
+  /** Today's count (0 when the stored one is another day's). */
+  todayCount: bigint | number | null;
+  /** Until the next UTC midnight, by the database clock. */
+  toMidnight: bigint | number | null;
+};
 
 async function readAhead(name: string): Promise<AheadRow | null> {
   const rows = await prisma.$queryRaw<AheadRow[]>(Prisma.sql`
     SELECT TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), tat) AS ahead,
            TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), pausedUntil) AS paused,
-           pauseLevel
+           pauseLevel,
+           IF(dayKey = ${TODAY}, dayCount, 0) AS todayCount,
+           TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), TIMESTAMP(UTC_DATE() + INTERVAL 1 DAY)) AS toMidnight
       FROM \`MailBudget\` WHERE name = ${name}
   `);
   return rows[0] ?? null;
@@ -101,6 +131,16 @@ export async function spendToken(lane: MailLane, cfg: BudgetConfig, name: string
       row = await readAhead(name);
     }
     const aheadMs = Number(row?.ahead ?? 0) / 1000;
+    const limit = lane === 'BULK' ? bulkDailyLimit(cfg) : null;
+    if (limit !== null && Number(row?.todayCount ?? 0) >= limit) {
+      // Today's bulk share is spent: wait for the database's next UTC day.
+      return {
+        allowed: false,
+        reason: 'daily_cap',
+        waitMs: Math.max(1_000, Math.round(Number(row?.toMidnight ?? 0) / 1000)),
+        pauseLevel: Number(row?.pauseLevel ?? 0),
+      };
+    }
     return {
       allowed: false,
       reason: 'refused',
@@ -121,6 +161,7 @@ export async function chargeToken(cfg: BudgetConfig, name: string = SMTP_BUDGET)
   await prisma.$executeRaw(Prisma.sql`
     UPDATE \`MailBudget\`
        SET tat = GREATEST(tat, UTC_TIMESTAMP(3)) + INTERVAL ${micros(cfg.intervalMs)} MICROSECOND,
+           ${COUNT_TODAY},
            updatedAt = UTC_TIMESTAMP(3)
      WHERE name = ${name}
   `);

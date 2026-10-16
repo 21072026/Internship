@@ -12,6 +12,8 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { createInvitation, discardInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { locales } from '@/i18n/config';
+import { mailQueueNotice } from '@/lib/mailOutbox';
+import { bulkInvitationLane, fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
 import {
   BULK_INVITE_MAX_CHARS,
   BULK_INVITE_ROLES,
@@ -42,10 +44,6 @@ const schema = z.object({
   // nobody asked for. Omitted → the admin's own UI language, resolved below.
   locale: z.enum(locales).optional().nullable(),
 });
-
-// How many invitations may be in flight to the relay at once. Small on
-// purpose: throughput is not the point, surviving a 5 000-row paste is.
-const SEND_CONCURRENCY = 4;
 
 // Duplicate pre-flight is a full mentee scan per row, so it is only worth
 // running for a roster a human is about to read. Beyond this the report keeps
@@ -170,7 +168,17 @@ export async function POST(request: Request) {
       const byRowNumber = new Map(parsed.rows.map((r) => [r.row, r]));
       const toSend = report.filter((r) => r.status === 'invite');
       let created = 0;
-      await mapWithConcurrency(toSend, SEND_CONCURRENCY, async (entry: BulkInviteReportRow) => {
+      // Of the mailed invitations, the ones waiting on the mail queue (#2951).
+      let queued = 0;
+      // The lane and the width follow MAIL_QUEUE_LANES (#2951): with the
+      // TRANSACTIONAL lane queued, every invitation goes through it — a paste
+      // of 300 addresses is not 300 people at a sign-in screen, so it must not
+      // spend the critical reserve — one enqueue at a time, and the mail
+      // queue paces the relay. Without it, the invitation's own lane and the
+      // four in flight it always had (fanOutWidth).
+      const policy = mailPolicy(process.env);
+      const lane = bulkInvitationLane(policy);
+      await mapWithConcurrency(toSend as BulkInviteReportRow[], fanOutWidth(policy, lane ?? 'CRITICAL'), async (entry) => {
         const raw = byRowNumber.get(entry.row);
         try {
           const result = await createInvitation({
@@ -181,6 +189,7 @@ export async function POST(request: Request) {
             role: entry.role,
             locale: inviteLocale,
             request,
+            lane,
           });
           if (result.mailError) {
             // Not half-created: the token goes away with the failed send, so
@@ -190,6 +199,7 @@ export async function POST(request: Request) {
             entry.reason = 'send_failed';
             return;
           }
+          if (result.emailQueued) queued++;
           // "The transport did not throw" is NOT "the mail was delivered"
           // (#1431): sendEmail() answers SKIPPED without throwing in demo mode
           // and on any env with no SMTP_USER. Carry the transport's own verdict
@@ -225,6 +235,9 @@ export async function POST(request: Request) {
         created,
         ...outcome,
         rows: report,
+        // How many wait on the mail queue and roughly how long they take at
+        // this environment's pace (#2951) — the board says so.
+        ...(queued > 0 ? { mailQueue: await mailQueueNotice(queued, { orgId }) } : {}),
       });
     });
   } catch (error) {

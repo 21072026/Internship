@@ -20,6 +20,7 @@ import {
   writtenNewsletterLocales,
 } from '@/lib/newsletter';
 import { dispatchNewsletter, newsletterQuotaHold } from '@/lib/newsletterDispatch';
+import { mailQueueNotice } from '@/lib/mailOutbox';
 import { broadcastQuotaError } from '@/lib/broadcastQuota';
 
 /**
@@ -294,6 +295,9 @@ export async function POST(request: Request) {
       scheduledAt: created.scheduledAt,
       imageUrl: imageData ? newsletterImageUrl(created.id) : null,
       ...(dispatch ? { dispatch } : {}),
+      // How many copies wait on the mail queue and roughly how long they take
+      // at this environment's pace (#2951) — the composer says so.
+      ...(dispatch?.queued ? { mailQueue: await mailQueueNotice(dispatch.queued, { orgId: resolveOrgId(session), channel: 'bulk' }) } : {}),
     },
     { status: 201 }
   );

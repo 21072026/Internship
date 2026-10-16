@@ -29,6 +29,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { sendInvitationEmail } from '@/services/emailService';
+import type { MailLane } from '@/lib/mailDeliveryRule';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 export const INVITATION_TTL_DAYS = 7;
@@ -69,6 +70,14 @@ export interface CreateInvitationInput {
   companyId?: string | null;
   /** Passed through to the activity log for IP/UA attribution. */
   request?: Request;
+  /**
+   * The mail lane, when the caller sends many (#2951): a bulk paste of 300
+   * addresses is not 300 people waiting at a sign-in screen, so the bulk board
+   * passes 'TRANSACTIONAL' and its mails go through the paced queue instead of
+   * spending the critical reserve inline. Omitted: the invitation's own lane
+   * (CRITICAL) — a single invite is somebody waiting.
+   */
+  lane?: MailLane;
 }
 
 export interface CreatedInvitation {
@@ -77,6 +86,8 @@ export interface CreatedInvitation {
   registerUrl: string;
   /** True only for an actually delivered mail — a SKIPPED transport is false. */
   emailSent: boolean;
+  /** On the mail queue rather than handed to the relay already (#2951). */
+  emailQueued?: boolean;
   /** Non-null when the transport threw; the token exists regardless. */
   mailError: unknown;
 }
@@ -185,10 +196,10 @@ export async function logInvitationCreated(
  * mail, never the invitation.
  */
 export async function deliverInvitation(
-  input: Pick<CreateInvitationInput, 'email' | 'role' | 'orgId'>,
+  input: Pick<CreateInvitationInput, 'email' | 'role' | 'orgId' | 'lane'>,
   persisted: PersistedInvitation,
-): Promise<{ emailSent: boolean; mailError: unknown }> {
-  if (!input.email) return { emailSent: false, mailError: null };
+): Promise<{ emailSent: boolean; emailQueued: boolean; mailError: unknown }> {
+  if (!input.email) return { emailSent: false, emailQueued: false, mailError: null };
   try {
     // The transport reports what it did, so demo mode and an unconfigured
     // SMTP are honestly "not sent" rather than a guess about SMTP_USER.
@@ -198,26 +209,28 @@ export async function deliverInvitation(
       role: input.role,
       orgId: input.orgId,
       locale: persisted.locale,
+      lane: input.lane,
     });
     // QUEUED is on its way (the mail queue retries it, #2944); only SKIPPED
     // means nobody will receive it.
-    return { emailSent: result !== 'SKIPPED', mailError: null };
+    return { emailSent: result !== 'SKIPPED', emailQueued: result === 'QUEUED', mailError: null };
   } catch (err) {
     console.error('Invitation email failed (token still valid):', err);
-    return { emailSent: false, mailError: err };
+    return { emailSent: false, emailQueued: false, mailError: err };
   }
 }
 
 export async function createInvitation(input: CreateInvitationInput): Promise<CreatedInvitation> {
   const persisted = await persistInvitation(input);
   await logInvitationCreated(input, persisted.invitationId);
-  const { emailSent, mailError } = await deliverInvitation(input, persisted);
+  const { emailSent, emailQueued, mailError } = await deliverInvitation(input, persisted);
 
   return {
     invitationId: persisted.invitationId,
     token: persisted.token,
     registerUrl: await invitationRegisterUrl(persisted.token, input.orgId),
     emailSent,
+    emailQueued,
     mailError,
   };
 }

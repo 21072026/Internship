@@ -4422,6 +4422,11 @@ enum EmailStatus {
   // view's failuresSinceOk counts FAILED only. Additive (#2941); nothing
   // writes it until the outbox lands.
   DEFERRED
+  // NewsletterSend only (#2951): the issue is on the mail queue and the drain
+  // has not settled it yet. The queued mail's settle hook moves it to SENT,
+  // FAILED or SKIPPED (src/lib/mailRefHooks.ts). EmailLog never carries it — a
+  // queued mail's ledger row is written when the drain sends it. Additive.
+  QUEUED
 }
 
 // Delivery log for outgoing mail (#1194).

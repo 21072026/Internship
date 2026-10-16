@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { bulkInvitationLane, fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import {
@@ -37,9 +38,12 @@ const bodySchema = z.object({
   action: z.enum(['resend', 'revoke', 'delete']),
 });
 
-// Bulk resend fans out mail. Four at a time keeps the SMTP connection pool and
-// the request itself bounded; the batch cap above bounds the total.
-const SEND_CONCURRENCY = 4;
+// Bulk resend fans out mail. With the TRANSACTIONAL lane queued
+// (MAIL_QUEUE_LANES, #2951) it goes one row at a time on that lane — a resend
+// of 200 invitations is not 200 people waiting, so it goes through the paced
+// mail queue rather than spending the critical reserve. Without it, the
+// invitation's own lane and four at a time, as before (fanOutWidth). The batch
+// cap above bounds the total.
 
 type Outcome =
   | 'resent'
@@ -59,11 +63,11 @@ interface RowResult {
   label: string | null;
 }
 
-/** Run `task` over `items` with a small fixed concurrency, in order. */
-async function pooled<T, R>(items: T[], task: (item: T) => Promise<R>): Promise<R[]> {
+/** Run `task` over `items` with at most `width` in flight, in order. */
+async function pooled<T, R>(items: T[], width: number, task: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
-  for (let i = 0; i < items.length; i += SEND_CONCURRENCY) {
-    out.push(...(await Promise.all(items.slice(i, i + SEND_CONCURRENCY).map(task))));
+  for (let i = 0; i < items.length; i += width) {
+    out.push(...(await Promise.all(items.slice(i, i + width).map(task))));
   }
   return out;
 }
@@ -189,7 +193,9 @@ export async function POST(request: Request) {
           eligible.push(row);
         }
 
-        const sent = await pooled(eligible, async (row): Promise<RowResult> => {
+        const policy = mailPolicy(process.env);
+        const lane = bulkInvitationLane(policy);
+        const sent = await pooled(eligible, fanOutWidth(policy, lane ?? 'CRITICAL'), async (row): Promise<RowResult> => {
           // The expiry is refreshed for every eligible row, mailed or not: an
           // email-less shareable link (#670) has no delivery path at all, and a
           // synthetic demo address must not be mailed — but "give it another
@@ -209,6 +215,7 @@ export async function POST(request: Request) {
                 // The language the invitation was created in (#1720) — a bulk
                 // resend must not flip a Turkish invitee to English.
                 locale: row.locale,
+                lane,
               })) !== 'SKIPPED';
           } catch (mailErr) {
             // The token is still valid and the expiry is already refreshed, so a

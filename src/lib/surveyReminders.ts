@@ -32,6 +32,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { emailBrand, sendEmail } from '@/services/emailService';
+import { dedupeKeyFor } from '@/lib/mailDeliveryRule';
 
 /** The ceiling. Not configurable — see the header. */
 export const SURVEY_MAX_REMINDERS = 2;
@@ -119,6 +120,9 @@ async function sendReminder(inv: ReminderInvitation, n: number, token: string) {
     category: 'survey-invite',
     userId: inv.user?.id,
     orgId: inv.orgId ?? inv.user?.orgId ?? null,
+    // Reminder n of this invitation, once (#2951), and none after its link expires.
+    dedupeKey: dedupeKeyFor({ kind: 'survey', invitationId: inv.id, round: n }),
+    notAfter: inv.expiresAt,
     locale,
     to: inv.email,
     subject: t.surveyCampaign.reminderSubject,

@@ -121,8 +121,9 @@ const USED_THIS_MONTH: Record<BroadcastCategory, (orgId: string, since: Date) =>
     prisma.newsletterSend.count({
       // SENT and FAILED both reached the relay and both can generate a
       // complaint or a bounce; SKIPPED never left the process, so it costs the
-      // sending domain nothing and is not counted.
-      where: { sentAt: { gte: since }, status: { in: ['SENT', 'FAILED'] }, user: { orgId } },
+      // sending domain nothing and is not counted. QUEUED (#2951) is on its way
+      // to the relay, so it is counted from the moment it is queued.
+      where: { sentAt: { gte: since }, status: { in: ['SENT', 'FAILED', 'QUEUED'] }, user: { orgId } },
     }),
 };
 

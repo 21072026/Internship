@@ -52,10 +52,20 @@ import { utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { RESET_TOKEN_TTL_MS } from '@/lib/passwordReset';
-import { budgetConfig, budgetNameFor, classifySmtpError, laneFor, recipientHash, type MailLane } from '@/lib/mailDeliveryRule';
+import {
+  budgetConfig,
+  budgetNameFor,
+  classifySmtpError,
+  dedupeKeyFor,
+  effectiveLane,
+  opsAlertWindow,
+  recipientHash,
+  utcDayKey,
+  type MailLane,
+} from '@/lib/mailDeliveryRule';
 import { createMeterObserver, type MeterObserver } from '@/lib/mailMeterObserver';
-import { decayPause, readBudgetState } from '@/lib/mailBudgetStore';
-import { INLINE_FALLBACK_DELAY_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
+import { decayPause, readBudgetState, spendToken } from '@/lib/mailBudgetStore';
+import { INLINE_FALLBACK_DELAY_MS, INLINE_PACE_MAX_WAIT_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
 import { canQueue, cancelQueuedMail, enqueueMail, type DrainDeps, type EnqueueMailOptions } from '@/lib/mailOutbox';
 import {
   BULK_GROUP_CATEGORIES,
@@ -424,16 +434,30 @@ export async function recordOptOut(to: string | null | undefined, category: stri
 // ── E-mail delivery health alerts (#1190) ───────────────────────────────────
 // The channel's own failures must not stay silent, but the alert also travels
 // by e-mail — so the alert is best-effort and the durable signals are the
-// ActivityLog row and /api/health. In-memory dedupe (6h) is deliberate: after
-// a restart one extra alert beats a missed one.
+// ActivityLog row and /api/health.
+//
+// ONE ALERT PER KIND PER SIX-HOUR WINDOW (#2951). The window's key,
+// `ops:email-<reason>:<window start>` (`dedupeKeyFor({ kind: 'ops' })`), is the
+// de-duplication: the alert mail is QUEUED under it (`queueOnly`), and the
+// queue's unique key lets one copy per window through however many replicas
+// and restarts raise it — where the old per-process timestamp let every
+// replica, and every restart, send its own. The same key kept in this
+// process's memory spares the ActivityLog row and the enqueue on the repeats
+// one process raises itself.
 const EMAIL_ALERT_CATEGORY = 'ops-alert';
 const EMAIL_ALERT_MIN_FAILURES = 3;
-const EMAIL_ALERT_INTERVAL_MS = 6 * 60 * 60 * 1000;
-let lastEmailAlertAt = 0;
+const EMAIL_ALERT_WINDOW_HOURS = 6;
+const raisedEmailAlerts = new Set<string>();
 
 async function alertEmailHealth(reason: 'consecutive_failures' | 'stale', health: EmailHealth) {
-  if (Date.now() - lastEmailAlertAt < EMAIL_ALERT_INTERVAL_MS) return;
-  lastEmailAlertAt = Date.now();
+  const key = dedupeKeyFor({
+    kind: 'ops',
+    alert: `email-${reason.replace(/_/g, '-')}`,
+    at: opsAlertWindow(new Date(), EMAIL_ALERT_WINDOW_HOURS),
+  });
+  if (raisedEmailAlerts.has(key)) return;
+  if (raisedEmailAlerts.size > 64) raisedEmailAlerts.clear();
+  raisedEmailAlerts.add(key);
   // ActivityLog.detail is VARCHAR(191) — an oversized JSON is silently lost
   // (P2000, the #1268 lesson), so the error is pre-trimmed and the whole
   // payload capped.
@@ -454,6 +478,8 @@ async function alertEmailHealth(reason: 'consecutive_failures' | 'stale', health
       subject: `[CRM] E-mail delivery ${reason === 'stale' ? 'stalled' : 'failing'} — ${health.failuresSinceOk} failures since last success`,
       html: `<p>E-mail delivery health alert (<b>${reason}</b>).</p><ul><li>Failures since last success: ${health.failuresSinceOk}</li><li>Deferred (queued for retry) since last success: ${health.deferredSinceOk}</li><li>Last success: ${health.lastOkAt ?? 'never'}</li><li>Last error: ${health.lastError ?? '-'}</li></ul><p>Watch /api/health (detail view) for the live state.</p>`,
       category: EMAIL_ALERT_CATEGORY,
+      dedupeKey: key,
+      queueOnly: true,
     });
   } catch (e) {
     logger.error('Email health alert could not be delivered', { error: String(e) });
@@ -817,6 +843,20 @@ export interface SendEmailArgs {
   //               expiry, a meeting's start). The lane's maximum age caps it.
   dedupeKey?: string;
   notAfter?: Date;
+  // A LOWER lane than the category's own (#2951) — a bulk invitation run is
+  // not two hundred people waiting at a sign-in screen. A higher one is
+  // ignored (`effectiveLane()`): a lane is a claim on the critical reserve.
+  lane?: MailLane;
+  // The sender's own record of this mail, named for the queue's settle hook
+  // (`src/lib/mailRefHooks.ts`) — the newsletter's NewsletterSend row. Without
+  // it the queued row carries a random reference that names nothing.
+  ref?: string;
+  // Queue this mail even though its lane is sent inline (#2951). Only for an
+  // operator alert: its `dedupeKey` (`ops:<kind>:<window>`) is then a durable,
+  // cross-replica "already alerted", and the alert does not ride the very
+  // inline path whose failure it reports. A mail that cannot be queued is
+  // still sent inline.
+  queueOnly?: boolean;
 }
 
 /**
@@ -864,6 +904,7 @@ export async function prepareEmail({
   prefs,
   headers,
   orgId,
+  lane,
 }: SendEmailArgs): Promise<PrepareResult> {
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
@@ -1019,7 +1060,7 @@ export async function prepareEmail({
       subject,
       category,
       transport,
-      lane: laneFor(category),
+      lane: effectiveLane(category, lane),
       group: groupId ?? null,
       userId: userId ?? null,
       orgId: orgId !== undefined ? orgId : (storedOrg?.orgId ?? null),
@@ -1120,12 +1161,17 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const result = await prepareEmail(args);
   if (result.status === 'SKIPPED') return 'SKIPPED';
   const now = new Date();
-  return dispatchPrepared(result.prepared, {
-    dedupeKey: args.dedupeKey ?? null,
-    notAfter: args.notAfter ?? null,
-    ref: fallbackRef(now),
-    now,
-  });
+  return dispatchPrepared(
+    result.prepared,
+    {
+      dedupeKey: args.dedupeKey ?? null,
+      notAfter: args.notAfter ?? null,
+      ref: args.ref ?? fallbackRef(now),
+      now,
+    },
+    {},
+    { queueOnly: !!args.queueOnly },
+  );
 }
 
 type QueueOpts = Omit<EnqueueMailOptions, 'reason' | 'runAt' | 'priority'>;
@@ -1154,13 +1200,25 @@ type SendSeams = { via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver
  * A mail that cannot be queued (attachments over the cap, no server secret, the
  * database down) falls back to exactly the old behaviour.
  */
-async function dispatchPrepared(prepared: PreparedEmail, queue: QueueOpts, seams: SendSeams = {}): Promise<'SENT' | 'QUEUED'> {
+async function dispatchPrepared(
+  prepared: PreparedEmail,
+  queue: QueueOpts,
+  seams: SendSeams = {},
+  opts: { queueOnly?: boolean } = {},
+): Promise<'SENT' | 'QUEUED'> {
   const policy = mailPolicy(process.env);
   const observer = seams.observer ?? meterObserver;
 
-  if (prepared.lane !== 'CRITICAL' && policy.queueLanes.has(prepared.lane) && canQueue(prepared)) {
+  const queuedLane = prepared.lane !== 'CRITICAL' && policy.queueLanes.has(prepared.lane);
+  if ((queuedLane || opts.queueOnly) && canQueue(prepared)) {
     if (await tryEnqueue(prepared, { ...queue, reason: 'lane' })) return 'QUEUED';
   }
+  // A paced lane's mail that could not take the queue (an image over the
+  // queue's attachment cap, the queue unreachable) still waits for its token
+  // under enforce mode, here in the caller: a broadcast of a large photo would
+  // otherwise be N unpaced back-to-back sends while the admin is told the send
+  // is paced (#2951).
+  const pacedInline = queuedLane && (await paceInline(prepared));
 
   const relay = prepared.lane === 'CRITICAL' ? await relayState(prepared.transport) : null;
   if (prepared.lane === 'CRITICAL' && canQueue(prepared) && relay?.open) {
@@ -1171,7 +1229,7 @@ async function dispatchPrepared(prepared: PreparedEmail, queue: QueueOpts, seams
     }
   }
 
-  observeSafely(() => observer.spend(prepared));
+  if (!pacedInline) observeSafely(() => observer.spend(prepared));
   if (prepared.lane === 'CRITICAL') {
     const outcome = await sendCriticalCapped(prepared, policy.inlineTimeoutMs, queue, seams);
     // The pause ran out and this send was its probe: a delivery walks the
@@ -1188,6 +1246,41 @@ async function dispatchPrepared(prepared: PreparedEmail, queue: QueueOpts, seams
   await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
   observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
+}
+
+/**
+ * Wait, in the caller, for a budget token for a mail of a paced lane that is
+ * being sent inline (#2951). Enforce mode only — observe and off return false
+ * at once and the observer charges the meter as before. True when this call
+ * spent the token (the observer must not charge it a second time).
+ *
+ * Bounded by `INLINE_PACE_MAX_WAIT_MS` per mail: past it, or on a refusal that
+ * would last longer (the daily cap until midnight), or when the meter cannot be
+ * read, the mail goes — a request is not held for hours, and the meter is
+ * charged for the send so it keeps describing what the relay saw.
+ */
+async function paceInline(prepared: PreparedEmail): Promise<boolean> {
+  const cfg = budgetConfig(process.env, prepared.transport);
+  if (cfg.mode !== 'enforce') return false;
+  const name = budgetNameFor(prepared.transport);
+  const deadline = Date.now() + INLINE_PACE_MAX_WAIT_MS;
+  for (;;) {
+    const outcome = await spendToken(prepared.lane, cfg, name);
+    if (outcome.allowed) return outcome.reason === 'spent';
+    if (outcome.reason === 'db_error') return false;
+    const left = deadline - Date.now();
+    if (outcome.waitMs > left) {
+      logger.warning('mail_inline.pace_overrun', {
+        lane: prepared.lane,
+        category: prepared.category,
+        channel: prepared.transport,
+        reason: outcome.reason,
+        waitMs: outcome.waitMs,
+      });
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.max(250, outcome.waitMs)));
+  }
 }
 
 async function tryEnqueue(prepared: PreparedEmail, opts: EnqueueMailOptions) {
@@ -1452,6 +1545,7 @@ export async function sendInvitationEmail({
   role,
   orgId,
   locale,
+  lane,
 }: {
   to: string;
   token: string;
@@ -1459,6 +1553,8 @@ export async function sendInvitationEmail({
   orgId?: string | null;
   /** The inviter's choice, stored on InvitationToken.locale. */
   locale?: string | null;
+  /** A lower lane for a bulk run (#2951); omitted, the invitation's own. */
+  lane?: MailLane;
 }) {
   // WORLDS (#2590): the invitation opens the product of the organization that is
   // inviting — the invited person may already hold an account in the OTHER
@@ -1476,6 +1572,7 @@ export async function sendInvitationEmail({
     to,
     fromName: brand.name,
     category: 'invitation',
+    lane,
     // An essential group, so there is no footer to translate here — but the
     // locale is passed anyway, so this send behaves like every other one if the
     // taxonomy ever moves it.
@@ -3740,6 +3837,10 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
       await sendEmail({
         to: relation.mentee.email, fromName: brand.name, category: 'weekly-report', subject: copy.reminderSubject,
         userId: relation.mentee.id, locale: relation.mentee.preferredLanguage,
+        // One reminder per mentee per week on the queue (#2951), and none once
+        // the week it is about is over.
+        dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'weekly-report', userId: relation.mentee.id, day: utcDayKey(weekStart) }),
+        notAfter: new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000),
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${base}/portal`, copy.reminderCta)}</div>`,
       }).then(() => { emailed++; }).catch((error) => logger.error('Weekly report reminder email failed', { relationId: relation.id, error: String(error) }));
     }
@@ -4055,6 +4156,10 @@ export async function sendMeetingReminders() {
           // One host per mail (#2495): the footer follows the same org the body's
           // links were resolved from.
           orgId: user.orgId,
+          // On the queue (#2951): one reminder per participant per start time,
+          // however often the tick runs, and none once the meeting has begun.
+          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt! }),
+          notAfter: m.scheduledAt!,
           locale: uLocale,
           subject: R.subject.replace('{title}', m.title),
           html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -4103,6 +4208,7 @@ export async function sendMeetingReminders() {
           locale: m.relation.mentor?.preferredLanguage,
           // …and whose product this is: the organizer's world, as for the invite.
           orgId: m.relation.orgId ?? m.relation.mentor?.orgId ?? null,
+          meetingId: m.id,
         });
         emailed++;
       } catch (e) {
@@ -4127,6 +4233,7 @@ async function sendMeetingGuestReminderEmail({
   minutes,
   locale,
   orgId,
+  meetingId,
 }: {
   to: string;
   name?: string | null;
@@ -4139,6 +4246,8 @@ async function sendMeetingGuestReminderEmail({
   locale?: string | null;
   /** The organizer's organization — a guest has no world of their own either. */
   orgId?: string | null;
+  /** The meeting, for the queued mail's natural key (#2951). */
+  meetingId?: string;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
@@ -4154,6 +4263,9 @@ async function sendMeetingGuestReminderEmail({
     // account-less MeetingGuest — and it already stops on its own when the guest
     // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
+    // On the queue (#2951): once per guest per start time, never after it.
+    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt }) } : {}),
+    notAfter: scheduledAt,
     locale: resolved,
     subject: R.subject.replace('{title}', title),
     html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -4324,6 +4436,10 @@ export async function sendProjectMeetingSeriesReminders() {
             to: user.email,
             fromName: brand.name,
             orgId: user.orgId,
+            // On the queue (#2951): one per member per occurrence and lead
+            // time, and none once the occurrence has started.
+            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead }),
+            notAfter: when,
             locale: uLocale,
             subject:
               lead === 'HOUR_BEFORE'
@@ -4442,6 +4558,7 @@ export async function sendWeeklyMentorDigests() {
         category: 'mentor-digest',
         userId: m.id,
         orgId: m.orgId,
+        dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'mentor-weekly', userId: m.id, day: utcDayKey(new Date()) }),
         to: m.email,
         locale: mLocale,
         subject: D.subject,
@@ -4612,6 +4729,7 @@ async function sendOverdueTodoMail(
     category: 'activity-digest',
     userId: u.id,
     orgId: u.orgId,
+    dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-todo', userId: u.id, day: utcDayKey(new Date()) }),
     to: u.email,
     locale: u.preferredLanguage,
     subject: A.todoSubject,
@@ -4687,6 +4805,7 @@ export async function sendDailyActivityDigests() {
         category: 'activity-digest',
         userId: m.id,
         orgId: m.orgId,
+        dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-mentor', userId: m.id, day: utcDayKey(new Date()) }),
         to: m.email,
         locale: mLocale,
         subject: A.subject,
@@ -4754,6 +4873,7 @@ export async function sendDailyActivityDigests() {
           category: 'activity-digest',
           userId: a.id,
           orgId: a.orgId,
+          dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-admin', userId: a.id, day: utcDayKey(new Date()) }),
           to: a.email,
           locale: aLocale,
           subject: A.subjectAll,
@@ -5259,9 +5379,18 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
 // so a message is never included in more than one digest.
 const UNREAD_DIGEST_AFTER_MIN = 60;
 
+// How far back the digest looks (#2951). A message is only stamped digested
+// once its recipient's digest actually left (SENT, or QUEUED and on its way),
+// so a recipient whose digest did not go — opted out, refused for good — keeps
+// unstamped messages. This window bounds both what each hourly run re-reads
+// for them and the backlog a later digest could carry: a week-old unread line
+// is not news any more.
+const UNREAD_DIGEST_LOOKBACK_DAYS = 7;
+
 export async function sendUnreadMessageDigests() {
   const now = new Date();
   const cutoff = new Date(now.getTime() - UNREAD_DIGEST_AFTER_MIN * 60 * 1000);
+  const lookback = new Date(now.getTime() - UNREAD_DIGEST_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
   // #1720: `preferredLanguage` was not selected here either — the highest-volume
   // mail in the app went out in English to everyone. Both sides of a relation
@@ -5272,7 +5401,7 @@ export async function sendUnreadMessageDigests() {
     // relationId is nullable since #768; the digest covers mentorship threads
     // only, so conversation-only messages are skipped (and left un-digested for
     // the conversation-layer digest to pick up later).
-    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff }, relationId: { not: null } },
+    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff, gte: lookback }, relationId: { not: null } },
     orderBy: { createdAt: 'asc' },
     include: {
       relation: { include: { mentor: { select: userSelect }, mentee: { select: userSelect } } },
@@ -5283,9 +5412,14 @@ export async function sendUnreadMessageDigests() {
   type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
   const byRecipient = new Map<
     string,
-    { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }
+    { recipient: Recipient; items: { relationId: string; from: string; preview: string }[]; ids: string[] }
   >();
   const allIds: string[] = [];
+  // What is stamped digested at the end (#2951): muted lines (a mute is a
+  // decision, not a postponement) and the lines of every recipient whose
+  // digest actually left. Nothing else — a digest that did not go out keeps
+  // its lines for the next run.
+  const stampIds: string[] = [];
 
   // Muted threads (#1609): a recipient who muted the pair's conversation gets
   // no digest line for it. Read once for the batch. A mentorship thread's
@@ -5311,14 +5445,20 @@ export async function sendUnreadMessageDigests() {
     allIds.push(m.id);
     const recipient = m.senderId === rel.mentorId ? rel.mentee : rel.mentor;
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
-    if (!recipient?.email) continue;
+    // No address: nobody can ever be mailed this line, so it is settled.
+    if (!recipient?.email) {
+      stampIds.push(m.id);
+      continue;
+    }
     if (
       (m.conversationId && mutedThreads.has(`c:${m.conversationId}|${recipient.id}`)) ||
       mutedThreads.has(`d:${directKeyFor(rel.mentorId, rel.menteeId)}|${recipient.id}`)
     ) {
+      stampIds.push(m.id);
       continue;
     }
-    const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
+    const entry = byRecipient.get(recipient.id) ?? { recipient, items: [], ids: [] };
+    entry.ids.push(m.id);
     entry.items.push({
       relationId: rel.id,
       // In the recipient's language too — a deleted sender should not be the one
@@ -5338,8 +5478,12 @@ export async function sendUnreadMessageDigests() {
   await origins.prefetch([...byRecipient.values()].map((entry) => entry.recipient.orgId));
   const brandOf = createBrandBook();
 
+  // An environment that can never deliver (demo, no SMTP) settles every line as
+  // before: a retry there is the same SKIPPED, written to the ledger again
+  // every hour.
+  const neverDelivers = IS_DEMO_MODE || !process.env.SMTP_USER;
   let sent = 0;
-  for (const { recipient, items } of byRecipient.values()) {
+  for (const { recipient, items, ids } of byRecipient.values()) {
     // The mail's taxonomy home is `digests`, and that is the only thing checked
     // here. The legacy 'messages' key existing opt-outs are recorded under maps
     // to direct_messages, so as a conjunct it suppressed a digest the surfaces
@@ -5375,11 +5519,19 @@ export async function sendUnreadMessageDigests() {
       .join(' · ');
     try {
       const brand = await brandOf(recipient.orgId);
-      await sendEmail({
+      const delivery = await sendEmail({
         to: recipient.email!,
         userId: recipient.id,
         orgId: recipient.orgId,
         category: 'unread-digest',
+        // One digest per recipient per hour on the queue (#2951): a run that
+        // fires twice in the hour queues it once.
+        dedupeKey: dedupeKeyFor({
+          kind: 'digest',
+          digest: 'unread',
+          userId: recipient.id,
+          day: now.toISOString().slice(0, 13),
+        }),
         locale: rLocale,
         // One and many are separate keys, not an appended "s": Turkish puts the
         // count before an uninflected noun and German inflects the noun itself.
@@ -5397,18 +5549,39 @@ export async function sendUnreadMessageDigests() {
           <p style="font-size:12px;color:#9ca3af;">${esc(U.footer)}</p>
         </div>`,
       });
-      sent++;
+      // SENT, or QUEUED and on its way: these lines are digested. SKIPPED is
+      // not — the lines wait for a run whose digest leaves (#2951).
+      if (delivery !== 'SKIPPED') stampIds.push(...ids);
+      if (delivery !== 'SKIPPED') sent++;
     } catch (e) {
-      console.error('Unread message digest failed:', e);
+      // A permanent refusal (a 5xx for this mailbox) is final: stamp the lines,
+      // or the next hourly run builds a fresh digest under a new hour key and
+      // bounces off the same mailbox again for the whole lookback week — the
+      // reputation damage this queue exists to prevent. Only a failure that a
+      // later run could get past leaves them unstamped. Never the relay's text:
+      // it can echo the address.
+      const cls = classifySmtpError(e);
+      if (!cls.retryable) stampIds.push(...ids);
+      logger.error('Unread message digest failed', {
+        kind: cls.kind,
+        reason: cls.reason,
+        settled: !cls.retryable,
+        rcpt: recipientHash(recipient.email ?? '').slice(0, 16),
+      });
     }
   }
 
-  // Mark every considered message as digested (even for opted-out recipients) so
-  // the cron never reprocesses them.
-  if (allIds.length) {
-    await prisma.message.updateMany({ where: { id: { in: allIds } }, data: { digestedAt: now } });
+  // Stamp what was settled above — and ONLY that (#2951). This used to stamp
+  // every considered message, so a recipient whose digest failed lost those
+  // lines for good. An opted-out recipient's lines stay unstamped too and age
+  // out of the lookback window; switching the digest back on brings at most a
+  // week of them.
+  if (neverDelivers) stampIds.push(...[...byRecipient.values()].flatMap((entry) => entry.ids));
+  const toStamp = [...new Set(stampIds)];
+  for (let i = 0; i < toStamp.length; i += 1000) {
+    await prisma.message.updateMany({ where: { id: { in: toStamp.slice(i, i + 1000) } }, data: { digestedAt: now } });
   }
-  return { sent, considered: allIds.length };
+  return { sent, considered: allIds.length, digested: toStamp.length };
 }
 
 // How long a delivery-log row is kept (#1211). The log exists to answer "did
