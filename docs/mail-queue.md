@@ -421,7 +421,11 @@ the env file overrides it for topic environments), which still goes through the
 real relay (`mailRouteFor()` in `src/lib/mailSinkRule.ts`). The choice is made
 from the recipients alone, never from whether the sink is up: a sink that is
 down fails the send like any relay failure — the mail is queued and retried
-against the sink — and nothing ever falls back to the relay. Mailpit keeps the
+against the sink — and nothing ever falls back to the relay. Mail to the sink
+still passes the environment's own send budget (the topic database's own
+`MailBudget` row): with preview's numbers a topic environment's queued mail
+reaches the sink at about one a minute, while critical mail goes inline at once.
+Mailpit keeps the
 last 2000 messages. To read them: `ssh -L 8025:127.0.0.1:8025 <box>` and open
 `http://localhost:8025` (`infra/README.md` § The mail sink).
 
