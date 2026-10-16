@@ -87,6 +87,22 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/mailOpsRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'an operator alert fires on its threshold and not before, a tenant admin never reads another tenant\'s mail rows, a retry never resurrects a mail past its deadline (#2953)',
+    },
+  ],
+  [
+    'src/lib/mailSinkRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a PR environment sends to its sink unless EVERY recipient is allowlisted, and a sink that is down never falls back to the real relay (#2953)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,

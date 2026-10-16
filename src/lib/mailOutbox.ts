@@ -41,6 +41,8 @@ import {
   type Envelope,
 } from '@/lib/mailWorkerRule';
 import * as budgetStore from '@/lib/mailBudgetStore';
+import { isAuthRejection } from '@/lib/mailOpsRule';
+import { noteRelayAuthRejected } from '@/lib/mailOpsSignal';
 import type { PreparedEmail } from '@/services/emailService';
 
 // The mail outbox (#2944): a queued mail is a `Job` named 'email.send', and
@@ -78,6 +80,11 @@ import type { PreparedEmail } from '@/services/emailService';
 //   6. settle (`settleAction()` in mailWorkerRule.ts) with ONE guarded
 //      `updateMany` on `{ id, status: RUNNING, lockedBy: me }`: a row the
 //      reaper handed to somebody else is not written over.
+//   A FAILED (5xx) or DEAD_LETTER row KEEPS its sealed envelope until its own
+//   `notAfter` (#2953), so an operator can retry it from the admin Queue tab;
+//   `clearExpiredEnvelopes()` removes it from such a row once `notAfter` has
+//   passed, at most a minute later. Every other terminal state clears the box
+//   in the settle itself, as before.
 //   A relay-wide failure is not charged to the message: the row goes back to
 //   PENDING with `attempts` unchanged (every RELAY_RELEASES_PER_ATTEMPT-th
 //   release does count, so no row is released forever), the budget is paused,
@@ -321,6 +328,9 @@ export interface DrainSummary {
   reaped: number;
   /** BULK rows put back to the next UTC day by `MAIL_DAILY_CAP` (enforce mode). */
   capped: number;
+  /** The relay rejected our credentials during this tick (#2953): the
+   *  operator alert's trigger (`evaluateMailOps()`). */
+  authRejected: boolean;
   /** Why the tick ended: no due rows, the budget, the breaker, the relay, the
    *  clock — or `daily_cap`: nothing left but BULK, and today's bulk share is
    *  spent. */
@@ -434,6 +444,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     unsubscribed: 0,
     reaped: 0,
     capped: 0,
+    authRejected: false,
     stoppedBy: 'empty',
   };
   // Nothing to send with (demo, an environment without SMTP, the e2e server):
@@ -458,6 +469,9 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     if (Date.now() - lastReapAt > 60_000) {
       lastReapAt = Date.now();
       summary.reaped = await reapExpiredLeases(DEFAULT_LEASE_MS, { names: [...JOB_NAMES], store: store() });
+      await clearExpiredEnvelopes(clock()).catch((e) =>
+        logger.warning('mail_outbox.envelope_sweep_failed', { error: e instanceof Error ? e.name : 'unknown' }),
+      );
     }
 
     while (Date.now() < deadline) {
@@ -611,6 +625,11 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     error = e;
   }
 
+  if (error && isAuthRejection(classifySmtpError(error).reason)) {
+    summary.authRejected = true;
+    noteRelayAuthRejected();
+  }
+
   let pausedUntil: Date | null = null;
   if (cfg.mode !== 'off') {
     if (!error) {
@@ -684,11 +703,13 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
       summary.retried++;
       return null;
     case 'dead':
+      // The envelope stays sealed on the row until `notAfter` (#2953): the
+      // admin Queue tab may put the mail back, and `clearExpiredEnvelopes()`
+      // removes it once that can no longer happen.
       await settle(row, workerId, {
         status: action.status,
         attempts: action.attempts,
         lastError: action.reason,
-        payload: clearedPayload(payload),
       });
       await deps.record(envelope, 'FAILED', errorText(error));
       await settleMailRef(payload.ref, 'FAILED', action.reason);
@@ -710,6 +731,41 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
       summary.expired++;
       return null;
   }
+}
+
+/**
+ * A FAILED or DEAD_LETTER mail keeps its sealed envelope only while it could
+ * still be retried (#2953): once its `notAfter` has passed, the envelope goes.
+ * Run with the reaper, once a minute per process. Reads only rows that changed
+ * in the last four days (the longest lane lives 72 h), at most 200 a run; each
+ * clear is guarded on the state it read, so a row an operator just retried is
+ * left alone.
+ */
+export async function clearExpiredEnvelopes(now: Date = new Date()): Promise<number> {
+  const rows = await prisma.job.findMany({
+    where: {
+      name: MAIL_JOB_NAME,
+      status: { in: ['FAILED', 'DEAD_LETTER'] },
+      updatedAt: { gt: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true, status: true, payload: true },
+    orderBy: { updatedAt: 'asc' },
+    take: 200,
+  });
+  let cleared = 0;
+  for (const row of rows) {
+    const p = row.payload as { box?: unknown; notAfter?: unknown } | null;
+    if (!p || typeof p.box !== 'string') continue;
+    // No readable deadline means no retry either (queueActionAllowed): clear.
+    const until = typeof p.notAfter === 'string' ? Date.parse(p.notAfter) : NaN;
+    if (Number.isFinite(until) && until > now.getTime()) continue;
+    const { count } = await prisma.job.updateMany({
+      where: { id: row.id, status: row.status },
+      data: { payload: clearedPayload(p) },
+    });
+    cleared += count;
+  }
+  return cleared;
 }
 
 function errorText(error: unknown): string {

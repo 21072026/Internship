@@ -338,6 +338,54 @@ _in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 _in_image "$IMAGE" node prisma/set-public-host.mjs --org demo-marketing --host "$MARKETING_HOST" \
   || echo "WARN: could not map demo-marketing publicHost → ${MARKETING_HOST}"
 
+# ── Mail sink (#2953) ────────────────────────────────────────────────────────
+# A topic environment never spends the shared relay's budget: every mail it
+# sends goes to ONE Mailpit container shared by all topic environments on this
+# box — it accepts anything, keeps the last messages for a look, and relays
+# nothing. Only mail whose recipients are ALL on MAIL_RECIPIENT_ALLOWLIST (from
+# the env file; TOPIC_MAIL_RECIPIENT_ALLOWLIST overrides it there) still goes
+# through the real relay (src/lib/mailSinkRule.ts).
+#
+# Never published publicly: SMTP and the web UI are bound to 127.0.0.1 on the
+# box (host networking reaches them there), plus a private docker network for a
+# bridge-mode container. To read the sink: an SSH tunnel to the UI —
+#   ssh -L 8025:127.0.0.1:8025 <box>   then open http://localhost:8025
+# (infra/README.md § The mail sink).
+#
+# Started idempotently. If it cannot be started, MAIL_SINK_HOST is STILL set:
+# the app then fails to reach the sink, queues the mail and retries it against
+# the sink — it never falls back to the real relay. The image is pinned; bump it
+# by hand.
+MAIL_SINK_CONTAINER="${MAIL_SINK_CONTAINER:-internship-mail-sink}"
+MAIL_SINK_IMAGE="${MAIL_SINK_IMAGE:-axllent/mailpit:v1.31.3}"
+MAIL_SINK_NETWORK="${MAIL_SINK_NETWORK:-internship-mail-sink}"
+docker network inspect "$MAIL_SINK_NETWORK" >/dev/null 2>&1 \
+  || docker network create "$MAIL_SINK_NETWORK" >/dev/null 2>&1 \
+  || echo "WARN: could not create the docker network ${MAIL_SINK_NETWORK}"
+if [ "$(docker inspect -f '{{.State.Running}}' "$MAIL_SINK_CONTAINER" 2>/dev/null)" != "true" ]; then
+  docker rm -f "$MAIL_SINK_CONTAINER" >/dev/null 2>&1 || true
+  # MP_MAX_MESSAGES bounds the store: the sink is a window, not an archive.
+  docker run -d \
+    --name "$MAIL_SINK_CONTAINER" \
+    --restart=unless-stopped \
+    --network "$MAIL_SINK_NETWORK" \
+    -p 127.0.0.1:1025:1025 \
+    -p 127.0.0.1:8025:8025 \
+    -e MP_MAX_MESSAGES=2000 \
+    "$MAIL_SINK_IMAGE" >/dev/null \
+    && echo "==> Mail sink started (${MAIL_SINK_CONTAINER}, ${MAIL_SINK_IMAGE})" \
+    || echo "WARN: mail sink could not be started — this environment's mail will wait on its queue"
+else
+  echo "==> Mail sink running (${MAIL_SINK_CONTAINER})"
+fi
+if [ "$NETWORK" = host ]; then
+  TOPIC_MAIL_SINK_HOST=127.0.0.1
+else
+  # A bridge-mode container reaches the sink by name on the private network
+  # (connected below, once the container exists).
+  TOPIC_MAIL_SINK_HOST="$MAIL_SINK_CONTAINER"
+fi
+
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 # OPERATOR_* (#1396) is forwarded like the rest: same host, same operator, so a
@@ -372,6 +420,9 @@ docker run -d \
   -e MAIL_INLINE_TIMEOUT_MS="${MAIL_INLINE_TIMEOUT_MS:-}" \
   -e MAIL_DAILY_CAP="${TOPIC_MAIL_DAILY_CAP:-${MAIL_DAILY_CAP:-}}" \
   -e MAIL_BULK_DAILY_CAP="${MAIL_BULK_DAILY_CAP:-}" \
+  -e MAIL_SINK_HOST="$TOPIC_MAIL_SINK_HOST" \
+  -e MAIL_SINK_PORT=1025 \
+  -e MAIL_RECIPIENT_ALLOWLIST="${TOPIC_MAIL_RECIPIENT_ALLOWLIST:-${MAIL_RECIPIENT_ALLOWLIST:-}}" \
   -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
   -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
   -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
@@ -396,6 +447,11 @@ docker run -d \
   -e MARKETING_OPERATOR_REGISTER="${MARKETING_OPERATOR_REGISTER:-}" \
   -e MARKETING_OPERATOR_DPO="${MARKETING_OPERATOR_DPO:-}" \
   "$IMAGE"
+
+if [ "$NETWORK" != host ]; then
+  docker network connect "$MAIL_SINK_NETWORK" "$CONTAINER" 2>/dev/null \
+    || echo "WARN: ${CONTAINER} could not join ${MAIL_SINK_NETWORK} — its mail will wait on its queue"
+fi
 
 # ── Container health (local) ─────────────────────────────────────────────────
 sleep 3

@@ -5467,6 +5467,14 @@ model MailBudget {
   /// pause. Null = never paused. Nullable, so adding it is an expand-only push.
   pausedUntil DateTime? @db.DateTime(3)
 
+  /// When the relay outage the current pause belongs to began (#2953): set by
+  /// the first throttle or relay-wide failure after a quiet spell, kept while
+  /// the pauses follow each other, cleared by a delivered mail. What the
+  /// "breaker open for more than 15 minutes" operator alert reads — the rung
+  /// alone cannot say how long the relay has been refusing. Nullable, so adding
+  /// it is an expand-only push.
+  pausedSince DateTime? @db.DateTime(3)
+
   /// UTC day (YYYY-MM-DD) `dayCount` belongs to — the optional bulk daily cap.
   dayKey   String? @db.VarChar(10)
   dayCount Int     @default(0)

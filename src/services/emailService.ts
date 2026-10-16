@@ -67,6 +67,9 @@ import { createMeterObserver, type MeterObserver } from '@/lib/mailMeterObserver
 import { decayPause, readBudgetState, spendToken } from '@/lib/mailBudgetStore';
 import { INLINE_FALLBACK_DELAY_MS, INLINE_PACE_MAX_WAIT_MS, breakerOpen, fallbackRef, firstQueuedRunAt, mailPolicy } from '@/lib/mailWorkerRule';
 import { canQueue, cancelQueuedMail, enqueueMail, type DrainDeps, type EnqueueMailOptions } from '@/lib/mailOutbox';
+import { mailRouteFor, parseRecipientAllowlist, type MailRoute, type RecipientAllowlist } from '@/lib/mailSinkRule';
+import { isAuthRejection } from '@/lib/mailOpsRule';
+import { noteRelayAuthRejected } from '@/lib/mailOpsSignal';
 import {
   BULK_GROUP_CATEGORIES,
   emailGroupAllowed,
@@ -301,6 +304,79 @@ function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter 
     modeTransports.set(key, t);
   }
   return t;
+}
+
+// ---------------------------------------------------------------------------
+// The mail sink (#2953, src/lib/mailSinkRule.ts).
+//
+// With MAIL_SINK_HOST set (a per-PR topic environment), every mail whose
+// recipients are not all on MAIL_RECIPIENT_ALLOWLIST goes to that SMTP server —
+// a Mailpit container on the box that keeps the message for a look and relays
+// nothing — instead of the real relay. Chosen per mail from its recipients
+// alone, never from whether the sink answers: a sink that is down fails the
+// send like any relay failure (the mail is queued and retried against the
+// sink), and nothing ever falls back to the relay. No auth and no TLS: the sink
+// listens on the box's loopback or a private docker network only.
+// Unset, this is a no-op and every mail takes `smtpTransport()` as before.
+// ---------------------------------------------------------------------------
+let allowlistMemo: { raw: string; list: RecipientAllowlist } | null = null;
+
+function recipientAllowlist(): RecipientAllowlist {
+  const raw = process.env.MAIL_RECIPIENT_ALLOWLIST ?? '';
+  if (!allowlistMemo || allowlistMemo.raw !== raw) allowlistMemo = { raw, list: parseRecipientAllowlist(raw) };
+  return allowlistMemo.list;
+}
+
+/** Every address a prepared mail is addressed to — to, cc and bcc — as one
+ *  comma list, so a copy to a stranger cannot ride an allowlisted `to`. */
+function envelopeRecipients(prepared: Pick<PreparedEmail, 'to' | 'message'>): string {
+  const parts: string[] = [prepared.to];
+  const add = (v: unknown) => {
+    if (!v) return;
+    if (typeof v === 'string') parts.push(v);
+    else if (Array.isArray(v)) v.forEach(add);
+    else if (typeof v === 'object' && typeof (v as { address?: unknown }).address === 'string') parts.push((v as { address: string }).address);
+  };
+  add(prepared.message?.to);
+  add(prepared.message?.cc);
+  add(prepared.message?.bcc);
+  return parts.join(', ');
+}
+
+/** Which way this mail goes: the relay, or the environment's sink. */
+export function mailRoute(prepared: Pick<PreparedEmail, 'to' | 'message'>): MailRoute {
+  return mailRouteFor(envelopeRecipients(prepared), process.env.MAIL_SINK_HOST, recipientAllowlist());
+}
+
+function sinkTransport(mode: DeliveryMode): Transporter {
+  const key = `sink:${mode}`;
+  let t = modeTransports.get(key);
+  if (!t) {
+    const server = {
+      host: process.env.MAIL_SINK_HOST,
+      port: Number(process.env.MAIL_SINK_PORT) || 1025,
+      secure: false,
+      ignoreTLS: true,
+    };
+    const timeouts = mode === 'urgent' ? URGENT_TIMEOUTS : SMTP_TIMEOUTS;
+    t =
+      mode === 'drain'
+        ? nodemailer.createTransport({ ...server, pool: true, maxConnections: 1, maxMessages: 50, ...timeouts })
+        : nodemailer.createTransport({ ...server, ...timeouts });
+    modeTransports.set(key, t);
+  }
+  return t;
+}
+
+/** The transport one prepared mail goes out on: the sink when the route says
+ *  so, otherwise its channel's transport for this delivery mode. */
+function transportForMail(prepared: PreparedEmail, mode: DeliveryMode): Transporter {
+  return mailRoute(prepared) === 'sink' ? sinkTransport(mode) : smtpTransport(prepared.transport, mode);
+}
+
+/** The relay rejected our credentials: the operator alert's signal (#2953). */
+function noteAuthFailure(reason: string): void {
+  if (isAuthRejection(reason)) noteRelayAuthRejected();
 }
 
 // ── The shared send budget, observe mode (#2941) ────────────────────────────
@@ -1103,7 +1179,7 @@ export async function deliverPrepared(
   }: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
 ): Promise<'SENT'> {
   const { to, subject, category, transport } = prepared;
-  const transporterFor = via ?? smtpTransport(transport, mode);
+  const transporterFor = via ?? transportForMail(prepared, mode);
   try {
     await transporterFor.sendMail(prepared.message);
   } catch (e) {
@@ -1113,6 +1189,7 @@ export async function deliverPrepared(
     // Never the address or the subject (#2944): the recipient's hash and the
     // failure class are enough to correlate with the EmailLog row.
     const cls = classifySmtpError(e);
+    noteAuthFailure(cls.reason);
     logger.error('Email send failed', { category, transport, kind: cls.kind, reason: cls.reason, rcpt: recipientHash(to).slice(0, 16) });
     await recordEmail(to, subject, category, 'FAILED', transport, message);
     void maybeAlertEmailFailures(category).catch(() => {});
@@ -1318,6 +1395,7 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
   const observer = seams.observer ?? meterObserver;
   observeSafely(() => observer.outcome(prepared, e));
   const cls = classifySmtpError(e);
+  noteAuthFailure(cls.reason);
   const message = e instanceof Error ? e.message : String(e);
   if (cls.retryable && canQueue(prepared)) {
     const runAt = firstQueuedRunAt(cls, lane, new Date(), budgetConfig(process.env, transport));
@@ -1436,7 +1514,7 @@ export async function transmit(
   prepared: PreparedEmail,
   { mode = 'request', via }: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'> } = {},
 ): Promise<void> {
-  await (via ?? smtpTransport(prepared.transport, mode)).sendMail(prepared.message);
+  await (via ?? transportForMail(prepared, mode)).sendMail(prepared.message);
 }
 
 /** The drain's ledger row for a queued mail (#2944): the same EmailLog row an

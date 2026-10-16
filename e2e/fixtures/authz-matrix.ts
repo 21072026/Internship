@@ -291,6 +291,23 @@ export const SUPER_ADMIN_ONLY: SuperAdminProbe[] = [
 ];
 
 /**
+ * The mail queue's operator surface (#2953): deployment-wide, so only a super
+ * admin or the ADMIN of the deployment's default organization may read or act
+ * on it (`queueScopeFor()`, src/lib/mailOpsRule.ts). Every role in the matrix
+ * is refused — the matrix ADMIN administers its own tenant, not the default
+ * organization. `:jobId` is a mail row of the FOREIGN tenant the spec seeds, so
+ * an action that got through would show on the row.
+ */
+export const MAIL_JOB_ID_PARAM = ':jobId';
+
+export const MAIL_QUEUE_OPERATOR_ONLY: Array<{ method: 'GET' | 'POST'; path: string; why: string }> = [
+  { method: 'GET', path: '/api/admin/mail-queue', why: 'the deployment-wide mail queue view' },
+  { method: 'GET', path: '/api/admin/mail-queue?probe=1', why: 'the Queue tab probe' },
+  { method: 'POST', path: `/api/admin/mail-queue/${MAIL_JOB_ID_PARAM}/retry`, why: 'retry a dead mail' },
+  { method: 'POST', path: `/api/admin/mail-queue/${MAIL_JOB_ID_PARAM}/cancel`, why: 'cancel a waiting mail' },
+];
+
+/**
  * Writes into ONE organization's own setup (#2922): only that organization's
  * ADMIN or a super admin of its world may make them — the door of PATCH
  * /api/admin/organizations (src/lib/orgAdminGate.ts). Probed against the

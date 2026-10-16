@@ -179,9 +179,17 @@ export async function pauseBudget(cfg: BudgetConfig, name: string = SMTP_BUDGET)
   const ladder = cfg.ladderSec.map((s) => Math.trunc(s));
   const top = ladder.length - 1;
   await ensureRow(name);
+  // `pausedSince` (#2953) is assigned FIRST, so it reads the OLD `pausedUntil`:
+  // a pause that follows the previous one within the ladder's top rung is the
+  // same outage and keeps its start; after a longer quiet spell (or none at
+  // all) a new outage starts now. What the "breaker open > 15 min" alert reads.
   await prisma.$executeRaw(Prisma.sql`
     UPDATE \`MailBudget\`
-       SET tat = GREATEST(tat, UTC_TIMESTAMP(3) + INTERVAL CAST(ELT(LEAST(pauseLevel, ${Prisma.raw(String(top))}) + 1, ${Prisma.raw(ladder.join(', '))}) AS UNSIGNED) SECOND),
+       SET pausedSince = IF(
+             pausedSince IS NULL OR pausedUntil IS NULL
+               OR pausedUntil < UTC_TIMESTAMP(3) - INTERVAL ${Prisma.raw(String(Math.max(...ladder)))} SECOND,
+             UTC_TIMESTAMP(3), pausedSince),
+           tat = GREATEST(tat, UTC_TIMESTAMP(3) + INTERVAL CAST(ELT(LEAST(pauseLevel, ${Prisma.raw(String(top))}) + 1, ${Prisma.raw(ladder.join(', '))}) AS UNSIGNED) SECOND),
            pausedUntil = GREATEST(COALESCE(pausedUntil, UTC_TIMESTAMP(3)), UTC_TIMESTAMP(3) + INTERVAL CAST(ELT(LEAST(pauseLevel, ${Prisma.raw(String(top))}) + 1, ${Prisma.raw(ladder.join(', '))}) AS UNSIGNED) SECOND),
            pauseLevel = LEAST(pauseLevel + 1, ${Prisma.raw(String(top))}),
            updatedAt = UTC_TIMESTAMP(3)
@@ -189,13 +197,15 @@ export async function pauseBudget(cfg: BudgetConfig, name: string = SMTP_BUDGET)
   `);
 }
 
-/** A delivered mail walks the ladder one rung back down. A no-op write when
- *  the budget is not paused (the WHERE matches nothing). True when a rung was
- *  removed, so a caller can stop decaying once the ladder is back at 0. */
+/** A delivered mail walks the ladder one rung back down, and ends the outage
+ *  the pause belonged to (`pausedSince`, #2953). A no-op write when the budget
+ *  is not paused (the WHERE matches nothing). True when a rung was removed, so
+ *  a caller can stop decaying once the ladder is back at 0. */
 export async function decayPause(name: string = SMTP_BUDGET): Promise<boolean> {
   const changed = await prisma.$executeRaw(Prisma.sql`
-    UPDATE \`MailBudget\` SET pauseLevel = pauseLevel - 1, updatedAt = UTC_TIMESTAMP(3)
-     WHERE name = ${name} AND pauseLevel > 0
+    UPDATE \`MailBudget\`
+       SET pauseLevel = GREATEST(pauseLevel - 1, 0), pausedSince = NULL, updatedAt = UTC_TIMESTAMP(3)
+     WHERE name = ${name} AND (pauseLevel > 0 OR pausedSince IS NOT NULL)
   `);
   return changed === 1;
 }
@@ -228,4 +238,52 @@ export async function readBudget(
     where: { name },
     select: { tat: true, pauseLevel: true, dayKey: true, dayCount: true },
   });
+}
+
+/**
+ * The breaker and the daily counter as an operator reads them (#2953): the
+ * health endpoint's `mail` block and the admin Queue tab. Against the DATABASE
+ * clock, like everything else here. Null when the row was never touched.
+ * Counters and instants only — nothing here is about one mail.
+ */
+export interface BudgetHealth {
+  /** A relay pause is running right now. */
+  paused: boolean;
+  /** When the current pause ends (ISO), null when there is none running. */
+  pausedUntil: string | null;
+  pauseLevel: number;
+  /** How long the relay has been refusing, ms — null when no outage is open. */
+  outageMs: number | null;
+  /** Sends counted against today's UTC day. */
+  dayCount: number;
+}
+
+type HealthRow = {
+  paused: bigint | number | null;
+  since: bigint | number | null;
+  pauseLevel: number;
+  todayCount: bigint | number | null;
+};
+
+export async function readBudgetHealth(name: string = SMTP_BUDGET, now: Date = new Date()): Promise<BudgetHealth | null> {
+  const rows = await prisma.$queryRaw<HealthRow[]>(Prisma.sql`
+    SELECT TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), pausedUntil) AS paused,
+           TIMESTAMPDIFF(MICROSECOND, pausedSince, UTC_TIMESTAMP(3)) AS since,
+           pauseLevel,
+           IF(dayKey = ${TODAY}, dayCount, 0) AS todayCount
+      FROM \`MailBudget\` WHERE name = ${name}
+  `);
+  const row = rows[0];
+  if (!row) return null;
+  const pausedMs = row.paused === null || row.paused === undefined ? 0 : Number(row.paused) / 1000;
+  const paused = pausedMs > 0;
+  return {
+    paused,
+    // Reported in the app's clock from the database's remaining time, so a
+    // replica with a drifting clock still prints the right distance.
+    pausedUntil: paused ? new Date(now.getTime() + pausedMs).toISOString() : null,
+    pauseLevel: Number(row.pauseLevel ?? 0),
+    outageMs: row.since === null || row.since === undefined ? null : Math.max(0, Number(row.since) / 1000),
+    dayCount: Number(row.todayCount ?? 0),
+  };
 }

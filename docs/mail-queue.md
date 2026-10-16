@@ -76,7 +76,12 @@ A queued mail is a `Job` row named `email.send` on the existing job queue
   headers, attachments — is encrypted with `secretBox` under the purpose
   `mail-outbox` and stored in `payload.box`. It carries password-reset and
   sign-in links, so a database dump must not be able to read it. The box is set
-  to null in the same statement that writes any terminal state.
+  to null in the same statement that writes a terminal state — except FAILED
+  and DEAD_LETTER (#2953), which keep it until the mail's `notAfter` so an
+  operator can retry it; the drain's once-a-minute housekeeping
+  (`clearExpiredEnvelopes()`) removes it from such a row once `notAfter` has
+  passed. At most 72 hours (the bulk lane's lifetime), and erasure still
+  deletes the row by its recipient hash.
 - **No address in the clear.** `payload.rcpt` is the sha256 of the lowercased
   address. It is what account erasure deletes by.
 - **De-duplicated.** `Job.idempotencyKey` is the mail's natural key when the
@@ -162,8 +167,8 @@ Per row, in order:
 | 250 | SUCCEEDED, box cleared | +1 | SENT |
 | relay-wide (throttle, refused session, timeout, auth) | PENDING after the pause, one second behind **the rest of the batch, which is released too; the tick stops** | unchanged (every 4th release of the same row: +1) | DEFERRED |
 | 4xx about the message | PENDING after a backoff (exponential, jittered, per lane) | +1 | DEFERRED |
-| 5xx | FAILED, box cleared | +1 | FAILED |
-| attempts exhausted (5), retries and counted releases together | DEAD_LETTER, box cleared | 5 | FAILED |
+| 5xx | FAILED, box kept until `notAfter` (#2953) | +1 | FAILED |
+| attempts exhausted (5), retries and counted releases together | DEAD_LETTER, box kept until `notAfter` | 5 | FAILED |
 | the next try would land after `notAfter` | CANCELLED, box cleared | — | FAILED |
 
 A relay-wide failure is not charged to the message: it says nothing about the
@@ -307,6 +312,122 @@ short throttle that clears does not alert), and the hourly stale check counts
 deferrals as activity. A relay-wide deferral, inline or in the drain, and a
 mail that expires in the queue both run the check.
 
+## Operations (#2953)
+
+### The health block
+
+`GET /api/health?jobs=1` carries a `mail` block next to `jobs` — but only for an
+**operator**: the `HEALTH_TOKEN` holder or a super admin. A plain tenant ADMIN,
+who may read the generic `jobs` counters, does not get it: it is every
+tenant's mailing volume, the figure `mailQueueNotice()` keeps from tenants.
+
+```json
+"mail": {
+  "lanes": {
+    "CRITICAL":      { "pending": 0, "oldestPendingAgeSec": null },
+    "TRANSACTIONAL": { "pending": 3, "oldestPendingAgeSec": 12 },
+    "BULK":          { "pending": 140, "oldestPendingAgeSec": 5400 }
+  },
+  "running": 1, "deferred24h": 4, "dead": 0, "failed24h": 1,
+  "breaker": { "primary": { "paused": false, "pausedUntil": null, "pauseLevel": 0, "outageSec": null } },
+  "day": { "primary": { "count": 412, "cap": 2000 } },
+  "meterMode": "enforce"
+}
+```
+
+The lane is read from `Job.priority` (`laneOfPriority()`: ≥ 100 CRITICAL,
+≥ 50 TRANSACTIONAL, the rest BULK — the bands `lanePriority()` writes), so the
+counters group on an indexed column instead of reading JSON. The age is since
+the mail was **queued**, not since it became due. `bulk` appears only when the
+bulk server is configured. Counts, ages and instants — never an address, a
+subject or a relay's text.
+
+### The Queue tab
+
+Settings → Email deliverability has two tabs: *Delivery* (what was there before) and
+*Queue* (`src/components/admin/MailQueuePanel.tsx`, fed by
+`GET /api/admin/mail-queue`): counts per lane and state, the relay pause per
+channel, the mail that was not delivered and the mail that is waiting.
+
+**Who sees it** (`queueScopeFor()` in `src/lib/mailOpsRule.ts`) — the queue is
+the whole deployment's, both products and every tenant:
+
+| Caller | Rows | Today's count vs. the cap |
+|---|---|---|
+| super admin | every row of an organization in their world, plus the rows with no organization when their world is the default one | yes |
+| ADMIN of the deployment's default organization | that organization's rows and the rows with no organization (operator alerts, mail to an address with no account yet) | no |
+| any other ADMIN, every other role | none — 403 `mail_queue_operator_only`, and no tab | — |
+
+A row is its lane, category, product, state, attempts, a reason **code**
+(`reasonCodeOf()`: anything that is not code-shaped shows as `other`) and the
+first 12 hex characters of the recipient's sha256 — enough to match a log
+line's `rcpt`, nothing an address can be read back from. The sealed envelope
+never leaves the server. A row outside the caller's scope answers 404, the
+same as a row that does not exist.
+
+**The two actions** (`applyQueueAction()` in `src/lib/mailQueueAdmin.ts`):
+
+- **Retry** — a FAILED or DEAD_LETTER mail goes back to PENDING, due now, with
+  `attempts` and the relay-release counter reset. Only while its `notAfter` has
+  not passed (`409 expired`) and its envelope is still on the row
+  (`409 no_envelope`). A newsletter copy's `NewsletterSend` row was already
+  settled FAILED; the retry delivers the mail but does not re-open that tally.
+- **Cancel** — a PENDING mail becomes CANCELLED (`cancelled_by_operator`), its
+  envelope cleared; a newsletter copy's record settles FAILED and the ledger
+  gets a SKIPPED row. A RUNNING row is a drain's and is never touched.
+
+Each is ONE guarded `updateMany` on the state the read saw, and the AuditLog
+row (`MAIL_QUEUE_RETRY` / `MAIL_QUEUE_CANCEL`, `orgId` = the mail's tenant, or
+the operator's when the mail has none) is written in the same transaction only
+when a row changed: two operators clicking at once make one change, and the
+second gets `409 conflict`. A `mail_queue.retry` / `.cancel` ActivityLog line
+follows.
+
+### Alerts
+
+`evaluateMailOps()` (`src/lib/mailOpsAlert.ts`) runs after every drain tick:
+the credentials flag every time (in memory), the two database facts at most
+once a minute per process. Each alert is raised at most once per hour — its
+mail is queued under `ops:<kind>:<hour>`, and the process remembers the key —
+and writes a `mail_ops.alert` log line and ActivityLog row first:
+
+| Kind | Fires when | Read from |
+|---|---|---|
+| `mail-critical-waiting` | the oldest CRITICAL mail still PENDING was queued more than 5 minutes ago | `Job` (priority ≥ 100) |
+| `mail-breaker-open` | a relay pause is running and the outage began more than 15 minutes ago | `MailBudget.pausedSince` |
+| `mail-relay-auth` | the relay rejected our credentials (`EAUTH`, `ENOAUTH`, or a refusal at the AUTH step) | the inline sender and the drain |
+
+`MailBudget.pausedSince` is set by the first pause after a quiet spell, kept
+while pauses follow each other within the ladder's top rung, and cleared by a
+delivered mail. During an outage the alert mail itself waits on the queue with
+everything else; the log line and the ActivityLog row are the durable signal.
+
+The daily dead-letter alert (`src/lib/jobs/dlqAlert.ts`) already counts every
+job name; for `email.send` it now also says how many of them are mail and that
+the Queue tab can retry those whose deadline has not passed.
+
+### The mail sink (PR environments)
+
+A topic environment (`pr<N>`) never spends the relay's budget.
+`infra/server/topic-deploy.sh` starts one shared Mailpit container on the box
+(idempotently; SMTP on `127.0.0.1:1025`, the web UI on `127.0.0.1:8025`, plus a
+private docker network for a bridge-mode container — no public port) and gives
+every topic container `MAIL_SINK_HOST`/`MAIL_SINK_PORT`.
+
+With `MAIL_SINK_HOST` set, `emailService` sends every mail to the sink —
+unless **every** recipient (to, cc and bcc) is on `MAIL_RECIPIENT_ALLOWLIST`
+(comma list of addresses and exact domains; `TOPIC_MAIL_RECIPIENT_ALLOWLIST` in
+the env file overrides it for topic environments), which still goes through the
+real relay (`mailRouteFor()` in `src/lib/mailSinkRule.ts`). The choice is made
+from the recipients alone, never from whether the sink is up: a sink that is
+down fails the send like any relay failure — the mail is queued and retried
+against the sink — and nothing ever falls back to the relay. Mailpit keeps the
+last 2000 messages. To read them: `ssh -L 8025:127.0.0.1:8025 <box>` and open
+`http://localhost:8025` (`infra/README.md` § The mail sink).
+
+The demo container runs with `MAIL_WORKER_ENABLED=0`
+(`infra/server/demo-refresh.sh`): it sends nothing, so it drains nothing.
+
 ## Erasure and retention
 
 - **Erasure** (`src/lib/accountErasure.ts`) deletes every queued mail to the
@@ -336,6 +457,8 @@ the EmailLog row.
 | `MAIL_BULK_*` | the primary values | the optional bulk channel's own budget |
 | `MAIL_THROTTLE_LADDER_SEC` | `60,120,300,900,1800` | the pause ladder |
 | `MAIL_DAILY_CAP`, `MAIL_BULK_DAILY_CAP` | unset (no cap) | mails per UTC day; BULK stops at 90 % |
+| `MAIL_SINK_HOST`, `MAIL_SINK_PORT` | unset, `1025` | send to this SMTP sink instead of the relay (topic environments, #2953) |
+| `MAIL_RECIPIENT_ALLOWLIST` | unset | with a sink: addresses / domains that still go through the relay |
 
 The deploy scripts (`infra/deploy-prod.sh`, `infra/server/topic-deploy.sh`)
 forward all of them from the environment file.
@@ -396,6 +519,14 @@ an address, a subject or the relay's text:
   a retryable failure is repeating.
 - `mail_outbox.ref_settle_failed` — a queued newsletter copy settled, but its
   `NewsletterSend` row could not be updated (the mail itself is fine).
+- `mail_ops.alert` (#2953) — one of the three operator alerts fired (`kind`,
+  `criticalWaitingSec`, `outageSec`); `mail_ops.evaluate_failed` — the
+  evaluation itself could not read the database.
+- `mail_queue.retry`, `mail_queue.cancel` — an operator acted on a row
+  (ActivityLog, with the AuditLog row beside it).
+- `mail_outbox.envelope_sweep_failed` — the housekeeping that clears the
+  envelope of a dead row past its `notAfter` could not run (it retries a
+  minute later).
 
 ## Tests
 
@@ -409,6 +540,16 @@ an address, a subject or the relay's text:
 - `scripts/test/mail-pacing.test.mjs` — lane routing, the claim bands and their
   in-memory twin, world alternation, the daily cap, the estimate and the
   natural keys (#2951).
+- `scripts/test/mail-ops.test.mjs` — the alert thresholds, the auth
+  classification, the lane bands, the reason-code and fingerprint rules, which
+  action applies to which row, who sees which rows, and the sink allowlist and
+  routing (#2953).
+- `e2e/mail-queue-admin.spec.ts` — the Queue tab's API and actions, the scope
+  per caller (the smoke case: a tenant admin is refused, the default
+  organization's admin sees only its own rows), the audit rows and the health
+  block's shape. `e2e/authz-matrix.spec.ts` probes the routes for every role.
+- `e2e/mail-ops.spec.ts` — the sink routing, an unreachable sink that never
+  falls back to the relay, and the three alerts with their hourly key.
 - `e2e/mail-pacing.spec.ts` — a 30-recipient announcement is queued whole and
   delivered at a test rate; a meeting reminder past its start is cancelled; the
   unread digest does not stamp a skipped recipient. The smoke case: a password
