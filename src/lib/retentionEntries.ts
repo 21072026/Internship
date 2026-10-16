@@ -790,7 +790,7 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     // docs/mail-queue.md), not an operator knob.
     defaultDays: 7,
     reason:
-      'A delivered or withdrawn mail is only ever looked at while somebody asks "did it go out?", which the EmailLog row answers for 90 days anyway; the queue row adds the recipient hash and a reason code and nothing else, so a week is plenty. A FAILED or DEAD_LETTER mail row is kept 30 days, past the daily dead-letter alert. Rows still on their way are never touched.',
+      'A delivered or withdrawn mail is only ever looked at while somebody asks "did it go out?", which the EmailLog row answers for 90 days anyway; the queue row adds the recipient hash and a reason code and nothing else, so a week is plenty. A FAILED or DEAD_LETTER mail row is kept 30 days, past the daily dead-letter alert; it keeps its sealed message only until the deadline of that mail (at most 72 hours) so an operator can retry it, and from then on holds the hash and the code like the rest. Rows still on their way are never touched.',
     run: pruneMailOutbox,
   },
   {

@@ -136,7 +136,14 @@ test('the queue counters are read only for a verified caller who asks for them',
   // deploy drift gate needs. `verified` is not, and the counters ride on
   // `verified`, so an un-tokened server (every environment today) still refuses
   // them to an anonymous ?jobs=1.
-  expect(src).toContain('return { detail: !expected, verified: false };');
+  expect(src).toContain('return { detail: !expected, verified: false, operator: false };');
+
+  // The mail block (#2953) is stricter still: opt-in, and only for an
+  // OPERATOR (the token, or a super admin) — a tenant ADMIN is verified but
+  // must not read every tenant's mail volume.
+  expect(src.match(/mailQueueHealth\(\)/g) ?? []).toHaveLength(1);
+  expect(src).toContain('...(wantsJobs && access.operator ? { mail: await mailQueueHealth() } : {})');
+  expect(src.indexOf('await mailQueueHealth()')).toBeGreaterThan(src.indexOf('if (!access.detail)'));
 
   // …and the read sits after the anonymous early return, so a caller the gate
   // turned away never reaches it.

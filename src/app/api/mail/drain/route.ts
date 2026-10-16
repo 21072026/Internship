@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { drainOnce } from '@/lib/mailOutbox';
 import { mailDrainDeps } from '@/services/emailService';
+import { evaluateMailOps } from '@/lib/mailOpsAlert';
 import { mailPolicy } from '@/lib/mailWorkerRule';
 import { logger } from '@/lib/logger';
 import { withRequestScope } from '@/lib/requestContext';
@@ -55,9 +56,16 @@ async function handlePost(request: Request) {
     const summary = await drainOnce({ deps: mailDrainDeps() });
     // Quiet when idle — this runs every five seconds.
     if (summary.claimed > 0 || summary.reaped > 0) logger.info('mail_outbox.drain', { ...summary });
+    // The operator alerts (#2953): critical mail waiting, a long relay
+    // outage, rejected credentials. Cheap when nothing is wrong — the database
+    // half runs at most once a minute per process — and never fails the tick.
+    await evaluateMailOps({ authRejected: summary.authRejected });
     return NextResponse.json({ ok: true, ...summary });
   } catch (e) {
     logger.error('mail_outbox.drain_failed', { error: e instanceof Error ? e.name : 'unknown' });
+    // A drain that fails every tick is one of the things the critical-waiting
+    // alert is for: evaluate here too, so a broken drain still raises it.
+    await evaluateMailOps();
     return NextResponse.json({ error: 'Drain failed' }, { status: 502 });
   }
 }

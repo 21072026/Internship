@@ -79,9 +79,14 @@ if [ "$DATA_ONLY" = 0 ]; then
     else
       NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "${PORT}:3000")
     fi
+    # MAIL_WORKER_ENABLED=0 (#2953): the demo sends nothing (DEMO_MODE skips
+    # every mail), so it drains nothing either — no 5-second tick, and a row
+    # somebody queued by hand stays where it is instead of going to the relay.
+    # After --env-file, so the env file cannot switch it back on.
     docker run -d \
       --name "$CONTAINER" \
       --env-file "$ENV_FILE" \
+      -e MAIL_WORKER_ENABLED=0 \
       "${NET_ARGS[@]}" \
       --restart=unless-stopped \
       "$IMAGE" >/dev/null

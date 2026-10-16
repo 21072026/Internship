@@ -397,6 +397,41 @@ outage or that one MySQL still does. Anything that quotes this work as an
 availability guarantee — #1604's status page and SLA in particular — has to
 carry that sentence with it.
 
+### The mail sink (topic environments, #2953)
+
+A topic environment never sends through the shared relay. `topic-deploy.sh`
+starts **one** Mailpit container for all of them, idempotently, before it
+starts the topic container:
+
+| | |
+|---|---|
+| container | `internship-mail-sink` (`MAIL_SINK_CONTAINER`), image pinned in the script (`MAIL_SINK_IMAGE`) |
+| SMTP | `127.0.0.1:1025` on the box, and `internship-mail-sink:1025` on the private docker network `internship-mail-sink` (bridge-mode topic containers join it) |
+| web UI | `127.0.0.1:8025` on the box — **no public port, no Caddy site** |
+| storage | the last 2000 messages (`MP_MAX_MESSAGES`), in the container |
+
+Every topic container gets `MAIL_SINK_HOST` / `MAIL_SINK_PORT`, and every mail
+whose recipients are not **all** on `MAIL_RECIPIENT_ALLOWLIST` goes to the sink
+(`src/lib/mailSinkRule.ts`, `docs/mail-queue.md` § The mail sink). To receive a
+real mail from a PR environment on purpose, put your address or domain in the
+preview env file as `TOPIC_MAIL_RECIPIENT_ALLOWLIST=you@example.com,example.org`.
+
+**Reading the sink** — an SSH tunnel to the UI, from your laptop:
+
+```bash
+ssh -L 8025:127.0.0.1:8025 <the box>
+# then open http://localhost:8025 — every topic environment's mail, newest first
+```
+
+If the sink is down, the topic environments' mail waits on their own queues
+and is retried against the sink; it never falls back to the relay. Restart it by
+re-running any topic deploy, or `docker start internship-mail-sink`. Tearing a
+topic environment down leaves the shared sink alone. Bump the image by editing
+`MAIL_SINK_IMAGE` in the script (a pinned tag, never `latest`).
+
+The demo container (`demo-refresh.sh`) runs with `MAIL_WORKER_ENABLED=0`: demo
+mode sends nothing, so it has nothing to drain either.
+
 ### One-time server setup this requires
 - The stock `include /etc/nginx/conf.d/*.conf;` must be active (default on Plesk).
   These hostnames are **not** Plesk-managed domains (only the apex/`preview` are),

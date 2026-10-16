@@ -531,6 +531,18 @@ marketing names redirect there, and their apex now serves **mail only**.
   the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
   `CRON_ENABLED=0` — an interim pin, not an election, and the reason two
   replicas cannot double-send today.
+- **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
+  that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
+  retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a
+  transporter's own send call anywhere else. A mail's lane (CRITICAL / TRANSACTIONAL / BULK) comes
+  from its category's group in `src/lib/emailGroups.ts` through `laneFor()` in
+  `src/lib/mailDeliveryRule.ts` and nowhere else — a new category gets a group, never a lane of
+  its own. Queued mail is a `Job` named `email.send` with a sealed envelope and no address in the
+  clear; the drain (`src/lib/mailOutbox.ts`, ticked on every replica) claims with `SKIP LOCKED`
+  and **never takes a lease**. The queue is deployment-wide: its operator screen and the health
+  `mail` block are for a super admin (or the default organization's ADMIN, scoped to its own
+  rows), never a tenant admin. A topic environment sends to a Mailpit sink unless every recipient
+  is on `MAIL_RECIPIENT_ALLOWLIST`, and a sink that is down never falls back to the relay.
 - **One billing meter** (`docs/metering.md`, #1750): the billable unit is *"a relation in
   ACTIVE state with any logged activity in the calendar month; paused, benched and completed
   pairs are not counted"* — the sentence we publish, and the header comment of

@@ -10,6 +10,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
 import { EmailOptOutProof } from '@/components/admin/EmailOptOutProof';
+import { MailQueuePanel } from '@/components/admin/MailQueuePanel';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
@@ -181,6 +182,17 @@ export default function AdminSettingsPage() {
     failuresSinceOk: number;
     attempts24h: number;
   } | null>(null);
+
+  // The mail queue tab (#2953): offered only to the queue's operators — a
+  // super admin, or the ADMIN of the deployment's default organization. Any
+  // other admin gets a 403 from the probe and sees no tab at all.
+  const [mailTab, setMailTab] = useState<'delivery' | 'queue'>('delivery');
+  const [queueAllowed, setQueueAllowed] = useState(false);
+  useEffect(() => {
+    fetch('/api/admin/mail-queue?probe=1')
+      .then((r) => setQueueAllowed(r.ok))
+      .catch(() => {});
+  }, []);
 
   const loadEmailLog = useCallback(() => {
     // The log is installation-wide (every tenant's recipients), so only a
@@ -677,7 +689,39 @@ export default function AdminSettingsPage() {
 
       <Card className="mt-6">
         <CardHeader><CardTitle>{t.settings.emailHealth}</CardTitle></CardHeader>
-        <div className="space-y-3 max-w-2xl">
+        {queueAllowed && (
+          <div role="tablist" aria-label={t.settings.emailHealth} className="mb-4 inline-flex gap-1 rounded-lg border border-gray-200 dark:border-gray-800 p-1">
+            {(['delivery', 'queue'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                id={`mail-tab-${tab}`}
+                aria-selected={mailTab === tab}
+                aria-controls={`mail-tabpanel-${tab}`}
+                data-testid={`mail-tab-${tab}`}
+                onClick={() => setMailTab(tab)}
+                className={`min-h-9 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  mailTab === tab
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                {tab === 'delivery' ? t.settings.mailTabDelivery : t.settings.mailTabQueue}
+              </button>
+            ))}
+          </div>
+        )}
+        {queueAllowed && mailTab === 'queue' && (
+          <div role="tabpanel" id="mail-tabpanel-queue" aria-labelledby="mail-tab-queue" className="max-w-4xl">
+            <MailQueuePanel />
+          </div>
+        )}
+        <div
+          className="space-y-3 max-w-2xl"
+          hidden={queueAllowed && mailTab !== 'delivery'}
+          {...(queueAllowed ? { role: 'tabpanel', id: 'mail-tabpanel-delivery', 'aria-labelledby': 'mail-tab-delivery' } : {})}
+        >
           <p className="text-xs text-gray-500 dark:text-gray-400">{t.settings.emailHealthHint}</p>
 
           {smtpInfo && (

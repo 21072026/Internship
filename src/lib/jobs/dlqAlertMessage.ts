@@ -1,5 +1,10 @@
 import { sanitizeError } from '@/lib/sanitizeError';
 
+// The mail outbox's job name (src/lib/mailWorkerRule.ts § MAIL_JOB_NAME). A
+// literal rather than an import: this file is kept free of the send path's
+// modules so its unit spec loads it alone.
+const MAIL_JOB_NAME = 'email.send';
+
 // The dead-letter alert's *message* (#1674) — pure string building, no Prisma,
 // no nodemailer, no node-cron.
 //
@@ -92,6 +97,13 @@ export function buildDeadLetterAlert(
     (g) => `<li><code>${esc(g.name)}</code> — <b>${g.count}</b> iş, son düşen: ${esc(trDate(g.lastFailedAt))}</li>`
   );
   const reasonRows = summary.reasons.map((r) => `<li><b>${r.count}×</b> ${esc(r.reason)}</li>`);
+  // Dead mail (#2953) is the one kind an operator can act on from the app: the
+  // admin Queue tab retries it while its deadline has not passed. Named, with
+  // its count, so the reader knows where to go — still no address, no subject.
+  const mail = summary.byName.find((g) => g.name === MAIL_JOB_NAME);
+  const mailNote = mail
+    ? `<p><b>${mail.count}</b> tanesi giden e-posta (<code>${MAIL_JOB_NAME}</code>). Son geçerlilik zamanı dolmamış olanlar Ayarlar → E-posta ulaşılabilirliği → <b>Kuyruk</b> sekmesinden yeniden denenebilir; süresi dolanların içeriği zaten silinmiştir.</p>`
+    : '';
   const sampleNote =
     summary.total > summary.reasonsSampledFrom
       ? ` (en son ${summary.reasonsSampledFrom} kayıt üzerinden)`
@@ -104,6 +116,7 @@ export function buildDeadLetterAlert(
       <p>Tüm denemeleri tükenmiş <b>${summary.total}</b> iş var; en eskisi <b>${esc(trDate(summary.oldestAt))}</b> tarihinden beri bekliyor. Bu işler kendiliğinden tekrar çalışmaz — elle incelenmesi gerekir.</p>
       <h3 style="font-size:15px;">İş türüne göre</h3>
       <ul style="padding-left:18px;">${listWithTail(nameRows, summary.byName.length, 'tür')}</ul>
+      ${mailNote}
       <h3 style="font-size:15px;">Hata nedenleri${esc(sampleNote)}</h3>
       <ul style="padding-left:18px;">${listWithTail(reasonRows, summary.reasons.length, 'neden')}</ul>
       <p style="font-size:13px;color:#6b7280;">Canlı sayaçlar: <code>/api/health?jobs=1</code> (HEALTH_TOKEN başlığı veya ADMIN oturumu ile).</p>

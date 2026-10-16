@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { isAiConfigured } from '@/lib/ai/provider';
 import { getEmailHealth } from '@/lib/emailHealth';
 import { jobQueueHealth, retentionHealth } from '@/lib/jobs/health';
+import { mailQueueHealth } from '@/lib/mailQueueAdmin';
+import { isSuperAdmin } from '@/lib/superAdmin';
 import { leaseSnapshot, replicaName } from '@/lib/jobs/lease';
 import { rateLimitStoreHealth } from '@/lib/rateLimit';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
@@ -34,6 +36,13 @@ interface HealthAccess {
    * is strictly stronger than `detail`, which is fail-open (see below).
    */
   verified: boolean;
+  /**
+   * An operator of the whole deployment: the HEALTH_TOKEN holder or a super
+   * admin — never a plain tenant ADMIN. What the `mail` block needs (#2953):
+   * it is every tenant's mailing volume, the figure mailQueueNotice() keeps
+   * from tenant admins. Decided only when `needsOperator` asked for it.
+   */
+  operator: boolean;
 }
 
 /**
@@ -60,14 +69,14 @@ interface HealthAccess {
  * something that needs proof. An anonymous liveness probe on an un-tokened
  * server does exactly what it did before.
  */
-async function resolveAccess(request: Request, needsProof: boolean): Promise<HealthAccess> {
+async function resolveAccess(request: Request, needsProof: boolean, needsOperator = false): Promise<HealthAccess> {
   const expected = process.env.HEALTH_TOKEN;
 
   if (expected) {
     const got = request.headers.get('x-health-token') || '';
     try {
       if (got.length === expected.length && timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
-        return { detail: true, verified: true };
+        return { detail: true, verified: true, operator: true };
       }
     } catch {
       // fall through to the session check
@@ -76,10 +85,12 @@ async function resolveAccess(request: Request, needsProof: boolean): Promise<Hea
 
   if (expected || needsProof) {
     const session = await getServerSession(authOptions);
-    if (session?.user.role === 'ADMIN') return { detail: true, verified: true };
+    if (session?.user.role === 'ADMIN') {
+      return { detail: true, verified: true, operator: needsOperator && (await isSuperAdmin(session)) };
+    }
   }
 
-  return { detail: !expected, verified: false };
+  return { detail: !expected, verified: false, operator: false };
 }
 
 /**
@@ -122,7 +133,7 @@ export async function GET(request: Request) {
   // rather than on the fail-open detail path: an anonymous probe still issues
   // no query at all and stays inside its k6 latency budget.
   const wantsLeases = params.get('leases') === '1';
-  const access = await resolveAccess(request, wantsJobs || wantsLimits || wantsLeases);
+  const access = await resolveAccess(request, wantsJobs || wantsLimits || wantsLeases, wantsJobs);
 
   let db: 'ok' | 'error' | 'skipped' = 'skipped';
   if (wantsDb) {
@@ -183,6 +194,13 @@ export async function GET(request: Request) {
             retention: await retentionHealth(),
           }
         : {}),
+      // The mail queue (#2953, src/lib/mailQueueAdmin.ts): pending and the
+      // oldest wait per lane, deferred in 24 h, dead letters, the relay pause
+      // per channel and today's count against the daily cap. Counters, ages
+      // and instants — never an address or a subject. Rides `?jobs=1` like the
+      // queue counters, but only for an OPERATOR (the token or a super admin):
+      // it is every tenant's volume, which a tenant ADMIN must not read.
+      ...(wantsJobs && access.operator ? { mail: await mailQueueHealth() } : {}),
       // Opt-in with ?limits=1, and only for a verified caller — see above.
       ...(wantsLimits && access.verified ? { rateLimitStore: rateLimitStoreHealth() } : {}),
       // WHICH replica answered. Costs nothing (one env read) and it is the
