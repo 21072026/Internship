@@ -8,12 +8,10 @@ name: Build image (reusable)
 # WHY (2026-07-29): while this repo was private the hosted Actions quota ran out,
 # so the deploys were moved onto a self-hosted runner *on the server itself*
 # (#636) — which meant the production box did an `npm ci` + `next build` for
-# every merge and for every push to every open PR. The repo was public from then
-# until 2026-10, so hosted standard runners were free and the build moved back
-# here, leaving the server with `docker pull` + container swap. The repo is
-# private again since 2026-10 (Free plan: 2,000 hosted minutes a month, arm64
-# included, #2910). The build stays hosted anyway: compiling on the production
-# box is what this file exists to avoid.
+# every merge and for every push to every open PR. The repo is public now, so
+# hosted standard runners are free and unmetered: the build belongs back here,
+# and the server is left with `docker pull` + container swap. (It was private
+# and metered 2026-10-08..14; public again since 2026-10-14, #2949.)
 #
 # WHY MULTI-ARCH (2026-09-05, #2166): the project is moving to an Oracle Cloud
 # Ampere instance, which is **arm64**. An amd64-only image does not fail at
@@ -27,9 +25,7 @@ name: Build image (reusable)
 # builds the foreign arch under QEMU emulation, and `npm ci` + `next build`
 # emulated takes tens of minutes. This repo merges ~78 PRs a week and every one
 # of them builds a topic image. So each arch builds on its OWN NATIVE RUNNER
-# (`ubuntu-24.04-arm`: free while the repo was public; in a private repo it is
-# metered from the same 2,000-minute pool as x64, at $0.005/min against x64's
-# $0.006, and gets 2 vCPUs instead of 4) and the two results are stitched
+# (`ubuntu-24.04-arm` is free for public repos) and the two results are stitched
 # into one manifest list afterwards. The two builds run in parallel, so
 # wall-clock is roughly unchanged from the single-arch build.
 #

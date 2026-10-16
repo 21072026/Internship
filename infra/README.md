@@ -503,14 +503,12 @@ container.
 
 ---
 
-## Where the work runs (2026-07-29, re-checked 2026-10-13)
+## Where the work runs (2026-07-29, re-checked 2026-10-16)
 
-This layout dates from 2026-07-29, when the repo went **public** and GitHub-hosted
-standard runners were free and unmetered. Since 2026-10 the repo is **private** again,
-on the Free plan. That plan includes **2,000 hosted minutes a month**, arm64 runners draw
-from the same pool, and every job is rounded up to a whole minute (#2910). The layout
-stays anyway: cost is not a reason to compile on the production box. Everything that can
-run on GitHub does, and the server only does what has to happen on the server:
+The repo is **public**, so GitHub-hosted runners (x64 and arm64) are free and unmetered.
+(It was private and metered 2026-10-08..14; public again since 2026-10-14, #2949.)
+Everything that can run there, does — the server only does what has to happen on
+the server:
 
 | Runs on GitHub-hosted | Runs on the server (self-hosted runner) |
 |---|---|
@@ -681,10 +679,9 @@ secrets** — not to dodge a billing quota.
 
 Keep it to that. `runs-on: self-hosted` belongs only on steps that need something
 that exists only on this machine; anything that merely needs a Linux box with node
-and docker (builds, tests, linting) goes to `ubuntu-latest`. That was free while the
-repo was public (2026-07-29 → 2026-10). It is metered now (#2910), but that is not a
-reason to move work onto the box. Moving builds onto the runner in 2026-06 was a quota
-workaround (#636), and it made the production host compile on every PR push.
+and docker (builds, tests, linting) goes to `ubuntu-latest`, which is free for this
+public repo. Moving builds onto the runner in 2026-06 was a quota workaround
+(#636), and it made the production host compile on every PR push.
 
 ---
 

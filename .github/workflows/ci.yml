@@ -6,8 +6,8 @@ on:
   # topic-preview stay workflow_dispatch-only. Neither is true any more. A run
   # is two jobs, ~7 billed minutes (each job rounds up to a whole minute), and
   # it runs on every PR push and again on every push to main. The repo is
-  # private on the Free plan since 2026-10, so those minutes come out of 2,000
-  # a month (#2910).
+  # public, so hosted minutes are free and unmetered (it was private and
+  # metered 2026-10-08..14; public again since 2026-10-14, #2949).
   workflow_dispatch:
   push:
     branches: [main]

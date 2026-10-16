@@ -20,10 +20,9 @@ on:
   # runs; the `changes` job below decides whether the smoke job has anything
   # to test, and a job skipped by its `if:` reports Success to branch
   # protection.
-  # Since 2026-10 the repo is private on the Free plan, where branch protection
-  # is not enforced (the API answers 403), so "required" is a convention and
-  # nothing blocks a red merge (#2910). The design above stays, so the gate
-  # works again the day protection does.
+  # Branch protection on main enforces this check (and `Forbidden terms (PR)`).
+  # It was unenforceable while the repo was private, 2026-10-08..14; public
+  # again since 2026-10-14 (#2949).
   pull_request:
     branches: [main]
 
