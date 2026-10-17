@@ -65,6 +65,108 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.365.0-beta',
+    date: '2026-10-16',
+    time: '04:11',
+    commit: '6b628ad',
+    highlights: {
+      en: [
+        "Administrators who run the installation can now see the outgoing mail queue under Settings → Email deliverability → Queue: what is waiting, what could not be delivered, and whether the mail server is pausing. Undelivered mail can be retried and waiting mail cancelled.",
+      ],
+      tr: [
+        "Kurulumu yöneten yöneticiler artık giden e-posta kuyruğunu Ayarlar → E-posta ulaşılabilirliği → Kuyruk altında görebilir: neyin beklediğini, neyin teslim edilemediğini ve posta sunucusunun duraklayıp duraklamadığını. Teslim edilemeyen e-postalar yeniden denenebilir, bekleyenler iptal edilebilir.",
+      ],
+      de: [
+        "Administratoren, die die Installation betreiben, sehen die ausgehende E-Mail-Warteschlange jetzt unter Einstellungen → E-Mail-Zustellbarkeit → Warteschlange: was wartet, was nicht zugestellt werden konnte und ob der Mailserver pausiert. Nicht zugestellte E-Mails lassen sich erneut versuchen, wartende stornieren.",
+      ],
+    },
+  },
+  {
+    version: '0.364.0-beta',
+    date: '2026-10-16',
+    time: '02:33',
+    commit: '4e5b22c',
+    highlights: {
+      en: [
+        "Large sends such as announcements, newsletters and bulk invitations are now paced instead of tripping the mail server. The confirmation tells you how many emails are queued and roughly how long delivery will take.",
+      ],
+      tr: [
+        "Duyurular, bültenler ve toplu davetler gibi büyük gönderimler artık posta sunucusunu zorlamak yerine aralıklarla gönderiliyor. Onay mesajı kaç e-postanın kuyrukta olduğunu ve teslimatın yaklaşık ne kadar süreceğini gösteriyor.",
+      ],
+      de: [
+        "Große Sendungen wie Ankündigungen, Newsletter und Sammeleinladungen werden jetzt verteilt zugestellt, statt den Mailserver zu überlasten. Die Bestätigung zeigt, wie viele E-Mails in der Warteschlange sind und wie lange die Zustellung ungefähr dauert.",
+      ],
+    },
+  },
+  {
+    version: '0.363.0-beta',
+    date: '2026-10-16',
+    time: '01:17',
+    commit: 'f02aae5',
+    highlights: {
+      en: [
+        "Emails that a mail server temporarily refuses or delays are now queued and retried automatically instead of being lost, and sign-in and password-reset emails no longer keep you waiting when the mail server is slow.",
+      ],
+      tr: [
+        "Bir e-posta sunucusunun geçici olarak reddettiği ya da geciktirdiği e-postalar artık kaybolmuyor; sıraya alınıp otomatik olarak yeniden gönderiliyor. E-posta sunucusu yavaş olduğunda giriş ve şifre sıfırlama e-postaları da sizi bekletmiyor.",
+      ],
+      de: [
+        "E-Mails, die ein Mailserver vorübergehend ablehnt oder verzögert, gehen nicht mehr verloren: Sie werden in eine Warteschlange gestellt und automatisch erneut gesendet. Anmelde- und Passwort-Zurücksetzen-E-Mails lassen Sie bei einem langsamen Mailserver nicht mehr warten.",
+      ],
+    },
+  },
+  {
+    version: '0.362.0-beta',
+    date: '2026-10-15',
+    time: '23:30',
+    commit: '6142144',
+    highlights: {
+      en: [
+        "A marketing site that has not set up its own brand now shows a neutral look — the coreCRM name, the standard blue and a simple app icon — and its pricing page invites you to ask for an offer instead of listing figures.",
+      ],
+      tr: [
+        "Kendi markasını henüz tanımlamamış bir pazarlama sitesi artık sade bir görünüm sunuyor — coreCRM adı, standart mavi ve basit bir uygulama simgesi — ve fiyat sayfası rakam listelemek yerine teklif istemeye davet ediyor.",
+      ],
+      de: [
+        "Eine Marketing-Seite ohne eigenes Branding zeigt jetzt ein neutrales Erscheinungsbild — den Namen coreCRM, das Standardblau und ein schlichtes App-Symbol — und die Preisseite lädt dazu ein, ein Angebot anzufragen, statt Zahlen aufzulisten.",
+      ],
+    },
+  },
+  {
+    version: '0.361.0-beta',
+    date: '2026-10-15',
+    time: '16:26',
+    commit: 'd8cc6e1',
+    highlights: {
+      en: [
+        "Sales organizations can set how long the decision window after a trial lasts, and can save their own default letter for postal campaigns.",
+      ],
+      tr: [
+        "Satış organizasyonları denemeden sonraki karar penceresinin süresini ayarlayabilir ve posta kampanyaları için kendi varsayılan mektuplarını kaydedebilir.",
+      ],
+      de: [
+        "Vertriebsorganisationen können festlegen, wie lange das Entscheidungsfenster nach einer Testphase dauert, und einen eigenen Standardbrief für Briefkampagnen speichern.",
+      ],
+    },
+  },
+  {
+    version: '0.360.0-beta',
+    date: '2026-10-15',
+    time: '14:09',
+    commit: 'e972729',
+    highlights: {
+      en: [
+        "Organizations can upload their logo mark and get a complete set of app icons generated from it — home-screen and maskable icons, favicon, shortcut icons and iOS launch screens — plus a tile colour, a default accent and, optionally, their own colour palette that members can pick as \"Organization colour\".",
+      ],
+      tr: [
+        "Kurumlar logo işaretlerini yükleyip ondan üretilmiş eksiksiz bir uygulama simgesi seti alabilir — ana ekran ve maskelenebilir simgeler, favicon, kısayol simgeleri ve iOS açılış ekranları — ayrıca bir zemin rengi, varsayılan vurgu rengi ve isteğe bağlı olarak üyelerin \"Kurum rengi\" diye seçebileceği kendi renk paletleri.",
+      ],
+      de: [
+        "Organisationen können ihr Logo-Zeichen hochladen und erhalten daraus einen vollständigen Satz App-Icons — Homescreen- und maskierbare Icons, Favicon, Shortcut-Icons und iOS-Startbildschirme — dazu eine Kachelfarbe, eine Standard-Akzentfarbe und auf Wunsch eine eigene Farbpalette, die Mitglieder als „Organisationsfarbe“ wählen können.",
+      ],
+    },
+  },
+  {
     version: '0.359.0-beta',
     date: '2026-10-13',
     time: '19:43',
