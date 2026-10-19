@@ -8,13 +8,16 @@
 //   node prisma/register-integration-source.mjs --org acme --slug demo-feed --key <apiKeyId> --apply      # bind to one key
 //   node prisma/register-integration-source.mjs --org acme --slug demo-feed --unbind-key --apply          # any companies:write key
 //   node prisma/register-integration-source.mjs --org acme --slug demo-feed --disable --apply             # switch off (404)
+//   node prisma/register-integration-source.mjs --org acme --slug demo-feed --enable --apply              # switch back on
 //   node prisma/register-integration-source.mjs --org acme --slug demo-feed --allowed-ips "203.0.113.7,198.51.100.0/24" --apply
 //   node prisma/register-integration-source.mjs --org acme --slug demo-feed --allowed-ips none --apply    # any address again
 //   node prisma/register-integration-source.mjs --list [--org acme]
 //
 // `--org` takes the organization's slug or id. Every run states whether the
-// source is ON: `--disable` switches it off, a run without it switches it (back)
-// on. `--label` is required to create a source and optional afterwards; the
+// source is ON. A new source is registered on unless `--disable`; on an
+// existing one the switch is KEPT unless `--enable` or `--disable` says
+// otherwise — an organization's admin may switch it on /admin/integrations too
+// (#2978), and a run that only changes the allowlist must not undo that. `--label` is required to create a source and optional afterwards; the
 // key binding is kept unless `--key` or `--unbind-key` says otherwise; the IP
 // allowlist (#2978) likewise unless `--allowed-ips` sets it (`none` clears it).
 // The request-signing secret is NOT set here: it is generated on the admin
@@ -226,7 +229,7 @@ const has = (name) => process.argv.includes(`--${name}`);
 
 const USAGE =
   'Usage: node prisma/register-integration-source.mjs --org <slug|id> --slug <slug> [--label "<label>"] ' +
-  '[--key <apiKeyId> | --unbind-key] [--allowed-ips "<ip|cidr>,…" | --allowed-ips none] [--disable] [--apply]\n' +
+  '[--key <apiKeyId> | --unbind-key] [--allowed-ips "<ip|cidr>,…" | --allowed-ips none] [--enable | --disable] [--apply]\n' +
   '       node prisma/register-integration-source.mjs --list [--org <slug|id>]';
 
 async function findOrg(prisma, ref) {
@@ -314,7 +317,13 @@ async function main() {
         allowedIps = serializeAllowlist(parsed.entries);
       }
     }
-    const enabled = !has('disable');
+    const enableFlag = has('enable');
+    const disableFlag = has('disable');
+    if (enableFlag && disableFlag) {
+      console.error('--enable and --disable contradict each other.');
+      process.exitCode = 2;
+      return;
+    }
     const apply = has('apply');
 
     const org = await findOrg(prisma, orgRef);
@@ -356,6 +365,8 @@ async function main() {
       return;
     }
 
+    // The switch is kept unless a flag names it; a new source starts on.
+    const enabled = disableFlag ? false : enableFlag ? true : (existing?.enabled ?? true);
     const want = {
       label: label ?? existing?.label,
       enabled,

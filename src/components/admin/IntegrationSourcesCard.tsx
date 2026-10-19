@@ -71,6 +71,9 @@ export function IntegrationSourcesCard() {
   const rotate = async (row: SourceRow) => {
     if (row.signing.enabled && !confirm(s.rotateConfirm)) return;
     const res = await fetch(`/api/admin/integration-sources/${row.id}/signing-secret`, { method: 'POST' });
+    // 409: another rotation won the race and its secret is the live one — show
+    // the fresh state rather than a secret that was never stored.
+    if (res.status === 409) { await load(); return; }
     if (!res.ok) return;
     const d = await res.json();
     setCopied(false);

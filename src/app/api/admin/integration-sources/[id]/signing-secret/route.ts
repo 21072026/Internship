@@ -8,7 +8,9 @@ import { disableSigning, rotateSigningSecret, sourceFor } from '@/lib/integratio
 // POST generates it, or rotates it: the new secret is in THIS response and in
 // no later one (it is sealed at rest and never listed); the secret it replaces
 // keeps verifying for SIGNING_SECRET_OVERLAP_MS so a running sender is not cut
-// off before it is redeployed. DELETE switches signing off at once.
+// off before it is redeployed. Two rotations racing: the one that read a secret
+// that is no longer stored answers 409 `signing_conflict` and shows nothing.
+// DELETE switches signing off at once.
 //
 // The ADMIN of the source's org or a super admin of its world; another org's
 // source is the same 404 as a missing one; an AuditLog row with the source's
@@ -19,8 +21,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const gate = await sourceFor(session, (await params).id);
   if (!gate.ok) return gate.response;
-  const { secret, source } = await rotateSigningSecret(session, gate.value);
-  return NextResponse.json({ secret, source }, { headers: { 'Cache-Control': 'no-store' } });
+  const result = await rotateSigningSecret(session, gate.value);
+  if (!result.ok) {
+    // Another rotation won the race; its secret is the live one. Reload and retry.
+    return NextResponse.json({ error: 'The signing secret changed meanwhile', code: result.code }, { status: result.status });
+  }
+  return NextResponse.json({ secret: result.secret, source: result.source }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {

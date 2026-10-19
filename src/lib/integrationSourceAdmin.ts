@@ -188,12 +188,20 @@ export async function patchSource(session: Session, row: Row, patch: SourcePatch
  * window replaces the previous one too — only the newest two ever verify.
  * The plaintext is returned here and nowhere else.
  */
-export async function rotateSigningSecret(session: Session, row: Row): Promise<{ secret: string; source: SourceView }> {
+export async function rotateSigningSecret(
+  session: Session,
+  row: Row,
+): Promise<{ ok: true; secret: string; source: SourceView } | { ok: false; status: 409; code: 'signing_conflict' }> {
   const secret = generateSigningSecret();
   const now = Date.now();
   const rotating = row.signingSecret !== null;
-  await prisma.integrationSource.updateMany({
-    where: { id: row.id, orgId: row.orgId },
+  // Guarded on the secret this request read: two rotations racing (two tabs,
+  // two admins) would otherwise both write, and the secret shown to the first
+  // would be overwritten without ever becoming the "previous" one — a sender
+  // configured with it would fail at once, with no overlap. The loser gets a
+  // 409 and shows no secret.
+  const { count } = await prisma.integrationSource.updateMany({
+    where: { id: row.id, orgId: row.orgId, signingSecret: row.signingSecret },
     data: {
       signingSecret: seal(secret, SIGNING_SECRET_PURPOSE),
       signingSecretPrevious: rotating ? row.signingSecret : null,
@@ -201,8 +209,9 @@ export async function rotateSigningSecret(session: Session, row: Row): Promise<{
       signingRotatedAt: new Date(now),
     },
   });
+  if (count === 0) return { ok: false, status: 409, code: 'signing_conflict' };
   await audit(session, row, rotating ? 'integration_source.signing_rotated' : 'integration_source.signing_enabled', rotating ? `previous secret valid until ${overlapUntil(now).toISOString()}` : null);
-  return { secret, source: await reread(row) };
+  return { ok: true, secret, source: await reread(row) };
 }
 
 /** Switch signing off at once: both secrets go, unsigned requests are accepted again. */

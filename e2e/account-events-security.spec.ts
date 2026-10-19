@@ -347,6 +347,39 @@ test.describe('account events: source IP allowlist and request signing', () => {
     expect(audits[0].orgId).toBe(orgId);
   });
 
+  test('rotation: racing rotations never hand out a secret that does not verify', async ({ request }) => {
+    // Two tabs / two admins clicking Rotate at once: each read the same stored
+    // secret. Unguarded, both wrote and the first one's secret was lost without
+    // becoming the "previous" one. Now a loser answers 409 and shows nothing,
+    // so every secret that WAS shown verifies.
+    const answers = await Promise.all(
+      Array.from({ length: 4 }, () => jars.admin!.post(`/api/admin/integration-sources/${signedId}/signing-secret`)),
+    );
+    const statuses = answers.map((a) => a.status());
+    expect(statuses.every((s) => s === 200 || s === 409)).toBe(true);
+    const shown: string[] = [];
+    for (const a of answers) {
+      const body = await a.json();
+      if (a.status() === 409) {
+        expect(body.code).toBe('signing_conflict');
+        expect(body.secret).toBeUndefined();
+      } else {
+        shown.push(body.secret);
+      }
+    }
+    expect(shown.length).toBeGreaterThan(0);
+    // Only the newest two verify; each shown secret is one of them unless a
+    // later winner replaced it in sequence — which the audit trail counts.
+    const verifying: string[] = [];
+    for (const s of shown) {
+      if ((await post(request, SIGNED, JSON.stringify(envelope()), { sign: { secret: s } })).status() === 200) verifying.push(s);
+    }
+    expect(verifying.length).toBeGreaterThanOrEqual(Math.min(shown.length, 2));
+    const rotations = await prisma.auditLog.count({ where: { targetId: signedId, action: 'integration_source.signing_rotated', orgId } });
+    expect(rotations).toBe(1 + shown.length);
+    secret = verifying[0];
+  });
+
   test('the admin screen: the card lists the sources and shows a rotated secret once', async ({ browser }) => {
     const context = await browser.newContext({ storageState: await jars.admin!.storageState(), extraHTTPHeaders: H });
     try {
