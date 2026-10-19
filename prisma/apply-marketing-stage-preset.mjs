@@ -42,7 +42,7 @@
 //   compared against templateSlaPayload() and the refusals against
 //   templateApplyBlockers() by scripts/test/marketing-ops-clis.test.mjs —
 //   change the preset and the mirrors in one commit.
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { MARKETING_DEMO_STAGES } from './seed-demo-marketing.mjs';
 
 /** The preset's stages, as provisionStagePreset() hands them to replaceStages(). */
@@ -218,12 +218,22 @@ async function main() {
       return;
     }
 
-    // Read and write inside one transaction, so the plan that is printed is the
-    // plan that is written: a stage move landing in between cannot slip past
-    // the refusal.
+    // Read and write inside one transaction. A plain read there takes no lock
+    // (InnoDB, REPEATABLE READ), so before a retired key is deleted its
+    // records are read again WITH a lock: `FOR UPDATE` on the pipelineStatus
+    // index holds every row on those keys and the gap a concurrent move would
+    // land in until the commit. A record found there refuses the run, and the
+    // transaction rolls everything back.
     const outcome = await prisma.$transaction(async (tx) => {
       const plan = planStagePreset(await loadState(tx, org.id));
       if (!apply || plan.blockers.length || plan.changes === 0) return { plan, written: false };
+      if (plan.removals.length) {
+        const keys = plan.removals.map((r) => r.key);
+        const onRetired = await tx.$queryRaw`SELECT \`id\` FROM \`MentorshipRelation\` WHERE \`orgId\` = ${org.id} AND \`pipelineStatus\` IN (${Prisma.join(keys)}) FOR UPDATE`;
+        if (onRetired.length) {
+          throw new Error(`REFUSED: ${onRetired.length} funnel record(s) moved onto ${keys.join(', ')} while the run was planned; nothing was written. Run it again.`);
+        }
+      }
       for (const s of plan.stages) {
         if (s.action === 'unchanged') continue;
         const { key, ...data } = s.after;

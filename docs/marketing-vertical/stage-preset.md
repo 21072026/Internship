@@ -20,6 +20,10 @@ Ne yapar (tek transaction):
   reddeder**, hiçbir şey yazmaz ve hangi anahtarın neden engellediğini söyler
   (`templateApplyBlockers()` ile aynı iki ret: `stranded_relations`, `stale_slas`). Çözüm: kayıtları
   önce preset aşamasına taşı; SLA'yı aşama hâlâ varken `/admin/settings`'te temizle.
+  Transaction içindeki düz okuma kilit almaz (InnoDB, REPEATABLE READ); bu yüzden silmeden hemen önce
+  emekliye ayrılan anahtarlardaki kayıtlar `SELECT … FOR UPDATE` ile **kilitli** yeniden okunur. Plan
+  okunduktan sonra o anahtarlardan birine taşınmış bir kayıt bulunursa çalıştırma reddedilir ve hiçbir
+  şey yazılmaz (exit 1, "Run it again").
 - Presetin SLA'larını `PUT /api/admin/stage-sla`'nın `templateSlaPayload()`'ı yazdığı gibi yazar: her
   preset aşaması presetteki gün sayısını alır ya da hiç almaz, mevcut `wipLimit` korunur, ikisi de boş
   kalan satır silinir.

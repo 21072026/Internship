@@ -20,7 +20,10 @@ import { defaultTemplateForVertical, templateStagePayload, templateSlaPayload } 
 //     • it takes only what the source CREATED (Company.createdBySource): a
 //       manual account the source merely moved, an account another source
 //       created and the same source's accounts in ANOTHER org all survive;
-//     • an account a person worked on is kept, with the reason.
+//     • an account a person worked on is kept, with the reason — an interaction,
+//       a win-back that only left an activity entry, a value a person typed,
+//       the lead's own contact-permission withdrawal; a mere read is not work;
+//     • the events and entries of a kept or merely moved account stay.
 //
 // The events reach the database through the real route
 // (POST /api/integrations/<slug>/events), so the marker under test is the one
@@ -239,6 +242,26 @@ test('wipe: the dry run writes nothing, --apply deletes exactly what it counted 
   expect(alone.relationId).toBeUndefined();
   const worked = await send(request, a.key, SLUG, event(`ext-worked-${STAMP}`));
   await prisma.interactionLog.create({ data: { relationId: worked.relationId, type: 'Meeting', date: new Date(), notes: 'A call a person logged' } });
+  // Work that leaves no row in a record table: a person's win-back (only an
+  // actor-attributed activity entry, in the lowercase spelling the route
+  // writes), a deal value a person typed, and the lead's own withdrawal of
+  // contact permission (the legal evidence).
+  const wonBack = await send(request, a.key, SLUG, event(`ext-wonback-${STAMP}`));
+  await prisma.activityLog.create({
+    data: { orgId: a.id, action: 'pipeline.win_back', actorId: a.ownerId, targetType: 'relation', targetId: wonBack.relationId, detail: 'by a person' },
+  });
+  const valued = await send(request, a.key, SLUG, event(`ext-valued-${STAMP}`));
+  await prisma.relationValue.create({ data: { orgId: a.id, relationId: valued.relationId, valueMinor: 4900, source: 'MANUAL', updatedById: a.ownerId } });
+  const withdrawn = await send(request, a.key, SLUG, event(`ext-withdrawn-${STAMP}`));
+  const withdrawnPermission = await prisma.contactPermission.updateMany({
+    where: { companyId: withdrawn.companyId },
+    data: { revokedAt: new Date(), revokedVia: 'LINK' },
+  });
+  expect(withdrawnPermission.count).toBe(1);
+  // Reading an account is not work: a person's view entry does not keep `full`.
+  await prisma.activityLog.create({
+    data: { orgId: a.id, action: 'company.view', actorId: a.ownerId, targetType: 'company', targetId: full.companyId },
+  });
   // Record-only and unknown-account events of SLUG.
   await send(request, a.key, SLUG, event(`ext-full-${STAMP}`, { event_type: 'plan_changed' }));
   expect((await send(request, a.key, SLUG, event(`ext-nobody-${STAMP}`, { event_type: 'converted' }))).outcome).toBe('unknown_account');
@@ -256,7 +279,8 @@ test('wipe: the dry run writes nothing, --apply deletes exactly what it counted 
   const foreign = await send(request, b.key, SLUG, event(`ext-foreign-${STAMP}`));
 
   const marker = await prisma.company.findMany({ where: { orgId: a.id, createdBySource: SLUG }, select: { id: true } });
-  expect(marker.map((c) => c.id).sort()).toEqual([full.companyId, alone.companyId, worked.companyId].sort());
+  const keptIds = [worked.companyId, wonBack.companyId, valued.companyId, withdrawn.companyId];
+  expect(marker.map((c) => c.id).sort()).toEqual([full.companyId, alone.companyId, ...keptIds].sort());
   expect((await prisma.company.findUniqueOrThrow({ where: { id: manual.id } })).createdBySource).toBeNull();
 
   const beforeA = await snapshot(a.id);
@@ -270,6 +294,9 @@ test('wipe: the dry run writes nothing, --apply deletes exactly what it counted 
   expect(verdicts[alone.companyId].action).toBe('wipe');
   expect(verdicts[worked.companyId].action).toBe('keep');
   expect(verdicts[worked.companyId].reasons).toEqual(['interactionLog: 1']);
+  expect(verdicts[wonBack.companyId]).toMatchObject({ action: 'keep', reasons: ['activityByPerson: 1'] });
+  expect(verdicts[valued.companyId]).toMatchObject({ action: 'keep', reasons: ['relationValueByPerson: 1'] });
+  expect(verdicts[withdrawn.companyId]).toMatchObject({ action: 'keep', reasons: ['contactPermissionEvidence: 1'] });
   expect(dry.json.touchedNotCreated).toEqual([manual.id]);
   expect(dry.json.totals.companies).toBe(2);
   expect(dry.json.totals.relations).toBe(1);
@@ -298,19 +325,41 @@ test('wipe: the dry run writes nothing, --apply deletes exactly what it counted 
 
   // What must survive in org A.
   expect(await prisma.company.count({ where: { id: { in: [full.companyId, alone.companyId] } } })).toBe(0);
-  expect(await prisma.company.count({ where: { id: { in: [worked.companyId, manual.id, other.companyId] } } })).toBe(3);
+  expect(await prisma.company.count({ where: { id: { in: [...keptIds, manual.id, other.companyId] } } })).toBe(keptIds.length + 2);
   expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: manualRel.id } })).pipelineStatus).toBe('TRIAL_ACTIVE');
   expect(await prisma.user.count({ where: { id: manualLead.id } })).toBe(1);
-  // The kept account keeps its own events; the source's other events are gone,
-  // the other source's are untouched.
-  const left = await prisma.integrationEvent.findMany({ where: { orgId: a.id }, select: { provider: true, companyId: true } });
-  expect(left.filter((e) => e.provider === SLUG).every((e) => e.companyId === worked.companyId)).toBe(true);
+  // The withdrawal is still on record, and so is the person's value.
+  expect((await prisma.contactPermission.findFirstOrThrow({ where: { companyId: withdrawn.companyId } })).revokedVia).toBe('LINK');
+  expect(await prisma.relationValue.count({ where: { relationId: valued.relationId } })).toBe(1);
+  // The kept accounts and the account the source only moved keep their own
+  // events (the evidence of what the source did to them); the source's events
+  // that name no surviving account are gone; the other source's are untouched.
+  const survivors = new Set([...keptIds, manual.id]);
+  const left = await prisma.integrationEvent.findMany({ where: { orgId: a.id }, select: { provider: true, companyId: true, externalId: true } });
+  const leftOfSlug = left.filter((e) => e.provider === SLUG);
+  expect(leftOfSlug.every((e) => e.companyId !== null && survivors.has(e.companyId))).toBe(true);
+  expect(leftOfSlug.some((e) => e.companyId === manual.id)).toBe(true);
   expect(left.filter((e) => e.provider === OTHER_SLUG)).toHaveLength(1);
-  expect(await prisma.activityLog.count({ where: { orgId: a.id, detail: { startsWith: `${SLUG}: ` } } })).toBe(0);
+  // The source's activity entries left are only those about a surviving account.
+  const survivingExternalIds = new Set(
+    (await prisma.company.findMany({ where: { id: { in: [...survivors] } }, select: { externalId: true } })).map((c) => c.externalId),
+  );
+  const survivingRelationIds = new Set(
+    (await prisma.mentorshipRelation.findMany({ where: { companyId: { in: [...survivors] } }, select: { id: true } })).map((r) => r.id),
+  );
+  const slugEntries = await prisma.activityLog.findMany({
+    where: { orgId: a.id, detail: { startsWith: `${SLUG}: ` } },
+    select: { targetType: true, targetId: true },
+  });
+  for (const e of slugEntries) {
+    const about = e.targetType === 'company_external_id' ? survivingExternalIds : survivingRelationIds;
+    expect(about.has(e.targetId), JSON.stringify(e)).toBe(true);
+  }
   expect(await prisma.company.count({ where: { id: foreign.companyId } })).toBe(1);
 
-  // A second run finds only the kept account.
+  // A second run finds only the kept accounts, and still lists the moved one.
   const again = await cli('wipe-integration-source.mjs', ['--org', a.slug, '--source', SLUG]);
-  expect(again.json.accounts.map((x: { action: string }) => x.action)).toEqual(['keep']);
-  expect(again.json.totals.companies).toBe(0);
+  expect(again.json.accounts.map((x: { action: string }) => x.action)).toEqual(keptIds.map(() => 'keep'));
+  expect(again.json.touchedNotCreated).toEqual([manual.id]);
+  expect(again.json.totals).toEqual(Object.fromEntries(Object.keys(again.json.totals).map((k) => [k, 0])));
 });

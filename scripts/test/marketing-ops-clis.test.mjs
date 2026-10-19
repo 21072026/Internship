@@ -27,7 +27,13 @@ import {
   isLeadStandIn,
   totalCounts,
   sourceActivityWhere,
+  sourceEventsWhere,
+  humanWorkTables,
+  MACHINE_TABLES,
+  personActivityWhere,
+  permissionEvidenceWhere,
 } from '../../prisma/wipe-integration-source.mjs';
+import { Prisma } from '@prisma/client';
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 const { defaultTemplateForVertical, templateStagePayload, templateSlaPayload, templateApplyBlockers } = await import(
@@ -195,14 +201,64 @@ test('human work keeps the account, and says why', () => {
   }
 });
 
-test('a lead that existed before, or has a record elsewhere, is kept — the account still goes', () => {
+test('a lead that is not the account\'s own stand-in (older, a record elsewhere, a person) keeps the lead AND the account', () => {
+  const reason = "leads that are not this account's own stand-ins: 1";
   const older = classifyAccount(fresh({ leads: [standIn('u1', { createdAt: new Date(T0.getTime() - SAME_INSERT_SLACK_MS - 1) })] }));
-  assert.equal(older.action, 'wipe');
-  assert.deepEqual([older.leadIds, older.keptLeadIds], [[], ['u1']]);
+  assert.deepEqual([older.action, older.leadIds, older.keptLeadIds, older.reasons], ['keep', [], ['u1'], [reason]]);
   const elsewhere = classifyAccount(fresh({ leads: [standIn('u1', { relationIds: ['r1', 'r-other'] })] }));
-  assert.deepEqual([elsewhere.leadIds, elsewhere.keptLeadIds], [[], ['u1']]);
+  assert.deepEqual([elsewhere.action, elsewhere.leadIds, elsewhere.keptLeadIds], ['keep', [], ['u1']]);
   const person = classifyAccount(fresh({ leads: [standIn('u1', { email: 'person@shop.example' })] }));
-  assert.deepEqual(person.keptLeadIds, ['u1']);
+  assert.deepEqual([person.action, person.keptLeadIds], ['keep', ['u1']]);
+});
+
+test('human work is every table pointing at a record or an account, minus the argued machine tables', () => {
+  const t = humanWorkTables(Prisma.dmmf.datamodel);
+  const onRecord = new Set(t.onRecord.map((x) => x.accessor));
+  const onAccount = new Set(t.onAccount.map((x) => x.accessor));
+  // The work a review found unguarded before (#2963), plus the original list.
+  for (const a of ['interactionLog', 'relationNote', 'sessionNote', 'message', 'meeting', 'offer', 'goal', 'placement',
+    'mentorQuestion', 'meetingRequest', 'sessionAgenda', 'weeklyReport', 'evaluation', 'meetingAttendance', 'meetingSeries', 'mentorshipRequest']) {
+    assert.ok(onRecord.has(a), a);
+  }
+  for (const a of ['companyContact', 'postCampaignRecipient', 'companyInquiry', 'companyEntitlement', 'companyNeed', 'companyInterest',
+    'requisition', 'interviewRequest', 'application', 'companyNeedAlert', 'offer', 'placement', 'project']) {
+    assert.ok(onAccount.has(a), a);
+  }
+  for (const machine of Object.keys(MACHINE_TABLES)) {
+    assert.ok(Prisma.dmmf.datamodel.models.some((m) => m.name === machine), `MACHINE_TABLES names ${machine}, which the schema no longer has`);
+    const accessor = machine.charAt(0).toLowerCase() + machine.slice(1);
+    assert.ok(!onRecord.has(accessor) && !onAccount.has(accessor), machine);
+  }
+  for (const x of [...t.onRecord, ...t.onAccount]) assert.equal(typeof x.fk, 'string');
+});
+
+test('a person\'s activity is any non-read entry with an actor, about the account, a record or a stand-in, in every spelling', () => {
+  const w = personActivityWhere('c1', ['r1'], ['u1']);
+  assert.deepEqual(w.actorId, { not: null });
+  assert.deepEqual(w.NOT, { action: { endsWith: '.view' } });
+  assert.deepEqual(w.OR, [
+    { targetType: { in: ['Company', 'company'] }, targetId: 'c1' },
+    { targetType: { in: ['MentorshipRelation', 'relation'] }, targetId: { in: ['r1'] } },
+    { targetType: { in: ['User', 'user'] }, targetId: { in: ['u1'] } },
+  ]);
+  assert.equal(personActivityWhere('c1', [], []).OR.length, 1);
+});
+
+test('contact-permission evidence: anything but the machine\'s bare NONE row', () => {
+  const w = permissionEvidenceWhere('c1');
+  assert.equal(w.companyId, 'c1');
+  assert.deepEqual(w.OR, [
+    { basis: { not: 'NONE' } },
+    { confirmedAt: { not: null } },
+    { grantedById: { not: null } },
+    { revokedAt: { not: null } },
+  ]);
+});
+
+test('every human-work signal keeps the account', () => {
+  for (const key of ['activityByPerson', 'relationValueByPerson', 'contactPermissionEvidence', 'companyChannelChanged', 'companyEntitlement']) {
+    assert.equal(classifyAccount(fresh({ humanWork: { ...noWork, [key]: 1 } })).action, 'keep', key);
+  }
 });
 
 test('a record of an older lead that started before the account was re-pointed, not created: keep', () => {
@@ -213,7 +269,7 @@ test('a record of an older lead that started before the account was re-pointed, 
     }),
   );
   assert.equal(v.action, 'keep');
-  assert.deepEqual(v.reasons, ['records that predate the account: 1']);
+  assert.deepEqual(v.reasons, ['records that predate the account: 1', "leads that are not this account's own stand-ins: 1"]);
 });
 
 test('totals add the wiped accounts and the source-wide rows, never a kept account', () => {
@@ -229,5 +285,16 @@ test('the source-wide activity filter names the slug with its separator, so "fee
   const w = sourceActivityWhere(ORG, 'feed');
   assert.equal(w.detail.startsWith, 'feed: ');
   assert.equal(w.orgId, ORG);
-  assert.equal(sourceActivityWhere(ORG, 'feed', ['r1']).OR[1].targetId.notIn[0], 'r1');
+  assert.ok(w.action.in.includes('integration.new_journey'));
+  // Only entries about an external id: an entry about a record goes with its
+  // account or stays with it.
+  assert.equal(w.targetType, 'company_external_id');
+  assert.equal(w.OR, undefined);
+  assert.deepEqual(sourceActivityWhere(ORG, 'feed', ['ext-1']).OR, [{ targetId: null }, { targetId: { notIn: ['ext-1'] } }]);
+});
+
+test('source-wide events are only the ones that name no account, minus a surviving account\'s external ids', () => {
+  const w = sourceEventsWhere(ORG, 'feed', ['ext-1']);
+  assert.deepEqual(w, { orgId: ORG, provider: 'feed', companyId: null, OR: [{ externalId: null }, { externalId: { notIn: ['ext-1'] } }] });
+  assert.deepEqual(sourceEventsWhere(ORG, 'feed'), { orgId: ORG, provider: 'feed', companyId: null });
 });
