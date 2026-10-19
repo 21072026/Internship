@@ -7974,6 +7974,8 @@ const en = {
     error_schedule_after_expiry: 'This mail expires before that time.',
     error_expired: 'This mail has expired.',
     error_not_pending: 'Someone already decided this mail.',
+    error_not_queueable: 'This mail carries attachments too large to schedule. Send it now instead.',
+    error_send_failed: 'The mail could not be sent. It is still waiting here; try again.',
     pendingBadge: '{count} mails waiting for approval',
   },
 };
@@ -15738,6 +15740,8 @@ const tr: Dict = {
     error_schedule_after_expiry: 'Bu e-postanın süresi o zamandan önce doluyor.',
     error_expired: 'Bu e-postanın süresi doldu.',
     error_not_pending: 'Bu e-posta için başka biri zaten karar verdi.',
+    error_not_queueable: 'Bu e-postanın ekleri zamanlamak için çok büyük. Bunun yerine şimdi gönder.',
+    error_send_failed: 'E-posta gönderilemedi. Hâlâ burada bekliyor; yeniden dene.',
     pendingBadge: 'Onay bekleyen {count} e-posta',
   },
 };
@@ -23503,6 +23507,8 @@ const de: Dict = {
     error_schedule_after_expiry: 'Diese E-Mail läuft vor diesem Zeitpunkt ab.',
     error_expired: 'Diese E-Mail ist abgelaufen.',
     error_not_pending: 'Über diese E-Mail hat schon jemand entschieden.',
+    error_not_queueable: 'Die Anhänge dieser E-Mail sind zu groß, um sie zu planen. Sende sie stattdessen jetzt.',
+    error_send_failed: 'Die E-Mail konnte nicht gesendet werden. Sie wartet weiterhin hier; versuche es erneut.',
     pendingBadge: '{count} E-Mails warten auf Freigabe',
   },
 };

@@ -74,7 +74,12 @@ test('staff is never held: the org\'s own ADMIN and MENTOR accounts', () => {
 test('exempt even when on: the account_security group and the person\'s own acknowledgement', () => {
   const security = EMAIL_GROUPS.find((g) => g.id === 'account_security');
   assert.ok(security);
-  for (const category of security.categories) {
+  // The one essential-grouped category that is held: a cron's re-consent ask.
+  const exemptSecurity = security.categories.filter((c) => c !== 'retention-reminder');
+  assert.equal(OUTBOUND_CATEGORIES['retention-reminder']?.exempt, false);
+  assert.deepEqual(outboundDecision({ ...on, category: 'retention-reminder', recipient: 'lead' }), { hold: true, code: 'held_lead' });
+  assert.equal(outboundDecision({ ...on, category: 'retention-reminder', recipient: 'staff' }).hold, false);
+  for (const category of exemptSecurity) {
     assert.equal(OUTBOUND_CATEGORIES[category]?.exempt, true, `${category} must be exempt`);
     assert.deepEqual(outboundDecision({ ...on, category, recipient: 'lead' }), { hold: false, code: 'exempt_category' });
   }
@@ -83,7 +88,7 @@ test('exempt even when on: the account_security group and the person\'s own ackn
   assert.equal(outboundDecision({ ...on, category: 'mentor-application-received', recipient: 'contact' }).hold, false);
   // And nothing outside those is exempt.
   const exempt = Object.entries(OUTBOUND_CATEGORIES).filter(([, e]) => e.exempt).map(([c]) => c).sort();
-  assert.deepEqual(exempt, [...security.categories, 'mentor-application-received'].sort());
+  assert.deepEqual(exempt, [...exemptSecurity, 'mentor-application-received'].sort());
 });
 
 test('an unknown or missing category is HELD (fail safe), and an org-less mail is never held', () => {

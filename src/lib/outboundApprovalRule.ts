@@ -28,7 +28,8 @@
 // the exempt ones still leave with approval on:
 //   • the essential `account_security` group — sign-in, verification, password,
 //     invitation, security notices, operator alerts, and `consent`, which is
-//     the demo form's double-opt-in confirmation;
+//     the demo form's double-opt-in confirmation — EXCEPT `retention-reminder`,
+//     a cron's re-consent ask the person never triggered, which is held;
 //   • mail the person triggered themselves — the acknowledgement of their own
 //     application (`mentor-application-received`).
 // An UNKNOWN or missing category is HELD (fail safe): a new sender nobody
@@ -122,10 +123,16 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   security: { exempt: true, why: `${ESSENTIAL} — security notices may never be silenced` },
   'ops-alert': { exempt: true, why: `${ESSENTIAL} — operator alerts go to staff addresses` },
   test: { exempt: true, why: `${ESSENTIAL} — the admin's own test mail` },
-  'retention-reminder': { exempt: true, why: `${ESSENTIAL} — a data-protection re-consent notice` },
   consent: { exempt: true, why: `${ESSENTIAL} — the demo form's double-opt-in confirmation, triggered by the person` },
   // ── triggered by the person themselves ────────────────────────────────────
   'mentor-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own application' },
+  // ── held although essential-grouped ───────────────────────────────────────
+  // The re-consent ask ("keep your data with us?") is a cron the person never
+  // triggered, sent to every lead past the retention limit — neither the
+  // person's own action nor mail to staff, so in a sales org it waits for an
+  // operator like any other automated mail to a lead. Staff still get it at
+  // once (the rule never holds mail to staff).
+  'retention-reminder': { exempt: false, trigger: 'other', why: 'a cron-driven data-protection re-consent ask, not triggered by the person' },
   // ── held: automated mail about the funnel ─────────────────────────────────
   'stage-deadline': { exempt: false, trigger: 'deadline', why: 'trial and stage deadline reminders' },
   'interaction-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },

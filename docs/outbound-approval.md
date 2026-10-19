@@ -61,10 +61,13 @@ reason; the unit test fails when a category of `src/lib/emailGroups.ts` has no
 entry, so a new mail is a decision somebody makes. **Exempt** (still sent with
 approval on):
 
-- the whole essential `account_security` group — `verification`,
-  `password-reset`, `invitation`, `account`, `security`, `ops-alert`, `test`,
-  `retention-reminder` and `consent` (the demo form's double-opt-in
-  confirmation, triggered by the person themselves);
+- the essential `account_security` group — `verification`,
+  `password-reset`, `invitation`, `account`, `security`, `ops-alert`, `test`
+  and `consent` (the demo form's double-opt-in confirmation, triggered by the
+  person themselves) — **except `retention-reminder`**: the "do you want to keep
+  your data with us?" ask is a cron the person never triggered, sent to every
+  lead past the retention limit, so it is held like any other automated mail to
+  a lead (to staff it still goes at once);
 - `mentor-application-received` — the acknowledgement of the person's own
   application.
 
@@ -108,14 +111,16 @@ leaves because the check failed.
   `reason` (the rule's code), `trigger` (what produced it, rendered as a
   sentence: deadline, check-in, win-back, message, meeting, …), `rcpt` (sha256
   of the address), `recipientUserId` / `recipientCompanyId` when known.
-- `box` — the whole prepared mail, **sealed** with `secretBox`
+- `box` (`LongText`: a message copy may carry 10 MB of attachments) — the whole prepared mail, **sealed** with `secretBox`
   (`'outbound-draft'`), like the mail queue's envelope. `summary` — a sealed
   copy of what the list shows (subject, display name, masked address). No
   address is ever in the clear on the row or in a log line.
 - `dedupeKey`, unique per org: the sender's own key (`dedupeKeyFor()`) when it
-  named one, else a hash of category + recipient + subject + UTC day. The same
-  logical mail held twice is one draft, whatever its state — a discarded draft
-  is a decision, not an invitation to ask again.
+  named one, else a hash of category + recipient + subject + UTC day + **body**
+  (html, text and attachments). The same logical mail held twice is one draft,
+  whatever its state — a discarded draft is a decision, not an invitation to ask
+  again — while two different mails that share a subject on one day (two in-app
+  messages to the same lead) are two drafts.
 - `status`: `DRAFT` → `SENT` | `SCHEDULED` | `DISCARDED` | `EXPIRED`.
   `notAfter` = the sender's own deadline, capped at 14 days.
 
@@ -128,6 +133,19 @@ leaves because the check failed.
 | send now | `SENT` | `enqueueMail(…, { reason: 'approved', dedupeKey: 'draft:<id>' })` — the mail queue's drain delivers it |
 | schedule | `SCHEDULED`, `scheduledFor` | the same, with `runAt` = the chosen time (the page converts the operator's local time; stored UTC). In the future, within 30 days, before the draft expires |
 | discard | `DISCARDED`, `box` cleared | nothing is sent |
+
+A mail whose attachments are over the queue's cap (`MAX_QUEUED_ATTACHMENT_BYTES`,
+256 KB — a message copy with a photo, a newsletter with a large image) cannot
+wait on the queue: **schedule** refuses it (`409 not_queueable`, the screen says
+"send it now instead") and **send now** delivers it inline through the same
+dispatch an ordinary send takes after the hook; a failed inline send undoes the
+claim (`500 send_failed`) and the draft waits again.
+
+A held newsletter copy is recorded `HELD` and counted with the skipped; when
+its approved copy settles, `settleMailRef()` moves the record out of `HELD` and
+the issue's tally from *skipped* to *sent* (or *failed*). Announcements report
+held copies as `held`, not `emailed`; a held report-subscription mail is
+recorded `SKIPPED` / `held_for_approval`, never `SENT`.
 
 Each is **one guarded `updateMany` from `DRAFT`** with its `AuditLog` row
 (`outbound_draft.send|schedule|discard`, the org's `orgId`) in the same
@@ -151,8 +169,9 @@ past its `notAfter` to `EXPIRED` and deletes its mail (`expireDrafts()`).
 
 - **ADMIN** — every draft of their org (`/admin/outbox`).
 - **MENTOR** (a sales rep, `/sales/outbox`) — the drafts addressed to a lead or
-  an account they own **now** (a relation they are the owner of, by its lead or
-  its company), so a handed-over lead's waiting mail moves with the lead.
+  an account they own **now** (an `ACTIVE` relation they are the owner of, by
+  its lead or its company), so a handed-over lead's waiting mail moves with the
+  lead and the previous owner loses it.
 - Anybody else — nothing.
 
 Another org's draft, or another rep's, answers **404** like a missing id —
@@ -183,5 +202,7 @@ link carries the pending count (`OutboxBadge`). The nav link is tagged
   touched (it expires first).
 - Account erasure deletes every draft addressed to the account and every draft
   addressed to its address **inside its own org**; forgetting an account-less
-  contact does the same for the requesting org (`forgetOutboundDrafts()`).
+  contact does the same for the requesting org (`forgetOutboundDrafts()`). An
+  approved draft's queued copy (sent now and not yet drained, or scheduled) is
+  deleted with it, by the `jobId` the approval recorded.
   Another world's drafts for the same address are untouched by construction.

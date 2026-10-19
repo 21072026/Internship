@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { recipientHash } from '@/lib/mailDeliveryRule';
-import { expireDrafts, forgetOutboundDrafts } from '@/lib/outboundDrafts';
+import { applyDraftAction, expireDrafts, forgetOutboundDrafts, type OutboxActor } from '@/lib/outboundDrafts';
+import { newsletterSendRef, settleMailRef } from '@/lib/mailRefHooks';
 import {
   mailMeterIdleForTests,
   resetMailTransportsForTests,
@@ -366,6 +367,98 @@ test.describe('outbound approval', () => {
     expect(await draftsFor(E.lead2)).toHaveLength(0);
     // The other lead's drafts are untouched.
     expect((await draftsFor(E.lead1)).length).toBeGreaterThan(0);
+  });
+
+  test('two different mails with the same subject on the same day are two drafts; the same mail again is one', async () => {
+    const subject = `Same subject ${STAMP}`;
+    const send = (body: string) =>
+      sendEmail({ to: E.lead1, subject, html: `<p>${body}</p>`, category: 'message', userId: ids.lead1, orgId: ids.org });
+    expect(await send('first message')).toBe('HELD');
+    expect(await send('second message')).toBe('HELD');
+    // A re-run of the very same mail still collapses into its draft.
+    expect(await send('second message')).toBe('HELD');
+    const held = (await draftsFor(E.lead1)).filter((d) => d.category === 'message');
+    expect(held).toHaveLength(2);
+    expect(await prisma.emailLog.count({ where: { to: E.lead1, subject, status: 'HELD' } })).toBe(2);
+  });
+
+  test('a held mail too large for the queue cannot be scheduled, but "send now" delivers it inline', async () => {
+    const admin: OutboxActor = { id: ids.admin, role: 'ADMIN', orgId: ids.org };
+    const subject = `Large attachment ${STAMP}`;
+    const result = await sendEmail({
+      to: E.lead1,
+      subject,
+      html: '<p>with a photo</p>',
+      category: 'message',
+      userId: ids.lead1,
+      orgId: ids.org,
+      attachments: [{ filename: 'photo.bin', content: randomBytes(300 * 1024), contentType: 'application/octet-stream' }],
+    });
+    expect(result).toBe('HELD');
+    const draft = (await draftsFor(E.lead1)).filter((d) => d.status === 'DRAFT' && d.category === 'message').pop()!;
+    const before = smtp.to(E.lead1).length;
+
+    const at = new Date(Date.now() + 60 * 60 * 1000);
+    expect(await applyDraftAction(admin, draft.id, 'schedule', { scheduledFor: at })).toEqual({ ok: false, httpStatus: 409, code: 'not_queueable' });
+    expect((await prisma.outboundDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe('DRAFT');
+
+    const sent = await applyDraftAction(admin, draft.id, 'send');
+    expect(sent).toEqual({ ok: true, status: 'SENT', jobId: null });
+    await expect.poll(() => smtp.to(E.lead1).length).toBe(before + 1);
+    const after = await prisma.outboundDraft.findUniqueOrThrow({ where: { id: draft.id } });
+    expect(after.status).toBe('SENT');
+    expect(after.box).toBeNull();
+    expect(await prisma.job.count({ where: { idempotencyKey: `draft:${draft.id}` } })).toBe(0);
+  });
+
+  test('a newsletter copy that was held is settled out of HELD once it is approved', async () => {
+    const nl = await prisma.newsletter.create({
+      data: { subject: `Issue ${STAMP}`, content: {}, createdById: ids.admin, orgId: ids.org, status: 'SENT', recipientCount: 1, skippedCount: 1 },
+    });
+    try {
+      await prisma.newsletterSend.create({ data: { newsletterId: nl.id, userId: ids.lead1, email: E.lead1, locale: 'en', status: 'HELD' } });
+      expect(await settleMailRef(newsletterSendRef(nl.id, ids.lead1), 'SENT')).toBe(true);
+      const row = await prisma.newsletterSend.findFirstOrThrow({ where: { newsletterId: nl.id } });
+      expect(row.status).toBe('SENT');
+      const issue = await prisma.newsletter.findUniqueOrThrow({ where: { id: nl.id } });
+      expect([issue.sentCount, issue.skippedCount]).toEqual([1, 0]);
+      // Settled once: a second settle changes nothing.
+      expect(await settleMailRef(newsletterSendRef(nl.id, ids.lead1), 'SENT')).toBe(false);
+    } finally {
+      await prisma.newsletterSend.deleteMany({ where: { newsletterId: nl.id } });
+      await prisma.newsletter.delete({ where: { id: nl.id } });
+    }
+  });
+
+  test("a rep whose relation with the lead ended no longer sees the lead's held mail", { tag: '@smoke' }, async ({ playwright }) => {
+    const draft = await holdOne(E.lead1, ids.lead1, ids.org, `Handed over ${STAMP}`);
+    const rep1 = await playwright.request.newContext();
+    try {
+      await apiAs(rep1, E.rep1);
+      expect((await rep1.get(`/api/admin/outbox/${draft.id}`, { headers: H })).status()).toBe(200);
+      await prisma.mentorshipRelation.updateMany({ where: { orgId: ids.org, mentorId: ids.rep1, menteeId: ids.lead1 }, data: { status: 'COMPLETED' } });
+      expect((await rep1.get(`/api/admin/outbox/${draft.id}`, { headers: H })).status()).toBe(404);
+      expect((await rep1.post(`/api/admin/outbox/${draft.id}/send`, { headers: H })).status()).toBe(404);
+      expect((await prisma.outboundDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe('DRAFT');
+    } finally {
+      await prisma.mentorshipRelation.updateMany({ where: { orgId: ids.org, mentorId: ids.rep1, menteeId: ids.lead1 }, data: { status: 'ACTIVE' } });
+      await rep1.dispose();
+    }
+  });
+
+  test('erasing a contact also removes the queued copy of their scheduled mail', async () => {
+    const admin: OutboxActor = { id: ids.admin, role: 'ADMIN', orgId: ids.org };
+    const result = await sendEmail({ to: CONTACT, subject: `Scheduled to contact ${STAMP}`, html: '<p>later</p>', category: 'never-classified', orgId: ids.org });
+    expect(result).toBe('HELD');
+    const draft = (await draftsFor(CONTACT)).filter((d) => d.status === 'DRAFT').pop()!;
+    const at = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const scheduled = await applyDraftAction(admin, draft.id, 'schedule', { scheduledFor: at });
+    expect(scheduled.ok).toBe(true);
+    expect(await prisma.job.count({ where: { idempotencyKey: `draft:${draft.id}` } })).toBe(1);
+
+    await forgetOutboundDrafts({ address: CONTACT, orgId: ids.org });
+    expect(await draftsFor(CONTACT)).toHaveLength(0);
+    expect(await prisma.job.count({ where: { idempotencyKey: `draft:${draft.id}` } })).toBe(0);
   });
 
   test('the setting is refused for an internship organization', async ({ playwright }) => {

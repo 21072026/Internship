@@ -9,8 +9,9 @@ import { verticalFor } from '@/lib/verticalContext';
 import { verticalCapabilities } from '@/lib/verticals';
 import { logActivity } from '@/lib/activity';
 import { recipientHash } from '@/lib/mailDeliveryRule';
-import { decodeEnvelope, encodeEnvelope, type Envelope } from '@/lib/mailWorkerRule';
+import { MAIL_JOB_NAME, decodeEnvelope, encodeEnvelope, type Envelope } from '@/lib/mailWorkerRule';
 import { canQueue, enqueueMail } from '@/lib/mailOutbox';
+import { settleMailRef } from '@/lib/mailRefHooks';
 import {
   OUTBOUND_BULK_MAX,
   actionAllowed,
@@ -145,10 +146,30 @@ export type HoldResult =
   | { held: false; code: OutboundDecisionCode }
   | { held: true; code: OutboundDecisionCode; draftId: string; created: boolean };
 
-/** The draft's identity when the sender named none: one per recipient, subject and UTC day. */
-function fallbackDraftKey(prepared: PreparedEmail, now: Date): string {
+/**
+ * The draft's identity when the sender named none: one per recipient, subject,
+ * BODY and UTC day. The body is part of it because two different mails can
+ * share a subject on the same day — two in-app messages to one lead both read
+ * "New message from …" — and the second must be a draft of its own, not lost
+ * to the first one's key. A cron that runs twice builds the same body, so it
+ * still collapses into one draft.
+ */
+export function fallbackDraftKey(prepared: PreparedEmail, now: Date): string {
+  const msg = (prepared.message ?? {}) as { html?: unknown; text?: unknown; attachments?: { content?: unknown; filename?: unknown }[] };
+  const body = createHash('sha256');
+  body.update(typeof msg.html === 'string' ? msg.html : '');
+  body.update('\n');
+  body.update(typeof msg.text === 'string' ? msg.text : '');
+  for (const a of msg.attachments ?? []) {
+    body.update('\n');
+    body.update(typeof a.filename === 'string' ? a.filename : '');
+    const c = a.content;
+    if (typeof c === 'string' || Buffer.isBuffer(c)) body.update(c);
+  }
   const digest = createHash('sha256')
-    .update([prepared.category ?? '', recipientHash(prepared.to), prepared.subject, now.toISOString().slice(0, 10)].join('\n'))
+    .update(
+      [prepared.category ?? '', recipientHash(prepared.to), prepared.subject, now.toISOString().slice(0, 10), body.digest('hex')].join('\n'),
+    )
     .digest('hex');
   return `hold:${digest}`;
 }
@@ -242,7 +263,9 @@ export async function visibleDraftsWhere(actor: OutboxActor): Promise<Prisma.Out
   if (actor.role !== 'MENTOR') return null;
   const owned = await runUnscoped(() =>
     prisma.mentorshipRelation.findMany({
-      where: { orgId: actor.orgId, mentorId: actor.id },
+      // ACTIVE only: a relation that ended (completed, or closed by a handover
+      // to another rep) no longer makes this rep the owner of the lead.
+      where: { orgId: actor.orgId, mentorId: actor.id, status: 'ACTIVE' },
       select: { menteeId: true, companyId: true },
     }),
   );
@@ -397,7 +420,7 @@ export async function draftDetail(actor: OutboxActor, id: string): Promise<Draft
 
 export type DraftActionResult =
   | { ok: true; status: OutboundDraftStatus; jobId: string | null }
-  | { ok: false; httpStatus: 404 | 409 | 500; code: 'not_found' | 'conflict' | 'unreadable' | 'not_queueable' | 'enqueue_failed' | ActionRefusal };
+  | { ok: false; httpStatus: 404 | 409 | 500; code: 'not_found' | 'conflict' | 'unreadable' | 'not_queueable' | 'enqueue_failed' | 'send_failed' | ActionRefusal };
 
 const AUDIT_ACTION: Record<OutboundAction, string> = {
   send: 'outbound_draft.send',
@@ -437,7 +460,10 @@ export async function applyDraftAction(
     const env = row.box ? decodeEnvelope(open(row.box, SEAL_PURPOSE)) : null;
     if (!env) return { ok: false, httpStatus: 409, code: 'unreadable' };
     prepared = env as unknown as PreparedEmail;
-    if (!canQueue(prepared)) return { ok: false, httpStatus: 409, code: 'not_queueable' };
+    // A mail whose attachments are over the queue's cap (a message copy with a
+    // photo, a newsletter with a large image) cannot wait on the queue, so it
+    // cannot be scheduled — but "send now" delivers it inline below.
+    if (action === 'schedule' && !canQueue(prepared)) return { ok: false, httpStatus: 409, code: 'not_queueable' };
   }
 
   const next = statusAfter(action);
@@ -472,7 +498,29 @@ export async function applyDraftAction(
   if (!claimed) return { ok: false, httpStatus: 409, code: 'conflict' };
 
   let jobId: string | null = null;
-  if (prepared) {
+  if (prepared && !canQueue(prepared)) {
+    // Send now, inline: the same dispatch an ordinary send takes after the
+    // hold (the meter, the breaker, a temporary failure to … nothing: it cannot
+    // be queued, so a failure throws). Imported lazily — emailService imports
+    // this module for the hook, and a static import back would close the cycle.
+    try {
+      const { sendPrepared } = await import('@/services/emailService');
+      await sendPrepared(prepared);
+      await runUnscoped(() =>
+        prisma.outboundDraft.updateMany({ where: { id: row.id, orgId: row.orgId, status: next }, data: { box: null } }),
+      );
+      await settleMailRef(row.ref, 'SENT');
+    } catch (e) {
+      logger.error('outbound_draft.send_failed', { draftId: row.id, orgId: row.orgId, error: e instanceof Error ? e.name : 'unknown' });
+      await runUnscoped(() =>
+        prisma.outboundDraft.updateMany({
+          where: { id: row.id, orgId: row.orgId, status: next, jobId: null },
+          data: { status: 'DRAFT', decidedById: null, decidedAt: null, scheduledFor: null },
+        }),
+      );
+      return { ok: false, httpStatus: 500, code: 'send_failed' };
+    }
+  } else if (prepared) {
     try {
       const job = await enqueueMail(prepared, {
         reason: 'approved',
@@ -591,5 +639,20 @@ export async function forgetOutboundDrafts(subject: { userId?: string | null; ad
   if (subject.userId) or.push({ recipientUserId: subject.userId });
   if (subject.address && subject.orgId) or.push({ orgId: subject.orgId, rcpt: recipientHash(subject.address) });
   if (or.length === 0) return 0;
+  // An approved draft is on the mail queue (sent-now and not yet drained, or
+  // scheduled up to 30 days ahead). Its queued copy goes too, by the job id
+  // the approval recorded — not by the bare address, which the account path
+  // narrows to one user id and a draft held through the address lookup does
+  // not carry.
+  const jobIds = (
+    await runUnscoped(() =>
+      prisma.outboundDraft.findMany({ where: { OR: or, jobId: { not: null } }, select: { jobId: true } }),
+    )
+  )
+    .map((r) => r.jobId)
+    .filter((j): j is string => !!j);
+  if (jobIds.length) {
+    await runUnscoped(() => prisma.job.deleteMany({ where: { id: { in: jobIds }, name: MAIL_JOB_NAME } }));
+  }
   return (await runUnscoped(() => prisma.outboundDraft.deleteMany({ where: { OR: or } }))).count;
 }

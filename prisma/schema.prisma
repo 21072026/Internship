@@ -4717,7 +4717,9 @@ model OutboundDraft {
   // must not block deleting either, and erasure removes the draft itself.
   recipientUserId    String?
   recipientCompanyId String?
-  box                String?             @db.MediumText
+  // The sealed mail. LongText: a message copy may carry up to 10 MB of
+  // attachments, which base64 + sealing grows past MediumText's 16 MB.
+  box                String?             @db.LongText
   summary            String?             @db.Text
   // The draft's identity per org: the sender's own dedupe key when it named
   // one, else a hash of category + recipient + subject + day — so a cron that
