@@ -60,7 +60,7 @@ import { findOrCreateSource } from '@/lib/leadSource';
 import { planFieldUpdates } from '@/lib/externalSyncPolicy';
 import { leadStandInEmail, CONTACT_IN_FUNNEL, type ManualAccountFields } from '@/lib/marketingImport';
 import { createMarketingAccountsBatch, type MarketingImportOwner } from '@/lib/marketingImportStore';
-import { runImport, emptyCounts, type ImportReport, type PlannedRow, type RowResult, type RowStatus } from '@/lib/importPreview';
+import { runImport, emptyCounts, importErrorMessage, type ImportReport, type PlannedRow, type RowResult, type RowStatus } from '@/lib/importPreview';
 import { fetchListNames, fetchProfilesPage, testKlaviyoKey, type KlaviyoClientOptions } from '@/lib/klaviyoClient';
 import {
   KLAVIYO_PAGES_PER_MANUAL_RUN,
@@ -649,7 +649,7 @@ export async function syncProfilesPage(
             await applyUpdate(ctx, row);
             out.push({ row: row.row, key: row.key, status: 'UPDATE', targetId: row.targetId ?? null, changed: row.changed ?? [], ...(row.reason ? { reason: row.reason } : {}), value: row.value });
           } catch (error) {
-            out.push({ row: row.row, key: row.key, status: 'ERROR', reason: error instanceof Error ? error.message.split('\n').find((l) => l.trim())?.slice(0, 200) ?? 'write failed' : 'write failed', value: row.value });
+            out.push({ row: row.row, key: row.key, status: 'ERROR', reason: importErrorMessage(error), value: row.value });
           }
           continue;
         }
