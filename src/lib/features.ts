@@ -176,6 +176,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     // #2958 — a sales rep types in their own lead on /sales. Same tag as the
     // sales target: the surface exists only where there is no mentorship.
     { key: 'repOwnLeads', category: 'companies', icon: UserPlus, color: 'green', withoutCapability: 'mentorship', title: C.repOwnLeads.t, desc: C.repOwnLeads.d },
+    // #2966 — the product a tenant sells reports its accounts' trials, purchases,
+    // cancellations and reactivations; replayed in batches with a dry run.
+    { key: 'accountEvents', category: 'companies', icon: Link2, color: 'teal', withoutCapability: 'mentorship', title: C.accountEvents.t, desc: C.accountEvents.d },
     // #2569 — the public enquiry / demo form, filed by host into the right org.
     { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
     // #2577 — per-account contact permission with its proof, and the double opt-in.

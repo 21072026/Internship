@@ -5,9 +5,14 @@
 // src/lib/accountEventSchema.ts, and the source registry
 // src/lib/integrationSources.ts.
 //
-// Only three event types act on the funnel:
-//   account_created, trial_started → TRIAL_ACTIVE
-//   converted                      → DEAL_WON
+// What acts on the funnel (`ingestIntent`, then `planAccountEvent` against the
+// record's current stage — the whole table is in the contract and unit-tested):
+//   account_created, trial_started → TRIAL_ACTIVE (a re-trial after an ended
+//                                    trial, a loss or a closed record is a
+//                                    new journey through win-back)
+//   converted                      → DEAL_WON (on a lost record: win-back)
+//   cancelled, deactivated         → DEAL_LOST, with a drop-off reason (#2966)
+//   reactivated                    → on a lost record: win-back
 // Every other type is recorded (IntegrationEvent + an activity entry) and moves
 // nothing — a mapping for it is a product decision, not a side effect of a
 // sender adding a field. An unknown type is refused at the schema.
@@ -19,6 +24,7 @@
 // Unit-tested in scripts/test/account-event-rule.test.mjs.
 import { ACQUISITION_SOURCES } from './leadSourceName';
 import { TEXT_LIMITS } from './textLimits';
+import { isBackwardMove, type StageForDirection } from './stageDirection';
 import {
   TRIAL_ACTIVE_STAGE_KEY,
   TRIAL_EXPIRED_STAGE_KEY,
@@ -119,9 +125,14 @@ export function normalizeSourceLabel(raw: unknown): string | null {
   return v || null;
 }
 
+export const WON_STAGE_KEY = 'DEAL_WON';
+export const LOST_STAGE_KEY = 'DEAL_LOST';
+
 export type IngestIntent =
   | { kind: 'open_trial'; toStage: 'TRIAL_ACTIVE' }
   | { kind: 'won'; toStage: 'DEAL_WON' }
+  | { kind: 'lost'; toStage: 'DEAL_LOST' }
+  | { kind: 'reactivate' }
   | { kind: 'record' };
 
 export function ingestIntent(eventType: AccountEventType): IngestIntent {
@@ -131,8 +142,103 @@ export function ingestIntent(eventType: AccountEventType): IngestIntent {
       return { kind: 'open_trial', toStage: 'TRIAL_ACTIVE' };
     case 'converted':
       return { kind: 'won', toStage: 'DEAL_WON' };
+    case 'cancelled':
+    case 'deactivated':
+      return { kind: 'lost', toStage: 'DEAL_LOST' };
+    case 'reactivated':
+      return { kind: 'reactivate' };
     default:
       return { kind: 'record' };
+  }
+}
+
+/**
+ * The drop-off reason a lost move from the feed carries (#2966). A customer
+ * who had signed (the record reached DEAL_WON) and left is the vocabulary's
+ * own CUSTOMER_CANCELLED (src/lib/dropoffReasons.ts); anything else ended
+ * before it was ever won, and is OTHER with a fixed note naming the source.
+ */
+export function lostReasonFor(wasWon: boolean, sourceSlug: string): { reasonCode: string; reasonNote: string | null } {
+  return wasWon
+    ? { reasonCode: 'CUSTOMER_CANCELLED', reasonNote: null }
+    : { reasonCode: 'OTHER', reasonNote: `${sourceSlug}: ended during trial` };
+}
+
+/** The record an event acts on, as much of it as the plan needs. */
+export interface PlanRecord {
+  /** `MentorshipRelation.status`: ACTIVE, or closed (COMPLETED …). */
+  status: string;
+  pipelineStatus: string;
+  /** The record is at DEAL_WON, or its history shows it reached DEAL_WON. */
+  wasWon: boolean;
+  trialEndsAt: Date | null;
+}
+
+/**
+ * What one event does to one existing funnel record. `move` is an in-place
+ * stage move; `win_back` opens a NEW journey through the one win-back writer
+ * (src/lib/winBack.ts), chained by `previousRelationId`; `refused_backward`
+ * is logged and changes nothing; `nothing` is answered `recorded` with its
+ * detail; `missing_stage` is a `conflict` (the org has no such stage).
+ */
+export type EventPlan =
+  | { kind: 'move'; toStage: string; reasonCode?: string; reasonNote?: string | null }
+  | { kind: 'win_back'; toStage: 'TRIAL_ACTIVE' | 'DEAL_WON'; predecessorClosed: boolean }
+  | { kind: 'refused_backward'; toStage: string }
+  | { kind: 'nothing'; detail: string }
+  | { kind: 'missing_stage'; stage: string };
+
+/**
+ * The event table (docs/integrations/account-events.md § Event types). Pure:
+ * the writer reads the record and the org's stages, this decides.
+ *
+ * A record has ENDED when it is closed (not ACTIVE) or sits on an off-path
+ * stage (lost). An ended record is never reopened in place: a new trial, a
+ * conversion of a lost customer or a reactivation opens a new journey. An
+ * expired trial is not ended — a `converted` moves it on in place — but a new
+ * trial for it is a new journey too, as long as the event comes after the
+ * trial's end: a trial event from inside the old window belongs to the trial
+ * that already ran, and is refused as a backward move exactly as before.
+ */
+export function planAccountEvent(input: {
+  intent: Exclude<IngestIntent, { kind: 'record' }>;
+  record: PlanRecord;
+  stages: readonly StageForDirection[];
+  occurredAt: Date;
+  sourceSlug: string;
+}): EventPlan {
+  const { intent, record, stages } = input;
+  const has = (key: string) => stages.some((s) => s.key === key);
+  const current = stages.find((s) => s.key === record.pipelineStatus);
+  const closed = record.status !== 'ACTIVE';
+  const lost = !!current?.isOffPath;
+  const ended = closed || lost;
+  const winBack = (toStage: 'TRIAL_ACTIVE' | 'DEAL_WON'): EventPlan =>
+    has(toStage) ? { kind: 'win_back', toStage, predecessorClosed: closed } : { kind: 'missing_stage', stage: toStage };
+  const move = (toStage: string, extra: { reasonCode?: string; reasonNote?: string | null } = {}): EventPlan => {
+    if (!has(toStage)) return { kind: 'missing_stage', stage: toStage };
+    if (isBackwardMove(stages, record.pipelineStatus, toStage)) return { kind: 'refused_backward', toStage };
+    return { kind: 'move', toStage, ...extra };
+  };
+
+  switch (intent.kind) {
+    case 'open_trial': {
+      if (ended) return winBack(TRIAL_ACTIVE_STAGE_KEY);
+      const afterTrial = !record.trialEndsAt || input.occurredAt.getTime() > record.trialEndsAt.getTime();
+      if (record.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY && afterTrial) return winBack(TRIAL_ACTIVE_STAGE_KEY);
+      return move(intent.toStage);
+    }
+    case 'won':
+      if (lost) return winBack(WON_STAGE_KEY);
+      if (closed) return { kind: 'refused_backward', toStage: intent.toStage };
+      return move(intent.toStage);
+    case 'lost': {
+      if (ended) return { kind: 'nothing', detail: `${record.pipelineStatus}: the record has already ended` };
+      return move(intent.toStage, lostReasonFor(record.wasWon, input.sourceSlug));
+    }
+    case 'reactivate':
+      if (!lost) return { kind: 'nothing', detail: `${record.pipelineStatus}: not lost, nothing to reactivate` };
+      return winBack(record.wasWon ? WON_STAGE_KEY : TRIAL_ACTIVE_STAGE_KEY);
   }
 }
 
@@ -345,4 +451,38 @@ export function shouldUndoHistoricExpiry(input: {
   if (!newest || newest.changedById !== null) return false;
   if (newest.fromStatus !== TRIAL_ACTIVE_STAGE_KEY || newest.toStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
   return newest.createdAt.getTime() > input.at.getTime();
+}
+
+// ── The batch (#2966) ────────────────────────────────────────────────────────
+
+/** The most events one batch request may carry (docs/integrations/account-events.md § Batch). */
+export const ACCOUNT_EVENT_BATCH_MAX = 200;
+
+/**
+ * The order a batch is processed in: by external id, then by when each event
+ * happened, then as sent — the order a replay must be applied in, whatever
+ * order the sender listed it. Returns the events' indexes. Ids compare as the
+ * stored, lower-cased ASCII strings they are (no locale collation).
+ */
+export function batchOrder(events: readonly { external_id: string; occurred_at: Date }[]): number[] {
+  return events
+    .map((e, index) => ({ key: e.external_id, at: e.occurred_at.getTime(), index }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.at - b.at || a.index - b.index))
+    .map((e) => e.index);
+}
+
+/**
+ * The stages a replay writes into (docs/integrations/account-events.md
+ * § Batch): a trial, its expiry, a conversion and a loss. A batch is refused up
+ * front (409 `missing_stages`) when the org lacks any of them, BEFORE anything
+ * is claimed: a history replayed before the org's funnel is ready (an org
+ * still on an older stage set) is a configuration gap to fix first, not two
+ * hundred per-event conflicts to read through.
+ */
+export const REPLAY_STAGE_KEYS = [TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY, WON_STAGE_KEY, LOST_STAGE_KEY] as const;
+
+/** The replay stages the org's funnel lacks, in REPLAY_STAGE_KEYS order (empty = ready). */
+export function missingReplayStages(stages: readonly { key: string }[]): string[] {
+  const keys = new Set(stages.map((s) => s.key));
+  return REPLAY_STAGE_KEYS.filter((k) => !keys.has(k));
 }

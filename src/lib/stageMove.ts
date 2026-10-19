@@ -64,6 +64,12 @@ export async function recordStageMove(opts: {
   deadlineSetByCaller?: boolean;
   /** Extra words for the activity line, e.g. what caused a move nobody dragged. */
   cause?: string;
+  /**
+   * The caller wrote the StatusChange row itself, in the same transaction as
+   * the stage (the account-event feed, #2966): only the activity line and the
+   * effects follow. Everything else about the move is unchanged.
+   */
+  historyWritten?: boolean;
 }): Promise<void> {
   const { relation, toStatus, actor } = opts;
   const auditRow = statusChangeData({
@@ -77,8 +83,13 @@ export async function recordStageMove(opts: {
   // statusChangeData refuses a from === to entry, so this is the same no-op
   // guard every stage write path shares.
   if (!auditRow) return;
-  await prisma.statusChange.create({ data: auditRow });
+  if (!opts.historyWritten) await prisma.statusChange.create({ data: auditRow });
   await logActivity({
+    // A move nobody made (the account-event feed, the auto-advance) has no
+    // actor to read the org from, and a sessionless caller binds no tenant
+    // scope: the relation's own org, or the entry would belong to nobody.
+    // A person's move keeps resolving through the actor, exactly as before.
+    ...(actor ? {} : { orgId: relation.orgId }),
     action: 'pipeline.stage_change',
     actorId: actor?.id ?? null,
     actorEmail: actor?.email ?? null,

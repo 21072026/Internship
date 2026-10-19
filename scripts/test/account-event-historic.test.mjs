@@ -157,14 +157,16 @@ test('the envelope accepts an optional replay flag and stays schema version 1', 
   assert.deepEqual(bad.error.issues.map((i) => i.path.join('.')), ['replay']);
 });
 
-test('the writer is quiet by construction: no stage effects, SLA, webhook, bell or mail import', async () => {
+test('the writer reaches stage effects through the shared path, and only for a live move', async () => {
+  // Since #2966 a LIVE move goes through recordStageMove() (src/lib/stageMove.ts)
+  // like a person's move of the card; a historic move stays silent. So the
+  // writer imports the shared path and nothing that rings, mails or sets an
+  // SLA by itself, and its one call to it sits on the live branch.
   const { readFileSync } = await import('node:fs');
   const source = readFileSync(new URL('../../src/lib/accountEventIngest.ts', import.meta.url), 'utf8');
   const imports = [...source.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
   for (const banned of [
     '@/lib/stageChangeEffects',
-    '@/lib/stageMove',
-    '@/lib/stageSla',
     '@/lib/webhooks',
     '@/lib/notify',
     '@/lib/mailOutbox',
@@ -172,5 +174,20 @@ test('the writer is quiet by construction: no stage effects, SLA, webhook, bell 
   ]) {
     assert.ok(!imports.includes(banned), `accountEventIngest.ts must not import ${banned}`);
   }
-  assert.ok(!/stageDeadline/.test(source.replace(/\/\/.*$/gm, '')), 'no stageDeadline write outside a comment');
+  const code = source.replace(/\/\/.*$/gm, '');
+  // A historic move CLEARS the deadline of the stage it leaves (where the org
+  // manages deadlines by SLA) and never sets one: every stageDeadline the
+  // writer writes is null, and stageSla is asked only whether it manages them.
+  const deadlineWrites = [...code.matchAll(/stageDeadline\s*:\s*([^,}\s]+)/g)].map((m) => m[1]);
+  assert.ok(deadlineWrites.length >= 1, 'the historic move clears the old deadline');
+  assert.ok(deadlineWrites.every((v) => v === 'null'), `stageDeadline is only ever cleared, got ${deadlineWrites.join(', ')}`);
+  const slaUses = [...code.replace(/^import [^;]*;$/gm, '').matchAll(/\b(stageDeadlineUpdate|resolveStageSlas|stageSla\w*)\b/g)].map((m) => m[1]);
+  assert.ok(slaUses.every((n) => n === 'stageDeadlineUpdate'), `only stageDeadlineUpdate from stageSla, got ${slaUses.join(', ')}`);
+  const calls = [...code.matchAll(/recordStageMove\(/g)];
+  assert.equal(calls.length, 1, 'one call to the shared stage path');
+  const live = code.indexOf('if (!ctx.at) {');
+  assert.ok(live >= 0 && live < calls[0].index, 'the call sits on the live branch');
+  assert.ok(code.indexOf('return;', live) > calls[0].index, 'inside that branch, before it returns');
+  // Historic win-backs set no deadline either: winBack() is asked to be quiet.
+  assert.match(code, /quiet: ctx\.historic/);
 });

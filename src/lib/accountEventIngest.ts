@@ -14,9 +14,12 @@
 //
 // NEVER BACKWARDS. Every stage move goes through `isBackwardMove`
 // (src/lib/stageChange.ts) — a machine never drags a record to an earlier
-// stage, and a refused move is logged, not swallowed. A lost (off-path) record
-// is never reopened: a new trial opens a NEW journey chained by
-// `previousRelationId`, and the old record stays as it ended.
+// stage, and a refused move is logged, not swallowed. What an event does to a
+// record is decided by ONE pure table, `planAccountEvent`
+// (src/lib/accountEventRule.ts). A lost (off-path) or closed record is never
+// reopened: a new trial, a `converted` or a `reactivated` opens a NEW journey
+// chained by `previousRelationId` through the one win-back writer,
+// `winBack()` (src/lib/winBack.ts), and the old record stays as it ended.
 //
 // ONE ACCOUNT NAMESPACE PER ORG. The claim and the high-water mark are kept per
 // source, but the account is matched on `Company.externalId` inside the org,
@@ -35,11 +38,18 @@
 // overwritten. It never writes a marketing permission: a new account gets the
 // machine NONE row and nothing else (#2577).
 //
-// QUIET BY CONSTRUCTION. The writer never calls `emitStageChange()` and never
-// rings a bell: no SLA `stageDeadline`, no `pipeline.stage_change` webhook, no
-// notification, no mail — live or historic. A machine feed is not a person
-// moving a card. Keep it that way: a replay of years of history goes through
-// this same code.
+// LIVE MOVES ARE MOVES (#2966). A live (non-historic) stage move goes through
+// the shared stage write path, `recordStageMove()` (src/lib/stageMove.ts): the
+// history row, the `pipeline.stage_change` activity line, the stage SLA, the
+// owner's bell and the webhook — exactly what a person's move of the card does
+// (the lead itself is never told: a MARKETING org has no portal, see
+// emitStageChange). A HISTORIC move stays silent: its history row is written
+// here, backdated, and nothing else.
+//
+// ONE WRITER, ANY HANDLE. Every read and write goes through `ctx.db`
+// (src/lib/dbHandle.ts) — the root client, or the transaction the batch's dry
+// run rolls back (`ingestAccountEventBatch`): a dry run is this same call with
+// a writer that does not write.
 //
 // HISTORIC MODE (docs/integrations/account-events.md § Historic mode). An event
 // the sender marks `replay: true`, or one older than HISTORIC_EVENT_AGE_DAYS,
@@ -57,10 +67,16 @@
 // expired).
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { inTransaction, type Db } from '@/lib/dbHandle';
 import { runWithOrg } from '@/lib/orgContext';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
-import { isBackwardMove, statusChangeData } from '@/lib/stageChange';
+import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
+import { recordStageMove } from '@/lib/stageMove';
+import { stageDeadlineUpdate } from '@/lib/stageSla';
+import { winBack, WinBackConflictError } from '@/lib/winBack';
+import { AlreadyMentoredError } from '@/lib/activeMentorship';
+import { findOrCreateSource } from '@/lib/leadSource';
 import {
   DECISION_WINDOW_CLAIM,
   TRIAL_ACTIVE_STAGE_KEY,
@@ -84,7 +100,13 @@ import {
   ingestTrialWindow,
   isHistoricEvent,
   isStaleEvent,
+  missingReplayStages,
+  planAccountEvent,
   shouldUndoHistoricExpiry,
+  batchOrder,
+  WON_STAGE_KEY,
+  type EventPlan,
+  type IngestIntent,
 } from '@/lib/accountEventRule';
 import type { AccountEvent } from '@/lib/accountEventSchema';
 
@@ -162,6 +184,8 @@ export interface IngestOptions {
   now?: Date;
   /** Share one aggregated activity line across several events (see ReplayLog). */
   replayLog?: ReplayLog;
+  /** The handle every read and write goes through; omitted = the root client. */
+  db?: Db;
 }
 
 /** One event's write context: who, what, and whether it replays the past. */
@@ -174,6 +198,7 @@ interface Ctx {
   /** The moment historic rows are dated; undefined for a live event. */
   at: Date | undefined;
   log: ReplayLog | null;
+  db: Db;
 }
 
 const RELATION_SELECT = {
@@ -189,12 +214,29 @@ const RELATION_SELECT = {
 } as const;
 type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION_SELECT }>;
 
+/**
+ * What `apply` answers, plus whether the event's claim must be released: a
+ * configuration gap of the org (no default lead owner, a missing stage) is not
+ * a verdict on the event, so the same event can be sent again once it is fixed.
+ */
+type Applied = IngestResult & { release?: true };
+
 export async function ingestAccountEvent(
   orgId: string,
   source: EventSource,
   event: AccountEvent,
   options: IngestOptions = {},
 ): Promise<IngestResult> {
+  return (await ingestEvent(orgId, source, event, options)).result;
+}
+
+/** One event; `released` says its claim was given back (the event may be sent again). */
+async function ingestEvent(
+  orgId: string,
+  source: EventSource,
+  event: AccountEvent,
+  options: IngestOptions,
+): Promise<{ result: IngestResult; released: boolean }> {
   const now = options.now ?? new Date();
   const historic = isHistoricEvent(event.occurred_at, now, event.replay);
   const ownLog = historic && !options.replayLog ? newReplayLog() : null;
@@ -206,38 +248,43 @@ export async function ingestAccountEvent(
     historic,
     at: backdateFor(historic, event.occurred_at, now),
     log: historic ? (options.replayLog ?? ownLog) : null,
+    db: options.db ?? prisma,
   };
-  const result = await runWithOrg(orgId, () => ingestOne(ctx));
-  if (!historic) return result;
-  if (ctx.log && result.outcome !== 'duplicate' && result.outcome !== 'no_default_owner') {
+  const { result, released } = await runWithOrg(orgId, () => ingestOne(ctx));
+  if (!historic) return { result, released };
+  if (ctx.log && result.outcome !== 'duplicate' && !released) {
     ctx.log.events += 1;
     tally(ctx, result.outcome);
   }
   if (ownLog) await flushReplayLog(orgId, source, ownLog);
-  return { ...result, historic: true };
+  return { result: { ...result, historic: true }, released };
 }
 
-async function ingestOne(ctx: Ctx): Promise<IngestResult> {
-  const { orgId, source, event } = ctx;
-  const claimId = await claim(orgId, source, event);
-  if (!claimId) return { outcome: 'duplicate' };
-  let result: IngestResult;
+async function ingestOne(ctx: Ctx): Promise<{ result: IngestResult; released: boolean }> {
+  const { orgId, source, event, db } = ctx;
+  const claimId = await claim(db, orgId, source, event);
+  if (!claimId) return { result: { outcome: 'duplicate' }, released: false };
+  let applied: Applied;
   try {
-    result = await apply(ctx);
+    applied = await apply(ctx);
   } catch (e) {
-    await prisma.integrationEvent.delete({ where: { id: claimId } }).catch(() => {});
+    await db.integrationEvent.delete({ where: { id: claimId } }).catch(() => {});
     throw e;
   }
-  if (result.outcome === 'no_default_owner') {
-    // Retryable: nothing was written, and the org's setting is what is missing.
-    await prisma.integrationEvent.delete({ where: { id: claimId } });
-    return result;
+  const { release, ...result } = applied;
+  if (release || result.outcome === 'no_default_owner') {
+    // Retryable: the event decided nothing (a gap fill it may have made is
+    // idempotent), and an org setting is what is missing (the default lead
+    // owner, a stage). Keeping the claim would answer the
+    // same event `duplicate` after the operator fixed it — a lost event.
+    await db.integrationEvent.delete({ where: { id: claimId } });
+    return { result, released: true };
   }
-  await prisma.integrationEvent.update({
+  await db.integrationEvent.update({
     where: { id: claimId },
     data: { outcome: result.outcome, companyId: result.companyId ?? null, detail: result.detail?.slice(0, 500) ?? null },
   });
-  return result;
+  return { result, released: false };
 }
 
 function tally(ctx: Ctx, key: string): void {
@@ -257,7 +304,7 @@ async function note(ctx: Ctx, entry: ActivityInput & { action: string }): Promis
 }
 
 /** The claim row's id, or null when the event was already seen. */
-async function claim(orgId: string, source: EventSource, event: AccountEvent): Promise<string | null> {
+async function claim(db: Db, orgId: string, source: EventSource, event: AccountEvent): Promise<string | null> {
   const data = {
     orgId,
     provider: source.slug,
@@ -268,24 +315,24 @@ async function claim(orgId: string, source: EventSource, event: AccountEvent): P
     outcome: 'processing',
   };
   try {
-    return (await prisma.integrationEvent.create({ data, select: { id: true } })).id;
+    return (await db.integrationEvent.create({ data, select: { id: true } })).id;
   } catch (e) {
     if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') throw e;
   }
   // Seen before. A finished event stays finished; a `processing` claim whose run
   // died is taken over by ONE conditional update (two takers cannot both win).
   const where = { orgId, provider: source.slug, eventId: data.eventId, outcome: 'processing', createdAt: { lt: new Date(Date.now() - CLAIM_STALE_MS) } };
-  const taken = await prisma.integrationEvent.updateMany({ where, data: { createdAt: new Date() } });
+  const taken = await db.integrationEvent.updateMany({ where, data: { createdAt: new Date() } });
   if (taken.count === 0) return null;
-  const row = await prisma.integrationEvent.findFirst({
+  const row = await db.integrationEvent.findFirst({
     where: { orgId, provider: source.slug, eventId: data.eventId },
     select: { id: true },
   });
   return row?.id ?? null;
 }
 
-async function apply(ctx: Ctx): Promise<IngestResult> {
-  const { orgId, source, event } = ctx;
+async function apply(ctx: Ctx): Promise<Applied> {
+  const { orgId, source, event, db } = ctx;
   const intent = ingestIntent(event.event_type);
   if (intent.kind === 'record') {
     await note(ctx, {
@@ -295,38 +342,62 @@ async function apply(ctx: Ctx): Promise<IngestResult> {
       targetId: event.external_id,
       detail: `${source.slug}: ${event.event_type} (recorded; this event type has no funnel mapping)`,
     });
+    // Recorded, but what it says about where the account came from still counts.
+    if (event.referral_code || event.acquisition_source) {
+      const known = await findAccounts(ctx);
+      if (known.length === 1) await fillLeadSource(ctx, known[0].id);
+    }
     return { outcome: 'recorded', detail: event.event_type };
   }
 
-  const newest = await prisma.integrationEvent.findFirst({
+  const newest = await db.integrationEvent.findFirst({
     where: { orgId, provider: source.slug, externalId: event.external_id, outcome: 'applied' },
     orderBy: { occurredAt: 'desc' },
     select: { occurredAt: true },
   });
   if (isStaleEvent(event.occurred_at, newest?.occurredAt ?? null)) return { outcome: 'stale' };
 
-  const tenant = await orgWhere(orgId);
-  const accounts = await prisma.company.findMany({
-    where: withinTenant({ externalId: event.external_id }, tenant),
-    select: { id: true },
-    take: 2,
-  });
+  const accounts = await findAccounts(ctx);
   if (accounts.length > 1) return { outcome: 'conflict', detail: 'the external id is on several accounts — merge them first' };
   let companyId = accounts[0]?.id ?? null;
   const stages = await resolvePipelineStages(orgId);
 
-  if (intent.kind === 'won') {
+  if (intent.kind !== 'open_trial') {
+    // Only a trial event creates an account: a conversion, a loss or a
+    // reactivation of an account the CRM never heard of has nothing to act on.
     if (!companyId) return { outcome: 'unknown_account' };
-    return moveAccount(ctx, companyId, intent.toStage, stages);
+    const result = await moveAccount(ctx, companyId, intent, stages);
+    await fillLeadSource(ctx, companyId);
+    return result;
   }
 
   if (!companyId) {
+    // A new account lands at TRIAL_ACTIVE: an org without it is not ready for
+    // the feed yet (an older stage set), and the event waits for it.
+    if (!stages.some((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)) return missingStage(TRIAL_ACTIVE_STAGE_KEY);
     const created = await createAccount(ctx, stages);
     if (created.outcome !== 'exists') return created;
     companyId = created.companyId;
   }
-  await fillGaps(companyId, event);
-  return moveAccount(ctx, companyId, intent.toStage, stages);
+  await fillGaps(ctx, companyId);
+  const result = await moveAccount(ctx, companyId, intent, stages);
+  await fillLeadSource(ctx, companyId);
+  return result;
+}
+
+/** A stage the event needs is missing from the org's funnel: a conflict, and a retryable one. */
+function missingStage(stage: string, ids: { companyId?: string; relationId?: string } = {}): Applied {
+  return { outcome: 'conflict', ...ids, detail: `the org has no ${stage} stage`, release: true };
+}
+
+/** The accounts of the org carrying the event's external id (at most two: one is the answer, two a conflict). */
+async function findAccounts(ctx: Ctx): Promise<{ id: string }[]> {
+  const tenant = await orgWhere(ctx.orgId);
+  return ctx.db.company.findMany({
+    where: withinTenant({ externalId: ctx.event.external_id }, tenant),
+    select: { id: true },
+    take: 2,
+  });
 }
 
 /**
@@ -337,7 +408,7 @@ async function createAccount(
   ctx: Ctx,
   stages: Stages,
 ): Promise<IngestResult | { outcome: 'exists'; companyId: string }> {
-  const { orgId, source, event } = ctx;
+  const { orgId, source, event, db } = ctx;
   const owner = await resolveDefaultLeadOwner(orgId);
   if (!owner) return { outcome: 'no_default_owner' };
   const leadSource = leadSourceName({ reference: event.referral_code, acquisitionSource: event.acquisition_source });
@@ -357,18 +428,19 @@ async function createAccount(
     createdBySource: source.slug,
     // Historic: the account, its lead and its record are dated at the event.
     ...(ctx.at ? { now: ctx.at, quiet: true } : {}),
+    db,
   });
   switch (outcome.kind) {
     case 'created': {
       tally(ctx, 'account_created');
-      const relation = await prisma.mentorshipRelation.findFirst({
+      const relation = await db.mentorshipRelation.findFirst({
         where: { companyId: outcome.companyId, status: 'ACTIVE' },
         select: { id: true },
       });
       // The import stamped the CRM's default window seconds ago; the dates the
       // event carries replace it.
       if (relation && (event.trial_started_at || event.trial_ends_at)) {
-        await prisma.mentorshipRelation.update({
+        await db.mentorshipRelation.update({
           where: { id: relation.id },
           data: {
             ...(event.trial_started_at ? { trialStartedAt: event.trial_started_at } : {}),
@@ -376,7 +448,7 @@ async function createAccount(
           },
         });
       }
-      await recordMachineContactPermission(prisma, {
+      await recordMachineContactPermission(db, {
         writer: 'ingest',
         orgId,
         companyId: outcome.companyId,
@@ -398,8 +470,9 @@ async function createAccount(
 }
 
 /** Gap-fill only: an operator's value is never overwritten by the feed. */
-async function fillGaps(companyId: string, event: AccountEvent): Promise<void> {
-  const current = await prisma.company.findUniqueOrThrow({
+async function fillGaps(ctx: Ctx, companyId: string): Promise<void> {
+  const { db, event } = ctx;
+  const current = await db.company.findUniqueOrThrow({
     where: { id: companyId },
     select: { externalId: true, contactEmail: true, contactName: true },
   });
@@ -408,12 +481,57 @@ async function fillGaps(companyId: string, event: AccountEvent): Promise<void> {
     { externalId: event.external_id, contactEmail: event.contact?.email ?? null, contactName: contactFullName(event.contact) || null },
     { authoritative: false },
   );
-  if (plan.changed.length > 0) await prisma.company.update({ where: { id: companyId }, data: plan.changes });
+  if (plan.changed.length > 0) await db.company.update({ where: { id: companyId }, data: plan.changes });
 }
 
-async function moveAccount(ctx: Ctx, companyId: string, toStage: string, stages: Stages): Promise<IngestResult> {
-  const { orgId, source, event } = ctx;
-  const relations = await prisma.mentorshipRelation.findMany({
+/**
+ * Source fill (#2966): an acquisition source the source system learnt later —
+ * an affiliate code or a sign-up channel on any event — is the lead's `Source`
+ * when the lead has none yet. First touch, the import's own rule
+ * (src/lib/marketingImportStore.ts placeOnFunnel): a lead that already has a
+ * Source or a referring person keeps it, and the write is conditional on
+ * exactly that, so a concurrent attribution is never overwritten.
+ */
+async function fillLeadSource(ctx: Ctx, companyId: string): Promise<void> {
+  const { db, event, orgId } = ctx;
+  const name = leadSourceName({ reference: event.referral_code, acquisitionSource: event.acquisition_source });
+  if (name.kind === 'unknown') return;
+  const records = await db.mentorshipRelation.findMany({
+    where: { companyId, orgId },
+    orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
+    select: { status: true, menteeId: true },
+    take: 5,
+  });
+  const record = records.find((r) => r.status === 'ACTIVE') ?? records[0];
+  if (!record) return;
+  const lead = await db.user.findUnique({ where: { id: record.menteeId }, select: { sourceId: true, referredById: true } });
+  if (!lead || lead.sourceId || lead.referredById) return;
+  const row = await findOrCreateSource(orgId, name.name, {}, db);
+  const filled = await db.user.updateMany({
+    where: { id: record.menteeId, sourceId: null, referredById: null },
+    data: { sourceId: row.id },
+  });
+  if (filled.count > 0) tally(ctx, 'source_filled');
+}
+
+/** Did this record ever sign? It is at DEAL_WON, or its history shows the move. */
+async function recordWasWon(ctx: Ctx, relation: RelationRow): Promise<boolean> {
+  if (relation.pipelineStatus === WON_STAGE_KEY) return true;
+  const row = await ctx.db.statusChange.findFirst({
+    where: { relationId: relation.id, toStatus: WON_STAGE_KEY },
+    select: { id: true },
+  });
+  return !!row;
+}
+
+async function moveAccount(
+  ctx: Ctx,
+  companyId: string,
+  intent: Exclude<IngestIntent, { kind: 'record' }>,
+  stages: Stages,
+): Promise<Applied> {
+  const { orgId, source, event, db } = ctx;
+  const relations = await db.mentorshipRelation.findMany({
     where: { companyId, orgId },
     orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
     select: RELATION_SELECT,
@@ -422,27 +540,66 @@ async function moveAccount(ctx: Ctx, companyId: string, toStage: string, stages:
   const relation = relations.find((r) => r.status === 'ACTIVE') ?? relations[0] ?? null;
   if (!relation) return { outcome: 'recorded', companyId, detail: 'the account has no funnel record; nothing moved' };
 
-  const current = stages.find((s) => s.key === relation.pipelineStatus);
-  const closed = relation.status !== 'ACTIVE' || !!current?.isOffPath;
-  if (closed && toStage === 'TRIAL_ACTIVE') return newJourney(ctx, companyId, relation, toStage, stages);
-  if (closed || isBackwardMove(stages, relation.pipelineStatus, toStage)) {
-    await note(ctx, {
-      action: 'integration.backward_refused',
-      orgId,
-      level: 'warning',
-      targetType: 'MentorshipRelation',
-      targetId: relation.id,
-      detail: `${source.slug}: ${event.event_type}: ${relation.pipelineStatus} → ${toStage} refused (a machine never moves a record backwards)`,
-    });
-    return { outcome: 'refused_backward', companyId, relationId: relation.id, detail: `${relation.pipelineStatus} → ${toStage}` };
+  const needsWon = intent.kind === 'lost' || intent.kind === 'reactivate';
+  const plan = planAccountEvent({
+    intent,
+    record: {
+      status: relation.status,
+      pipelineStatus: relation.pipelineStatus,
+      wasWon: needsWon ? await recordWasWon(ctx, relation) : false,
+      trialEndsAt: relation.trialEndsAt,
+    },
+    stages,
+    occurredAt: event.occurred_at,
+    sourceSlug: source.slug,
+  });
+
+  switch (plan.kind) {
+    case 'missing_stage':
+      return missingStage(plan.stage, { companyId, relationId: relation.id });
+    case 'nothing':
+      await note(ctx, {
+        action: 'integration.event',
+        orgId,
+        targetType: 'MentorshipRelation',
+        targetId: relation.id,
+        detail: `${source.slug}: ${event.event_type} (recorded; ${plan.detail})`,
+      });
+      return { outcome: 'recorded', companyId, relationId: relation.id, detail: plan.detail };
+    case 'refused_backward':
+      await note(ctx, {
+        action: 'integration.backward_refused',
+        orgId,
+        level: 'warning',
+        targetType: 'MentorshipRelation',
+        targetId: relation.id,
+        detail: `${source.slug}: ${event.event_type}: ${relation.pipelineStatus} → ${plan.toStage} refused (a machine never moves a record backwards)`,
+      });
+      return { outcome: 'refused_backward', companyId, relationId: relation.id, detail: `${relation.pipelineStatus} → ${plan.toStage}` };
+    case 'win_back':
+      return newJourney(ctx, companyId, relation, plan, stages);
+    case 'move': {
+      if (plan.reasonCode) {
+        // The drop-off reason is checked BEFORE the write, as on every stage
+        // write path: a refused reason must never leave a moved record behind.
+        const check = await validateDropoffReason({
+          orgId,
+          toStatus: plan.toStage,
+          reasonCode: plan.reasonCode,
+          reasonNote: plan.reasonNote ?? undefined,
+        });
+        if (!check.ok) return { outcome: 'conflict', companyId, relationId: relation.id, detail: check.error };
+        tally(ctx, `lost_${plan.reasonCode.toLowerCase()}`);
+      }
+      await moveRelation(ctx, relation, plan);
+      if (plan.toStage === TRIAL_ACTIVE_STAGE_KEY) await settleHistoricTrial(ctx, relation.id, stages);
+      return { outcome: 'applied', companyId, relationId: relation.id };
+    }
   }
-  await moveRelation(ctx, relation, toStage);
-  if (toStage === TRIAL_ACTIVE_STAGE_KEY) await settleHistoricTrial(ctx, relation.id, stages);
-  return { outcome: 'applied', companyId, relationId: relation.id };
 }
 
 /** The newest row of a record's stage history (null when it has none). */
-function newestHistory(db: Prisma.TransactionClient, relationId: string) {
+function newestHistory(db: Db, relationId: string) {
   return db.statusChange.findFirst({
     where: { relationId },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -451,15 +608,19 @@ function newestHistory(db: Prisma.TransactionClient, relationId: string) {
 }
 
 /**
- * One transaction: the stage, its trial window, and the history row. A
- * historic move first takes back the replay's own expiry when the move came
- * before it (`shouldUndoHistoricExpiry`), and is dated at the event but never
- * at or before the record's newest history row (`historicMoveAt`).
+ * One in-place move. A LIVE move writes the stage and its trial window, then
+ * hands the rest to the shared stage write path (`recordStageMove`: history
+ * row, activity line, SLA, bell, webhook). A HISTORIC move is one silent
+ * transaction: the stage, its window and a backdated history row. It first
+ * takes back the replay's own expiry when the move came before it
+ * (`shouldUndoHistoricExpiry`), and is dated at the event but never at or
+ * before the record's newest history row (`historicMoveAt`).
  */
-async function moveRelation(ctx: Ctx, relation: RelationRow, toStage: string): Promise<void> {
-  const { orgId, event } = ctx;
+async function moveRelation(ctx: Ctx, relation: RelationRow, plan: Extract<EventPlan, { kind: 'move' }>): Promise<void> {
+  const { orgId, event, source } = ctx;
+  const toStage = plan.toStage;
   const window =
-    toStage === 'TRIAL_ACTIVE'
+    toStage === TRIAL_ACTIVE_STAGE_KEY
       ? ingestTrialWindow(
           { trialStartedAt: relation.trialStartedAt, trialEndsAt: relation.trialEndsAt },
           { trialStartedAt: event.trial_started_at ?? null, trialEndsAt: event.trial_ends_at ?? null },
@@ -474,37 +635,73 @@ async function moveRelation(ctx: Ctx, relation: RelationRow, toStage: string): P
           }),
         )
       : {};
-  const undone = await prisma.$transaction(async (tx) => {
+
+  if (!ctx.at) {
+    // The stage and its history row commit together (as they always did here);
+    // only the effects (activity line, SLA, bell, webhook) follow the commit.
+    // A failure in those releases the claim, and the retry finds the record
+    // already there — its history is never the part that went missing.
+    const history = statusChangeData({
+      relationId: relation.id,
+      fromStatus: relation.pipelineStatus,
+      toStatus: toStage,
+      changedById: null,
+      ...(plan.reasonCode ? { reasonCode: plan.reasonCode } : {}),
+      ...(plan.reasonNote ? { reasonNote: plan.reasonNote } : {}),
+    });
+    await inTransaction(ctx.db, async (tx) => {
+      await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } });
+      if (history) await tx.statusChange.create({ data: history });
+    });
+    await recordStageMove({
+      relation: { id: relation.id, menteeId: relation.menteeId, orgId, pipelineStatus: relation.pipelineStatus },
+      toStatus: toStage,
+      actor: null,
+      reasonCode: plan.reasonCode ?? null,
+      reasonNote: plan.reasonNote ?? null,
+      cause: `${source.slug}: ${event.event_type}`,
+      historyWritten: true,
+    });
+    return;
+  }
+
+  const at = ctx.at;
+  // Historic: the stage the record leaves takes its service-level deadline
+  // with it, and the one it lands on gets none — a deadline dated from the
+  // past would be overdue the moment it is written, and a replay rings
+  // nothing. Only where the org manages deadlines by SLA (`stageDeadlineUpdate`
+  // non-null); elsewhere a deadline is a person's own date and stays.
+  const deadline = (await stageDeadlineUpdate(orgId, toStage, at)) ? { stageDeadline: null, deadlineReminderSentAt: null } : {};
+  const undone = await inTransaction(ctx.db, async (tx) => {
     let fromStatus = relation.pipelineStatus;
-    let createdAt: Date | undefined;
     let undoneExpiry = false;
-    if (ctx.at) {
-      let newest = await newestHistory(tx, relation.id);
-      if (newest && shouldUndoHistoricExpiry({ pipelineStatus: fromStatus, toStage, at: ctx.at, newest })) {
-        // Conditional, like the expiry itself: only the state just read.
-        const back = await tx.mentorshipRelation.updateMany({
-          where: { id: relation.id, pipelineStatus: TRIAL_EXPIRED_STAGE_KEY },
-          data: { pipelineStatus: TRIAL_ACTIVE_STAGE_KEY },
-        });
-        if (back.count === 1) {
-          await tx.statusChange.delete({ where: { id: newest.id } });
-          fromStatus = TRIAL_ACTIVE_STAGE_KEY;
-          undoneExpiry = true;
-          newest = await newestHistory(tx, relation.id);
-        }
+    let newest = await newestHistory(tx, relation.id);
+    if (newest && shouldUndoHistoricExpiry({ pipelineStatus: fromStatus, toStage, at, newest })) {
+      // Conditional, like the expiry itself: only the state just read.
+      const back = await tx.mentorshipRelation.updateMany({
+        where: { id: relation.id, pipelineStatus: TRIAL_EXPIRED_STAGE_KEY },
+        data: { pipelineStatus: TRIAL_ACTIVE_STAGE_KEY },
+      });
+      if (back.count === 1) {
+        await tx.statusChange.delete({ where: { id: newest.id } });
+        fromStatus = TRIAL_ACTIVE_STAGE_KEY;
+        undoneExpiry = true;
+        newest = await newestHistory(tx, relation.id);
       }
-      // Historic: the move happened at the event, not at the replay — but not
-      // underneath history the record already has.
-      createdAt = historicMoveAt(ctx.at, { startDate: relation.startDate, newestHistoryAt: newest?.createdAt ?? null });
     }
+    // Historic: the move happened at the event, not at the replay — but not
+    // underneath history the record already has.
+    const createdAt = historicMoveAt(at, { startDate: relation.startDate, newestHistoryAt: newest?.createdAt ?? null });
     const history = statusChangeData({
       relationId: relation.id,
       fromStatus,
       toStatus: toStage,
       changedById: null,
-      ...(createdAt ? { createdAt } : {}),
+      createdAt,
+      ...(plan.reasonCode ? { reasonCode: plan.reasonCode } : {}),
+      ...(plan.reasonNote ? { reasonNote: plan.reasonNote } : {}),
     });
-    await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } });
+    await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window, ...deadline } });
     if (history) await tx.statusChange.create({ data: history });
     return undoneExpiry;
   });
@@ -512,63 +709,71 @@ async function moveRelation(ctx: Ctx, relation: RelationRow, toStage: string): P
 }
 
 /**
- * A new trial for an account whose record is closed (lost, or completed): a NEW
- * journey, chained by `previousRelationId`, for the same lead and owner. The
- * old record is not reopened; an ACTIVE-but-lost one is completed first, so
- * the lead never has two active records (#419).
+ * A new journey for an account whose record has ended (lost, closed) or whose
+ * trial ran out: chained by `previousRelationId`, for the same lead and owner,
+ * through the one win-back writer (`winBack()`, src/lib/winBack.ts). The old
+ * record is not reopened; an ACTIVE one is closed first (ENDED_CHURNED), so the
+ * lead never has two active records (#419) — and if the lead somehow already
+ * has another active record, nothing is written and the answer is a conflict.
+ * Historic: the old record ends, and the new one starts, at the event (never
+ * underneath what the old record already went through), with no stage deadline.
  */
 async function newJourney(
   ctx: Ctx,
   companyId: string,
   previous: RelationRow,
-  toStage: string,
+  plan: Extract<EventPlan, { kind: 'win_back' }>,
   stages: Stages,
 ): Promise<IngestResult> {
   const { orgId, source, event } = ctx;
-  if (!stages.some((s) => s.key === toStage)) return { outcome: 'conflict', detail: `the org has no ${toStage} stage` };
-  // Historic: the old record ends, and the new one starts, at the event — but
-  // never underneath what the old record already went through.
   const at = ctx.at
     ? historicMoveAt(ctx.at, {
         startDate: previous.startDate,
-        newestHistoryAt: (await newestHistory(prisma, previous.id))?.createdAt ?? null,
+        newestHistoryAt: (await newestHistory(ctx.db, previous.id))?.createdAt ?? null,
       })
     : undefined;
-  const window = ingestTrialWindow(
-    { trialStartedAt: null, trialEndsAt: null },
-    { trialStartedAt: event.trial_started_at ?? null, trialEndsAt: event.trial_ends_at ?? null },
-    trialWindowFor({ toStage, enteredAt: event.occurred_at, existing: null, lengthDays: await trialLengthDaysFor(orgId) }),
-  );
-  const created = await prisma.$transaction(async (tx) => {
-    if (previous.status === 'ACTIVE') {
-      await tx.mentorshipRelation.update({
-        where: { id: previous.id, status: 'ACTIVE' },
-        data: { status: 'COMPLETED', completedAt: at ?? new Date() },
-      });
+  const trialWindow =
+    plan.toStage === TRIAL_ACTIVE_STAGE_KEY
+      ? ingestTrialWindow(
+          { trialStartedAt: null, trialEndsAt: null },
+          { trialStartedAt: event.trial_started_at ?? null, trialEndsAt: event.trial_ends_at ?? null },
+          trialWindowFor({
+            toStage: plan.toStage,
+            enteredAt: event.occurred_at,
+            existing: null,
+            lengthDays: await trialLengthDaysFor(orgId),
+          }),
+        )
+      : {};
+  let newRelationId: string;
+  try {
+    ({ newRelationId } = await winBack({
+      relationId: previous.id,
+      toStage: plan.toStage,
+      expect: { pipelineStatus: previous.pipelineStatus, ...(plan.predecessorClosed ? { closed: true } : {}) },
+      ...(at ? { at } : {}),
+      quiet: ctx.historic,
+      trialWindow,
+      db: ctx.db,
+    }));
+  } catch (e) {
+    if (e instanceof WinBackConflictError) {
+      return { outcome: 'conflict', companyId, relationId: previous.id, detail: 'the record changed meanwhile' };
     }
-    return tx.mentorshipRelation.create({
-      data: {
-        orgId,
-        companyId,
-        mentorId: previous.mentorId,
-        menteeId: previous.menteeId,
-        pipelineStatus: toStage,
-        previousRelationId: previous.id,
-        ...(at ? { startDate: at } : {}),
-        ...window,
-      },
-      select: { id: true },
-    });
-  });
+    if (e instanceof AlreadyMentoredError) {
+      return { outcome: 'conflict', companyId, relationId: previous.id, detail: 'the lead already has another active record' };
+    }
+    throw e;
+  }
   await note(ctx, {
     action: 'integration.new_journey',
     orgId,
     targetType: 'MentorshipRelation',
-    targetId: created.id,
-    detail: `${source.slug}: ${event.event_type}: new journey after ${previous.pipelineStatus} (${previous.id})`,
+    targetId: newRelationId,
+    detail: `${source.slug}: ${event.event_type}: new journey at ${plan.toStage} after ${previous.pipelineStatus} (${previous.id})`,
   });
-  await settleHistoricTrial(ctx, created.id, stages);
-  return { outcome: 'applied', companyId, relationId: created.id };
+  await settleHistoricTrial(ctx, newRelationId, stages);
+  return { outcome: 'applied', companyId, relationId: newRelationId };
 }
 
 /**
@@ -582,15 +787,16 @@ async function newJourney(
  */
 async function settleHistoricTrial(ctx: Ctx, relationId: string, stages: Stages): Promise<void> {
   if (!ctx.historic || !ctx.at) return;
+  const { db } = ctx;
   const hasExpired = stages.some((s) => s.key === TRIAL_EXPIRED_STAGE_KEY);
-  const relation = await prisma.mentorshipRelation.findUnique({
+  const relation = await db.mentorshipRelation.findUnique({
     where: { id: relationId },
     select: { pipelineStatus: true, trialEndsAt: true, startDate: true },
   });
   if (!relation) return;
   // The record entered the trial at its newest history row (the move just
   // written, possibly held after a person's newer move) or at its start.
-  const newest = await newestHistory(prisma, relationId);
+  const newest = await newestHistory(db, relationId);
   const enteredAt = new Date(
     Math.max(ctx.at.getTime(), relation.startDate.getTime(), newest?.createdAt.getTime() ?? 0),
   );
@@ -605,7 +811,7 @@ async function settleHistoricTrial(ctx: Ctx, relationId: string, stages: Stages)
   let status = relation.pipelineStatus;
   if (landing.expire && landing.expiredAt && hasExpired) {
     const expiredAt = landing.expiredAt;
-    const moved = await prisma.$transaction(async (tx) => {
+    const moved = await inTransaction(db, async (tx) => {
       // Conditional, like the sweep's own expiry: whoever moved it first wins.
       const claimed = await tx.mentorshipRelation.updateMany({
         where: { id: relationId, pipelineStatus: TRIAL_ACTIVE_STAGE_KEY },
@@ -633,9 +839,150 @@ async function settleHistoricTrial(ctx: Ctx, relationId: string, stages: Stages)
     // `sentAt` is deliberately NOT backdated: the retention prune deletes claim
     // rows by `sentAt` after a year, and a claim dated years back would be
     // pruned on the next run and un-suppress the very bell it exists to stop.
-    await prisma.trialReminder.createMany({
+    await db.trialReminder.createMany({
       data: [{ orgId: ctx.orgId, relationId, threshold: DECISION_WINDOW_CLAIM }],
       skipDuplicates: true,
     });
   }
+}
+
+// ── The batch (#2966) ────────────────────────────────────────────────────────
+//
+// docs/integrations/account-events.md § Batch. One request, at most
+// ACCOUNT_EVENT_BATCH_MAX events of one source, processed one after another in
+// (external_id, occurred_at) order — the order a replay must be applied in,
+// whatever order the sender listed them — and ALWAYS in historic mode: a batch
+// is a replay of the past by definition. Each event is exactly one
+// `ingestAccountEvent` call (its own claim, its own transactions), so a batch
+// that dies halfway is retried whole and the events it already handled answer
+// `duplicate`. The answers come back in the REQUEST's order.
+//
+// A DRY RUN is the same loop, through the same call, inside ONE transaction
+// that is rolled back at the end (src/lib/dbHandle.ts): every read sees what
+// the earlier events of the run wrote, so a `converted` after an
+// `account_created` of the same batch is judged exactly as the real run would
+// judge it — and nothing is committed. Its limits: the ids the run assigned are
+// gone with the rollback, so a dry answer carries no `companyId` /
+// `relationId`; the replay's activity line is not written; and while it runs
+// it holds the row locks a real run would take, so a live event for the same
+// account waits for it (seconds, bounded by DRY_RUN_TIMEOUT_MS).
+//
+// THREE GUARDS keep a replay from losing events or starving the app:
+//   • The org's funnel must have every stage a replay writes into
+//     (`missingReplayStages`) — checked BEFORE anything is claimed, and the
+//     whole batch is refused (MissingReplayStagesError → 409 `missing_stages`).
+//   • An event whose claim was RELEASED (no default lead owner, a missing
+//     stage: the org is not ready, the event is not wrong) holds back the later
+//     events of the same account in the batch: they are answered with the same
+//     outcome, unclaimed, so resending the batch once the org is fixed replays
+//     the whole account in order. Handled, a `converted` after an unhandled
+//     `account_created` would be a final `unknown_account`, and the resent
+//     batch would answer it `duplicate` — lost for good.
+//   • At most DRY_RUN_CONCURRENCY dry runs per process: each one holds a
+//     database connection for its whole run and its reads of org settings need
+//     a second one, so unbounded parallel dry runs could drain the pool every
+//     tenant shares (DryRunBusyError → 429 `dry_run_busy`).
+
+export { ACCOUNT_EVENT_BATCH_MAX } from '@/lib/accountEventRule';
+
+/** How long one dry run may hold its transaction. */
+export const DRY_RUN_TIMEOUT_MS = 120_000;
+
+/** Dry runs one process runs at a time (see THREE GUARDS above). */
+export const DRY_RUN_CONCURRENCY = 1;
+let dryRunsInFlight = 0;
+
+/** The org's funnel lacks stages a replay writes into; nothing was claimed. */
+export class MissingReplayStagesError extends Error {
+  constructor(readonly stages: string[]) {
+    super(`the org's funnel has no ${stages.join(', ')} stage(s)`);
+  }
+}
+
+/** Another dry run is running in this process; nothing was read or written. */
+export class DryRunBusyError extends Error {
+  constructor() {
+    super('another dry run is running');
+  }
+}
+
+export interface BatchItemResult extends IngestResult {
+  /** The event's position in the request (0-based). */
+  index: number;
+  event_id: string;
+}
+
+class DryRunRollback extends Error {
+  constructor(readonly results: BatchItemResult[]) {
+    super('dry run: rolled back');
+  }
+}
+
+export async function ingestAccountEventBatch(
+  orgId: string,
+  source: EventSource,
+  events: readonly AccountEvent[],
+  options: { dryRun?: boolean; now?: Date } = {},
+): Promise<BatchItemResult[]> {
+  const now = options.now ?? new Date();
+  const missing = missingReplayStages(await runWithOrg(orgId, () => resolvePipelineStages(orgId)));
+  if (missing.length > 0) throw new MissingReplayStagesError(missing);
+
+  const run = async (db: Db, log: ReplayLog): Promise<BatchItemResult[]> => {
+    const results: BatchItemResult[] = new Array(events.length);
+    // external_id → the outcome of its event whose claim was released.
+    const heldBack = new Map<string, IngestOutcome>();
+    for (const index of batchOrder(events)) {
+      const event = { ...events[index], replay: true };
+      const waitingFor = heldBack.get(event.external_id);
+      if (waitingFor) {
+        results[index] = {
+          index,
+          event_id: event.event_id,
+          outcome: waitingFor,
+          detail: `not handled: an earlier event of this account in the batch answered ${waitingFor}; nothing was claimed, resend once that is fixed`,
+          historic: true,
+        };
+        continue;
+      }
+      const { result, released } = await ingestEvent(orgId, source, event, { now, replayLog: log, db });
+      if (released) heldBack.set(event.external_id, result.outcome);
+      results[index] = { index, event_id: event.event_id, ...result };
+    }
+    return results;
+  };
+
+  if (!options.dryRun) {
+    const log = newReplayLog();
+    try {
+      return await run(prisma, log);
+    } finally {
+      await flushReplayLog(orgId, source, log);
+    }
+  }
+
+  if (dryRunsInFlight >= DRY_RUN_CONCURRENCY) throw new DryRunBusyError();
+  dryRunsInFlight += 1;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        throw new DryRunRollback(await run(tx, newReplayLog()));
+      },
+      { timeout: DRY_RUN_TIMEOUT_MS, maxWait: 10_000 },
+    );
+  } catch (e) {
+    if (e instanceof DryRunRollback) {
+      // The ids belong to rows the rollback removed: never hand them out.
+      return e.results.map((r) => {
+        const dry: BatchItemResult = { ...r };
+        delete dry.companyId;
+        delete dry.relationId;
+        return dry;
+      });
+    }
+    throw e;
+  } finally {
+    dryRunsInFlight -= 1;
+  }
+  throw new Error('dry run: the transaction was not rolled back');
 }

@@ -323,11 +323,11 @@ test('a lost account starting a new trial gets a NEW journey; the lost record is
 test('an event type with no funnel mapping is recorded and moves nothing', async ({ request }) => {
   const externalId = extId();
   const { relationId } = await seedAccount('TRIAL_ACTIVE', externalId);
-  const res = await post(request, envelope({ external_id: externalId, event_type: 'deactivated' }));
+  const res = await post(request, envelope({ external_id: externalId, event_type: 'plan_changed' }));
   expect((await res.json()).outcome).toBe('recorded');
   expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relationId } })).pipelineStatus).toBe('TRIAL_ACTIVE');
   const log = await prisma.activityLog.findFirst({ where: { action: 'integration.event', targetId: externalId } });
-  expect(log?.detail).toContain(`${SLUG}: deactivated`);
+  expect(log?.detail).toContain(`${SLUG}: plan_changed`);
 });
 
 test('an org without a default owner answers 409, and the event is retryable once one is set', async ({ request }) => {

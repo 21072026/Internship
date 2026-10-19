@@ -7,14 +7,16 @@ This page is the **public contract** (schema version `1`). The implementation is
 | What | Where |
 |---|---|
 | Route | `src/app/api/integrations/[source]/events/route.ts` |
+| Batch route | `src/app/api/integrations/[source]/events/batch/route.ts` |
 | Rule (pure, unit-tested) | `src/lib/accountEventRule.ts` · `scripts/test/account-event-rule.test.mjs` |
+| Event table (unit-tested) | `planAccountEvent` · `scripts/test/account-event-plan.test.mjs` |
 | Envelope validation | `src/lib/accountEventSchema.ts` |
-| Writer | `src/lib/accountEventIngest.ts` |
+| Writer | `src/lib/accountEventIngest.ts` (new journeys through `src/lib/winBack.ts`, live moves through `src/lib/stageMove.ts`) |
 | Source registry | `src/lib/integrationSources.ts` · model `IntegrationSource` |
 | Operator CLI | `prisma/register-integration-source.mjs` |
 | Rollback CLI | `prisma/wipe-integration-source.mjs` · `scripts/test/marketing-ops-clis.test.mjs` |
 | Historic mode (rule tests) | `scripts/test/account-event-historic.test.mjs` |
-| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` · `e2e/marketing-ops-clis.spec.ts` (rollback) |
+| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` · `e2e/account-events-lost-batch.spec.ts` · `e2e/marketing-ops-clis.spec.ts` (rollback) |
 
 ## The endpoint
 
@@ -26,7 +28,7 @@ Content-Type: application/json
 
 `<source>` is the **slug** of a source the organization registered (see [Registering a source](#registering-a-source)). The code names no source: the slug is data, looked up inside the API key's organization.
 
-One request carries one event. The tenant is always the API key's organization, never anything in the request.
+One request carries one event; a replay of many goes to the [batch](#batch) endpoint. The tenant is always the API key's organization, never anything in the request.
 
 ## Authentication and the order of the checks
 
@@ -89,10 +91,34 @@ Example:
 |---|---|
 | `account_created` | Opens a trial: the account's funnel record moves to `TRIAL_ACTIVE` (the account is created if it does not exist yet). |
 | `trial_started` | Same as `account_created`. |
-| `converted` | The record moves to `DEAL_WON`. An unknown account answers `unknown_account`. |
-| `commitment_confirmed`, `plan_changed`, `deactivated`, `cancellation_requested`, `cancelled`, `reactivated`, `out_of_scope`, `deleted` | Recorded (an `IntegrationEvent` row and an `integration.event` activity entry) and nothing moves. A funnel mapping for any of them is a product decision for a later change. |
+| `converted` | The record moves to `DEAL_WON`; on a lost record, a [new journey](#new-journeys) at `DEAL_WON`. An unknown account answers `unknown_account`. |
+| `cancelled`, `deactivated` | The record moves to `DEAL_LOST` with a drop-off reason: `CUSTOMER_CANCELLED` when the record had been won (it is at `DEAL_WON`, or its history shows it reached it), otherwise `OTHER` with the fixed note `"<source slug>: ended during trial"`. An unknown account answers `unknown_account`. |
+| `reactivated` | On a lost record, a [new journey](#new-journeys): at `DEAL_WON` when the lost record had been won, otherwise a new trial. On any other record it moves nothing (`recorded`). An unknown account answers `unknown_account`. |
+| `commitment_confirmed`, `plan_changed`, `cancellation_requested`, `out_of_scope`, `deleted` | Recorded (an `IntegrationEvent` row and an `integration.event` activity entry) and nothing moves. A funnel mapping for any of them is a product decision for a later change. |
 
 Any other value is a `400`.
+
+### The table
+
+What an event does depends on where the account's funnel record is (the active record, else the newest one). `planAccountEvent` in `src/lib/accountEventRule.ts` is the one place this is decided, and `scripts/test/account-event-plan.test.mjs` pins every cell.
+
+| Record is at | `account_created` / `trial_started` | `converted` | `cancelled` / `deactivated` | `reactivated` |
+|---|---|---|---|---|
+| `LEAD_*`, `TRIAL_ACTIVE` | → `TRIAL_ACTIVE` | → `DEAL_WON` | → `DEAL_LOST` (`OTHER`) | recorded |
+| `TRIAL_EXPIRED` | new journey at `TRIAL_ACTIVE` if the event is after the trial's end, else `refused_backward` | → `DEAL_WON` | → `DEAL_LOST` (`OTHER`, or `CUSTOMER_CANCELLED` if it had been won) | recorded |
+| `DEAL_WON` | `refused_backward` | applied, nothing to move | → `DEAL_LOST` (`CUSTOMER_CANCELLED`) | recorded |
+| `DEAL_LOST` (or any off-path stage) | new journey at `TRIAL_ACTIVE` | new journey at `DEAL_WON` | recorded (already ended) | new journey at `DEAL_WON` if it had been won, else at `TRIAL_ACTIVE` |
+| closed (not `ACTIVE`), not lost | new journey at `TRIAL_ACTIVE` | `refused_backward` | recorded (already ended) | recorded |
+
+A target stage the organization does not have is a `conflict` (`"the org has no <stage> stage"`), never a write of an unknown stage key. It is the one **retryable** conflict: the organization is not ready, the event is not wrong, so its claim is released and the same `event_id` can be sent again once the stage exists (a new account needs `TRIAL_ACTIVE` for the same reason). A drop-off reason the organization's vertical does not know is a `conflict` too: the reason is checked before anything is written.
+
+### New journeys
+
+A record that has ended (lost, or closed) is never reopened, and a trial that has run out is not restarted in place. A new trial, a conversion of a lost customer or a reactivation opens a **new** funnel record for the same lead and owner, chained to the old one by `previousRelationId` (`integration.new_journey`). It goes through the same writer as the person's *win back* button (`winBack()`, `src/lib/winBack.ts`): an old record that is still `ACTIVE` is closed first (`COMPLETED`, lifecycle `ENDED_CHURNED`), the new one starts at the target stage, and if the lead somehow already has another active record nothing is written and the answer is a `conflict`. A trial event dated inside an expired trial's own window belongs to that trial and is refused as a backward move, as before.
+
+### Source fill
+
+Any event that carries `referral_code` or `acquisition_source` fills the lead's `Source` when the lead has none yet: an acquisition source the source system learnt after the account was created still counts. First touch, the import's own rule: a lead that already has a `Source` or a referring person keeps it, and the write is conditional on exactly that.
 
 ## What an event does
 
@@ -100,13 +126,13 @@ Any other value is a `400`.
 - **A funnel record needs a person.** The record's lead is the contact, found or created by `contact.email`. An event with no contact e-mail creates the account **alone**: the answer is `applied` with no `relationId` and a `detail` saying so. Later events for that account answer `recorded` ("the account has no funnel record; nothing moved") until an operator places the account on the funnel; a contact e-mail arriving later is filled into the account's gap but does not create the record by itself.
 - **An existing account** (matched on `external_id` inside the organization) only gets gaps filled: an operator's edit is never overwritten. A trial date the record already carries is never overwritten either.
 - **Never backwards.** A machine never moves a record to an earlier stage. A refused move is logged (`integration.backward_refused`) and answered `refused_backward`.
-- **A closed record is never reopened.** A new trial for a lost or completed account opens a **new** funnel record chained to the old one (`integration.new_journey`).
+- **A closed record is never reopened.** See [New journeys](#new-journeys).
 - **Out of order.** An event older than the newest event the same source already applied for the same account is `stale` and changes nothing.
 - An external id found on more than one account is a `conflict`; merge the accounts first.
 
 The ingest's own activity entries (`integration.event`, `integration.backward_refused`, `integration.new_journey`) belong to the organization and carry the source's slug in their detail. A [historic](#historic-mode) request writes one `integration.replay` entry instead.
 
-**Quiet, always.** The feed is a machine, not a person moving a card: it sets no stage SLA (`stageDeadline`), fires no `pipeline.stage_change` webhook, rings no bell and sends no mail, live or historic. What a live event *can* lead to later is the daily trial sweep's own work on the record it left behind (trial reminders to the owner, the expiry, the decision-window bell), exactly as for a record a person created.
+**A live move is a move.** A live (non-historic) stage move goes through the shared stage write path (`recordStageMove`, `src/lib/stageMove.ts`), exactly like a person moving the card: the history row (no actor), a `pipeline.stage_change` activity line, the stage's SLA (`stageDeadline`), the owner's bell and the `pipeline.stage_change` webhook. A live new journey gets the stage's SLA, like the *win back* button's. The lead is never told: a MARKETING organization has no portal, and nothing in this path mails a lead. What a live event can also lead to later is the daily trial sweep's own work on the record it left behind (trial reminders to the owner, the expiry, the decision-window bell), exactly as for a record a person created. A **historic** event stays silent (below).
 
 ## Historic mode
 
@@ -128,9 +154,43 @@ A live event (neither) is handled exactly as described above. A historic one goe
 | **Decision window** | When the expired trial's decision window (`trial_ends_at` + the organization's `decisionWindowDays`) has already closed, its one reminder is claimed up front, so the daily sweep never rings about it. A window still open is left alone: that reminder is real, upcoming work. |
 | **Trial reminders** | None for the past: a trial that ended is expired, not warned about. A trial that is still running today is a running trial, and its owner's 7/3/0-day reminders come as usual. |
 | **Activity log** | One `integration.replay` entry per request (the counts of what the request did) instead of one entry per event and per new account. |
+| **Losses and new journeys** | A historic loss is a backdated history row carrying its drop-off reason; a historic new journey closes the old record and starts the new one at the event, with no stage deadline. |
+| **Stage deadlines** | A historic move sets no deadline, and where the organization manages deadlines by SLA it clears the one the record carried from the stage it leaves (a deadline dated from the past would be overdue at once). A deadline a person typed in an organization without SLAs is left alone. |
 | **Response** | The `200` body carries `"historic": true`. |
 
-Nothing in historic mode mails a lead or a customer, and nothing writes a stage SLA, a webhook delivery or a notification (see *Quiet, always* above).
+Nothing in historic mode mails a lead or a customer, and nothing writes a stage SLA, a webhook delivery, a `pipeline.stage_change` activity line or a notification.
+
+## Batch
+
+```
+POST /api/integrations/<source>/events/batch
+Authorization: Bearer <API key with the companies:write scope>
+Content-Type: application/json
+
+{ "events": [ <envelope>, … ], "dry_run": false }
+```
+
+For a replay of a source's history. The door is the single route's, in the same order ([Authentication](#authentication-and-the-order-of-the-checks)): `401`, `403`, the same `404 unknown_source`, `403 wrong_source_key`, `403 capability_unavailable`. The rate limit and a key's quota are charged **once per batch**.
+
+- **At most 200 events** (`ACCOUNT_EVENT_BATCH_MAX`); more is `400 { "code": "too_many_events" }`, none is a `400`.
+- **All or nothing at the envelope.** Every event is validated first; one invalid event refuses the whole batch with a `400` whose issue paths name it (`events.3.external_id`), and nothing is handled.
+- **Sorted on the server.** The events are processed one after another by `external_id`, then `occurred_at`, then their position in the request: the order a replay must be applied in, whatever order they were listed in.
+- **Always historic.** Every event of a batch is handled in [historic mode](#historic-mode), as if it carried `replay: true`. The request writes one `integration.replay` activity line.
+- **The funnel must be ready.** An organization whose funnel lacks any of `TRIAL_ACTIVE`, `TRIAL_EXPIRED`, `DEAL_WON`, `DEAL_LOST` (`REPLAY_STAGE_KEYS`; an organization still on an older stage set) gets `409 { "code": "missing_stages", "stages": [ … ] }` for the whole batch, dry run included, and nothing is claimed. Apply the current stage set first.
+- **One event, one ordinary ingest.** Each event is exactly what the single route would do with it: its own claim, its own transactions, the same outcomes. A batch that fails with a server error midway can be resent whole: the events it already handled answer `duplicate`.
+- **The answer** is `200 { "dry_run": false, "results": [ … ] }` with one result per event **in the request's order**: `{ "index", "event_id", "outcome", "companyId"?, "relationId"?, "detail"?, "historic": true }`, with the single route's outcome vocabulary. `no_default_owner` is one of the outcomes here, not a `409` for the batch.
+- **An account waits for its own first event.** When an event's claim is released (`no_default_owner`, or the retryable missing-stage `conflict`), the later events of the **same account** in the batch are not handled: each answers the same outcome with a `detail` that starts with `not handled:`, and none of them is claimed. Resending the batch once the organization is fixed replays the whole account in order; the events already handled answer `duplicate`. (Handled, a `converted` after an `account_created` that could not create the account would be a final `unknown_account`.)
+
+### Dry run
+
+`"dry_run": true` runs the **same** batch through the same code, inside one database transaction that is rolled back at the end: a writer that does not write. Every event sees what the earlier events of the run did, so a `converted` after an `account_created` of the same batch is judged exactly as the real run would judge it, and the outcomes are the real run's. Nothing persists: no account, lead, record, history row, claim, source, permission, reminder claim, activity line or notification, and nothing is rung, mailed or delivered.
+
+Its limits:
+
+- The answer carries no `companyId` / `relationId`: those rows were removed by the rollback.
+- It answers for the database as it is **at that moment**. A live event arriving between the dry run and the real run can change an outcome.
+- It holds the row locks a real run would take for as long as it runs (at most two minutes, `DRY_RUN_TIMEOUT_MS`), so a live event for an account in the batch waits for it. Dry-run before switching a live feed on, not during peak traffic.
+- One dry run at a time per application process (`DRY_RUN_CONCURRENCY`): it holds a database connection for its whole run. A second one meanwhile is refused with `429 { "code": "dry_run_busy" }` and `Retry-After`, before anything is read.
 
 ## Idempotency
 
@@ -147,12 +207,13 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 | Status | Body | Meaning |
 |---|---|---|
 | `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"?, "historic"? }` | The event was handled (`historic: true` when in [historic mode](#historic-mode)). Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
-| `400` | `{ "error": "Invalid event", "issues": [{ "path", "message" }] }` | The envelope is invalid. Do not retry unchanged. |
+| `400` | `{ "error": "Invalid event", "issues": [{ "path", "message" }] }` | The envelope is invalid. Do not retry unchanged. (Batch: also `{ "code": "too_many_events" }`.) |
 | `401` | `{ "error": … }` | No usable API key. |
 | `403` | `{ "error": … }`, `{ "code": "wrong_source_key" }`, `{ "code": "capability_unavailable" }` | Wrong scope, wrong key for this source, or the product has no accounts. |
 | `404` | `{ "code": "unknown_source" }` | No such source for this organization, or it is switched off. Nothing was written; park the event and retry later rather than dropping it. |
 | `409` | `{ "code": "no_default_owner" }` | Retry once the organization has a default lead owner. |
-| `429` | `{ "type": "rate_limited" \| "quota_exceeded" }` | Back off; `Retry-After` says how long. |
+| `409` | `{ "code": "missing_stages", "stages": [ … ] }` | Batch only: the organization's funnel lacks a stage a replay writes into. Nothing was handled; resend once the stages exist. |
+| `429` | `{ "type": "rate_limited" \| "quota_exceeded" }`, `{ "code": "dry_run_busy" }` | Back off; `Retry-After` says how long. `dry_run_busy`: batch dry run only, another one is running. |
 
 ## Registering a source
 
