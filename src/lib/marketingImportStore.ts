@@ -851,6 +851,9 @@ export async function createMarketingAccount(input: {
       await runWithOrg(owner.orgId, () =>
         logActivity({
           action: 'marketing.account.created',
+          // Explicit: with no actor (a web request, an ingest) nothing else
+          // names the tenant, and the entry was written with orgId NULL (#2959).
+          orgId: owner.orgId,
           actorId: input.actor === undefined ? owner.id : (input.actor?.id ?? null),
           actorEmail: input.actor === undefined ? owner.email : (input.actor?.email ?? null),
           targetType: 'Company',
