@@ -19,6 +19,12 @@
 // Unit-tested in scripts/test/account-event-rule.test.mjs.
 import { ACQUISITION_SOURCES } from './leadSourceName';
 import { TEXT_LIMITS } from './textLimits';
+import {
+  TRIAL_ACTIVE_STAGE_KEY,
+  TRIAL_EXPIRED_STAGE_KEY,
+  daysUntilUtcDay,
+  decisionWindowEndsAt,
+} from './trialReminderRule';
 
 /** The envelope version this code understands; anything else is refused. */
 export const ACCOUNT_EVENT_SCHEMA_VERSION = 1;
@@ -201,4 +207,142 @@ export function ingestTrialWindow(existing: TrialDates, event: TrialDates, fallb
  */
 export function isStaleEvent(occurredAt: Date, newestAppliedAt: Date | null): boolean {
   return !!newestAppliedAt && occurredAt.getTime() < newestAppliedAt.getTime();
+}
+
+// ── Historic mode ────────────────────────────────────────────────────────────
+//
+// A source that connects to the CRM after years of its own history replays that
+// history through the same endpoint. Those events describe things that already
+// happened: a trial that ran out two years ago must land as an expired trial
+// dated two years ago, and nobody may be reminded, rung or mailed about it.
+// An event is HISTORIC when the sender says so (`replay: true`) or when it is
+// older than HISTORIC_EVENT_AGE_DAYS — a live feed delivers within minutes, and
+// one that parked a 404 for a day or two still counts as live.
+// docs/integrations/account-events.md § Historic mode is the contract.
+
+/** An event older than this many days is historic even without `replay: true`. */
+export const HISTORIC_EVENT_AGE_DAYS = 3;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * The smallest step that keeps two history rows apart: Prisma's DateTime is a
+ * DATETIME(3), so one millisecond is what the column can still tell apart.
+ */
+export const HISTORY_STEP_MS = 1;
+
+/**
+ * Does this event replay the past (true) or report the present (false)?
+ * Strictly older than the threshold; an event dated in the future is live.
+ */
+export function isHistoricEvent(occurredAt: Date, now: Date, replayFlag: boolean | null | undefined): boolean {
+  if (replayFlag === true) return true;
+  return now.getTime() - occurredAt.getTime() > HISTORIC_EVENT_AGE_DAYS * MS_PER_DAY;
+}
+
+/**
+ * The moment a historic write is dated with: the event's own `occurred_at`,
+ * never later than `now` (a clock-skewed sender must not date history in the
+ * future). A live event gets undefined — its rows are dated by the database
+ * exactly as before historic mode existed.
+ */
+export function backdateFor(historic: boolean, occurredAt: Date, now: Date): Date | undefined {
+  if (!historic) return undefined;
+  return occurredAt.getTime() > now.getTime() ? now : occurredAt;
+}
+
+export interface HistoricTrialLanding {
+  /** Move the record from TRIAL_ACTIVE to TRIAL_EXPIRED as part of the replay. */
+  expire: boolean;
+  /** The expiry's history row is dated here (null when `expire` is false). */
+  expiredAt: Date | null;
+  /**
+   * The decision window of the expired trial has already closed: claim its one
+   * bell up front, so the daily sweep never rings about a window that shut
+   * long ago.
+   */
+  preclaimDecisionWindow: boolean;
+}
+
+/**
+ * Where a historic trial record lands once its window is known. The same
+ * calendar-day rule as the daily expiry (`expireTrials`,
+ * src/lib/jobs/trialReminders.ts): a trial whose last day is before today
+ * (UTC) has run out. The expiry is dated at the trial's end — never before the
+ * moment the record entered the trial (`enteredAt`), so the history stays in
+ * order even when a source sends an end before its start.
+ */
+export function historicTrialLanding(input: {
+  pipelineStatus: string;
+  trialEndsAt: Date | null;
+  enteredAt: Date;
+  now: Date;
+  decisionWindowDays: number;
+}): HistoricTrialLanding {
+  const { trialEndsAt, now } = input;
+  if (!trialEndsAt) return { expire: false, expiredAt: null, preclaimDecisionWindow: false };
+  const expire = input.pipelineStatus === TRIAL_ACTIVE_STAGE_KEY && daysUntilUtcDay(trialEndsAt, now) < 0;
+  const expired = expire || input.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY;
+  const closes = decisionWindowEndsAt(trialEndsAt, input.decisionWindowDays);
+  return {
+    expire,
+    // Strictly after the entry: a source that sends an end at or before its
+    // start must not tie the expiry with the move into the trial, or a reader
+    // ordering by createdAt alone could show the expiry first.
+    expiredAt: expire ? new Date(Math.max(trialEndsAt.getTime(), input.enteredAt.getTime() + HISTORY_STEP_MS)) : null,
+    preclaimDecisionWindow: expired && !!closes && closes.getTime() <= now.getTime(),
+  };
+}
+
+/**
+ * The moment a historic move of ONE record is dated: the event's own moment,
+ * but never before the record's start and never at or before the newest row
+ * already in its history. The out-of-order guard (`isStaleEvent`) only knows
+ * the feed's own earlier events; a person's move from today, or the import's,
+ * is history the replay must not slide underneath — every "last move" reader
+ * (the stage clock, the board's ordering, the timeline) reads the newest row.
+ * A replay into a record somebody already worked on lands right after that
+ * work, which is the earliest moment the record could truly have made the move.
+ */
+export function historicMoveAt(at: Date, record: { startDate: Date | null; newestHistoryAt: Date | null }): Date {
+  let t = at.getTime();
+  if (record.startDate) t = Math.max(t, record.startDate.getTime());
+  if (record.newestHistoryAt) t = Math.max(t, record.newestHistoryAt.getTime() + HISTORY_STEP_MS);
+  return new Date(t);
+}
+
+/** The newest history row of a record, as the undo rule needs to see it. */
+export interface HistoryRowLike {
+  fromStatus: string;
+  toStatus: string;
+  changedById: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Should a historic move first take back the record's system expiry?
+ *
+ * The replay expires a trial as soon as the trial's own event is applied
+ * (`historicTrialLanding`), looking at today's date — it cannot know what the
+ * replay says next. When the next event is a move that happened BEFORE that
+ * expiry (a customer who paid during the trial), the expiry never happened:
+ * the record goes on from TRIAL_ACTIVE, and the expiry row is removed rather
+ * than left as a "TRIAL_EXPIRED → DEAL_WON" dated before the expiry itself.
+ *
+ * Only ever the system's own expiry (`changedById` null, TRIAL_ACTIVE →
+ * TRIAL_EXPIRED), only when it is the newest row of the record, and only when
+ * it is dated after the event — anything a person did is never touched.
+ */
+export function shouldUndoHistoricExpiry(input: {
+  pipelineStatus: string;
+  toStage: string;
+  at: Date;
+  newest: HistoryRowLike | null;
+}): boolean {
+  const { newest } = input;
+  if (input.pipelineStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
+  if (input.toStage === TRIAL_ACTIVE_STAGE_KEY || input.toStage === TRIAL_EXPIRED_STAGE_KEY) return false;
+  if (!newest || newest.changedById !== null) return false;
+  if (newest.fromStatus !== TRIAL_ACTIVE_STAGE_KEY || newest.toStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
+  return newest.createdAt.getTime() > input.at.getTime();
 }

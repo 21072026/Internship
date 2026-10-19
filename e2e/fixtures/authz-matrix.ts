@@ -458,3 +458,35 @@ export const MARKETING_MENTOR_PAGES: Array<{ path: string; expect: 200 | 404; wh
   { path: '/sales/accounts/:foreignCompanyId', expect: 404, why: "another org's account" },
   { path: '/sales/leads/:foreignRelationId', expect: 404, why: "another org's record" },
 ];
+
+/**
+ * A sales rep types in their OWN lead (#2958): `POST /api/sales/leads`, the
+ * rep's door into the same create-only writer as the admin form. Consumed by
+ * `e2e/marketing-rep-new-lead.spec.ts` (@smoke) and mirrored in
+ * `docs/role-access-matrix.md` § "MARKETING satış temsilcisi".
+ *
+ * Whoever is allowed in is ALWAYS the owner of what they create: the spec sends
+ * every probe with a colleague's `ownerId` and another org's `orgId` in the
+ * body, and a 201 must still land on the caller's own book, in the caller's own
+ * org. `code` is the refusal's machine-readable reason where the route gives one.
+ */
+export const SALES_LEAD_CREATE_PATH = '/api/sales/leads';
+
+export type SalesLeadCaller =
+  | 'marketingMentor'
+  | 'marketingAdmin'
+  | 'marketingMentee'
+  | 'marketingCompany'
+  | 'internshipMentor'
+  | 'internshipAdmin'
+  | 'anonymous';
+
+export const SALES_LEAD_CREATE: Array<{ caller: SalesLeadCaller; expect: 201 | 401 | 403; code?: string; why: string }> = [
+  { caller: 'marketingMentor', expect: 201, why: 'the sales rep, on their own book' },
+  { caller: 'marketingAdmin', expect: 201, why: 'an admin who also sells (sales mode), on their own book' },
+  { caller: 'marketingMentee', expect: 403, why: 'a lead is a record, not an operator' },
+  { caller: 'marketingCompany', expect: 403, why: 'the customer login' },
+  { caller: 'internshipMentor', expect: 403, code: 'vertical_unavailable', why: 'an INTERNSHIP mentor has the mentor shell, no sales leads' },
+  { caller: 'internshipAdmin', expect: 403, code: 'vertical_unavailable', why: 'INTERNSHIP has its own intake paths' },
+  { caller: 'anonymous', expect: 401, why: 'no session' },
+];

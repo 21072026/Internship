@@ -13,12 +13,25 @@ import { onPathKeys, startStageKey } from '@/lib/pipeline';
 // the fields; everything that decides what they MEAN — the match key, the
 // stand-in lead address, the one-active-owner rule — happens on the server, in
 // the marketing import's own writer (POST /api/admin/marketing-accounts).
+//
+// The same dialog is the sales rep's "New lead" on /sales (#2958), with
+// `surface="sales"`: it posts to POST /api/sales/leads (owner = the rep, always)
+// and links into the rep's own pages. That route returns ids only for records
+// on the rep's own book, so a duplicate on a colleague's book is reported
+// without a link.
+
+export type LeadDialogSurface = 'admin' | 'sales';
 
 type Outcome =
-  | { kind: 'created'; leadId: string | null }
-  | { kind: 'exists'; companyId: string; leadId: string | null }
-  | { kind: 'contact_in_funnel'; leadId: string | null }
+  | { kind: 'created'; leadHref: string | null }
+  | { kind: 'exists'; companyId: string | null; leadHref: string | null }
+  | { kind: 'contact_in_funnel'; leadHref: string | null }
   | { kind: 'message'; text: string };
+
+const SURFACE = {
+  admin: { endpoint: '/api/admin/marketing-accounts', board: '/admin/board' },
+  sales: { endpoint: '/api/sales/leads', board: '/sales/board' },
+} as const;
 
 const EMPTY = {
   name: '',
@@ -34,15 +47,24 @@ export function NewMarketingLeadDialog({
   onClose,
   onCreated,
   onOpenAccount,
+  surface = 'admin',
 }: {
   onClose: () => void;
   /** Refresh the account list behind the dialog. */
   onCreated: () => void | Promise<void>;
-  /** Open an existing account's edit dialog on the page. */
-  onOpenAccount: (companyId: string) => void;
+  /** Open an existing account's edit dialog on the page (admin surface). */
+  onOpenAccount?: (companyId: string) => void;
+  /** Which door: the admin form, or the sales rep's own (#2958). */
+  surface?: LeadDialogSurface;
 }) {
   const t = useT();
   const nl = t.companiesPage.newLead;
+  const sl = t.sales.newLead;
+  const isSales = surface === 'sales';
+  const { endpoint, board } = SURFACE[surface];
+  // Admin links take the lead person's id; the rep's pages take the record's.
+  const adminLeadHref = (leadId: unknown) => (typeof leadId === 'string' && leadId ? `/admin/candidates/${leadId}` : null);
+  const salesLeadHref = (relationId: unknown) => (typeof relationId === 'string' && relationId ? `/sales/leads/${relationId}` : null);
   const stages = useResolvedStages();
   const onPath = useMemo(() => {
     const keys = new Set(onPathKeys(stages));
@@ -69,24 +91,28 @@ export function NewMarketingLeadDialog({
       for (const [key, value] of Object.entries(fields)) {
         if (value.trim()) body[key] = value.trim();
       }
-      const res = await fetch('/api/admin/marketing-accounts', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 201) {
-        setOutcome({ kind: 'created', leadId: data.leadId ?? null });
+        setOutcome({ kind: 'created', leadHref: isSales ? salesLeadHref(data.relationId) : adminLeadHref(data.leadId) });
         setFields(EMPTY);
         await onCreated();
       } else if (data.code === 'account_exists') {
-        setOutcome({ kind: 'exists', companyId: data.companyId, leadId: data.leadId ?? null });
+        setOutcome({
+          kind: 'exists',
+          companyId: typeof data.companyId === 'string' ? data.companyId : null,
+          leadHref: isSales ? null : adminLeadHref(data.leadId),
+        });
       } else if (data.code === 'contact_in_funnel') {
-        setOutcome({ kind: 'contact_in_funnel', leadId: data.leadId ?? null });
+        setOutcome({ kind: 'contact_in_funnel', leadHref: isSales ? salesLeadHref(data.relationId) : adminLeadHref(data.leadId) });
       } else if (data.code === 'contact_is_user') {
         setOutcome({ kind: 'message', text: nl.contactIsUser });
       } else if (data.code === 'already_mentored') {
-        setOutcome({ kind: 'message', text: nl.alreadyMentored });
+        setOutcome({ kind: 'message', text: isSales ? sl.alreadyMentored : nl.alreadyMentored });
       } else if (data.code === 'account_ambiguous') {
         setOutcome({ kind: 'message', text: nl.ambiguous });
       } else {
@@ -111,9 +137,14 @@ export function NewMarketingLeadDialog({
         className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
         <h2 id="new-lead-title" className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          {nl.title}
+          {isSales ? sl.title : nl.title}
         </h2>
         <p className="text-sm text-gray-500 mb-5">{nl.hint}</p>
+        {isSales && (
+          <p className="text-sm text-gray-500 -mt-3 mb-5" data-testid="new-lead-owner-hint">
+            {sl.ownerHint}
+          </p>
+        )}
 
         {outcome?.kind === 'created' && (
           <div
@@ -121,12 +152,12 @@ export function NewMarketingLeadDialog({
             className="mb-4 p-3 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm flex flex-wrap items-center gap-3"
           >
             <span>{nl.created}</span>
-            {outcome.leadId && (
-              <Link href={`/admin/candidates/${outcome.leadId}`} className="underline font-medium" data-testid="new-lead-open-lead">
+            {outcome.leadHref && (
+              <Link href={outcome.leadHref} className="underline font-medium" data-testid="new-lead-open-lead">
                 {nl.openLead}
               </Link>
             )}
-            <Link href="/admin/board" className="underline font-medium">
+            <Link href={board} className="underline font-medium">
               {nl.openBoard}
             </Link>
           </div>
@@ -136,17 +167,24 @@ export function NewMarketingLeadDialog({
             data-testid="new-lead-exists"
             className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex flex-wrap items-center gap-3"
           >
-            <span>{nl.exists}</span>
-            <button
-              type="button"
-              className="underline font-medium"
-              data-testid="new-lead-open-account"
-              onClick={() => onOpenAccount(outcome.companyId)}
-            >
-              {nl.openAccount}
-            </button>
-            {outcome.leadId && (
-              <Link href={`/admin/candidates/${outcome.leadId}`} className="underline font-medium">
+            <span>{isSales && !outcome.companyId ? sl.existsElsewhere : nl.exists}</span>
+            {outcome.companyId && !isSales && onOpenAccount && (
+              <button
+                type="button"
+                className="underline font-medium"
+                data-testid="new-lead-open-account"
+                onClick={() => onOpenAccount(outcome.companyId!)}
+              >
+                {nl.openAccount}
+              </button>
+            )}
+            {outcome.companyId && isSales && (
+              <Link href={`/sales/accounts/${outcome.companyId}`} className="underline font-medium" data-testid="new-lead-open-account">
+                {nl.openAccount}
+              </Link>
+            )}
+            {outcome.leadHref && (
+              <Link href={outcome.leadHref} className="underline font-medium">
                 {nl.openLead}
               </Link>
             )}
@@ -157,9 +195,9 @@ export function NewMarketingLeadDialog({
             data-testid="new-lead-contact-in-funnel"
             className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex flex-wrap items-center gap-3"
           >
-            <span>{nl.contactInFunnel}</span>
-            {outcome.leadId && (
-              <Link href={`/admin/candidates/${outcome.leadId}`} className="underline font-medium">
+            <span>{isSales && !outcome.leadHref ? sl.contactInFunnelElsewhere : nl.contactInFunnel}</span>
+            {outcome.leadHref && (
+              <Link href={outcome.leadHref} className="underline font-medium">
                 {nl.openLead}
               </Link>
             )}
