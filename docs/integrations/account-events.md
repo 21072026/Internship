@@ -110,7 +110,7 @@ What an event does depends on where the account's funnel record is (the active r
 | `DEAL_LOST` (or any off-path stage) | new journey at `TRIAL_ACTIVE` | new journey at `DEAL_WON` | recorded (already ended) | new journey at `DEAL_WON` if it had been won, else at `TRIAL_ACTIVE` |
 | closed (not `ACTIVE`), not lost | new journey at `TRIAL_ACTIVE` | `refused_backward` | recorded (already ended) | recorded |
 
-A target stage the organization does not have is a `conflict` (`"the org has no <stage> stage"`), never a write of an unknown stage key. A drop-off reason the organization's vertical does not know is a `conflict` too: the reason is checked before anything is written.
+A target stage the organization does not have is a `conflict` (`"the org has no <stage> stage"`), never a write of an unknown stage key. It is the one **retryable** conflict: the organization is not ready, the event is not wrong, so its claim is released and the same `event_id` can be sent again once the stage exists (a new account needs `TRIAL_ACTIVE` for the same reason). A drop-off reason the organization's vertical does not know is a `conflict` too: the reason is checked before anything is written.
 
 ### New journeys
 
@@ -155,6 +155,7 @@ A live event (neither) is handled exactly as described above. A historic one goe
 | **Trial reminders** | None for the past: a trial that ended is expired, not warned about. A trial that is still running today is a running trial, and its owner's 7/3/0-day reminders come as usual. |
 | **Activity log** | One `integration.replay` entry per request (the counts of what the request did) instead of one entry per event and per new account. |
 | **Losses and new journeys** | A historic loss is a backdated history row carrying its drop-off reason; a historic new journey closes the old record and starts the new one at the event, with no stage deadline. |
+| **Stage deadlines** | A historic move sets no deadline, and where the organization manages deadlines by SLA it clears the one the record carried from the stage it leaves (a deadline dated from the past would be overdue at once). A deadline a person typed in an organization without SLAs is left alone. |
 | **Response** | The `200` body carries `"historic": true`. |
 
 Nothing in historic mode mails a lead or a customer, and nothing writes a stage SLA, a webhook delivery, a `pipeline.stage_change` activity line or a notification.
@@ -175,8 +176,10 @@ For a replay of a source's history. The door is the single route's, in the same 
 - **All or nothing at the envelope.** Every event is validated first; one invalid event refuses the whole batch with a `400` whose issue paths name it (`events.3.external_id`), and nothing is handled.
 - **Sorted on the server.** The events are processed one after another by `external_id`, then `occurred_at`, then their position in the request: the order a replay must be applied in, whatever order they were listed in.
 - **Always historic.** Every event of a batch is handled in [historic mode](#historic-mode), as if it carried `replay: true`. The request writes one `integration.replay` activity line.
+- **The funnel must be ready.** An organization whose funnel lacks any of `TRIAL_ACTIVE`, `TRIAL_EXPIRED`, `DEAL_WON`, `DEAL_LOST` (`REPLAY_STAGE_KEYS`; an organization still on an older stage set) gets `409 { "code": "missing_stages", "stages": [ … ] }` for the whole batch, dry run included, and nothing is claimed. Apply the current stage set first.
 - **One event, one ordinary ingest.** Each event is exactly what the single route would do with it: its own claim, its own transactions, the same outcomes. A batch that fails with a server error midway can be resent whole: the events it already handled answer `duplicate`.
 - **The answer** is `200 { "dry_run": false, "results": [ … ] }` with one result per event **in the request's order**: `{ "index", "event_id", "outcome", "companyId"?, "relationId"?, "detail"?, "historic": true }`, with the single route's outcome vocabulary. `no_default_owner` is one of the outcomes here, not a `409` for the batch.
+- **An account waits for its own first event.** When an event's claim is released (`no_default_owner`, or the retryable missing-stage `conflict`), the later events of the **same account** in the batch are not handled: each answers the same outcome with a `detail` that starts with `not handled:`, and none of them is claimed. Resending the batch once the organization is fixed replays the whole account in order; the events already handled answer `duplicate`. (Handled, a `converted` after an `account_created` that could not create the account would be a final `unknown_account`.)
 
 ### Dry run
 
@@ -187,6 +190,7 @@ Its limits:
 - The answer carries no `companyId` / `relationId`: those rows were removed by the rollback.
 - It answers for the database as it is **at that moment**. A live event arriving between the dry run and the real run can change an outcome.
 - It holds the row locks a real run would take for as long as it runs (at most two minutes, `DRY_RUN_TIMEOUT_MS`), so a live event for an account in the batch waits for it. Dry-run before switching a live feed on, not during peak traffic.
+- One dry run at a time per application process (`DRY_RUN_CONCURRENCY`): it holds a database connection for its whole run. A second one meanwhile is refused with `429 { "code": "dry_run_busy" }` and `Retry-After`, before anything is read.
 
 ## Idempotency
 
@@ -208,7 +212,8 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 | `403` | `{ "error": … }`, `{ "code": "wrong_source_key" }`, `{ "code": "capability_unavailable" }` | Wrong scope, wrong key for this source, or the product has no accounts. |
 | `404` | `{ "code": "unknown_source" }` | No such source for this organization, or it is switched off. Nothing was written; park the event and retry later rather than dropping it. |
 | `409` | `{ "code": "no_default_owner" }` | Retry once the organization has a default lead owner. |
-| `429` | `{ "type": "rate_limited" \| "quota_exceeded" }` | Back off; `Retry-After` says how long. |
+| `409` | `{ "code": "missing_stages", "stages": [ … ] }` | Batch only: the organization's funnel lacks a stage a replay writes into. Nothing was handled; resend once the stages exist. |
+| `429` | `{ "type": "rate_limited" \| "quota_exceeded" }`, `{ "code": "dry_run_busy" }` | Back off; `Retry-After` says how long. `dry_run_busy`: batch dry run only, another one is running. |
 
 ## Registering a source
 

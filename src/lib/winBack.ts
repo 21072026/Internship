@@ -44,6 +44,14 @@ export async function winBack(input: {
 }): Promise<{ newRelationId: string }> {
   const now = input.at ?? new Date();
   return inTransaction(input.db ?? prisma, async (tx) => {
+    // FIRST, before any plain read: lock the predecessor. Two win-backs of one
+    // record then run one after the other, and the second one's reads (its
+    // snapshot is taken at its first plain read, i.e. after this lock is
+    // granted) see the journey the first one opened — so the #419 question
+    // below refuses it. An ACTIVE predecessor was already serialized by the
+    // guarded close; a CLOSED one (`expect.closed`) is written nowhere, and
+    // without this lock two concurrent events could each open a journey.
+    await tx.$queryRaw`SELECT id FROM \`MentorshipRelation\` WHERE id = ${input.relationId} FOR UPDATE`;
     const old = await tx.mentorshipRelation.findUniqueOrThrow({
       where: { id: input.relationId },
       select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true },

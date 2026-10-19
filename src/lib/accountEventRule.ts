@@ -470,3 +470,19 @@ export function batchOrder(events: readonly { external_id: string; occurred_at: 
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.at - b.at || a.index - b.index))
     .map((e) => e.index);
 }
+
+/**
+ * The stages a replay writes into (docs/integrations/account-events.md
+ * § Batch): a trial, its expiry, a conversion and a loss. A batch is refused up
+ * front (409 `missing_stages`) when the org lacks any of them, BEFORE anything
+ * is claimed: a history replayed before the org's funnel is ready (an org
+ * still on an older stage set) is a configuration gap to fix first, not two
+ * hundred per-event conflicts to read through.
+ */
+export const REPLAY_STAGE_KEYS = [TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY, WON_STAGE_KEY, LOST_STAGE_KEY] as const;
+
+/** The replay stages the org's funnel lacks, in REPLAY_STAGE_KEYS order (empty = ready). */
+export function missingReplayStages(stages: readonly { key: string }[]): string[] {
+  const keys = new Set(stages.map((s) => s.key));
+  return REPLAY_STAGE_KEYS.filter((k) => !keys.has(k));
+}

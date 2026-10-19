@@ -4,7 +4,12 @@ import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveIntegrationSource } from '@/lib/integrationSources';
 import { accountEventSchema, type AccountEvent } from '@/lib/accountEventSchema';
-import { ACCOUNT_EVENT_BATCH_MAX, ingestAccountEventBatch } from '@/lib/accountEventIngest';
+import {
+  ACCOUNT_EVENT_BATCH_MAX,
+  DryRunBusyError,
+  ingestAccountEventBatch,
+  MissingReplayStagesError,
+} from '@/lib/accountEventIngest';
 
 // POST — up to ACCOUNT_EVENT_BATCH_MAX account events of one registered source
 // in one request (#2966), the replay path. The public contract is
@@ -28,7 +33,10 @@ import { ACCOUNT_EVENT_BATCH_MAX, ingestAccountEventBatch } from '@/lib/accountE
 // by (external_id, occurred_at), one ingestAccountEvent call each, every one in
 // historic mode; `dry_run: true` is the same loop rolled back. The answer is
 // 200 with one result per event, in the request's order — a
-// `no_default_owner` is one of them, not a 409 for the batch.
+// `no_default_owner` is one of them, not a 409 for the batch. Two refusals
+// come before any event is claimed: 409 `missing_stages` (the org's funnel
+// lacks a stage a replay writes into) and, for a dry run, 429 `dry_run_busy`
+// (another dry run is running in this process).
 //
 // Listed in scripts/check-api-key-routes.mjs next to the single route.
 
@@ -87,8 +95,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
       }
 
       const dryRun = body.dry_run === true;
-      const results = await ingestAccountEventBatch(key.orgId, source, events, { dryRun });
-      return NextResponse.json({ dry_run: dryRun, results });
+      try {
+        const results = await ingestAccountEventBatch(key.orgId, source, events, { dryRun });
+        return NextResponse.json({ dry_run: dryRun, results });
+      } catch (e) {
+        if (e instanceof MissingReplayStagesError) {
+          return NextResponse.json(
+            {
+              code: 'missing_stages',
+              stages: e.stages,
+              error: 'The organization\'s funnel lacks stages a replay writes into. Nothing was handled; resend once they exist.',
+            },
+            { status: 409 },
+          );
+        }
+        if (e instanceof DryRunBusyError) {
+          return NextResponse.json(
+            { code: 'dry_run_busy', error: 'Another dry run is running. Nothing was handled; retry shortly.' },
+            { status: 429, headers: { 'Retry-After': '30' } },
+          );
+        }
+        throw e;
+      }
     }),
   );
 }

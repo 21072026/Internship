@@ -35,6 +35,7 @@ const daysAgo = (d: number) => new Date(Date.now() - d * DAY);
 
 let orgId: string;
 let otherOrgId: string;
+let oldStagesOrgId: string;
 let ownerId: string;
 let writeKey: string;
 let readKey: string;
@@ -49,12 +50,14 @@ async function mintKey(org: string, scopes: string): Promise<string> {
   return raw;
 }
 
-async function marketingOrg(label: string) {
+async function marketingOrg(label: string, keep: (key: string) => boolean = () => true) {
   const org = await prisma.organization.create({
     data: { name: `Account Lost ${label} ${STAMP}`, slug: `account-lost-${label}-${STAMP}`, vertical: 'MARKETING' },
   });
   await prisma.pipelineStage.createMany({
-    data: templateStagePayload(defaultTemplateForVertical('MARKETING')!).stages.map((s) => ({ ...s, orgId: org.id })),
+    data: templateStagePayload(defaultTemplateForVertical('MARKETING')!)
+      .stages.filter((s) => keep(s.key))
+      .map((s) => ({ ...s, orgId: org.id })),
   });
   return org.id;
 }
@@ -146,6 +149,8 @@ test.describe.configure({ mode: 'serial' });
 test.beforeAll(async () => {
   orgId = await marketingOrg('a');
   otherOrgId = await marketingOrg('b');
+  // A funnel not ready for a replay: no trial stages (an older stage set).
+  oldStagesOrgId = await marketingOrg('c', (key) => !key.startsWith('TRIAL_'));
   const ownerEmail = uniqueEmail('lost-owner');
   emails.push(ownerEmail);
   ownerId = (await seedUser(ownerEmail, PW, 'MENTOR', 'Lost Owner', orgId)).id;
@@ -163,7 +168,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const orgIds = [orgId, otherOrgId].filter(Boolean);
+  const orgIds = [orgId, otherOrgId, oldStagesOrgId].filter(Boolean);
   await prisma.integrationEvent.deleteMany({ where: { orgId: { in: orgIds } } });
   await prisma.integrationSource.deleteMany({ where: { orgId: { in: orgIds } } });
   await prisma.trialReminder.deleteMany({ where: { orgId: { in: orgIds } } });
@@ -265,13 +270,16 @@ test('a live deactivation of a won customer is CUSTOMER_CANCELLED', async ({ req
 
 test('a historic loss is backdated and tells nobody', async ({ request }) => {
   const seeded = await seedAccount('TRIAL_EXPIRED', { trialEndsAt: daysAgo(30) });
+  // A deadline the record carried from the stage it leaves: the org manages
+  // deadlines by SLA, so the historic move takes it away and sets none.
+  await prisma.mentorshipRelation.update({ where: { id: seeded.relationId }, data: { stageDeadline: daysAgo(1) } });
   const lostAt = daysAgo(20);
   const before = await noiseFor(seeded.relationId);
   const res = await post(request, envelope({ event_type: 'cancelled', external_id: seeded.externalId, occurred_at: lostAt.toISOString() }));
   expect(await res.json()).toMatchObject({ outcome: 'applied', historic: true, relationId: seeded.relationId });
 
   const relation = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: seeded.relationId } });
-  expect(relation).toMatchObject({ pipelineStatus: 'DEAL_LOST', stageDeadline: null });
+  expect(relation).toMatchObject({ pipelineStatus: 'DEAL_LOST', stageDeadline: null, deadlineReminderSentAt: null });
   const row = await prisma.statusChange.findFirstOrThrow({ where: { relationId: seeded.relationId } });
   expect([row.toStatus, row.reasonCode, row.createdAt.toISOString()]).toEqual(['DEAL_LOST', 'OTHER', lostAt.toISOString()]);
   expect(await noiseFor(seeded.relationId)).toEqual(before);
@@ -395,6 +403,59 @@ test('per-event outcomes: unknown account, record-only, duplicate inside the bat
   });
   const outcomes = (await res.json()).results.map((r: { outcome: string }) => r.outcome);
   expect(outcomes).toEqual(['unknown_account', 'recorded', 'applied', 'duplicate']);
+});
+
+test('a batch for a funnel without the replay stages is a 409 and claims nothing', async ({ request }) => {
+  const key = await mintKey(oldStagesOrgId, 'companies:write');
+  const slug = `e2e-lost-old-${STAMP}`;
+  await prisma.integrationSource.create({ data: { orgId: oldStagesOrgId, slug, label: 'Old stages' } });
+  for (const dry_run of [false, true]) {
+    const res = await postBatch(request, { events: [envelope({ occurred_at: daysAgo(30).toISOString() })], dry_run }, key, slug);
+    expect(res.status(), await res.text()).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'missing_stages', stages: ['TRIAL_ACTIVE', 'TRIAL_EXPIRED'] });
+  }
+  expect(await prisma.integrationEvent.count({ where: { orgId: oldStagesOrgId } })).toBe(0);
+  expect(await prisma.company.count({ where: { orgId: oldStagesOrgId } })).toBe(0);
+});
+
+test('an account waiting for the default owner holds back its later events; the resent batch replays it whole', async ({ request }) => {
+  const externalId = extId();
+  const created = envelope({ external_id: externalId, occurred_at: daysAgo(100).toISOString() });
+  const won = envelope({ event_type: 'converted', external_id: externalId, occurred_at: daysAgo(90).toISOString(), contact: null });
+  const lost = envelope({ event_type: 'cancelled', external_id: externalId, occurred_at: daysAgo(50).toISOString(), contact: null });
+  const events = [lost, won, created];
+  const ids = events.map((e) => e.event_id);
+
+  await prisma.setting.deleteMany({ where: { orgId, key: 'defaultLeadOwnerId' } });
+  try {
+    const res = await postBatch(request, { events });
+    expect(res.status(), await res.text()).toBe(200);
+    const results = (await res.json()).results as { outcome: string; detail?: string }[];
+    expect(results.map((r) => r.outcome)).toEqual(['no_default_owner', 'no_default_owner', 'no_default_owner']);
+    // The account's first event decided it; the later two were never handled.
+    expect(results[0].detail).toMatch(/^not handled:/);
+    expect(results[1].detail).toMatch(/^not handled:/);
+    expect(results[2].detail ?? '').not.toMatch(/^not handled:/);
+    expect(await prisma.integrationEvent.count({ where: { orgId, eventId: { in: ids } } })).toBe(0);
+    expect(await prisma.company.count({ where: { orgId, externalId } })).toBe(0);
+  } finally {
+    await prisma.setting.upsert({
+      where: { orgId_key: { orgId, key: 'defaultLeadOwnerId' } },
+      create: { orgId, key: 'defaultLeadOwnerId', value: ownerId },
+      update: { value: ownerId },
+    });
+  }
+
+  const again = await (await postBatch(request, { events })).json();
+  expect(again.results.map((r: { outcome: string }) => r.outcome)).toEqual(['applied', 'applied', 'applied']);
+  const company = await prisma.company.findFirstOrThrow({ where: { orgId, externalId } });
+  const relation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: company.id } });
+  expect(relation.pipelineStatus).toBe('DEAL_LOST');
+  const history = await prisma.statusChange.findMany({ where: { relationId: relation.id }, orderBy: { createdAt: 'asc' } });
+  expect(history.map((h) => `${h.fromStatus}>${h.toStatus}:${h.reasonCode ?? ''}`)).toEqual([
+    'TRIAL_ACTIVE>DEAL_WON:',
+    'DEAL_WON>DEAL_LOST:CUSTOMER_CANCELLED',
+  ]);
 });
 
 test('dry_run answers like the real run and writes nothing', async ({ request }) => {

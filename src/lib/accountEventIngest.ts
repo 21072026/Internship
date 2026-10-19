@@ -73,6 +73,7 @@ import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { recordStageMove } from '@/lib/stageMove';
+import { stageDeadlineUpdate } from '@/lib/stageSla';
 import { winBack, WinBackConflictError } from '@/lib/winBack';
 import { AlreadyMentoredError } from '@/lib/activeMentorship';
 import { findOrCreateSource } from '@/lib/leadSource';
@@ -99,6 +100,7 @@ import {
   ingestTrialWindow,
   isHistoricEvent,
   isStaleEvent,
+  missingReplayStages,
   planAccountEvent,
   shouldUndoHistoricExpiry,
   batchOrder,
@@ -212,12 +214,29 @@ const RELATION_SELECT = {
 } as const;
 type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION_SELECT }>;
 
+/**
+ * What `apply` answers, plus whether the event's claim must be released: a
+ * configuration gap of the org (no default lead owner, a missing stage) is not
+ * a verdict on the event, so the same event can be sent again once it is fixed.
+ */
+type Applied = IngestResult & { release?: true };
+
 export async function ingestAccountEvent(
   orgId: string,
   source: EventSource,
   event: AccountEvent,
   options: IngestOptions = {},
 ): Promise<IngestResult> {
+  return (await ingestEvent(orgId, source, event, options)).result;
+}
+
+/** One event; `released` says its claim was given back (the event may be sent again). */
+async function ingestEvent(
+  orgId: string,
+  source: EventSource,
+  event: AccountEvent,
+  options: IngestOptions,
+): Promise<{ result: IngestResult; released: boolean }> {
   const now = options.now ?? new Date();
   const historic = isHistoricEvent(event.occurred_at, now, event.replay);
   const ownLog = historic && !options.replayLog ? newReplayLog() : null;
@@ -231,37 +250,41 @@ export async function ingestAccountEvent(
     log: historic ? (options.replayLog ?? ownLog) : null,
     db: options.db ?? prisma,
   };
-  const result = await runWithOrg(orgId, () => ingestOne(ctx));
-  if (!historic) return result;
-  if (ctx.log && result.outcome !== 'duplicate' && result.outcome !== 'no_default_owner') {
+  const { result, released } = await runWithOrg(orgId, () => ingestOne(ctx));
+  if (!historic) return { result, released };
+  if (ctx.log && result.outcome !== 'duplicate' && !released) {
     ctx.log.events += 1;
     tally(ctx, result.outcome);
   }
   if (ownLog) await flushReplayLog(orgId, source, ownLog);
-  return { ...result, historic: true };
+  return { result: { ...result, historic: true }, released };
 }
 
-async function ingestOne(ctx: Ctx): Promise<IngestResult> {
+async function ingestOne(ctx: Ctx): Promise<{ result: IngestResult; released: boolean }> {
   const { orgId, source, event, db } = ctx;
   const claimId = await claim(db, orgId, source, event);
-  if (!claimId) return { outcome: 'duplicate' };
-  let result: IngestResult;
+  if (!claimId) return { result: { outcome: 'duplicate' }, released: false };
+  let applied: Applied;
   try {
-    result = await apply(ctx);
+    applied = await apply(ctx);
   } catch (e) {
     await db.integrationEvent.delete({ where: { id: claimId } }).catch(() => {});
     throw e;
   }
-  if (result.outcome === 'no_default_owner') {
-    // Retryable: nothing was written, and the org's setting is what is missing.
+  const { release, ...result } = applied;
+  if (release || result.outcome === 'no_default_owner') {
+    // Retryable: the event decided nothing (a gap fill it may have made is
+    // idempotent), and an org setting is what is missing (the default lead
+    // owner, a stage). Keeping the claim would answer the
+    // same event `duplicate` after the operator fixed it — a lost event.
     await db.integrationEvent.delete({ where: { id: claimId } });
-    return result;
+    return { result, released: true };
   }
   await db.integrationEvent.update({
     where: { id: claimId },
     data: { outcome: result.outcome, companyId: result.companyId ?? null, detail: result.detail?.slice(0, 500) ?? null },
   });
-  return result;
+  return { result, released: false };
 }
 
 function tally(ctx: Ctx, key: string): void {
@@ -308,7 +331,7 @@ async function claim(db: Db, orgId: string, source: EventSource, event: AccountE
   return row?.id ?? null;
 }
 
-async function apply(ctx: Ctx): Promise<IngestResult> {
+async function apply(ctx: Ctx): Promise<Applied> {
   const { orgId, source, event, db } = ctx;
   const intent = ingestIntent(event.event_type);
   if (intent.kind === 'record') {
@@ -349,6 +372,9 @@ async function apply(ctx: Ctx): Promise<IngestResult> {
   }
 
   if (!companyId) {
+    // A new account lands at TRIAL_ACTIVE: an org without it is not ready for
+    // the feed yet (an older stage set), and the event waits for it.
+    if (!stages.some((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)) return missingStage(TRIAL_ACTIVE_STAGE_KEY);
     const created = await createAccount(ctx, stages);
     if (created.outcome !== 'exists') return created;
     companyId = created.companyId;
@@ -357,6 +383,11 @@ async function apply(ctx: Ctx): Promise<IngestResult> {
   const result = await moveAccount(ctx, companyId, intent, stages);
   await fillLeadSource(ctx, companyId);
   return result;
+}
+
+/** A stage the event needs is missing from the org's funnel: a conflict, and a retryable one. */
+function missingStage(stage: string, ids: { companyId?: string; relationId?: string } = {}): Applied {
+  return { outcome: 'conflict', ...ids, detail: `the org has no ${stage} stage`, release: true };
 }
 
 /** The accounts of the org carrying the event's external id (at most two: one is the answer, two a conflict). */
@@ -498,7 +529,7 @@ async function moveAccount(
   companyId: string,
   intent: Exclude<IngestIntent, { kind: 'record' }>,
   stages: Stages,
-): Promise<IngestResult> {
+): Promise<Applied> {
   const { orgId, source, event, db } = ctx;
   const relations = await db.mentorshipRelation.findMany({
     where: { companyId, orgId },
@@ -525,7 +556,7 @@ async function moveAccount(
 
   switch (plan.kind) {
     case 'missing_stage':
-      return { outcome: 'conflict', companyId, relationId: relation.id, detail: `the org has no ${plan.stage} stage` };
+      return missingStage(plan.stage, { companyId, relationId: relation.id });
     case 'nothing':
       await note(ctx, {
         action: 'integration.event',
@@ -606,7 +637,22 @@ async function moveRelation(ctx: Ctx, relation: RelationRow, plan: Extract<Event
       : {};
 
   if (!ctx.at) {
-    await ctx.db.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } });
+    // The stage and its history row commit together (as they always did here);
+    // only the effects (activity line, SLA, bell, webhook) follow the commit.
+    // A failure in those releases the claim, and the retry finds the record
+    // already there — its history is never the part that went missing.
+    const history = statusChangeData({
+      relationId: relation.id,
+      fromStatus: relation.pipelineStatus,
+      toStatus: toStage,
+      changedById: null,
+      ...(plan.reasonCode ? { reasonCode: plan.reasonCode } : {}),
+      ...(plan.reasonNote ? { reasonNote: plan.reasonNote } : {}),
+    });
+    await inTransaction(ctx.db, async (tx) => {
+      await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } });
+      if (history) await tx.statusChange.create({ data: history });
+    });
     await recordStageMove({
       relation: { id: relation.id, menteeId: relation.menteeId, orgId, pipelineStatus: relation.pipelineStatus },
       toStatus: toStage,
@@ -614,11 +660,18 @@ async function moveRelation(ctx: Ctx, relation: RelationRow, plan: Extract<Event
       reasonCode: plan.reasonCode ?? null,
       reasonNote: plan.reasonNote ?? null,
       cause: `${source.slug}: ${event.event_type}`,
+      historyWritten: true,
     });
     return;
   }
 
   const at = ctx.at;
+  // Historic: the stage the record leaves takes its service-level deadline
+  // with it, and the one it lands on gets none — a deadline dated from the
+  // past would be overdue the moment it is written, and a replay rings
+  // nothing. Only where the org manages deadlines by SLA (`stageDeadlineUpdate`
+  // non-null); elsewhere a deadline is a person's own date and stays.
+  const deadline = (await stageDeadlineUpdate(orgId, toStage, at)) ? { stageDeadline: null, deadlineReminderSentAt: null } : {};
   const undone = await inTransaction(ctx.db, async (tx) => {
     let fromStatus = relation.pipelineStatus;
     let undoneExpiry = false;
@@ -648,7 +701,7 @@ async function moveRelation(ctx: Ctx, relation: RelationRow, plan: Extract<Event
       ...(plan.reasonCode ? { reasonCode: plan.reasonCode } : {}),
       ...(plan.reasonNote ? { reasonNote: plan.reasonNote } : {}),
     });
-    await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } });
+    await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window, ...deadline } });
     if (history) await tx.statusChange.create({ data: history });
     return undoneExpiry;
   });
@@ -813,11 +866,45 @@ async function settleHistoricTrial(ctx: Ctx, relationId: string, stages: Stages)
 // `relationId`; the replay's activity line is not written; and while it runs
 // it holds the row locks a real run would take, so a live event for the same
 // account waits for it (seconds, bounded by DRY_RUN_TIMEOUT_MS).
+//
+// THREE GUARDS keep a replay from losing events or starving the app:
+//   • The org's funnel must have every stage a replay writes into
+//     (`missingReplayStages`) — checked BEFORE anything is claimed, and the
+//     whole batch is refused (MissingReplayStagesError → 409 `missing_stages`).
+//   • An event whose claim was RELEASED (no default lead owner, a missing
+//     stage: the org is not ready, the event is not wrong) holds back the later
+//     events of the same account in the batch: they are answered with the same
+//     outcome, unclaimed, so resending the batch once the org is fixed replays
+//     the whole account in order. Handled, a `converted` after an unhandled
+//     `account_created` would be a final `unknown_account`, and the resent
+//     batch would answer it `duplicate` — lost for good.
+//   • At most DRY_RUN_CONCURRENCY dry runs per process: each one holds a
+//     database connection for its whole run and its reads of org settings need
+//     a second one, so unbounded parallel dry runs could drain the pool every
+//     tenant shares (DryRunBusyError → 429 `dry_run_busy`).
 
 export { ACCOUNT_EVENT_BATCH_MAX } from '@/lib/accountEventRule';
 
 /** How long one dry run may hold its transaction. */
 export const DRY_RUN_TIMEOUT_MS = 120_000;
+
+/** Dry runs one process runs at a time (see THREE GUARDS above). */
+export const DRY_RUN_CONCURRENCY = 1;
+let dryRunsInFlight = 0;
+
+/** The org's funnel lacks stages a replay writes into; nothing was claimed. */
+export class MissingReplayStagesError extends Error {
+  constructor(readonly stages: string[]) {
+    super(`the org's funnel has no ${stages.join(', ')} stage(s)`);
+  }
+}
+
+/** Another dry run is running in this process; nothing was read or written. */
+export class DryRunBusyError extends Error {
+  constructor() {
+    super('another dry run is running');
+  }
+}
 
 export interface BatchItemResult extends IngestResult {
   /** The event's position in the request (0-based). */
@@ -838,11 +925,28 @@ export async function ingestAccountEventBatch(
   options: { dryRun?: boolean; now?: Date } = {},
 ): Promise<BatchItemResult[]> {
   const now = options.now ?? new Date();
+  const missing = missingReplayStages(await runWithOrg(orgId, () => resolvePipelineStages(orgId)));
+  if (missing.length > 0) throw new MissingReplayStagesError(missing);
+
   const run = async (db: Db, log: ReplayLog): Promise<BatchItemResult[]> => {
     const results: BatchItemResult[] = new Array(events.length);
+    // external_id → the outcome of its event whose claim was released.
+    const heldBack = new Map<string, IngestOutcome>();
     for (const index of batchOrder(events)) {
       const event = { ...events[index], replay: true };
-      const result = await ingestAccountEvent(orgId, source, event, { now, replayLog: log, db });
+      const waitingFor = heldBack.get(event.external_id);
+      if (waitingFor) {
+        results[index] = {
+          index,
+          event_id: event.event_id,
+          outcome: waitingFor,
+          detail: `not handled: an earlier event of this account in the batch answered ${waitingFor}; nothing was claimed, resend once that is fixed`,
+          historic: true,
+        };
+        continue;
+      }
+      const { result, released } = await ingestEvent(orgId, source, event, { now, replayLog: log, db });
+      if (released) heldBack.set(event.external_id, result.outcome);
       results[index] = { index, event_id: event.event_id, ...result };
     }
     return results;
@@ -857,6 +961,8 @@ export async function ingestAccountEventBatch(
     }
   }
 
+  if (dryRunsInFlight >= DRY_RUN_CONCURRENCY) throw new DryRunBusyError();
+  dryRunsInFlight += 1;
   try {
     await prisma.$transaction(
       async (tx) => {
@@ -875,6 +981,8 @@ export async function ingestAccountEventBatch(
       });
     }
     throw e;
+  } finally {
+    dryRunsInFlight -= 1;
   }
   throw new Error('dry run: the transaction was not rolled back');
 }

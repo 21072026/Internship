@@ -15,7 +15,9 @@ const {
   batchOrder,
   ingestIntent,
   lostReasonFor,
+  missingReplayStages,
   planAccountEvent,
+  REPLAY_STAGE_KEYS,
 } = await import('../../src/lib/accountEventRule.ts');
 const { MARKETING_DROPOFF_REASON_CODES } = await import('../../src/lib/dropoffReasons.ts');
 
@@ -157,4 +159,12 @@ test('a batch is processed by external id, then by when each event happened, the
   assert.deepEqual(batchOrder(events), [3, 4, 1, 5, 2, 0]);
   assert.deepEqual(batchOrder([]), []);
   assert.equal(ACCOUNT_EVENT_BATCH_MAX, 200);
+});
+
+test('a replay needs the trial, expiry, won and lost stages — the old stage set lacks the trial ones', () => {
+  assert.deepEqual([...REPLAY_STAGE_KEYS], ['TRIAL_ACTIVE', 'TRIAL_EXPIRED', 'DEAL_WON', 'DEAL_LOST']);
+  assert.deepEqual(missingReplayStages(STAGES), []);
+  const oldSet = ['LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'DEAL_PROPOSAL', 'DEAL_NEGOTIATION', 'DEAL_WON', 'DEAL_LOST'].map((key) => ({ key }));
+  assert.deepEqual(missingReplayStages(oldSet), ['TRIAL_ACTIVE', 'TRIAL_EXPIRED']);
+  assert.deepEqual(missingReplayStages([]), ['TRIAL_ACTIVE', 'TRIAL_EXPIRED', 'DEAL_WON', 'DEAL_LOST']);
 });

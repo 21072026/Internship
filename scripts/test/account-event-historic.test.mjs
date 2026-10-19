@@ -167,7 +167,6 @@ test('the writer reaches stage effects through the shared path, and only for a l
   const imports = [...source.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
   for (const banned of [
     '@/lib/stageChangeEffects',
-    '@/lib/stageSla',
     '@/lib/webhooks',
     '@/lib/notify',
     '@/lib/mailOutbox',
@@ -176,7 +175,14 @@ test('the writer reaches stage effects through the shared path, and only for a l
     assert.ok(!imports.includes(banned), `accountEventIngest.ts must not import ${banned}`);
   }
   const code = source.replace(/\/\/.*$/gm, '');
-  assert.ok(!/stageDeadline/.test(code), 'no stageDeadline write outside a comment');
+  // A historic move CLEARS the deadline of the stage it leaves (where the org
+  // manages deadlines by SLA) and never sets one: every stageDeadline the
+  // writer writes is null, and stageSla is asked only whether it manages them.
+  const deadlineWrites = [...code.matchAll(/stageDeadline\s*:\s*([^,}\s]+)/g)].map((m) => m[1]);
+  assert.ok(deadlineWrites.length >= 1, 'the historic move clears the old deadline');
+  assert.ok(deadlineWrites.every((v) => v === 'null'), `stageDeadline is only ever cleared, got ${deadlineWrites.join(', ')}`);
+  const slaUses = [...code.replace(/^import [^;]*;$/gm, '').matchAll(/\b(stageDeadlineUpdate|resolveStageSlas|stageSla\w*)\b/g)].map((m) => m[1]);
+  assert.ok(slaUses.every((n) => n === 'stageDeadlineUpdate'), `only stageDeadlineUpdate from stageSla, got ${slaUses.join(', ')}`);
   const calls = [...code.matchAll(/recordStageMove\(/g)];
   assert.equal(calls.length, 1, 'one call to the shared stage path');
   const live = code.indexOf('if (!ctx.at) {');
