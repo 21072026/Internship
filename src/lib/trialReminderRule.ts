@@ -392,19 +392,27 @@ export function planTrialEndChange({
  * When the automatic TRIAL_ACTIVE → TRIAL_EXPIRED move is recorded as having
  * happened (#2970): the moment the trial ENDED — not the tick that noticed it,
  * which may be days or, for a record loaded late, months later. Clamped so the
- * history stays in order: strictly after the record's previous stage move (a
- * record put into TRIAL_ACTIVE after its end date was already past expires the
- * moment it got there), and never in the future — the same ordering the
- * historic account-event path keeps (`historicTrialLanding`). A missing or invalid end
- * falls back to `now`.
+ * history stays in order, the same floors the historic account-event path
+ * keeps (`historicMoveAt`): never before the record's own `startDate` (a record
+ * created today with an end date already past expires the moment it exists,
+ * not before it existed — the stage-aging report subtracts the start), strictly
+ * after the record's previous stage move (a record put into TRIAL_ACTIVE after
+ * its end date was already past expires the moment it got there), and never in
+ * the future. A missing or invalid end falls back to `now`.
  */
-export function expiryRecordedAt(trialEndsAt: TrialEndValue, previousMoveAt: Date | null | undefined, now: Date): Date {
+export function expiryRecordedAt(
+  trialEndsAt: TrialEndValue,
+  record: { startDate?: Date | null; previousMoveAt?: Date | null },
+  now: Date,
+): Date {
   const end = asDate(trialEndsAt);
   let at = end ? end.getTime() : now.getTime();
+  const valid = (d: Date | null | undefined): d is Date => d instanceof Date && Number.isFinite(d.getTime());
+  if (valid(record.startDate)) at = Math.max(at, record.startDate.getTime());
   // Strictly after the previous row (1 ms, the step accountEventRule's
   // HISTORY_STEP_MS uses), so a reader ordering by createdAt alone never shows
   // the expiry before the move into the trial.
-  if (previousMoveAt instanceof Date && Number.isFinite(previousMoveAt.getTime())) at = Math.max(at, previousMoveAt.getTime() + 1);
+  if (valid(record.previousMoveAt)) at = Math.max(at, record.previousMoveAt.getTime() + 1);
   return new Date(Math.min(at, now.getTime()));
 }
 

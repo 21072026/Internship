@@ -393,7 +393,7 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
 
   const due = await prisma.mentorshipRelation.findMany({
     where: { orgId, status: 'ACTIVE', pipelineStatus: activeKey, trialEndsAt: { lt: startOfToday } },
-    select: { id: true, trialEndsAt: true },
+    select: { id: true, trialEndsAt: true, startDate: true },
     // Bounded, and safely so — see TRIAL_EXPIRY_MAX_PER_RUN. Oldest first, so a
     // backlog drains in the order it accumulated instead of in whatever order
     // the index hands back.
@@ -435,7 +435,8 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
       // stage clock and the history read the move from this row, and a sweep
       // that was down for a week — or a record loaded long after its trial ran
       // out — must not report the expiry as today's news. Never before the
-      // record's previous move, so the history stays in order (expiryRecordedAt).
+      // record's start or its previous move, so the history stays in order
+      // (expiryRecordedAt).
       if (row) {
         const previous = await tx.statusChange.findFirst({
           where: { relationId: relation.id },
@@ -443,7 +444,11 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
           select: { createdAt: true },
         });
         await tx.statusChange.create({
-          data: { ...row, createdAt: expiryRecordedAt(relation.trialEndsAt, previous?.createdAt ?? null, now) },
+          data: { ...row, createdAt: expiryRecordedAt(
+              relation.trialEndsAt,
+              { startDate: relation.startDate, previousMoveAt: previous?.createdAt ?? null },
+              now,
+            ), },
         });
       }
       return true;

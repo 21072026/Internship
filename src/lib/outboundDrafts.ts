@@ -8,7 +8,7 @@ import { getSetting } from '@/lib/settings';
 import { verticalFor } from '@/lib/verticalContext';
 import { verticalCapabilities } from '@/lib/verticals';
 import { logActivity } from '@/lib/activity';
-import { recipientHash } from '@/lib/mailDeliveryRule';
+import { recipientHash, unmailableRecipient } from '@/lib/mailDeliveryRule';
 import { MAIL_JOB_NAME, decodeEnvelope, encodeEnvelope, type Envelope } from '@/lib/mailWorkerRule';
 import { canQueue, enqueueMail } from '@/lib/mailOutbox';
 import { settleMailRef } from '@/lib/mailRefHooks';
@@ -420,7 +420,7 @@ export async function draftDetail(actor: OutboxActor, id: string): Promise<Draft
 
 export type DraftActionResult =
   | { ok: true; status: OutboundDraftStatus; jobId: string | null }
-  | { ok: false; httpStatus: 404 | 409 | 500; code: 'not_found' | 'conflict' | 'unreadable' | 'not_queueable' | 'enqueue_failed' | 'send_failed' | ActionRefusal };
+  | { ok: false; httpStatus: 404 | 409 | 500; code: 'not_found' | 'conflict' | 'unreadable' | 'not_queueable' | 'unmailable' | 'enqueue_failed' | 'send_failed' | ActionRefusal };
 
 const AUDIT_ACTION: Record<OutboundAction, string> = {
   send: 'outbound_draft.send',
@@ -460,6 +460,10 @@ export async function applyDraftAction(
     const env = row.box ? decodeEnvelope(open(row.box, SEAL_PURPOSE)) : null;
     if (!env) return { ok: false, httpStatus: 409, code: 'unreadable' };
     prepared = env as unknown as PreparedEmail;
+    // A generated address is nobody (#2970). prepareEmail() refuses one before
+    // it can become a draft, but a draft held before that net existed may
+    // still carry one: it can only be discarded, never sent or scheduled.
+    if (unmailableRecipient(prepared.to)) return { ok: false, httpStatus: 409, code: 'unmailable' };
     // A mail whose attachments are over the queue's cap (a message copy with a
     // photo, a newsletter with a large image) cannot wait on the queue, so it
     // cannot be scheduled — but "send now" delivers it inline below.

@@ -1,6 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { recipientHash } from '@/lib/mailDeliveryRule';
+import { drainOnce, enqueueMail } from '@/lib/mailOutbox';
+import { applyDraftAction, type OutboxActor } from '@/lib/outboundDrafts';
+import { triggerFor } from '@/lib/outboundApprovalRule';
+import { encodeEnvelope, type Envelope } from '@/lib/mailWorkerRule';
+import { seal } from '@/lib/secretBox';
 import { defaultTemplateForVertical, templateStagePayload } from '@/lib/programTemplates';
 import { DECISION_WINDOW_CLAIM } from '@/lib/trialReminderRule';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
@@ -19,6 +24,7 @@ import {
   checkReEngagementReminders,
   checkRetentionReminders,
   checkStageDeadlineReminders,
+  mailDrainDeps,
   mailMeterIdleForTests,
   resetMailTransportsForTests,
   sendDormantCheckIns,
@@ -66,6 +72,7 @@ const LEADS = {
   qualified: 'LEAD_QUALIFIED',
   trialSoon: 'TRIAL_ACTIVE',
   trialOver: 'TRIAL_ACTIVE',
+  trialLate: 'TRIAL_ACTIVE',
   windowClosing: 'TRIAL_EXPIRED',
   windowStale: 'TRIAL_EXPIRED',
   won: 'DEAL_WON',
@@ -126,14 +133,25 @@ test.describe('mail safety net', () => {
     const trialEnd: Partial<Record<LeadKey, Date>> = {
       trialSoon: utcDay(3), // the 3-day mark: a reminder to the OWNER
       trialOver: utcDay(-10), // ran out ten days ago: the sweep expires it
+      trialLate: utcDay(-10), // same end, but the record was only created today
       windowClosing: utcDay(-25), // window closes in 5 days: one bell
       windowStale: utcDay(-90), // window closed 60 days ago: a historic record
     };
+    // The record behind `trialOver` has existed for forty days; `trialLate`
+    // keeps the default (now), as a record loaded today with a past end does.
+    const startDate: Partial<Record<LeadKey, Date>> = { trialOver: utcDay(-40) };
     for (const [key, stage] of Object.entries(LEADS) as [LeadKey, string][]) {
       const lead = await seedUser(leadEmail[key], PASSWORD, 'MENTEE', `Net Lead ${key} ${STAMP}`, orgId);
       ids[key] = lead.id;
       const r = await prisma.mentorshipRelation.create({
-        data: { orgId, mentorId: ids.rep, menteeId: lead.id, pipelineStatus: stage, trialEndsAt: trialEnd[key] ?? null },
+        data: {
+          orgId,
+          mentorId: ids.rep,
+          menteeId: lead.id,
+          pipelineStatus: stage,
+          trialEndsAt: trialEnd[key] ?? null,
+          ...(startDate[key] ? { startDate: startDate[key] } : {}),
+        },
       });
       rel[key] = r.id;
     }
@@ -286,6 +304,14 @@ test.describe('mail safety net', () => {
     ]);
     const audits = await prisma.auditLog.findMany({ where: { action: 'trial.expire', targetId: rel.trialOver! } });
     expect(audits.map((a) => a.orgId)).toEqual([orgId]);
+    // ...but never before the record existed: one created today with the same
+    // past end expired the moment it was created, not ten days before it.
+    const late = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.trialLate! } });
+    expect(late.pipelineStatus).toBe('TRIAL_EXPIRED');
+    const lateMoves = await prisma.statusChange.findMany({ where: { relationId: rel.trialLate! } });
+    expect(lateMoves.map((m) => [m.fromStatus, m.toStatus, m.createdAt.toISOString()])).toEqual([
+      ['TRIAL_ACTIVE', 'TRIAL_EXPIRED', late.startDate!.toISOString()],
+    ]);
 
     // NO STALE BELL. The window closing in five days rang its one bell; the
     // one that closed two months ago did not, and stays in the queue unrung.
@@ -294,5 +320,55 @@ test.describe('mail safety net', () => {
     expect(await claims(rel.windowClosing!)).toBe(1);
     expect(await claims(rel.windowStale!)).toBe(0);
     expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.windowStale! } })).pipelineStatus).toBe('TRIAL_EXPIRED');
+  });
+  test('a draft or a queued mail from before the net still never reaches a stand-in', { tag: '@smoke' }, async () => {
+    // Written as the outbox and the queue stored them before #2970: the
+    // stand-in address sealed inside, nothing refused on the way in.
+    const prepared = {
+      to: STAND_IN,
+      subject: `Legacy ${STAMP}`,
+      category: 're-engagement',
+      transport: 'primary' as const,
+      lane: 'BULK' as const,
+      message: { html: '<p>x</p>' },
+      userId: ids.standIn,
+      orgId,
+    };
+    const draft = await prisma.outboundDraft.create({
+      data: {
+        orgId,
+        status: 'DRAFT',
+        category: prepared.category,
+        lane: prepared.lane,
+        reason: 'held_lead',
+        trigger: triggerFor(prepared.category),
+        rcpt: recipientHash(STAND_IN),
+        recipientUserId: ids.standIn,
+        box: seal(encodeEnvelope(prepared as unknown as Envelope), 'outbound-draft'),
+        dedupeKey: `sn-legacy-draft-${STAMP}`,
+        notAfter: utcDay(7),
+      },
+    });
+    const admin: OutboxActor = { id: ids.admin, role: 'ADMIN', orgId };
+    // It cannot be sent or scheduled — only discarded.
+    expect(await applyDraftAction(admin, draft.id, 'send')).toEqual({ ok: false, httpStatus: 409, code: 'unmailable' });
+    const at = new Date(Date.now() + 60 * 60 * 1000);
+    expect(await applyDraftAction(admin, draft.id, 'schedule', { scheduledFor: at })).toEqual({ ok: false, httpStatus: 409, code: 'unmailable' });
+    expect((await prisma.outboundDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe('DRAFT');
+    expect(await applyDraftAction(admin, draft.id, 'discard')).toMatchObject({ ok: true, status: 'DISCARDED' });
+
+    // A queued row: the drain cancels it unsent and records why.
+    const job = await enqueueMail(prepared, { reason: 'approved', dedupeKey: `sn-legacy-job-${STAMP}` });
+    for (let i = 0; i < 5; i++) {
+      await drainOnce({ maxMs: 5_000, deps: mailDrainDeps() });
+      if ((await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).status !== 'PENDING') break;
+    }
+    const settled = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(settled.status).toBe('CANCELLED');
+    expect(settled.lastError).toBe('unmailable');
+    expect((settled.payload as Record<string, unknown>).box).toBeNull();
+    expect(smtp.to(STAND_IN)).toHaveLength(0);
+    const logs = await prisma.emailLog.findMany({ where: { to: STAND_IN, subject: prepared.subject } });
+    expect(logs.map((l) => [l.status, l.error])).toEqual([['SKIPPED', 'Unmailable address: placeholder_address']]);
   });
 });

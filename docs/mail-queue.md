@@ -21,7 +21,7 @@ mails every time, and a password reset sent during that minute was lost too.
 | Situation | Result | EmailLog | What happens next |
 |---|---|---|---|
 | The relay accepts the mail | `SENT` | SENT | — |
-| A generated recipient address — a stand-in lead (`import.local`) or an erased account (`erased.local`), checked **first** (#2970, `unmailableRecipient()`) | `SKIPPED` | SKIPPED, `Unmailable address: placeholder_address` / `erased_address` | nothing: never queued, never held as a draft |
+| A generated recipient address — a stand-in lead (`import.local`) or an erased account (`erased.local`), checked **first** (#2970, `unmailableRecipient()`) | `SKIPPED` | SKIPPED, `Unmailable address: placeholder_address` / `erased_address` | nothing: never queued, never held as a draft. A row queued before #2970 is cancelled by the drain (`lastError: 'unmailable'`) |
 | An opt-out, demo mode, no SMTP configured | `SKIPPED` | SKIPPED | — |
 | A **temporary** failure, any lane: a throttle, a refused session, a timeout, a 4xx about the message | `QUEUED` | DEFERRED | the drain retries it |
 | A **permanent** failure: a 5xx about the message | throws | FAILED | nothing — as before |
