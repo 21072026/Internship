@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import {
   TRIAL_REMINDER_THRESHOLDS,
   daysUntilUtcDay,
+  expiryRecordedAt,
   selectDueTrialReminders,
   utcDayNumber,
 } from '../../src/lib/trialReminderRule.ts';
@@ -263,4 +264,32 @@ test('the trialLengthDays setting parses whole days in 1..365, anything else is 
   for (const raw of ['', '0', '366', '-3', '12.5', 'abc', null, undefined]) {
     assert.equal(parseTrialLengthDays(raw), 30, String(raw));
   }
+});
+
+test('the automatic expiry is dated when the trial ended, in order, never in the future (#2970)', () => {
+  const at = (s) => new Date(s);
+  const now = at('2026-10-19T05:20:00Z');
+  // The usual case: the sweep runs the morning after; history says the end.
+  assert.equal(expiryRecordedAt(at('2026-10-18T00:00:00Z'), { previousMoveAt: at('2026-09-18T10:00:00Z') }, now).toISOString(), '2026-10-18T00:00:00.000Z');
+  // A sweep down for a month, or a record loaded late: still the end date.
+  assert.equal(expiryRecordedAt('2026-06-01T00:00:00.000Z', { previousMoveAt: at('2026-05-02T00:00:00Z') }, now).toISOString(), '2026-06-01T00:00:00.000Z');
+  // Put into TRIAL_ACTIVE after the end had already passed: it expired the
+  // moment it got there — strictly after its previous move, never tied with it.
+  assert.equal(expiryRecordedAt(at('2026-06-01T00:00:00Z'), { previousMoveAt: at('2026-10-10T08:00:00Z') }, now).toISOString(), '2026-10-10T08:00:00.001Z');
+  assert.equal(expiryRecordedAt(at('2026-10-10T08:00:00Z'), { previousMoveAt: at('2026-10-10T08:00:00Z') }, now).toISOString(), '2026-10-10T08:00:00.001Z');
+  // No previous move on record, no end, a broken end, a future end: bounded.
+  assert.equal(expiryRecordedAt(at('2026-06-01T00:00:00Z'), { previousMoveAt: null }, now).toISOString(), '2026-06-01T00:00:00.000Z');
+  assert.equal(expiryRecordedAt(null, { previousMoveAt: null }, now).toISOString(), now.toISOString());
+  assert.equal(expiryRecordedAt('not a date', { previousMoveAt: undefined }, now).toISOString(), now.toISOString());
+  assert.equal(expiryRecordedAt(at('2027-01-01T00:00:00Z'), { previousMoveAt: null }, now).toISOString(), now.toISOString());
+  assert.equal(expiryRecordedAt(at('2026-06-01T00:00:00Z'), { previousMoveAt: at('2027-01-01T00:00:00Z') }, now).toISOString(), now.toISOString());
+  // Never before the record existed: created today with an end already ten
+  // days past (an import, a live account event, a hand-made record) and no
+  // history row at all — it expired the moment it was created.
+  assert.equal(expiryRecordedAt(at('2026-10-09T00:00:00Z'), { startDate: at('2026-10-19T04:00:00Z'), previousMoveAt: null }, now).toISOString(), '2026-10-19T04:00:00.000Z');
+  // A start before the end changes nothing; a start in the future is still bounded by now.
+  assert.equal(expiryRecordedAt(at('2026-10-09T00:00:00Z'), { startDate: at('2026-09-09T00:00:00Z') }, now).toISOString(), '2026-10-09T00:00:00.000Z');
+  assert.equal(expiryRecordedAt(at('2026-10-09T00:00:00Z'), { startDate: at('2027-01-01T00:00:00Z') }, now).toISOString(), now.toISOString());
+  // Both floors: the later one wins (strictly after the previous row).
+  assert.equal(expiryRecordedAt(at('2026-06-01T00:00:00Z'), { startDate: at('2026-05-01T00:00:00Z'), previousMoveAt: at('2026-07-01T00:00:00Z') }, now).toISOString(), '2026-07-01T00:00:00.001Z');
 });

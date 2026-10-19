@@ -456,3 +456,35 @@ test('dedupe: every key fits Job.idempotencyKey (191)', () => {
     assert.ok(k.length <= 191, `${k.length}`);
   }
 });
+
+// ── Addresses nobody reads (#2970) ──────────────────────────────────────────
+
+test('unmailable: a stand-in lead address and an erased account are refused, with the reason', async () => {
+  const { leadStandInEmail } = await import('../../src/lib/marketingImport.ts');
+  assert.equal(R.unmailableRecipient(leadStandInEmail('lena@acme-sales.example.test', 'org-1')), 'placeholder_address');
+  assert.equal(R.unmailableRecipient('mentee.someone.1a2b@import.local'), 'placeholder_address');
+  assert.equal(R.unmailableRecipient('erased-abc@erased.local'), 'erased_address');
+  // Case, spaces, a display name and a trailing root dot do not slip past it.
+  assert.equal(R.unmailableRecipient('  Lead@IMPORT.LOCAL '), 'placeholder_address');
+  assert.equal(R.unmailableRecipient('Lead Person <lead@import.local>'), 'placeholder_address');
+  assert.equal(R.unmailableRecipient('lead@import.local.'), 'placeholder_address');
+  // A list with one generated address on it is one refused mail.
+  assert.equal(R.unmailableRecipient('rep@acme-sales.example.test, lead@import.local'), 'placeholder_address');
+});
+
+test('unmailable: real addresses, look-alikes and junk are left alone', () => {
+  for (const to of [
+    'lead@acme-sales.example.test',
+    'someone@import.local.example.test',
+    'someone@notimport.local',
+    'import.local@acme-sales.example.test',
+    'constructor@constructor',
+    'someone@constructor',
+    'no-at-sign',
+    '',
+  ]) {
+    assert.equal(R.unmailableRecipient(to), null, to);
+  }
+  assert.equal(R.unmailableRecipient(null), null);
+  assert.equal(R.unmailableRecipient(undefined), null);
+});

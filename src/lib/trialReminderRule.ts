@@ -388,6 +388,34 @@ export function planTrialEndChange({
   };
 }
 
+/**
+ * When the automatic TRIAL_ACTIVE → TRIAL_EXPIRED move is recorded as having
+ * happened (#2970): the moment the trial ENDED — not the tick that noticed it,
+ * which may be days or, for a record loaded late, months later. Clamped so the
+ * history stays in order, the same floors the historic account-event path
+ * keeps (`historicMoveAt`): never before the record's own `startDate` (a record
+ * created today with an end date already past expires the moment it exists,
+ * not before it existed — the stage-aging report subtracts the start), strictly
+ * after the record's previous stage move (a record put into TRIAL_ACTIVE after
+ * its end date was already past expires the moment it got there), and never in
+ * the future. A missing or invalid end falls back to `now`.
+ */
+export function expiryRecordedAt(
+  trialEndsAt: TrialEndValue,
+  record: { startDate?: Date | null; previousMoveAt?: Date | null },
+  now: Date,
+): Date {
+  const end = asDate(trialEndsAt);
+  let at = end ? end.getTime() : now.getTime();
+  const valid = (d: Date | null | undefined): d is Date => d instanceof Date && Number.isFinite(d.getTime());
+  if (valid(record.startDate)) at = Math.max(at, record.startDate.getTime());
+  // Strictly after the previous row (1 ms, the step accountEventRule's
+  // HISTORY_STEP_MS uses), so a reader ordering by createdAt alone never shows
+  // the expiry before the move into the trial.
+  if (valid(record.previousMoveAt)) at = Math.max(at, record.previousMoveAt.getTime() + 1);
+  return new Date(Math.min(at, now.getTime()));
+}
+
 // ── The decision window (#2843, #2927) ───────────────────────────────────────
 //
 // `trialEndsAt` is the end of the FREE period. After it the record sits in
@@ -447,4 +475,27 @@ export function isDecisionWindowClosing(
   if (record.pipelineStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
   const closes = decisionWindowEndsAt(record.trialEndsAt, windowDays);
   return !!closes && daysUntilUtcDay(closes, now) <= DECISION_WINDOW_WARN_DAYS;
+}
+
+/**
+ * How long after a window CLOSED its bell may still ring (#2970). The queue
+ * keeps showing an undecided record whatever its age (`isDecisionWindowClosing`);
+ * the bell is a reminder, and a reminder about a window that closed months ago
+ * — a historic record loaded late, an import, a sweep that was down — is noise
+ * to its owner. A week covers a sweep that missed a few days.
+ */
+export const DECISION_WINDOW_STALE_DAYS = 7;
+
+/**
+ * Is the one "window closing" bell due for this record? Closing (above), and
+ * its window closed no more than DECISION_WINDOW_STALE_DAYS ago.
+ */
+export function isDecisionWindowBellDue(
+  record: { pipelineStatus: string | null | undefined; trialEndsAt: TrialEndValue },
+  now: Date,
+  windowDays: number = DEFAULT_DECISION_WINDOW_DAYS,
+): boolean {
+  if (!isDecisionWindowClosing(record, now, windowDays)) return false;
+  const closes = decisionWindowEndsAt(record.trialEndsAt, windowDays)!;
+  return daysUntilUtcDay(closes, now) >= -DECISION_WINDOW_STALE_DAYS;
 }

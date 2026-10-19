@@ -18,6 +18,7 @@ import {
   lanePriority,
   queueEtaMinutes,
   recipientHash,
+  unmailableRecipient,
   type BudgetConfig,
   type MailChannel,
 } from '@/lib/mailDeliveryRule';
@@ -325,6 +326,8 @@ export interface DrainSummary {
   dead: number;
   expired: number;
   unsubscribed: number;
+  /** Rows addressed to a generated address (#2970), cancelled unsent. */
+  unmailable: number;
   reaped: number;
   /** BULK rows put back to the next UTC day by `MAIL_DAILY_CAP` (enforce mode). */
   capped: number;
@@ -442,6 +445,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     dead: 0,
     expired: 0,
     unsubscribed: 0,
+    unmailable: 0,
     reaped: 0,
     capped: 0,
     authRejected: false,
@@ -565,6 +569,19 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     deps.finalFailure(envelope);
     logger.warning('mail_outbox.expired', meta);
     summary.expired++;
+    return null;
+  }
+
+  // ── A generated address is nobody (#2970) ────────────────────────────────
+  // prepareEmail() refuses one before it is ever queued; this catches a row
+  // queued before that net existed (or an approved draft from then). Before
+  // the budget, so it spends no token on mail that will never leave.
+  if (unmailableRecipient(envelope.to)) {
+    await settle(row, workerId, { status: 'CANCELLED', lastError: 'unmailable', payload: clearedPayload(payload) });
+    await deps.record(envelope, 'SKIPPED', `Unmailable address: ${unmailableRecipient(envelope.to)}`);
+    await settleMailRef(payload.ref, 'SKIPPED', 'unmailable');
+    logger.info('mail_outbox.unmailable', meta);
+    summary.unmailable++;
     return null;
   }
 

@@ -20,6 +20,7 @@ import {
   salesRecordLink,
   salesLeadHref,
   interactionReminderApplies,
+  dormantCheckInApplies,
 } from '../../src/lib/salesSurface.ts';
 import { verticalCapabilities } from '../../src/lib/verticals.ts';
 import { SALES_NAV_LINKS, visibleNavLinks } from '../../src/lib/navLinks.ts';
@@ -87,4 +88,14 @@ test('the "no contact in N days" reminder is mentorship work — none for a MARK
   assert.equal(interactionReminderApplies(MARKETING), false);
   // The same line the sales queue draws.
   assert.ok(!SALES_ATTENTION_REASONS.includes('inactive'));
+});
+
+test('the dormant check-in is an internship mail — a MARKETING lead never gets it (#2970)', () => {
+  assert.equal(dormantCheckInApplies(INTERNSHIP), true);
+  assert.equal(dormantCheckInApplies(MARKETING), false);
+  // Every vertical without mentorship is out, whatever else it carries.
+  for (const v of ['INTERNSHIP', 'MARKETING']) {
+    const caps = verticalCapabilities(v);
+    assert.equal(dormantCheckInApplies(caps), caps.includes('mentorship'), v);
+  }
 });

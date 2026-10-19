@@ -18,7 +18,7 @@ import { logActivity } from '@/lib/activity';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
-import { interactionReminderApplies } from '@/lib/salesSurface';
+import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { settingByOrg } from '@/lib/settingsOrg';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
@@ -61,6 +61,7 @@ import {
   effectiveLane,
   opsAlertWindow,
   recipientHash,
+  unmailableRecipient,
   utcDayKey,
   type MailLane,
 } from '@/lib/mailDeliveryRule';
@@ -996,6 +997,19 @@ export async function prepareEmail({
   orgId,
   lane,
 }: SendEmailArgs): Promise<PrepareResult> {
+  // ── A GENERATED ADDRESS IS NOBODY (#2970) ─────────────────────────────────
+  // Before anything else — the opt-out read, demo mode, the approval hold, the
+  // queue: a stand-in lead address (`import.local`) or an erased account's
+  // (`erased.local`) is not a mailbox, so the mail is recorded SKIPPED with
+  // the reason and goes nowhere — not on the queue, not into an outbox as a
+  // draft somebody could approve. The rule is pure in mailDeliveryRule.ts.
+  const unmailable = unmailableRecipient(to);
+  if (unmailable) {
+    logger.info('Email not sent: generated address', { category, reason: unmailable });
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), `Unmailable address: ${unmailable}`);
+    return { status: 'SKIPPED' };
+  }
+
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
   // user who simply never replied (#1194) — the whole reason a batch of
@@ -4010,7 +4024,7 @@ export const DORMANT_NUDGE_MAX_PER_RUN = 50;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function sendDormantCheckIns(now = new Date()) {
-  const relations = await prisma.mentorshipRelation.findMany({
+  const flagged = await prisma.mentorshipRelation.findMany({
     where: {
       status: 'ACTIVE',
       dormantSince: { not: null },
@@ -4031,6 +4045,16 @@ export async function sendDormantCheckIns(now = new Date()) {
     // rather than a random slice of it.
     orderBy: { dormantSince: 'asc' },
   });
+
+  // THE CAPABILITY GATE (#2970). The check-in is mentorship work; in a vertical
+  // without `mentorship` (MARKETING) the MENTEE is a lead, and the product must
+  // never write to a lead on its own — not even as a draft. Filtered before
+  // anything is claimed, so a lead's two-nudge budget is never spent here.
+  const capabilitiesOf = capabilitiesMemo();
+  const relations: typeof flagged = [];
+  for (const relation of flagged) {
+    if (dormantCheckInApplies(await capabilitiesOf(relation.orgId))) relations.push(relation);
+  }
 
   let sent = 0;
   let checked = 0;

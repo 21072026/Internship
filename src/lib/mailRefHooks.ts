@@ -42,14 +42,14 @@ function parseNewsletterRef(ref: string): { newsletterId: string; userId: string
 /**
  * A queued `Job` row's terminal state as a sender's outcome: delivered (or
  * delivered inline after all) is SENT, cancelled because the reader opted out
- * in the meantime is SKIPPED, everything else that ended it is FAILED. Null
+ * in the meantime (or addressed to a generated address, #2970) is SKIPPED, everything else that ended it is FAILED. Null
  * while the row is still on its way.
  */
 export function outcomeOfJob(status: string, lastError: string | null | undefined): MailRefOutcome | null {
   if (status === 'SUCCEEDED') return 'SENT';
   if (status === 'FAILED' || status === 'DEAD_LETTER') return 'FAILED';
   if (status === 'CANCELLED') {
-    if (lastError === 'unsubscribed') return 'SKIPPED';
+    if (lastError === 'unsubscribed' || lastError === 'unmailable') return 'SKIPPED';
     if (lastError === 'sent_inline') return 'SENT';
     return 'FAILED';
   }

@@ -105,6 +105,48 @@ claim, so the next run does not ask again. When the decision cannot be made (the
 database is down) the send **throws**, recorded `FAILED`: a mail to a lead never
 leaves because the check failed.
 
+## The safety net (#2970)
+
+Approval decides which mail **waits**. Four smaller rules make sure that some
+mail never even gets that far, and that a quiet launch stays quiet. All of them
+apply whatever the org's `outboundApproval` value is.
+
+| Net | Where | What it does |
+|---|---|---|
+| **No mail to a generated address** | `unmailableRecipient()` in `src/lib/mailDeliveryRule.ts` (pure, unit-tested), the first check of `prepareEmail()` | A stand-in lead address (`…@import.local`, written by the importer, an account event or a mentor for a lead with no known address) or an erased account's (`…@erased.local`) is not a mailbox. The mail is recorded `SKIPPED` with `Unmailable address: placeholder_address` / `erased_address` **before** the opt-out read, demo mode, the hold and the queue: never queued, never a draft somebody could approve, in every org and every category. A list (`a, b`) with one such address on it is refused whole. Mail stored **before** this net existed is caught twice more: approving or scheduling such a draft answers `409 unmailable` (it can only be discarded), and the drain cancels such a queued row unsent (`lastError: 'unmailable'`, EmailLog `SKIPPED`) before it spends a budget token. |
+| **No dormant check-in outside mentorship** | `dormantCheckInApplies()` in `src/lib/salesSurface.ts`, read in `sendDormantCheckIns()` | The "are you still interested?" mail is an internship concept. In a vertical without `mentorship` the job skips the relation before it claims anything: no mail, no draft, no spent nudge. |
+| **No stale decision-window bell** | `isDecisionWindowBellDue()` / `DECISION_WINDOW_STALE_DAYS` (7) in `src/lib/trialReminderRule.ts`, read in `ringDecisionWindows()` | A window that closed more than a week ago never rings — a historic or late-loaded record stays in the owner's queue but does not produce a reminder for something long past. |
+| **A quieter trial expiry** | `expireTrials()` (`src/lib/jobs/trialReminders.ts`), `expiryRecordedAt()` | The automatic `TRIAL_ACTIVE → TRIAL_EXPIRED` history row is dated when the trial **ended** (never before the record's `startDate`, strictly after its previous move, never in the future — the floors `historicMoveAt()` keeps), not when the sweep noticed; its `AuditLog` rows carry the org's `orgId`. |
+
+### Audit: what can reach the lead side of a MARKETING org
+
+Every category the product sends is in `OUTBOUND_CATEGORIES` (the unit test
+pins that `src/lib/emailGroups.ts` has no category without an entry). For a
+recipient that is a lead (`MENTEE`), a customer login (`COMPANY`) or an
+account-less contact of a MARKETING org, each one is either **exempt by
+design** — the person or a staff member asked for it — or **held**:
+
+| Category | With approval on | Why |
+|---|---|---|
+| `verification`, `password-reset`, `account` | sent | the person asked: their own sign-up, reset or sign-in link, an account change |
+| `security` | sent | a security notice may never be silenced (docs/security-notices.md) |
+| `invitation` | sent | an invitation is a staff member's deliberate act, never a cron |
+| `consent` | sent | the demo form's double-opt-in confirmation, triggered by the person |
+| `mentor-application-received` | sent | the acknowledgement of the person's own application |
+| `ops-alert`, `test` | sent | staff addresses only (the server's alert address, the admin's own test) |
+| `retention-reminder` | **held** | a cron's re-consent ask the person never triggered |
+| every other category (deadlines, check-ins, re-engagement, digests, messages, meetings, pipeline notices, content, surveys, inbound copies) | **held** | automated mail, or the mail copy of something done in the app |
+| an unknown or missing category | **held** | fail safe |
+
+And none of them reaches a generated address at all (the first net above).
+
+`e2e/mail-safety-net.spec.ts` pins it end to end: a synthetic MARKETING org
+with approval on, a lead in every funnel stage, a customer login and a stand-in
+lead; the daily crons are called directly (the `/api/cron` batch, the trial
+sweep, report subscriptions, surveys, evaluations), and the spec asserts zero
+`email.send` jobs and zero `SENT` / `DEFERRED` `EmailLog` rows for anybody on
+the lead side — only `OutboundDraft` rows, and for the stand-in not even that.
+
 ## The draft — `OutboundDraft`
 
 - `orgId` (registered in `TENANT_MODELS`), `category`, `lane`, `mailGroup`,

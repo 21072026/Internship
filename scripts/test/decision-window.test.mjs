@@ -14,6 +14,8 @@ import {
   TRIAL_REMINDER_THRESHOLDS,
   decisionWindowEndsAt,
   isDecisionWindowClosing,
+  isDecisionWindowBellDue,
+  DECISION_WINDOW_STALE_DAYS,
   parseDecisionWindowDays,
 } from '../../src/lib/trialReminderRule.ts';
 
@@ -73,4 +75,23 @@ test('the claim threshold is a fixed negative marker outside the trial ladder', 
   assert.equal(DECISION_WINDOW_CLAIM, -(DEFAULT_DECISION_WINDOW_DAYS - DECISION_WINDOW_WARN_DAYS));
   assert.equal(DECISION_WINDOW_CLAIM, -23);
   assert.ok(!TRIAL_REMINDER_THRESHOLDS.includes(DECISION_WINDOW_CLAIM));
+});
+
+test('the bell never rings for a window that closed more than a week ago (#2970)', () => {
+  assert.equal(DECISION_WINDOW_STALE_DAYS, 7);
+  // Window: 2026-10-01 + 30 days = closes 2026-10-31.
+  const rec = { pipelineStatus: 'TRIAL_EXPIRED', trialEndsAt: d('2026-10-01') };
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-10-23')), false); // 8 days left: not yet
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-10-24')), true); // 7 days left
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-10-31')), true); // closes today
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-11-07')), true); // closed 7 days ago: still a missed sweep
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-11-08')), false); // closed 8 days ago: stale
+  assert.equal(isDecisionWindowBellDue(rec, d('2027-03-01')), false); // a historic record
+  // The queue still shows it — only the bell is quiet.
+  assert.equal(isDecisionWindowClosing(rec, d('2027-03-01')), true);
+  // The org's own window length moves both edges.
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-10-22'), 14), true); // closed 2026-10-15, 7 days ago
+  assert.equal(isDecisionWindowBellDue(rec, d('2026-10-23'), 14), false);
+  assert.equal(isDecisionWindowBellDue({ ...rec, pipelineStatus: 'TRIAL_ACTIVE' }, d('2026-10-30')), false);
+  assert.equal(isDecisionWindowBellDue({ ...rec, trialEndsAt: null }, d('2026-10-30')), false);
 });
