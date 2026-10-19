@@ -124,12 +124,19 @@ export function PublicHeader({
           <Link
             href={localizeHref('/', urlLocale)}
             data-testid="public-home-link"
-            aria-label={n.homeLink}
             className="flex items-center gap-2 min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <BrandMark className="h-7 w-7 text-blue-600 flex-shrink-0" />
             <span className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{productName}</span>
             <BetaBadge className="flex-shrink-0" />
+            {/* The destination hint is a CHILD, not an aria-label (#2967). An
+                aria-label REPLACES the name, so the link was called
+                "InternshipCRM — go to the home page" while it visibly read
+                "Internship CRM beta" — WCAG 2.5.3 Label in Name, and a voice
+                user saying what they could see did not reach it. As a child it
+                is appended to the name instead, which keeps the visible
+                wordmark inside it whatever the brand and the badge say. */}
+            <span className="sr-only">{n.homeLink}</span>
           </Link>
 
           <nav aria-label={n.menu} className="hidden lg:flex items-center gap-6">

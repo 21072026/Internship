@@ -232,10 +232,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkOwnerLabel: 'Rep',
         bulkAssignOwner: 'Assign rep',
       },
-      // Public chrome + auth pages (#2501): the header aria-label, footer
-      // tagline and sign-in/register copy a marketing visitor reads.
+      // Public chrome + auth pages (#2501): the footer tagline and the
+      // sign-in/register copy a marketing visitor reads. The header wordmark
+      // needs no entry — it names itself from `productNameFor()` (#2967).
       publicNav: {
-        homeLink: '{product} — go to the home page',
         tagline: 'Leads, accounts and deals in one pipeline — from first contact to close.',
       },
       auth: {
@@ -834,7 +834,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkAssignOwner: 'Temsilci ata',
       },
       publicNav: {
-        homeLink: '{product} — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
       },
       auth: {
@@ -1314,7 +1313,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
       },
       publicNav: {
-        homeLink: '{product} — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
       },
       auth: {
