@@ -111,6 +111,13 @@ One-time setup (maintainer):
 
 iOS distribution (TestFlight) needs an Apple Developer Program membership in the publishing company's name (99 USD/year, D-U-N-S). EAS creates and stores the signing certificates.
 
+**What goes up (#2979).** EAS archives the project from the git root. The root `.easignore` limits the upload to `apps/mobile`, about 0.6 MB, where it used to be 62 MB of web app, docs and `.git`. That file replaces every `.gitignore` for the upload, so a file that must stay on your machine (`google-services.json`, `.env*.local`, a key) needs its rule there as well. To see exactly what would be sent, without starting a build:
+
+```bash
+cd apps/mobile
+npx eas-cli@latest build:inspect -p android -e staging -s archive -o /tmp/eas-archive   # an empty or new folder
+```
+
 ### Publisher ids
 
 Who publishes the app is configuration, not code (#2926), because every instance of this AGPL project publishes under its own name. `app.config.ts` reads:

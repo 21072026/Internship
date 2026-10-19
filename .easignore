@@ -1,0 +1,67 @@
+# What `eas build` uploads (the mobile app, apps/mobile, #2979).
+#
+# EAS archives the project from the git root, so without this file every build
+# shipped the whole repository: the web app, e2e, docs and a depth-1 `.git` of
+# all of it (62 MB, of which apps/mobile is 1 MB). Only apps/mobile is built.
+#
+# Before you change it:
+# - This file REPLACES every .gitignore for the upload, the nested ones too
+#   (eas-cli src/vcs/local.ts). Whatever must not leave the machine has to be
+#   listed here again: the rules of apps/mobile/.gitignore and the root rules
+#   that can match inside apps/mobile are repeated below. Add new ones to both.
+# - Only `node_modules` is always left out. `.git` goes too, through the first
+#   rule: the build server reads git only for builds it clones itself.
+# - No trailing slash on a directory pattern: eas-cli tests a directory as
+#   `apps`, not `apps/`, so `!/apps/` would never put it back, and `.expo/`
+#   leaves out what is inside but still uploads the empty folder.
+# - Check what goes up (apps/mobile/README.md § Building):
+#   cd apps/mobile && npx eas-cli@latest build:inspect -p android -e staging -s archive -o <empty dir>
+
+# Everything at the root except apps/, and in apps/ everything except mobile/.
+/*
+!/apps
+/apps/*
+!/apps/mobile
+
+# --- apps/mobile/.gitignore, repeated (directories without the slash) ---
+node_modules
+.expo
+dist
+web-build
+expo-env.d.ts
+.kotlin
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env*.local
+*.tsbuildinfo
+/apps/mobile/android
+/apps/mobile/ios
+# Firebase / FCM config: EAS gets it from the file env var GOOGLE_SERVICES_JSON.
+google-services.json
+GoogleService-Info.plist
+
+# --- root .gitignore rules that can match inside apps/mobile ---
+.env
+.env.*
+*.log
+*.keystore
+coverage
+.cache
+*.tgz
+*.sql.gz
+*.[cC][sS][vV]
+*.[tT][sS][vV]
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[oO][dD][sS]
+.HANDOFF-*
