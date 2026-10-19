@@ -143,4 +143,22 @@ works on synthetic data in development (CLAUDE.md, "Develop on synthetic data on
   `contractAcceptedAt` on the first login after go-live; whether existing partners
   must re-accept is a business decision, not a technical one.
 - IP hashing key: a per-org secret held outside the repo.
-- Who may see the bank details: this design says ADMIN only. Confirm.
+- Bank details (IBAN) are visible to ADMIN, because the admin makes the
+  transfers by hand. Nobody else reads them. Partners edit their own details.
+  Decided, not open.
+- The tenth paying customer's first payment is paid as a percent commission,
+  not a tier. The contract's "ab dem zehnten" can also be read as the tenth
+  customer still getting the tier. Pinned by a test in
+  `scripts/test/affiliate-commission-rule.test.mjs`; change needs the business
+  decision first.
+- A first payment of exactly 0.00 is not a paying customer. Customers with two
+  free months only count when the first real payment lands.
+- Amounts with cents between two tier bands (e.g. 20.50) fall into the higher
+  band, because the contract states whole-euro bounds only.
+
+## Implementation status
+
+- `src/lib/affiliateCommissionRule.ts`: the contract's commission rule, pure
+  (tiers, 20 %, 10-customer switch, 24-month window, termination). Integer cents.
+- `scripts/test/affiliate-commission-rule.test.mjs`: 12 unit tests, passing.
+- Not yet: Prisma models, writer, admin and partner screens, migration.
