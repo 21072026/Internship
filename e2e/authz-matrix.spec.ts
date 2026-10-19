@@ -10,6 +10,8 @@ import {
   MAIL_QUEUE_OPERATOR_ONLY,
   MATRIX,
   ORG_SETUP_WRITES,
+  OUTBOX_DRAFT_ID_PARAM,
+  OUTBOX_FOREIGN,
   SUPER_ADMIN_ONLY,
   TARGET_ORG_ID_PARAM,
   type MatrixUser,
@@ -73,6 +75,8 @@ let foreignCompanyId = '';
 // retry or a cancel that got through would change.
 let foreignDeadMailId = '';
 let foreignWaitingMailId = '';
+// A held mail of the foreign tenant (#2960).
+let foreignDraftId = '';
 /** Every id of the foreign tenant, for the "body must not carry it" check. */
 const foreignIds: string[] = [];
 
@@ -186,6 +190,19 @@ test.beforeAll(async () => {
   ]);
   foreignDeadMailId = deadMail.id;
   foreignWaitingMailId = waitingMail.id;
+  const foreignDraft = await prisma.outboundDraft.create({
+    data: {
+      orgId: foreignOrgId,
+      lane: 'BULK',
+      reason: 'held_lead',
+      trigger: 'check_in',
+      rcpt: 'f'.repeat(64),
+      dedupeKey: `matrix-draft-${Date.now()}`,
+      notAfter: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      box: 'matrix-sealed',
+    },
+  });
+  foreignDraftId = foreignDraft.id;
 
   users.ADMIN = { id: admin.id, role: 'ADMIN' };
   // The mentor's one relation points at "our" company — the only company its
@@ -198,6 +215,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await prisma.job.deleteMany({ where: { id: { in: [foreignDeadMailId, foreignWaitingMailId] } } });
+  await prisma.outboundDraft.deleteMany({ where: { id: foreignDraftId } });
   await prisma.interactionLog.deleteMany({ where: { relationId: { in: [ownRelationId, foreignRelationId] } } });
   await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [ownRelationId, foreignRelationId] } } });
   for (const email of [
@@ -344,6 +362,17 @@ for (const role of Object.keys(LANDING) as Role[]) {
     }
     expect((await prisma.job.findUniqueOrThrow({ where: { id: foreignDeadMailId } })).status, `${role} retried another tenant's mail`).toBe('DEAD_LETTER');
     expect((await prisma.job.findUniqueOrThrow({ where: { id: foreignWaitingMailId } })).status, `${role} cancelled another tenant's mail`).toBe('PENDING');
+
+    // The outbox (#2960): another tenant's held mail is out of reach of every
+    // role, and no probe may move it.
+    for (const probe of OUTBOX_FOREIGN) {
+      const path = probe.path.replace(OUTBOX_DRAFT_ID_PARAM, foreignDraftId);
+      const body = probe.body ? JSON.parse(JSON.stringify(probe.body).replace(OUTBOX_DRAFT_ID_PARAM, foreignDraftId)) : undefined;
+      const res = await page.request.fetch(path, { method: probe.method, ...(body ? { data: body } : {}) });
+      expect([401, 403, 404], `${role} ${probe.method} ${path} must be refused (${probe.why})`).toContain(res.status());
+      expect(await res.text(), `${role} ${path} carried a foreign draft`).not.toContain(foreignDraftId);
+    }
+    expect((await prisma.outboundDraft.findUniqueOrThrow({ where: { id: foreignDraftId } })).status, `${role} decided another tenant's held mail`).toBe('DRAFT');
 
     // One organization's own setup (#2922): the foreign org for every role, the
     // caller's own org for every role but ADMIN. A real mark is sent, so a

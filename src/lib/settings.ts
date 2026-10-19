@@ -280,6 +280,14 @@ export const SETTING_DEFAULTS = {
   // only). Off by default: a leaderboard is something a team opts into. The
   // org's admins see it either way.
   salesLeaderboardForReps: 'false',
+  // Outbound approval (#2960, docs/outbound-approval.md): 'off' (default) =
+  // automated mail leaves as it always has; 'lead_mail' = every automated mail
+  // to one of the org's leads or customers becomes a draft in the outbox
+  // (/admin/outbox) until an operator sends, schedules or discards it. The
+  // vocabulary and which mails are held: src/lib/outboundApprovalRule.ts.
+  // MARKETING only: the settings API refuses it for any other vertical, and the
+  // rule reads it as 'off' there whatever a row says.
+  outboundApproval: 'off',
   // Meeting attendance (#2014): a cancellation this many hours or fewer before
   // the start is recorded as LATE_CANCEL for whoever cancelled.
   lateCancelHours: '24',

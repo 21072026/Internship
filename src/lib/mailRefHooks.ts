@@ -17,8 +17,9 @@ import { logger } from '@/lib/logger';
 // can call it without the import cycle a call into newsletterDispatch.ts would
 // close (that module imports emailService, which imports the outbox).
 //
-// Every hook is ONE guarded statement on a row still QUEUED: a second settle
-// (the reconciliation below racing the drain) changes nothing.
+// Every hook is ONE guarded statement on a row still QUEUED (or HELD, for a
+// copy an operator approved, #2960): a second settle (the reconciliation below
+// racing the drain) changes nothing.
 
 /** The outcome of a queued mail, as a sender's record states it. */
 export type MailRefOutcome = 'SENT' | 'FAILED' | 'SKIPPED';
@@ -69,7 +70,7 @@ export async function settleMailRef(ref: string | null | undefined, outcome: Mai
       where: { newsletterId: nl.newsletterId, userId: nl.userId, status: 'QUEUED' },
       data: { status: outcome, error: outcome === 'SENT' ? null : (error ?? null)?.slice(0, 2000) ?? null },
     });
-    if (count !== 1) return false;
+    if (count !== 1) return settleHeldNewsletterSend(nl, outcome, error);
     // The issue's tally counts this recipient as reached when it was queued;
     // a queued copy that did not arrive moves to the column it belongs in.
     // Unguarded on purpose: during a first run the dispatch adds its tally only
@@ -90,6 +91,36 @@ export async function settleMailRef(ref: string | null | undefined, outcome: Mai
     logger.warning('mail_outbox.ref_settle_failed', { kind: 'newsletter', error: e instanceof Error ? e.name : 'unknown' });
     return false;
   }
+}
+
+/**
+ * A recipient whose copy was HELD for approval (#2960) was recorded HELD and
+ * counted with the skipped; an operator's approval later delivered (or lost)
+ * it through the queue or inline. The record moves out of HELD once, guarded,
+ * and the issue's tally moves the recipient from "skipped" to the column the
+ * outcome belongs in. A draft that is discarded or expires never settles, so
+ * its record stays HELD — the truth: it never reached anyone.
+ */
+async function settleHeldNewsletterSend(
+  nl: { newsletterId: string; userId: string },
+  outcome: MailRefOutcome,
+  error?: string | null,
+): Promise<boolean> {
+  const { count } = await prisma.newsletterSend.updateMany({
+    where: { newsletterId: nl.newsletterId, userId: nl.userId, status: 'HELD' },
+    data: { status: outcome, error: outcome === 'SENT' ? null : (error ?? null)?.slice(0, 2000) ?? null },
+  });
+  if (count !== 1) return false;
+  if (outcome !== 'SKIPPED') {
+    await prisma.newsletter.updateMany({
+      where: { id: nl.newsletterId },
+      data: {
+        skippedCount: { decrement: 1 },
+        ...(outcome === 'SENT' ? { sentCount: { increment: 1 } } : { failedCount: { increment: 1 } }),
+      },
+    });
+  }
+  return true;
 }
 
 /** The client `reopenMailRef()` writes through: Prisma, or a transaction. */

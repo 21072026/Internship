@@ -14,6 +14,7 @@ import { salesTargetApplies } from '@/lib/salesTargetRule';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { isStorableMinLength } from '@/lib/passwordPolicyRule';
 import { REQUIRE_2FA_MODES } from '@/lib/twoFactorPolicyRule';
+import { OUTBOUND_APPROVAL_MODES, outboundApprovalApplies } from '@/lib/outboundApprovalRule';
 
 // GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
 // row → the code default (see src/lib/settings.ts). The org is passed
@@ -119,6 +120,10 @@ const schema = z.object({
   // leaderboard switch (leaderboards are a non-goal there).
   salesMonthlyWonTarget: z.string().regex(/^\d{1,4}$/).or(z.literal('')).optional(),
   salesLeaderboardForReps: z.enum(['true', 'false']).optional(),
+  // Outbound approval (#2960): hold automated mail to leads and customers for
+  // an operator. The sales vertical only — refused below anywhere else, and
+  // the rule reads it as 'off' there regardless.
+  outboundApproval: z.enum(OUTBOUND_APPROVAL_MODES).optional(),
   // Extra `external_id` header spellings for the marketing import (comma- or
   // newline-separated; parseHeaderAliases() in src/lib/marketingImport.ts).
   importExternalIdAliases: z.string().max(700).optional(),
@@ -186,6 +191,10 @@ export async function PUT(request: Request) {
   const salesKey = SALES_TARGET_KEYS.find((k) => parsed.data[k] !== undefined);
   if (salesKey && !salesTargetApplies(await shellCapabilities(orgId))) {
     return NextResponse.json({ error: 'vertical_mismatch', field: salesKey }, { status: 400 });
+  }
+
+  if (parsed.data.outboundApproval !== undefined && !outboundApprovalApplies(await shellCapabilities(orgId))) {
+    return NextResponse.json({ error: 'vertical_mismatch', field: 'outboundApproval' }, { status: 400 });
   }
 
   return withTenantScope(session, async () => {

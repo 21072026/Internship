@@ -8,6 +8,7 @@ import { InstallAppButton } from '@/components/InstallAppButton';
 import { useT } from '@/i18n/client';
 import { ADMIN_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
 import type { VerticalCapability } from '@/lib/verticals';
+import { OutboxBadge, useOutboxPending } from '@/components/outbox/OutboxBadge';
 
 // The route list itself lives in lib/navLinks — shared with the command
 // palette's "Go to" group (#2079), so the two can never drift apart.
@@ -50,6 +51,10 @@ export function AdminNav({ capabilities }: { capabilities?: readonly VerticalCap
       .catch(() => {});
     return () => { cancelled = true; };
   }, [pathname]);
+
+  // Mail held for approval (#2960) — the third queue an admin drains. Asked
+  // only where the outbox exists (the link survived the vertical filter).
+  const outboxPending = useOutboxPending(LINKS.some((l) => l.key === 'outbox'), pathname);
 
   const items = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -96,6 +101,7 @@ export function AdminNav({ capabilities }: { capabilities?: readonly VerticalCap
                 {pendingApplications > 9 ? '9+' : pendingApplications}
               </span>
             )}
+            {l.key === 'outbox' && outboxPending > 0 && <OutboxBadge count={outboxPending} />}
             {l.key === 'offers' && outstandingOffers > 0 && (
               <span
                 data-testid="admin-offers-badge"

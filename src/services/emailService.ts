@@ -93,6 +93,7 @@ import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages'
 import { isStageOverdue } from '@/lib/stageClock';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
+import { expireDrafts, holdIfRequired } from '@/lib/outboundDrafts';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -456,7 +457,7 @@ async function recordEmail(
   to: string,
   subject: string,
   category: string | undefined,
-  status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED',
+  status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED' | 'HELD',
   transport: MailTransport,
   error?: string,
 ) {
@@ -798,7 +799,7 @@ export const __testable = {
 // throws (and is recorded FAILED first), so every existing try/catch keeps
 // working exactly as before. 'FAILED' is in the union for callers that catch and
 // want to name the outcome; sendEmail itself never returns it.
-export type EmailDeliveryResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'FAILED';
+export type EmailDeliveryResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'FAILED' | 'HELD';
 
 /**
  * The From display name for a mail whose caller named none (docs/worlds.md):
@@ -1241,16 +1242,45 @@ export async function sendPrepared(
 
 /**
  * What happened to a mail: handed to the relay (`SENT`), on the mail queue and
- * still on its way (`QUEUED`, #2944), or deliberately not sent (`SKIPPED`: an
- * opt-out, demo mode, no SMTP). A caller that reports "did the mail go?" treats
- * QUEUED like SENT — the queue retries it — and only SKIPPED as "no".
+ * still on its way (`QUEUED`, #2944), deliberately not sent (`SKIPPED`: an
+ * opt-out, demo mode, no SMTP), or HELD for approval (#2960): the recipient's
+ * organization approves automated mail to its leads and customers first, and
+ * this one is now a draft in its outbox. A caller that reports "did the mail
+ * go?" treats QUEUED like SENT — the queue retries it — and only SKIPPED as
+ * "no". HELD reads as handled too, on purpose: every caller that compares
+ * `!== 'SKIPPED'` stamps its claim (a digest, a reminder ladder) and moves on,
+ * so tomorrow's run does not build the same draft again — the draft's own
+ * de-duplication key catches the rest.
  */
-export type SendEmailResult = 'SENT' | 'QUEUED' | 'SKIPPED';
+export type SendEmailResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'HELD';
 
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const result = await prepareEmail(args);
   if (result.status === 'SKIPPED') return 'SKIPPED';
   const now = new Date();
+  // OUTBOUND APPROVAL (#2960) — the ONE hook, here and nowhere else, so every
+  // sender is covered: after every consent decision (an opted-out lead is not
+  // drafted at all), before the first transport is touched. The rule is
+  // src/lib/outboundApprovalRule.ts; a held mail leaves only through the
+  // outbox's approval, which puts it straight on the queue. A check that cannot
+  // be made throws (recorded FAILED), like a transport failure: a mail to a lead
+  // never leaves because the database could not say whether it may.
+  let hold: Awaited<ReturnType<typeof holdIfRequired>>;
+  try {
+    hold = await holdIfRequired(result.prepared, { dedupeKey: args.dedupeKey ?? null, notAfter: args.notAfter ?? null, ref: args.ref ?? null, now });
+  } catch (e) {
+    const p = result.prepared;
+    logger.error('outbound_hold.check_failed', { category: p.category, error: e instanceof Error ? e.message : String(e) });
+    await recordEmail(p.to, p.subject, p.category, 'FAILED', p.transport, 'Outbound approval check failed');
+    throw e;
+  }
+  if (hold.held) {
+    if (hold.created) {
+      const p = result.prepared;
+      await recordEmail(p.to, p.subject, p.category, 'HELD', p.transport, `Held for approval (${hold.code})`);
+    }
+    return 'HELD';
+  }
   return dispatchPrepared(
     result.prepared,
     {
@@ -5804,6 +5834,12 @@ export function initCronJobs() {
       await runEmailHealthCheck();
     } catch (e) {
       logger.error('Email health cron failed', { error: String(e) });
+    }
+    // Held drafts past their deadline (#2960): the same hourly mail tick.
+    try {
+      await expireDrafts();
+    } catch (e) {
+      logger.error('Outbound draft expiry failed', { error: String(e) });
     }
   });
   scheduledTasks.set('email-health', emailHealthTask);

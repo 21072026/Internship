@@ -6,6 +6,7 @@ import { useT } from '@/i18n/client';
 import { MENTOR_NAV_LINKS, SALES_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
 import type { VerticalCapability } from '@/lib/verticals';
 import { useMemo } from 'react';
+import { OutboxBadge, useOutboxPending } from '@/components/outbox/OutboxBadge';
 
 // `set="sales"` renders the sales surface's links (#2580) with the same markup;
 // the default is the mentor shell's list, unchanged.
@@ -23,6 +24,8 @@ export function MentorNav({
   const t = useT();
   const pathname = usePathname();
   const nav = t.nav as Record<string, string>;
+  // The rep's own drafts waiting for approval (#2960), on the sales surface only.
+  const outboxPending = useOutboxPending(LINKS.some((l) => l.key === 'outbox'), pathname);
 
   // The route list lives in lib/navLinks — shared with the command palette's
   // "Go to" group (#2079), so the two can never drift apart.
@@ -46,7 +49,8 @@ export function MentorNav({
             }`}
           >
             <Icon className={`h-5 w-5 ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-            {nav[link.key] ?? link.key}
+            <span className="flex-1">{nav[link.key] ?? link.key}</span>
+            {link.key === 'outbox' && outboxPending > 0 && <OutboxBadge count={outboxPending} />}
           </Link>
         );
       })}

@@ -78,7 +78,8 @@ export interface JobPayloadMap {
     rcpt: string;
     /// ISO instant after which the mail is no longer worth sending.
     notAfter: string;
-    /// Why it was queued: 'retry' | 'inline_timeout' | 'breaker' | 'lane'.
+    /// Why it was queued: 'retry' | 'inline_timeout' | 'breaker' | 'lane' |
+    /// 'approved' (an operator released a held draft, #2960).
     reason: string;
     ref: string | null;
     box: string | null;

@@ -117,7 +117,7 @@ const JOB_NAMES = [MAIL_JOB_NAME] as const;
 export type MailJobPayload = JobPayloadMap['email.send'];
 
 /** Why a mail was put on the queue — written to the row, read by operators. */
-export type QueueReason = 'retry' | 'inline_timeout' | 'breaker' | 'lane';
+export type QueueReason = 'retry' | 'inline_timeout' | 'breaker' | 'lane' | 'approved';
 
 export interface EnqueueMailOptions {
   reason: QueueReason;

@@ -237,6 +237,7 @@ model Organization {
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
+  outboundDrafts          OutboundDraft[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
@@ -4427,6 +4428,11 @@ enum EmailStatus {
   // FAILED or SKIPPED (src/lib/mailRefHooks.ts). EmailLog never carries it — a
   // queued mail's ledger row is written when the drain sends it. Additive.
   QUEUED
+  // EmailLog only (#2960): the organization holds automated mail to its leads
+  // and customers for approval (`outboundApproval`), so this mail became an
+  // OutboundDraft instead of leaving. Not a failure and not a delivery: the
+  // draft's own status says what happened next. Additive.
+  HELD
 }
 
 // Delivery log for outgoing mail (#1194).
@@ -4669,6 +4675,83 @@ model TrialReminder {
 
   @@unique([relationId, threshold])
   @@index([sentAt])
+}
+
+// An automated mail an organization holds for approval (#2960,
+// docs/outbound-approval.md). With the per-org setting `outboundApproval` on,
+// `sendEmail()` asks the one rule (src/lib/outboundApprovalRule.ts) whether a
+// prepared mail may leave; a held one is stored here instead, and an operator
+// previews it and sends it now, schedules it or discards it from the outbox.
+//
+// THE MAIL IS SEALED. `box` is the whole prepared mail (recipient, subject,
+// body, headers) sealed with `secretBox` ('outbound-draft') — it can carry links
+// and the lead's own words, so a database dump must not read it; `summary` is a
+// small sealed copy of what the list shows (subject, display name, masked
+// address). The address itself is never in the clear: `rcpt` is its sha256, the
+// same hash the mail queue and account erasure use. `box` and `summary` are set
+// to null in the statement that writes any terminal state.
+//
+// ONE WRITER: src/lib/outboundDrafts.ts (the hold, the three actions, the
+// expiry sweep, the prune, erasure). Every status move is one guarded
+// `updateMany` whose WHERE carries the expected status.
+model OutboundDraft {
+  // Registered in TENANT_MODELS; the writer always passes it (the hold runs
+  // inside crons and sessionless routes too).
+  orgId              String
+  org                Organization        @relation(fields: [orgId], references: [id])
+  id                 String              @id @default(cuid())
+  status             OutboundDraftStatus @default(DRAFT)
+  category           String?             @db.VarChar(64)
+  // CRITICAL | TRANSACTIONAL | BULK — the lane the mail would have taken.
+  lane               String              @db.VarChar(16)
+  // The e-mail group (src/lib/emailGroups.ts) of `category`, when it has one.
+  mailGroup          String?             @db.VarChar(32)
+  // Why it was held: a code of the rule (`held_lead`, `held_customer`, …).
+  reason             String              @db.VarChar(32)
+  // What produced it, as a code the outbox renders ("trial ends soon",
+  // "win-back", …): `triggerFor(category)` in the rule.
+  trigger            String              @db.VarChar(32)
+  // sha256 of the lower-cased recipient address (recipientHash()).
+  rcpt               String              @db.VarChar(64)
+  // The recipient's account / company, when known. No FK on purpose: a draft
+  // must not block deleting either, and erasure removes the draft itself.
+  recipientUserId    String?
+  recipientCompanyId String?
+  // The sealed mail. LongText: a message copy may carry up to 10 MB of
+  // attachments, which base64 + sealing grows past MediumText's 16 MB.
+  box                String?             @db.LongText
+  summary            String?             @db.Text
+  // The draft's identity per org: the sender's own dedupe key when it named
+  // one, else a hash of category + recipient + subject + day — so a cron that
+  // runs again tomorrow does not stack a second copy of the same mail.
+  dedupeKey          String              @db.VarChar(191)
+  // The sender's own reference (a NewsletterSend id, …), handed to the queue
+  // on approval so its settle hook still names the right record.
+  ref                String?             @db.VarChar(191)
+  // After this the draft is EXPIRED by the hourly sweep: the sender's own
+  // deadline when it gave one, else 14 days after it was held.
+  notAfter           DateTime
+  scheduledFor       DateTime?
+  // The email.send job approval created (its idempotency key is `draft:<id>`).
+  jobId              String?
+  decidedById        String?
+  decidedAt          DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([orgId, dedupeKey])
+  @@index([orgId, status, createdAt])
+  @@index([status, notAfter])
+  @@index([rcpt])
+  @@index([recipientUserId])
+}
+
+enum OutboundDraftStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  DISCARDED
+  EXPIRED
 }
 
 // The ESTIMATED monthly value of a funnel record (#2422, story #2393): what the
