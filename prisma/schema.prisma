@@ -2038,26 +2038,43 @@ model IntegrationEvent {
 // `IntegrationEvent.provider` of this source's events and is immutable: a
 // rename would split the dedupe claim and the high-water mark, so a new name
 // is a new source. Registered by prisma/register-integration-source.mjs
-// (operator CLI; the demo seed adds a `demo-feed` one); read only by
-// src/lib/integrationSources.ts.
+// (operator CLI; the demo seed adds a `demo-feed` one); read by
+// src/lib/integrationSources.ts, and its switch, allowlist and signing secret
+// are also managed on /admin/integrations (src/lib/integrationSourceAdmin.ts).
 // Contract: docs/integrations/account-events.md.
 model IntegrationSource {
-  orgId     String
-  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  id        String       @id @default(cuid())
+  orgId                 String
+  org                   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id                    String       @id @default(cuid())
   // Lower-case `^[a-z0-9][a-z0-9-]{1,39}$`, never a static sibling route
   // (src/lib/accountEventRule.ts: SOURCE_SLUG_PATTERN, RESERVED_SOURCE_SLUGS).
-  slug      String       @db.VarChar(40)
+  slug                  String       @db.VarChar(40)
   // Display name; also the prefix of a placeholder account name
   // ("<label> <external id>") when an event carries no company or person.
-  label     String       @db.VarChar(80)
+  label                 String       @db.VarChar(80)
   // A disabled source answers 404, exactly like an unregistered one.
-  enabled   Boolean      @default(true)
+  enabled               Boolean      @default(true)
   // Optional binding: when set, only this `companies:write` key may post for
   // the source (403 `wrong_source_key`); null = any such key of the org.
-  apiKeyId  String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  apiKeyId              String?
+  // The door's hardening (#2978), each opt-in — NULL is the behaviour before it.
+  // allowedIps: canonical IPs / CIDRs joined by `,`
+  // (src/lib/sourceIpAllowlistRule.ts); when set, a request from any other
+  // client address is 403 `source_ip_not_allowed`, after the key check.
+  allowedIps            String?      @db.Text
+  // The HMAC signing secret, SEALED (src/lib/secretBox.ts, purpose
+  // `integration-source-signing`) — never stored or logged in plaintext and
+  // shown once, by the admin route that generates it. When set, every request
+  // must carry a valid X-Timestamp + X-Signature (src/lib/sourceSignatureRule.ts).
+  signingSecret         String?      @db.Text
+  // The secret a rotation replaced, sealed the same way; it still verifies
+  // until signingPreviousUntil (SIGNING_SECRET_OVERLAP_MS after the rotation).
+  signingSecretPrevious String?      @db.Text
+  signingPreviousUntil  DateTime?
+  // When the current secret was generated — what the admin screen shows.
+  signingRotatedAt      DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   @@unique([orgId, slug])
 }

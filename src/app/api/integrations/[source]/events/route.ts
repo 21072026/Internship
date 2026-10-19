@@ -3,6 +3,7 @@ import { withApiKey } from '@/lib/apiKey';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveIntegrationSource } from '@/lib/integrationSources';
+import { guardSourceRequest, parseJsonBody } from '@/lib/integrationSourceGuard';
 import { accountEventSchema } from '@/lib/accountEventSchema';
 import { ingestAccountEvent } from '@/lib/accountEventIngest';
 
@@ -22,8 +23,13 @@ import { ingestAccountEvent } from '@/lib/accountEventIngest';
 //      reserved or another tenant's are one and the same 404 `unknown_source`;
 //   3. the binding — a source bound to one key refuses every other key of the
 //      org with 403 `wrong_source_key`;
-//   4. the product — the org's vertical must carry the `companies` capability;
-//   5. the envelope, then the writer (src/lib/accountEventIngest.ts).
+//   4. the source's own hardening (#2978, src/lib/integrationSourceGuard.ts),
+//      each opt-in per source: a client address outside its IP allowlist is
+//      403 `source_ip_not_allowed`; when it has a signing secret, the RAW body
+//      must carry a valid X-Timestamp + X-Signature (401 `bad_signature` /
+//      `stale_signature`) before a byte of it is parsed;
+//   5. the product — the org's vertical must carry the `companies` capability;
+//   6. the envelope, then the writer (src/lib/accountEventIngest.ts).
 //
 // withApiKey counts the request against a quota-limited key's allowance before
 // this handler runs, so a 404 or 403 answered below spends it like any other
@@ -53,10 +59,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
         );
       }
 
+      const guarded = await guardSourceRequest(request, key.orgId, source);
+      if (!guarded.ok) return guarded.response;
+
       const gated = await requireCapability(key.orgId, 'companies');
       if (gated) return gated;
 
-      const parsed = accountEventSchema.safeParse(await request.json().catch(() => null));
+      const parsed = accountEventSchema.safeParse(parseJsonBody(guarded.rawBody));
       if (!parsed.success) {
         return NextResponse.json(
           {

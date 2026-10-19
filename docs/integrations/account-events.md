@@ -13,10 +13,12 @@ This page is the **public contract** (schema version `1`). The implementation is
 | Envelope validation | `src/lib/accountEventSchema.ts` |
 | Writer | `src/lib/accountEventIngest.ts` (new journeys through `src/lib/winBack.ts`, live moves through `src/lib/stageMove.ts`) |
 | Source registry | `src/lib/integrationSources.ts` · model `IntegrationSource` |
+| IP allowlist and request signing | `src/lib/integrationSourceGuard.ts` · rules `src/lib/sourceIpAllowlistRule.ts`, `src/lib/sourceSignatureRule.ts` · `scripts/test/source-ip-allowlist.test.mjs`, `scripts/test/source-signature.test.mjs` |
+| Admin screen | `/admin/integrations` → `src/app/api/admin/integration-sources/**` · `src/lib/integrationSourceAdmin.ts` |
 | Operator CLI | `prisma/register-integration-source.mjs` |
 | Rollback CLI | `prisma/wipe-integration-source.mjs` · `scripts/test/marketing-ops-clis.test.mjs` |
 | Historic mode (rule tests) | `scripts/test/account-event-historic.test.mjs` |
-| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` · `e2e/account-events-lost-batch.spec.ts` · `e2e/marketing-ops-clis.spec.ts` (rollback) |
+| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` · `e2e/account-events-lost-batch.spec.ts` · `e2e/marketing-ops-clis.spec.ts` (rollback) · `e2e/account-events-security.spec.ts` (allowlist, signing, admin) |
 
 ## The endpoint
 
@@ -37,10 +39,60 @@ The order is the security model; each step answers before the next one runs.
 1. **The API key.** No key, or an unknown, expired or revoked one, is `401`. A key without the `companies:write` scope is `403`. The slug is not looked at before this, so a caller without a key gets the same `401` for every slug and cannot find out which slugs exist. Requests are rate limited per key (the same limiter and numbers as `/api/v1`). A key with a request allowance (a quota) is charged once the key passes this step, so every answer from the later steps counts toward it, a `404` or `403` included.
 2. **The source.** The slug is lower-cased and looked up in the key's organization. Not registered, switched off, malformed, reserved, or registered only in *another* organization: all of these are the same `404 { "code": "unknown_source" }`. Nothing is written, and a source an operator switched off answers exactly like one that does not exist, so a sender should park an event answered `404` and retry it later rather than drop it.
 3. **The key binding.** A source can be bound to one API key. Any other key of the organization then gets `403 { "code": "wrong_source_key" }`. An unbound source accepts any `companies:write` key of the organization.
-4. **The product.** The organization's product must include accounts (the `companies` capability), otherwise `403 { "code": "capability_unavailable" }`.
-5. **The envelope**, then the writer.
+4. **The source's own hardening**, each part opt-in per source (see [Security](#security)): a client address outside the source's IP allowlist is `403 { "code": "source_ip_not_allowed" }`; a source with a signing secret refuses a request without a valid signature with `401 { "code": "bad_signature" }` or `401 { "code": "stale_signature" }`. The signature is checked on the raw body, before it is parsed.
+5. **The product.** The organization's product must include accounts (the `companies` capability), otherwise `403 { "code": "capability_unavailable" }`.
+6. **The envelope**, then the writer.
 
 `companies:write` is not part of the paid public API (`SCOPE_ENTITLEMENT` in `src/lib/apiScopes.ts`): it is the tenant's own data feed. An admin issues the key on `/admin/integrations`; it is never a default scope.
+
+## Security
+
+Two protections on top of the API key, both **per source** and both **off** until an admin of the organization switches them on (on `/admin/integrations`, under *Event sources*). A source with neither behaves exactly as before. Both are checked **after** the API key, so a caller without a working key only ever sees the `401` of step 1 and learns nothing about a source's allowlist or whether it signs.
+
+### IP allowlist
+
+A source may carry a list of IPv4 / IPv6 addresses and CIDR blocks (at most 50; for example `203.0.113.7`, `198.51.100.0/24`, `2001:db8::/32`). When it does, a request from any other client address is refused with `403 { "code": "source_ip_not_allowed" }` and nothing is read from its body. The refusal is logged with the organization, the source, the address and the code, never the body.
+
+- **The client address** is the one the rate limiter uses (`clientIp()`, `src/lib/clientIp.ts`): read from `X-Forwarded-For` counting back from the right one entry per trusted proxy hop (`TRUSTED_PROXY_COUNT`), so a sender cannot choose it by writing the header itself. Behind a proxy chain the CRM does not know about, every request looks like it comes from the proxy; list the address the CRM sees.
+- **IPv4-mapped IPv6** (`::ffff:203.0.113.7`) is matched as the IPv4 address it carries.
+- **Refused on save**, with every refused entry named: anything that is not an address or block, a block with host bits set (`10.0.0.1/8`: write `10.0.0.1` or `10.0.0.0/8`), and `/0`. Entries are stored in one canonical spelling (lower-case, RFC 5952 for IPv6).
+- **Fail closed**: an address the CRM cannot determine matches no list.
+- An empty list switches the allowlist off (any address).
+
+### Request signing
+
+An admin generates a **signing secret** for a source. It is shown **once**, at that moment, with a copy button; it is stored encrypted (`secretBox`) and can never be displayed again — a lost secret is replaced by rotating it. From then on, every request to the source (single, batch and batch dry run alike) must carry two headers:
+
+```
+X-Timestamp: <unix time in whole seconds>
+X-Signature: sha256=<hex HMAC-SHA256(secret, "<X-Timestamp>" + "." + <raw request body>)>
+```
+
+- **The key** is the whole secret string (`isig_…`) as UTF-8 bytes.
+- **The signed bytes** are the timestamp exactly as sent in `X-Timestamp`, a dot, and the request body **byte for byte** as it goes over the wire. Sign the bytes you send; never re-serialize the JSON after signing. The CRM verifies the raw bytes before it parses them.
+- **Hex** is 64 characters, upper or lower case.
+- **Clock skew**: the timestamp must be within **300 seconds** of the CRM's clock in either direction (`SIGNATURE_MAX_SKEW_SECONDS`).
+- **Answers**: a missing or malformed header, or a signature that does not verify, is `401 { "code": "bad_signature" }`. A correct signature over a timestamp outside the window is `401 { "code": "stale_signature" }` (only a sender holding the secret can get this answer: the signature is checked first). Re-sign with the current time and resend. The comparison is constant-time.
+- **Replays.** A captured request can be replayed only inside the 300-second window, and a replay is harmless: every event is claimed once by its `event_id` ([Idempotency](#idempotency)), so the same body again answers `duplicate` and writes nothing. That is why the window is minutes, not seconds, and why there is no nonce.
+
+**Test vector.** Check an implementation against these values before connecting it:
+
+| | |
+|---|---|
+| secret | `isig_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef` |
+| `X-Timestamp` | `1760000000` |
+| body (exact bytes) | `{"event_id":"evt-2026-10-14-0001","schema_version":1}` |
+| `X-Signature` | `sha256=55450b33e47867c5cc4804f3c452ff5c781d1dc251b6c15196ab40bd09682df3` |
+
+```bash
+printf '%s.%s' '1760000000' '{"event_id":"evt-2026-10-14-0001","schema_version":1}' \
+  | openssl dgst -sha256 -hmac 'isig_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+# SHA2-256(stdin)= 55450b33e47867c5cc4804f3c452ff5c781d1dc251b6c15196ab40bd09682df3
+```
+
+(`scripts/test/source-signature.test.mjs` pins the same numbers.)
+
+**Rotation.** *Rotate secret* makes a new secret the current one and keeps the one it replaced valid for **24 hours** (`SIGNING_SECRET_OVERLAP_MS`), so a running sender is not cut off between the click and its redeploy; the admin screen shows until when. Rotating again inside those 24 hours drops the oldest secret at once: only the two newest ever verify. *Switch signing off* removes both secrets immediately, and unsigned requests are accepted again. Every change (allowlist, switch, secret generated, rotated, switched off) is an `AuditLog` row of the organization that names what changed and never carries a secret.
 
 ## The envelope
 
@@ -170,7 +222,7 @@ Content-Type: application/json
 { "events": [ <envelope>, … ], "dry_run": false }
 ```
 
-For a replay of a source's history. The door is the single route's, in the same order ([Authentication](#authentication-and-the-order-of-the-checks)): `401`, `403`, the same `404 unknown_source`, `403 wrong_source_key`, `403 capability_unavailable`. The rate limit and a key's quota are charged **once per batch**.
+For a replay of a source's history. The door is the single route's, in the same order ([Authentication](#authentication-and-the-order-of-the-checks)): `401`, `403`, the same `404 unknown_source`, `403 wrong_source_key`, the source's [IP allowlist and signature](#security) (`403 source_ip_not_allowed`, `401 bad_signature` / `stale_signature`; a dry run is signed like any other request, over the batch's raw body), `403 capability_unavailable`. The rate limit and a key's quota are charged **once per batch**.
 
 - **At most 200 events** (`ACCOUNT_EVENT_BATCH_MAX`); more is `400 { "code": "too_many_events" }`, none is a `400`.
 - **All or nothing at the envelope.** Every event is validated first; one invalid event refuses the whole batch with a `400` whose issue paths name it (`events.3.external_id`), and nothing is handled.
@@ -209,7 +261,9 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 | `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"?, "historic"? }` | The event was handled (`historic: true` when in [historic mode](#historic-mode)). Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
 | `400` | `{ "error": "Invalid event", "issues": [{ "path", "message" }] }` | The envelope is invalid. Do not retry unchanged. (Batch: also `{ "code": "too_many_events" }`.) |
 | `401` | `{ "error": … }` | No usable API key. |
+| `401` | `{ "code": "bad_signature" }`, `{ "code": "stale_signature" }` | The source requires [signed requests](#request-signing): the signature is missing or wrong, or the timestamp is more than 300 s off. Nothing was read. |
 | `403` | `{ "error": … }`, `{ "code": "wrong_source_key" }`, `{ "code": "capability_unavailable" }` | Wrong scope, wrong key for this source, or the product has no accounts. |
+| `403` | `{ "code": "source_ip_not_allowed" }` | The request came from an address outside the source's [IP allowlist](#ip-allowlist). |
 | `404` | `{ "code": "unknown_source" }` | No such source for this organization, or it is switched off. Nothing was written; park the event and retry later rather than dropping it. |
 | `409` | `{ "code": "no_default_owner" }` | Retry once the organization has a default lead owner. |
 | `409` | `{ "code": "missing_stages", "stages": [ … ] }` | Batch only: the organization's funnel lacks a stage a replay writes into. Nothing was handled; resend once the stages exist. |
@@ -217,12 +271,13 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 
 ## Registering a source
 
-A source is one `IntegrationSource` row: `orgId`, `slug`, `label`, `enabled`, and an optional `apiKeyId` binding.
+A source is one `IntegrationSource` row: `orgId`, `slug`, `label`, `enabled`, an optional `apiKeyId` binding, and the optional [security](#security) settings (`allowedIps`, the sealed signing secrets).
 
 - **slug**: 2–40 characters of `a–z`, `0–9` and `-`, starting with a letter or digit. It is the URL segment and the key every stored event is filed under, so it is **immutable**: a new name means registering a new source. The names of the other routes under `/api/integrations/` (`calendar`, `google`) are reserved.
 - **label**: up to 80 characters; shown to operators and used in placeholder account names.
 - **enabled**: a disabled source answers `404`, exactly like an unregistered one. Switching a source off therefore pauses it only for senders that retry a `404`; a sender that drops on `404` loses the events posted meanwhile.
 - **apiKeyId**: optional; when set, only that `companies:write` key may post for the source.
+- **allowedIps**, **signing secret**: optional, see [Security](#security). An admin of the organization manages them, and the on/off switch, on `/admin/integrations`; the operator CLI can set the allowlist too. The signing secret is only ever generated on the admin screen, the one place that shows it.
 
 The operator registers a source with the CLI. It is a dry run unless `--apply` is given:
 
@@ -232,10 +287,12 @@ node prisma/register-integration-source.mjs --org <org slug or id> --slug <slug>
 node prisma/register-integration-source.mjs --org <org> --slug <slug> --key <apiKeyId> --apply   # bind to one key
 node prisma/register-integration-source.mjs --org <org> --slug <slug> --unbind-key --apply       # any companies:write key
 node prisma/register-integration-source.mjs --org <org> --slug <slug> --disable --apply          # switch off
+node prisma/register-integration-source.mjs --org <org> --slug <slug> --allowed-ips "203.0.113.7,2001:db8::/32" --apply
+node prisma/register-integration-source.mjs --org <org> --slug <slug> --allowed-ips none --apply # any address again
 node prisma/register-integration-source.mjs --list [--org <org>]
 ```
 
-Every run says whether the source is on: `--disable` switches it off and a run without it switches it back on. The CLI refuses a malformed or reserved slug, an unknown organization, and a `--key` that is not a live `companies:write` key of that organization. It warns, and still writes, when the organization is not a MARKETING tenant (the writer creates marketing accounts and funnel records) and when the organization already has another enabled source (see below).
+Every run says whether the source is on: `--disable` switches it off and a run without it switches it back on. The allowlist is kept unless `--allowed-ips` is given; it is checked by a plain-ESM copy of the same rule (`scripts/test/source-ip-allowlist.test.mjs` compares the two). The CLI refuses a malformed or reserved slug, an invalid `--allowed-ips` entry, an unknown organization, and a `--key` that is not a live `companies:write` key of that organization. It warns, and still writes, when the organization is not a MARKETING tenant (the writer creates marketing accounts and funnel records) and when the organization already has another enabled source (see below).
 
 The demo seed registers a `demo-feed` source in the demo marketing tenant, so a preview environment can exercise the route once an admin has issued a `companies:write` key and set a default lead owner.
 

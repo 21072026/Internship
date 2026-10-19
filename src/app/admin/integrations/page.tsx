@@ -12,6 +12,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
 import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
+import { IntegrationSourcesCard } from '@/components/admin/IntegrationSourcesCard';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key {
@@ -549,6 +550,11 @@ export default function IntegrationsPage() {
             POSTed to a SIEM. Own component — own fetch, own one-time secret
             banner — so this page only mounts it. */}
         <AuditDrainsCard onLocked={() => setApiLocked(true)} />
+
+        {/* The registered account-event sources (#2978): their switch, IP
+            allowlist and request-signing secret. Renders nothing for an
+            organization without a registered source. */}
+        <IntegrationSourcesCard />
       </div>
     </div>
   );

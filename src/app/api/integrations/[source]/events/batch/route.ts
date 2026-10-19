@@ -3,6 +3,7 @@ import { withApiKey } from '@/lib/apiKey';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveIntegrationSource } from '@/lib/integrationSources';
+import { guardSourceRequest, parseJsonBody } from '@/lib/integrationSourceGuard';
 import { accountEventSchema, type AccountEvent } from '@/lib/accountEventSchema';
 import {
   ACCOUNT_EVENT_BATCH_MAX,
@@ -19,7 +20,9 @@ import {
 // order is the security model): the API key with `companies:write` (401/403,
 // before the slug is looked at), the source resolved inside the key's org (one
 // 404 `unknown_source` for every kind of miss), the key binding (403
-// `wrong_source_key`), the `companies` capability — and only then the body.
+// `wrong_source_key`), the source's IP allowlist and request signature (#2978,
+// verified on the raw bytes — a dry run is signed like any other request), the
+// `companies` capability — and only then the body.
 // withApiKey rate-limits and charges the key's quota ONCE for the request,
 // however many events it carries.
 //
@@ -57,10 +60,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
         );
       }
 
+      const guarded = await guardSourceRequest(request, key.orgId, source);
+      if (!guarded.ok) return guarded.response;
+
       const gated = await requireCapability(key.orgId, 'companies');
       if (gated) return gated;
 
-      const body = (await request.json().catch(() => null)) as { events?: unknown; dry_run?: unknown } | null;
+      const body = parseJsonBody(guarded.rawBody) as { events?: unknown; dry_run?: unknown } | null;
       if (!body || typeof body !== 'object' || !Array.isArray(body.events) || body.events.length === 0) {
         return NextResponse.json(
           { error: 'Invalid batch', issues: [{ path: 'events', message: 'events: a non-empty array of account events' }] },

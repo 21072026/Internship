@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Account events: IP allowlist and signed requests per source (#2978, `docs/integrations/account-events.md` § Security):** a registered `IntegrationSource` gets two opt-in protections on top of the API key, both off (NULL) by default so every existing source behaves as before. `allowedIps` (canonical IPv4/IPv6 addresses and CIDR blocks, at most 50; host bits, `/0` and junk refused on write; IPv4-mapped IPv6 matched as IPv4) refuses any other client address — the rate limiter's `clientIp()` with its proxy trust rules — with `403 source_ip_not_allowed`, logged without the body. A signing secret (`isig_…`, sealed with `secretBox` under its own purpose, shown once when generated or rotated) makes every request carry `X-Timestamp` and `X-Signature: sha256=<hex HMAC-SHA256(secret, timestamp + \".\" + raw body)>`, verified on the raw bytes before the JSON is parsed, constant-time: a missing or wrong signature is `401 bad_signature`, a correct one more than 300 s off (`SIGNATURE_MAX_SKEW_SECONDS`) is `401 stale_signature`; a rotation keeps the previous secret valid for 24 h (`SIGNING_SECRET_OVERLAP_MS`). Both checks run after the key, the source and its key binding, before the capability gate and the envelope, on the single route and the batch route (dry run included); a replay inside the window stays harmless through `event_id` idempotency. Rules are pure in `src/lib/sourceIpAllowlistRule.ts` and `src/lib/sourceSignatureRule.ts` (unit-tested with fixed vectors; the docs publish a test vector), applied by `src/lib/integrationSourceGuard.ts`. `/admin/integrations` gains an *Event sources* card (only when the org has a source): on/off, allowlist, generate/rotate/switch off the signing secret with a copy button, last event received — `GET /api/admin/integration-sources`, `PATCH …/[id]`, `POST|DELETE …/[id]/signing-secret`, for the org's ADMIN or a super admin of its world, another org's source a 404, an AuditLog row with `orgId` per change and never a secret. `prisma/register-integration-source.mjs` takes `--allowed-ips` (`none` clears) through a plain-ESM mirror of the rule, compared by the unit test. Schema: five nullable columns on `IntegrationSource`.",
+  "notes": {
+    "en": [
+      "Event sources that send account events can now be limited to known IP addresses and required to sign every request. Set it up per source under Integrations; the signing secret is shown once and can be rotated without cutting off a running sender."
+    ],
+    "tr": [
+      "Hesap olayları gönderen kaynaklar artık bilinen IP adresleriyle sınırlanabilir ve her isteği imzalamaları zorunlu tutulabilir. Ayarı her kaynak için Entegrasyonlar altında yapın; imzalama anahtarı bir kez gösterilir ve çalışan bir göndericiyi kesmeden yenilenebilir."
+    ],
+    "de": [
+      "Ereignisquellen, die Konto-Ereignisse senden, lassen sich jetzt auf bekannte IP-Adressen beschränken und zur Signatur jeder Anfrage verpflichten. Die Einstellung erfolgt pro Quelle unter Integrationen; der Signaturschlüssel wird einmal angezeigt und lässt sich erneuern, ohne einen laufenden Absender abzuschneiden."
+    ]
+  }
+}
