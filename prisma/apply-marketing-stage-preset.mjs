@@ -247,7 +247,7 @@ async function main() {
         }
       }
       return { plan, written: true };
-    });
+    }, { timeout: 60_000 });
 
     const { plan, written } = outcome;
     if (json) {

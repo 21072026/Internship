@@ -318,7 +318,7 @@ async function wipeAccount(prisma, orgId, slug, verdict) {
     n.companies = (await tx.company.deleteMany({ where: { id: company.id, orgId, createdBySource: slug } })).count;
     if (n.companies !== 1) throw new Error(`account ${company.id} changed since it was read`);
     return n;
-  });
+  }, { timeout: 60_000 });
 }
 
 function arg(name) {
