@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Every control's visible text is now part of its accessible name** (#2967, WCAG 2.5.3 Label in Name). Two controls overrode their own name with an `aria-label`, on all 22 scanned pages: the public header's wordmark link was called `InternshipCRM — go to the home page` while it visibly reads `Internship CRM beta`, and the account-menu button was called `Account` while it visibly reads the signed-in person's name and e-mail. Speech-input users saying what they could see reached neither. The hint is now a `sr-only` CHILD rather than a label — a label *replaces* the name, a child is *appended* to it — so the visible text stays inside the name whatever the brand and the environment badge say. `nav.homeLink` also stops naming the product (`Go to the home page`), which restores the rule `verticalOverlays.ts` already states (#2936: the product name is never written into copy, it comes from `productNameFor()`) and removes the drift that caused this — #2477 changed the wordmark to `Internship CRM` and left the label on the old one-word spelling. The three MARKETING overlay entries for that key are redundant and are gone. Surfaced by `@axe-core/playwright` 4.14 (#2957), where `label-content-name-mismatch` stops being experimental and runs by default.",
+  "notes": {
+    "en": [
+      "Voice control now reaches the account menu and the site logo by the words you can actually see on them."
+    ],
+    "tr": [
+      "Sesle kumanda artık hesap menüsüne ve site logosuna ekranda yazan sözcüklerle ulaşıyor."
+    ],
+    "de": [
+      "Sprachsteuerung erreicht das Kontomenü und das Logo jetzt über die Wörter, die tatsächlich darauf stehen."
+    ]
+  }
+}

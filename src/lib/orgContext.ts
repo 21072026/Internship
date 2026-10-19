@@ -319,6 +319,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // sweep's own counting) inside one tenant. Without it a per-org report of
   // "who did we warn about an expiring trial?" would answer across tenants.
   'TrialReminder',
+  // An automated mail an org holds for approval (#2960): a sealed copy of a
+  // mail to one of ITS leads or customers. The hold runs inside crons and
+  // sessionless routes, so src/lib/outboundDrafts.ts (the one writer) always
+  // stamps the recipient org explicitly and reads outside the auto-filter with
+  // its own `orgId` in every WHERE; the registration keeps every other reader
+  // inside one tenant.
+  'OutboundDraft',
   // A funnel record's estimated monthly value (#2422). Commercial data, like
   // Placement next door: one tenant must never read or sum another's pipeline
   // value. Every writer — the owner/ADMIN edit route, the marketing import and

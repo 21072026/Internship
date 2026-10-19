@@ -47,6 +47,7 @@ değişmediği sürece tek bir PR sessizce farklı davranamaz.
   engel listesi, DIN 5008 mektup, kampanya atfı ve `MARKETING_OPERATOR_*` (#2697)
 - `sales-email-capture.md` — satış e-postalarının CRM'e düşmesi: BCC-to-CRM, gövdesiz (karar #2564, uygulama #2809)
 - `go-live-checklist.md` — ilk gün / ilk hafta kontrol listesi ve ölçüm (#2581)
+- `stage-preset.md` — mevcut bir MARKETING tenant'ını güncel aşama setine getiren operatör CLI'ı (#2959)
 - `outreach-compliance.md` — MARKETING satış iletişimi kanal kuralları (UWG § 7 /
   DSGVO, #2576); CRM izin kodlarının (#2577) hukuki metni — hukuki danışmanlık değildir,
   Fachanwalt incelemesi bekliyor

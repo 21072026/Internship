@@ -269,6 +269,8 @@ async function handlePost(request: Request) {
   let emailed = 0;
   // Of `emailed`, the mails waiting on the mail queue (#2951).
   let queued = 0;
+  // Waiting in the outbox for an operator (#2960) — not emailed yet.
+  let held = 0;
   // The people the broadcast honoured an opt-out for (#2054): one SKIPPED
   // EmailLog row each, from the preference row this handler already loaded —
   // one batched insert, no extra read — so "show me this person's opt-out was
@@ -293,6 +295,7 @@ async function handlePost(request: Request) {
     });
     emailed = mailed.emailed;
     queued = mailed.queued;
+    held = mailed.held;
   }
 
   if (emailed > 0) {
@@ -305,6 +308,7 @@ async function handlePost(request: Request) {
       recipients: users.length,
       emailed,
       skipped,
+      ...(held > 0 ? { held } : {}),
       imageUrl: imageData ? announcementImageUrl(announcement.id) : null,
       // How many wait on the mail queue and roughly how long they take at this
       // environment's pace (#2951) — the composer says so.

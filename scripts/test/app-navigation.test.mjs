@@ -15,7 +15,9 @@ const MARKETING = verticalCapabilities('MARKETING');
 const hrefs = (l) => l.map((x) => x.href);
 
 test('internship: every role gets its full web sidebar', () => {
-  assert.deepEqual(hrefs(appNavLinks('ADMIN', INTERNSHIP)), hrefs(ADMIN_NAV_LINKS));
+  // Less the links that exist only where a module is absent (the sales
+  // vertical's outbox, #2960) — INTERNSHIP carries every module.
+  assert.deepEqual(hrefs(appNavLinks('ADMIN', INTERNSHIP)), hrefs(ADMIN_NAV_LINKS.filter((l) => !l.withoutCapability)));
   assert.deepEqual(hrefs(appNavLinks('MENTOR', INTERNSHIP)), hrefs(MENTOR_NAV_LINKS));
   assert.deepEqual(hrefs(appNavLinks('MENTEE', INTERNSHIP)), hrefs(PORTAL_NAV_LINKS));
 });

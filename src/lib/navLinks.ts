@@ -41,6 +41,14 @@ export interface NavLink {
    * until a later refinement decides them deliberately.
    */
   capability?: VerticalCapability;
+  /**
+   * The inverse tag: shown only to an org whose vertical does NOT carry this
+   * capability. For a surface that exists only where a module is absent — the
+   * sales vertical's outbox (#2960) lives where `mentorship` does not, exactly
+   * like the sales surface itself (src/lib/salesSurface.ts). Presentation only:
+   * the page and its API close themselves on the same rule.
+   */
+  withoutCapability?: VerticalCapability;
 }
 
 export const ADMIN_NAV_LINKS: NavLink[] = [
@@ -65,6 +73,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Outbound acquisition by letter (#2697) — the companies module, so both
   // products have it: a marketing org writes to online sellers, InternCRM to institutions.
   { href: '/admin/acquisition', icon: Send, key: 'acquisition', capability: 'companies' },
+  // Automated mail to leads and customers waiting for approval (#2960) — the
+  // sales vertical only (pipeline without mentorship, outboundApprovalRule.ts).
+  { href: '/admin/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts and mentor/mentee success stories are
   // internship modules (#2499). A MARKETING
@@ -187,6 +198,8 @@ export const SALES_NAV_LINKS: NavLink[] = [
   { href: '/sales', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'pipeline' },
   { href: '/sales/board', icon: Columns3, key: 'board', capability: 'pipeline' },
   { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },
+  // The rep's share of the outbox (#2960): drafts for their own leads only.
+  { href: '/sales/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },
 ];
 
 /** Roles that get a sidebar (and therefore a "Go to" group in the palette). */
@@ -210,5 +223,7 @@ export function visibleNavLinks(
   links: NavLink[],
   caps: readonly VerticalCapability[],
 ): NavLink[] {
-  return links.filter((l) => !l.capability || caps.includes(l.capability));
+  return links.filter(
+    (l) => (!l.capability || caps.includes(l.capability)) && (!l.withoutCapability || !caps.includes(l.withoutCapability)),
+  );
 }

@@ -22,11 +22,23 @@ const INTERNSHIP = verticalCapabilities('INTERNSHIP');
 const MARKETING = verticalCapabilities('MARKETING');
 
 test('INTERNSHIP hides nothing — the filter is a no-op for today’s product', () => {
+  // The one exception is by construction: a link tagged `withoutCapability`
+  // exists only where a module is ABSENT (the sales vertical's outbox, #2960),
+  // and INTERNSHIP carries every module. Nothing else may drop.
   for (const links of [ADMIN_NAV_LINKS, MENTOR_NAV_LINKS, PORTAL_NAV_LINKS]) {
     const out = visibleNavLinks(links, INTERNSHIP);
-    assert.equal(out.length, links.length);
-    assert.deepEqual(out.map((l) => l.href), links.map((l) => l.href));
+    const expected = links.filter((l) => !l.withoutCapability);
+    assert.equal(out.length, expected.length);
+    assert.deepEqual(out.map((l) => l.href), expected.map((l) => l.href));
   }
+  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.withoutCapability).map((l) => l.href), ['/admin/outbox']);
+  assert.deepEqual(MENTOR_NAV_LINKS.filter((l) => l.withoutCapability), []);
+  assert.deepEqual(PORTAL_NAV_LINKS.filter((l) => l.withoutCapability), []);
+});
+
+test('the outbox shows only where there is a pipeline and no mentorship (#2960)', () => {
+  assert.ok(visibleNavLinks(ADMIN_NAV_LINKS, MARKETING).some((l) => l.href === '/admin/outbox'));
+  assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, INTERNSHIP).some((l) => l.href === '/admin/outbox'));
 });
 
 test('every untagged link survives every vertical', () => {

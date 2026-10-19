@@ -393,6 +393,8 @@ async function createAccount(
     origin: 'ingest',
     actor: null,
     leadSourceName: leadSource.kind === 'unknown' ? null : leadSource.name,
+    // What this source CREATED, for the rollback CLI (#2959).
+    createdBySource: source.slug,
     // Historic: the account, its lead and its record are dated at the event.
     ...(ctx.at ? { now: ctx.at, quiet: true } : {}),
     db,

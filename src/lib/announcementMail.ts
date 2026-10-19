@@ -53,8 +53,10 @@ export interface AnnouncementMailInput {
 }
 
 export interface AnnouncementMailResult {
-  /** Handed to the relay or put on the mail queue — everything but SKIPPED. */
+  /** Handed to the relay or put on the mail queue — not SKIPPED, not HELD. */
   emailed: number;
+  /** Held for approval in the outbox (#2960): not sent yet, so not `emailed`. */
+  held: number;
   /** Of `emailed`, the ones waiting on the mail queue. */
   queued: number;
   /** Mails that failed for good (a 5xx, or no queue to fall back on). */
@@ -67,7 +69,7 @@ const escapeHtml = (value: string) =>
 export async function mailAnnouncement(input: AnnouncementMailInput): Promise<AnnouncementMailResult> {
   const { recipients, text, link, image } = input;
   const translations = input.translations as Parameters<typeof resolveAnnouncementText>[0]['translations'];
-  const result: AnnouncementMailResult = { emailed: 0, queued: 0, failed: 0 };
+  const result: AnnouncementMailResult = { emailed: 0, held: 0, queued: 0, failed: 0 };
 
   // The image is attached inline (cid:) rather than linked: /api/announcements/
   // <id>/image requires a session, so an <img src="https://…"> would render as
@@ -125,7 +127,8 @@ export async function mailAnnouncement(input: AnnouncementMailInput): Promise<An
         // Handed over with `prefs`, which skips the read that would have learned it.
         orgId: u.orgId,
       });
-      if (delivery !== 'SKIPPED') result.emailed++;
+      if (delivery === 'HELD') result.held++;
+      else if (delivery !== 'SKIPPED') result.emailed++;
       if (delivery === 'QUEUED') result.queued++;
     } catch (e) {
       result.failed++;

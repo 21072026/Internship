@@ -166,7 +166,7 @@ export async function sendReportSubscription(
           <a href="${esc(unsubscribeUrl)}">${esc(S.unsubscribe)}</a></p>
       </div>`;
 
-    await sendEmail({
+    const delivery = await sendEmail({
       category: 'analytics-report',
       to,
       subject,
@@ -180,6 +180,9 @@ export async function sendReportSubscription(
       userId: userId ?? null,
       headers: userId ? undefined : { 'List-Unsubscribe': `<${unsubscribeUrl}>` },
     });
+    // Held for approval (#2960): an external recipient of a sales org waits
+    // in the outbox; the ledger must not claim it went.
+    if (delivery === 'HELD') return await finish('SKIPPED', 'held_for_approval');
     return await finish('SENT');
   } catch (error) {
     logger.error('Report subscription send failed', { subscriptionId: sub.id, error: String(error) });

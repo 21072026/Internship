@@ -110,9 +110,14 @@ export function AccountMenu({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={t.account.nav}
         className="flex items-center gap-3 w-full px-3 py-1.5 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
       >
+        {/* "Account" is a CHILD, not an aria-label (#2967): as a label it
+            REPLACED the name, so the button was called "Account" while it
+            visibly read the signed-in person's name and e-mail — WCAG 2.5.3
+            Label in Name. As a child it prefixes the name instead, so the
+            visible text stays part of it. */}
+        <span className="sr-only">{t.account.nav}</span>
         <SidebarAvatar avatarUrl={avatarUrl} name={name} fallback={fallback} className={avatarClassName} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{name}</p>

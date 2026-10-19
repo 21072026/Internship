@@ -376,7 +376,8 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 | `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |
 | `POST /api/sales/leads` (yeni lead, #2958) | ✅ 201, sahibi **her zaman** kendisi | Gövdedeki `ownerId`/`orgId` yok sayılır; admin formuyla aynı yazıcı ve tekilleştirme (`createMarketingAccount`). "Zaten var" cevabı yalnızca temsilcinin **kendi** kaydının kimliğini döndürür. MENTEE/COMPANY 403, INTERNSHIP MENTOR/ADMIN `403 vertical_unavailable`, oturumsuz 401. Fixture: `SALES_LEAD_CREATE` |
 | `POST /api/invite` | **403** `capability_unavailable` | ADMIN dışı davet artık `mentorship` yeteneği ister (#2580) |
-| `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır |
+| `/sales/outbox`, `GET /api/admin/outbox[/id]`, `POST /api/admin/outbox/[id]/send` · `/schedule` · `/discard`, `POST /api/admin/outbox/bulk` | ✅ kendi / 404 | Onay bekleyen otomatik postalar (#2960, [`docs/outbound-approval.md`](outbound-approval.md)): yalnızca **şu an sahibi olduğu** kayıtların lead'ine ya da hesabına giden taslaklar (`visibleDraftsWhere`). Başka temsilcinin ya da başka org'un taslağı **404** — okuma da her eylem de. ADMIN org'unun tamamını görür. `mentorship` taşıyan dikeyde (INTERNSHIP) uçlar **403 `capability_unavailable`**. `/api/admin/*` altında MENTOR'a açık ikinci uç ailesi (ilki `duplicates/check`) |
+| `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır (istisna: yukarıdaki outbox) |
 | `GET/PATCH /api/users/[id]` | 401 | ADMIN-only |
 | `POST/PUT/DELETE /api/companies…` | 401 | ADMIN-only |
 | `POST /api/mentorship`, `…/transfer` | 401/403 | Atama ve devir ADMIN'de |
@@ -385,7 +386,9 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 `MARKETING_MENTOR_ADMIN_ONLY`, `MARKETING_MENTOR_ROWS`, `MARKETING_MENTOR_PAGES`;
 koşan spec `e2e/marketing-sales-surface.spec.ts`; yeni lead kapısı için
 `SALES_LEAD_CREATE` → `e2e/marketing-rep-new-lead.spec.ts` (`@smoke`). Bir satır
-eklerken ikisini birlikte güncelleyin.
+eklerken ikisini birlikte güncelleyin. Outbox'ın kapsamı `e2e/outbound-approval.spec.ts`'te, başka
+tenant'ın taslağına karşı her rolün reddi `e2e/fixtures/authz-matrix.ts` →
+`OUTBOX_FOREIGN`'da koşar.
 
 ## Bu matrisin dışında kalanlar / Out of scope for this matrix
 

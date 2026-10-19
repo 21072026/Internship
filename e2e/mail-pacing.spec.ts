@@ -165,7 +165,7 @@ test.describe('mail pacing', () => {
       const started = Date.now();
       const result = await mailAnnouncement({ recipients: bulk, text: `Hello ${RUN}`, translations: {} });
       // Queued, not sent: the request answers without a single SMTP conversation.
-      expect(result).toEqual({ emailed: 30, queued: 30, failed: 0 });
+      expect(result).toEqual({ emailed: 30, held: 0, queued: 30, failed: 0 });
       expect(Date.now() - started).toBeLessThan(15_000);
       expect(emails.flatMap((e) => smtp.to(e))).toHaveLength(0);
       const jobs = await jobsFor(emails);

@@ -10,6 +10,7 @@ import {
 } from '@/lib/notificationRetention';
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
+import { OUTBOUND_DRAFT_RETENTION_DAYS, pruneOutboundDrafts } from '@/lib/outboundDrafts';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { messageRetentionCutoff } from '@/lib/safeguarding';
 import { inquiryErasureData } from '@/lib/companyContactErasure';
@@ -865,6 +866,14 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'Every enquiry is one person\'s name, address, phone number and own words, and nothing ever deleted one (GDPR Art. 5(1)(e), #2559). Two years is long enough for a lead that went quiet to come back and for a year-on-year look at where requests came from, and short enough that a request nobody answered is not kept for ever. An enquiry never converted into an account is deleted; a converted one stays, because it is where the account came from, and loses only its personal columns — the same ones the account erasure scrubs (src/lib/companyContactErasure.ts).',
     run: pruneCompanyInquiries,
+  },
+  {
+    key: 'outboundDraft',
+    // No setting: part of the outbox's design (#2960, docs/outbound-approval.md).
+    defaultDays: OUTBOUND_DRAFT_RETENTION_DAYS,
+    reason:
+      'A held mail that was decided — sent, scheduled, discarded or expired — keeps only its sealed one-line summary (subject, the recipient\'s name, a masked address) so the outbox can answer "what happened to that mail?" for a month; the mail itself is deleted the moment it is decided. Thirty days matches the dead-mail window of the mail queue next door. A draft still waiting is never touched: it expires on its own deadline first.',
+    run: async (ctx) => pruneOutboundDrafts(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
   },
   {
     key: 'trialReminder',

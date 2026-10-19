@@ -121,6 +121,9 @@ export default function AdminSettingsPage() {
   const [salesWonTargetError, setSalesWonTargetError] = useState<string | null>(null);
   const [salesLeaderboardForReps, setSalesLeaderboardForReps] = useState(false);
   const [loadedSalesLeaderboardForReps, setLoadedSalesLeaderboardForReps] = useState(false);
+  // Outbound approval (#2960) — MARKETING only, same load/post dance.
+  const [outboundApproval, setOutboundApproval] = useState<'off' | 'lead_mail'>('off');
+  const [loadedOutboundApproval, setLoadedOutboundApproval] = useState<'off' | 'lead_mail'>('off');
   // Set when the box holds something the API's `\d{1,6}` would reject (empty is
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
@@ -168,7 +171,7 @@ export default function AdminSettingsPage() {
   const [emailLogAllowed, setEmailLogAllowed] = useState(true);
   const [emailLog, setEmailLog] = useState<{
     entries: { id: string; to: string; subject: string; category: string | null; transport: string | null; status: string; error: string | null; createdAt: string }[];
-    summary: { SENT: number; FAILED: number; SKIPPED: number; DEFERRED?: number };
+    summary: { SENT: number; FAILED: number; SKIPPED: number; DEFERRED?: number; HELD?: number };
     last24h: { primary: number; bulk: number };
     byCategory: { category: string; transport: string; count: number }[];
   } | null>(null);
@@ -283,6 +286,9 @@ export default function AdminSettingsPage() {
     setLoadedSalesWonTarget(settings.salesMonthlyWonTarget ?? '');
     setSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
     setLoadedSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
+    const approval = settings.outboundApproval && settings.outboundApproval !== 'off' ? 'lead_mail' : 'off';
+    setOutboundApproval(approval);
+    setLoadedOutboundApproval(approval);
     setLoadState('ready');
   }, []);
   // The people a lead may belong to: this org's active admins and reps — the
@@ -358,16 +364,17 @@ export default function AdminSettingsPage() {
       return;
     }
     const boardChanged = hasTrialStage && salesLeaderboardForReps !== loadedSalesLeaderboardForReps;
+    const approvalChanged = hasTrialStage && outboundApproval !== loadedOutboundApproval;
     setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (windowChanged) setLoadedDecisionWindowDays(windowDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (windowChanged) setLoadedDecisionWindowDays(windowDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); if (approvalChanged) setLoadedOutboundApproval(outboundApproval); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -628,6 +635,23 @@ export default function AdminSettingsPage() {
                 <p id="sales-leaderboard-for-reps-hint" className="text-xs text-gray-500 mt-1">{t.settings.salesLeaderboardForRepsHint}</p>
               </div>
             )}
+            {hasTrialStage && (
+              <div>
+                <label htmlFor="outbound-approval" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.outboundApproval}</label>
+                <select
+                  id="outbound-approval"
+                  value={outboundApproval}
+                  onChange={(e) => setOutboundApproval(e.target.value === 'lead_mail' ? 'lead_mail' : 'off')}
+                  aria-describedby="outbound-approval-hint"
+                  className="block w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
+                  data-testid="outbound-approval-select"
+                >
+                  <option value="off">{t.settings.outboundApprovalOff}</option>
+                  <option value="lead_mail">{t.settings.outboundApprovalLeadMail}</option>
+                </select>
+                <p id="outbound-approval-hint" className="text-xs text-gray-500 mt-1">{t.settings.outboundApprovalHint}</p>
+              </div>
+            )}
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
             </fieldset>
           </form>
@@ -834,6 +858,15 @@ export default function AdminSettingsPage() {
                   <span className={(emailLog.summary.DEFERRED ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-400'}>
                     {t.settings.emailLogDeferred.replace('{n}', String(emailLog.summary.DEFERRED ?? 0))}
                   </span>
+                  {/* Held for approval in the outbox (#2960): only shown once there is one. */}
+                  {(emailLog.summary.HELD ?? 0) > 0 && (
+                    <>
+                      {' · '}
+                      <span className="text-amber-700 dark:text-amber-400" data-testid="email-log-held">
+                        {t.settings.emailLogHeld.replace('{n}', String(emailLog.summary.HELD ?? 0))}
+                      </span>
+                    </>
+                  )}
                 </p>
               )}
 
@@ -881,12 +914,12 @@ export default function AdminSettingsPage() {
                               className={
                                 e.status === 'SENT'
                                   ? 'text-green-700 dark:text-green-400'
-                                  : e.status === 'DEFERRED'
+                                  : e.status === 'DEFERRED' || e.status === 'HELD'
                                     ? 'text-amber-700 dark:text-amber-400'
                                     : 'text-red-600 dark:text-red-400'
                               }
                             >
-                              ● {e.status === 'DEFERRED' ? t.settings.emailLogStatusDeferred : e.status}
+                              ● {e.status === 'DEFERRED' ? t.settings.emailLogStatusDeferred : e.status === 'HELD' ? t.settings.emailLogStatusHeld : e.status}
                             </span>
                           </td>
                           <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400">
