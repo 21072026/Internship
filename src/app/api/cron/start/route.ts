@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
 import { initAuditDrainCron } from '@/lib/auditDrain';
+import { initKlaviyoSyncCron } from '@/lib/klaviyoSync';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
 import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
 import { initRetentionCron } from '@/lib/retentionEntries';
@@ -74,5 +75,9 @@ export async function POST(request: Request) {
   // here with the others so every schedule in the product is registered from
   // one place until #1676 leases the scheduler.
   initAuditDrainCron();
+  // The Klaviyo pull connector (docs/integrations/klaviyo.md), every fifteen
+  // minutes. Imports leads; never mails one. Here with the others for the same
+  // one-place reason as the audit stream.
+  initKlaviyoSyncCron();
   return NextResponse.json({ ok: true, started: true });
 }

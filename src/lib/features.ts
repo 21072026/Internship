@@ -185,6 +185,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'contactPermission', category: 'trust', icon: MailCheck, color: 'green', capability: 'companies', title: C.contactPermission.t, desc: C.contactPermission.d },
     // #2697 — outbound acquisition by letter, the lawful cold channel.
     { key: 'postalCampaigns', category: 'companies', icon: Send, color: 'blue', capability: 'companies', title: C.postalCampaigns.t, desc: C.postalCampaigns.d },
+    // The Klaviyo pull connector — the sales product only (its leads land on a
+    // marketing funnel), hence the opposite tag, like the estimated deal value.
+    { key: 'klaviyo', category: 'platform', icon: Link2, color: 'indigo', withoutCapability: 'mentorship', title: C.klaviyo.t, desc: C.klaviyo.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
     // Light gamification: the mentee portal's profile completeness meter. Lives

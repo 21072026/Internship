@@ -103,6 +103,7 @@ export const MACHINE_TABLES = {
   ContactPermission: "inspected on its own: a NONE row with no evidence is the writer's",
   CompanyChannel: "inspected on its own: a channel changed after the account insert is a person's",
   CompanyUsage: 'the product usage sync',
+  ExternalProfileLink: 'the pull connector\'s profile link (src/lib/klaviyoSync.ts), cascades with the account',
 };
 
 /** Spellings of an activity entry's target in use for an account / a record / a user. */

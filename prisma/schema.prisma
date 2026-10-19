@@ -234,6 +234,8 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   auditDrains             AuditDrain[]
+  externalConnections     ExternalConnection[]
+  externalProfileLinks    ExternalProfileLink[]
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
@@ -1619,6 +1621,9 @@ model Company {
   contacts           CompanyContact[]
   // The marketplaces, shop systems and carriers it works on (#2408).
   channels           CompanyChannel[]
+  // The third-party marketing profiles this account was imported from or
+  // matched to by a pull connector (Klaviyo, docs/integrations/klaviyo.md).
+  externalProfiles   ExternalProfileLink[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -4553,6 +4558,106 @@ model AuditDrain {
 
   @@index([orgId])
   @@index([active, nextAttemptAt])
+}
+
+// A PULL connector to a third-party marketing platform (Klaviyo today,
+// docs/integrations/klaviyo.md): one row per organization and provider. The CRM
+// only ever READS from the provider — nothing here is ever written back.
+//
+// The key is a READ-ONLY private API key, sealed with secretBox (purpose
+// `external-connection:<provider>`) because the sync has to send it, not only
+// verify it. It is never returned to a client after it is saved: the admin
+// screen shows `keyLast4` and nothing else.
+//
+// THE PROFILES CURSOR (src/lib/klaviyoRule.ts) is three columns, all nullable:
+//   profilesSince          the `updated` instant the current query starts after
+//                          (null = the first, full import);
+//   profilesQueryStartedAt when the current query began — the next query's
+//                          `since`, so a profile edited WHILE a long query was
+//                          being paged is fetched again rather than missed;
+//   profilesPageCursor     the provider's opaque page cursor inside the current
+//                          query, committed after every page: a run cut off by
+//                          the per-tick budget resumes on the next page.
+// `initialSyncDoneAt` is null until the first full query completed — that run
+// is the SILENT one (no bell, one aggregated activity line).
+//
+// Mail engagement (opens/clicks, K2) will add its own nullable events cursor
+// next to these rather than reuse them.
+model ExternalConnection {
+  id                     String                @id @default(cuid())
+  orgId                  String
+  org                    Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // 'klaviyo' (EXTERNAL_PROVIDERS in src/lib/klaviyoRule.ts).
+  provider               String                @db.VarChar(40)
+  sealedKey              String                @db.Text
+  keyLast4               String                @db.VarChar(8)
+  enabled                Boolean               @default(true)
+  // The admin who saved the key; the lead owner when the org has no default
+  // lead owner (src/lib/klaviyoSync.ts). Not a foreign key: the row outlives a
+  // deactivated admin, and the owner rule re-checks the user on every run.
+  connectedById          String?               @db.VarChar(191)
+  profilesSince          DateTime?
+  profilesQueryStartedAt DateTime?
+  profilesPageCursor     String?               @db.Text
+  initialSyncDoneAt      DateTime?
+  lastSyncAt             DateTime?
+  lastSyncOkAt           DateTime?
+  // 'ok' | 'partial' | 'error' (KLAVIYO_SYNC_STATUSES).
+  lastStatus             String?               @db.VarChar(20)
+  // A CODE, never a response body or an address (KLAVIYO_ERROR_CODES).
+  lastErrorCode          String?               @db.VarChar(40)
+  // Consecutive failed runs; drives the backoff (nextAttemptAt).
+  failures               Int                   @default(0)
+  nextAttemptAt          DateTime?
+  // The last run's counts — numbers only, the admin card renders them.
+  lastCreated            Int                   @default(0)
+  lastUpdated            Int                   @default(0)
+  lastUnchanged          Int                   @default(0)
+  lastSkipped            Int                   @default(0)
+  lastErrors             Int                   @default(0)
+  totalCreated           Int                   @default(0)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  profileLinks           ExternalProfileLink[]
+
+  @@unique([orgId, provider])
+  @@index([enabled, nextAttemptAt])
+}
+
+// One provider profile <-> the CRM account it became or was matched to
+// (src/lib/klaviyoSync.ts is the only writer). The link — not
+// `Company.externalId`, which belongs to the tenant's own product — is what
+// makes a re-sync an update instead of a duplicate.
+//
+// `attributes` and `consent` are the provider's own data, shown as INFO on the
+// account and overwritten on every sync: bounded JSON TEXT (never a Json
+// column — the MariaDB empty-string trap), capped by KLAVIYO_ATTRIBUTES_MAX.
+// The consent summary is information only: it never creates a contact
+// permission (docs/contact-permission.md — a machine writes NONE only).
+model ExternalProfileLink {
+  id               String             @id @default(cuid())
+  orgId            String
+  org              Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connectionId     String
+  connection       ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  provider         String             @db.VarChar(40)
+  // The provider's profile id.
+  externalId       String             @db.VarChar(64)
+  // Cascade: deleting (or erasing) the account takes its provider link.
+  companyId        String?
+  company          Company?           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // The lead person (a stand-in MENTEE); a plain id, the account is the anchor.
+  leadUserId       String?            @db.VarChar(191)
+  // The Source name the profile was attributed to (leadSourceName()).
+  sourceName       String?            @db.VarChar(120)
+  consent          String?            @db.Text
+  attributes       String?            @db.Text
+  profileUpdatedAt DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([connectionId, externalId])
+  @@index([orgId, companyId])
 }
 
 // Single-use, time-limited token to confirm a user's email address.

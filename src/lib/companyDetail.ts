@@ -22,6 +22,7 @@
 // the same `company.view` ActivityLog entry as GET /api/companies/[id] (#2433).
 
 import { usageSeries } from '@/lib/usageRule';
+import { profileInfo } from '@/lib/klaviyoRule';
 import { endedByChurn } from '@/lib/relationLifecycle';
 import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
@@ -198,6 +199,17 @@ export async function loadCompanyDetail({
     });
     const usage = usageSeries(usageRows, new Date(), USAGE_DAYS);
 
+    // What a pull connector knows about this account (docs/integrations/klaviyo.md):
+    // information only, shown as the provider sent it on its last sync.
+    const externalProfiles = (
+      await prisma.externalProfileLink.findMany({
+        where: { companyId: company.id },
+        select: { provider: true, sourceName: true, consent: true, attributes: true, profileUpdatedAt: true },
+        orderBy: { createdAt: 'asc' },
+        take: 5,
+      })
+    ).map(profileInfo);
+
     await logViewActivity({
       action: 'company.view',
       reader: session.user,
@@ -206,7 +218,7 @@ export async function loadCompanyDetail({
       request: { headers },
     });
 
-    return { company: { ...company, mentorships: relations }, interactions, usage };
+    return { company: { ...company, mentorships: relations }, interactions, usage, externalProfiles };
   });
 }
 
