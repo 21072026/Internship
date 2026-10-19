@@ -221,6 +221,8 @@ async function createAccount(
     origin: 'ingest',
     actor: null,
     leadSourceName: leadSource.kind === 'unknown' ? null : leadSource.name,
+    // What this source CREATED, for the rollback CLI (#2959).
+    createdBySource: source.slug,
   });
   switch (outcome.kind) {
     case 'created': {

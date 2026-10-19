@@ -229,6 +229,13 @@ interface WriterContext {
   offPathStages: ReadonlySet<string>;
   /** The org's `trialLengthDays`, resolved once per run (#2551). */
   trialLengthDays: number;
+  /**
+   * The integration source whose event creates this account (#2959), stamped
+   * on `Company.createdBySource` in the same insert. Only the account-event
+   * writer sets it; a file import, the manual form and the demo form leave it
+   * null, which is what keeps them out of reach of the rollback CLI.
+   */
+  createdBySource?: string | null;
 }
 
 /**
@@ -282,10 +289,11 @@ async function leadSourceIdFor(row: MarketingPlannedRow, context: WriterContext)
 const IMPORT_REASON_CODE = 'OTHER';
 const IMPORT_REASON_NOTE = 'Imported from the marketing account spreadsheet';
 
-function accountCreateData(row: MarketingPlannedRow, orgId: string | null) {
+function accountCreateData(row: MarketingPlannedRow, orgId: string | null, createdBySource: string | null = null) {
   const { changes } = row.value.account;
   return {
     orgId,
+    createdBySource,
     name: changes.name ?? row.value.input.name,
     vatId: changes.vatId ?? null,
     country: changes.country ?? null,
@@ -470,7 +478,7 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
       const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         const company = await tx.company.create({
-          data: accountCreateData(row, context.orgId),
+          data: accountCreateData(row, context.orgId, context.createdBySource ?? null),
           select: { id: true, contactEmail: true },
         });
         // An import knows the address and nothing else (#2577): it records the
@@ -646,6 +654,8 @@ interface MarketingRunCore {
   chunkSize?: number;
   /** Defaults to `typed` — the file's own `source` column. */
   leadSource?: LeadSourceBinding;
+  /** See `WriterContext.createdBySource`. */
+  createdBySource?: string | null;
 }
 
 /**
@@ -669,6 +679,7 @@ async function runMarketingRows(core: MarketingRunCore) {
       orgId,
       offPathStages,
       trialLengthDays,
+      createdBySource: core.createdBySource ?? null,
     });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
@@ -775,6 +786,12 @@ export async function createMarketingAccount(input: {
    * is the source (#2570, see LeadSourceBinding).
    */
   leadSourceName?: string | null;
+  /**
+   * The registered integration source creating this account (origin `ingest`
+   * only, #2959): stamped on `Company.createdBySource` so the rollback CLI can
+   * tell what a source created from what it merely matched.
+   */
+  createdBySource?: string;
 }): Promise<ManualAccountOutcome> {
   const { owner, fields } = input;
   const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
@@ -811,6 +828,7 @@ export async function createMarketingAccount(input: {
     parse: () => manualAccountTable({ ...fields, stage }),
     mode: 'createOnly',
     leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
+    createdBySource: input.createdBySource ?? null,
   });
   const row = report.rows[0];
   if (!row) return { kind: 'invalid', reason: 'empty row' };

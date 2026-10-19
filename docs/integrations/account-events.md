@@ -12,7 +12,8 @@ This page is the **public contract** (schema version `1`). The implementation is
 | Writer | `src/lib/accountEventIngest.ts` |
 | Source registry | `src/lib/integrationSources.ts` · model `IntegrationSource` |
 | Operator CLI | `prisma/register-integration-source.mjs` |
-| End to end | `e2e/account-event-ingest.spec.ts` |
+| Rollback CLI | `prisma/wipe-integration-source.mjs` · `scripts/test/marketing-ops-clis.test.mjs` |
+| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/marketing-ops-clis.spec.ts` (rollback) |
 
 ## The endpoint
 
@@ -156,6 +157,23 @@ An organization may register more than one source, but all of them share **one a
 So the sources of one organization must either use the same id for the same account (a sign-up service and a billing system of the same product, say) or ids that can never collide, for example a per-source prefix (`billing:1001`).
 
 What stays per source is the bookkeeping: the duplicate claim is keyed on `(organization, source slug, event_id)`, so two sources may reuse each other's event ids, and the out-of-order check compares an event only with the events of its own source.
+
+## Rolling a source back
+
+When a replay went wrong (the wrong organization, the wrong id space, a test run against production), the operator removes what one source created in one organization and replays it:
+
+```bash
+node prisma/wipe-integration-source.mjs --org <org slug or id> --source <slug>            # dry run: counts per table
+node prisma/wipe-integration-source.mjs --org <org slug or id> --source <slug> --apply    # delete
+```
+
+**What the source created** is exactly the accounts whose `Company.createdBySource` is the slug. The writer stamps it in the same insert that creates the account, and only there: an account a person typed in, a demo request converted to an account, a file import, and an account a feed only *matched* all leave it empty. It was added with this tool, so accounts ingested before it existed are not found (they show up as "moved but did not create").
+
+For each such account, in one transaction, the tool deletes its funnel records and their stage history, its lead stand-ins (a lead record created with the account that has no funnel record elsewhere; a person who existed before is kept), the activity entries about the account and its records, this source's events for it, and the account itself (its contact-permission row and channels go with it).
+
+It **keeps** an account a person has worked on and names the reason: a stage move a person made, an interaction, a note, a message, a meeting, an offer, a goal, a placement, a contact person, a postal campaign, a converted inquiry, another user attached to it, or a record the feed attached to an older lead instead of creating it. Such an account's events stay too, so a later run still finds it.
+
+Outside the accounts it deletes the source's other events (recorded, stale, unknown account, and moves of accounts it did not create) and its `integration.event` / `integration.backward_refused` activity entries. An account the source only **moved** is left exactly as it is, stage and history included; the dry run lists it so an operator can look at it. Nothing of another source or another organization is touched, and the registered source, the lead `Source` rows and the settings stay. `--json` prints the plan and, with `--apply`, what was deleted per table; the dry run and the apply count the same rows.
 
 ## Pull instead of push
 

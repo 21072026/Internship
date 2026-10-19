@@ -1580,6 +1580,16 @@ model Company {
   // external id X?"). Contracts: docs/usage-feed.md and
   // docs/integrations/account-events.md.
   externalId      String?       @db.VarChar(191)
+  // The slug of the registered integration source (`IntegrationSource.slug`)
+  // whose account event CREATED this row (#2959), stamped in the same insert by
+  // the account-event writer (src/lib/accountEventIngest.ts). NULL for every
+  // account a person, the demo form or a file import created — and for any
+  // account a feed only MATCHED and moved. It is the one reliable answer to
+  // "what did this source create?", which the rollback CLI
+  // (prisma/wipe-integration-source.mjs) needs: `IntegrationEvent.companyId`
+  // is also set by an event that merely moved an existing account. Nullable
+  // and unbackfilled: only events ingested after it exists carry it.
+  createdBySource String?       @db.VarChar(40)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -1616,6 +1626,7 @@ model Company {
   // `findMany({ where: { externalId } })`, and without this it would filter the
   // whole table row by row.
   @@index([orgId, externalId])
+  @@index([orgId, createdBySource])
 }
 
 // One sales channel of one account (#2408): a marketplace, a shop system or a
