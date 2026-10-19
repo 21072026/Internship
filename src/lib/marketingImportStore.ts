@@ -38,6 +38,7 @@ import { runImport, parseDelimited, type ImportReport, type ParsedTable } from '
 import { resolvePipelineStages } from './pipelineStages';
 import { startStageKey } from './pipeline';
 import { statusChangeData } from './stageChange';
+import { historicMoveAt } from './accountEventRule';
 import { trialLengthDaysFor } from './trialWindow';
 import { getSetting } from './settings';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
@@ -236,6 +237,20 @@ interface WriterContext {
    * null, which is what keeps them out of reach of the rollback CLI.
    */
   createdBySource?: string | null;
+  /**
+   * The moment the written rows are dated (a historic account event replays
+   * the past, docs/integrations/account-events.md § Historic mode). Omitted:
+   * the wall clock, and every timestamp keeps its database default — exactly
+   * the writes the file import and the manual form have always made. Set: the
+   * account's and the new lead's `createdAt`, the record's `startDate` and the
+   * trial window the record is given all read this instant.
+   */
+  now?: Date;
+}
+
+/** `createdAt` / `startDate` for a backdated write; nothing for a live one. */
+function datedAt<K extends string>(key: K, now: Date | undefined): Partial<Record<K, Date>> {
+  return now ? ({ [key]: now } as Record<K, Date>) : {};
 }
 
 /**
@@ -328,6 +343,24 @@ async function writeImportedValue(
 }
 
 /**
+ * A backdated move of an EXISTING record (a historic account event that met a
+ * record somebody already works on): dated at the event, but never before the
+ * record's start nor at or before its newest history row — the stage clock and
+ * every "last move" reader read the newest row (`historicMoveAt`).
+ */
+async function historicMoveAtFor(tx: TxClient, relationId: string, at: Date): Promise<Date> {
+  const [relation, newest] = await Promise.all([
+    tx.mentorshipRelation.findUnique({ where: { id: relationId }, select: { startDate: true } }),
+    tx.statusChange.findFirst({
+      where: { relationId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { createdAt: true },
+    }),
+  ]);
+  return historicMoveAt(at, { startDate: relation?.startDate ?? null, newestHistoryAt: newest?.createdAt ?? null });
+}
+
+/**
  * Place the row's lead person and funnel record. Runs inside the row's own
  * transaction, after the Company is written, so `companyId` is known.
  */
@@ -377,6 +410,7 @@ async function placeOnFunnel(
         preferredLanguage: funnel.leadChanges.preferredLanguage ?? null,
         referralSource: funnel.leadChanges.referralSource ?? null,
         sourceId,
+        ...datedAt('createdAt', context.now),
       },
       select: { id: true },
     });
@@ -406,12 +440,15 @@ async function placeOnFunnel(
     // A record created straight into TRIAL_ACTIVE gets its trial window in the
     // same insert (#2551) — see funnelRelationCreateData().
     const created = await tx.mentorshipRelation.create({
-      data: funnelRelationCreateData(funnel, leadId, {
-        orgId: context.orgId,
-        companyId,
-        now: new Date(),
-        trialLengthDays: context.trialLengthDays,
-      }),
+      data: {
+        ...funnelRelationCreateData(funnel, leadId, {
+          orgId: context.orgId,
+          companyId,
+          now: context.now ?? new Date(),
+          trialLengthDays: context.trialLengthDays,
+        }),
+        ...datedAt('startDate', context.now),
+      },
       select: { id: true },
     });
     await writeImportedValue(tx, created.id, funnel, context);
@@ -432,7 +469,7 @@ async function placeOnFunnel(
     where: { id: active.id },
     data: funnelRelationUpdateData(funnel, current, {
       companyId,
-      now: new Date(),
+      now: context.now ?? new Date(),
       trialLengthDays: context.trialLengthDays,
     }),
   });
@@ -449,6 +486,7 @@ async function placeOnFunnel(
     fromStatus,
     toStatus: funnel.toStage,
     changedById: funnel.ownerId,
+    ...(context.now ? { createdAt: await historicMoveAtFor(tx, active.id, context.now) } : {}),
     ...(context.offPathStages.has(funnel.toStage)
       ? { reasonCode: IMPORT_REASON_CODE, reasonNote: IMPORT_REASON_NOTE }
       : {}),
@@ -478,7 +516,7 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
       const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         const company = await tx.company.create({
-          data: accountCreateData(row, context.orgId, context.createdBySource ?? null),
+          data: { ...accountCreateData(row, context.orgId, context.createdBySource ?? null), ...datedAt('createdAt', context.now) },
           select: { id: true, contactEmail: true },
         });
         // An import knows the address and nothing else (#2577): it records the
@@ -656,6 +694,8 @@ interface MarketingRunCore {
   leadSource?: LeadSourceBinding;
   /** See `WriterContext.createdBySource`. */
   createdBySource?: string | null;
+  /** The moment the written rows are dated (WriterContext.now); omitted = the wall clock. */
+  now?: Date;
 }
 
 /**
@@ -680,6 +720,7 @@ async function runMarketingRows(core: MarketingRunCore) {
       offPathStages,
       trialLengthDays,
       createdBySource: core.createdBySource ?? null,
+      ...(core.now ? { now: core.now } : {}),
     });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
@@ -792,6 +833,17 @@ export async function createMarketingAccount(input: {
    * tell what a source created from what it merely matched.
    */
   createdBySource?: string;
+  /**
+   * The moment the account, its lead and its record are dated, for a historic
+   * account event (docs/integrations/account-events.md § Historic mode).
+   * Omitted: now, with the database defaults — every other caller.
+   */
+  now?: Date;
+  /**
+   * Write no `marketing.account.created` line: a historic replay folds its
+   * activity into one aggregated entry per request instead of one per account.
+   */
+  quiet?: boolean;
 }): Promise<ManualAccountOutcome> {
   const { owner, fields } = input;
   const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
@@ -829,6 +881,7 @@ export async function createMarketingAccount(input: {
     mode: 'createOnly',
     leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
     createdBySource: input.createdBySource ?? null,
+    ...(input.now ? { now: input.now } : {}),
   });
   const row = report.rows[0];
   if (!row) return { kind: 'invalid', reason: 'empty row' };
@@ -848,7 +901,7 @@ export async function createMarketingAccount(input: {
         );
         leadId = lead?.id ?? null;
       }
-      await runWithOrg(owner.orgId, () =>
+      if (!input.quiet) await runWithOrg(owner.orgId, () =>
         logActivity({
           action: 'marketing.account.created',
           // Explicit: with no actor (a web request, an ingest) nothing else

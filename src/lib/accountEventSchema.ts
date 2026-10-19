@@ -26,6 +26,10 @@ export const accountEventSchema = z.object({
   schema_version: z.literal(ACCOUNT_EVENT_SCHEMA_VERSION),
   event_type: z.enum(ACCOUNT_EVENT_TYPES),
   occurred_at: isoDate,
+  // Historic mode (docs/integrations/account-events.md § Historic mode): the
+  // sender marks a replay of its own past. Optional and additive — an event
+  // older than HISTORIC_EVENT_AGE_DAYS is historic without it.
+  replay: z.boolean().nullable().optional(),
   external_id: z
     .string()
     .transform((v, ctx) => {

@@ -459,7 +459,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         stats: { open: 'Open leads', accounts: 'Accounts' },
         records: {
           title: 'My leads',
-          empty: 'No leads are assigned to you yet. An admin — or the default lead owner setting — assigns them to you.',
+          empty: 'No leads on your board yet. Create one with “New lead”, or an admin — or the default lead owner setting — assigns them to you.',
           person: 'Lead',
           company: 'Account',
         },
@@ -980,7 +980,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         stats: { open: 'Açık müşteri adayları', accounts: 'Hesaplar' },
         records: {
           title: 'Müşteri adaylarım',
-          empty: 'Henüz sana atanmış bir müşteri adayı yok. Bir yönetici — ya da varsayılan sahip ayarı — atar.',
+          empty: 'Panonda henüz müşteri adayı yok. “Yeni lead” ile kendin oluştur ya da bir yönetici — veya varsayılan sahip ayarı — sana atasın.',
           person: 'Müşteri adayı',
           company: 'Hesap',
         },
@@ -1458,7 +1458,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         stats: { open: 'Offene Leads', accounts: 'Accounts' },
         records: {
           title: 'Meine Leads',
-          empty: 'Dir ist noch kein Lead zugewiesen. Ein Admin — oder die Einstellung für den Standard-Owner — weist sie dir zu.',
+          empty: 'Auf deinem Board ist noch kein Lead. Leg mit „Neuer Lead“ selbst einen an, oder ein Admin — oder die Einstellung für den Standard-Owner — weist sie dir zu.',
           person: 'Lead',
           company: 'Account',
         },
