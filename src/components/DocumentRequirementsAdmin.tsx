@@ -21,6 +21,8 @@ interface MissingRow {
   missing: { id: string; label: string }[];
 }
 
+const ROLES = ['MENTEE', 'MENTOR', 'COMPANY', 'SOURCE', 'ADMIN'] as const;
+
 const emptyForm = { key: '', en: '', tr: '', de: '', stage: '', role: 'MENTEE', mandatory: true, order: '0', active: true };
 
 export function DocumentRequirementsAdmin() {
@@ -120,7 +122,7 @@ export function DocumentRequirementsAdmin() {
         <Input label={d.labelTr} required value={form.tr} onChange={(e) => setForm({ ...form, tr: e.target.value })} />
         <Input label={d.labelDe} required value={form.de} onChange={(e) => setForm({ ...form, de: e.target.value })} />
         <label className="text-sm text-gray-700 dark:text-gray-300">{d.stage}<select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })} className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"><option value="">{d.allStages}</option>{stages.map((stage) => <option key={stage.key} value={stage.key}>{stage.label}</option>)}</select></label>
-        <label className="text-sm text-gray-700 dark:text-gray-300">{d.role}<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"><option value="">{d.allRoles}</option>{['MENTEE', 'MENTOR', 'COMPANY', 'SOURCE', 'ADMIN'].map((role) => <option key={role}>{role}</option>)}</select></label>
+        <label className="text-sm text-gray-700 dark:text-gray-300">{d.role}<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"><option value="">{d.allRoles}</option>{ROLES.map((role) => <option key={role} value={role}>{d.roles[role]}</option>)}</select></label>
         <Input label={d.order} type="number" min={0} value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.mandatory} onChange={(e) => setForm({ ...form, mandatory: e.target.checked })} />{d.mandatory}</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />{d.active}</label>
@@ -142,7 +144,7 @@ export function DocumentRequirementsAdmin() {
       <CardHeader><CardTitle>{d.missingTitle}</CardTitle></CardHeader>
       <div className="mb-4 flex flex-wrap gap-3">
         <select aria-label={d.stageFilter} value={stageFilter} onChange={(e) => { setPage(1); setStageFilter(e.target.value); }} className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"><option value="">{d.allStages}</option>{stages.map((stage) => <option key={stage.key} value={stage.key}>{stage.label}</option>)}</select>
-        <select aria-label={d.role} value={roleFilter} onChange={(e) => { setPage(1); setRoleFilter(e.target.value); }} className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{['MENTEE', 'MENTOR', 'COMPANY', 'SOURCE', 'ADMIN'].map((role) => <option key={role}>{role}</option>)}</select>
+        <select aria-label={d.role} value={roleFilter} onChange={(e) => { setPage(1); setRoleFilter(e.target.value); }} className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{ROLES.map((role) => <option key={role} value={role}>{d.roles[role]}</option>)}</select>
         <Input aria-label={d.search} placeholder={d.search} value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} className="max-w-xs" />
       </div>
       {missing.length === 0 ? <p className="text-sm text-gray-500">{d.noneMissing}</p> : <div className="divide-y divide-gray-100 dark:divide-gray-800">{missing.map((row) => <div key={row.user.id} className="py-3">
