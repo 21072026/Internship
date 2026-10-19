@@ -88,11 +88,20 @@ async function jar(
   return ctx;
 }
 
-/** Mail jobs queued for this address since `since` (the queue stores only its hash). */
-async function mailJobsFor(address: string, since: Date) {
-  const rcpt = crypto.createHash('sha256').update(address.trim().toLowerCase()).digest('hex');
+/**
+ * Mail addressed to `address` since `since`, by either route out: a queued job
+ * (the queue stores only the recipient's hash) or an `EmailLog` row. The second
+ * is the one that matters here: in the e2e server SMTP is unset and the queue
+ * lanes are off by default, so a send is recorded as a SKIPPED log row and
+ * never queued; counting jobs alone would stay at 0 whatever the route did.
+ */
+async function mailsTo(address: string, since: Date) {
+  const key = address.trim().toLowerCase();
+  const rcpt = crypto.createHash('sha256').update(key).digest('hex');
   const rows = await prisma.job.findMany({ where: { name: 'email.send', createdAt: { gte: since } }, select: { payload: true } });
-  return rows.filter((r) => (r.payload as { rcpt?: string } | null)?.rcpt === rcpt).length;
+  const jobs = rows.filter((r) => (r.payload as { rcpt?: string } | null)?.rcpt === rcpt).length;
+  const logs = await prisma.emailLog.count({ where: { to: { in: [address, key] }, createdAt: { gte: since } } });
+  return jobs + logs;
 }
 
 test.beforeAll(async () => {
@@ -186,8 +195,8 @@ test('who may create their own lead, and that it is always theirs, in their own 
       expect(log.detail ?? '').toMatch(/^manual /);
       // No mail to the contact address, nor to the lead's stand-in.
       const leadUser = await prisma.user.findUniqueOrThrow({ where: { id: relation.menteeId }, select: { email: true } });
-      expect(await mailJobsFor(body.contactEmail, since)).toBe(0);
-      expect(await mailJobsFor(leadUser.email, since)).toBe(0);
+      expect(await mailsTo(body.contactEmail, since)).toBe(0);
+      expect(await mailsTo(leadUser.email, since)).toBe(0);
     } finally {
       await ctx.dispose();
     }
@@ -253,6 +262,68 @@ test("duplicates are refused with the admin path's rules, without pointing at a 
     await rep.dispose();
     await colleague.dispose();
     await foreign.dispose();
+  }
+});
+
+test("a colleague's closed lead is not picked up, and a stale record of the rep's never answers for an open one", { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  test.slow();
+  const rep = await jar(playwright, baseURL, ids.repEmail, true);
+  const colleague = await jar(playwright, baseURL, ids.colleagueEmail, true);
+  try {
+    // 1. The colleague's lead, then closed: the import's create-only plan no
+    //    longer sees the contact as "in the funnel", but the person and the
+    //    colleague's data on it are still there.
+    const theirs = lead({ contactName: `Colleague Typed ${STAMP}`, contactPhone: '+49 1' });
+    expect((await colleague.post(SALES_LEAD_CREATE_PATH, { data: theirs })).status()).toBe(201);
+    const theirCompany = await prisma.company.findFirstOrThrow({ where: { orgId: ids.orgA, name: theirs.name } });
+    const theirRelation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: theirCompany.id } });
+    await prisma.mentorshipRelation.update({ where: { id: theirRelation.id }, data: { status: 'COMPLETED' } });
+
+    const takeover = await rep.post(SALES_LEAD_CREATE_PATH, {
+      data: lead({ contactEmail: theirs.contactEmail, contactName: 'Rep Typed', contactPhone: '+49 2' }),
+    });
+    expect(takeover.status()).toBe(409);
+    expect(await takeover.json()).toEqual({ code: 'contact_in_funnel', mine: false });
+    // Nothing written: no record of the rep's on that person, its data untouched.
+    expect(await prisma.mentorshipRelation.count({ where: { menteeId: theirRelation.menteeId, mentorId: ids.rep } })).toBe(0);
+    const leadPerson = await prisma.user.findUniqueOrThrow({ where: { id: theirRelation.menteeId }, select: { fullName: true } });
+    expect(leadPerson.fullName).toBe(theirs.contactName);
+
+    // 2. A lead only the rep ever held may be re-opened by the rep.
+    const own = lead();
+    expect((await rep.post(SALES_LEAD_CREATE_PATH, { data: own })).status()).toBe(201);
+    const ownCompany = await prisma.company.findFirstOrThrow({ where: { orgId: ids.orgA, name: own.name } });
+    const ownRelation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: ownCompany.id } });
+    await prisma.mentorshipRelation.update({ where: { id: ownRelation.id }, data: { status: 'COMPLETED' } });
+    const reopen = await rep.post(SALES_LEAD_CREATE_PATH, { data: lead({ contactEmail: own.contactEmail }) });
+    expect(reopen.status()).toBe(201);
+    expect((await reopen.json()).relationId).not.toBe(ownRelation.id);
+
+    // 3. The colleague holds the contact OPEN; the rep has only an older,
+    //    closed record on the same person. "In the funnel" is the colleague's,
+    //    so the answer must not hand the rep their stale record as "yours".
+    const shared = lead();
+    expect((await colleague.post(SALES_LEAD_CREATE_PATH, { data: shared })).status()).toBe(201);
+    const sharedCompany = await prisma.company.findFirstOrThrow({ where: { orgId: ids.orgA, name: shared.name } });
+    const sharedRelation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: sharedCompany.id } });
+    const stale = await prisma.mentorshipRelation.create({
+      data: {
+        orgId: ids.orgA,
+        mentorId: ids.rep,
+        menteeId: sharedRelation.menteeId,
+        status: 'COMPLETED',
+        startDate: new Date(Date.now() - 86_400_000 * 30),
+      },
+    });
+    const again = await rep.post(SALES_LEAD_CREATE_PATH, { data: lead({ contactEmail: shared.contactEmail }) });
+    expect(again.status()).toBe(409);
+    const againBody = await again.json();
+    expect(['contact_in_funnel', 'already_mentored']).toContain(againBody.code);
+    expect(againBody.mine ?? false).toBe(false);
+    expect(JSON.stringify(againBody)).not.toContain(stale.id);
+  } finally {
+    await rep.dispose();
+    await colleague.dispose();
   }
 });
 

@@ -13,6 +13,8 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logger } from '@/lib/logger';
 import { createMarketingAccount } from '@/lib/marketingImportStore';
 import { findLeadOwner } from '@/lib/leadOwner';
+import { leadStandInEmail } from '@/lib/marketingImport';
+import { normalizeEmailKey } from '@/lib/duplicateDetection';
 
 // A sales rep types in their OWN lead (#2958) — the call, the trade-fair
 // badge, the LinkedIn message — from the /sales surface.
@@ -39,9 +41,18 @@ import { findLeadOwner } from '@/lib/leadOwner';
 //     and the rep must hear it — but the ids come back only when the existing
 //     record is on the rep's own book. A colleague's account or lead is named
 //     as existing and nothing more (no id that a later request could confirm).
+//   • A COLLEAGUE'S CLOSED LEAD IS NOT PICKED UP HERE. The import's create-only
+//     plan refuses a contact only while it has an ACTIVE record; a contact whose
+//     only records are closed would be placed on the rep's book, re-using the
+//     existing lead person — and the colleague's name, phone and company link
+//     on it would open to the rep on /sales/leads/[id]. When such a person has
+//     any record in the org owned by someone else, the rep hears
+//     `contact_in_funnel` with `mine: false`; re-opening it is an admin's
+//     transfer, not a fresh lead.
 //
 // Creating a lead mails nobody: the import writer sends nothing, and this
-// route adds nothing (the e2e spec counts the mail queue to keep it so).
+// route adds nothing (the e2e spec counts the mail queue and the mail log to
+// keep it so).
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(TEXT_LIMITS.companyName),
@@ -106,6 +117,9 @@ async function handlePost(request: Request) {
 
   return withTenantScope(session, async () => {
     try {
+      if (await closedLeadOfColleague(orgId, owner.id, fields.contactEmail)) {
+        return NextResponse.json({ code: 'contact_in_funnel', mine: false }, { status: 409 });
+      }
       const outcome = await createMarketingAccount({
         owner,
         fields,
@@ -129,7 +143,12 @@ async function handlePost(request: Request) {
           );
         }
         case 'contact_in_funnel': {
-          const relationId = outcome.leadId ? await ownRelationOfLead(orgId, owner.id, outcome.leadId) : null;
+          // Only the rep's ACTIVE record: the contact is in the funnel because
+          // SOMEBODY holds it open, and an older closed record of the rep's
+          // must not stand in for a colleague's open one.
+          const relationId = outcome.leadId
+            ? await ownRelationOfLead(orgId, owner.id, outcome.leadId, { activeOnly: true })
+            : null;
           return NextResponse.json(
             relationId ? { code: 'contact_in_funnel', mine: true, relationId } : { code: 'contact_in_funnel', mine: false },
             { status: 409 },
@@ -157,10 +176,15 @@ async function handlePost(request: Request) {
 }
 
 /** The rep's own funnel record for this lead person, inside the org — or null. */
-async function ownRelationOfLead(orgId: string, ownerId: string, leadId: string): Promise<string | null> {
+async function ownRelationOfLead(
+  orgId: string,
+  ownerId: string,
+  leadId: string,
+  opts: { activeOnly?: boolean } = {},
+): Promise<string | null> {
   const relation = await runWithOrg(orgId, () =>
     prisma.mentorshipRelation.findFirst({
-      where: { orgId, mentorId: ownerId, menteeId: leadId },
+      where: { orgId, mentorId: ownerId, menteeId: leadId, ...(opts.activeOnly ? { status: 'ACTIVE' as const } : {}) },
       orderBy: { startDate: 'desc' },
       select: { id: true },
     }),
@@ -177,4 +201,30 @@ async function isOwnAccount(orgId: string, ownerId: string, companyId: string): 
     }),
   );
   return !!hit;
+}
+
+/**
+ * Whether the contact's lead person — under either address the import keys it
+ * by (the real one, or this org's stand-in) — has NO active record but at
+ * least one record owned by someone other than the rep. That is the case the
+ * create-only writer would otherwise place on the rep's book. A lead with an
+ * active record is left to the writer (`contact_in_funnel` / `already_mentored`),
+ * and a lead only the rep ever held may be re-opened by the rep.
+ */
+async function closedLeadOfColleague(orgId: string, ownerId: string, contactEmail: string): Promise<boolean> {
+  const key = normalizeEmailKey(contactEmail);
+  if (!key) return false;
+  return runWithOrg(orgId, async () => {
+    const leads = await prisma.user.findMany({
+      where: { orgId, role: 'MENTEE', email: { in: [key, leadStandInEmail(key, orgId)] } },
+      select: { id: true },
+    });
+    if (leads.length === 0) return false;
+    const relations = await prisma.mentorshipRelation.findMany({
+      where: { orgId, menteeId: { in: leads.map((l) => l.id) } },
+      select: { mentorId: true, status: true },
+    });
+    if (relations.some((r) => r.status === 'ACTIVE')) return false;
+    return relations.some((r) => r.mentorId !== ownerId);
+  });
 }
