@@ -374,6 +374,7 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 | `GET/PUT /api/mentorship/[id]` başka temsilcinin | 403 | Aynı kiracı, sahip değil |
 | `GET/PUT /api/mentorship/[id]` başka org'un | 404 | İlişki çağıranın kiracısı içinde aranır (#2613); ADMIN dahil |
 | `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |
+| `POST /api/sales/leads` (yeni lead, #2958) | ✅ 201, sahibi **her zaman** kendisi | Gövdedeki `ownerId`/`orgId` yok sayılır; admin formuyla aynı yazıcı ve tekilleştirme (`createMarketingAccount`). "Zaten var" cevabı yalnızca temsilcinin **kendi** kaydının kimliğini döndürür. MENTEE/COMPANY 403, INTERNSHIP MENTOR/ADMIN `403 vertical_unavailable`, oturumsuz 401. Fixture: `SALES_LEAD_CREATE` |
 | `POST /api/invite` | **403** `capability_unavailable` | ADMIN dışı davet artık `mentorship` yeteneği ister (#2580) |
 | `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır |
 | `GET/PATCH /api/users/[id]` | 401 | ADMIN-only |
@@ -382,8 +383,9 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 
 Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` →
 `MARKETING_MENTOR_ADMIN_ONLY`, `MARKETING_MENTOR_ROWS`, `MARKETING_MENTOR_PAGES`;
-koşan spec `e2e/marketing-sales-surface.spec.ts`. Bir satır eklerken ikisini
-birlikte güncelleyin.
+koşan spec `e2e/marketing-sales-surface.spec.ts`; yeni lead kapısı için
+`SALES_LEAD_CREATE` → `e2e/marketing-rep-new-lead.spec.ts` (`@smoke`). Bir satır
+eklerken ikisini birlikte güncelleyin.
 
 ## Bu matrisin dışında kalanlar / Out of scope for this matrix
 

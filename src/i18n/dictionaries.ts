@@ -927,6 +927,15 @@ const en = {
       interactionsEmpty: 'No interactions logged yet.',
       openBoard: 'Open the board',
     },
+    // #2958 — a rep types in their own lead from /sales; it is always theirs.
+    newLead: {
+      button: 'New lead',
+      title: 'New lead',
+      ownerHint: 'The lead is placed on your own board, owned by you.',
+      existsElsewhere: 'This account already exists on a colleague’s board — nothing was created. Ask an admin if it should be yours.',
+      contactInFunnelElsewhere: 'This contact is already on a colleague’s board — nothing was created. Ask an admin if it should be yours.',
+      alreadyMentored: 'This contact already belongs to another owner — nothing was created. An admin can transfer the lead to you.',
+    },
   },
   companiesPage: {
     title: 'Companies',
@@ -5570,6 +5579,7 @@ const en = {
       followUps: { t: 'Next step and follow-up date', d: 'Write the next step on any record — "call Thursday about pricing" — with the day it is due. On that day the owner gets one reminder, in the app and by e-mail; from the next day the record sits in the needs-attention list until the date is moved or cleared. The date belongs to the person who set it: moving the record to another stage never changes it, and the account list can be sorted by the next follow-up.' },
       dealValue: { t: 'Estimated deal value', d: 'Give every account an estimated monthly value — typed on the record or brought in by the account import — and see, month by month, what was newly won, what was lost after winning and the estimated monthly value of the accounts held at month end. Each month is rebuilt from the stage history, amounts are kept in whole cents, and a range that mixes currencies is shown as such instead of being converted. Always labelled an estimate: pricing is usage-based, so the real invoice varies.' },
       salesTarget: { t: 'Won-deal target & team leaderboard', d: 'Set a monthly won-deal target and every sales rep sees “N of target” with a progress bar on their dashboard. A team leaderboard ranks the reps by deals won this month — names and counts only, never deal values — and is shown to reps only when an admin switches it on. Counted from the stage history: a deal counts in the month it first moved into a won stage.' },
+      repOwnLeads: { t: 'Reps create their own leads', d: 'A sales rep adds the lead from a call, a trade fair or LinkedIn straight from their own dashboard. The lead lands on their own board, owned by them, with the same duplicate checks as the admin form — VAT ID, name and country, and the contact’s e-mail — and nothing is mailed to the contact.' },
       accountDetail: { t: 'One page per account', d: 'Open any company and see its whole state on one screen: the account fields, its contacts with the primary one marked, every record in the pipeline with its stage, owner, trial window and next step, and the latest logged interactions. An admin can also record the id the account carries in your own product, and the page warns when another account of your organization already uses it.' },
       stories: { t: 'Consent-based success stories', d: 'Real evaluation excerpts, published only with both sides’ consent and the author’s approval of the exact wording — withdrawable at any time, gone immediately.' },
       messaging: { t: 'Built-in messaging', d: 'A unified inbox with per-mentorship threads, attachments and email mirroring you can reply to — answer the notification from your mail app and it lands back in the thread. Messages arrive live while the inbox is open, and can notify your device even when the app is closed. A half-written reply is kept per conversation until you send it, and you can see when the other person is writing. The answers you give over and over live in a shared pool of canned responses \u2014 written once in English, Turkish and German, inserted in your own language, one click.' },
@@ -8778,6 +8788,15 @@ const tr: Dict = {
       interactions: 'Son etkileşimler',
       interactionsEmpty: 'Henüz kayıtlı etkileşim yok.',
       openBoard: 'Panoyu aç',
+    },
+    // #2958
+    newLead: {
+      button: 'Yeni lead',
+      title: 'Yeni lead',
+      ownerHint: 'Lead senin panona, sahibi sen olarak eklenir.',
+      existsElsewhere: 'Bu hesap bir ekip arkadaşının panosunda zaten var — hiçbir şey oluşturulmadı. Senin olması gerekiyorsa bir yöneticiye sor.',
+      contactInFunnelElsewhere: 'Bu kişi bir ekip arkadaşının panosunda zaten var — hiçbir şey oluşturulmadı. Senin olması gerekiyorsa bir yöneticiye sor.',
+      alreadyMentored: 'Bu kişinin zaten başka bir sahibi var — hiçbir şey oluşturulmadı. Bir yönetici lead\'i sana devredebilir.',
     },
   },
   companiesPage: {
@@ -13295,6 +13314,7 @@ const tr: Dict = {
       followUps: { t: 'Sonraki adım ve takip tarihi', d: 'Her kayda sonraki adımı — "perşembe fiyat için ara" — ve tarihini yazın. O gün kayıt sahibine uygulama içinde ve e-postayla tek bir hatırlatma gider; ertesi günden itibaren kayıt, tarih ileri alınana ya da silinene kadar dikkat listesinde durur. Tarih onu koyan kişiye aittir: kaydı başka bir aşamaya taşımak onu asla değiştirmez ve hesap listesi en yakın takip tarihine göre sıralanabilir.' },
       dealValue: { t: 'Tahmini iş değeri', d: 'Her hesaba tahmini bir aylık değer verin — kayıtta yazılarak ya da hesap içe aktarımıyla — ve ay ay neyin yeni kazanıldığını, kazanıldıktan sonra neyin kaybedildiğini ve ay sonunda elde tutulan hesapların tahmini aylık değerini görün. Her ay aşama geçmişinden yeniden kurulur, tutarlar tam kuruş olarak tutulur ve farklı para birimleri içeren bir aralık çevrilmek yerine öyle gösterilir. Her zaman tahmin olarak etiketlenir: fiyatlandırma kullanım bazlıdır, gerçek fatura değişir.' },
       salesTarget: { t: 'Kazanılan anlaşma hedefi ve ekip sıralaması', d: 'Aylık bir kazanılan anlaşma hedefi belirleyin; her satış temsilcisi panosunda ilerleme çubuğuyla “N / hedef” görür. Ekip sıralaması temsilcileri bu ay kazanılan anlaşmalara göre dizer — yalnızca isimler ve sayılar, anlaşma değerleri asla — ve temsilcilere yalnızca bir yönetici açtığında gösterilir. Aşama geçmişinden sayılır: bir anlaşma, ilk kez kazanıldı aşamasına geçtiği ayda sayılır.' },
+      repOwnLeads: { t: 'Temsilciler kendi lead\'lerini oluşturur', d: 'Bir satış temsilcisi telefondan, fuardan ya da LinkedIn\'den gelen lead\'i doğrudan kendi panosundan ekler. Lead, sahibi temsilci olarak kendi panosuna düşer; yönetici formundaki tekrar kontrolleri — VAT numarası, ad ve ülke, kişinin e-postası — aynen uygulanır ve kişiye hiçbir e-posta gönderilmez.' },
       accountDetail: { t: 'Her hesap için tek sayfa', d: 'Herhangi bir şirketi açın ve tüm durumunu tek ekranda görün: hesap alanları, birincili işaretli muhatapları, pipeline’daki her kayıt aşaması, sahibi, deneme süresi ve sonraki adımıyla birlikte, ve son kaydedilen etkileşimler. Admin, hesabın kendi ürününüzdeki kimliğini de girebilir; kuruluşunuzda başka bir hesap bu kimliği zaten kullanıyorsa sayfa uyarır.' },
       stories: { t: 'Rıza temelli başarı hikâyeleri', d: 'Gerçek değerlendirme alıntıları, yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — istenildiği an geri alınabilir, anında yayından düşer.' },
       messaging: { t: 'Yerleşik mesajlaşma', d: 'Mentorluk başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir. Yarım kalan yanıt gönderilene kadar sohbet başına saklanır ve karşı taraf yazarken bunu görürsünüz. Sürekli verdiğiniz yanıtlar ortak bir hazır yanıt havuzunda durur \u2014 İngilizce, Türkçe ve Almanca bir kez yazılır, kendi dilinizde tek tıkla eklenir.' },
@@ -16461,6 +16481,15 @@ const de: Dict = {
       interactions: 'Letzte Interaktionen',
       interactionsEmpty: 'Noch keine Interaktionen erfasst.',
       openBoard: 'Board öffnen',
+    },
+    // #2958
+    newLead: {
+      button: 'Neuer Lead',
+      title: 'Neuer Lead',
+      ownerHint: 'Der Lead landet auf deinem eigenen Board, mit dir als Owner.',
+      existsElsewhere: 'Dieser Account existiert bereits auf dem Board einer Kollegin oder eines Kollegen — es wurde nichts angelegt. Frag einen Admin, wenn er dir gehören soll.',
+      contactInFunnelElsewhere: 'Dieser Kontakt ist bereits auf dem Board einer Kollegin oder eines Kollegen — es wurde nichts angelegt. Frag einen Admin, wenn er dir gehören soll.',
+      alreadyMentored: 'Dieser Kontakt gehört bereits zu einem anderen Owner — es wurde nichts angelegt. Ein Admin kann dir den Lead übertragen.',
     },
   },
   companiesPage: {
@@ -20980,6 +21009,7 @@ const de: Dict = {
       followUps: { t: 'Nächster Schritt und Wiedervorlage', d: 'Schreiben Sie an jeden Datensatz den nächsten Schritt — „Donnerstag wegen Preisen anrufen“ — und den Tag, an dem er fällig ist. An diesem Tag erhält der Verantwortliche eine Erinnerung, in der App und per E-Mail; ab dem Folgetag steht der Datensatz in der Aufmerksamkeitsliste, bis das Datum verschoben oder entfernt wird. Das Datum gehört der Person, die es gesetzt hat: Ein Wechsel in eine andere Stufe ändert es nie, und die Kontenliste lässt sich nach der nächsten Wiedervorlage sortieren.' },
       dealValue: { t: 'Geschätzter Deal-Wert', d: 'Geben Sie jedem Account einen geschätzten Monatswert — am Datensatz eingetragen oder über den Konten-Import übernommen — und sehen Sie Monat für Monat, was neu gewonnen, was nach dem Gewinn verloren wurde und wie viel die zum Monatsende gehaltenen Accounts geschätzt pro Monat wert sind. Jeder Monat wird aus dem Phasenverlauf neu berechnet, Beträge werden in ganzen Cent geführt, und ein Zeitraum mit gemischten Währungen wird als solcher gezeigt statt umgerechnet. Immer als Schätzung gekennzeichnet: Die Preise sind nutzungsbasiert, die tatsächliche Rechnung schwankt.' },
       salesTarget: { t: 'Abschlussziel & Team-Rangliste', d: 'Legen Sie ein monatliches Ziel für gewonnene Deals fest, und jede Vertriebsperson sieht im Dashboard „N von Ziel“ mit Fortschrittsbalken. Eine Team-Rangliste ordnet das Team nach den diesen Monat gewonnenen Deals — nur Namen und Anzahlen, nie Deal-Werte — und ist für das Team nur sichtbar, wenn ein Admin sie einschaltet. Gezählt wird aus dem Phasenverlauf: Ein Deal zählt in dem Monat, in dem er zum ersten Mal in eine Gewonnen-Phase gewechselt ist.' },
+      repOwnLeads: { t: 'Vertrieb legt eigene Leads an', d: 'Eine Vertriebsperson erfasst den Lead aus einem Anruf, von einer Messe oder aus LinkedIn direkt im eigenen Dashboard. Der Lead landet auf ihrem eigenen Board, mit ihr als Owner, mit denselben Dublettenprüfungen wie im Admin-Formular — USt-IdNr., Name und Land sowie die E-Mail des Kontakts — und an den Kontakt geht keine E-Mail.' },
       accountDetail: { t: 'Eine Seite pro Account', d: 'Öffnen Sie ein beliebiges Unternehmen und sehen Sie seinen ganzen Stand auf einem Bildschirm: die Account-Felder, die Ansprechpartner samt Hauptkontakt, jeden Datensatz in der Pipeline mit Phase, Verantwortlichem, Testphase und nächstem Schritt sowie die zuletzt erfassten Interaktionen. Ein Admin kann außerdem die ID hinterlegen, die der Account in Ihrem eigenen Produkt trägt; die Seite warnt, wenn ein anderer Account Ihrer Organisation sie bereits verwendet.' },
       stories: { t: 'Einwilligungsbasierte Erfolgsgeschichten', d: 'Echte Bewertungsauszüge, veröffentlicht nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts — jederzeit widerrufbar und sofort entfernt.' },
       messaging: { t: 'Integrierte Nachrichten', d: 'Ein zentraler Posteingang mit Threads pro Mentoring, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen. Eine halb geschriebene Antwort bleibt pro Gespräch erhalten, bis du sie sendest, und du siehst, wenn die andere Person schreibt. Antworten, die du immer wieder gibst, liegen in einem gemeinsamen Pool vorgefertigter Antworten \u2014 einmal auf Englisch, Türkisch und Deutsch verfasst, mit einem Klick in deiner eigenen Sprache eingefügt.' },

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Sales reps create their own leads (#2958).** The MARKETING sales surface gets a **New lead** button on `/sales` and `/sales/accounts`: the admin form's dialog (`NewMarketingLeadDialog`, now with `surface=\"sales\"`) posting to the new `POST /api/sales/leads`. The route runs the same create-only writer as `POST /api/admin/marketing-accounts` (`createMarketingAccount()`, `origin: 'manual'`, the rep as actor in the activity log), behind the same `companies` + `pipeline` capability gate and the MARKETING-only check, for whoever has the sales surface (`hasSalesSurface`). The owner is always the caller — an `ownerId` or `orgId` in the body is dropped — and the caller is re-read as an active lead owner of their own org. Duplicate answers (`account_exists`, `contact_in_funnel`) carry ids only for the rep's own records (`mine: true`; for `contact_in_funnel` only an active one), never a colleague's; a contact whose lead person has no open record but one owned by a colleague is refused (`contact_in_funnel`, `mine: false`) instead of being re-opened on the rep's book; `account_ambiguous` does not echo the matcher's reason. MENTEE/COMPANY get 403, an INTERNSHIP mentor or admin `403 vertical_unavailable`. No mail is sent (the spec checks both the mail queue and the mail log). Probes in `e2e/fixtures/authz-matrix.ts` (`SALES_LEAD_CREATE`), run by `e2e/marketing-rep-new-lead.spec.ts` (`@smoke`); `docs/role-access-matrix.md` and `docs/marketing-import.md` updated. The admin route and the INTERNSHIP vertical are unchanged.",
+  "notes": {
+    "en": [
+      "Sales reps can now add a lead themselves: “New lead” on their dashboard puts it straight on their own board, with the same duplicate checks as the admin form and without e-mailing the contact."
+    ],
+    "tr": [
+      "Satış temsilcileri artık lead'i kendileri ekleyebiliyor: panolarındaki “Yeni lead” onu doğrudan kendi panolarına koyuyor; yönetici formundaki tekrar kontrolleri aynen geçerli ve kişiye e-posta gitmiyor."
+    ],
+    "de": [
+      "Vertriebsmitarbeitende können Leads jetzt selbst anlegen: „Neuer Lead“ im Dashboard legt ihn direkt auf das eigene Board — mit denselben Dublettenprüfungen wie im Admin-Formular und ohne E-Mail an den Kontakt."
+    ]
+  }
+}

@@ -18,6 +18,8 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { salesTargetApplies } from '@/lib/salesTargetRule';
 import { loadSalesTargetView } from '@/lib/salesTarget';
 import { SalesTargetCards } from '@/components/SalesTargetCards';
+import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
+import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
 
 // The sales rep's dashboard (#2580): their own attention queue and their own
 // records. Every read is the rep's rows only (`mentorId = self`) AND the rep's
@@ -71,12 +73,16 @@ export default async function SalesDashboard() {
   const targetView = salesTargetApplies(capabilities) ? await loadSalesTargetView(session, locale) : null;
   const stages = await resolvePipelineStages(session.user.orgId, locale);
   const date = (value: Date) => formatDate(value, locale, { timeZone: 'UTC' });
+  const canCreateLead = await salesLeadCreateAvailable(session.user.orgId, capabilities);
 
   return (
     <div data-testid="sales-dashboard">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.dashboard.title}</h1>
-        <p className="text-gray-500 mt-1">{s.dashboard.subtitle}</p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.dashboard.title}</h1>
+          <p className="text-gray-500 mt-1">{s.dashboard.subtitle}</p>
+        </div>
+        {canCreateLead && <NewSalesLeadButton />}
       </div>
 
       <MentorAttentionQueue items={attention.items} usage={attention.usage} t={t} locale={locale} hrefBase="/sales/leads" />

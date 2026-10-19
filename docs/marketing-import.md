@@ -731,6 +731,39 @@ first on-path stage and an off-path stage is refused (it would need a drop-off r
 form has no field for). No marketing-consent record is written (#2577). INTERNSHIP orgs
 never see the dialog, and the route answers them `403 vertical_unavailable`.
 
+### The sales rep's own door (#2958)
+
+The same dialog sits on `/sales` and `/sales/accounts` as **"New lead"** for whoever works
+the sales surface (`hasSalesSurface`: a MENTOR, or an ADMIN in sales mode, of a MARKETING
+org). It posts to `POST /api/sales/leads`, which calls the same `createMarketingAccount()`
+with `origin: 'manual'` and the rep as the actor — so the activity log line is
+`marketing.account.created` / `manual stage=…` with the rep's id. Three differences from
+the admin route, none in the writer:
+
+- **The owner is always the caller.** The body has no `ownerId`; one sent anyway (or an
+  `orgId`) is stripped by the schema. The caller is re-read as a lead owner of their own org
+  (`findLeadOwner`), so a deactivated account with a live session gets `403`.
+- **Ids only for the caller's own records.** `409 account_exists` carries
+  `{ mine: true, companyId }` only when the account has a record of the rep's (what
+  `/sales/accounts/[id]` would open); a colleague's account answers `{ mine: false }` and
+  nothing else. `contact_in_funnel` likewise returns the rep's own **active** `relationId`
+  or no id — an older closed record of the rep's never answers for a colleague's open one.
+- **A colleague's closed lead is not picked up.** The create-only plan only refuses a
+  contact while it has an ACTIVE record; on this door, a contact whose lead person has no
+  open record but at least one owned by someone else is refused as
+  `409 { code: 'contact_in_funnel', mine: false }` before the writer runs — otherwise the
+  rep would get a record on the existing person and see the colleague's data on it.
+  Re-opening such a lead is an admin's transfer. A lead only the rep ever held may be
+  re-opened by the rep.
+  `account_ambiguous` does not echo the matcher's reason (it can name accounts).
+- **Who:** MENTEE, COMPANY and SOURCE get `403`; an INTERNSHIP mentor or admin
+  `403 vertical_unavailable`. The match key is the org's, so the same VAT id in another
+  MARKETING org is a different account there.
+
+Creating a lead mails nobody, on either door. The probes live in
+`e2e/fixtures/authz-matrix.ts` (`SALES_LEAD_CREATE`), run by
+`e2e/marketing-rep-new-lead.spec.ts`.
+
 ## Tests
 
 `scripts/test/marketing-import.test.mjs` (`npm run test:marketing-import`) pins the four

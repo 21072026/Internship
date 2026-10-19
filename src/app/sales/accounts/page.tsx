@@ -10,6 +10,8 @@ import { getServerDictionary } from '@/i18n/server';
 import { Card } from '@/components/ui/Card';
 import { marketingEmailPermissionFilter } from '@/lib/contactPermission';
 import { marketingEmailAllowed } from '@/lib/contactPermissionRule';
+import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
+import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
 
 // The rep's own accounts (#2580): the companies behind at least one of THEIR
 // relations, in their tenant — the MENTOR `company` scope of
@@ -66,12 +68,16 @@ export default async function SalesAccountsPage({
 
   const { t } = await getServerDictionary();
   const s = t.sales.accounts;
+  const canCreateLead = await salesLeadCreateAvailable(session.user.orgId, capabilities);
 
   return (
     <div data-testid="sales-accounts">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.title}</h1>
-        <p className="text-gray-500 mt-1">{s.subtitle}</p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.title}</h1>
+          <p className="text-gray-500 mt-1">{s.subtitle}</p>
+        </div>
+        {canCreateLead && <NewSalesLeadButton />}
       </div>
       <nav className="mb-4 flex gap-2 text-sm" aria-label={s.permission} data-testid="sales-accounts-permission-filter">
         <Link
