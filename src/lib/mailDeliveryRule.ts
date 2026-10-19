@@ -26,6 +26,8 @@
 //   automated volume?".
 import { createHash } from 'node:crypto';
 import { groupForCategory, isBulkGroup, isEssentialGroup, type EmailGroupId } from './emailGroups';
+// Dependency-free like emailGroups: the two generated-address domains.
+import { ERASED_EMAIL_DOMAIN, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 
 // ── Lanes ────────────────────────────────────────────────────────────────────
 
@@ -531,6 +533,47 @@ export type MailWorld = (typeof MAIL_WORLDS)[number];
  */
 export function bulkWorldOrder(last: string | null | undefined): MailWorld[] {
   return last === 'INTERNSHIP' ? ['MARKETING', 'INTERNSHIP'] : ['INTERNSHIP', 'MARKETING'];
+}
+
+// ── Addresses nobody reads (#2970) ──────────────────────────────────────────
+//
+// Some recipients are generated, not typed: a lead the importer, an account
+// event or a mentor created without a known address gets a STAND-IN on
+// `import.local` (`leadStandInEmail()`, src/lib/menteeAccount.ts), and an
+// erased account is rewritten to `erased.local`. Neither is a mailbox. Mail to
+// one can only bounce — or, worse, become a draft an operator could approve —
+// so `prepareEmail()` refuses it before anything else: recorded SKIPPED with
+// the reason below, never queued, never held, whatever the org's settings.
+
+export type UnmailableReason = 'placeholder_address' | 'erased_address';
+
+// A Map, not an object literal: a domain is input, and `constructor` must not
+// find Object.prototype.
+const UNMAILABLE_DOMAINS: ReadonlyMap<string, UnmailableReason> = new Map([
+  [PLACEHOLDER_EMAIL_DOMAIN, 'placeholder_address'],
+  [ERASED_EMAIL_DOMAIN, 'erased_address'],
+]);
+
+/** The domain of one address, lower-cased; `Name <a@b>` and stray spaces allowed. */
+function addressDomain(address: string): string {
+  const angled = address.match(/<([^>]*)>/);
+  const bare = (angled ? angled[1] : address).trim().toLowerCase();
+  const at = bare.lastIndexOf('@');
+  return at >= 0 ? bare.slice(at + 1).replace(/\.+$/, '') : '';
+}
+
+/**
+ * Why this recipient can never be mailed, or null when it can. A list (`a, b`)
+ * is refused when ANY address on it is generated: a mail is one decision, and
+ * half of it reaching a stand-in is still mail to nobody on a lead's record.
+ */
+export function unmailableRecipient(to: string | null | undefined): UnmailableReason | null {
+  if (typeof to !== 'string') return null;
+  for (const one of to.split(',')) {
+    const reason = UNMAILABLE_DOMAINS.get(addressDomain(one));
+    if (reason) return reason;
+  }
+  return null;
 }
 
 // ── Identity and de-duplication ──────────────────────────────────────────────

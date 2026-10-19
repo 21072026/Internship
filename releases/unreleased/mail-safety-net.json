@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**Mail safety net (#2970):** `sendEmail()` now refuses a generated recipient address before anything else — a stand-in lead address on `import.local` or an erased account's on `erased.local` is recorded `SKIPPED` (`Unmailable address: placeholder_address` / `erased_address`), never queued and never held as an outbound draft (`unmailableRecipient()` in `src/lib/mailDeliveryRule.ts`). `sendDormantCheckIns()` only runs where the vertical has `mentorship` (`dormantCheckInApplies()`), so a MARKETING lead never gets the check-in, not even as a draft, and spends no nudge. `ringDecisionWindows()` skips a window that closed more than `DECISION_WINDOW_STALE_DAYS` (7) ago (`isDecisionWindowBellDue()`); the queue still shows it. `expireTrials()` dates its history row at the trial's end (`expiryRecordedAt()`: strictly after the previous move, never in the future) and writes its `trial.expire` audit rows with `orgId`. Audit of every category that can reach a MARKETING lead, customer or contact, and the end-to-end spec `e2e/mail-safety-net.spec.ts`, in `docs/outbound-approval.md` § The safety net.",
+  "notes": {
+    "en": [
+      "Sales teams: records that only have a placeholder address never trigger an e-mail or a draft, the internship check-in mail is no longer sent to leads, and expired trials show the day they actually ended."
+    ],
+    "tr": [
+      "Satış ekipleri: yalnızca yer tutucu adresi olan kayıtlar hiçbir e-posta ya da taslak üretmez, staj programına ait hatırlatma maili artık müşteri adaylarına gitmez ve süresi dolan denemeler gerçekte bittikleri günü gösterir."
+    ],
+    "de": [
+      "Vertriebsteams: Datensätze mit nur einer Platzhalteradresse lösen keine E-Mail und keinen Entwurf mehr aus, die Nachfass-Mail aus dem Praktikumsprogramm geht nicht mehr an Leads, und abgelaufene Testphasen zeigen den Tag, an dem sie tatsächlich endeten."
+    ]
+  }
+}

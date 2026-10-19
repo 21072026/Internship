@@ -104,3 +104,17 @@ export function salesRecordLink(
 export function interactionReminderApplies(capabilities: readonly VerticalCapability[]): boolean {
   return capabilities.includes('mentorship');
 }
+
+/**
+ * Whether the dormant first-contact check-in — the "are you still interested?"
+ * mail to the MENTEE (`sendDormantCheckIns`, docs/dormant-first-contacts.md) —
+ * applies to a relation in this vertical. It is an internship concept: a
+ * mentee who never answered their mentor's first message. In a vertical
+ * without `mentorship` the MENTEE is a lead, and the product writing to a lead
+ * on its own is exactly what a sales org must decide itself (#2970) — so the
+ * job neither sends nor drafts it there, and spends none of the person's
+ * two-nudge budget.
+ */
+export function dormantCheckInApplies(capabilities: readonly VerticalCapability[]): boolean {
+  return capabilities.includes('mentorship');
+}

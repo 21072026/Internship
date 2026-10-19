@@ -17,6 +17,7 @@ import { findDueTrialReminders, type DueTrialReminderRow } from '@/lib/trialRemi
 import { sendTrialReminderEmail } from '@/services/emailService';
 import { ringContractEnds } from '@/lib/contractEnd';
 import { ringDecisionWindows } from '@/lib/decisionWindow';
+import { expiryRecordedAt } from '@/lib/trialReminderRule';
 
 // The `trial-reminders` job (#2415, #2410, #2417 — story #2392).
 //
@@ -392,7 +393,7 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
 
   const due = await prisma.mentorshipRelation.findMany({
     where: { orgId, status: 'ACTIVE', pipelineStatus: activeKey, trialEndsAt: { lt: startOfToday } },
-    select: { id: true },
+    select: { id: true, trialEndsAt: true },
     // Bounded, and safely so — see TRIAL_EXPIRY_MAX_PER_RUN. Oldest first, so a
     // backlog drains in the order it accumulated instead of in whatever order
     // the index hands back.
@@ -430,7 +431,21 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
       // The move and its history row land together or not at all (#2527).
       // Built by the gate every StatusChange write goes through (#934).
       const row = statusChangeData({ relationId: relation.id, fromStatus: activeKey, toStatus: expiredKey, changedById: null });
-      if (row) await tx.statusChange.create({ data: { ...row, createdAt: now } });
+      // Dated when the trial ENDED, not when this tick noticed (#2970): the
+      // stage clock and the history read the move from this row, and a sweep
+      // that was down for a week — or a record loaded long after its trial ran
+      // out — must not report the expiry as today's news. Never before the
+      // record's previous move, so the history stays in order (expiryRecordedAt).
+      if (row) {
+        const previous = await tx.statusChange.findFirst({
+          where: { relationId: relation.id },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        await tx.statusChange.create({
+          data: { ...row, createdAt: expiryRecordedAt(relation.trialEndsAt, previous?.createdAt ?? null, now) },
+        });
+      }
       return true;
     });
     if (claimed) moved.push(relation.id);
@@ -439,7 +454,9 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
 
   await prisma.auditLog
     .createMany({
-      data: moved.map((id) => ({ actorId: 'system', action: 'trial.expire', targetId: id })),
+      // `orgId` on every row (CLAUDE.md, the audit stream): a cron binds no
+      // session, and a row without one reaches no tenant's audit drain.
+      data: moved.map((id) => ({ orgId, actorId: 'system', action: 'trial.expire', targetId: id })),
     })
     .catch((error) => logger.error('Trial expiry audit rows failed', { orgId, count: moved.length, error: String(error) }));
 

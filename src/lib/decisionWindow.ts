@@ -7,7 +7,7 @@ import {
   DECISION_WINDOW_CLAIM,
   TRIAL_EXPIRED_STAGE_KEY,
   decisionWindowEndsAt,
-  isDecisionWindowClosing,
+  isDecisionWindowBellDue,
 } from '@/lib/trialReminderRule';
 import { decisionWindowDaysFor } from '@/lib/trialWindow';
 
@@ -16,7 +16,8 @@ import { decisionWindowDaysFor } from '@/lib/trialWindow';
 // org, with that org's window length (`decisionWindowDays`, #2927). One bell
 // per record: the claim is a TrialReminder row at the negative threshold
 // DECISION_WINDOW_CLAIM — the same unique (relationId, threshold) that keeps
-// the trial ladder from ringing twice. Never moves a stage.
+// the trial ladder from ringing twice. Never moves a stage, and never rings
+// for a window that closed more than DECISION_WINDOW_STALE_DAYS ago.
 
 export async function ringDecisionWindows(orgId: string, now: Date): Promise<number> {
   const windowDays = await decisionWindowDaysFor(orgId);
@@ -39,7 +40,10 @@ export async function ringDecisionWindows(orgId: string, now: Date): Promise<num
       mentor: { select: { role: true } },
     },
   });
-  const due = candidates.filter((r) => isDecisionWindowClosing(r, now, windowDays));
+  // Not a window that closed more than DECISION_WINDOW_STALE_DAYS ago (#2970):
+  // a historic or late-loaded record must not ring a stale reminder. It stays
+  // in the owner's queue; it simply never rings.
+  const due = candidates.filter((r) => isDecisionWindowBellDue(r, now, windowDays));
   if (due.length === 0) return 0;
   const capabilities = await shellCapabilities(orgId);
   let rung = 0;

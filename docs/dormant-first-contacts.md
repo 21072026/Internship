@@ -67,6 +67,12 @@ gösterilir, "Pasif" rozeti ve kaç hatırlatma gittiği kartta görünür.
   hakkı, hiç gönderilmemiş maillerle tükenmez; sonradan açarsa hatırlatmayı alır.
   E-posta grubu: `announcements` (`re-engagement` ile aynı grup — okuyucunun bunu
   kapatmak için uzanacağı düğme odur).
+- **Yalnızca mentorluk yeteneği olan dikeyde** (#2970). Check-in bir staj kavramıdır;
+  mentorluk yeteneği olmayan bir dikeyde (MARKETING) MENTEE bir **lead**'dir ve ürünün
+  bir lead'e kendiliğinden yazması o kiracının kendi kararıdır. `sendDormantCheckIns`
+  bu ilişkileri sayaç harcamadan **önce** eler (`dormantCheckInApplies()`,
+  `src/lib/salesSurface.ts`, `capabilitiesMemo()` ile org başına bir okuma) — ne mail
+  gider ne taslak oluşur ne de iki hakkın biri harcanır.
 
 ## Üst sınır nerede uygulanır (#2287)
 
