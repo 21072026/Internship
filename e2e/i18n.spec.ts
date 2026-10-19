@@ -19,7 +19,7 @@ test('language switcher toggles the admin nav between EN and TR', async ({ page 
 
   // Switch to Turkish — the switcher lives in the account menu; open it, then
   // clicking TR sets a cookie and reloads.
-  await page.getByLabel('Account').click();
+  await page.getByTestId('account-menu-button').click();
   await page.getByRole('button', { name: 'tr' }).click();
   await page.waitForLoadState('load');
   await expect(nav().getByRole('link', { name: 'Davet Gönder', exact: true })).toBeVisible();

@@ -24,7 +24,7 @@ test('mobile: tapping the account menu opens sign-out without closing the drawer
     // Open the off-canvas drawer.
     await page.getByRole('button', { name: 'Open menu' }).click();
 
-    const accountToggle = page.getByRole('button', { name: 'Account', exact: true });
+    const accountToggle = page.getByTestId('account-menu-button');
     await expect(accountToggle).toBeVisible({ timeout: 10_000 });
 
     // Tapping the account toggle opens the popover — the drawer stays open.
