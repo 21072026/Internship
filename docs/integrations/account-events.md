@@ -12,7 +12,8 @@ This page is the **public contract** (schema version `1`). The implementation is
 | Writer | `src/lib/accountEventIngest.ts` |
 | Source registry | `src/lib/integrationSources.ts` · model `IntegrationSource` |
 | Operator CLI | `prisma/register-integration-source.mjs` |
-| End to end | `e2e/account-event-ingest.spec.ts` |
+| Historic mode (rule tests) | `scripts/test/account-event-historic.test.mjs` |
+| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` |
 
 ## The endpoint
 
@@ -48,6 +49,7 @@ Unknown keys are ignored, so a sender may add fields without breaking anything. 
 | `schema_version` | number | yes | Always `1`. |
 | `event_type` | string | yes | One of the [event types](#event-types). |
 | `occurred_at` | string | yes | ISO 8601 with offset: when it happened at the source. |
+| `replay` | boolean \| null | no | `true` marks the event as a replay of the source's own past: it is handled in [historic mode](#historic-mode) whatever its age. Optional; the schema version stays `1`. |
 | `external_id` | string | yes | The account's id in the source system: 1–191 characters of printable ASCII (U+0020–U+007E) after trimming, stored lower-cased. Otherwise opaque. It is what `Company.externalId` holds and what every later event is matched on (see [Idempotency](#idempotency) and [Several sources in one organization](#several-sources-in-one-organization)). |
 | `trial_started_at` | string \| null | no | ISO 8601. The trial window as the source sends it. |
 | `trial_ends_at` | string \| null | no | ISO 8601. |
@@ -101,7 +103,33 @@ Any other value is a `400`.
 - **Out of order.** An event older than the newest event the same source already applied for the same account is `stale` and changes nothing.
 - An external id found on more than one account is a `conflict`; merge the accounts first.
 
-The ingest's own activity entries (`integration.event`, `integration.backward_refused`, `integration.new_journey`) belong to the organization and carry the source's slug in their detail.
+The ingest's own activity entries (`integration.event`, `integration.backward_refused`, `integration.new_journey`) belong to the organization and carry the source's slug in their detail. A [historic](#historic-mode) request writes one `integration.replay` entry instead.
+
+**Quiet, always.** The feed is a machine, not a person moving a card: it sets no stage SLA (`stageDeadline`), fires no `pipeline.stage_change` webhook, rings no bell and sends no mail, live or historic. What a live event *can* lead to later is the daily trial sweep's own work on the record it left behind (trial reminders to the owner, the expiry, the decision-window bell), exactly as for a record a person created.
+
+## Historic mode
+
+A source that connects after years of its own history replays that history through this same endpoint, oldest first. Those events describe the past, and the CRM writes them as the past, without telling anybody about them.
+
+An event is **historic** when either
+
+- the envelope says `"replay": true`, or
+- `occurred_at` is more than **3 days** before the moment the CRM receives it (`HISTORIC_EVENT_AGE_DAYS` in `src/lib/accountEventRule.ts`). A live feed delivers within minutes; one that parked a `404` for a day or two is still live.
+
+A live event (neither) is handled exactly as described above. A historic one goes through the same checks (claim, duplicates, out-of-order, never backwards, new journeys) and differs in these ways only:
+
+| | Historic |
+|---|---|
+| **Dates** | Everything it writes is dated at `occurred_at` (never later than the moment it arrives): a new account's and its lead's creation time, the funnel record's start, a stage move's history row, the end of a closed record a new journey replaces. The trial window comes from `trial_started_at` / `trial_ends_at`; without them the organization's trial length is counted from `occurred_at`. |
+| **A trial that already ran out** | A record placed in `TRIAL_ACTIVE` whose trial's last day is before today (UTC, the same rule as the daily expiry) moves straight on to `TRIAL_EXPIRED`, with a history row dated at the trial's end (strictly after the move into the trial, even when a source sends an end at or before its start). |
+| **A conversion during the trial** | The expiry above is decided when the trial's own event arrives, before the replay says what came next. When a later historic event moves the record on at a moment *before* that expiry (a customer who paid during the trial), the expiry is taken back: its history row is removed and the move is written from `TRIAL_ACTIVE`. Only the system's own expiry, and only while it is the record's newest history row (`shouldUndoHistoricExpiry`). |
+| **History already on the record** | The out-of-order guard only knows the source's own events. A historic move into a record that already has newer history (a person's move from today, an import's) is dated right after that newest row instead of underneath it, and never before the record's start (`historicMoveAt`), so every "last move" reader (the stage clock, the board, the timeline) still sees the newest move last. |
+| **Decision window** | When the expired trial's decision window (`trial_ends_at` + the organization's `decisionWindowDays`) has already closed, its one reminder is claimed up front, so the daily sweep never rings about it. A window still open is left alone: that reminder is real, upcoming work. |
+| **Trial reminders** | None for the past: a trial that ended is expired, not warned about. A trial that is still running today is a running trial, and its owner's 7/3/0-day reminders come as usual. |
+| **Activity log** | One `integration.replay` entry per request (the counts of what the request did) instead of one entry per event and per new account. |
+| **Response** | The `200` body carries `"historic": true`. |
+
+Nothing in historic mode mails a lead or a customer, and nothing writes a stage SLA, a webhook delivery or a notification (see *Quiet, always* above).
 
 ## Idempotency
 
@@ -117,7 +145,7 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 
 | Status | Body | Meaning |
 |---|---|---|
-| `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"? }` | The event was handled. Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
+| `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"?, "historic"? }` | The event was handled (`historic: true` when in [historic mode](#historic-mode)). Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
 | `400` | `{ "error": "Invalid event", "issues": [{ "path", "message" }] }` | The envelope is invalid. Do not retry unchanged. |
 | `401` | `{ "error": … }` | No usable API key. |
 | `403` | `{ "error": … }`, `{ "code": "wrong_source_key" }`, `{ "code": "capability_unavailable" }` | Wrong scope, wrong key for this source, or the product has no accounts. |
