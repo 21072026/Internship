@@ -170,6 +170,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     // Same tag as the deal value: the sales target lives on /sales, which exists
     // only where there is a pipeline and no mentorship (src/lib/salesTargetRule.ts).
     { key: 'salesTarget', category: 'insights', icon: Target, color: 'blue', withoutCapability: 'mentorship', title: C.salesTarget.t, desc: C.salesTarget.d },
+    // #2958 — a sales rep types in their own lead on /sales. Same tag as the
+    // sales target: the surface exists only where there is no mentorship.
+    { key: 'repOwnLeads', category: 'companies', icon: UserPlus, color: 'green', withoutCapability: 'mentorship', title: C.repOwnLeads.t, desc: C.repOwnLeads.d },
     // #2569 — the public enquiry / demo form, filed by host into the right org.
     { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
     // #2577 — per-account contact permission with its proof, and the double opt-in.
