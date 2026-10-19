@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { recipientHash } from '@/lib/mailDeliveryRule';
 import { expireDrafts, forgetOutboundDrafts } from '@/lib/outboundDrafts';
@@ -26,7 +27,9 @@ import { asHost, gotoSettled, MARKETING_HOST, signInAndSettle, signInViaApi } fr
 // Local database only: it writes email.send jobs a deployed drain would race for.
 const local = !process.env.BASE_URL;
 const PASSWORD = 'OutboxPass123!';
-const STAMP = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+// randomBytes, not Math.random: the stamp ends up in mail addresses and
+// subjects, which CodeQL treats as a security context.
+const STAMP = `${Date.now().toString(36)}${randomBytes(2).toString('hex')}`;
 
 const E = {
   admin: uniqueEmail(`ob-admin-${STAMP}`),
