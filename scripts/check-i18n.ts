@@ -118,13 +118,33 @@ const LEAK_EXEMPT: Record<string, string> = {
   adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   evaluationDue: 'Sent only by src/lib/evaluationDue.ts, whose sweep skips every org without the `evaluations` capability — a MARKETING tenant is never reminded of an evaluation (#1891).',
   productTour: 'The internship landing\'s product tour (#1399): ProductTour reads it only for an INTERNSHIP host, and its screenshots show the internship product. The MARKETING tour reads `productTourMarketing`, which is deliberately not exempt.',
+  // Internship-only surfaces a MARKETING org cannot reach (the bulk overlay pass).
+  activityReport: '/admin/mentee-activity — gatePage closes it for an org without the `mentorship` capability; the only other reader, /mentor/mentee-activity (ActivityReportView\'s second mount), is in the mentor shell, whose layout sends a MARKETING MENTOR to /sales.',
+  apply: '/apply/[mentorId] (#2544) — src/app/apply/layout.tsx answers 404 through requireVerticalCapability(\'mentorship\'), and POST /api/apply refuses (requireCapability) for a mentor\'s org without `mentorship`. (MarketingAccountImport\'s `m.apply` is a different namespace.)',
+  applyLink: 'Read only by ApplyLinkBox, which is mounted only on /mentor/mentees — the mentor layout sends a MARKETING MENTOR to /sales.',
+  applyMentor: '/apply-as-mentor (#2544) — requireVerticalCapability(\'mentorship\') answers 404 on a vertical without the module, POST /api/mentor-applications refuses the same; the other reader, /admin/mentor-applications/[id], is closed by gatePage.',
+  codeOfConduct: '/code-of-conduct — requireVerticalCapability(\'mentorship\') answers 404 on a vertical without the module, and PublicFooter drops the link on the marketing hosts (isMarketing).',
+  cohorts: '/admin/cohorts — gatePage closes it, and /api/cohorts refuses (requireCapability), for an org without `mentorship`; /admin/candidates/[id] only reads `d.cohorts` from that API\'s JSON, never the namespace.',
+  dormantCheckIn: 'Sent only by sendDormantCheckIns (src/services/emailService.ts), whose sweep skips every org without `mentorship` (dormantCheckInApplies, src/lib/salesSurface.ts, #2970) before anything is claimed — a MARKETING lead is never mailed.',
+  emailTemplates: 'Read by TargetedEmailComposer, mounted only on /admin/email (gatePage, `mentorship`) and /mentor/email (mentor shell), and by emitOutcomeComms (src/lib/outcomeComms.server.ts), which returns before the auto-send for an org without `placements`.',
+  mentorApplicationEmail: 'Sent only by sendMentorApplication*Email (src/services/emailService.ts), called only from POST /api/mentor-applications (404 unless the request vertical carries `mentorship`) and PATCH /api/mentor-applications/[id] (requireCapability `mentorship`).',
+  mentorApplications: 'Read only by /mentor/applications — the mentor layout sends a MARKETING MENTOR to /sales.',
+  mentorApplicationsAdmin: '/admin/mentor-applications — gatePage closes it, and its APIs refuse (requireCapability), for an org without `mentorship`; AdminNav\'s pending badge hangs on the `mentorship`-tagged link, which visibleNavLinks() drops for MARKETING.',
+  mentorDetail: '/admin/mentors/[id] — the /admin/mentors segment layout\'s gatePage closes it for an org without `mentorship`.',
+  mentorEmail: 'Read only by TargetedEmailComposer, mounted only on /admin/email (gatePage, `mentorship`) and /mentor/email (mentor shell, which sends a MARKETING MENTOR to /sales).',
+  mentorFeedback: 'Read only by /mentor/feedback — the mentor layout sends a MARKETING MENTOR to /sales.',
+  mentors: '/admin/mentors — gatePage closes it for an org without `mentorship`; the other reader, MentorshipRequestPanel, is mounted only in /portal, whose layout redirects such an org.',
+  mentorshipRequests: 'Read only by MentorshipRequestQueue (/admin/mentorship, gatePage) and MentorshipRequestPanel (/portal only, whose layout redirects an org without `mentorship`); the request APIs refuse (requireCapability).',
+  relationNotes: 'Read only by RelationNotesPanel, mounted only on /mentor/mentees/[id] — the mentor layout sends a MARKETING MENTOR to /sales.',
+  rematchRequest: 'Read only by /admin/mentorship and its MentorshipRequestQueue (gatePage) and by MentorshipRequestPanel (/portal only, whose layout redirects an org without `mentorship`); /api/mentorship/[id]/rematch refuses (requireCapability).',
+  sources: '/admin/sources — gatePage closes it for an org without the `sourcing` capability (MARKETING lacks it); the other files only read `d.sources` from API JSON, never the namespace.',
 };
 
 // The pinned counts. Lower them when a change removes leaks; never raise them
 // — a new leak is fixed with an overlay entry (src/i18n/verticalOverlays.ts),
 // or argued into LEAK_EXEMPT with its reason. History: 528/530/526 (en/tr/de)
 // on the day the ratchet landed, before #2557/#2558's own overlay entries.
-const EXPECTED_LEAKS: Record<string, number> = { en: 398, tr: 401, de: 396 };
+const EXPECTED_LEAKS: Record<string, number> = { en: 320, tr: 322, de: 317 };
 
 const leakArg = process.argv.find((a) => a === '--leaks' || a.startsWith('--leaks='));
 const listLocale = leakArg ? (leakArg.split('=')[1] ?? 'all') : null;
