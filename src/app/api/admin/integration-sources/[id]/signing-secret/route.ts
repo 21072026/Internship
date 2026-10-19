@@ -15,15 +15,19 @@ import { disableSigning, rotateSigningSecret, sourceFor } from '@/lib/integratio
 // orgId for each change, never the secret.
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const gate = await sourceFor(session, (await params).id);
-  if (!gate.ok || !session) return gate.ok ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) : gate.response;
+  if (!gate.ok) return gate.response;
   const { secret, source } = await rotateSigningSecret(session, gate.value);
   return NextResponse.json({ secret, source }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const gate = await sourceFor(session, (await params).id);
-  if (!gate.ok || !session) return gate.ok ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) : gate.response;
+  if (!gate.ok) return gate.response;
   return NextResponse.json({ source: await disableSigning(session, gate.value) });
 }

@@ -21,8 +21,10 @@ const patchSchema = z
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const gate = await sourceFor(session, (await params).id);
-  if (!gate.ok || !session) return gate.ok ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) : gate.response;
+  if (!gate.ok) return gate.response;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

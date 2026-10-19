@@ -10,6 +10,8 @@ import { listOrgFor, listSources } from '@/lib/integrationSourceAdmin';
 // who does is refused. Rules and writes: src/lib/integrationSourceAdmin.ts.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const gate = await listOrgFor(session, new URL(request.url).searchParams.get('orgId'));
   if (!gate.ok) return gate.response;
   return NextResponse.json({ sources: await listSources(gate.value) });

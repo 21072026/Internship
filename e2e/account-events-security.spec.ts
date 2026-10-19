@@ -145,7 +145,7 @@ test.describe('account events: source IP allowlist and request signing', () => {
     await prisma.organization.deleteMany({ where: { id: { in: orgIds } } }).catch(() => {});
   });
 
-  test('a source with neither protection behaves as before', async ({ request }) => {
+  test('a source with neither protection behaves as before', { tag: '@smoke' }, async ({ request }) => {
     const res = await post(request, SIGNED, JSON.stringify(envelope()));
     expect(res.status(), await res.text()).toBe(200);
     expect((await res.json()).outcome).toBe('recorded');
