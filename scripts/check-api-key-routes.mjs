@@ -137,6 +137,10 @@ const KEY_ROUTES_OUTSIDE_V1 = {
     'Account events (#2450, #2914): the machine-to-machine ingest a registered source system POSTs to ' +
     'with a companies:write key; the tenant is the key\'s bound org and the [source] slug is resolved ' +
     'inside it (IntegrationSource). Contract: docs/integrations/account-events.md.',
+  'src/app/api/integrations/[source]/events/batch/route.ts':
+    'Account-event batch (#2966): the same door as the single route (companies:write key, the [source] ' +
+    'slug resolved inside the key\'s org, the key binding, the companies capability) for up to 200 events ' +
+    'of a replay, with a dry run. Contract: docs/integrations/account-events.md § Batch.',
 };
 const outside = routeFiles('src/app/api').filter((f) => !f.replace(/\\/g, '/').startsWith(`${V1_DIR}/`));
 for (const file of outside) {

@@ -27,6 +27,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { leadSourceName, type LeadSourceInput } from '@/lib/leadSourceName';
+import type { Db } from '@/lib/dbHandle';
 
 export interface SourceRef {
   id: string;
@@ -35,8 +36,8 @@ export interface SourceRef {
 
 export type FindOrCreateSourceResult = SourceRef & { created: boolean };
 
-export async function findSourceByName(orgId: string, name: string): Promise<SourceRef | null> {
-  return prisma.source.findFirst({
+export async function findSourceByName(orgId: string, name: string, db: Db = prisma): Promise<SourceRef | null> {
+  return db.source.findFirst({
     where: withinTenant({ name }, await orgWhere(orgId)),
     // Oldest first: if a legacy NULL twin and a stamped row ever coexist, the
     // answer is stable.
@@ -54,18 +55,20 @@ export async function findOrCreateSource(
   orgId: string,
   name: string,
   extra: { contactName?: string | null; contactEmail?: string | null } = {},
+  /** The handle to read and write through: a caller's transaction (src/lib/dbHandle.ts). */
+  db: Db = prisma,
 ): Promise<FindOrCreateSourceResult> {
-  const existing = await findSourceByName(orgId, name);
+  const existing = await findSourceByName(orgId, name, db);
   if (existing) return { ...existing, created: false };
   try {
-    const row = await prisma.source.create({
+    const row = await db.source.create({
       data: { orgId, name, contactName: extra.contactName ?? null, contactEmail: extra.contactEmail ?? null },
       select: { id: true, name: true },
     });
     return { ...row, created: true };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      const winner = await findSourceByName(orgId, name);
+      const winner = await findSourceByName(orgId, name, db);
       if (winner) return { ...winner, created: false };
     }
     throw error;

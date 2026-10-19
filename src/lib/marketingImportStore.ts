@@ -29,6 +29,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { inTransaction, type Db } from './dbHandle';
 import { randomUUID } from 'node:crypto';
 import { runWithOrg } from './orgContext';
 import { acquireLease, releaseLease, replicaId } from './jobs/lease';
@@ -155,11 +156,12 @@ const ACCOUNT_SELECT = {
 async function loadSnapshot(
   orgId: string | null,
   emailKeys: string[],
+  db: Db = prisma,
 ): Promise<MarketingTargetSnapshot> {
   // One query for every account of the org. The alternative — a WHERE built
   // from the file's raw names — cannot express `normalizeNameKey()`, so it
   // would silently miss exactly the İ/ı/ü/ß rows #2405 is about.
-  const accounts = (await prisma.company.findMany({ where: { orgId }, select: ACCOUNT_SELECT })).map(
+  const accounts = (await db.company.findMany({ where: { orgId }, select: ACCOUNT_SELECT })).map(
     ({ channels, ...account }) => ({ ...account, channels: channels.map((c) => c.channel) }),
   );
 
@@ -167,7 +169,7 @@ async function loadSnapshot(
   // different person-record in the other world, and that one is neither a lead
   // to update nor a staff user to collide with.
   const leads = emailKeys.length
-    ? await prisma.user.findMany({
+    ? await db.user.findMany({
         // MENTEE only: a staff user whose address is typed in as a contact is
         // never the lead (see `MarketingLeadTarget.role`). The diff enforces
         // the same rule on `role`, so a snapshot built elsewhere cannot slip one in.
@@ -191,7 +193,7 @@ async function loadSnapshot(
     : [];
 
   const relations = leads.length
-    ? await prisma.mentorshipRelation.findMany({
+    ? await db.mentorshipRelation.findMany({
         where: { menteeId: { in: leads.map((l) => l.id) } },
         select: {
           id: true,
@@ -239,6 +241,12 @@ interface WriterContext {
    * trial window the record is given all read this instant.
    */
   now?: Date;
+  /**
+   * The handle every write goes through (src/lib/dbHandle.ts): the root client,
+   * or a caller's transaction — the account-event batch's dry run, which rolls
+   * it back. Omitted: the root client, each row in its own transaction.
+   */
+  db?: Db;
 }
 
 /** `createdAt` / `startDate` for a backdated write; nothing for a live one. */
@@ -281,7 +289,7 @@ async function leadSourceIdFor(row: MarketingPlannedRow, context: WriterContext)
   const name = funnel.sourceName;
   if (!name) return null;
   const orgId = context.orgId ?? (await defaultOrgId());
-  return (await findOrCreateSource(orgId, name)).id;
+  return (await findOrCreateSource(orgId, name, {}, context.db ?? prisma)).id;
 }
 
 /**
@@ -506,7 +514,7 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
   return {
     async createAccount(row) {
       const sourceId = await leadSourceIdFor(row, context);
-      return prisma.$transaction(async (tx) => {
+      return inTransaction(context.db ?? prisma, async (tx) => {
         const company = await tx.company.create({
           data: { ...accountCreateData(row, context.orgId), ...datedAt('createdAt', context.now) },
           select: { id: true, contactEmail: true },
@@ -531,7 +539,7 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
       const targetId = row.value.account.targetId;
       if (!targetId) throw new Error('an UPDATE row reached the writer without a target id');
       const sourceId = await leadSourceIdFor(row, context);
-      return prisma.$transaction(async (tx) => {
+      return inTransaction(context.db ?? prisma, async (tx) => {
         if (Object.keys(row.value.account.changes).length > 0) {
           await tx.company.update({ where: { id: targetId }, data: row.value.account.changes });
         }
@@ -686,6 +694,8 @@ interface MarketingRunCore {
   leadSource?: LeadSourceBinding;
   /** The moment the written rows are dated (WriterContext.now); omitted = the wall clock. */
   now?: Date;
+  /** The handle reads and writes go through (WriterContext.db); omitted = the root client. */
+  db?: Db;
 }
 
 /**
@@ -710,6 +720,7 @@ async function runMarketingRows(core: MarketingRunCore) {
       offPathStages,
       trialLengthDays,
       ...(core.now ? { now: core.now } : {}),
+      ...(core.db ? { db: core.db } : {}),
     });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
@@ -737,9 +748,9 @@ async function runMarketingRows(core: MarketingRunCore) {
         ];
         const ownerEmails = [...new Set(rows.map((r) => r.value.ownerEmail).filter(Boolean))];
         const [snapshot, owners] = await Promise.all([
-          loadSnapshot(orgId, emailKeys),
+          loadSnapshot(orgId, emailKeys, core.db),
           ownerEmails.length
-            ? prisma.user.findMany({
+            ? (core.db ?? prisma).user.findMany({
                 where: { orgId, email: { in: ownerEmails }, role: { in: ['ADMIN', 'MENTOR'] } },
                 select: { id: true, email: true },
               })
@@ -827,6 +838,12 @@ export async function createMarketingAccount(input: {
    * activity into one aggregated entry per request instead of one per account.
    */
   quiet?: boolean;
+  /**
+   * The handle the account is written through (src/lib/dbHandle.ts) — an
+   * account-event dry run passes the transaction it rolls back. Omitted: the
+   * root client.
+   */
+  db?: Db;
 }): Promise<ManualAccountOutcome> {
   const { owner, fields } = input;
   const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
@@ -864,6 +881,7 @@ export async function createMarketingAccount(input: {
     mode: 'createOnly',
     leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
     ...(input.now ? { now: input.now } : {}),
+    ...(input.db ? { db: input.db } : {}),
   });
   const row = report.rows[0];
   if (!row) return { kind: 'invalid', reason: 'empty row' };
@@ -879,7 +897,7 @@ export async function createMarketingAccount(input: {
         // the owner's org (#2590): the address is no longer globally unique, so
         // a bare lookup by it could return another world's row.
         const lead = await runWithOrg(owner.orgId, () =>
-          prisma.user.findFirst({ where: { orgId: owner.orgId, email: funnel.leadEmail }, select: { id: true } }),
+          (input.db ?? prisma).user.findFirst({ where: { orgId: owner.orgId, email: funnel.leadEmail }, select: { id: true } }),
         );
         leadId = lead?.id ?? null;
       }

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Account events: loss, win-back, source fill and a batch endpoint (#2966):** `cancelled` and `deactivated` now move the funnel record to `DEAL_LOST` with a drop-off reason — `CUSTOMER_CANCELLED` once the record had been won, otherwise `OTHER` with the fixed note `<source slug>: ended during trial`; `deleted` and `out_of_scope` stay record-only. `reactivated` and a `converted` on a lost record, and a new trial after an expired one (an event after the trial's end), open a new journey through the one win-back writer, `winBack()` (now with `at`, `quiet`, `trialWindow`, `expect.closed` and a `db` handle; the feed's own `newJourney` delegates to it). The whole event × stage table is one pure function, `planAccountEvent` (`src/lib/accountEventRule.ts`, unit-tested cell by cell); a target stage the org lacks is a `conflict`. A live stage move from the feed now goes through `recordStageMove()` (history row, `pipeline.stage_change` activity, SLA, the owner's bell, the webhook); a historic one stays silent and backdated. Any event carrying `referral_code` / `acquisition_source` fills an unsourced lead's `Source` (first touch, conditional write). New `POST /api/integrations/[source]/events/batch`: up to 200 events behind the single route's door, sorted server-side by (`external_id`, `occurred_at`), every event historic, rate limit charged once, one result per event in request order; `dry_run: true` runs the same `ingestAccountEvent` inside one transaction that is rolled back (`src/lib/dbHandle.ts`: `inTransaction` joins a caller's transaction with a SAVEPOINT; `createMarketingAccount`, `findOrCreateSource` and the import writer take the handle). Contract: `docs/integrations/account-events.md` § Event types, § Batch, § Dry run.",
+  "notes": {
+    "en": [
+      "Account events from the product you sell now cover cancellations and returning customers: a cancellation is filed as a lost deal with its reason, and a customer who comes back starts a new journey linked to the old one. History can be replayed in batches of up to 200 events, with a dry run that shows every outcome first and writes nothing."
+    ],
+    "tr": [
+      "Sattığınız üründen gelen hesap olayları artık iptalleri ve geri dönen müşterileri de kapsıyor: bir iptal gerekçesiyle birlikte kaybedilmiş anlaşma olarak işlenir, geri dönen bir müşteri eskisine bağlı yeni bir yolculuk başlatır. Geçmiş, 200 olaya kadar partilerle yeniden oynatılabilir; deneme çalıştırması önce her sonucu gösterir ve hiçbir şey yazmaz."
+    ],
+    "de": [
+      "Account-Ereignisse aus dem Produkt, das Sie verkaufen, decken jetzt Kündigungen und zurückkehrende Kunden ab: Eine Kündigung wird mit ihrem Grund als verlorener Deal erfasst, und ein Kunde, der zurückkommt, beginnt eine neue, mit der alten verknüpfte Journey. Historie lässt sich in Paketen von bis zu 200 Ereignissen nachspielen, mit einem Probelauf, der zuerst jedes Ergebnis zeigt und nichts schreibt."
+    ]
+  }
+}

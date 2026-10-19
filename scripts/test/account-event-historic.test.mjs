@@ -157,13 +157,16 @@ test('the envelope accepts an optional replay flag and stays schema version 1', 
   assert.deepEqual(bad.error.issues.map((i) => i.path.join('.')), ['replay']);
 });
 
-test('the writer is quiet by construction: no stage effects, SLA, webhook, bell or mail import', async () => {
+test('the writer reaches stage effects through the shared path, and only for a live move', async () => {
+  // Since #2966 a LIVE move goes through recordStageMove() (src/lib/stageMove.ts)
+  // like a person's move of the card; a historic move stays silent. So the
+  // writer imports the shared path and nothing that rings, mails or sets an
+  // SLA by itself, and its one call to it sits on the live branch.
   const { readFileSync } = await import('node:fs');
   const source = readFileSync(new URL('../../src/lib/accountEventIngest.ts', import.meta.url), 'utf8');
   const imports = [...source.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
   for (const banned of [
     '@/lib/stageChangeEffects',
-    '@/lib/stageMove',
     '@/lib/stageSla',
     '@/lib/webhooks',
     '@/lib/notify',
@@ -172,5 +175,13 @@ test('the writer is quiet by construction: no stage effects, SLA, webhook, bell 
   ]) {
     assert.ok(!imports.includes(banned), `accountEventIngest.ts must not import ${banned}`);
   }
-  assert.ok(!/stageDeadline/.test(source.replace(/\/\/.*$/gm, '')), 'no stageDeadline write outside a comment');
+  const code = source.replace(/\/\/.*$/gm, '');
+  assert.ok(!/stageDeadline/.test(code), 'no stageDeadline write outside a comment');
+  const calls = [...code.matchAll(/recordStageMove\(/g)];
+  assert.equal(calls.length, 1, 'one call to the shared stage path');
+  const live = code.indexOf('if (!ctx.at) {');
+  assert.ok(live >= 0 && live < calls[0].index, 'the call sits on the live branch');
+  assert.ok(code.indexOf('return;', live) > calls[0].index, 'inside that branch, before it returns');
+  // Historic win-backs set no deadline either: winBack() is asked to be quiet.
+  assert.match(code, /quiet: ctx\.historic/);
 });

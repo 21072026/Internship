@@ -35,11 +35,17 @@ const mirror = await import('../../prisma/register-integration-source.mjs');
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 
-test('only account_created / trial_started and converted act on the funnel; every other type is recorded', () => {
+test('trial, conversion, loss and reactivation act on the funnel; every other type is recorded', () => {
   assert.deepEqual(ingestIntent('account_created'), { kind: 'open_trial', toStage: 'TRIAL_ACTIVE' });
   assert.deepEqual(ingestIntent('trial_started'), { kind: 'open_trial', toStage: 'TRIAL_ACTIVE' });
   assert.deepEqual(ingestIntent('converted'), { kind: 'won', toStage: 'DEAL_WON' });
-  const acting = new Set(['account_created', 'trial_started', 'converted']);
+  assert.deepEqual(ingestIntent('cancelled'), { kind: 'lost', toStage: 'DEAL_LOST' });
+  assert.deepEqual(ingestIntent('deactivated'), { kind: 'lost', toStage: 'DEAL_LOST' });
+  assert.deepEqual(ingestIntent('reactivated'), { kind: 'reactivate' });
+  // deleted and out_of_scope stay record-only (an owner decision, #2966).
+  assert.deepEqual(ingestIntent('deleted'), { kind: 'record' });
+  assert.deepEqual(ingestIntent('out_of_scope'), { kind: 'record' });
+  const acting = new Set(['account_created', 'trial_started', 'converted', 'cancelled', 'deactivated', 'reactivated']);
   for (const type of ACCOUNT_EVENT_TYPES) {
     if (!acting.has(type)) assert.deepEqual(ingestIntent(type), { kind: 'record' }, type);
   }

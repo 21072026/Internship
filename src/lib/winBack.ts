@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { inTransaction, type Db } from '@/lib/dbHandle';
 import { findActiveMentorship, AlreadyMentoredError } from '@/lib/activeMentorship';
 import { ENDED_CHURNED } from '@/lib/relationLifecycle';
 import { stageTrialWindow } from '@/lib/trialWindow';
@@ -12,30 +13,57 @@ import type { WinBackStage } from '@/lib/winBackRule';
 // is a new journey, so its trial window, deal value and notice period start
 // empty. No StatusChange for the new relation: a relation CREATED at a stage
 // has no move to record (stageEnteredAt() reads `startDate`).
+//
+// The ONE writer of a new journey (#2966): the person's "win back" button and
+// the account-event feed (src/lib/accountEventIngest.ts — a `reactivated`, a
+// `converted` on a lost record, a new trial after an expired or closed one)
+// both come here. The feed's extras are options, never a second copy:
+//   • `at` dates the close and the new start (a historic replay);
+//   • `quiet` sets no stage deadline (a historic replay rings nothing);
+//   • `trialWindow` is the window the event itself carries;
+//   • `expect.closed` accepts a predecessor that is already closed (a person
+//     completed it): it is chained, not closed a second time;
+//   • `db` joins a caller's transaction (the batch dry run, src/lib/dbHandle.ts).
 
 export async function winBack(input: {
   relationId: string;
   toStage: WinBackStage;
-  /** Expected state of the lost relation, so a concurrent move cannot be overwritten. */
-  expect: { pipelineStatus: string };
+  /**
+   * Expected state of the predecessor, so a concurrent move cannot be
+   * overwritten: its stage while it is still ACTIVE, or `closed: true` for one
+   * that is already closed (then only its being closed is checked).
+   */
+  expect: { pipelineStatus: string; closed?: boolean };
+  /** The moment the old journey ends and the new one starts; omitted = now. */
+  at?: Date;
+  /** Set no stage deadline on the new journey. */
+  quiet?: boolean;
+  /** The new journey's trial window; omitted = the stage's own default. */
+  trialWindow?: { trialStartedAt?: Date | null; trialEndsAt?: Date | null };
+  db?: Db;
 }): Promise<{ newRelationId: string }> {
-  const now = new Date();
-  return prisma.$transaction(async (tx) => {
+  const now = input.at ?? new Date();
+  return inTransaction(input.db ?? prisma, async (tx) => {
     const old = await tx.mentorshipRelation.findUniqueOrThrow({
       where: { id: input.relationId },
-      select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true },
+      select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true },
     });
-    const closed = await tx.mentorshipRelation.updateMany({
-      where: { id: old.id, status: 'ACTIVE', pipelineStatus: input.expect.pipelineStatus },
-      data: { status: 'COMPLETED', lifecycleState: ENDED_CHURNED, completedAt: now },
-    });
-    if (closed.count === 0) throw new WinBackConflictError();
+    if (input.expect.closed) {
+      if (old.status === 'ACTIVE') throw new WinBackConflictError();
+    } else {
+      const closed = await tx.mentorshipRelation.updateMany({
+        where: { id: old.id, status: 'ACTIVE', pipelineStatus: input.expect.pipelineStatus },
+        data: { status: 'COMPLETED', lifecycleState: ENDED_CHURNED, completedAt: now },
+      });
+      if (closed.count === 0) throw new WinBackConflictError();
+    }
 
     const other = await findActiveMentorship(tx, old.menteeId, { exceptRelationId: old.id });
     if (other) throw new AlreadyMentoredError(old.menteeId, other.id);
 
-    const trialWindow = await stageTrialWindow({ orgId: old.orgId, toStage: input.toStage, enteredAt: now, existing: null });
-    const deadline = await stageDeadlineUpdate(old.orgId, input.toStage, now);
+    const trialWindow =
+      input.trialWindow ?? (await stageTrialWindow({ orgId: old.orgId, toStage: input.toStage, enteredAt: now, existing: null }));
+    const deadline = input.quiet ? null : await stageDeadlineUpdate(old.orgId, input.toStage, now);
     const created = await tx.mentorshipRelation.create({
       data: {
         orgId: old.orgId,
