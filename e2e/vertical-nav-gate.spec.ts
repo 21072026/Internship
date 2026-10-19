@@ -57,8 +57,10 @@ test('a MARKETING admin loses the mentorship/placement/sourcing links, keeps the
     for (const name of KEPT) {
       await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
     }
-    // Mentorship/placement/sourcing gone.
-    for (const name of HIDDEN_FOR_MARKETING) {
+    // Mentorship/placement/sourcing gone — under the internship names and under
+    // the names the MARKETING overlay gives the same links, so the check still
+    // bites now that the overlay renames them.
+    for (const name of [...HIDDEN_FOR_MARKETING, 'Sales reps', 'Sales Rep Applications']) {
       await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(0);
     }
   } finally {

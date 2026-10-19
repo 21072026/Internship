@@ -14,14 +14,15 @@
 //
 // Overlays are PARTIAL and only ever REPLACE a leaf string that already exists;
 // they never add keys (check-i18n enforces both — a typo'd overlay key that
-// matches nothing is a silent no-op, so it is a build error instead). The set is
-// intentionally small and grows as real marketing surfaces are dressed; it does
-// not attempt to translate the whole 4800-key dictionary at once.
+// matches nothing is a silent no-op, so it is a build error instead). It covers
+// every string a MARKETING tenant can reach that the base phrases in internship
+// words — and only those; a namespace MARKETING cannot render is argued into
+// LEAK_EXEMPT in scripts/check-i18n.ts instead of being dressed here.
 //
 // How far it has got is measured, not guessed (#2558): scripts/check-i18n.ts
 // counts the MARKETING-resolved values that still contain an internship word
-// and pins that count, so a new un-overlaid "mentor" string fails the check —
-// and an overlay entry here that removes some means lowering the literal there.
+// and pins that count — now at zero — so a new un-overlaid "mentor" string a
+// MARKETING tenant can reach fails the check.
 // E-mails read this same overlay through src/i18n/emailDictionary.ts, keyed on
 // the recipient's org; there is no second terminology layer for mail.
 //
@@ -77,6 +78,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
             mentorHours: 'Leave at 0 unless your organisation counts donated rep time as a cost.',
           },
         },
+        categories: {
+          MENTOR_TIME: 'Sales rep time',
+        },
+        steps: {
+          mentorTimeCost: 'Unbilled sales rep time',
+        },
+        assumptions: {
+          mentorHourValue: 'Value of one sales rep hour',
+        },
       },
       // #1376: the MARKETING home title comes from the root layout's own
       // branch; these keep the internship copy out of the resolved dictionary.
@@ -91,14 +101,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Survey results (#1910): the breakdown labels name the roles, so they
       // take the same rep/lead words as everywhere else.
       // Goal sharing scope (#1858): the option names the two seats.
-      goals: { visibilityPair: 'Sales rep and lead', visibilityProgram: 'Sales rep, lead and team' },
+      goals: {
+        visibilityPair: 'Sales rep and lead',
+        visibilityProgram: 'Sales rep, lead and team',
+        byMentor: 'Created by sales rep',
+        byMentee: 'Created by lead',
+      },
       surveyResults: {
         byMentor: 'By sales rep',
         noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
         role_MENTEE: 'Leads',
         role_MENTOR: 'Sales reps',
       },
-      nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
+      nav: {
+        candidates: 'Leads',
+        companyInquiries: 'Demo requests',
+        myCompanies: 'My accounts',
+        mentorDirectory: 'Sales reps',
+        mentors: 'Sales reps',
+        mentorships: 'Deals',
+        myMentees: 'My Leads',
+        inviteMentee: 'Invite a lead',
+        menteeActivity: 'Lead Activity',
+        mentorApplications: 'Sales Rep Applications',
+      },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
       // The role-convert button on the lead detail and the users list (#2557):
@@ -132,6 +158,21 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'role_changed.toMentee': 'An administrator converted your account to a lead account.',
           'outcome.needsMessage': '{name} reached an outcome stage. Write them a message.',
           'duplicate.suspected': 'A new record may duplicate an existing lead: {name}.',
+          'outcome.placedElsewhere': 'Congratulations on your next step! Your journey here is marked as complete — the door stays open whenever you need us.',
+          'goal.assigned': 'A new goal was added to your deal: "{title}".',
+          'evaluation.added': 'A new evaluation was added about your deal.',
+          'mentorship_request.new': 'New contact request from {from}.',
+          'mentorship_request.newGeneric': 'A new contact request was received.',
+          'mentorship_request.approved': 'Your contact request was approved — say hi to your contact person!',
+          'mentorship_request.rejected': 'Your contact request was reviewed but could not be approved right now.',
+          'mentorship_request.rematch': '{from} asked for a different contact person.',
+          'mentorship_request.rematchGeneric': 'A lead asked for a different contact person.',
+          'mentorship_request.rematchApproved': 'You have a new contact person — your previous one no longer looks after you.',
+          'mentorship_request.rematchRejected': 'Your request for a different contact person was reviewed. Your current contact person stays with you for now.',
+          'mentorship_request.rematchMentorNotice': 'Your deal with {menteeName} has ended — they are continuing with another rep.',
+          'application.received': '{name} signed up as your lead.',
+          'mentor_application.new': '{name} applied to join as a sales rep.',
+          'mentor_application.approved': 'Your sales rep application was approved — welcome aboard!',
         },
         // The assignment mails (#2558): the rep is asked to book a demo; the
         // lead is a customer and gets a contact person, not a mentor.
@@ -161,6 +202,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           trackingNote: 'Time-on-site and page views are shown only for leads who enabled activity tracking.',
           columns: { mentee: 'Lead' },
         },
+        types: {
+          mentorship_request: 'Contact request',
+          mentor_application: 'Sales rep application',
+        },
+        rematchRequestedEmail: {
+          subject: 'New contact person requested: {name}',
+          heading: 'New contact person requested',
+          body: '{name} has asked for a different contact person. Their current deal stays active until you decide.',
+          privacy: 'The reason they gave is in the admin queue and is not shared with their current rep.',
+        },
+        rematchMentorEmail: {
+          subject: 'Your deal with {name} has ended',
+          heading: 'A deal has ended',
+          body: 'Your deal with {name} has ended. They are continuing with another rep.',
+          thanks: 'Thank you for the time and care you gave. Your other leads are unaffected.',
+        },
       },
       usersAdmin: {
         mentor: 'Rep',
@@ -177,6 +234,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         ssoRoleMappingsHint: 'A user whose claim contains the value gets that role. The highest priority wins; a tie gives the lower role. No match: lead. Admin cannot be mapped yet.',
         ssoRoleNone: 'No mappings yet — every SSO user starts as a lead.',
         ssoRoleSyncHint: 'Off: an existing user keeps the role they have. On: their role follows the mapping at each sign-in (never for an admin, and a login that matches nothing changes nothing).',
+        relations: 'Deals',
       },
       candidateDetail: {
         mentorship: 'Owner',
@@ -214,6 +272,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       forCompanies: {
         submit: 'Request a demo',
         successBody: 'Your request reached our sales team. We answer within two working days to find a time for the demo.',
+        pilotBody: 'We open the account and connect the leads you already have, and we delete your data the day you ask. What it costs is published rather than negotiated, so you can check the number before anyone quotes you one.',
       },
       companyInquiriesAdmin: {
         title: 'Demo requests',
@@ -239,6 +298,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // needs no entry — it names itself from `productNameFor()` (#2967).
       publicNav: {
         tagline: 'Leads, accounts and deals in one pipeline — from first contact to close.',
+        becomeMentor: 'Join as a sales rep',
       },
       auth: {
         signinSubtitle: 'Sign in to your {product} account',
@@ -246,6 +306,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         tokenHint: 'Paste the invitation token from your e-mail. Accounts on this product are created by invitation.',
         dataSharingTitle: 'How your data is shared',
         dataSharingBody: 'Depending on your role, the details you add may be visible to others: a lead’s details and activity history are seen by the assigned rep and by admins. Reps see only their own leads and accounts. See the privacy notice for details.',
+        wantMentor: 'Want to become a sales rep?',
+        becomeMentorPrompt: 'Want to become a sales rep instead?',
       },
       // The admin dashboard (#2498). People = leads, the pipeline relation = a
       // deal — so "mentee/mentor/mentorship" become "lead/rep/deal" and nothing
@@ -473,7 +535,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // without mentorship, and the board it renders is the mentor board, so
       // the few mentor.* strings that board reads are dressed here too — they
       // are never shown by a mentor shell in this vertical, which has none.
-      panel: { sales: 'Sales' },
+      panel: {
+        sales: 'Sales',
+        mentor: 'Rep Portal',
+        mentee: 'Lead Portal',
+      },
       sales: {
         dashboard: { title: 'Your sales pipeline', subtitle: 'Your own leads and accounts, and what needs you today.' },
         stats: { open: 'Open leads', accounts: 'Accounts' },
@@ -497,6 +563,25 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         boardSubtitle: 'Your leads by stage — drag a card, or use its stage menu, to move it',
         menteeBoardSearchPlaceholder: 'Find a lead...',
         noMatchingMentees: 'No leads match this filter',
+        dashSubtitle: 'Here\'s an overview of your leads and interactions',
+        activeMentees: 'Active Leads',
+        myMentees: 'My Leads',
+        currentRelationships: 'Current active deals',
+        noActiveMentees: 'No active leads assigned',
+        exampleLogNote: 'Discussed progress on the current proposal and next steps for the deal.',
+        goToMenteeToLog: 'Go to a lead\'s detail page to log an interaction',
+        interactionSearchPlaceholder: 'Search subject, notes or lead...',
+        menteeDormantMatchOne: '1 dormant lead matches this filter and stays hidden.',
+        menteeDormantMatchMany: '{n} dormant leads match this filter and stay hidden.',
+        menteesSubtitle: 'All your deals',
+        noMenteesAssigned: 'No leads assigned yet',
+        noMenteesHint: 'Add your first lead or share your application link to start.',
+        interactionLogsSubtitle: 'All your logged interactions with leads',
+        backToMentees: 'Back to leads',
+        addMentee: 'Add Lead',
+        newMentee: 'New Lead',
+        menteeCreated: 'Lead created',
+        setPwLinkHint: 'We emailed the lead a link to set their password and activate their account. If it doesn’t arrive, share this link with them directly:',
       },
       // The day-one empty states of the same two screens (both rendered by the
       // pages #2426/#2427 name, so the acceptance "no mentorship word on
@@ -510,6 +595,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         companies: {
           adminBody: 'Companies are the accounts you sell to: once one exists you can attach what it needs, its contact people and the deals open against it.',
+        },
+        candidates: {
+          adminBody: 'Everyone who signs up or accepts an invitation lands in this list, together with their rep, account and stage. Send the first invitation and the list fills itself.',
+        },
+        requisitions: {
+          companyBody: 'A requisition tells the reps which position you are hiring for, how many people you need and which skills matter. Create one and matching people can be proposed to you.',
+        },
+        interviewRequests: {
+          mentorBody: 'When an account asks to meet one of your leads, the request appears here with the proposed times, and you arrange the meeting from there.',
+        },
+        weeklyReports: {
+          menteeBody: 'A weekly report is a short note about what you did, how long it took and what is blocking you. Write the first one in the form above so your contact person can comment on it.',
+          mentorBody: 'Weekly reports appear here as your lead submits them, newest first, and you can approve one or ask for changes. Nothing has been submitted yet.',
+        },
+        documents: {
+          mentorBody: 'Your lead has not uploaded anything yet. Their contracts, order forms and certificates appear here as they arrive, with the version history kept.',
+          menteeBody: 'This is where your contracts, order forms and certificates live. Upload the first one below and your contact person can see it right away.',
+        },
+        portalGoals: {
+          title: 'No contact person assigned yet',
+          menteeBody: 'Goals, evaluations and weekly reports all belong to a deal, so they open up once an admin assigns you a contact person. A complete profile makes that faster.',
+        },
+        todos: {
+          body: 'This list holds what your contact person handed you, what your projects need and whatever you add yourself. Write the first line in the box above.',
         },
       },
       landing: {
@@ -561,13 +670,85 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         trans5T: 'Consent as a mechanism',
         trans5D: 'Customer data is shown to nobody outside your team; every consent is recorded with its version and revocable at any time. Email and phone never appear on any public page.',
         transBeta: 'And the honest part: the marketing product is in early access, built by a small team, with no customer testimonials yet. We would rather you read that here than find it out later.',
-        founderBody: '{product} is built and maintained by {name} — one person, in the open, on the same core that runs a mentoring platform for hundreds of people. Questions and criticism are welcome.',
+        founderBody: '{product} is built and maintained by {name} — one person, in the open, on the same core that already runs a sister platform for hundreds of people. Questions and criticism are welcome.',
         badge: 'Marketing CRM · Track leads · Close deals',
         heroTitle: 'Every lead, every conversation, every deal —',
         heroAccent: 'in one pipeline.',
         heroSubtitle: 'Track your customers from first contact to close. See where every deal stands, who touched it last and what to do next — instead of piecing it together from a spreadsheet.',
         featuresTitle: 'Everything your team needs to close',
         featuresSubtitle: 'Purpose-built for tracking customers and moving deals forward.',
+        becomeMentor: 'Want to join as a sales rep?',
+        fMentorT: 'Rep self-service',
+        fMentorD: 'Reps add their own leads, log meetings, feedback, emails, calls and WhatsApp chats, keep private notes, and get a needs-attention queue on their dashboard — admins can do it all too.',
+        fGrowthD: 'Deal projects with task lists and progress, personal goals, structured interim and final evaluations in both directions, and built-in Q&A between lead and rep.',
+        roleAdminD: 'Full control — invite users, manage accounts, cohorts and sources, assign deals, broadcast announcements, impersonate, and read analytics & audit logs.',
+        roleMentor: 'Sales rep',
+        roleMentorD: 'Own leads, interaction history, kanban board, meetings, availability slots and emails.',
+        roleMentee: 'Lead',
+        roleMenteeD: 'Complete your profile, message your sales rep, upload documents, use document templates, and track your goals and progress.',
+        roleSourceD: 'Referral partners submit leads and follow how their referrals progress.',
+        heroModel: 'One price per user — no hidden add-ons.',
+        freeCoreBody: 'Messages, meetings, goals, evaluations and the whole pipeline are part of every plan — billed per user, with no hidden add-ons.',
+        liveMentors: '{n} sales reps',
+        liveWaiting: '{n} leads waiting for a rep',
+        wheelSubtitle: 'This is not a lead list or a contact database. A third person — the sales rep — knows the lead and puts their own name behind them.',
+        wheelMenteeT: 'Lead',
+        wheelMentorT: 'Sales rep',
+        wheelCompanyD: 'Brings a real need — a project, a purchase. Missing: a signal it can trust.',
+        wheelArrow1: 'The lead engages',
+        wheelArrow2: 'The rep writes down what they saw',
+        wheelChain1: 'The account trusts the record because a rep signed it.',
+        wheelChain2: 'The rep could sign it because the lead actually engaged.',
+        wheelChain3: 'The lead engaged because the account put a real opportunity on the table.',
+        wheelNote: 'We are at the start: the lead and rep sides run today, the account side is early access with hand-opened accounts. None of it is a mock-up — but the loop is not turning at full speed yet.',
+        pickMenteeT: 'I am looking for a solution',
+        pickMenteeCta: 'Read the lead section',
+        pickMentorCta: 'Read the sales rep section',
+        pickCompanyD: 'Meet the lead through the rep who has worked with them for months.',
+        audMenteeSubtitle: 'A sales rep who knows you, a real offer to work through, and a record that reaches the account before you have to repeat yourself.',
+        audMentee1T: 'We assign you a sales rep — you are not filling in a form and waiting for an answer.',
+        audMentee1D: 'We invite reps one by one; not everyone becomes one. You tell us what you are after and we assign someone who knows your field. Once the assignment is made you message inside the app, request a meeting, and ask the question that is blocking you without waiting for a call. There is no rep directory yet: today you do not pick your rep, we do the assignment. The directory is on the way.',
+        audMentee2D: 'From first contact to proposal to closing, you see where you stand and what the next step is every time you open the app. Everything you discussed with your rep and every goal you set stays on the record.',
+        audMentee3D: 'Your rep rates the deal on fit, communication, reliability and progress and writes comments — and you read every word of it. Each project task you finish is recorded on its own. If you choose to share your profile with an account, that evaluation goes with it.',
+        audMentee5T: 'You can start before a rep is assigned.',
+        audMentee6D: 'Make your profile public and you get a link you can share; separately, if you allow it, you appear in account search. Both are off by default and you can undo either at any time. Your email, phone number and date of birth are never shown. When an account shows interest, the signal goes to your rep first and your rep tells you.',
+        audMenteeProof: 'We are new and we are not hiding it: we have not published a success story yet, and we are not writing a fake one. What we can show you today: we invite sales reps one at a time, no screen on the lead side asks for money, we show your data to nobody without your permission, and you can delete your account together with your CV whenever you want. Being here early has one concrete payoff — the number of leads per rep will never be this low again.',
+        audMenteeCtaNote: 'Verify your email; we review your sign-up and open your account. We ask for your CV later, when we assign your sales rep.',
+        audMentorSubtitle: 'We do the remembering.',
+        audMentorTitleAlt: '{n} leads are waiting for a sales rep right now.',
+        audMentor4D: 'The leads you follow up are the only pool where you have actually seen how someone works. You pick your next hire from months of observation instead of a CV.',
+        audMentorProof: 'The product is in beta: the rep dashboard, stage tracking, the interaction log, goals, meetings and availability are live today. We have no user testimonials yet — you would be one of the first twenty sales reps, and you get a say in what gets built next. The code is fully open; every record you enter can be exported at any time.',
+        audMentorCtaNote: 'You fill in a short form and we open your account within two working days. We are growing the sales rep side slowly on purpose.',
+        audMentorCta2: 'I am not following up any leads yet, but I want to start',
+        audCompanyTitle: 'Meet the lead through the sales rep who worked with them for months, not through a CV.',
+        audCompanySubtitle: 'Follow your leads from day one and make the decision from a written record spanning months instead of two calls. We are in a pilot: we open the account, we charge nothing, there is no contract.',
+        audCompany1T: 'Where is your lead, and how is it going?',
+        audCompany1D: 'One screen shows every lead linked to your account: which stage they are at, who their sales rep is, and the shape of the funnel. Meeting notes and goals are kept by the rep; you read the status and the rep’s periodic evaluation. You do not get write access — so the side keeping the record stays impartial.',
+        audCompany2D: 'The process runs on a single line: deal starting → deal in progress → ready to close → won. You get to know the lead through months of real work rather than one call performance.',
+        audCompany3D: 'The lead already has a sales rep: someone who sets goals, meets them regularly, writes down their progress and produces periodic evaluations.',
+        audCompany4T: 'A lead report card with a sales rep’s name on it.',
+        audCompany4D: 'For every lead who starts a deal with your account, their sales rep files two evaluations — interim and final — with a score and a written comment under four headings: technical, communication, reliability, growth. Next to it sit the real project tasks the lead completed. The report card is the product of time spent together: the pool is where you meet someone, not where you decide. Account access to evaluations is a premium permission and is opened by hand today.',
+        audCompanyProofCaption: 'An anonymized lead report card: four criteria, interim and final, the sales rep’s comment, and the completed project tasks.',
+        how1D: 'The lead signs up, or a sales rep brings them in through their own link. We review the sign-up and open the account.',
+        how2D: 'A sales rep is assigned, meetings and goals start, and the lead joins a project with actual tasks.',
+        how3D: 'The sales rep writes the evaluation; with the lead’s consent it goes to the account along with the completed tasks.',
+        howInterest: 'When an account marks a lead and writes a note, the notification goes to the sales rep following that lead, and the rep makes the introduction. Account users cannot message leads inside the app.',
+        stories: {
+          roles: {
+            mentor: 'Sales rep',
+            mentee: 'Lead',
+          },
+        },
+        faqFilterMentee: 'Lead',
+        faqFilterMentor: 'Sales rep',
+        faqMentee1A: 'We open your account after you verify your email — usually within one working day. There is nothing for you to chase in the meantime; we are looking for the right sales rep for you.',
+        faqMentee2A: 'You and your sales rep set the rhythm; the typical pattern is one or two meetings a month with questions in between. Reps publish their weekly availability and you request a slot. Pausing during busy weeks is fine.',
+        faqMentee4A: 'Only your sales rep — and, if you allow it, the account you are connected to — sees your CV. AI feedback is a separate consent; if you do not turn it on, your CV never goes to any model. Delete your account and your CV goes with it.',
+        faqMentee5A: 'A lead never pays anything. The team that follows up with you pays per user — we sell them the software, not your data.',
+        faqMentor4Q: 'Will it be visible outside that I am a sales rep here?',
+        faqMentor4A: 'Not today. Sales rep profiles and a rep directory are planned — we will build them before we promise them.',
+        faqCompany1A: 'We open the account and connect your current leads ourselves; we do not send you a link until there is at least one real lead in the panel.',
+        ctaMentor: 'Apply as a sales rep',
       },
       // The public feature catalogue (#2475). `/features` renders whatever
       // getFeatures() returns for this vertical; the cards themselves are
@@ -591,6 +772,64 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           // promise), so the rep's version of it is a sentence here (#2580).
           ownWorkspace: { t: 'A workspace for every sales rep', d: 'Each rep signs in to their own book: their leads and accounts, the follow-ups and trial ends that are due, their own board — and a quick way to log the call they just made. Another rep\u2019s deals, or another organization\u2019s, are not a hidden tab away; they simply do not exist on that page.' },
           inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
+          pricing: {
+            d: 'The price list is on the website, not in a quote: plan bands, admin seats, the overage rate and every add-on. One metering unit — the active deal — so sales reps and leads are structurally unbillable, and the page states what is never metered at any tier.',
+          },
+          rematch: {
+            t: 'Ask for a different contact person',
+            d: 'A lead whose deal is not working out with their rep can ask the team for a different contact person, with a reason category and an optional note. The current deal stays fully live until an admin decides, the swap happens in one step so nobody is ever left without a contact person, and the outgoing rep is told the deal was handed over — never what was written about them.',
+          },
+          activityReport: {
+            d: 'Consent-based lead activity digests for sales reps and admins: logins, time on site, pages visited and completed to-dos.',
+          },
+          menteeOwnProject: {
+            d: 'A lead is not only assigned to projects — they can start one. Creating a project from the portal makes the creator its owner: they edit every field and run its to-dos. Their own project starts private, so it is a team of one until an admin adds someone or publishes it to the public showcase — from then on the owner grows the team by approving join requests.',
+          },
+          menteeInsights: {
+            d: 'The activity summary a lead’s sales rep and team read is also theirs to read, on their own page in the portal: goals, meetings, interactions, stage moves and messages, plus time on site and visited pages while activity tracking is on. No comparison to anyone else, no score, and never a paid feature.',
+          },
+          publicProfiles: {
+            d: 'Leads and sales reps can opt in to a public, PII-free profile page — and when its link is shared on LinkedIn, WhatsApp or Slack, it unfurls into a branded card with name, role, location and top skills.',
+          },
+          interviewRequests: {
+            d: 'Accounts shortlist leads per requisition and request interviews; the team or the assigned sales rep reviews each request before scheduling.',
+          },
+          aiPackage: {
+            d: 'CV feedback and interview prep for leads, interaction-log summaries for sales reps, AI-assisted assignment, and themes across evaluation comments and weekly-report blockers for admins — each theme linked to the rows behind it. All consent- and quota-gated.',
+          },
+          matchQuality: {
+            d: 'Every sales rep suggestion the platform makes is recorded with the position it was shown at, and a one-click dismissal asks why — wrong field, no capacity, language, already assigned. The analytics page then answers the question every team owner eventually asks: how often is the suggestion actually taken, and does the top-ranked rep really get picked? The suggestion stays a suggestion — a person always decides.',
+          },
+          selfServe: {
+            t: 'Self-serve lead intake',
+            d: 'Leads sign up on their own, complete onboarding and request a contact person; admins approve from a queue.',
+          },
+          outcomeComms: {
+            d: 'When a deal ends, the portal says where things stand and what to do next instead of quietly changing a status, and the sales rep is handed a ready-to-edit message rather than a blank page. Automatic sending is off by default — a person reads every rejection before it goes out. A lead who finds what they need elsewhere is not treated as a failure, and gets its own wording.',
+          },
+          joinRequests: {
+            d: 'Public projects accept join requests the owner approves in one click, and everyone — lead, sales rep or admin — has a personal invite link that records who brought a newcomer in.',
+          },
+          todos: {
+            d: 'Everything someone has to do in one place: what their sales rep handed them, what their projects need, the open project goals they can claim, and what they wrote for themselves — finished ones archived rather than deleted. A to-do from the shared, multilingual pool stays linked to it: reword the pool entry once and it changes for everyone who has it, in each person’s own language. Each to-do can carry a due date: the soonest come first and undated ones last, a late one is marked “overdue” in words as well as in colour, and a sales rep or admin can read one list of everything their people are carrying.',
+          },
+          dualRole: {
+            d: 'A sales rep can be a lead too. Someone who looks after others may still need a contact person themselves — give a rep a rep of their own and the lead portal opens up next to their sales pages, with a view switch in the sidebar to move between them. Admins can put anyone on either side of a deal; nobody can be paired with themselves.',
+          },
+          weeklyReports: {
+            t: 'Weekly lead reports',
+            d: 'Leads write a weekly report, keep drafts and print their diary; sales reps review each submission, approve it or request changes. Missing reports surface in the rep attention queue and a weekly reminder; coordinators get a term-wide compliance matrix with a one-click reminder, an XLSX export and a printable report booklet per lead.',
+          },
+          newsletter: {
+            d: 'Short, emoji-led issues of CV and interview advice, written once in English, Turkish and German and sent to each reader in their own language. Send by hand or on a weekly, fortnightly or monthly schedule; sales reps get a coaching angle on the same issue, every send is kept on the record, and one press unsubscribes.',
+          },
+          mentorSelfApply: {
+            t: 'Self-serve sales rep applications',
+            d: 'Anyone can apply to become a sales rep without an account; admins review, take into review, approve or reject from a queue, and approval creates or upgrades the rep’s account automatically.',
+          },
+          offers: {
+            d: 'Create, preview and send an offer from a lead’s deal card in three steps; the lead accepts or declines (with a reason) from their portal, sees a persistent decision state, and overdue offers expire on their own — every step logged and notified. An admin offer index answers what is still outstanding, what expires this week and what was declined, and why.',
+          },
         },
       },
       // /pricing (#2475). The marketing price list is the host organization's
@@ -602,6 +841,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroTitle: 'One price per user, no surprises',
         heroSubtitle: 'Plans for sales teams, billed per user. No hidden add-ons — and if you would rather run it yourself, the code is open source.',
         discountsTitle: 'What is already true',
+        freeTitle: 'Billed per user, no surprises',
+        freeBody: 'Plans are billed per user on the sales team. There are no hidden add-ons — every plan and its limits are listed on this page.',
+        neverMetered: {
+          messaging: 'Messages between sales rep and lead',
+          portal: 'The lead portal',
+        },
+        planDesc: {
+          employer_free: 'A brand page and answering a rep-approved shortlist.',
+        },
+        meteringCounted: 'Counted: a deal in ACTIVE state with any logged activity during the calendar month.',
+        meteringNeverCounted: 'Never counted: sales reps and leads. They are not a unit we can meter.',
+        employerSubtitle: 'A separate wallet, bought by a different buyer. Nothing here changes what a team pays, and nothing an account pays reaches the lead side.',
+        faq1Q: 'Do sales reps or leads ever pay?',
+        faq1A: 'No, and not as a policy we could quietly change — they are not the metering unit. There is no rep seat and no lead seat to sell.',
+        faq2A: 'One sales rep assigned to one lead, in ACTIVE state, with at least one logged activity in that calendar month. A deal you paused is not counted, and a deal that finished stops counting the month it finishes.',
+        ctaMenteeT: 'I want a sales rep',
+        ctaMentorT: 'I want to work leads',
+        ctaMentorA: 'Apply as a sales rep',
       },
       bulkInvite: { roleMentee: 'Lead', roleMentor: 'Sales rep' },
       assignMentor: {
@@ -639,7 +896,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // product or its relation model are replaced; the legal substance
       // (controller, rights, retention, subprocessors) is the same codebase's.
       share: { title: 'Shared with {product}' },
-      publicProfile: { poweredBy: '{product}', mentor: 'Sales rep' },
+      publicProfile: {
+        poweredBy: '{product}',
+        mentor: 'Sales rep',
+        activeMentees: 'Active leads',
+        evaluationTitle: 'Sales rep evaluation',
+        evaluationByMentor: 'sales rep',
+      },
       imprint: { intro: 'Who runs this {product} instance, and how to reach them.' },
       privacy: {
         intro: 'We store the information you provide in order to manage leads, accounts and deals. This notice explains what we process, why, who can see it, how long we keep it, and your rights (GDPR Arts. 13–15).',
@@ -700,6 +963,262 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'We have published no evaluation measuring how accurate or how biased the rep suggestion is.',
         ],
       },
+      programTemplates: {
+        blockers: {
+          strandedRelations: 'Some leads are on stages this template does not contain. Move or complete them first — applying now would leave them on a stage that no longer exists.',
+        },
+        items: {
+          canonical_pipeline: {
+            name: 'Canonical placement pipeline',
+          },
+          graduate_internship: {
+            name: 'Graduate programme',
+            desc: 'Application, screening call, match with a host team, the programme itself with a midpoint check, and a hiring decision at the end. Eight stages, service levels and two required documents.',
+          },
+        },
+      },
+      certificate: {
+        title: 'Completion certificate',
+        signatureTitlePlaceholder: 'e.g. Sales rep',
+        success: 'Certificate generated and saved to the lead’s documents.',
+      },
+      matchFeedback: {
+        reportSubtitle: 'Rep suggestions over the last {n} months.',
+        reportEmpty: 'No rep suggestions recorded yet.',
+      },
+      duplicates: {
+        mergeErrors: {
+          linked_by_mentorship: 'These two records are linked by a deal, so they are not the same person. Resolve that first.',
+          active_mentor_conflict: 'Both records have an active rep ({a} and {b}). Close one of the two deals first, then merge — we will not decide for you which rep is the real one.',
+        },
+      },
+      availability: {
+        subtitle: 'Your recurring weekly slots for lead meetings',
+        zoneUnset: 'You have not set a time zone yet, so these hours are read as {zone}. Set yours so leads see the right time.',
+      },
+      apiDocs: {
+        candidatesHint: 'Returns up to 200 leads with their current pipeline stage.',
+      },
+      projects: {
+        subtitle: 'Projects — account-backed or team-run',
+        ownerMentor: 'A sales rep',
+        ownerMentee: 'A lead',
+        members: 'members',
+        showcaseSubtitle: 'Team and account projects.',
+        noPublicHint: 'Want to get involved? Ask your sales rep about projects you can join.',
+        manageOwners: 'Manage owners & reps',
+        roleMentorMember: 'Sales rep',
+        roleMentee: 'Lead',
+        addMenteeMember: 'Add a lead (with a role)',
+        noMenteesToAdd: 'No leads available to add.',
+      },
+      weeklyReports: {
+        mentorComment: 'Sales rep comment',
+        commentPlaceholder: 'Add feedback for the lead...',
+        printDiary: 'Print activity diary',
+      },
+      meetings: {
+        topics: [
+          'Weekly check-in',
+          'Progress review',
+          'Technical demo',
+          'Needs discovery',
+          'Proposal walkthrough',
+          'Feedback session',
+        ],
+        scheduledCount: 'Invite sent to {n} lead(s).',
+      },
+      messageTemplateAdmin: {
+        subtitle: 'The replies your sales reps send over and over. Write one once, in the languages you need — a rep inserts it in their own.',
+        newTemplateHint: 'Fill in at least one language. A rep gets the reply in their own language and falls back to English.',
+      },
+      orphanApplicants: {
+        subtitle: 'Accounts the public application link created, whose sales rep declined and which show no other sign of life. They can never sign in and belong to nobody, so they are anonymised automatically {grace} days after the decision. Everything the sweep would take is listed here first.',
+      },
+      changeMentor: {
+        action: 'Change rep',
+        title: 'Change rep',
+        context: 'Lead: {mentee} · current rep: {mentor}',
+        hint: 'One step, one record. If nothing has been logged under this deal yet, the rep is corrected in place. If it has a history, the deal is closed as “rep changed” — never as completed — and the new one continues on the same pipeline stage. Notes, logs and messages stay with the deal they were written under.',
+        newMentor: 'New rep',
+        selectNewMentor: 'Select the new rep…',
+        privacy: 'The reason and the note are recorded for the team — the note only in the admin audit log. Neither rep is shown them in the app; the outgoing rep is only told that the deal ended.',
+        submit: 'Change rep',
+        failed: 'The rep could not be changed.',
+        sameMentor: 'That is already this lead’s rep.',
+        inactive: 'This deal is no longer active — reload the page.',
+        transferredResult: '{mentee} was handed over to {mentor} on the same pipeline stage. The previous deal is closed as “rep changed” and keeps its history.',
+        reasons: {
+          mentor_unavailable: 'The rep is unavailable',
+          changed_goals: 'The lead’s needs changed',
+          mentee_request: 'The lead asked for a change',
+        },
+        alreadyMentoredOffer: '{mentor} already handles this person. Change their rep instead of opening a second deal.',
+        changeInstead: 'Change rep instead',
+        badgeReassigned: 'Rep changed',
+      },
+      mentorships: {
+        title: 'Deals',
+        subtitle: 'Assign leads to reps and accounts',
+        assign: 'Assign deal',
+        searchPlaceholder: 'Search by rep, lead or account...',
+        none: 'No deals yet',
+        mentor: 'Rep',
+        mentee: 'Lead',
+        selectMentor: 'Select rep',
+        selectMentee: 'Select lead',
+        mentorMenteeRequired: 'Rep and Lead are required',
+        assignFailed: 'The deal could not be created.',
+        planLimitReached: 'Plan limit reached: {usage}/{limit} active deals on the {plan} plan. Existing leads are unaffected — upgrade to add more.',
+        invalidMentor: 'That rep cannot be assigned.',
+      },
+      company: {
+        mentor: 'Rep',
+        interestHint: 'Let the rep know how you feel about this lead. They’ll be notified.',
+        notePlaceholder: 'Optional note for the rep...',
+        interestSaved: 'Saved — the rep has been notified.',
+        verifiedTitle: 'Verified by rep',
+        verifiedHint: 'Rep evaluations and project work, verified through the deal.',
+        verifiedEvaluations: 'Rep evaluations',
+      },
+      programSurvey: {
+        mentee: {
+          communication: 'Was communication with your contact person there when you needed it?',
+        },
+        mentor: {
+          support: 'Was the support you received from the team enough for your lead follow-up?',
+          workloadSustainability: 'Was your lead follow-up workload at a sustainable pace?',
+        },
+      },
+      surveyTemplates: {
+        programPre: {
+          q: {
+            goalsMentor: 'What do you most want your lead to get out of this?',
+          },
+        },
+        pulse: {
+          q: {
+            mood: 'How is the deal going right now?',
+          },
+        },
+      },
+      relationTimeline: {
+        actorRole: {
+          MENTOR: 'the rep',
+          MENTEE: 'the lead',
+        },
+      },
+      erasure: {
+        confirmDelete: 'This will permanently delete the account and its deal history. This cannot be undone.',
+      },
+      todos: {
+        subtitle: 'Everything on your list: what your contact person asked for, what your projects need, and what you wrote yourself.',
+      },
+      mentorDirectory: {
+        title: 'Sales reps',
+        subtitle: 'Sales reps who chose to be listed — see who could work with you',
+        acceptingOnly: 'Accepting new leads',
+        accepting: 'Accepting leads',
+        requestMentor: 'Request this rep',
+        requestedMentorUnavailable: 'That rep is no longer available — pick another one below.',
+        requestedMentorPending: 'You already have a request waiting for an answer, so this rep was not added to it.',
+        requestedMentorActiveMentorship: 'You already have a sales rep, so this request was not started.',
+        empty: 'No sales reps are listed yet. Reps appear here once they opt in.',
+        noMatches: 'No sales reps match these filters.',
+        loadError: 'Failed to load the sales rep directory',
+        showing: 'Showing {from}–{to} of {total} sales reps',
+        partialNotice: 'This list may be incomplete — only the first {cap} listed sales reps could be searched. Narrow your filters to be sure you are seeing everyone.',
+      },
+      sourcePortal: {
+        title: 'My leads',
+        subtitle: 'Submit leads you refer; a sales rep will pick them up and assign them.',
+        addMentee: 'Add a lead',
+        submit: 'Submit lead',
+        added: 'Lead submitted',
+        myMentees: 'Submitted leads',
+        none: 'No leads submitted yet',
+        assignedTo: 'Sales rep:',
+        pending: 'Awaiting a sales rep',
+      },
+      matchScore: {
+        dimensions: {
+          capacityHeadroom: 'Rep capacity',
+        },
+        violations: {
+          capacityHeadroom: 'The sales rep has no capacity left',
+          managerExclusion: 'The sales rep is the direct manager of this lead',
+        },
+      },
+      demo: {
+        roles: {
+          mentor: 'Sales rep',
+          mentee: 'Lead',
+        },
+      },
+      testimonials: {
+        admin: {
+          roles: {
+            mentor: 'sales rep',
+            mentee: 'lead',
+          },
+        },
+      },
+      tags: {
+        notYourMentee: 'You can only tag your own leads.',
+      },
+      releaseNotes: {
+        feedDescription: 'New features and improvements in {product}.',
+      },
+      newsletter: {
+        emailMentorTitle: 'For sales reps',
+        audienceMentee: 'Leads',
+        audienceMentor: 'Sales reps',
+        audienceBoth: 'Leads and sales reps',
+        audienceHint: 'Sales reps also see the "For sales reps" block; leads never do.',
+        mentorNote: 'For sales reps',
+        mentorNotePlaceholder: 'What a sales rep should do with this content.',
+        mentorNoteHint: 'Only shown to sales reps, and only on a sales rep or shared issue.',
+        previewAsMentee: 'Lead',
+        previewAsMentor: 'Sales rep',
+        archiveMentorNote: 'For sales reps',
+      },
+      modeSwitch: {
+        mentor: 'Sales rep',
+        mentee: 'Lead',
+        mentorHint: 'Sales rep view: only the leads you look after yourself.',
+        menteeHint: 'Lead view: your own deal — the one where you are the lead.',
+      },
+      menteeActivation: {
+        placeholderNote: 'This lead was added without an e-mail address, so they have a stand-in one and cannot sign in. Enter their real address to activate the account — the record, its interaction log and its stage history are kept.',
+        noPasswordNote: 'This lead has not set a password yet. Correct the address if it is wrong, then send the activation link again.',
+        mailFailedHint: 'The e-mail could not be sent. Share this link with the lead directly:',
+      },
+      onboarding: {
+        mentee: {
+          subtitle: 'Help us connect you with the right contact person and offers',
+        },
+        mentor: {
+          title: 'Set Up Your Sales Rep Profile',
+          subtitle: 'A few quick steps so leads know who you are and when you’re free',
+        },
+      },
+      stageClock: {
+        mentee: {
+          expectedBy: 'Your contact person plans to take the next step by {date}.',
+          reassure: 'Waiting times differ from stage to stage — if you would like an update, just ask your contact person.',
+        },
+      },
+      evaluation: {
+        titleMentor: 'Evaluate your sales rep',
+        onMentor: 'On sales rep',
+      },
+      profileForm: {
+        mentorCapacity: 'Lead capacity',
+        mentorCapacityHint: 'How many leads you can take on at once',
+      },
+      aiSummary: {
+        consentRequired: 'The lead has not allowed AI summaries. They can enable it under Account → Privacy & consent.',
+      },
     },
     tr: {
       documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
@@ -720,6 +1239,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
             mentorHours: 'Kurumunuz gönüllü temsilci zamanını maliyet saymıyorsa 0 bırakın.',
           },
         },
+        categories: {
+          MENTOR_TIME: 'Temsilci zamanı',
+        },
+        steps: {
+          mentorTimeCost: 'Faturalanmayan temsilci zamanı',
+        },
+        assumptions: {
+          mentorHourValue: 'Bir temsilci saatinin değeri',
+        },
       },
       seo: {
         homeTitle: '{product} — Pazarlama CRM',
@@ -731,14 +1259,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
-      goals: { visibilityPair: 'Satış temsilcisi ve müşteri adayı', visibilityProgram: 'Satış temsilcisi, müşteri adayı ve ekip' },
+      goals: {
+        visibilityPair: 'Satış temsilcisi ve müşteri adayı',
+        visibilityProgram: 'Satış temsilcisi, müşteri adayı ve ekip',
+        byMentor: 'Temsilci oluşturdu',
+        byMentee: 'Müşteri adayı oluşturdu',
+      },
       surveyResults: {
         byMentor: 'Satış temsilcisine göre',
         noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
         role_MENTEE: 'Müşteri adayları',
         role_MENTOR: 'Satış temsilcileri',
       },
-      nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
+      nav: {
+        candidates: 'Müşteri Adayları',
+        companyInquiries: 'Demo talepleri',
+        myCompanies: 'Hesaplarım',
+        mentorDirectory: 'Satış temsilcileri',
+        mentors: 'Satış temsilcileri',
+        mentorships: 'Fırsatlar',
+        myMentees: 'Müşteri Adaylarım',
+        inviteMentee: 'Müşteri adayı davet et',
+        menteeActivity: 'Müşteri Adayı Etkinliği',
+        mentorApplications: 'Satış Temsilcisi Başvuruları',
+      },
       invite: {
         subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
         connectMentor: 'Bu temsilciye ata (isteğe bağlı)',
@@ -766,6 +1310,21 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'role_changed.toMentee': 'Bir yönetici hesabını müşteri adayı hesabına dönüştürdü.',
           'outcome.needsMessage': '{name} bir sonuç aşamasına geldi. Ona bir mesaj yaz.',
           'duplicate.suspected': 'Yeni bir kayıt mevcut bir müşteri adayıyla aynı kişi olabilir: {name}.',
+          'outcome.placedElsewhere': 'Yeni adımın için tebrikler! Buradaki yolculuğun tamamlandı olarak işaretlendi — ihtiyacın olduğunda kapı açık.',
+          'goal.assigned': 'Fırsatına yeni bir hedef eklendi: "{title}".',
+          'evaluation.added': 'Fırsatın hakkında yeni bir değerlendirme eklendi.',
+          'mentorship_request.new': '{from} yeni bir iletişim talebi gönderdi.',
+          'mentorship_request.newGeneric': 'Yeni bir iletişim talebi alındı.',
+          'mentorship_request.approved': 'İletişim talebin onaylandı — muhatabına merhaba de!',
+          'mentorship_request.rejected': 'İletişim talebin incelendi ancak şu an onaylanamadı.',
+          'mentorship_request.rematch': '{from} farklı bir muhatap talep etti.',
+          'mentorship_request.rematchGeneric': 'Bir müşteri adayı farklı bir muhatap talep etti.',
+          'mentorship_request.rematchApproved': 'Yeni bir muhatabın var — önceki muhatabın artık seninle ilgilenmiyor.',
+          'mentorship_request.rematchRejected': 'Farklı muhatap talebin incelendi. Mevcut muhatabın şimdilik seninle devam ediyor.',
+          'mentorship_request.rematchMentorNotice': '{menteeName} ile fırsatın sona erdi — başka bir temsilciyle devam ediyor.',
+          'application.received': '{name} müşteri adayın olarak kaydoldu.',
+          'mentor_application.new': '{name} satış temsilcisi olmak için başvurdu.',
+          'mentor_application.approved': 'Satış temsilcisi başvurun onaylandı — aramıza hoş geldin!',
         },
         menteeAssignedEmail: {
           subject: 'Yeni müşteri adayı atandı: {mentee}',
@@ -794,6 +1353,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           trackingNote: 'Sitede geçirilen süre ve sayfa görüntülemeleri yalnızca etkinlik takibini açan müşteri adayları için gösterilir.',
           columns: { mentee: 'Müşteri adayı' },
         },
+        types: {
+          mentorship_request: 'İletişim talebi',
+          mentor_application: 'Satış temsilcisi başvurusu',
+        },
+        rematchRequestedEmail: {
+          subject: 'Yeni muhatap talebi: {name}',
+          heading: 'Yeni muhatap talebi',
+          body: '{name} farklı bir muhatap talep etti. Siz karar verene kadar mevcut fırsatı aktif kalıyor.',
+          privacy: 'Belirttiği gerekçe yönetici kuyruğunda duruyor ve mevcut temsilcisiyle paylaşılmıyor.',
+        },
+        rematchMentorEmail: {
+          subject: '{name} ile fırsatınız sona erdi',
+          heading: 'Bir fırsat sona erdi',
+          body: '{name} ile fırsatınız sona erdi. Başka bir temsilciyle devam ediyor.',
+          thanks: 'Ayırdığınız zaman ve emek için teşekkürler. Diğer müşteri adaylarınız bundan etkilenmiyor.',
+        },
       },
       usersAdmin: {
         mentor: 'Temsilci',
@@ -809,6 +1384,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         ssoRoleMappingsHint: 'Claim\'i bu değeri içeren kullanıcı o rolü alır. En yüksek öncelik kazanır; eşitlikte düşük rol verilir. Eşleşme yoksa: müşteri adayı. Yönetici henüz eşlenemez.',
         ssoRoleNone: 'Henüz eşleme yok — her SSO kullanıcısı müşteri adayı olarak başlar.',
         ssoRoleSyncHint: 'Kapalı: mevcut kullanıcı rolünü korur. Açık: rolü her girişte eşlemeyi izler (yönetici için asla; hiçbir şeyle eşleşmeyen giriş bir şey değiştirmez).',
+        relations: 'Fırsatlar',
       },
       candidateDetail: {
         mentorship: 'Sorumlu',
@@ -839,6 +1415,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       forCompanies: {
         submit: 'Demo isteyin',
         successBody: 'Talebiniz satış ekibimize ulaştı. Demo için bir zaman bulmak üzere iki iş günü içinde dönüyoruz.',
+        pilotBody: 'Hesabı biz açıyoruz, hâlihazırdaki müşteri adaylarınızı sisteme bağlıyoruz ve istediğiniz gün verinizi siliyoruz. Ne tutacağı pazarlıkla değil ilan edilerek belirlendi — kimse size teklif vermeden rakamı kendiniz görebilirsiniz.',
       },
       companyInquiriesAdmin: {
         title: 'Demo talepleri',
@@ -856,6 +1433,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       publicNav: {
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
+        becomeMentor: 'Satış temsilcisi ol',
       },
       auth: {
         signinSubtitle: '{product} hesabınıza giriş yapın',
@@ -863,6 +1441,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         tokenHint: 'E-postanızdaki davet kodunu yapıştırın. Bu üründe hesaplar davetle açılır.',
         dataSharingTitle: 'Verileriniz nasıl paylaşılır',
         dataSharingBody: 'Rolünüze göre eklediğiniz bilgiler başkalarınca görülebilir: bir müşteri adayının bilgileri ve etkinlik geçmişi atanan temsilci ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Ayrıntılar için gizlilik bildirimine bakın.',
+        wantMentor: 'Satış temsilcisi olmak ister misin?',
+        becomeMentorPrompt: 'Bunun yerine satış temsilcisi mi olmak istiyorsun?',
       },
       dashboard: {
         subtitle: 'Pazarlama hattınıza genel bakış',
@@ -1012,7 +1592,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         groups: { pre: 'Müşteri Adayları', internship: 'Fırsatlar', custom: 'Satış hunisi' },
       },
       personCard: { roleMentor: 'Temsilci', roleMentee: 'Müşteri adayı' },
-      panel: { sales: 'Satış' },
+      panel: {
+        sales: 'Satış',
+        mentor: 'Temsilci Portalı',
+        mentee: 'Müşteri Adayı Portalı',
+      },
       sales: {
         dashboard: { title: 'Satış pipeline\'ın', subtitle: 'Kendi müşteri adayların ve hesapların, bugün seni bekleyenler.' },
         stats: { open: 'Açık müşteri adayları', accounts: 'Hesaplar' },
@@ -1036,6 +1620,25 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         boardSubtitle: 'Müşteri adayların aşamaya göre — taşımak için kartı sürükle ya da aşama menüsünü kullan',
         menteeBoardSearchPlaceholder: 'Müşteri adayı bul...',
         noMatchingMentees: 'Bu filtreye uyan müşteri adayı yok',
+        dashSubtitle: 'Müşteri adaylarına ve etkileşimlerine genel bakış',
+        activeMentees: 'Aktif Müşteri Adayı',
+        myMentees: 'Müşteri Adaylarım',
+        currentRelationships: 'Mevcut aktif fırsatlar',
+        noActiveMentees: 'Atanmış aktif müşteri adayı yok',
+        exampleLogNote: 'Mevcut teklifteki ilerleme ve fırsatın sonraki adımları konuşuldu.',
+        goToMenteeToLog: 'Etkileşim kaydetmek için bir müşteri adayının detay sayfasına git',
+        interactionSearchPlaceholder: 'Konu, not veya müşteri adayı ara...',
+        menteeDormantMatchOne: 'Bu filtreyle eşleşen 1 pasif müşteri adayı var ve gizli kalıyor.',
+        menteeDormantMatchMany: 'Bu filtreyle eşleşen {n} pasif müşteri adayı var ve gizli kalıyor.',
+        menteesSubtitle: 'Tüm fırsatların',
+        noMenteesAssigned: 'Henüz atanmış müşteri adayı yok',
+        noMenteesHint: 'Başlamak için ilk müşteri adayını ekle veya başvuru linkini paylaş.',
+        interactionLogsSubtitle: 'Müşteri adaylarınla tüm etkileşim kayıtların',
+        backToMentees: 'Müşteri adaylarına dön',
+        addMentee: 'Müşteri Adayı Ekle',
+        newMentee: 'Yeni Müşteri Adayı',
+        menteeCreated: 'Müşteri adayı oluşturuldu',
+        setPwLinkHint: 'Müşteri adayına parolasını belirleyip hesabını aktifleştirmesi için bir bağlantı e-postaladık. Ulaşmazsa bu bağlantıyı doğrudan onunla paylaşabilirsin:',
       },
       emptyStates: {
         board: {
@@ -1044,6 +1647,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         companies: {
           adminBody: 'Şirketler sattığın müşteri hesaplarıdır: bir şirket eklediğinde ona ihtiyaçlarını, iletişim kişilerini ve açık fırsatlarını bağlayabilirsin.',
+        },
+        candidates: {
+          adminBody: 'Kaydolan ya da daveti kabul eden herkes; temsilcisi, hesabı ve aşamasıyla birlikte bu listeye düşer. İlk daveti gönder, liste kendiliğinden dolsun.',
+        },
+        requisitions: {
+          companyBody: 'Bir talep, temsilcilere hangi pozisyon için işe aldığını, kaç kişiye ihtiyacın olduğunu ve hangi yetkinliklerin önemli olduğunu anlatır. Birini oluştur ki sana uygun kişiler önerilebilsin.',
+        },
+        interviewRequests: {
+          mentorBody: 'Bir hesap müşteri adaylarından biriyle görüşmek istediğinde talep, önerilen saatlerle birlikte burada belirir; görüşmeyi buradan ayarlarsın.',
+        },
+        weeklyReports: {
+          menteeBody: 'Haftalık rapor; ne yaptığını, ne kadar sürdüğünü ve seni neyin engellediğini anlatan kısa bir nottur. İlkini yukarıdaki formda yaz ki muhatabın yorum yapabilsin.',
+          mentorBody: 'Müşteri adayın rapor gönderdikçe en yeniden başlayarak burada listelenir; onaylayabilir ya da değişiklik isteyebilirsin. Henüz gönderilmiş bir rapor yok.',
+        },
+        documents: {
+          mentorBody: 'Müşteri adayın henüz bir şey yüklemedi. Sözleşmeleri, sipariş formları ve sertifikaları geldikçe sürüm geçmişiyle birlikte burada görünecek.',
+          menteeBody: 'Sözleşmelerin, sipariş formların ve sertifikaların burada durur. İlkini aşağıdan yükle; muhatabın anında görebilsin.',
+        },
+        portalGoals: {
+          title: 'Henüz muhatap atanmadı',
+          menteeBody: 'Hedefler, değerlendirmeler ve haftalık raporlar bir fırsata bağlıdır; bir yönetici sana muhatap atadığında açılırlar. Eksiksiz bir profil bunu hızlandırır.',
+        },
+        todos: {
+          body: 'Bu liste; muhatabının sana verdiklerini, projelerinin ihtiyaç duyduklarını ve kendi eklediklerini bir arada tutar. İlk satırı yukarıdaki kutuya yaz.',
         },
       },
       landing: {
@@ -1090,13 +1717,85 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         trans5T: 'Mekanizma olarak onay',
         trans5D: 'Müşteri verisi ekibiniz dışında kimseye gösterilmez; her onay sürümüyle kaydedilir ve her an geri alınabilir. E-posta ve telefon hiçbir herkese açık sayfada görünmez.',
         transBeta: 'Ve dürüst kısmı: pazarlama ürünü erken erişimde, küçük bir ekip yazıyor, henüz müşteri referansı yok. Bunu sonradan öğrenmenizden burada okumanızı tercih ederiz.',
-        founderBody: '{product}, yüzlerce kişiye mentorluk platformu çalıştıran aynı çekirdek üzerinde, {name} tarafından — tek kişi, açıkta — geliştiriliyor ve bakımı yapılıyor. Soru ve eleştiriye açığız.',
+        founderBody: '{product}, yüzlerce kişinin kullandığı kardeş bir platformu çalıştıran aynı çekirdek üzerinde, {name} tarafından — tek kişi, açıkta — geliştiriliyor ve bakımı yapılıyor. Soru ve eleştiriye açığız.',
         badge: 'Pazarlama CRM · Adayları takip et · Anlaşmaları kapat',
         heroTitle: 'Her aday, her görüşme, her anlaşma —',
         heroAccent: 'tek bir hatta.',
         heroSubtitle: 'Müşterilerini ilk temastan kapanışa kadar takip et. Her anlaşmanın nerede olduğunu, en son kimin dokunduğunu ve sıradaki adımı — tabloda parça parça aramak yerine — tek bakışta gör.',
         featuresTitle: 'Kapatmak için ekibinin ihtiyacı olan her şey',
         featuresSubtitle: 'Müşterileri takip etmek ve anlaşmaları ilerletmek için tasarlandı.',
+        becomeMentor: 'Satış temsilcisi olmak ister misin?',
+        fMentorT: 'Temsilci self-service',
+        fMentorD: 'Temsilciler kendi müşteri adaylarını ekler; toplantı, geri bildirim, e-posta, arama ve WhatsApp görüşmelerini loglar; özel notlar tutar ve panosunda ilgi bekleyenler kuyruğunu görür — admin de hepsini yapabilir.',
+        fGrowthD: 'Görev listeli ve ilerleme takipli fırsat projeleri, kişisel hedefler, çift yönlü yapılandırılmış ara/final değerlendirmeleri ve müşteri adayı–temsilci arası yerleşik Soru & Cevap.',
+        roleAdminD: 'Tam kontrol — kullanıcı davet; hesap, kohort ve kaynak yönetimi; fırsat atama, duyurular, impersonation, analitik & audit.',
+        roleMentor: 'Satış temsilcisi',
+        roleMentorD: 'Kendi müşteri adayları, etkileşim geçmişi, kanban panosu, toplantılar, uygunluk saatleri ve e-postalar.',
+        roleMentee: 'Müşteri adayı',
+        roleMenteeD: 'Profilini tamamla, temsilcinle mesajlaş, belge yükle, doküman şablonlarını kullan; hedeflerini ve sürecini takip et.',
+        roleSourceD: 'Yönlendirme partnerleri müşteri adayı önerir ve yönlendirdiklerinin ilerleyişini takip eder.',
+        heroModel: 'Kullanıcı başına tek fiyat — gizli ek ücret yok.',
+        freeCoreBody: 'Mesajlar, görüşmeler, hedefler, değerlendirmeler ve pipeline’ın tamamı her pakete dahildir — kullanıcı başına faturalanır, gizli ek ücret yok.',
+        liveMentors: '{n} temsilci',
+        liveWaiting: 'temsilci bekleyen {n} müşteri adayı',
+        wheelSubtitle: 'Burası bir ilan sitesi ya da kişi havuzu değil. Üçüncü bir insan — satış temsilcisi — hem müşteri adayını tanıyor hem de adını ortaya koyuyor.',
+        wheelMenteeT: 'Müşteri adayı',
+        wheelMentorT: 'Satış temsilcisi',
+        wheelCompanyD: 'Gerçek bir ihtiyaç getiriyor — bir proje, bir satın alma. Bulamadığı: güvenilebilir bir sinyal.',
+        wheelArrow1: 'Müşteri adayı ilgisini koyar',
+        wheelArrow2: 'Temsilci gördüğünü yazar',
+        wheelChain1: 'Hesabın güveni temsilcinin imzasından doğuyor.',
+        wheelChain2: 'Temsilcinin imzası, müşteri adayının gerçekten gösterdiği ilgiden doğuyor.',
+        wheelChain3: 'Müşteri adayının motivasyonu, hesabın masaya koyduğu gerçek fırsattan doğuyor.',
+        wheelNote: 'Başındayız: müşteri adayı ve temsilci tarafı bugün çalışıyor, hesap tarafı elle açılan hesaplarla erken erişimde. Hiçbiri maket değil — ama çark henüz tam hızıyla dönmüyor.',
+        pickMenteeT: 'Bir çözüm arıyorum',
+        pickMenteeCta: 'Müşteri adayı bölümünü oku',
+        pickMentorCta: 'Temsilci bölümünü oku',
+        pickCompanyD: 'Müşteri adayını, onunla aylarca çalışmış temsilcisinden tanı.',
+        audMenteeSubtitle: 'Seni tanıyan bir satış temsilcisi, üstünde çalışacağın gerçek bir teklif ve sen kendini tekrar anlatmadan hesaba ulaşan bir kayıt.',
+        audMentee1T: 'Sana bir satış temsilcisi atıyoruz — form doldurup cevap beklemiyorsun.',
+        audMentee1D: 'Temsilcileri tek tek biz davet ediyoruz; herkes temsilci olamıyor. Talebini alıp alanını bilen birini atıyoruz. Atama yapıldığında uygulama içinden yazışıyor, görüşme talebi açıyor, takıldığın soruyu toplantı beklemeden soruyorsun. Henüz temsilci dizini yok: bugün temsilcini sen seçmiyorsun, atamayı biz yapıyoruz. Dizin yolda.',
+        audMentee2D: 'İlk temastan teklife, tekliften kapanışa kadar hangi noktada olduğunu ve sıradaki adımı her açtığında görüyorsun. Temsilcinle konuştuğunuz her şey ve koyduğunuz her hedef kayıtta duruyor.',
+        audMentee3D: 'Temsilcin fırsatı uyum, iletişim, güvenilirlik ve ilerleme başlıklarında değerlendiriyor, yorum yazıyor — ve yazdığı her şeyi sen de okuyorsun. Tamamladığın proje görevleri tek tek kayda geçiyor. Profilini paylaşmayı seçtiğin hesaba bu değerlendirme de gidiyor.',
+        audMentee5T: 'Temsilcin atanmadan da başlarsın.',
+        audMentee6D: 'Profilini herkese açtığında paylaşabileceğin bir linkin oluyor; ayrıca izin verirsen hesapların aramasında çıkıyorsun. İkisi de varsayılan kapalı, istediğin an geri alıyorsun. E-postan, telefonun ve doğum tarihin hiçbir koşulda görünmüyor. Bir hesap ilgilendiğinde sinyal önce temsilcine gidiyor; temsilcin seni haberdar ediyor.',
+        audMenteeProof: 'Yeniyiz ve bunu saklamıyoruz: henüz başarı hikâyesi yayınlamadık, uydurma referans da yazmıyoruz. Bugün gösterebileceğimiz kanıt şu: satış temsilcilerini tek tek davet ediyoruz, müşteri adayı tarafında hiçbir ekran para istemiyor, verini izin vermeden kimseye göstermiyoruz ve istediğin an hesabını CV’nle birlikte silebiliyorsun. İlk gelenlerden biri olmanın karşılığı: temsilci başına düşen müşteri adayı sayısı bir daha hiç bu kadar az olmayacak.',
+        audMenteeCtaNote: 'E-postanı doğrula; başvurunu inceleyip hesabını açıyoruz. CV’ni sonra, satış temsilcini atarken istiyoruz.',
+        audMentorSubtitle: 'Hatırlama işini biz yapıyoruz.',
+        audMentorTitleAlt: 'Şu an satış temsilcisi bekleyen {n} müşteri adayı var.',
+        audMentor4D: 'Takip ettiğin müşteri adayları, gerçekten nasıl çalıştıklarını gördüğün tek aday havuzun. Kendi ekibine alacağın kişiyi CV’den değil, aylardır süren gözlemden seçersin.',
+        audMentorProof: 'Ürün beta: temsilci panosu, aşama takibi, etkileşim günlüğü, hedefler, toplantı ve müsaitlik yönetimi bugün canlı. Henüz kullanıcı referansımız yok — ilk 20 satış temsilcisinden biri olursun ve sıradaki işe sen de karar verirsin. Kod tamamen açık; girdiğin her kaydı istediğin an dışa aktarabilirsin.',
+        audMentorCtaNote: 'Kısa bir form dolduruyorsun, 2 iş günü içinde hesabını açıyoruz. Satış temsilcisi tarafını bilerek yavaş büyütüyoruz.',
+        audMentorCta2: 'Henüz hiçbir müşteri adayını takip etmiyorum, başlamak istiyorum',
+        audCompanyTitle: 'Müşteri adayını CV’sinden değil, onunla aylarca çalışan satış temsilcisinden tanıyın.',
+        audCompanySubtitle: 'Müşteri adaylarınızı ilk günden izleyin, kararı iki görüşmeye değil aylara yayılmış yazılı bir kayda bakarak verin. Pilot dönemdeyiz: hesabı biz açıyoruz, ücret almıyoruz, sözleşme yok.',
+        audCompany1T: 'Müşteri adayınız nerede, ne durumda?',
+        audCompany1D: 'Hesabınıza bağlı her müşteri adayının hangi aşamada olduğunu, satış temsilcisinin kim olduğunu ve sürecin hunisini tek ekranda görürsünüz. Görüşme notlarını ve hedefleri temsilci tutar; siz durumu ve temsilcinin dönemsel değerlendirmesini okursunuz. Yazma yetkisi sizde değil — kaydı tutan tarafın tarafsız kalması için.',
+        audCompany2D: 'Süreç tek bir hatta izlenir: fırsat başlayacak → fırsat devam ediyor → kapanmaya hazır → kazanıldı. Müşteri adayını bir görüşme performansıyla değil, aylarca süren gerçek işle tanırsınız.',
+        audCompany3D: 'Müşteri adayının zaten bir satış temsilcisi var: hedeflerini koyan, düzenli görüşen, ilerlemesini yazan, dönemsel değerlendirme üreten biri.',
+        audCompany4T: 'Satış temsilcisi imzalı müşteri adayı karnesi.',
+        audCompany4D: 'Hesabınızla fırsatı başlayan her müşteri adayı için satış temsilcisi iki kez — ara ve final — dört başlıkta puan ve yazılı yorum girer: teknik, iletişim, güvenilirlik, gelişim. Yanında adayın tamamladığı gerçek proje görevleri durur. Karne, birlikte geçen zamanın ürünüdür: havuz tanışma yeridir, karar yeri değil. Değerlendirmelerin hesaba açılması premium bir yetkiye bağlı ve bugün elle açılıyor.',
+        audCompanyProofCaption: 'Anonimleştirilmiş bir müşteri adayı karnesi: dört kriter, ara ve final, temsilci yorumu ve tamamlanan proje görevleri.',
+        how1D: 'Müşteri adayı kaydolur ya da bir satış temsilcisi kendi bağlantısıyla getirir. Kaydı inceleyip hesabı açıyoruz.',
+        how2D: 'Satış temsilcisi atanır, görüşmeler ve hedefler başlar, müşteri adayı gerçek görevlerin olduğu bir projeye girer.',
+        how3D: 'Satış temsilcisi değerlendirmeyi yazar; müşteri adayı izin verirse tamamlanan görevlerle birlikte hesaba gider.',
+        howInterest: 'Bir hesap müşteri adayını işaretleyip notunu yazdığında bildirim, adayı takip eden satış temsilcisine gider; tanıştırmayı temsilci yapar. Hesap kullanıcısı uygulama içinden adayla yazışamaz.',
+        stories: {
+          roles: {
+            mentor: 'Satış temsilcisi',
+            mentee: 'Müşteri adayı',
+          },
+        },
+        faqFilterMentee: 'Müşteri adayı',
+        faqFilterMentor: 'Satış temsilcisi',
+        faqMentee1A: 'Hesabını e-posta doğrulamandan sonra biz açıyoruz — genelde 1 iş günü. O arada beklemen gereken bir şey yok; biz sana uygun satış temsilcisini arıyoruz.',
+        faqMentee2A: 'Ritmi satış temsilcinle sen belirliyorsun; tipik akış ayda 1-2 görüşme, arada asenkron soru-cevap. Temsilciler haftalık müsait saatlerini giriyor, sen o slotlardan talep açıyorsun. Yoğun haftalarda ara vermek serbest.',
+        faqMentee4A: 'CV’ni yalnızca satış temsilcin ve — sen izin verirsen — ilişkili olduğun hesap görür. Yapay zekâ geri bildirimi ayrı bir onaya bağlı; sen açmazsan CV’n hiçbir modele gitmez. Hesabını sildiğinde CV’n de silinir.',
+        faqMentee5A: 'Müşteri adayı hiçbir şey ödemez. Seninle ilgilenen ekip kullanıcı başına öder — onlara verini değil, yazılımı satıyoruz.',
+        faqMentor4Q: 'Satış temsilcisi olduğum dışarıda görünecek mi?',
+        faqMentor4A: 'Bugün hayır. Temsilci profili ve dizini planda — vaat etmeden önce yapacağız.',
+        faqCompany1A: 'Hesabınızı biz açıp mevcut müşteri adaylarınızı sisteme bağlıyoruz; panelde en az bir gerçek müşteri adayı olmadan size link göndermiyoruz.',
+        ctaMentor: 'Satış temsilcisi olarak başvur',
       },
       featureCatalog: {
         title: '{product} neler yapabilir',
@@ -1108,6 +1807,64 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
           ownWorkspace: { t: 'Her satış temsilcisine kendi çalışma alanı', d: 'Her temsilci kendi portföyüne giriş yapar: müşteri adayları ve hesapları, vadesi gelen takipler ve deneme bitişleri, kendi panosu — ve az önce yaptığı görüşmeyi hemen kaydetme imkânı. Başka bir temsilcinin ya da başka bir kuruluşun fırsatları gizli bir sekmede durmaz; o sayfada hiç yoktur.' },
           inviteLinks: { d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
+          pricing: {
+            d: 'Fiyat listesi teklifte değil, sitede: paket bantları, yönetici koltukları, aşım ücreti ve tüm ek paketler. Tek ölçü birimi aktif fırsat olduğu için satış temsilcileri ve müşteri adayları yapısal olarak faturalanamaz; sayfa hiçbir pakette neyin ölçülmediğini de açıkça yazar.',
+          },
+          rematch: {
+            t: 'Farklı bir muhatap iste',
+            d: 'Temsilcisiyle işler yürümeyen bir müşteri adayı, sebep kategorisi ve isteğe bağlı bir notla ekipten farklı bir muhatap isteyebilir. Yönetici karar verene kadar mevcut fırsat tamamen canlı kalır, değişim tek adımda yapılır — kimse muhatapsız kalmaz — ve ayrılan temsilciye yalnızca fırsatın devredildiği bildirilir, hakkında yazılanlar asla gösterilmez.',
+          },
+          activityReport: {
+            d: 'Satış temsilcileri ve adminler için rıza temelli müşteri adayı aktivite özetleri: girişler, sitede geçen süre, gezilen sayfalar ve tamamlanan görevler.',
+          },
+          menteeOwnProject: {
+            d: 'Bir müşteri adayı yalnızca projelere atanmaz — kendisi de proje başlatabilir. Portaldan açılan projenin sahibi onu açan kişidir: tüm alanları düzenler, yapılacaklarını yönetir. Kendi projesi gizli başlar; yani bir yönetici birini ekleyene ya da projeyi vitrine çıkarana kadar tek kişilik bir ekiptir — vitrindeyken sahibi katılma isteklerini onaylayarak ekibini büyütür.',
+          },
+          menteeInsights: {
+            d: 'Bir müşteri adayının satış temsilcisinin ve ekibin okuduğu etkinlik özetini artık kendisi de portaldaki kendi sayfasında okuyor: hedefler, toplantılar, etkileşimler, aşama değişimleri ve mesajlar; etkinlik takibi açıkken sitede geçen süre ve gezilen sayfalar. Başkalarıyla kıyaslama yok, puan yok ve asla ücretli bir özellik değil.',
+          },
+          publicProfiles: {
+            d: 'Müşteri adayları ve satış temsilcileri isterlerse kişisel veri içermeyen herkese açık bir profil sayfası açabilir — linki LinkedIn, WhatsApp veya Slack’te paylaşıldığında isim, rol, konum ve öne çıkan becerileri gösteren markalı bir karta dönüşür.',
+          },
+          interviewRequests: {
+            d: 'Hesaplar müşteri adaylarını iş talebi bazında kısa listeye alıp mülakat ister; ekip veya atanmış satış temsilcisi her talebi planlamadan önce değerlendirir.',
+          },
+          aiPackage: {
+            d: 'Müşteri adaylarına CV geri bildirimi ve mülakat hazırlığı, satış temsilcilerine etkileşim özeti, AI destekli atama ve yöneticilere değerlendirme yorumlarıyla haftalık rapor engellerindeki temalar — her tema arkasındaki satırlara bağlı. Hepsi rıza ve kota kapılı.',
+          },
+          matchQuality: {
+            d: 'Platformun yaptığı her satış temsilcisi önerisi, listede kaçıncı sırada gösterildiğiyle birlikte kaydediliyor; tek tıkla kapatma ise nedenini soruyor — yanlış alan, kapasite yok, dil, zaten atanmış. Analiz sayfası da her ekip sorumlusunun bir gün sorduğu soruyu yanıtlıyor: öneriler gerçekte ne sıklıkla kabul ediliyor ve ilk sıradaki temsilci cidden seçiliyor mu? Öneri yine sadece öneri kalıyor — kararı her zaman bir insan veriyor.',
+          },
+          selfServe: {
+            t: 'Self-servis müşteri adayı başvurusu',
+            d: 'Müşteri adayları kendileri kaydolur, onboarding’i tamamlar ve muhatap talep eder; adminler kuyruktan onaylar.',
+          },
+          outcomeComms: {
+            d: 'Bir fırsat bittiğinde portal, durumu sessizce değiştirmek yerine nerede olunduğunu ve bundan sonra ne yapılabileceğini yazar; temsilciye boş sayfa değil, düzenlemeye hazır bir mesaj verilir. Otomatik gönderim varsayılan kapalı — giden her red mesajını önce bir insan okur. Aradığını başka yerde bulan müşteri adayı ise başarısızlık sayılmaz, kendi metniyle karşılanır.',
+          },
+          joinRequests: {
+            d: 'Açık projeler, sahibinin tek tıkla onayladığı katılma talepleri alır; müşteri adayı, satış temsilcisi ve admin dahil herkesin, gelen kişiyi kimin getirdiğini kaydeden kişisel davet linki olur.',
+          },
+          todos: {
+            d: 'Bir kişinin yapması gereken her şey tek yerde: satış temsilcisinin verdikleri, projelerinden gelenler, üstlenebileceği sahipsiz proje hedefleri ve kendine yazdıkları — bitenler silinmez, arşivlenir. Ortak ve çok dilli listeden gelen madde ona bağlı kalır: metni bir kez düzenlemek, o maddeyi alan herkeste kendi dilinde güncellenmesini sağlar. Her maddeye bitiş tarihi verilebilir: tarihi en yakın olan önce, tarihsizler sonda görünür, gecikenler yalnızca renkle değil “Gecikti” yazısıyla işaretlenir ve temsilci ya da yönetici sorumlu olduğu herkesin listesini tek yerde okuyabilir.',
+          },
+          dualRole: {
+            d: 'Bir satış temsilcisi aynı zamanda müşteri adayı olabilir. Başkalarıyla ilgilenen kişinin kendisinin de bir muhataba ihtiyacı olabilir — bir temsilciye kendi temsilcisi atandığında, satış sayfalarının yanında müşteri adayı portalı da açılır ve kenar çubuğundaki görünüm düğmesiyle ikisi arasında geçilir. Yöneticiler bir fırsatın iki tarafına da herkesi koyabilir; kimse kendisiyle eşleştirilemez.',
+          },
+          weeklyReports: {
+            t: 'Haftalık müşteri adayı raporları',
+            d: 'Müşteri adayları haftalık rapor yazar, taslaklarını saklar ve günlüklerini yazdırır; temsilciler her gönderimi onaylar veya değişiklik ister. Eksik raporlar temsilcinin dikkat kuyruğuna ve haftalık hatırlatmaya yansır; koordinatörler dönem boyu uyum matrisi, tek tıkla hatırlatma, XLSX dışa aktarma ve müşteri adayı başına yazdırılabilir rapor defteri alır.',
+          },
+          newsletter: {
+            d: 'CV ve mülakat tavsiyelerini emojili, kısa sayılar hâlinde ulaştırır; İngilizce, Türkçe ve Almanca bir kez yazılır, her okuyucuya kendi dilinde gider. Elle ya da haftalık, iki haftalık, aylık programla gönderilir; satış temsilcileri aynı sayıda koçluk bakışını da görür, her gönderim kayda geçer ve tek dokunuşla abonelik bırakılır.',
+          },
+          mentorSelfApply: {
+            t: 'Self-servis satış temsilcisi başvurusu',
+            d: 'Herkes hesap açmadan satış temsilcisi olmak için başvurabilir; adminler kuyruktan inceler, incelemeye alır, onaylar veya reddeder; onay, temsilcinin hesabını otomatik olarak oluşturur veya yükseltir.',
+          },
+          offers: {
+            d: 'Bir müşteri adayının fırsat kartından üç adımda teklif oluşturun, önizleyin ve gönderin; müşteri adayı portalından kabul veya (nedeniyle) reddeder, kararı kalıcı olarak görünür kalır, süresi geçen teklifler kendiliğinden süresi doldu olur — her adım kaydedilir ve bildirilir. Yönetici teklif listesi hangi tekliflerin hâlâ beklediğini, hangilerinin bu hafta dolduğunu ve hangilerinin neden reddedildiğini yanıtlar.',
+          },
         },
       },
       pricing: {
@@ -1115,6 +1872,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroTitle: 'Kullanıcı başına tek fiyat, sürpriz yok',
         heroSubtitle: 'Satış ekipleri için kullanıcı başına faturalanan paketler. Gizli ek ücret yok — kendiniz çalıştırmak isterseniz kod açık kaynak.',
         discountsTitle: 'Şimdiden doğru olanlar',
+        freeTitle: 'Kullanıcı başına faturalama, sürpriz yok',
+        freeBody: 'Paketler satış ekibindeki kullanıcı başına faturalanır. Gizli ek ücret yok — her paket ve sınırları bu sayfada listelenir.',
+        neverMetered: {
+          messaging: 'Satış temsilcisi ve müşteri adayı arasındaki mesajlar',
+          portal: 'Müşteri adayı portalı',
+        },
+        planDesc: {
+          employer_free: 'Bir marka sayfası ve temsilci onaylı kısa listeye yanıt verme.',
+        },
+        meteringCounted: 'Sayılır: takvim ayı içinde herhangi bir etkinliği kayda geçmiş, ACTIVE durumdaki bir fırsat.',
+        meteringNeverCounted: 'Asla sayılmaz: satış temsilcileri ve müşteri adayları. Onlar ölçebileceğimiz bir birim değil.',
+        employerSubtitle: 'Ayrı bir cüzdan, farklı bir alıcı. Buradaki hiçbir şey bir ekibin ödediğini değiştirmez, bir hesabın ödediği hiçbir şey de müşteri adayı tarafına geçmez.',
+        faq1Q: 'Satış temsilcisi ya da müşteri adayı hiç ödeme yapar mı?',
+        faq1A: 'Hayır — ve bu sessizce değiştirebileceğimiz bir politika değil, çünkü onlar ölçü birimi değil. Satılacak bir temsilci koltuğu ya da müşteri adayı koltuğu yok.',
+        faq2A: 'ACTIVE durumda, bir satış temsilcisine atanmış bir müşteri adayı ve o takvim ayında en az bir kayıtlı etkinlik. Duraklattığınız bir fırsat sayılmaz; tamamlanan bir fırsat, tamamlandığı ay saymayı bırakır.',
+        ctaMenteeT: 'Satış temsilcisi istiyorum',
+        ctaMentorT: 'Müşteri adaylarıyla çalışmak istiyorum',
+        ctaMentorA: 'Satış temsilcisi olarak başvur',
       },
       bulkInvite: { roleMentee: 'Müşteri adayı', roleMentor: 'Satış temsilcisi' },
       assignMentor: {
@@ -1143,7 +1918,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
       },
       share: { title: '{product} ile paylaşıldı' },
-      publicProfile: { poweredBy: '{product}', mentor: 'Satış temsilcisi' },
+      publicProfile: {
+        poweredBy: '{product}',
+        mentor: 'Satış temsilcisi',
+        activeMentees: 'Aktif müşteri adayı sayısı',
+        evaluationTitle: 'Temsilci değerlendirmesi',
+        evaluationByMentor: 'temsilci',
+      },
       imprint: { intro: 'Bu {product} kurulumunu kim işletiyor ve kendisine nasıl ulaşılır.' },
       privacy: {
         intro: 'Müşteri adaylarını, hesapları ve fırsatları yönetmek için sağladığın bilgileri saklarız. Bu bildirim; neyi, neden işlediğimizi, kimin görebileceğini, ne kadar sakladığımızı ve haklarını açıklar (GDPR Md. 13–15).',
@@ -1199,6 +1980,266 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'Temsilci önerisinin ne kadar isabetli ya da ne kadar yanlı olduğunu ölçen bir değerlendirme yayımlamadık.',
         ],
       },
+      programTemplates: {
+        blockers: {
+          strandedRelations: 'Bazı müşteri adayları bu şablonda bulunmayan aşamalarda duruyor. Önce onları taşıyın veya tamamlayın — şimdi uygularsanız artık var olmayan bir aşamada kalırlar.',
+        },
+        items: {
+          canonical_pipeline: {
+            name: 'Standart yerleştirme hattı',
+          },
+          graduate_internship: {
+            name: 'Mezun programı',
+            desc: 'Başvuru, ön görüşme, ekiple eşleştirme, ara değerlendirmeli programın kendisi ve sonunda işe alım kararı. Sekiz aşama, hizmet süreleri ve iki zorunlu belge.',
+          },
+        },
+      },
+      certificate: {
+        title: 'Tamamlama belgesi',
+        signatureTitlePlaceholder: 'örn. Satış temsilcisi',
+        success: 'Sertifika oluşturuldu ve müşteri adayının belgelerine kaydedildi.',
+      },
+      matchFeedback: {
+        reportSubtitle: 'Son {n} aydaki temsilci önerileri.',
+        reportEmpty: 'Henüz kayıtlı temsilci önerisi yok.',
+      },
+      duplicates: {
+        mergeErrors: {
+          linked_by_mentorship: 'Bu iki kayıt bir fırsatla bağlı, yani aynı kişi değiller. Önce bunu çözün.',
+          active_mentor_conflict: 'İki kaydın da aktif bir temsilcisi var ({a} ve {b}). Önce bu iki fırsattan birini kapatın, sonra birleştirin — hangi temsilcinin gerçek olduğuna sizin yerinize karar vermeyiz.',
+        },
+      },
+      availability: {
+        subtitle: 'Müşteri adayı toplantıları için haftalık tekrarlayan saatlerin',
+        zoneUnset: 'Henüz bir saat dilimi seçmedin, bu yüzden bu saatler {zone} kabul ediliyor. Müşteri adaylarının doğru saati görmesi için kendi dilimini ayarla.',
+      },
+      apiDocs: {
+        candidatesHint: 'En fazla 200 müşteri adayını mevcut pipeline aşamasıyla döner.',
+      },
+      mentorAvailability: {
+        notAccepting: 'Müşteri adayı almıyor',
+      },
+      projects: {
+        subtitle: 'Projeler — hesap destekli veya ekip içi',
+        ownerMentor: 'Bir satış temsilcisi',
+        ownerMentee: 'Bir müşteri adayı',
+        members: 'üye',
+        showcaseSubtitle: 'Ekip ve hesap projeleri.',
+        noPublicHint: 'Bir projeye katılmak mı istiyorsun? Satış temsilcine katılabileceğin projeleri sor.',
+        manageOwners: 'Owner ve temsilcileri yönet',
+        roleMentorMember: 'Satış temsilcisi',
+        roleMentee: 'Müşteri adayı',
+        addMenteeMember: 'Müşteri adayı ekle (rolüyle)',
+        noMenteesToAdd: 'Eklenecek müşteri adayı yok.',
+      },
+      weeklyReports: {
+        mentorComment: 'Temsilci yorumu',
+        commentPlaceholder: 'Müşteri adayı için geri bildirim ekle...',
+        printDiary: 'Etkinlik günlüğünü yazdır',
+      },
+      meetings: {
+        topics: [
+          'Haftalık görüşme',
+          'İlerleme değerlendirmesi',
+          'Teknik demo',
+          'İhtiyaç analizi',
+          'Teklif sunumu',
+          'Geri bildirim görüşmesi',
+        ],
+        scheduledCount: '{n} müşteri adayına davet gönderildi.',
+      },
+      messageTemplateAdmin: {
+        subtitle: 'Satış temsilcilerinin tekrar tekrar yazdığı yanıtlar. Bir kez yaz, ihtiyacın olan dillerde — temsilci kendi dilinde ekler.',
+        newTemplateHint: 'En az bir dili doldur. Temsilci yanıtı kendi dilinde alır, o dil yoksa İngilizcesine düşer.',
+      },
+      orphanApplicants: {
+        subtitle: 'Genel başvuru bağlantısının açtığı, satış temsilcisinin reddettiği ve başka hiçbir yaşam belirtisi göstermeyen hesaplar. Bu hesaplara giriş yapılamaz ve sahipleri yoktur; karardan {grace} gün sonra otomatik olarak anonimleştirilirler. Temizlik hangi hesapları alacaksa önce burada listelenir.',
+      },
+      changeMentor: {
+        action: 'Temsilciyi değiştir',
+        title: 'Temsilciyi değiştir',
+        context: 'Müşteri adayı: {mentee} · mevcut temsilci: {mentor}',
+        hint: 'Tek adım, tek kayıt. Bu fırsata henüz hiçbir şey işlenmemişse temsilci yerinde düzeltilir. Geçmişi varsa fırsat “temsilci değişti” olarak kapatılır — asla “tamamlandı” olarak değil — ve yenisi aynı pipeline aşamasından devam eder. Notlar, kayıtlar ve mesajlar yazıldıkları fırsatta kalır.',
+        newMentor: 'Yeni temsilci',
+        selectNewMentor: 'Yeni temsilciyi seç…',
+        privacy: 'Gerekçe ve not ekip için kaydedilir — not yalnızca admin denetim kaydında durur. Uygulamada iki temsilciye de gösterilmez; giden temsilciye sadece fırsatın sona erdiği söylenir.',
+        submit: 'Temsilciyi değiştir',
+        failed: 'Temsilci değiştirilemedi.',
+        sameMentor: 'Bu kişi zaten bu müşteri adayının temsilcisi.',
+        inactive: 'Bu fırsat artık aktif değil — sayfayı yenile.',
+        transferredResult: '{mentee}, aynı pipeline aşamasında {mentor} kişisine devredildi. Önceki fırsat “temsilci değişti” olarak kapandı ve geçmişini koruyor.',
+        reasons: {
+          mentor_unavailable: 'Temsilci müsait değil',
+          changed_goals: 'Müşteri adayının ihtiyaçları değişti',
+          mentee_request: 'Müşteri adayı değişiklik istedi',
+        },
+        alreadyMentoredOffer: 'Bu kişinin temsilcisi zaten {mentor}. İkinci bir fırsat açmak yerine temsilcisini değiştir.',
+        changeInstead: 'Bunun yerine temsilciyi değiştir',
+        badgeReassigned: 'Temsilci değişti',
+      },
+      mentorships: {
+        title: 'Fırsatlar',
+        subtitle: 'Müşteri adaylarını temsilcilere ve hesaplara ata',
+        assign: 'Fırsat ata',
+        searchPlaceholder: 'Temsilci, müşteri adayı veya hesaba göre ara...',
+        none: 'Henüz fırsat yok',
+        mentor: 'Temsilci',
+        mentee: 'Müşteri adayı',
+        selectMentor: 'Temsilci seç',
+        selectMentee: 'Müşteri adayı seç',
+        mentorMenteeRequired: 'Temsilci ve müşteri adayı zorunludur',
+        assignFailed: 'Fırsat oluşturulamadı.',
+        planLimitReached: 'Plan sınırına ulaşıldı: {plan} planında {usage}/{limit} aktif fırsat. Mevcut müşteri adayları etkilenmez — daha fazlası için planı yükseltin.',
+        invalidMentor: 'Bu temsilci atanamaz.',
+      },
+      company: {
+        mentor: 'Temsilci',
+        interestHint: 'Bu müşteri adayı hakkında ne düşündüğünü temsilciye bildir. Temsilciye bildirim gider.',
+        notePlaceholder: 'Temsilci için isteğe bağlı not...',
+        interestSaved: 'Kaydedildi — temsilciye bildirim gönderildi.',
+        verifiedTitle: 'Temsilci tarafından doğrulandı',
+        verifiedHint: 'Fırsat sürecinde doğrulanmış temsilci değerlendirmeleri ve proje çalışması.',
+        verifiedEvaluations: 'Temsilci değerlendirmeleri',
+      },
+      programSurvey: {
+        mentee: {
+          communication: 'Muhatabınla iletişim, ihtiyaç duyduğunda yeterli miydi?',
+        },
+        mentor: {
+          support: 'Ekipten aldığın destek, müşteri takibin için yeterli miydi?',
+          workloadSustainability: 'Müşteri takibi yükün sürdürülebilir bir tempoda mıydı?',
+        },
+      },
+      surveyTemplates: {
+        programPre: {
+          q: {
+            goalsMentor: 'Müşteri adayının bu süreçten en çok ne kazanmasını istiyorsun?',
+          },
+        },
+        pulse: {
+          q: {
+            mood: 'Fırsat şu anda nasıl gidiyor?',
+          },
+        },
+      },
+      relationTimeline: {
+        actorRole: {
+          MENTOR: 'temsilci',
+          MENTEE: 'müşteri adayı',
+        },
+      },
+      erasure: {
+        confirmDelete: 'Bu işlem hesabı ve fırsat geçmişini kalıcı olarak siler. Geri alınamaz.',
+      },
+      todos: {
+        subtitle: 'Listendeki her şey: muhatabının istedikleri, projelerinden gelenler ve kendine yazdıkların.',
+      },
+      mentorDirectory: {
+        title: 'Satış temsilcileri',
+        subtitle: 'Listelenmeyi seçen satış temsilcileri — seninle kimin çalışabileceğini gör',
+        acceptingOnly: 'Yeni müşteri adayı kabul edenler',
+        accepting: 'Müşteri adayı kabul ediyor',
+        requestMentor: 'Bu temsilciyi iste',
+        requestedMentorUnavailable: 'Bu temsilci artık müsait değil — aşağıdan başka bir temsilci seçebilirsin.',
+        requestedMentorPending: 'Yanıt bekleyen bir talebin zaten var, bu yüzden bu temsilci talebine eklenmedi.',
+        requestedMentorActiveMentorship: 'Zaten bir satış temsilcin var, bu yüzden bu talep başlatılmadı.',
+        empty: 'Henüz listelenen satış temsilcisi yok. Temsilciler onay verdikçe burada görünür.',
+        noMatches: 'Bu filtrelerle eşleşen satış temsilcisi yok.',
+        loadError: 'Satış temsilcisi dizini yüklenemedi',
+        showing: '{total} satış temsilcisinden {from}–{to} gösteriliyor',
+        partialNotice: 'Bu liste eksik olabilir — yalnızca listelenen ilk {cap} satış temsilcisi taranabildi. Herkesi gördüğünden emin olmak için filtreleri daralt.',
+        requestingMentor: '{name} adlı temsilciyi istiyorsun',
+      },
+      sourcePortal: {
+        title: 'Müşteri adaylarım',
+        subtitle: 'Yönlendirdiğin müşteri adaylarını gönder; bir satış temsilcisi onları alıp atayacak.',
+        addMentee: 'Müşteri adayı ekle',
+        submit: 'Müşteri adayı gönder',
+        added: 'Müşteri adayı gönderildi',
+        myMentees: 'Gönderilen müşteri adayları',
+        none: 'Henüz müşteri adayı gönderilmedi',
+        assignedTo: 'Temsilci:',
+        pending: 'Temsilci bekliyor',
+      },
+      matchScore: {
+        dimensions: {
+          capacityHeadroom: 'Temsilci kapasitesi',
+        },
+        violations: {
+          capacityHeadroom: 'Temsilcinin boş kapasitesi kalmamış',
+          managerExclusion: 'Temsilci, bu müşteri adayının doğrudan yöneticisi',
+        },
+      },
+      demo: {
+        roles: {
+          mentor: 'Satış temsilcisi',
+          mentee: 'Müşteri adayı',
+        },
+      },
+      testimonials: {
+        admin: {
+          roles: {
+            mentor: 'satış temsilcisi',
+            mentee: 'müşteri adayı',
+          },
+        },
+      },
+      tags: {
+        notYourMentee: 'Yalnızca kendi müşteri adaylarını etiketleyebilirsin.',
+      },
+      releaseNotes: {
+        feedDescription: '{product}’deki yeni özellikler ve iyileştirmeler.',
+      },
+      newsletter: {
+        emailMentorTitle: 'Satış temsilcileri için',
+        audienceMentee: 'Müşteri adayları',
+        audienceMentor: 'Satış temsilcileri',
+        audienceBoth: 'Müşteri adayları ve satış temsilcileri',
+        audienceHint: 'Satış temsilcileri ayrıca "Satış temsilcileri için" bölümünü görür; müşteri adayları hiçbir zaman görmez.',
+        mentorNote: 'Satış temsilcileri için',
+        mentorNotePlaceholder: 'Bir satış temsilcisinin bu içerikle ne yapması gerektiği.',
+        mentorNoteHint: 'Yalnızca satış temsilcilerine, yalnızca temsilci veya ortak sayılarda gösterilir.',
+        previewAsMentee: 'Müşteri adayı',
+        previewAsMentor: 'Satış temsilcisi',
+        archiveMentorNote: 'Satış temsilcileri için',
+      },
+      modeSwitch: {
+        mentor: 'Satış temsilcisi',
+        mentee: 'Müşteri adayı',
+        mentorHint: 'Temsilci görünümü: yalnızca kendi takip ettiğin müşteri adayları.',
+        menteeHint: 'Müşteri adayı görünümü: kendi fırsatın — senin müşteri adayı olduğun taraf.',
+      },
+      menteeActivation: {
+        placeholderNote: 'Bu müşteri adayı e-posta adresi girilmeden eklendiği için geçici bir adresi var ve giriş yapamıyor. Gerçek adresini yazarak hesabı aktive edebilirsin — kayıt, etkileşim geçmişi ve aşama geçmişi korunur.',
+        noPasswordNote: 'Bu müşteri adayı henüz parola belirlemedi. Adres yanlışsa düzelt, sonra aktivasyon bağlantısını yeniden gönder.',
+        mailFailedHint: 'E-posta gönderilemedi. Bu bağlantıyı müşteri adayıyla doğrudan paylaş:',
+      },
+      onboarding: {
+        mentee: {
+          subtitle: 'Seni doğru muhatap ve tekliflerle buluşturmamıza yardımcı ol',
+        },
+        mentor: {
+          title: 'Satış Temsilcisi Profilini Oluştur',
+          subtitle: 'Müşteri adaylarının seni tanıması ve müsait olduğun zamanları görmesi için birkaç kısa adım',
+        },
+      },
+      stageClock: {
+        mentee: {
+          expectedBy: 'Muhatabın bir sonraki adımı {date} tarihine kadar atmayı planlıyor.',
+          reassure: 'Bekleme süresi aşamadan aşamaya değişir — durumu merak ediyorsan muhatabına sormaya çekinme.',
+        },
+      },
+      evaluation: {
+        titleMentor: 'Satış temsilcini değerlendir',
+        onMentor: 'Satış temsilcisi için',
+      },
+      profileForm: {
+        mentorCapacity: 'Müşteri adayı kapasitesi',
+        mentorCapacityHint: 'Aynı anda kaç müşteri adayı alabilirsin',
+      },
+      aiSummary: {
+        consentRequired: 'Müşteri adayı AI özetlerine izin vermemiş. Hesap → Gizlilik ve onay bölümünden açabilir.',
+      },
     },
     de: {
       documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
@@ -1220,6 +2261,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
             mentorHours: 'Bei 0 lassen, sofern Ihre Organisation gespendete Vertriebszeit nicht als Kosten zählt.',
           },
         },
+        categories: {
+          MENTOR_TIME: 'Zeit der Vertriebsmitarbeiter',
+        },
+        steps: {
+          mentorTimeCost: 'Nicht abgerechnete Zeit der Vertriebsmitarbeiter',
+        },
+        assumptions: {
+          mentorHourValue: 'Wert einer Vertriebsstunde',
+        },
       },
       seo: {
         homeTitle: '{product} — Marketing-CRM',
@@ -1229,14 +2279,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
       },
-      goals: { visibilityPair: 'Vertriebsmitarbeiter und Lead', visibilityProgram: 'Vertriebsmitarbeiter, Lead und Team' },
+      goals: {
+        visibilityPair: 'Vertriebsmitarbeiter und Lead',
+        visibilityProgram: 'Vertriebsmitarbeiter, Lead und Team',
+        byMentor: 'Vom Vertriebsmitarbeiter erstellt',
+        byMentee: 'Vom Lead erstellt',
+      },
       surveyResults: {
         byMentor: 'Nach Vertriebsmitarbeiter',
         noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
         role_MENTEE: 'Leads',
         role_MENTOR: 'Vertriebsmitarbeiter',
       },
-      nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
+      nav: {
+        candidates: 'Leads',
+        companyInquiries: 'Demo-Anfragen',
+        myCompanies: 'Meine Accounts',
+        mentorDirectory: 'Vertriebsmitarbeiter',
+        mentors: 'Vertriebsmitarbeiter',
+        mentorships: 'Deals',
+        myMentees: 'Meine Leads',
+        inviteMentee: 'Lead einladen',
+        menteeActivity: 'Lead-Aktivität',
+        mentorApplications: 'Bewerbungen als Vertriebsmitarbeiter',
+      },
       invite: {
         subtitle: 'Vertriebsmitarbeiter und Leads einladen',
         connectMentor: 'Diesem Vertriebsmitarbeiter zuordnen (optional)',
@@ -1264,6 +2330,21 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'role_changed.toMentee': 'Ein Administrator hat dein Konto in ein Lead-Konto umgewandelt.',
           'outcome.needsMessage': '{name} hat eine Ergebnisphase erreicht. Schreib eine Nachricht.',
           'duplicate.suspected': 'Ein neuer Eintrag könnte ein Duplikat eines vorhandenen Leads sein: {name}.',
+          'outcome.placedElsewhere': 'Glückwunsch zu deinem nächsten Schritt! Deine Reise hier ist als abgeschlossen markiert — die Tür bleibt offen, wann immer du uns brauchst.',
+          'goal.assigned': 'Zu deinem Deal wurde ein neues Ziel hinzugefügt: "{title}".',
+          'evaluation.added': 'Zu deinem Deal wurde eine neue Bewertung hinzugefügt.',
+          'mentorship_request.new': 'Neue Kontaktanfrage von {from}.',
+          'mentorship_request.newGeneric': 'Eine neue Kontaktanfrage ist eingegangen.',
+          'mentorship_request.approved': 'Deine Kontaktanfrage wurde genehmigt — sag deiner Ansprechperson Hallo!',
+          'mentorship_request.rejected': 'Deine Kontaktanfrage wurde geprüft, konnte aber derzeit nicht genehmigt werden.',
+          'mentorship_request.rematch': '{from} hat um eine andere Ansprechperson gebeten.',
+          'mentorship_request.rematchGeneric': 'Ein Lead hat um eine andere Ansprechperson gebeten.',
+          'mentorship_request.rematchApproved': 'Du hast eine neue Ansprechperson — deine bisherige betreut dich nicht mehr.',
+          'mentorship_request.rematchRejected': 'Deine Anfrage nach einer anderen Ansprechperson wurde geprüft. Deine aktuelle Ansprechperson bleibt vorerst bei dir.',
+          'mentorship_request.rematchMentorNotice': 'Dein Deal mit {menteeName} ist beendet — die Person wird von einem anderen Vertriebsmitarbeiter weiter betreut.',
+          'application.received': '{name} hat sich als dein Lead angemeldet.',
+          'mentor_application.new': '{name} hat sich als Vertriebsmitarbeiter beworben.',
+          'mentor_application.approved': 'Deine Bewerbung als Vertriebsmitarbeiter wurde angenommen — willkommen an Bord!',
         },
         menteeAssignedEmail: {
           subject: 'Neuer Lead zugewiesen: {mentee}',
@@ -1292,6 +2373,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           trackingNote: 'Verweildauer und Seitenaufrufe werden nur für Leads angezeigt, die das Aktivitäts-Tracking aktiviert haben.',
           columns: { mentee: 'Lead' },
         },
+        types: {
+          mentorship_request: 'Kontaktanfrage',
+          mentor_application: 'Bewerbung als Vertriebsmitarbeiter',
+        },
+        rematchRequestedEmail: {
+          subject: 'Neue Ansprechperson angefragt: {name}',
+          heading: 'Neue Ansprechperson angefragt',
+          body: '{name} hat um eine andere Ansprechperson gebeten. Der aktuelle Deal bleibt aktiv, bis Sie entscheiden.',
+          privacy: 'Die angegebene Begründung liegt in der Admin-Warteschlange und wird dem aktuellen Vertriebsmitarbeiter nicht mitgeteilt.',
+        },
+        rematchMentorEmail: {
+          subject: 'Dein Deal mit {name} ist beendet',
+          heading: 'Ein Deal ist beendet',
+          body: 'Dein Deal mit {name} ist beendet. Die Person wird von einem anderen Vertriebsmitarbeiter weiter betreut.',
+          thanks: 'Danke für deine Zeit und deine Sorgfalt. Deine anderen Leads sind davon nicht betroffen.',
+        },
       },
       usersAdmin: {
         mentor: 'Vertriebsmitarbeiter',
@@ -1307,6 +2404,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         ssoRoleMappingsHint: 'Wer den Wert im Claim hat, erhält die Rolle. Die höchste Priorität gewinnt; bei Gleichstand die niedrigere Rolle. Ohne Treffer: Lead. Admin kann noch nicht zugeordnet werden.',
         ssoRoleNone: 'Noch keine Zuordnung — jeder SSO-Nutzer startet als Lead.',
         ssoRoleSyncHint: 'Aus: Bestehende Nutzer behalten ihre Rolle. An: Die Rolle folgt bei jeder Anmeldung der Zuordnung (nie für einen Admin; eine Anmeldung ohne Treffer ändert nichts).',
+        relations: 'Deals',
       },
       candidateDetail: {
         mentorship: 'Zuständig',
@@ -1337,6 +2435,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       forCompanies: {
         submit: 'Demo anfragen',
         successBody: 'Ihre Anfrage hat unser Vertriebsteam erreicht. Wir melden uns innerhalb von zwei Werktagen, um einen Termin für die Demo zu finden.',
+        pilotBody: 'Wir richten das Konto ein, verbinden die Leads, die Sie bereits haben, und löschen Ihre Daten an dem Tag, an dem Sie es wünschen. Was es kostet, ist veröffentlicht und nicht verhandelt — Sie können die Zahl prüfen, bevor Ihnen jemand eine nennt.',
       },
       companyInquiriesAdmin: {
         title: 'Demo-Anfragen',
@@ -1354,6 +2453,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       publicNav: {
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
+        becomeMentor: 'Vertriebsmitarbeiter werden',
       },
       auth: {
         signinSubtitle: 'Melden Sie sich bei Ihrem {product}-Konto an',
@@ -1361,6 +2461,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         tokenHint: 'Fügen Sie den Einladungscode aus Ihrer E-Mail ein. Konten in diesem Produkt werden per Einladung angelegt.',
         dataSharingTitle: 'Wie Ihre Daten geteilt werden',
         dataSharingBody: 'Je nach Rolle können die von Ihnen hinzugefügten Angaben für andere sichtbar sein: Angaben und Aktivitätsverlauf eines Leads sehen der zuständige Vertriebsmitarbeiter und Administratoren. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Einzelheiten im Datenschutzhinweis.',
+        wantMentor: 'Möchtest du Vertriebsmitarbeiter werden?',
+        becomeMentorPrompt: 'Möchtest du stattdessen Vertriebsmitarbeiter werden?',
       },
       dashboard: {
         subtitle: 'Überblick über Ihre Marketing-Pipeline',
@@ -1508,7 +2610,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
       },
       personCard: { roleMentor: 'Vertriebsmitarbeiter', roleMentee: 'Lead' },
-      panel: { sales: 'Vertrieb' },
+      panel: {
+        sales: 'Vertrieb',
+        mentor: 'Vertriebsportal',
+        mentee: 'Lead-Portal',
+      },
       sales: {
         dashboard: { title: 'Deine Vertriebs-Pipeline', subtitle: 'Deine eigenen Leads und Accounts und was heute ansteht.' },
         stats: { open: 'Offene Leads', accounts: 'Accounts' },
@@ -1532,6 +2638,25 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         boardSubtitle: 'Deine Leads nach Phase — ziehe eine Karte oder nutze ihr Phasenmenü, um sie zu verschieben',
         menteeBoardSearchPlaceholder: 'Lead suchen...',
         noMatchingMentees: 'Keine Leads passen zu diesem Filter',
+        dashSubtitle: 'Hier ist ein Überblick über deine Leads und Interaktionen',
+        activeMentees: 'Aktive Leads',
+        myMentees: 'Meine Leads',
+        currentRelationships: 'Aktuelle aktive Deals',
+        noActiveMentees: 'Keine aktiven Leads zugewiesen',
+        exampleLogNote: 'Fortschritt beim aktuellen Angebot und nächste Schritte für den Deal besprochen.',
+        goToMenteeToLog: 'Gehe zur Detailseite eines Leads, um eine Interaktion zu protokollieren',
+        interactionSearchPlaceholder: 'Betreff, Notizen oder Lead suchen...',
+        menteeDormantMatchOne: '1 inaktiver Lead entspricht diesem Filter und bleibt ausgeblendet.',
+        menteeDormantMatchMany: '{n} inaktive Leads entsprechen diesem Filter und bleiben ausgeblendet.',
+        menteesSubtitle: 'Alle deine Deals',
+        noMenteesAssigned: 'Noch keine Leads zugewiesen',
+        noMenteesHint: 'Füge deinen ersten Lead hinzu oder teile deinen Bewerbungslink.',
+        interactionLogsSubtitle: 'Alle deine protokollierten Interaktionen mit Leads',
+        backToMentees: 'Zurück zu den Leads',
+        addMentee: 'Lead hinzufügen',
+        newMentee: 'Neuer Lead',
+        menteeCreated: 'Lead erstellt',
+        setPwLinkHint: 'Wir haben dem Lead einen Link gesendet, um sein Passwort zu setzen und sein Konto zu aktivieren. Falls er nicht ankommt, teile diesen Link direkt mit ihm:',
       },
       emptyStates: {
         board: {
@@ -1540,6 +2665,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         companies: {
           adminBody: 'Unternehmen sind die Accounts, an die du verkaufst: sobald eines existiert, kannst du ihm seinen Bedarf, Ansprechpersonen und die offenen Deals zuordnen.',
+        },
+        candidates: {
+          adminBody: 'Wer sich anmeldet oder eine Einladung annimmt, landet in dieser Liste — mit Vertriebsmitarbeiter, Account und Phase. Sende die erste Einladung, dann füllt sich die Liste von selbst.',
+        },
+        requisitions: {
+          companyBody: 'Eine Anforderung sagt den Vertriebsmitarbeitern, für welche Stelle ihr einstellt, wie viele Leute ihr braucht und welche Skills zählen. Lege eine an, damit euch passende Personen vorgeschlagen werden.',
+        },
+        interviewRequests: {
+          mentorBody: 'Wenn ein Account einen deiner Leads treffen möchte, erscheint die Anfrage hier samt Terminvorschlägen, und du vereinbarst das Treffen von dort aus.',
+        },
+        weeklyReports: {
+          menteeBody: 'Ein Wochenbericht ist eine kurze Notiz darüber, was du getan hast, wie lange es gedauert hat und was dich blockiert. Schreibe den ersten im Formular oben, damit deine Ansprechperson ihn kommentieren kann.',
+          mentorBody: 'Wochenberichte erscheinen hier, sobald dein Lead sie einreicht — die neuesten zuerst — und du kannst freigeben oder Änderungen erbitten. Bisher wurde nichts eingereicht.',
+        },
+        documents: {
+          mentorBody: 'Dein Lead hat noch nichts hochgeladen. Verträge, Bestellformulare und Zertifikate erscheinen hier, sobald sie kommen, samt Versionshistorie.',
+          menteeBody: 'Hier liegen deine Verträge, Bestellformulare und Zertifikate. Lade unten das erste hoch, dann sieht deine Ansprechperson es sofort.',
+        },
+        portalGoals: {
+          title: 'Noch keine Ansprechperson zugewiesen',
+          menteeBody: 'Ziele, Bewertungen und Wochenberichte gehören zu einem Deal und öffnen sich, sobald ein Admin dir eine Ansprechperson zuweist. Ein vollständiges Profil beschleunigt das.',
+        },
+        todos: {
+          body: 'Diese Liste hält zusammen, was dir deine Ansprechperson gegeben hat, was deine Projekte brauchen und was du selbst notierst. Schreibe die erste Zeile in das Feld oben.',
         },
       },
       landing: {
@@ -1586,13 +2735,83 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         trans5T: 'Einwilligung als Mechanismus',
         trans5D: 'Kundendaten sieht niemand außerhalb Ihres Teams; jede Einwilligung wird mit Version erfasst und ist jederzeit widerrufbar. E-Mail und Telefon erscheinen auf keiner öffentlichen Seite.',
         transBeta: 'Und der ehrliche Teil: Das Marketing-Produkt ist im Early Access, von einem kleinen Team gebaut, noch ohne Kundenstimmen. Wir möchten, dass Sie das hier lesen und nicht später erfahren.',
-        founderBody: '{product} wird von {name} gebaut und gepflegt — eine Person, offen, auf demselben Kern, der eine Mentoring-Plattform für Hunderte betreibt. Fragen und Kritik sind willkommen.',
+        founderBody: '{product} wird von {name} gebaut und gepflegt — eine Person, offen, auf demselben Kern, der bereits eine Schwesterplattform für Hunderte betreibt. Fragen und Kritik sind willkommen.',
         badge: 'Marketing-CRM · Leads verfolgen · Abschlüsse erzielen',
         heroTitle: 'Jeder Lead, jedes Gespräch, jeder Abschluss —',
         heroAccent: 'in einer Pipeline.',
         heroSubtitle: 'Verfolgen Sie Ihre Kunden vom ersten Kontakt bis zum Abschluss. Sehen Sie auf einen Blick, wo jeder Deal steht, wer ihn zuletzt bearbeitet hat und was als Nächstes zu tun ist — statt es aus einer Tabelle zusammenzusuchen.',
         featuresTitle: 'Alles, was Ihr Team zum Abschluss braucht',
         featuresSubtitle: 'Entwickelt, um Kunden zu verfolgen und Deals voranzutreiben.',
+        becomeMentor: 'Möchten Sie als Vertriebsmitarbeiter mitmachen?',
+        fMentorT: 'Selbstverwaltung für Mitarbeiter',
+        fMentorD: 'Vertriebsmitarbeiter fügen ihre eigenen Leads hinzu, protokollieren Meetings, Feedback, E-Mails, Anrufe und WhatsApp-Chats, führen private Notizen und sehen eine „Braucht Aufmerksamkeit“-Liste auf ihrem Dashboard — Admins können das ebenfalls.',
+        fGrowthD: 'Deal-Projekte mit Aufgabenlisten und Fortschritt, persönliche Ziele, strukturierte Zwischen- und Abschlussbewertungen in beide Richtungen und ein integriertes Q&A zwischen Lead und Vertriebsmitarbeiter.',
+        roleAdminD: 'Volle Kontrolle — Benutzer einladen; Accounts, Kohorten und Quellen verwalten; Deals zuweisen, Ankündigungen senden, Identität wechseln sowie Analysen & Protokolle lesen.',
+        roleMentor: 'Vertriebsmitarbeiter',
+        roleMentorD: 'Eigene Leads, Interaktionsverlauf, Kanban-Board, Meetings, Verfügbarkeiten und E-Mails.',
+        roleMentee: 'Lead',
+        roleMenteeD: 'Vervollständigen Sie Ihr Profil, schreiben Sie Ihrem Vertriebsmitarbeiter, laden Sie Dokumente hoch, nutzen Sie Dokumentvorlagen und verfolgen Sie Ihre Ziele und Ihren Fortschritt.',
+        roleSourceD: 'Empfehlungspartner reichen Leads ein und verfolgen, wie sich ihre Empfehlungen entwickeln.',
+        heroModel: 'Ein Preis pro Benutzer — keine versteckten Zusatzkosten.',
+        freeCoreBody: 'Nachrichten, Termine, Ziele, Bewertungen und die gesamte Pipeline sind in jedem Plan enthalten — abgerechnet pro Nutzer, ohne versteckte Zusatzkosten.',
+        liveMentors: '{n} Vertriebsmitarbeiter',
+        liveWaiting: '{n} Leads warten auf einen Mitarbeiter',
+        wheelSubtitle: 'Das hier ist keine Adressliste und keine Kontaktdatenbank. Eine dritte Person — der Vertriebsmitarbeiter — kennt den Lead und steht mit seinem Namen dahinter.',
+        wheelMenteeT: 'Lead',
+        wheelMentorT: 'Vertriebsmitarbeiter',
+        wheelCompanyD: 'Bringt einen echten Bedarf — ein Projekt, einen Kauf. Es fehlt: ein verlässliches Signal.',
+        wheelArrow1: 'Der Lead bringt sich ein',
+        wheelArrow2: 'Der Mitarbeiter schreibt auf, was er gesehen hat',
+        wheelChain1: 'Der Account vertraut der Aufzeichnung, weil ein Mitarbeiter sie unterschrieben hat.',
+        wheelChain2: 'Der Mitarbeiter konnte unterschreiben, weil der Lead sich wirklich eingebracht hat.',
+        wheelChain3: 'Der Lead hat sich eingebracht, weil der Account eine echte Gelegenheit auf den Tisch gelegt hat.',
+        wheelNote: 'Wir stehen am Anfang: Die Lead- und die Mitarbeiterseite laufen heute, die Account-Seite ist Early Access mit von Hand angelegten Zugängen. Nichts davon ist eine Attrappe — aber der Kreislauf dreht sich noch nicht auf voller Drehzahl.',
+        pickMenteeT: 'Ich suche eine Lösung',
+        pickMenteeCta: 'Zum Lead-Abschnitt',
+        pickMentorCta: 'Zum Mitarbeiter-Abschnitt',
+        pickCompanyD: 'Lernen Sie den Lead über den Mitarbeiter kennen, der monatelang mit ihm gearbeitet hat.',
+        audMenteeSubtitle: 'Ein Vertriebsmitarbeiter, der Sie kennt, ein echtes Angebot zum Durcharbeiten und eine Aufzeichnung, die beim Account ankommt, bevor Sie sich wiederholen müssen.',
+        audMentee1T: 'Wir ordnen Ihnen einen Vertriebsmitarbeiter zu — Sie füllen kein Formular aus und warten.',
+        audMentee1D: 'Wir laden Vertriebsmitarbeiter einzeln ein; nicht jeder wird einer. Sie sagen uns, was Sie suchen, und wir ordnen jemanden zu, der Ihren Bereich kennt. Sobald die Zuordnung steht, schreiben Sie in der App, bitten um ein Gespräch und stellen Ihre Frage, ohne auf einen Termin zu warten. Ein Mitarbeiterverzeichnis gibt es noch nicht: Heute suchen Sie Ihren Mitarbeiter nicht selbst aus, die Zuordnung machen wir. Das Verzeichnis kommt.',
+        audMentee2D: 'Vom ersten Kontakt über das Angebot bis zum Abschluss sehen Sie bei jedem Öffnen, wo Sie stehen und was als Nächstes kommt. Alles, was Sie mit Ihrem Mitarbeiter besprochen haben, und jedes gesetzte Ziel bleibt festgehalten.',
+        audMentee3D: 'Ihr Mitarbeiter bewertet den Deal in den Feldern Passung, Kommunikation, Verlässlichkeit und Fortschritt und schreibt Kommentare — und Sie lesen jedes Wort davon mit. Jede erledigte Projektaufgabe wird einzeln festgehalten. Wenn Sie Ihr Profil mit einem Account teilen, geht diese Bewertung mit.',
+        audMentee5T: 'Sie können starten, bevor ein Mitarbeiter zugeordnet ist.',
+        audMentee6D: 'Machen Sie Ihr Profil öffentlich, bekommen Sie einen Link zum Teilen; getrennt davon erscheinen Sie, wenn Sie es erlauben, in der Suche von Accounts. Beides ist standardmäßig aus und jederzeit widerrufbar. Ihre E-Mail-Adresse, Ihre Telefonnummer und Ihr Geburtsdatum werden unter keinen Umständen angezeigt. Zeigt ein Account Interesse, geht das Signal zuerst an Ihren Mitarbeiter, und Ihr Mitarbeiter sagt Ihnen Bescheid.',
+        audMenteeProof: 'Wir sind neu und verstecken das nicht: Wir haben noch keine Erfolgsgeschichte veröffentlicht und erfinden auch keine. Was wir heute zeigen können: Wir laden Vertriebsmitarbeiter einzeln ein, kein Bildschirm auf der Lead-Seite verlangt Geld, wir zeigen deine Daten ohne deine Erlaubnis niemandem, und du kannst dein Konto samt Lebenslauf jederzeit löschen. Früh dabei zu sein hat einen konkreten Vorteil: Die Zahl der Leads pro Mitarbeiter wird nie wieder so niedrig sein.',
+        audMenteeCtaNote: 'Bestätige deine E-Mail-Adresse; wir prüfen deine Anmeldung und öffnen dein Konto. Deinen Lebenslauf brauchen wir später, für die Zuweisung deines Vertriebsmitarbeiters.',
+        audMentorSubtitle: 'Das Merken übernehmen wir.',
+        audMentorTitleAlt: 'Gerade warten {n} Leads auf einen Vertriebsmitarbeiter.',
+        audMentorProof: 'Das Produkt ist in der Beta: Mitarbeiter-Dashboard, Phasenverfolgung, Interaktionsprotokoll, Ziele, Meetings und Verfügbarkeiten laufen heute. Nutzerstimmen haben wir noch keine — Sie wären einer der ersten zwanzig Vertriebsmitarbeiter und entscheiden mit, was als Nächstes gebaut wird. Der Code ist vollständig offen; jeden Eintrag, den Sie machen, können Sie jederzeit exportieren.',
+        audMentorCtaNote: 'Du füllst ein kurzes Formular aus, wir öffnen dein Konto innerhalb von zwei Werktagen. Wir lassen die Seite der Vertriebsmitarbeiter bewusst langsam wachsen.',
+        audCompanyTitle: 'Lernen Sie den Lead nicht über seinen Lebenslauf kennen, sondern über den Vertriebsmitarbeiter, der monatelang mit ihm gearbeitet hat.',
+        audCompanySubtitle: 'Begleiten Sie Ihre Leads ab dem ersten Tag und treffen Sie die Entscheidung anhand einer über Monate gewachsenen schriftlichen Aufzeichnung statt anhand zweier Gespräche. Wir sind im Pilotbetrieb: Wir legen den Zugang an, wir berechnen nichts, es gibt keinen Vertrag.',
+        audCompany1T: 'Wo steht Ihr Lead, und wie läuft es?',
+        audCompany1D: 'Ein Bildschirm zeigt jeden mit Ihrem Account verknüpften Lead: in welcher Phase er ist, wer sein Vertriebsmitarbeiter ist und wie der Funnel aussieht. Gesprächsnotizen und Ziele führt der Mitarbeiter; Sie lesen den Status und die periodische Bewertung des Mitarbeiters. Schreibrechte haben Sie nicht — damit die Seite, die die Aufzeichnung führt, unabhängig bleibt.',
+        audCompany2D: 'Der Ablauf läuft auf einer Linie: Deal beginnt → Deal läuft → abschlussbereit → gewonnen. Sie lernen den Lead über Monate echter Arbeit kennen, nicht über eine Gesprächsleistung.',
+        audCompany3D: 'Der Lead hat bereits einen Vertriebsmitarbeiter: jemanden, der Ziele setzt, sich regelmäßig trifft, den Fortschritt aufschreibt und periodische Bewertungen erstellt.',
+        audCompany4T: 'Ein Lead-Zeugnis mit dem Namen eines Vertriebsmitarbeiters darunter.',
+        audCompany4D: 'Für jeden Lead, der mit Ihrem Account einen Deal beginnt, gibt sein Vertriebsmitarbeiter zweimal — zwischendurch und am Ende — Punkte und einen schriftlichen Kommentar zu vier Themen ab: Fachkompetenz, Kommunikation, Verlässlichkeit, Entwicklung. Daneben stehen die tatsächlich erledigten Projektaufgaben. Das Zeugnis ist das Ergebnis gemeinsamer Zeit: Der Pool ist der Ort des Kennenlernens, nicht der Entscheidung. Der Zugriff von Accounts auf Bewertungen ist eine Premium-Berechtigung und wird heute von Hand freigeschaltet.',
+        audCompanyProofCaption: 'Ein anonymisiertes Lead-Zeugnis: vier Kriterien, Zwischen- und Abschlussbewertung, Kommentar des Vertriebsmitarbeiters und die erledigten Projektaufgaben.',
+        how1D: 'Der Lead meldet sich an, oder ein Vertriebsmitarbeiter bringt ihn über seinen eigenen Link mit. Wir prüfen die Anmeldung und öffnen das Konto.',
+        how2D: 'Ein Vertriebsmitarbeiter wird zugewiesen, Gespräche und Ziele beginnen, und der Lead steigt in ein Projekt mit echten Aufgaben ein.',
+        how3D: 'Der Vertriebsmitarbeiter schreibt die Bewertung; mit Einwilligung des Leads geht sie samt erledigter Aufgaben an den Account.',
+        howInterest: 'Markiert ein Account einen Lead und schreibt eine Notiz, geht die Benachrichtigung an den betreuenden Vertriebsmitarbeiter, und der Mitarbeiter stellt den Kontakt her. Account-Nutzer können Leads in der App nicht schreiben.',
+        stories: {
+          roles: {
+            mentor: 'Vertriebsmitarbeiter',
+            mentee: 'Lead',
+          },
+        },
+        faqFilterMentee: 'Lead',
+        faqFilterMentor: 'Vertriebsmitarbeiter',
+        faqMentee1A: 'Wir öffnen dein Konto, nachdem du deine E-Mail-Adresse bestätigt hast — meist innerhalb eines Werktags. In der Zwischenzeit musst du nichts tun; wir suchen den passenden Vertriebsmitarbeiter für dich.',
+        faqMentee2A: 'Den Rhythmus bestimmst du mit deinem Vertriebsmitarbeiter; typisch sind ein bis zwei Gespräche im Monat und Fragen dazwischen. Mitarbeiter tragen ihre wöchentlichen Zeiten ein, du fragst einen Slot an. In stressigen Wochen zu pausieren ist völlig in Ordnung.',
+        faqMentee4A: 'Deinen Lebenslauf sehen nur dein Vertriebsmitarbeiter und — wenn du es erlaubst — der Account, mit dem du verknüpft bist. Das KI-Feedback ist eine separate Zustimmung; schaltest du sie nicht ein, geht dein Lebenslauf an kein Modell. Löschst du dein Konto, wird auch dein Lebenslauf gelöscht.',
+        faqMentee5A: 'Ein Lead zahlt nie etwas. Das Team, das Sie betreut, zahlt pro Nutzer — wir verkaufen ihm die Software, nicht Ihre Daten.',
+        faqMentor4Q: 'Ist nach außen sichtbar, dass ich hier Vertriebsmitarbeiter bin?',
+        faqMentor4A: 'Heute nicht. Mitarbeiterprofile und ein Verzeichnis sind geplant — wir bauen sie, bevor wir sie versprechen.',
+        faqCompany1A: 'Wir legen den Zugang an und verknüpfen Ihre bestehenden Leads selbst; wir schicken Ihnen keinen Link, bevor mindestens ein echter Lead im Panel steht.',
+        ctaMentor: 'Als Vertriebsmitarbeiter bewerben',
       },
       featureCatalog: {
         title: 'Alles, was {product} kann',
@@ -1604,6 +2823,64 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
           ownWorkspace: { t: 'Ein Arbeitsbereich für jeden Vertriebsmitarbeiter', d: 'Jeder Vertriebsmitarbeiter meldet sich in seinem eigenen Bestand an: seine Leads und Accounts, fällige Wiedervorlagen und Testphasen-Enden, sein eigenes Board — und das Gespräch, das er gerade geführt hat, gleich erfassen. Die Deals eines Kollegen oder einer anderen Organisation liegen nicht einen versteckten Reiter entfernt; auf dieser Seite gibt es sie schlicht nicht.' },
           inviteLinks: { d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },
+          pricing: {
+            d: 'Die Preisliste steht auf der Website und nicht in einem Angebot: Plan-Bänder, Admin-Plätze, die Überschreitungsgebühr und alle Zusatzpakete. Eine einzige Abrechnungseinheit — der aktive Deal — macht Vertriebsmitarbeiter und Leads strukturell nicht abrechenbar, und die Seite nennt auch, was in keinem Plan abgerechnet wird.',
+          },
+          rematch: {
+            t: 'Eine andere Ansprechperson anfragen',
+            d: 'Ein Lead, bei dem es mit dem Vertriebsmitarbeiter nicht passt, kann das Team mit Grundkategorie und optionaler Notiz um eine andere Ansprechperson bitten. Der laufende Deal bleibt vollständig aktiv, bis ein Admin entscheidet, der Wechsel erfolgt in einem Schritt — niemand steht ohne Ansprechperson da — und dem bisherigen Vertriebsmitarbeiter wird nur mitgeteilt, dass der Deal übergeben wurde, nie was über ihn geschrieben wurde.',
+          },
+          activityReport: {
+            d: 'Einwilligungsbasierte Lead-Aktivitätsübersichten für Vertriebsmitarbeiter und Admins: Logins, Verweildauer, besuchte Seiten und erledigte To-dos.',
+          },
+          menteeOwnProject: {
+            d: 'Ein Lead wird nicht nur Projekten zugewiesen — er kann selbst eines starten. Wer ein Projekt im Portal anlegt, besitzt es: alle Felder bearbeiten und die To-dos führen. Das eigene Projekt startet privat und bleibt ein Ein-Personen-Team, bis ein Admin jemanden hinzufügt oder es im Schaufenster veröffentlicht — danach wächst das Team über Beitrittsanfragen, die der Eigentümer genehmigt.',
+          },
+          menteeInsights: {
+            d: 'Die Aktivitätsübersicht, die Vertriebsmitarbeiter und Team über einen Lead lesen, liest der Lead jetzt auch selbst — auf einer eigenen Seite im Portal: Ziele, Meetings, Interaktionen, Phasenwechsel und Nachrichten, dazu Verweildauer und besuchte Seiten, solange das Aktivitäts-Tracking an ist. Kein Vergleich mit anderen, keine Punkte, und nie eine Bezahlfunktion.',
+          },
+          publicProfiles: {
+            d: 'Leads und Vertriebsmitarbeiter können sich für eine öffentliche Profilseite ohne personenbezogene Daten entscheiden — wird ihr Link auf LinkedIn, WhatsApp oder Slack geteilt, entfaltet er sich zu einer Karte mit Name, Rolle, Ort und Top-Skills.',
+          },
+          interviewRequests: {
+            d: 'Accounts setzen Leads je Stellenanforderung auf die Shortlist und fragen Interviews an; Team oder zuständiger Vertriebsmitarbeiter prüfen jede Anfrage vor der Planung.',
+          },
+          aiPackage: {
+            d: 'Lebenslauf-Feedback und Interviewvorbereitung für Leads, Interaktionszusammenfassungen für Vertriebsmitarbeiter, KI-gestützte Zuordnung und Themen aus Bewertungskommentaren und Wochenbericht-Hindernissen für Admins — jedes Thema mit den Zeilen dahinter verknüpft. Alles einwilligungs- und kontingentgesteuert.',
+          },
+          matchQuality: {
+            d: 'Jeder Vorschlag eines Vertriebsmitarbeiters durch die Plattform wird mit der Position erfasst, auf der er gezeigt wurde, und ein Verwerfen per Klick fragt nach dem Grund — falsches Fachgebiet, keine Kapazität, Sprache, bereits zugeordnet. Die Analyseseite beantwortet damit die Frage, die jede Teamleitung irgendwann stellt: Wie oft wird der Vorschlag tatsächlich übernommen, und wird der erstplatzierte Vertriebsmitarbeiter wirklich gewählt? Ein Vorschlag bleibt ein Vorschlag — entschieden wird immer von einem Menschen.',
+          },
+          selfServe: {
+            t: 'Self-Service-Lead-Aufnahme',
+            d: 'Leads registrieren sich selbst, durchlaufen das Onboarding und fragen eine Ansprechperson an; Admins genehmigen aus einer Warteschlange.',
+          },
+          outcomeComms: {
+            d: 'Endet ein Deal, sagt das Portal, wie es steht und was als Nächstes möglich ist, statt still einen Status zu ändern; Vertriebsmitarbeiter:innen bekommen eine fertige Nachricht zum Bearbeiten statt einer leeren Seite. Automatischer Versand ist standardmäßig aus — jede Absage liest ein Mensch, bevor sie rausgeht. Ein Lead, der anderswo fündig wird, gilt nicht als Misserfolg und bekommt einen eigenen Text.',
+          },
+          joinRequests: {
+            d: 'Öffentliche Projekte nehmen Beitrittsanfragen an, die der Owner mit einem Klick freigibt; und alle — Lead, Vertriebsmitarbeiter oder Admin — haben einen persönlichen Einladungslink, der festhält, wer jemanden gebracht hat.',
+          },
+          todos: {
+            d: 'Alles, was jemand zu tun hat, an einem Ort: was der Vertriebsmitarbeiter gegeben hat, was die Projekte brauchen, offene Projektziele zum Übernehmen und eigene Notizen — Erledigtes wird archiviert, nicht gelöscht. Eine Aufgabe aus dem gemeinsamen, mehrsprachigen Pool bleibt damit verknüpft: einmal neu formuliert, ändert sie sich für alle, die sie haben — jeweils in deren Sprache. Jede Aufgabe kann ein Fälligkeitsdatum tragen: das Nächstfällige steht oben, Undatiertes unten, Überfälliges wird als Text und nicht nur in Farbe ausgewiesen, und Vertriebsmitarbeiter und Admins lesen auf einer Liste, was ihre Leute offen haben.',
+          },
+          dualRole: {
+            d: 'Ein Vertriebsmitarbeiter kann auch Lead sein. Wer andere betreut, braucht manchmal selbst eine Ansprechperson — bekommt ein Vertriebsmitarbeiter einen eigenen, öffnet sich neben den Vertriebsseiten das Lead-Portal, mit einem Ansichtsschalter in der Seitenleiste zum Wechseln. Admins können beide Seiten eines Deals frei besetzen; niemand lässt sich mit sich selbst verknüpfen.',
+          },
+          weeklyReports: {
+            t: 'Wöchentliche Lead-Berichte',
+            d: 'Leads schreiben wöchentlich einen Bericht, speichern Entwürfe und drucken ihr Tagebuch; Vertriebsmitarbeiter genehmigen Einreichungen oder fordern Änderungen an. Fehlende Berichte erscheinen in der Aufmerksamkeit-Liste und in einer wöchentlichen Erinnerung; Koordinatoren erhalten eine Abgabe-Matrix für den ganzen Zeitraum mit Erinnerung per Klick, XLSX-Export und einem druckbaren Berichtsheft je Lead.',
+          },
+          newsletter: {
+            d: 'Kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt. Manuell oder wöchentlich, zweiwöchentlich, monatlich geplant; Vertriebsmitarbeiter erhalten zur gleichen Ausgabe die Coaching-Perspektive, jeder Versand wird archiviert, und ein Klick genügt zum Abmelden.',
+          },
+          mentorSelfApply: {
+            t: 'Self-Service-Bewerbungen als Vertriebsmitarbeiter',
+            d: 'Jeder kann sich ohne Konto als Vertriebsmitarbeiter bewerben; Admins prüfen die Warteschlange, starten die Prüfung, genehmigen oder lehnen ab — bei Genehmigung wird das Konto des Vertriebsmitarbeiters automatisch erstellt oder hochgestuft.',
+          },
+          offers: {
+            d: 'Erstelle, prüfe in der Vorschau und sende ein Angebot in drei Schritten direkt von der Deal-Karte eines Leads; der Lead nimmt im Portal an oder lehnt (mit Grund) ab, die Entscheidung bleibt dauerhaft sichtbar, und überfällige Angebote laufen von selbst ab — jeder Schritt wird protokolliert und gemeldet. Eine Angebotsübersicht für Admins beantwortet, was noch offen ist, was diese Woche abläuft und was warum abgelehnt wurde.',
+          },
         },
       },
       pricing: {
@@ -1611,6 +2888,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroTitle: 'Ein Preis pro Nutzer, keine Überraschungen',
         heroSubtitle: 'Pläne für Vertriebsteams, abgerechnet pro Nutzer. Keine versteckten Zusatzkosten — und wer es selbst betreiben will: Der Code ist Open Source.',
         discountsTitle: 'Was schon heute gilt',
+        freeTitle: 'Abrechnung pro Nutzer, keine Überraschungen',
+        freeBody: 'Die Pläne werden pro Nutzer im Vertriebsteam abgerechnet. Keine versteckten Zusatzkosten — jeder Plan und seine Grenzen stehen auf dieser Seite.',
+        neverMetered: {
+          messaging: 'Nachrichten zwischen Vertriebsmitarbeiter und Lead',
+          portal: 'Das Lead-Portal',
+        },
+        planDesc: {
+          employer_free: 'Eine Markenseite und die Antwort auf eine vom Vertriebsmitarbeiter freigegebene Shortlist.',
+        },
+        meteringCounted: 'Gezählt: ein Deal im Status ACTIVE mit irgendeiner protokollierten Aktivität im Kalendermonat.',
+        meteringNeverCounted: 'Nie gezählt: Vertriebsmitarbeiter und Leads. Sie sind keine Einheit, die wir abrechnen können.',
+        employerSubtitle: 'Eine eigene Geldbörse mit einem anderen Käufer. Nichts hiervon verändert, was ein Team zahlt, und nichts, was ein Account zahlt, erreicht die Lead-Seite.',
+        faq1Q: 'Zahlen Vertriebsmitarbeiter oder Leads jemals?',
+        faq1A: 'Nein — und das ist keine Richtlinie, die wir still ändern könnten, denn sie sind nicht die Abrechnungseinheit. Es gibt keinen Vertriebs- und keinen Lead-Platz zu verkaufen.',
+        faq2A: 'Ein Vertriebsmitarbeiter, einem Lead zugeordnet, im Status ACTIVE, mit mindestens einer protokollierten Aktivität in diesem Kalendermonat. Ein pausierter Deal wird nicht gezählt, ein abgeschlossener hört in dem Monat auf zu zählen, in dem er endet.',
+        ctaMenteeT: 'Ich möchte einen Vertriebsmitarbeiter',
+        ctaMentorT: 'Ich möchte Leads betreuen',
+        ctaMentorA: 'Als Vertriebsmitarbeiter bewerben',
       },
       bulkInvite: { roleMentee: 'Lead', roleMentor: 'Vertriebsmitarbeiter' },
       assignMentor: {
@@ -1639,7 +2934,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',
       },
       share: { title: 'Mit {product} geteilt' },
-      publicProfile: { poweredBy: '{product}', mentor: 'Vertriebsmitarbeiter' },
+      publicProfile: {
+        poweredBy: '{product}',
+        mentor: 'Vertriebsmitarbeiter',
+        activeMentees: 'Aktive Leads',
+        evaluationTitle: 'Bewertung des Vertriebsmitarbeiters',
+        evaluationByMentor: 'Vertriebsmitarbeiter:in',
+      },
       imprint: { intro: 'Wer diese {product}-Instanz betreibt und wie man ihn erreicht.' },
       privacy: {
         intro: 'Wir speichern die von dir bereitgestellten Informationen, um Leads, Accounts und Deals zu verwalten. Dieser Hinweis erklärt, was wir verarbeiten, warum, wer es sehen kann, wie lange wir es aufbewahren und welche Rechte du hast (DSGVO Art. 13–15).',
@@ -1694,6 +2995,261 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'Wir können keine Verarbeitungsregion zusichern — Anfragen werden dort verarbeitet, wo der Anbieter sie bedient.',
           'Wir haben keine Evaluation veröffentlicht, die misst, wie treffsicher oder wie verzerrt der Zuordnungsvorschlag ist.',
         ],
+      },
+      programTemplates: {
+        blockers: {
+          strandedRelations: 'Einige Leads stehen auf Stufen, die diese Vorlage nicht enthält. Verschieben oder beenden Sie diese zuerst — sonst bleiben sie auf einer Stufe, die es danach nicht mehr gibt.',
+        },
+        items: {
+          canonical_pipeline: {
+            name: 'Kanonische Vermittlungs-Pipeline',
+          },
+          graduate_internship: {
+            name: 'Absolventenprogramm',
+            desc: 'Bewerbung, Erstgespräch, Zuordnung zu einem Team, das Programm selbst mit Zwischenbewertung und am Ende die Einstellungsentscheidung. Acht Stufen, Fristen und zwei Pflichtdokumente.',
+          },
+        },
+      },
+      certificate: {
+        title: 'Abschlussdokument',
+        signatureTitlePlaceholder: 'z. B. Vertriebsmitarbeiter',
+        success: 'Zertifikat erstellt und in den Dokumenten des Leads gespeichert.',
+      },
+      matchFeedback: {
+        reportSubtitle: 'Vorschläge für Vertriebsmitarbeiter der letzten {n} Monate.',
+        reportEmpty: 'Noch keine Vorschläge für Vertriebsmitarbeiter erfasst.',
+      },
+      duplicates: {
+        mergeErrors: {
+          linked_by_mentorship: 'Diese beiden Datensätze sind über einen Deal verbunden, sind also nicht dieselbe Person. Kläre das zuerst.',
+          active_mentor_conflict: 'Beide Datensätze haben einen aktiven Vertriebsmitarbeiter ({a} und {b}). Schließe zuerst einen der beiden Deals, dann führe zusammen — wir entscheiden nicht für dich, welcher Vertriebsmitarbeiter der richtige ist.',
+        },
+      },
+      availability: {
+        subtitle: 'Deine wiederkehrenden wöchentlichen Zeitfenster für Lead-Meetings',
+        zoneUnset: 'Du hast noch keine Zeitzone gesetzt, daher gelten diese Zeiten als {zone}. Setze deine eigene, damit Leads die richtige Zeit sehen.',
+      },
+      apiDocs: {
+        candidatesHint: 'Gibt bis zu 200 Leads mit aktueller Pipeline-Phase zurück.',
+      },
+      projects: {
+        subtitle: 'Projekte — von Accounts unterstützt oder im Team',
+        ownerMentor: 'Ein Vertriebsmitarbeiter',
+        ownerMentee: 'Ein Lead',
+        members: 'Mitglieder',
+        showcaseSubtitle: 'Team- und Account-Projekte.',
+        noPublicHint: 'Möchtest du bei einem Projekt mitmachen? Frage deinen Vertriebsmitarbeiter nach Projekten, denen du beitreten kannst.',
+        manageOwners: 'Owner & Vertriebsmitarbeiter verwalten',
+        roleMentorMember: 'Vertriebsmitarbeiter',
+        roleMentee: 'Lead',
+        addMenteeMember: 'Lead hinzufügen (mit Rolle)',
+        noMenteesToAdd: 'Keine Leads zum Hinzufügen verfügbar.',
+      },
+      weeklyReports: {
+        mentorComment: 'Kommentar des Vertriebsmitarbeiters',
+        commentPlaceholder: 'Feedback für den Lead hinzufügen...',
+        printDiary: 'Aktivitätstagebuch drucken',
+      },
+      meetings: {
+        topics: [
+          'Wöchentliches Check-in',
+          'Fortschrittsüberprüfung',
+          'Technische Demo',
+          'Bedarfsanalyse',
+          'Angebotsbesprechung',
+          'Feedback-Gespräch',
+        ],
+        scheduledCount: 'Einladung an {n} Lead(s) gesendet.',
+      },
+      messageTemplateAdmin: {
+        subtitle: 'Die Antworten, die deine Vertriebsmitarbeiter immer wieder schreiben. Einmal verfassen, in den Sprachen, die du brauchst — eingefügt wird sie in der eigenen.',
+      },
+      orphanApplicants: {
+        subtitle: 'Konten, die der öffentliche Bewerbungslink angelegt hat, deren Vertriebsmitarbeiter abgelehnt hat und die kein weiteres Lebenszeichen zeigen. Sie können sich nie anmelden und gehören niemandem, deshalb werden sie {grace} Tage nach der Entscheidung automatisch anonymisiert. Was der Lauf erfassen würde, steht zuerst hier.',
+      },
+      changeMentor: {
+        action: 'Vertriebsmitarbeiter wechseln',
+        title: 'Vertriebsmitarbeiter wechseln',
+        context: 'Lead: {mentee} · aktueller Vertriebsmitarbeiter: {mentor}',
+        hint: 'Ein Schritt, ein Eintrag. Wurde zu diesem Deal noch nichts erfasst, wird der Vertriebsmitarbeiter direkt korrigiert. Gibt es eine Historie, wird der Deal als „Vertriebsmitarbeiter gewechselt“ geschlossen — nie als abgeschlossen — und der neue führt dieselbe Pipeline-Stufe fort. Notizen, Protokolle und Nachrichten bleiben bei dem Deal, unter dem sie entstanden sind.',
+        newMentor: 'Neuer Vertriebsmitarbeiter',
+        selectNewMentor: 'Neuen Vertriebsmitarbeiter auswählen…',
+        privacy: 'Grund und Notiz werden für das Team festgehalten — die Notiz nur im Admin-Audit-Log. In der App bekommt sie keiner der beiden Vertriebsmitarbeiter zu sehen; dem bisherigen wird nur mitgeteilt, dass der Deal beendet ist.',
+        submit: 'Vertriebsmitarbeiter wechseln',
+        failed: 'Der Vertriebsmitarbeiter konnte nicht gewechselt werden.',
+        sameMentor: 'Diese Person ist bereits der Vertriebsmitarbeiter dieses Leads.',
+        inactive: 'Dieser Deal ist nicht mehr aktiv — bitte die Seite neu laden.',
+        transferredResult: '{mentee} wurde auf derselben Pipeline-Stufe an {mentor} übergeben. Der bisherige Deal ist als „Vertriebsmitarbeiter gewechselt“ geschlossen und behält seine Historie.',
+        reasons: {
+          mentor_unavailable: 'Der Vertriebsmitarbeiter ist nicht verfügbar',
+          changed_goals: 'Der Bedarf des Leads hat sich geändert',
+          mentee_request: 'Der Lead hat um einen Wechsel gebeten',
+        },
+        alreadyMentoredOffer: '{mentor} betreut diese Person bereits. Wechsle den Vertriebsmitarbeiter, statt einen zweiten Deal anzulegen.',
+        changeInstead: 'Stattdessen Vertriebsmitarbeiter wechseln',
+        badgeReassigned: 'Vertriebsmitarbeiter gewechselt',
+      },
+      mentorships: {
+        title: 'Deals',
+        subtitle: 'Leads Vertriebsmitarbeitern und Accounts zuweisen',
+        assign: 'Deal zuweisen',
+        searchPlaceholder: 'Nach Vertriebsmitarbeiter, Lead oder Account suchen...',
+        none: 'Noch keine Deals',
+        mentor: 'Vertriebsmitarbeiter',
+        mentee: 'Lead',
+        selectMentor: 'Vertriebsmitarbeiter auswählen',
+        selectMentee: 'Lead auswählen',
+        mentorMenteeRequired: 'Vertriebsmitarbeiter und Lead sind erforderlich',
+        assignFailed: 'Der Deal konnte nicht erstellt werden.',
+        planLimitReached: 'Plangrenze erreicht: {usage}/{limit} aktive Deals im {plan}-Plan. Bestehende Leads sind nicht betroffen — für mehr bitte upgraden.',
+        invalidMentor: 'Dieser Vertriebsmitarbeiter kann nicht zugewiesen werden.',
+      },
+      company: {
+        mentor: 'Vertriebsmitarbeiter',
+        interestHint: 'Lass den Vertriebsmitarbeiter wissen, wie du über diesen Lead denkst. Er wird benachrichtigt.',
+        notePlaceholder: 'Optionale Notiz für den Vertriebsmitarbeiter...',
+        interestSaved: 'Gespeichert — der Vertriebsmitarbeiter wurde benachrichtigt.',
+        verifiedTitle: 'Vom Vertriebsmitarbeiter verifiziert',
+        verifiedHint: 'Bewertungen und Projektarbeit, verifiziert durch den Deal.',
+        verifiedEvaluations: 'Bewertungen des Vertriebsmitarbeiters',
+      },
+      programSurvey: {
+        mentee: {
+          communication: 'War die Kommunikation mit deiner Ansprechperson da, wenn du sie gebraucht hast?',
+        },
+        mentor: {
+          support: 'War die Unterstützung durch das Team für deine Lead-Betreuung ausreichend?',
+          workloadSustainability: 'War dein Aufwand für die Lead-Betreuung in einem nachhaltigen Tempo?',
+        },
+      },
+      surveyTemplates: {
+        programPre: {
+          q: {
+            goalsMentor: 'Was soll dein Lead aus diesem Prozess vor allem mitnehmen?',
+          },
+        },
+        pulse: {
+          q: {
+            mood: 'Wie läuft der Deal im Moment?',
+          },
+        },
+      },
+      relationTimeline: {
+        actorRole: {
+          MENTOR: 'vom Vertriebsmitarbeiter',
+          MENTEE: 'vom Lead',
+        },
+      },
+      erasure: {
+        confirmDelete: 'Dies löscht das Konto und seine Deal-Historie endgültig. Kann nicht rückgängig gemacht werden.',
+      },
+      todos: {
+        subtitle: 'Alles auf deiner Liste: was deine Ansprechperson erwartet, was deine Projekte brauchen und was du dir selbst notiert hast.',
+      },
+      mentorDirectory: {
+        title: 'Vertriebsmitarbeiter',
+        subtitle: 'Vertriebsmitarbeiter, die gelistet werden möchten — sieh, wer dich betreuen könnte',
+        acceptingOnly: 'Nimmt neue Leads an',
+        accepting: 'Nimmt Leads an',
+        requestMentor: 'Diesen Vertriebsmitarbeiter anfragen',
+        requestedMentorUnavailable: 'Dieser Vertriebsmitarbeiter ist nicht mehr verfügbar — wähle unten eine andere Person.',
+        requestedMentorPending: 'Du hast bereits eine offene Anfrage, deshalb wurde dieser Vertriebsmitarbeiter nicht hinzugefügt.',
+        requestedMentorActiveMentorship: 'Du hast bereits einen Vertriebsmitarbeiter, deshalb wurde diese Anfrage nicht gestartet.',
+        empty: 'Noch keine Vertriebsmitarbeiter gelistet. Sie erscheinen hier, sobald sie zustimmen.',
+        noMatches: 'Keine Vertriebsmitarbeiter passen zu diesen Filtern.',
+        loadError: 'Das Verzeichnis der Vertriebsmitarbeiter konnte nicht geladen werden',
+        showing: 'Zeige {from}–{to} von {total} Vertriebsmitarbeitern',
+        partialNotice: 'Diese Liste ist möglicherweise unvollständig — es konnten nur die ersten {cap} gelisteten Vertriebsmitarbeiter durchsucht werden. Grenze die Filter ein, um sicherzugehen, dass du alle siehst.',
+      },
+      sourcePortal: {
+        title: 'Meine Leads',
+        subtitle: 'Reiche von dir vermittelte Leads ein; ein Vertriebsmitarbeiter übernimmt und weist sie zu.',
+        addMentee: 'Lead hinzufügen',
+        submit: 'Lead einreichen',
+        added: 'Lead eingereicht',
+        myMentees: 'Eingereichte Leads',
+        none: 'Noch keine Leads eingereicht',
+        assignedTo: 'Vertriebsmitarbeiter:',
+        pending: 'Wartet auf einen Vertriebsmitarbeiter',
+      },
+      matchScore: {
+        dimensions: {
+          capacityHeadroom: 'Kapazität des Vertriebsmitarbeiters',
+        },
+        violations: {
+          capacityHeadroom: 'Der Vertriebsmitarbeiter hat keine freie Kapazität mehr',
+          managerExclusion: 'Der Vertriebsmitarbeiter ist die direkte Führungskraft dieses Leads',
+        },
+      },
+      demo: {
+        roles: {
+          mentor: 'Vertriebsmitarbeiter:in',
+          mentee: 'Lead',
+        },
+      },
+      testimonials: {
+        admin: {
+          roles: {
+            mentor: 'Vertriebsmitarbeiter',
+            mentee: 'Lead',
+          },
+        },
+      },
+      tags: {
+        notYourMentee: 'Du kannst nur deine eigenen Leads taggen.',
+      },
+      releaseNotes: {
+        feedDescription: 'Neue Funktionen und Verbesserungen in {product}.',
+      },
+      newsletter: {
+        emailMentorTitle: 'Für Vertriebsmitarbeiter',
+        audienceMentee: 'Leads',
+        audienceMentor: 'Vertriebsmitarbeiter',
+        audienceBoth: 'Leads und Vertriebsmitarbeiter',
+        audienceHint: 'Vertriebsmitarbeiter sehen zusätzlich den Block "Für Vertriebsmitarbeiter"; Leads nie.',
+        mentorNote: 'Für Vertriebsmitarbeiter',
+        mentorNotePlaceholder: 'Was ein Vertriebsmitarbeiter mit diesem Inhalt tun sollte.',
+        mentorNoteHint: 'Wird nur Vertriebsmitarbeitern gezeigt, und nur bei Vertriebs- oder gemeinsamen Ausgaben.',
+        previewAsMentee: 'Lead',
+        previewAsMentor: 'Vertriebsmitarbeiter',
+        archiveMentorNote: 'Für Vertriebsmitarbeiter',
+      },
+      modeSwitch: {
+        mentor: 'Vertriebsmitarbeiter',
+        mentee: 'Lead',
+        mentorHint: 'Vertriebs-Ansicht: nur die Leads, die du selbst betreust.',
+        menteeHint: 'Lead-Ansicht: dein eigener Deal — der, in dem du der Lead bist.',
+      },
+      menteeActivation: {
+        placeholderNote: 'Dieser Lead wurde ohne E-Mail-Adresse angelegt, hat deshalb eine Platzhalteradresse und kann sich nicht anmelden. Trage die echte Adresse ein, um das Konto zu aktivieren — der Datensatz, das Interaktionsprotokoll und die Phasenhistorie bleiben erhalten.',
+        noPasswordNote: 'Dieser Lead hat noch kein Passwort gesetzt. Korrigiere die Adresse, falls sie falsch ist, und sende den Aktivierungslink erneut.',
+        mailFailedHint: 'Die E-Mail konnte nicht gesendet werden. Teile diesen Link direkt mit dem Lead:',
+      },
+      onboarding: {
+        mentee: {
+          subtitle: 'Hilf uns, dich mit der passenden Ansprechperson und den richtigen Angeboten zusammenzubringen',
+        },
+        mentor: {
+          title: 'Richte dein Vertriebsprofil ein',
+          subtitle: 'Ein paar kurze Schritte, damit Leads wissen, wer du bist und wann du verfügbar bist',
+        },
+      },
+      stageClock: {
+        mentee: {
+          expectedBy: 'Deine Ansprechperson plant den nächsten Schritt bis zum {date}.',
+          reassure: 'Wartezeiten unterscheiden sich von Phase zu Phase — wenn du ein Update möchtest, frag einfach deine Ansprechperson.',
+        },
+      },
+      evaluation: {
+        titleMentor: 'Bewerte deinen Vertriebsmitarbeiter',
+        onMentor: 'Über Vertriebsmitarbeiter',
+      },
+      profileForm: {
+        mentorCapacity: 'Lead-Kapazität',
+        mentorCapacityHint: 'Wie viele Leads du gleichzeitig betreuen kannst',
+      },
+      aiSummary: {
+        consentRequired: 'Der Lead hat KI-Zusammenfassungen nicht erlaubt. Aktivierbar unter Konto → Datenschutz & Einwilligung.',
       },
     },
   },
