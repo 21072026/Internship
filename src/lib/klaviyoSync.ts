@@ -59,6 +59,8 @@ import { leadSourceName } from '@/lib/leadSourceName';
 import { findOrCreateSource } from '@/lib/leadSource';
 import { planFieldUpdates } from '@/lib/externalSyncPolicy';
 import { leadStandInEmail, CONTACT_IN_FUNNEL, type ManualAccountFields } from '@/lib/marketingImport';
+import { normalizeNameKey } from '@/lib/duplicateDetection';
+import { profileEmailHash } from '@/lib/externalProfileErasure';
 import { createMarketingAccountsBatch, type MarketingImportOwner } from '@/lib/marketingImportStore';
 import { runImport, emptyCounts, importErrorMessage, type ImportReport, type PlannedRow, type RowResult, type RowStatus } from '@/lib/importPreview';
 import { fetchListNames, fetchProfilesPage, testKlaviyoKey, type KlaviyoClientOptions } from '@/lib/klaviyoClient';
@@ -127,7 +129,7 @@ export async function klaviyoConnectionView(orgId: string) {
     select: VIEW_SELECT,
   });
   const linkedProfiles = row
-    ? await prisma.externalProfileLink.count({ where: { orgId, connectionId: row.id } })
+    ? await prisma.externalProfileLink.count({ where: { orgId, connectionId: row.id, erasedAt: null } })
     : 0;
   return {
     connected: Boolean(row),
@@ -139,11 +141,20 @@ export async function klaviyoConnectionView(orgId: string) {
 }
 
 /**
- * Save (or replace) the org's key, sealed. Replacing the key keeps the cursor
- * and the links — it is the same account with a rotated key. A key of a
- * DIFFERENT provider account is "disconnect, then connect" (docs).
+ * Save (or replace) the org's key, sealed. Re-saving the SAME key keeps the
+ * cursor. A DIFFERENT key starts the profile query over and makes it the quiet
+ * first import again: the key cannot tell us whether it belongs to the same
+ * provider account, and a key of another account must not inherit a cursor
+ * that would skip every one of its profiles older than it. For a rotated key
+ * of the same account that costs one re-read, in which every linked profile
+ * comes back UNCHANGED. The links stay either way.
  */
 export async function saveKlaviyoKey(orgId: string, key: string, actorId: string) {
+  const existing = await prisma.externalConnection.findFirst({
+    where: { orgId, provider: KLAVIYO_PROVIDER },
+    select: { sealedKey: true },
+  });
+  const keyChanged = !existing || open(existing.sealedKey, KLAVIYO_SECRET_PURPOSE) !== key;
   const data = {
     sealedKey: seal(key, KLAVIYO_SECRET_PURPOSE),
     keyLast4: keyLast4(key),
@@ -152,6 +163,16 @@ export async function saveKlaviyoKey(orgId: string, key: string, actorId: string
     failures: 0,
     nextAttemptAt: null,
     lastErrorCode: null,
+    ...(keyChanged
+      ? {
+          profilesSince: null,
+          profilesQueryStartedAt: null,
+          profilesPageCursor: null,
+          profilesErrorFloor: null,
+          profilesErrorHolds: null,
+          initialSyncDoneAt: null,
+        }
+      : {}),
   };
   return prisma.externalConnection.upsert({
     where: { orgId_provider: { orgId, provider: KLAVIYO_PROVIDER } },
@@ -247,6 +268,7 @@ function consentText(lead: KlaviyoLead): string | null {
 /** The provider-owned columns of a link, as written. */
 function linkData(plan: Pick<KlaviyoPlan, 'lead' | 'sourceName'>) {
   return {
+    emailHash: profileEmailHash(plan.lead.email),
     sourceName: plan.sourceName,
     consent: consentText(plan.lead),
     attributes: plan.lead.attributesText,
@@ -283,6 +305,22 @@ function accountFields(plan: KlaviyoPlan, startStage: string, name: string): Man
   };
 }
 
+/** Why a tombstoned profile is skipped (src/lib/externalProfileErasure.ts). */
+export const ERASED_REASON = 'the person this profile describes was erased';
+
+/**
+ * Whether a profile speaks for an existing account's contact. `named`: the
+ * account's contact address IS this profile's, so its record's lead is this
+ * person. `mayFill`: the profile may fill the account's empty contact columns —
+ * it is the contact, or the account names nobody (a scrubbed or a typed-in
+ * account), in which case this person becomes its contact.
+ */
+function isAccountContact(company: CompanyRow, email: string): { named: boolean; mayFill: boolean } {
+  const theirs = (company.contactEmail ?? '').trim().toLowerCase();
+  const named = Boolean(email && theirs && theirs === email);
+  return { named, mayFill: named || !theirs };
+}
+
 async function resolvePage(
   ctx: PageContext,
   rows: { row: number; key: string; value: KlaviyoLead }[],
@@ -295,7 +333,17 @@ async function resolvePage(
   const [links, leadsByEmail, companiesByEmail] = await Promise.all([
     prisma.externalProfileLink.findMany({
       where: { orgId, connectionId: ctx.connectionId, externalId: { in: ids } },
-      select: { id: true, externalId: true, companyId: true, leadUserId: true, sourceName: true, consent: true, attributes: true },
+      select: {
+        id: true,
+        externalId: true,
+        companyId: true,
+        leadUserId: true,
+        sourceName: true,
+        consent: true,
+        attributes: true,
+        emailHash: true,
+        erasedAt: true,
+      },
     }),
     emails.length
       ? prisma.user.findMany({
@@ -319,6 +367,8 @@ async function resolvePage(
   const resolved = rows.map((r) => {
     const lead = r.value;
     const link = linkById.get(lead.profileId) ?? null;
+    // The person was erased (src/lib/externalProfileErasure.ts): never again.
+    if (link?.erasedAt) return { r, link, companyId: null, leadUserId: null, via: 'erased' as const };
     if (link?.companyId) return { r, link, companyId: link.companyId, leadUserId: link.leadUserId, via: 'link' as const };
     if (lead.email) {
       const person = leadByEmail.get(leadStandInEmail(lead.email, orgId)) ?? leadByEmail.get(lead.email);
@@ -372,7 +422,7 @@ async function resolvePage(
       sourceName,
       companyId: x.companyId,
       leadUserId: null,
-      via: x.via,
+      via: x.via === 'erased' ? 'link' : x.via,
       linkId: x.link?.id ?? null,
       companyChanges: {},
       leadChanges: {},
@@ -385,20 +435,31 @@ async function resolvePage(
       continue;
     }
     seen.add(lead.profileId);
+    if (x.via === 'erased') {
+      plan.push({ row: x.r.row, key: x.r.key, status: 'SKIP', reason: ERASED_REASON, value: { ...base, via: 'link', companyId: null } });
+      continue;
+    }
 
     const company = x.companyId ? companyById.get(x.companyId) : undefined;
     if (!x.companyId || !company) {
       plan.push({ row: x.r.row, key: x.r.key, status: 'CREATE', value: { ...base, via: 'new', companyId: null } });
       continue;
     }
-    const leadUserId = x.leadUserId ?? leadOfCompany.get(company.id) ?? null;
+    // Is this profile the account's own contact? A second person of the same
+    // organization (linked by the account's NAME) is not: their profile must
+    // never fill the contact's line, nor the lead and first touch of the
+    // account's record — that lead is somebody else.
+    const contact = isAccountContact(company, lead.email);
+    const leadUserId = x.leadUserId ?? (contact.named ? (leadOfCompany.get(company.id) ?? null) : null);
     const leadUser = leadUserId ? leadById.get(leadUserId) : undefined;
 
-    const companyPlan = planFieldUpdates<Record<string, string | null>>(
-      { contactName: company.contactName, contactEmail: company.contactEmail, contactPhone: company.contactPhone, country: company.country },
-      incomingCompany(lead),
-      { authoritative: false },
-    );
+    const companyPlan = contact.mayFill
+      ? planFieldUpdates<Record<string, string | null>>(
+          { contactName: company.contactName, contactEmail: company.contactEmail, contactPhone: company.contactPhone, country: company.country },
+          incomingCompany(lead),
+          { authoritative: false },
+        )
+      : { changes: {}, changed: [] as string[], withheld: [] as string[] };
     const leadPlan = leadUser
       ? planFieldUpdates<Record<string, string | null>>(
           { phone: leadUser.phone, city: leadUser.city, country: leadUser.country },
@@ -414,7 +475,8 @@ async function resolvePage(
       (x.link.leadUserId ?? null) !== (leadUser?.id ?? null) ||
       x.link.sourceName !== wanted.sourceName ||
       x.link.consent !== wanted.consent ||
-      x.link.attributes !== wanted.attributes;
+      x.link.attributes !== wanted.attributes ||
+      (x.link.emailHash ?? null) !== wanted.emailHash;
 
     const changed = [
       ...companyPlan.changed.map((f) => `account.${f}`),
@@ -425,6 +487,7 @@ async function resolvePage(
     const withheld = [...companyPlan.withheld.map((f) => `account.${f}`), ...leadPlan.withheld.map((f) => `lead.${f}`)];
     const reasons = [
       x.via === 'lead' ? 'matched an existing lead by e-mail' : x.via === 'contact' ? 'matched an existing account by contact e-mail' : '',
+      contact.mayFill ? '' : 'another contact of this account',
       withheld.length ? `left alone: ${withheld.join(', ')}` : '',
     ].filter(Boolean);
     plan.push({
@@ -508,28 +571,52 @@ async function standInLeads(orgId: string, emails: string[]): Promise<Map<string
   return out;
 }
 
+/** At most this many writer passes per chunk; what is left is an ERROR, retried next query. */
+const MAX_CREATE_PASSES = 8;
+
 /**
  * The CREATE rows of one chunk, through the marketing import's create-only
- * writer, in at most two passes: a person-only account whose plain name is
- * already another account's is retried once under a disambiguated name.
+ * writer, pass by pass:
+ *   • ONE row per account name goes into a pass. The writer refuses a second
+ *     row for the same account in one file ("duplicate account in file"), and
+ *     two people of the same organization signing up between two syncs are
+ *     exactly that — so the second waits for the next pass, where the first
+ *     one's account exists and the name match links them to it.
+ *   • a person-only account whose plain name is already another contact's is
+ *     retried once under a disambiguated name (two "Jane Doe"s are two leads).
+ * Nothing is dropped silently: a row still unplaced after the last pass is an
+ * ERROR, which holds the cursor so the next query reads it again.
  */
 async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): Promise<RowResult<KlaviyoPlan>[]> {
+  type Pending = { row: PlannedRow<KlaviyoPlan>; name: string; disambiguated: boolean };
   const results = new Map<number, RowResult<KlaviyoPlan>>();
-  let pending = rows.map((row) => ({ row, name: row.value.lead.accountName }));
+  let pending: Pending[] = rows.map((row) => ({ row, name: row.value.lead.accountName, disambiguated: false }));
 
-  for (let pass = 0; pass < 2 && pending.length; pass++) {
+  for (let pass = 0; pass < MAX_CREATE_PASSES && pending.length; pass++) {
+    const batch: Pending[] = [];
+    const deferred: Pending[] = [];
+    const names = new Set<string>();
+    for (const p of pending) {
+      const k = normalizeNameKey(p.name);
+      if (names.has(k)) deferred.push(p);
+      else {
+        names.add(k);
+        batch.push(p);
+      }
+    }
     const report = await createMarketingAccountsBatch({
       owner: ctx.owner,
-      rows: pending.map((p) => accountFields(p.row.value, ctx.startStage, p.name)),
+      rows: batch.map((p) => accountFields(p.row.value, ctx.startStage, p.name)),
       createdBySource: KLAVIYO_CREATED_BY,
     });
     const leadIds = await standInLeads(
       ctx.orgId,
-      pending.map((p) => p.row.value.lead.email).filter(Boolean),
+      batch.map((p) => p.row.value.lead.email).filter(Boolean),
     );
-    const retry: typeof pending = [];
-    for (let i = 0; i < pending.length; i++) {
-      const { row } = pending[i];
+    const retry: Pending[] = [];
+    for (let i = 0; i < batch.length; i++) {
+      const item = batch[i];
+      const { row } = item;
       const plan = row.value;
       const outcome = report.rows.find((r) => r.row === i + 1);
       const leadUserId = plan.lead.email ? (leadIds.get(plan.lead.email) ?? null) : null;
@@ -555,7 +642,9 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
       if ((outcome.status === 'UPDATE' || outcome.status === 'UNCHANGED') && outcome.targetId) {
         // The match key found an existing account by its name (or VAT). The
         // same organization name is the same company: link to it. A person's
-        // name is not an identity — two "Jane Doe"s are two leads.
+        // name is not an identity — two "Jane Doe"s are two leads. A link made
+        // for ANOTHER person of that company carries no lead of its own, and
+        // resolvePage() never lets it fill the account's contact or record.
         const existing = await prisma.company.findFirst({
           where: { id: outcome.targetId, orgId: ctx.orgId },
           select: { contactEmail: true },
@@ -564,8 +653,8 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
         if (plan.lead.accountNameIsOrganization || sameContact) {
           await upsertLink(prisma, ctx, plan, outcome.targetId, leadUserId);
           done('UPDATE', outcome.targetId, 'matched an existing account by name');
-        } else if (pass === 0) {
-          retry.push({ row, name: disambiguatedAccountName(plan.lead) });
+        } else if (!item.disambiguated) {
+          retry.push({ row, name: disambiguatedAccountName(plan.lead), disambiguated: true });
         } else {
           done('ERROR', null, 'an account of this name already exists for another contact');
         }
@@ -586,9 +675,25 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
         }
         continue;
       }
+      if (outcome.status === 'SKIP' && (marketReason ?? '').startsWith('duplicate account in file')) {
+        // The writer's account key is looser than the name key above (VAT,
+        // country): same treatment — the next pass, once the first one exists.
+        retry.push(item);
+        continue;
+      }
       done(outcome.status === 'SKIP' ? 'SKIP' : 'ERROR', null, marketReason ?? 'refused by the account writer');
     }
-    pending = retry;
+    pending = [...retry, ...deferred];
+  }
+  for (const { row } of pending) {
+    results.set(row.row, {
+      row: row.row,
+      key: row.key,
+      status: 'ERROR',
+      targetId: null,
+      reason: 'not placed in this run; the next sync reads it again',
+      value: row.value,
+    });
   }
   return rows.map((row) => results.get(row.row) as RowResult<KlaviyoPlan>);
 }
@@ -683,6 +788,16 @@ export interface KlaviyoRunResult {
   initialCompleted: boolean;
 }
 
+/** The oldest provider `updated` among a page's ERROR rows, or null. */
+function oldestErrored(rows: RowResult<KlaviyoPlan>[]): Date | null {
+  let oldest: Date | null = null;
+  for (const r of rows) {
+    const at = r.status === 'ERROR' ? r.value?.lead.updatedAt : null;
+    if (at && (!oldest || at < oldest)) oldest = at;
+  }
+  return oldest;
+}
+
 /** Who owns a new lead: the org's default lead owner, else the admin who connected. */
 async function leadOwnerFor(orgId: string, connectedById: string | null): Promise<MarketingImportOwner | null> {
   return (await resolveDefaultLeadOwner(orgId)) ?? (connectedById ? await findLeadOwner(orgId, connectedById) : null);
@@ -716,6 +831,8 @@ export async function runKlaviyoSync(
           profilesSince: true,
           profilesQueryStartedAt: true,
           profilesPageCursor: true,
+          profilesErrorFloor: true,
+          profilesErrorHolds: true,
           initialSyncDoneAt: true,
           failures: true,
           totalCreated: true,
@@ -739,6 +856,8 @@ async function runLocked(
     profilesSince: Date | null;
     profilesQueryStartedAt: Date | null;
     profilesPageCursor: string | null;
+    profilesErrorFloor: Date | null;
+    profilesErrorHolds: number | null;
     initialSyncDoneAt: Date | null;
     failures: number;
     totalCreated: number;
@@ -790,7 +909,13 @@ async function runLocked(
     const listNames = await fetchListNames(key, opts.client);
     const ctx: PageContext = { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames };
     let cursor: ProfilesCursor = beginQuery(
-      { since: row.profilesSince, queryStartedAt: row.profilesQueryStartedAt, pageCursor: row.profilesPageCursor },
+      {
+        since: row.profilesSince,
+        queryStartedAt: row.profilesQueryStartedAt,
+        pageCursor: row.profilesPageCursor,
+        errorFloor: row.profilesErrorFloor,
+        errorHolds: row.profilesErrorHolds,
+      },
       startedAt,
     );
     const maxPages = opts.maxPages ?? (opts.trigger === 'manual' ? KLAVIYO_PAGES_PER_MANUAL_RUN : KLAVIYO_PAGES_PER_RUN);
@@ -811,7 +936,9 @@ async function runLocked(
       const report = await syncProfilesPage(ctx, page.data.profiles, { dryRun: false });
       for (const [status, n] of Object.entries(report.counts)) counts[status as RowStatus] += n;
       pages += 1;
-      const step = afterPage(cursor, page.data.nextCursor);
+      // A row that failed is read again by the next query (afterPage), so it is
+      // retried rather than left behind the cursor for good.
+      const step = afterPage(cursor, page.data.nextCursor, oldestErrored(report.rows));
       cursor = step.cursor;
       const completesInitial = step.queryDone && initial;
       await prisma.externalConnection.updateMany({
@@ -820,6 +947,8 @@ async function runLocked(
           profilesSince: cursor.since,
           profilesQueryStartedAt: cursor.queryStartedAt,
           profilesPageCursor: cursor.pageCursor,
+          profilesErrorFloor: cursor.errorFloor ?? null,
+          profilesErrorHolds: cursor.errorHolds ?? null,
           ...(completesInitial ? { initialSyncDoneAt: clock() } : {}),
         },
       });
@@ -868,7 +997,10 @@ async function runLocked(
   }
   // The owner's bell, once per run — never during the silent first import.
   if (!initial && counts.CREATE > 0) {
-    await notify(owner.id, 'integration.newLeads', { count: counts.CREATE, provider: 'Klaviyo' }, '/admin/companies?source=klaviyo');
+    // An ADMIN reads the filtered accounts list; a sales rep (MENTOR, the other
+    // lead-owner role) has no admin shell — their door is their own accounts.
+    const href = owner.role === 'ADMIN' ? '/admin/companies?source=klaviyo' : '/sales/accounts';
+    await notify(owner.id, 'integration.newLeads', { count: counts.CREATE, provider: 'Klaviyo' }, href);
   }
   return { outcome, pages, counts, initial, initialCompleted };
 }

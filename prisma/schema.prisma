@@ -4599,6 +4599,12 @@ model ExternalConnection {
   profilesSince          DateTime?
   profilesQueryStartedAt DateTime?
   profilesPageCursor     String?               @db.Text
+  // The oldest `updated` of a profile that ERRORED during the open query, and
+  // how many consecutive queries were held back to re-read such a profile
+  // (afterPage() in klaviyoRule.ts): a failed row is retried, a permanent
+  // failure is given up after KLAVIYO_ERROR_RETRY_QUERIES queries.
+  profilesErrorFloor     DateTime?
+  profilesErrorHolds     Int?
   initialSyncDoneAt      DateTime?
   lastSyncAt             DateTime?
   lastSyncOkAt           DateTime?
@@ -4653,11 +4659,20 @@ model ExternalProfileLink {
   consent          String?            @db.Text
   attributes       String?            @db.Text
   profileUpdatedAt DateTime?
+  // sha256 of the profile's lower-cased address, so an erasure of that person
+  // (src/lib/accountErasure.ts) finds this link without an address stored on it.
+  emailHash        String?            @db.Char(64)
+  // Set when the person this profile describes was erased: the link becomes a
+  // tombstone (externalId only — every other column nulled) and every later
+  // sync SKIPS the profile instead of writing the person back.
+  erasedAt         DateTime?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
   @@unique([connectionId, externalId])
   @@index([orgId, companyId])
+  @@index([orgId, emailHash])
+  @@index([orgId, leadUserId])
 }
 
 // Single-use, time-limited token to confirm a user's email address.

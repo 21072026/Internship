@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   KLAVIYO_ATTRIBUTES_MAX,
+  KLAVIYO_ERROR_RETRY_QUERIES,
   KLAVIYO_PROPERTY_LIMIT,
   KLAVIYO_REVISION,
   KLAVIYO_SINCE_OVERLAP_MS,
@@ -116,6 +117,42 @@ test('cursor: a query walks pages by the provider cursor and the next query star
   assert.equal(done.cursor.since?.getTime(), now.getTime() - KLAVIYO_SINCE_OVERLAP_MS);
   // A stale cursor restarts the open query from its own since — nothing skipped.
   assert.deepEqual(restartQuery({ since: now, queryStartedAt: now, pageCursor: 'stale' }), { since: now, queryStartedAt: now, pageCursor: null });
+});
+
+test('cursor: a row that errored is read again by the next query, but a permanent failure does not pin the cursor', () => {
+  const t0 = new Date('2026-10-20T10:00:00Z');
+  const failedAt = new Date('2026-10-19T08:00:00Z');
+  const open = beginQuery({ since: new Date('2026-10-19T00:00:00Z'), queryStartedAt: null, pageCursor: null }, t0);
+  // Page 1 had an error; page 2 (the last) none — the floor survives the page.
+  const p1 = afterPage(open, 'p2', failedAt);
+  assert.equal(p1.cursor.errorFloor?.getTime(), failedAt.getTime());
+  // The floor is kept across a stale-cursor restart and an interrupted run.
+  assert.equal(restartQuery(p1.cursor).errorFloor?.getTime(), failedAt.getTime());
+  assert.equal(beginQuery(p1.cursor, new Date('2026-10-20T10:20:00Z')).errorFloor?.getTime(), failedAt.getTime());
+  const closed = afterPage(p1.cursor, null, null);
+  assert.equal(closed.queryDone, true);
+  // Strictly greater-than on the provider side: start one second before the failed row.
+  assert.equal(closed.cursor.since?.getTime(), failedAt.getTime() - 1000);
+  assert.equal(closed.cursor.errorFloor, null);
+  assert.equal(closed.cursor.errorHolds, 1);
+
+  // The same row keeps failing: held KLAVIYO_ERROR_RETRY_QUERIES times, then released.
+  let cursor = closed.cursor;
+  for (let i = 1; i < KLAVIYO_ERROR_RETRY_QUERIES; i++) {
+    const q = beginQuery(cursor, new Date(t0.getTime() + i * 15 * MIN));
+    cursor = afterPage(q, null, failedAt).cursor;
+    assert.equal(cursor.since?.getTime(), failedAt.getTime() - 1000);
+  }
+  assert.equal(cursor.errorHolds, KLAVIYO_ERROR_RETRY_QUERIES);
+  const lastStart = new Date(t0.getTime() + 60 * MIN);
+  const released = afterPage(beginQuery(cursor, lastStart), null, failedAt).cursor;
+  assert.equal(released.since?.getTime(), lastStart.getTime() - KLAVIYO_SINCE_OVERLAP_MS);
+  assert.equal(released.errorHolds, 0);
+
+  // A clean query resets the count.
+  const clean = afterPage(beginQuery(closed.cursor, lastStart), null, null).cursor;
+  assert.equal(clean.errorHolds, 0);
+  assert.equal(clean.since?.getTime(), lastStart.getTime() - KLAVIYO_SINCE_OVERLAP_MS);
 });
 
 const PROFILE = {

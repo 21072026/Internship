@@ -414,3 +414,209 @@ test('the admin card connects, syncs and shows the profile on the account; the c
     await cleanupOrg(org.id, [adminEmail]);
   }
 });
+
+test('a second person of the same company — same page or a later sync — is linked, never written onto the first person; a new key starts the query over', async ({ playwright }) => {
+  test.setTimeout(180_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const { org } = await marketingOrg(`pair-${stamp}`);
+  const adminEmail = uniqueEmail('kl-pair-admin');
+  await seedUser(adminEmail, PW, 'ADMIN', 'Klaviyo Pair Admin', org.id);
+  const key = `pk_e2eP${stamp.replace(/\D/g, '')}`;
+  const domain = `pair-${stamp.replace(/\D/g, '')}.example.test`;
+  const sameCo = `Acme Sales Same ${stamp}`;
+  const pairCo = `Acme Sales Pair ${stamp}`;
+  // P1 has no phone and no city, so both are gaps a careless sync would fill.
+  await mock('/__account', {
+    key,
+    profiles: [
+      profile(`P1-${stamp}`, { email: `ann@${domain}`, first_name: 'Ann', last_name: 'First', organization: sameCo }),
+      // Two people of one company in the SAME page.
+      profile(`P3-${stamp}`, { email: `cat@${domain}`, first_name: 'Cat', last_name: 'Third', organization: pairCo }),
+      profile(`P4-${stamp}`, { email: `dan@${domain}`, first_name: 'Dan', last_name: 'Fourth', organization: pairCo, phone_number: '+4922844' }),
+    ],
+  });
+  const api = await apiAs(playwright, adminEmail, MARKETING_HOST);
+  const sync = async () => {
+    const res = await api.post('/api/admin/integrations/klaviyo/sync', { timeout: 120_000 });
+    expect(res.status()).toBe(200);
+    return res.json();
+  };
+  const link = (id: string) => prisma.externalProfileLink.findFirstOrThrow({ where: { orgId: org.id, externalId: id } });
+  try {
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key } })).status()).toBe(200);
+    const first = await sync();
+    expect(first.counts.SKIP).toBe(0);
+    expect(first.counts.ERROR).toBe(0);
+    // One account per company; the same-page colleague is linked to it, not dropped.
+    const names = (await prisma.company.findMany({ where: { orgId: org.id }, select: { name: true } })).map((c) => c.name);
+    expect(names.sort()).toEqual([pairCo, sameCo].sort());
+    const p3 = await link(`P3-${stamp}`);
+    const p4 = await link(`P4-${stamp}`);
+    expect(p4.companyId).toBe(p3.companyId);
+    expect(p4.leadUserId).toBeNull();
+    const pair = await prisma.company.findUniqueOrThrow({ where: { id: p3.companyId as string } });
+    expect(pair.contactEmail).toBe(`cat@${domain}`);
+    expect(pair.contactPhone).toBeNull(); // Dan's line never lands on Cat's account
+
+    const p1 = await link(`P1-${stamp}`);
+    const p1Lead = p1.leadUserId as string;
+    expect(p1Lead).toBeTruthy();
+
+    // A colleague signs up later, then edits their profile.
+    const p2Attrs = {
+      email: `bea@${domain}`,
+      first_name: 'Bea',
+      last_name: 'Second',
+      organization: sameCo,
+      phone_number: '+4922899',
+      location: { city: 'Bonn', country: 'DE' },
+    };
+    await mock('/__profile', { key, profile: profile(`P2-${stamp}`, { ...p2Attrs, updated: iso(new Date(Date.now() + 60_000)) }) });
+    await sync();
+    const p2 = await link(`P2-${stamp}`);
+    expect(p2.companyId).toBe(p1.companyId);
+    expect(p2.leadUserId).toBeNull();
+    // Both colleagues change their profiles — still nobody else's data moves.
+    await mock('/__profile', { key, profile: profile(`P2-${stamp}`, { ...p2Attrs, title: 'Buyer', updated: iso(new Date(Date.now() + 120_000)) }) });
+    await mock('/__profile', {
+      key,
+      profile: profile(`P4-${stamp}`, {
+        email: `dan@${domain}`,
+        first_name: 'Dan',
+        last_name: 'Fourth',
+        organization: pairCo,
+        phone_number: '+4922844',
+        location: { city: 'Essen', country: 'DE' },
+        updated: iso(new Date(Date.now() + 121_000)),
+      }),
+    });
+    const later = await sync();
+    expect(later.counts.ERROR).toBe(0);
+
+    const ann = await prisma.user.findUniqueOrThrow({ where: { id: p1Lead }, select: { phone: true, city: true, country: true } });
+    expect(ann).toEqual({ phone: null, city: null, country: null });
+    const same = await prisma.company.findUniqueOrThrow({ where: { id: p1.companyId as string } });
+    expect(same.contactEmail).toBe(`ann@${domain}`);
+    expect(same.contactName).toBe('Ann First');
+    expect(same.contactPhone).toBeNull();
+    expect(same.country).toBeNull();
+    const catLead = await prisma.user.findUniqueOrThrow({ where: { id: p3.leadUserId as string }, select: { phone: true, city: true } });
+    expect(catLead).toEqual({ phone: null, city: null });
+    expect((await link(`P2-${stamp}`)).attributes).toContain('Buyer'); // the colleague's own data stays on their link
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(2);
+
+    // A DIFFERENT key: the query starts over (quiet), so an old profile of that
+    // account is imported rather than hidden behind the previous cursor.
+    const key2 = `pk_e2eQ${stamp.replace(/\D/g, '')}`;
+    await mock('/__account', {
+      key: key2,
+      profiles: [
+        profile(`OLD-${stamp}`, {
+          email: `old@${domain}`,
+          organization: `Acme Sales Old ${stamp}`,
+          updated: iso(new Date(Date.now() - 30 * 24 * 3600 * 1000)),
+        }),
+      ],
+    });
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key: key2 } })).status()).toBe(200);
+    const reset = await prisma.externalConnection.findFirstOrThrow({ where: { orgId: org.id } });
+    expect(reset.profilesSince).toBeNull();
+    expect(reset.initialSyncDoneAt).toBeNull();
+    const switched = await sync();
+    expect(switched.counts.CREATE).toBe(1);
+    // Re-saving the same key keeps the cursor.
+    const before = await prisma.externalConnection.findFirstOrThrow({ where: { orgId: org.id } });
+    expect(before.initialSyncDoneAt).not.toBeNull();
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key: key2 } })).status()).toBe(200);
+    const after = await prisma.externalConnection.findFirstOrThrow({ where: { orgId: org.id } });
+    expect(after.profilesSince?.getTime()).toBe(before.profilesSince?.getTime());
+    expect(after.initialSyncDoneAt).not.toBeNull();
+  } finally {
+    await api.dispose();
+    await cleanupOrg(org.id, [adminEmail]);
+  }
+});
+
+test('an erased person is never written back by the next sync — neither onto the account nor as a new one', { tag: '@smoke' }, async ({ playwright }) => {
+  test.setTimeout(150_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const { org } = await marketingOrg(`erase-${stamp}`);
+  const adminEmail = uniqueEmail('kl-erase-admin');
+  await seedUser(adminEmail, PW, 'ADMIN', 'Klaviyo Erase Admin', org.id);
+  const key = `pk_e2eE${stamp.replace(/\D/g, '')}`;
+  const domain = `erase-${stamp.replace(/\D/g, '')}.example.test`;
+  const contactAttrs = {
+    email: `eve@${domain}`,
+    first_name: 'Eve',
+    last_name: 'Contact',
+    organization: `Acme Sales Erase ${stamp}`,
+    phone_number: '+4911111',
+  };
+  const leadAttrs = {
+    email: `fay@${domain}`,
+    first_name: 'Fay',
+    last_name: 'Lead',
+    organization: `Acme Sales Anon ${stamp}`,
+    phone_number: '+4922222',
+    location: { city: 'Köln', country: 'DE' },
+  };
+  await mock('/__account', { key, profiles: [profile(`E1-${stamp}`, contactAttrs), profile(`E2-${stamp}`, leadAttrs)] });
+  const api = await apiAs(playwright, adminEmail, MARKETING_HOST);
+  const sync = async () => {
+    const res = await api.post('/api/admin/integrations/klaviyo/sync', { timeout: 120_000 });
+    expect(res.status()).toBe(200);
+    return res.json();
+  };
+  try {
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key } })).status()).toBe(200);
+    await sync();
+    const e1 = await prisma.externalProfileLink.findFirstOrThrow({ where: { orgId: org.id, externalId: `E1-${stamp}` } });
+    const e2 = await prisma.externalProfileLink.findFirstOrThrow({ where: { orgId: org.id, externalId: `E2-${stamp}` } });
+    expect(e1.emailHash).toMatch(/^[0-9a-f]{64}$/);
+
+    // E1: the account's contact is forgotten (an account-less contact).
+    const forgot = await api.post('/api/admin/company-contacts/forget', {
+      data: { email: `eve@${domain}`, confirmEmail: `eve@${domain}`, adminPassword: PW },
+    });
+    expect(forgot.status()).toBe(200);
+    // E2: the lead is erased through its account.
+    const lead = await prisma.user.findUniqueOrThrow({ where: { id: e2.leadUserId as string }, select: { id: true, fullName: true } });
+    const erased = await api.post(`/api/admin/users/${lead.id}/erase`, {
+      data: { mode: 'anonymize', confirmName: lead.fullName, adminPassword: PW },
+    });
+    expect(erased.status()).toBe(200);
+
+    for (const id of [e1.id, e2.id]) {
+      const t = await prisma.externalProfileLink.findUniqueOrThrow({ where: { id } });
+      expect(t.erasedAt).not.toBeNull();
+      expect({ companyId: t.companyId, leadUserId: t.leadUserId, emailHash: t.emailHash, attributes: t.attributes, consent: t.consent }).toEqual({
+        companyId: null,
+        leadUserId: null,
+        emailHash: null,
+        attributes: null,
+        consent: null,
+      });
+    }
+
+    // Both profiles change in the provider; the next sync skips them.
+    await mock('/__profile', { key, profile: profile(`E1-${stamp}`, { ...contactAttrs, updated: iso(new Date(Date.now() + 60_000)) }) });
+    await mock('/__profile', { key, profile: profile(`E2-${stamp}`, { ...leadAttrs, updated: iso(new Date(Date.now() + 61_000)) }) });
+    const after = await sync();
+    expect(after.counts.SKIP).toBe(2);
+    expect(after.counts.CREATE).toBe(0);
+    expect(after.counts.UPDATE).toBe(0);
+    const account = await prisma.company.findUniqueOrThrow({ where: { id: e1.companyId as string } });
+    expect({ contactEmail: account.contactEmail, contactName: account.contactName, contactPhone: account.contactPhone }).toEqual({
+      contactEmail: null,
+      contactName: null,
+      contactPhone: null,
+    });
+    const anon = await prisma.user.findUniqueOrThrow({ where: { id: lead.id }, select: { phone: true, city: true } });
+    expect(anon).toEqual({ phone: null, city: null });
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(2);
+    expect(await prisma.company.count({ where: { orgId: org.id, contactEmail: `eve@${domain}` } })).toBe(0);
+  } finally {
+    await api.dispose();
+    await cleanupOrg(org.id, [adminEmail]);
+  }
+});

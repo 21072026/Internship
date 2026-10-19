@@ -10,10 +10,12 @@ import {
   accountlessTombstoneId,
   companyContactErasureData,
   erasedAddress,
+  erasureOrgId,
   erasureScoped,
   inquiryErasureData,
   normalizeContactEmail,
 } from '@/lib/companyContactErasure';
+import { externalProfileErasureOp } from '@/lib/externalProfileErasure';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
 // - hardDeleteUser: same cascade cleanup as the existing self-service account
@@ -100,7 +102,14 @@ async function forgetEmailLog(userId: string): Promise<void> {
 async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
   if (!user?.email) return [];
-  return contactScrubOps(user.email, user.orgId, userId, await defaultOrgId());
+  const fallbackOrgId = await defaultOrgId();
+  return [
+    ...contactScrubOps(user.email, user.orgId, userId, fallbackOrgId),
+    // A pull connector's profile of this person (as its lead, or by address)
+    // becomes a tombstone, or the next sync writes them back
+    // (src/lib/externalProfileErasure.ts).
+    externalProfileErasureOp({ orgId: erasureOrgId(user.orgId, fallbackOrgId), emails: [user.email], leadUserId: userId }),
+  ];
 }
 
 /**
@@ -154,9 +163,14 @@ export async function forgetCompanyContact(
   orgId: string | null,
   randomId: string,
 ): Promise<{ inquiries: number; companies: number; contacts: number }> {
-  const [inquiries, companies, contacts] = await prisma.$transaction(
-    contactScrubOps(normalizeContactEmail(email), orgId, accountlessTombstoneId(randomId), await defaultOrgId()),
-  );
+  const fallbackOrgId = await defaultOrgId();
+  const address = normalizeContactEmail(email);
+  const [inquiries, companies, contacts] = await prisma.$transaction([
+    ...contactScrubOps(address, orgId, accountlessTombstoneId(randomId), fallbackOrgId),
+    // The pull connector's profile of this address: a tombstone, so the next
+    // sync does not write the contact straight back onto the account.
+    externalProfileErasureOp({ orgId: erasureOrgId(orgId, fallbackOrgId), emails: [address] }),
+  ]);
   // A held mail to this contact (#2960) carries their address and the words
   // about them: it goes with them, inside the requesting org only.
   await forgetOutboundDrafts({ address: normalizeContactEmail(email), orgId: orgId ?? (await defaultOrgId()) });

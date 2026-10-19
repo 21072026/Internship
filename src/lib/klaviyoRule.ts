@@ -225,12 +225,28 @@ export interface ProfilesCursor {
   queryStartedAt: Date | null;
   /** Where inside the current query the next page starts. */
   pageCursor: string | null;
+  /**
+   * The oldest `updated` of a profile that ERRORED in the open query (null =
+   * none). When the query closes, the next one starts before it, so the row is
+   * read — and retried — again instead of being skipped for good.
+   */
+  errorFloor?: Date | null;
+  /** Consecutive closed queries that were held back for an errored row. */
+  errorHolds?: number | null;
 }
+
+/**
+ * How many consecutive queries are held back for a row that keeps failing.
+ * After that the cursor moves on (the failure stays counted on the connection's
+ * `lastErrors`): a permanent failure must not pin every later query to one
+ * instant and re-read a growing backlog every 15 minutes.
+ */
+export const KLAVIYO_ERROR_RETRY_QUERIES = 3;
 
 /** The cursor at the start of a run: an open query continues, else a new one begins now. */
 export function beginQuery(cursor: ProfilesCursor, now: Date): ProfilesCursor {
   if (cursor.queryStartedAt) return cursor;
-  return { since: cursor.since, queryStartedAt: now, pageCursor: null };
+  return { ...cursor, queryStartedAt: now, pageCursor: null };
 }
 
 /**
@@ -245,18 +261,40 @@ export function beginQuery(cursor: ProfilesCursor, now: Date): ProfilesCursor {
  * rows or re-reading the same page for ever; the provider's own page cursor
  * walks through it exactly once.
  */
-export function afterPage(cursor: ProfilesCursor, nextCursor: string | null): { cursor: ProfilesCursor; queryDone: boolean } {
-  if (nextCursor) return { cursor: { ...cursor, pageCursor: nextCursor }, queryDone: false };
+export function afterPage(
+  cursor: ProfilesCursor,
+  nextCursor: string | null,
+  pageErrorFloor: Date | null = null,
+): { cursor: ProfilesCursor; queryDone: boolean } {
+  const floor = earlier(cursor.errorFloor ?? null, pageErrorFloor);
+  if (nextCursor) return { cursor: { ...cursor, pageCursor: nextCursor, errorFloor: floor }, queryDone: false };
   const started = cursor.queryStartedAt ?? new Date();
+  const since = new Date(started.getTime() - KLAVIYO_SINCE_OVERLAP_MS);
+  const holds = cursor.errorHolds ?? 0;
+  // A row failed in this query: the next one starts just before it (the filter
+  // is strictly greater-than), at most KLAVIYO_ERROR_RETRY_QUERIES times in a row.
+  if (floor && holds < KLAVIYO_ERROR_RETRY_QUERIES) {
+    const held = new Date(floor.getTime() - 1000);
+    return {
+      cursor: { since: held < since ? held : since, queryStartedAt: null, pageCursor: null, errorFloor: null, errorHolds: holds + 1 },
+      queryDone: true,
+    };
+  }
   return {
-    cursor: { since: new Date(started.getTime() - KLAVIYO_SINCE_OVERLAP_MS), queryStartedAt: null, pageCursor: null },
+    cursor: { since, queryStartedAt: null, pageCursor: null, errorFloor: null, errorHolds: 0 },
     queryDone: true,
   };
 }
 
+function earlier(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a <= b ? a : b;
+}
+
 /** A stale page cursor (400) restarts the open query from its `since`; nothing is lost. */
 export function restartQuery(cursor: ProfilesCursor): ProfilesCursor {
-  return { since: cursor.since, queryStartedAt: cursor.queryStartedAt, pageCursor: null };
+  return { ...cursor, pageCursor: null };
 }
 
 // ── The mapping ──────────────────────────────────────────────────────────────

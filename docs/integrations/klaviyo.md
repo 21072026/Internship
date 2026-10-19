@@ -35,10 +35,13 @@ Who owns the new leads: the organization's **default lead owner** (Settings), el
 admin who saved the key. With neither, the run records `no_owner` and imports nothing.
 
 The key is never shown again: every response returns its last four characters only. It is
-stored encrypted (`secretBox`, purpose `external-connection:klaviyo`). Replacing the key
-keeps the cursor and the links (same account, rotated key); a key of a **different**
-Klaviyo account is *Disconnect*, then connect — disconnecting deletes the key and the
-profile links, never an account or a lead.
+stored encrypted (`secretBox`, purpose `external-connection:klaviyo`). Saving the same key
+again keeps the cursor. Saving a **different** key starts the profile query over as a
+quiet first import: a key cannot tell us whether it belongs to the same Klaviyo account,
+and a key of another account must not inherit a cursor that would skip all of its older
+profiles. For a rotated key of the same account that costs one re-read, in which every
+linked profile comes back UNCHANGED. *Disconnect* deletes the key and the profile links,
+never an account or a lead.
 
 ## What is imported
 
@@ -80,6 +83,16 @@ Mail engagement (opens, clicks) is a later step (K2) with its own cursor.
    If the import's match key finds an existing account by **name**: the same organization
    name is the same company (linked); the same *person's* name with another contact is
    another person — the account is created as `Name (address)`.
+   Two new profiles of the same organization in one page go to the writer in two passes
+   (one row per account name per pass), so the second is linked to the account the first
+   one created — never dropped as a "duplicate account in file".
+
+**A second person of the same company** (linked by the account's name, not by their
+address) is linked to the account but is **not its contact**: their profile never fills
+the account's contact columns, and never the lead, the location or the first-touch
+source of the account's record — that lead is somebody else. Their Klaviyo data is shown
+on the account page like any linked profile. A profile fills the account's contact
+columns only when it is the contact (same address) or the account names nobody.
 
 Each page runs through the shared engine, `runImport({ parse, validate, resolve, apply })`
 ([roster-feed.md](../roster-feed.md)): the page is the table, the mapping is the
@@ -110,6 +123,12 @@ name and the stage are never touched by a re-sync. The link's own columns (`attr
   nothing). Not "the highest `updated` seen": Klaviyo sorts by one field, and a bulk list
   import gives thousands of profiles the same second — a high-water mark could never move
   past it without skipping rows. A stale page cursor (400) restarts the open query.
+- **A row that failed is retried.** The oldest `updated` of a profile that ended as ERROR
+  in the open query is kept (`profilesErrorFloor`); when the query closes, the next one
+  starts one second before it, so that profile is read and tried again. At most
+  `KLAVIYO_ERROR_RETRY_QUERIES` (3) queries in a row are held back like that
+  (`profilesErrorHolds`); a permanent failure then lets the cursor move on and stays
+  counted in `lastErrors`.
 
 ### Failures and backoff
 
@@ -123,12 +142,24 @@ name and the stage are never touched by a re-sync. The link's own columns (`attr
   a longer `Retry-After` wins. A success clears it. Klaviyo's limits for both endpoints are
   per account, 75/s burst and 750/min steady — a run of 20 pages is far inside them.
 
+## Erasure
+
+Erasing a person (`anonymizeUser` / `hardDeleteUser`, or forgetting an account-less
+contact) also turns their profile links into **tombstones**
+(`src/lib/externalProfileErasure.ts`): found by the lead they point at or by `emailHash`
+(sha256 of the lower-cased address, kept on a live link only), they keep the Klaviyo
+profile id and `erasedAt` and nothing else — no account, no lead, no hash, no
+attributes. Every later sync **SKIPS** that profile id, so the person is not written back
+onto the scrubbed account nor re-created as a new one. A person who signs up again under
+a new Klaviyo profile is a new lead.
+
 ## Quiet first import
 
 Until the first full query completes (`initialSyncDoneAt`), runs are silent: no bell, no
 per-lead activity line, and one aggregated `integration.klaviyo.initial_import` activity
 entry when it completes. After that, a run that created leads rings the lead owner's bell
-once (`integration.newLeads`, a count) and writes one `integration.klaviyo.sync` line.
+once (`integration.newLeads`, a count; an ADMIN's links to the Klaviyo-filtered accounts
+list, a sales rep's to `/sales/accounts`) and writes one `integration.klaviyo.sync` line.
 No run ever sends mail to a lead.
 
 ## Version pinned, verified against the provider's reference (2026-10-20)
