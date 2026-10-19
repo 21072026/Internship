@@ -19,6 +19,12 @@
 // Unit-tested in scripts/test/account-event-rule.test.mjs.
 import { ACQUISITION_SOURCES } from './leadSourceName';
 import { TEXT_LIMITS } from './textLimits';
+import {
+  TRIAL_ACTIVE_STAGE_KEY,
+  TRIAL_EXPIRED_STAGE_KEY,
+  daysUntilUtcDay,
+  decisionWindowEndsAt,
+} from './trialReminderRule';
 
 /** The envelope version this code understands; anything else is refused. */
 export const ACCOUNT_EVENT_SCHEMA_VERSION = 1;
@@ -201,4 +207,80 @@ export function ingestTrialWindow(existing: TrialDates, event: TrialDates, fallb
  */
 export function isStaleEvent(occurredAt: Date, newestAppliedAt: Date | null): boolean {
   return !!newestAppliedAt && occurredAt.getTime() < newestAppliedAt.getTime();
+}
+
+// ── Historic mode ────────────────────────────────────────────────────────────
+//
+// A source that connects to the CRM after years of its own history replays that
+// history through the same endpoint. Those events describe things that already
+// happened: a trial that ran out two years ago must land as an expired trial
+// dated two years ago, and nobody may be reminded, rung or mailed about it.
+// An event is HISTORIC when the sender says so (`replay: true`) or when it is
+// older than HISTORIC_EVENT_AGE_DAYS — a live feed delivers within minutes, and
+// one that parked a 404 for a day or two still counts as live.
+// docs/integrations/account-events.md § Historic mode is the contract.
+
+/** An event older than this many days is historic even without `replay: true`. */
+export const HISTORIC_EVENT_AGE_DAYS = 3;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Does this event replay the past (true) or report the present (false)?
+ * Strictly older than the threshold; an event dated in the future is live.
+ */
+export function isHistoricEvent(occurredAt: Date, now: Date, replayFlag: boolean | null | undefined): boolean {
+  if (replayFlag === true) return true;
+  return now.getTime() - occurredAt.getTime() > HISTORIC_EVENT_AGE_DAYS * MS_PER_DAY;
+}
+
+/**
+ * The moment a historic write is dated with: the event's own `occurred_at`,
+ * never later than `now` (a clock-skewed sender must not date history in the
+ * future). A live event gets undefined — its rows are dated by the database
+ * exactly as before historic mode existed.
+ */
+export function backdateFor(historic: boolean, occurredAt: Date, now: Date): Date | undefined {
+  if (!historic) return undefined;
+  return occurredAt.getTime() > now.getTime() ? now : occurredAt;
+}
+
+export interface HistoricTrialLanding {
+  /** Move the record from TRIAL_ACTIVE to TRIAL_EXPIRED as part of the replay. */
+  expire: boolean;
+  /** The expiry's history row is dated here (null when `expire` is false). */
+  expiredAt: Date | null;
+  /**
+   * The decision window of the expired trial has already closed: claim its one
+   * bell up front, so the daily sweep never rings about a window that shut
+   * long ago.
+   */
+  preclaimDecisionWindow: boolean;
+}
+
+/**
+ * Where a historic trial record lands once its window is known. The same
+ * calendar-day rule as the daily expiry (`expireTrials`,
+ * src/lib/jobs/trialReminders.ts): a trial whose last day is before today
+ * (UTC) has run out. The expiry is dated at the trial's end — never before the
+ * moment the record entered the trial (`enteredAt`), so the history stays in
+ * order even when a source sends an end before its start.
+ */
+export function historicTrialLanding(input: {
+  pipelineStatus: string;
+  trialEndsAt: Date | null;
+  enteredAt: Date;
+  now: Date;
+  decisionWindowDays: number;
+}): HistoricTrialLanding {
+  const { trialEndsAt, now } = input;
+  if (!trialEndsAt) return { expire: false, expiredAt: null, preclaimDecisionWindow: false };
+  const expire = input.pipelineStatus === TRIAL_ACTIVE_STAGE_KEY && daysUntilUtcDay(trialEndsAt, now) < 0;
+  const expired = expire || input.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY;
+  const closes = decisionWindowEndsAt(trialEndsAt, input.decisionWindowDays);
+  return {
+    expire,
+    expiredAt: expire ? new Date(Math.max(trialEndsAt.getTime(), input.enteredAt.getTime())) : null,
+    preclaimDecisionWindow: expired && !!closes && closes.getTime() <= now.getTime(),
+  };
 }
