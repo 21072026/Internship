@@ -58,6 +58,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // Document requirements: the role picker names the seats, not the enum.
+      documentRequirements: { roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
       // example the base dictionary used to carry, and who reads the note.
       followUp: {
@@ -682,6 +684,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      documentRequirements: { roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
       followUp: {
@@ -1162,6 +1165,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      documentRequirements: { roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
       // Notiz liest.
