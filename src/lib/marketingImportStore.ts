@@ -231,6 +231,13 @@ interface WriterContext {
   /** The org's `trialLengthDays`, resolved once per run (#2551). */
   trialLengthDays: number;
   /**
+   * The integration source whose event creates this account (#2959), stamped
+   * on `Company.createdBySource` in the same insert. Only the account-event
+   * writer sets it; a file import, the manual form and the demo form leave it
+   * null, which is what keeps them out of reach of the rollback CLI.
+   */
+  createdBySource?: string | null;
+  /**
    * The moment the written rows are dated (a historic account event replays
    * the past, docs/integrations/account-events.md § Historic mode). Omitted:
    * the wall clock, and every timestamp keeps its database default — exactly
@@ -297,10 +304,11 @@ async function leadSourceIdFor(row: MarketingPlannedRow, context: WriterContext)
 const IMPORT_REASON_CODE = 'OTHER';
 const IMPORT_REASON_NOTE = 'Imported from the marketing account spreadsheet';
 
-function accountCreateData(row: MarketingPlannedRow, orgId: string | null) {
+function accountCreateData(row: MarketingPlannedRow, orgId: string | null, createdBySource: string | null = null) {
   const { changes } = row.value.account;
   return {
     orgId,
+    createdBySource,
     name: changes.name ?? row.value.input.name,
     vatId: changes.vatId ?? null,
     country: changes.country ?? null,
@@ -508,7 +516,7 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
       const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         const company = await tx.company.create({
-          data: { ...accountCreateData(row, context.orgId), ...datedAt('createdAt', context.now) },
+          data: { ...accountCreateData(row, context.orgId, context.createdBySource ?? null), ...datedAt('createdAt', context.now) },
           select: { id: true, contactEmail: true },
         });
         // An import knows the address and nothing else (#2577): it records the
@@ -684,6 +692,8 @@ interface MarketingRunCore {
   chunkSize?: number;
   /** Defaults to `typed` — the file's own `source` column. */
   leadSource?: LeadSourceBinding;
+  /** See `WriterContext.createdBySource`. */
+  createdBySource?: string | null;
   /** The moment the written rows are dated (WriterContext.now); omitted = the wall clock. */
   now?: Date;
 }
@@ -709,6 +719,7 @@ async function runMarketingRows(core: MarketingRunCore) {
       orgId,
       offPathStages,
       trialLengthDays,
+      createdBySource: core.createdBySource ?? null,
       ...(core.now ? { now: core.now } : {}),
     });
     // Create-only: a CREATE is written through the import's own writer; an
@@ -817,6 +828,12 @@ export async function createMarketingAccount(input: {
    */
   leadSourceName?: string | null;
   /**
+   * The registered integration source creating this account (origin `ingest`
+   * only, #2959): stamped on `Company.createdBySource` so the rollback CLI can
+   * tell what a source created from what it merely matched.
+   */
+  createdBySource?: string;
+  /**
    * The moment the account, its lead and its record are dated, for a historic
    * account event (docs/integrations/account-events.md § Historic mode).
    * Omitted: now, with the database defaults — every other caller.
@@ -863,6 +880,7 @@ export async function createMarketingAccount(input: {
     parse: () => manualAccountTable({ ...fields, stage }),
     mode: 'createOnly',
     leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
+    createdBySource: input.createdBySource ?? null,
     ...(input.now ? { now: input.now } : {}),
   });
   const row = report.rows[0];
@@ -886,6 +904,9 @@ export async function createMarketingAccount(input: {
       if (!input.quiet) await runWithOrg(owner.orgId, () =>
         logActivity({
           action: 'marketing.account.created',
+          // Explicit: with no actor (a web request, an ingest) nothing else
+          // names the tenant, and the entry was written with orgId NULL (#2959).
+          orgId: owner.orgId,
           actorId: input.actor === undefined ? owner.id : (input.actor?.id ?? null),
           actorEmail: input.actor === undefined ? owner.email : (input.actor?.email ?? null),
           targetType: 'Company',

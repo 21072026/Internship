@@ -8,6 +8,8 @@ bu dosyanın durumu #2578'e yorum olarak geçer.
 
 - [ ] Prod MARKETING org'u var; `TRIAL_ACTIVE` ve `TRIAL_EXPIRED` aşamaları mevcut
       (`/admin/settings` → aşamalar; ya da deploy logundaki trial-reminders `inScope` satırı) — #2579
+      — eski setteyse `node prisma/apply-marketing-stage-preset.mjs --org <slug>` (önce dry run,
+      sonra `--apply`; [`stage-preset.md`](stage-preset.md))
 - [ ] Host eşlemesi: `node prisma/set-public-host.mjs --list` prod'da prod marketing host'unu
       bu org'a bağlı gösteriyor; landing'de demo formu **açık** ([`demo-form.md`](demo-form.md))
 - [ ] `MARKETING_OPERATOR_*` prod + preview env dosyasında; prod marketing host'unun `/imprint`'i

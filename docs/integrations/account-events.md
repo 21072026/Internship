@@ -12,8 +12,9 @@ This page is the **public contract** (schema version `1`). The implementation is
 | Writer | `src/lib/accountEventIngest.ts` |
 | Source registry | `src/lib/integrationSources.ts` · model `IntegrationSource` |
 | Operator CLI | `prisma/register-integration-source.mjs` |
+| Rollback CLI | `prisma/wipe-integration-source.mjs` · `scripts/test/marketing-ops-clis.test.mjs` |
 | Historic mode (rule tests) | `scripts/test/account-event-historic.test.mjs` |
-| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` |
+| End to end | `e2e/account-event-ingest.spec.ts` · `e2e/account-events-historic.spec.ts` · `e2e/marketing-ops-clis.spec.ts` (rollback) |
 
 ## The endpoint
 
@@ -184,6 +185,31 @@ An organization may register more than one source, but all of them share **one a
 So the sources of one organization must either use the same id for the same account (a sign-up service and a billing system of the same product, say) or ids that can never collide, for example a per-source prefix (`billing:1001`).
 
 What stays per source is the bookkeeping: the duplicate claim is keyed on `(organization, source slug, event_id)`, so two sources may reuse each other's event ids, and the out-of-order check compares an event only with the events of its own source.
+
+## Rolling a source back
+
+When a replay went wrong (the wrong organization, the wrong id space, a test run against production), the operator removes what one source created in one organization and replays it:
+
+```bash
+node prisma/wipe-integration-source.mjs --org <org slug or id> --source <slug>            # dry run: counts per table
+node prisma/wipe-integration-source.mjs --org <org slug or id> --source <slug> --apply    # delete
+```
+
+**What the source created** is exactly the accounts whose `Company.createdBySource` is the slug. The writer stamps it in the same insert that creates the account, and only there: an account a person typed in, a demo request converted to an account, a file import, and an account a feed only *matched* all leave it empty. It was added with this tool, so accounts ingested before it existed are not found (they show up as "moved but did not create").
+
+For each such account, in one transaction, the tool deletes its funnel records and their stage history, its lead stand-ins (a lead record created with the account that has no funnel record elsewhere), the activity entries about the account, its records and its stand-ins, this source's events for it, and the account itself (its machine-written contact-permission row and channels go with it).
+
+It **keeps** an account a person has worked on and names the reason. The test is open-ended, so a table added later is protected by default:
+
+- a row in **any** table with a foreign key to one of its records or to the account — interactions, notes, messages, meetings, offers, goals, evaluations, contact persons, entitlements, a converted inquiry, … — except the few tables only machines write (`MACHINE_TABLES` in the script, each with its reason);
+- any activity entry a person is the actor of about the account, its records or its stand-ins (a win-back, a trial or contract-end change, an account edit, a channel added); reading an account is not work;
+- a stage move a person made, a deal value a person typed (any `RelationValue` not from an import), or a channel changed after the account was created;
+- contact-permission evidence: a basis other than `NONE`, a confirmation, an admin grant or a withdrawal. The owner's withdrawal locks the row against every later write ([contact-permission.md](../contact-permission.md)); a re-created account would start from `NONE` without it;
+- another user attached to the account, or a lead that is not one of its own stand-ins (a person, or a record the feed re-pointed — the writer moved its company link and may have overwritten its name and phone, and deleting the record would undo neither).
+
+The verdict is read again inside each account's transaction, so work added while a long run is going keeps that account (it is reported as failed, with the reason).
+
+Outside the accounts it deletes the source's events that name no surviving account (recorded, stale, unknown account) and its `integration.*` activity entries about such an external id. Everything the source did to an account that **stays** — a kept one, or one it only **moved** — stays as evidence: its events, its activity entries, and any record the source opened on it (`integration.new_journey`). Those accounts are left exactly as they are, stage and history included; the dry run lists them, and the records opened on them, so an operator can look. Because their events stay, a replay skips those event ids as duplicates instead of moving the accounts a second time. Nothing of another source or another organization is touched, and the registered source, the lead `Source` rows and the settings stay. `--json` prints the plan and, with `--apply`, what was deleted per table; the dry run and the apply count the same rows.
 
 ## Pull instead of push
 
