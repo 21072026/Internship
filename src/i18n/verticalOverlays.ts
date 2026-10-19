@@ -59,7 +59,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       // Document requirements: the role picker names the seats, not the enum.
-      documentRequirements: { roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' } },
+      documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
       // example the base dictionary used to carry, and who reads the note.
       followUp: {
@@ -269,6 +269,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'Invite your first reps',
           inviteMentees: 'Add your first leads',
           assignMentorship: 'Create the first deal',
+          mentorCapacity: 'Set your lead capacity',
+        },
+        guides: {
+          profile: 'Your details and your skills are what a sales rep reads before you ever speak. A filled-in profile gets routed to the right person; an empty one waits. Five minutes now saves a first call spent on questions you could have answered in writing.',
+          cv: 'A CV or company profile is what your sales rep actually reads. Upload the version you would send today even if it is not perfect. Keep it to facts that are true and checkable.',
+          public: 'A public profile is a page others can find that carries no phone number, no e-mail and no address. It is optional and reversible: switch it off and the page is gone the same second.',
+          bio: 'Two or three sentences about what you do and what you can help with are enough. A lead reads this before anything else, and something concrete helps more than a job title. Write it the way you would say it out loud.',
+          interestsOrSkills: 'Routing runs on this. Naming the areas you know — and the ones you enjoy — is what puts a fitting lead in front of you instead of a random one. Two or three specific entries beat ten vague ones.',
+          mentorCapacity: 'Capacity is how many leads you are willing to own at once, and the team respects it: an admin sees it before assigning anybody to you. Set it low and honestly — one well-followed lead is worth three neglected ones. You can raise it any time.',
+          availability: 'An availability slot is a recurring window in which you are happy to be booked, in your own timezone. A couple of them let a lead pick a time without a chain of “does Tuesday work?” e-mails. A slot is a window, not a promise: nothing is in your calendar until you accept the booking.',
+          configurePipeline: 'The pipeline is the row of stages every lead moves through, from first contact to won. Keeping the built-in stages is a perfectly good decision — which is why this step is optional. Rename or reorder them only if your team genuinely counts differently: every board column, report and service level is built on these stages.',
+          documentRequirements: 'Many teams collect paperwork — a signed agreement, an order form, a compliance certificate. Declaring them here turns “chase everyone by e-mail” into a list the app tracks and reminds about, per stage and per role. Only add documents you truly need: each one is work you are asking a customer to do.',
+          evaluationTemplate: 'The evaluation framework is the handful of criteria your team scores a lead or a deal on. Writing them down before the first evaluation is what makes two reps’ scores comparable. Three to six criteria is plenty, and the built-in rubric is a fine starting point while you have no strong opinion.',
+          inviteMentors: 'Invite your sales reps first: a lead without an owner waits, a rep without leads just has a quiet week. Invite people who already said yes in person — the e-mail is the paperwork, not the ask. Ask each of them to set their capacity and availability once they are in.',
+          inviteMentees: 'Add the leads you already have in one batch rather than a trickle — a pipeline only tells you something once there are people in it. Nobody sees anybody else’s data.',
+          addCompany: 'Accounts are the companies you sell to, and the last stages of the pipeline mean nothing without at least one. Add the ones you already talk to, with a contact address, before you need them. Recording what an account is looking for lets the fitting lead surface later instead of being remembered by luck.',
+          assignMentorship: 'This is the moment the pipeline starts: one rep, one lead, and from then on a shared history of calls, notes and stage changes. Create the first deal as soon as both sides exist — an owner that turns out wrong is easy to change. Every board, report and reminder is built on these deals.',
+          firstInteraction: 'A logged interaction — a call, an e-mail, a meeting — is how the team remembers what was said. The first one matters most: it is what a colleague reads before taking a lead over, and what the reminder job measures silence against. Log it right after the conversation. This step is optional: it is a milestone, not part of the setup.',
         },
       },
       // Lead attribution on /admin/analytics (#2421). `cohortTotal`/`cohortHired`
@@ -684,7 +702,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
-      documentRequirements: { roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
+      documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
       followUp: {
@@ -865,6 +883,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'İlk temsilcilerini davet et',
           inviteMentees: 'İlk müşteri adaylarını ekle',
           assignMentorship: 'İlk fırsatı oluştur',
+          mentorCapacity: 'Müşteri adayı kapasiteni belirle',
+        },
+        guides: {
+          profile: 'Bilgilerin ve yeteneklerin, bir satış temsilcisinin seninle konuşmadan önce okuduğu şeydir. Doldurulmuş bir profil doğru kişiye yönlendirilir; boş profil bekler. Şimdi ayıracağın beş dakika, ilk görüşmenin yazıyla cevaplanabilecek sorulara harcanmasını önler.',
+          cv: 'CV ya da şirket profili, satış temsilcinin gerçekten okuduğu şeydir. Mükemmel olmasa da bugün gönderebileceğin sürümü yükle. İçinde yalnızca doğru ve doğrulanabilir bilgi olsun.',
+          public: 'Herkese açık profil; telefon, e-posta ve adres içermeyen, dışarıdan bulunabilen bir sayfadır. İsteğe bağlıdır ve geri alınabilir: kapattığın anda sayfa da kaybolur.',
+          bio: 'Ne yaptığını ve neyde yardımcı olabileceğini anlatan iki üç cümle yeter. Bir müşteri adayı her şeyden önce burayı okur; somut bir cümle bir unvandan daha çok işe yarar. Sesli söyleyeceğin gibi yaz.',
+          interestsOrSkills: 'Yönlendirme buradan çalışır. Bildiğin ve keyif aldığın alanları yazman, karşına rastgele biri yerine sana uygun bir müşteri adayı çıkmasını sağlar. İki üç somut madde, on muğlak maddeden iyidir.',
+          mentorCapacity: 'Kapasite, aynı anda kaç müşteri adayından sorumlu olmaya razı olduğundur ve ekip buna uyar: yönetici, sana birini atamadan önce bunu görür. Düşük ve dürüst belirle — iyi takip edilen bir aday, ihmal edilen üç adaydan değerlidir. İstediğin zaman artırabilirsin.',
+          availability: 'Müsaitlik aralığı, kendi saat diliminde randevu almaya açık olduğun tekrar eden bir zaman penceresidir. Birkaç tane eklemen, müşteri adayının “salı olur mu?” e-posta zinciri olmadan saat seçmesini sağlar. Aralık bir penceredir, söz değil: sen kabul etmeden takvimine hiçbir şey girmez.',
+          configurePipeline: 'Pipeline, her müşteri adayının ilk temastan kazanılan satışa kadar geçtiği aşamalar dizisidir. Hazır aşamaları olduğu gibi bırakmak gayet iyi bir karardır, bu yüzden bu adım isteğe bağlıdır. Ekibin gerçekten farklı sayıyorsa yeniden adlandır ya da sırala: her pano sütunu, rapor ve hizmet seviyesi bu aşamaların üzerine kuruludur.',
+          documentRequirements: 'Birçok ekip evrak toplar: imzalı sözleşme, sipariş formu, uyum belgesi. Bunları burada tanımlamak, “herkesi e-postayla kovala” işini uygulamanın takip ettiği ve hatırlattığı bir listeye çevirir — aşama ve rol bazında. Yalnızca gerçekten ihtiyacın olanları ekle: her belge, bir müşteriden istediğin ek bir iştir.',
+          evaluationTemplate: 'Değerlendirme çerçevesi, ekibinin bir müşteri adayını ya da fırsatı puanladığı birkaç ölçüttür. Bunları ilk değerlendirmeden önce yazmak, iki temsilcinin puanlarını karşılaştırılabilir kılan şeydir. Üç ile altı ölçüt fazlasıyla yeter; net bir fikrin yoksa hazır çerçeve iyi bir başlangıçtır.',
+          inviteMentors: 'Önce satış temsilcilerini davet et: sorumlusu olmayan müşteri adayı bekler, adaysız temsilcinin yalnızca sakin bir haftası olur. Yüz yüze zaten “evet” demiş kişileri davet et — e-posta ricanın kendisi değil, kaydıdır. Girdiklerinde her birinden kapasitesini ve müsaitliğini girmesini iste.',
+          inviteMentees: 'Elindeki müşteri adaylarını damla damla değil tek seferde ekle — pipeline ancak içinde insan varken sana bir şey söyler. Kimse bir başkasının verisini görmez.',
+          addCompany: 'Hesaplar, satış yaptığın şirketlerdir; en az bir hesap olmadan pipeline’ın son aşamaları anlamsızdır. Zaten görüştüğün şirketleri, iletişim adresleriyle birlikte, ihtiyacın olmadan önce ekle. Bir hesabın ne aradığını kaydetmen, uygun müşteri adayının sonradan şansa hatırlanmak yerine kendiliğinden öne çıkmasını sağlar.',
+          assignMentorship: 'Pipeline asıl burada başlar: bir temsilci, bir müşteri adayı ve o andan itibaren ortak bir görüşme, not ve aşama geçmişi. İki taraf da var olur olmaz ilk fırsatı oluştur — yanlış çıkan bir sorumluyu değiştirmek kolaydır. Her pano, rapor ve hatırlatma bu fırsatların üzerine kuruludur.',
+          firstInteraction: 'Kaydedilen bir etkileşim — arama, e-posta, toplantı — ekibin ne konuşulduğunu hatırlama biçimidir. En önemlisi ilkidir: bir müşteri adayını devralacak meslektaşının okuduğu, hatırlatma işinin sessizliği ölçtüğü yerdir. Görüşmeden hemen sonra kaydet. Bu adım isteğe bağlıdır: kurulumun parçası değil, bir dönüm noktasıdır.',
         },
       },
       emailGroups: {
@@ -1165,7 +1201,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
-      documentRequirements: { roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
+      documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
       // Notiz liest.
@@ -1345,6 +1381,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'Laden Sie Ihre ersten Mitarbeiter ein',
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
+          mentorCapacity: 'Legen Sie Ihre Lead-Kapazität fest',
+        },
+        guides: {
+          profile: 'Ihre Angaben und Skills sind das, was ein Vertriebsmitarbeiter liest, bevor Sie je miteinander sprechen. Ein ausgefülltes Profil wird an die richtige Person geleitet, ein leeres wartet. Fünf Minuten jetzt ersparen ein erstes Gespräch voller Fragen, die schriftlich längst beantwortet wären.',
+          cv: 'Lebenslauf oder Firmenprofil ist das, was Ihr Vertriebsmitarbeiter tatsächlich liest. Laden Sie die Fassung hoch, die Sie heute abschicken würden, auch wenn sie nicht perfekt ist. Halten Sie sich an Angaben, die stimmen und überprüfbar sind.',
+          public: 'Ein öffentliches Profil ist eine auffindbare Seite ohne Telefonnummer, ohne E-Mail-Adresse und ohne Anschrift. Es ist freiwillig und umkehrbar: Schalten Sie es aus, ist die Seite in derselben Sekunde weg.',
+          bio: 'Zwei oder drei Sätze dazu, was Sie machen und wobei Sie helfen können, reichen. Ein Lead liest das als Erstes, und etwas Konkretes hilft mehr als eine Positionsbezeichnung. Schreiben Sie es so, wie Sie es aussprechen würden.',
+          interestsOrSkills: 'Die Zuweisung läuft darüber. Die Felder zu benennen, die Sie kennen — und die, die Ihnen Spaß machen —, sorgt dafür, dass ein passender Lead bei Ihnen landet und nicht ein zufälliger. Zwei, drei konkrete Einträge schlagen zehn vage.',
+          mentorCapacity: 'Die Kapazität ist die Zahl der Leads, die Sie gleichzeitig betreuen wollen, und das Team hält sich daran: Ein Admin sieht sie, bevor er Ihnen jemanden zuweist. Setzen Sie sie niedrig und ehrlich an — ein gut betreuter Lead ist mehr wert als drei vernachlässigte. Erhöhen können Sie sie jederzeit.',
+          availability: 'Ein Verfügbarkeitszeitraum ist ein wiederkehrendes Fenster in Ihrer eigenen Zeitzone, in dem Sie gebucht werden können. Ein paar davon lassen einen Lead eine Zeit wählen, ohne eine Kette von „Passt Dienstag?“-Mails. Ein Fenster ist kein Versprechen: In Ihrem Kalender steht erst etwas, wenn Sie die Buchung annehmen.',
+          configurePipeline: 'Die Pipeline ist die Reihe von Stufen, die jeder Lead vom ersten Kontakt bis zum Abschluss durchläuft. Die eingebauten Stufen zu behalten ist völlig in Ordnung — deshalb ist dieser Schritt optional. Benennen oder sortieren Sie sie nur um, wenn Ihr Team wirklich anders zählt: Jede Board-Spalte, jeder Bericht und jedes Service-Level baut auf diesen Stufen auf.',
+          documentRequirements: 'Viele Teams sammeln Papier ein — eine unterschriebene Vereinbarung, ein Bestellformular, einen Compliance-Nachweis. Sie hier zu deklarieren macht aus „alle per E-Mail hinterherjagen“ eine Liste, die die App verfolgt und an die sie erinnert, je Stufe und je Rolle. Nehmen Sie nur auf, was Sie wirklich brauchen: Jedes Dokument ist Arbeit, die Sie einem Kunden aufgeben.',
+          evaluationTemplate: 'Der Bewertungsrahmen sind die wenigen Kriterien, nach denen Ihr Team einen Lead oder einen Deal bewertet. Sie vor der ersten Bewertung aufzuschreiben macht die Bewertungen zweier Vertriebsmitarbeiter vergleichbar. Drei bis sechs Kriterien reichen völlig, und der eingebaute Rahmen ist ein guter Start, solange Sie keine feste Meinung haben.',
+          inviteMentors: 'Laden Sie zuerst Ihre Vertriebsmitarbeiter ein: Ein Lead ohne Verantwortlichen wartet, ein Mitarbeiter ohne Leads hat nur eine ruhige Woche. Laden Sie Leute ein, die persönlich schon zugesagt haben — die E-Mail ist die Formalität, nicht die Frage. Bitten Sie jede und jeden, nach dem Einloggen Kapazität und Verfügbarkeit zu setzen.',
+          inviteMentees: 'Fügen Sie die Leads, die Sie schon haben, in einem Schwung hinzu statt tröpfchenweise — eine Pipeline sagt erst etwas aus, wenn Menschen darin sind. Niemand sieht die Daten anderer.',
+          addCompany: 'Accounts sind die Unternehmen, an die Sie verkaufen, und ohne mindestens einen sind die letzten Stufen der Pipeline bedeutungslos. Tragen Sie die ein, mit denen Sie ohnehin sprechen, samt Kontaktadresse — bevor Sie sie brauchen. Festzuhalten, was ein Account sucht, sorgt dafür, dass später der passende Lead von selbst auftaucht.',
+          assignMentorship: 'Hier beginnt die Pipeline wirklich: ein Vertriebsmitarbeiter, ein Lead und von da an eine gemeinsame Historie aus Gesprächen, Notizen und Stufenwechseln. Legen Sie den ersten Deal an, sobald es beide Seiten gibt — ein falscher Verantwortlicher ist leicht zu ändern. Jedes Board, jeder Bericht und jede Erinnerung baut auf diesen Deals auf.',
+          firstInteraction: 'Eine festgehaltene Interaktion — ein Anruf, eine E-Mail, ein Termin — ist die Art, wie das Team sich erinnert, was gesagt wurde. Die erste zählt am meisten: Sie ist das, was eine Kollegin liest, bevor sie einen Lead übernimmt, und woran der Erinnerungsjob Stille misst. Halten Sie sie direkt nach dem Gespräch fest. Dieser Schritt ist optional: Er ist ein Meilenstein, kein Teil der Einrichtung.',
         },
       },
       emailGroups: {
