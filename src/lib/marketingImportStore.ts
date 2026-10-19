@@ -38,6 +38,7 @@ import { runImport, parseDelimited, type ImportReport, type ParsedTable } from '
 import { resolvePipelineStages } from './pipelineStages';
 import { startStageKey } from './pipeline';
 import { statusChangeData } from './stageChange';
+import { historicMoveAt } from './accountEventRule';
 import { trialLengthDaysFor } from './trialWindow';
 import { getSetting } from './settings';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
@@ -334,6 +335,24 @@ async function writeImportedValue(
 }
 
 /**
+ * A backdated move of an EXISTING record (a historic account event that met a
+ * record somebody already works on): dated at the event, but never before the
+ * record's start nor at or before its newest history row — the stage clock and
+ * every "last move" reader read the newest row (`historicMoveAt`).
+ */
+async function historicMoveAtFor(tx: TxClient, relationId: string, at: Date): Promise<Date> {
+  const [relation, newest] = await Promise.all([
+    tx.mentorshipRelation.findUnique({ where: { id: relationId }, select: { startDate: true } }),
+    tx.statusChange.findFirst({
+      where: { relationId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { createdAt: true },
+    }),
+  ]);
+  return historicMoveAt(at, { startDate: relation?.startDate ?? null, newestHistoryAt: newest?.createdAt ?? null });
+}
+
+/**
  * Place the row's lead person and funnel record. Runs inside the row's own
  * transaction, after the Company is written, so `companyId` is known.
  */
@@ -459,7 +478,7 @@ async function placeOnFunnel(
     fromStatus,
     toStatus: funnel.toStage,
     changedById: funnel.ownerId,
-    ...(context.now ? { createdAt: context.now } : {}),
+    ...(context.now ? { createdAt: await historicMoveAtFor(tx, active.id, context.now) } : {}),
     ...(context.offPathStages.has(funnel.toStage)
       ? { reasonCode: IMPORT_REASON_CODE, reasonNote: IMPORT_REASON_NOTE }
       : {}),

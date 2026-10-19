@@ -16,6 +16,8 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
 //     daily sweep run right after finds nothing to send, expire or ring;
 //   • `replay: true` makes even a fresh event historic;
 //   • a historic new journey dates the old record's end and the new one's start;
+//   • a conversion inside the trial window takes the replay's own expiry back;
+//   • a replayed move never lands underneath a person's newer move;
 //   • a recent live event behaves exactly as before (no backdating, its own
 //     activity lines, a running trial).
 
@@ -207,6 +209,64 @@ test('a historic new journey dates the old record\'s end and the new record\'s s
   // The default 30-day window from the event ran out long ago.
   expect(fresh.pipelineStatus).toBe('TRIAL_EXPIRED');
   expect(await prisma.activityLog.count({ where: { orgId, action: 'integration.new_journey' } })).toBe(0);
+});
+
+test('a customer who paid during the trial never expired: the replay takes its own expiry back', async ({ request }) => {
+  const occurredAt = daysAgo(400);
+  const trialEndsAt = daysAgo(370);
+  const created = await post(
+    request,
+    envelope({ occurred_at: occurredAt.toISOString(), trial_started_at: occurredAt.toISOString(), trial_ends_at: trialEndsAt.toISOString() }),
+  );
+  const body = await created.json();
+  expect(body).toMatchObject({ outcome: 'applied', historic: true });
+  const relationId = body.relationId as string;
+  // On its own, the first event cannot know what comes next: it expires.
+  expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relationId } })).pipelineStatus).toBe('TRIAL_EXPIRED');
+
+  const wonAt = daysAgo(390); // inside the trial window
+  const externalId = (await prisma.company.findUniqueOrThrow({ where: { id: body.companyId } })).externalId;
+  const won = await post(request, envelope({ event_type: 'converted', external_id: externalId, occurred_at: wonAt.toISOString() }));
+  expect(await won.json()).toMatchObject({ outcome: 'applied', historic: true, relationId });
+
+  const history = await prisma.statusChange.findMany({ where: { relationId }, orderBy: { createdAt: 'asc' } });
+  expect(history.map((h) => [`${h.fromStatus}>${h.toStatus}`, h.createdAt.toISOString(), h.changedById])).toEqual([
+    ['TRIAL_ACTIVE>DEAL_WON', wonAt.toISOString(), null],
+  ]);
+  expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relationId } })).pipelineStatus).toBe('DEAL_WON');
+  expect(await noiseFor(relationId)).toEqual({ ladderClaims: 0, notifications: 0, queuedMail: 0 });
+});
+
+test('a replay never slides underneath a move a person made today', async ({ request }) => {
+  const externalId = extId();
+  const company = await prisma.company.create({ data: { orgId, name: `Acme Sales Worked ${STAMP}`, externalId } });
+  const leadEmail = uniqueEmail('replay-worked-lead');
+  emails.push(leadEmail);
+  const lead = await seedUser(leadEmail, PW, 'MENTEE', 'Worked Lead', orgId);
+  const record = await prisma.mentorshipRelation.create({
+    data: { orgId, mentorId: ownerId, menteeId: lead.id, companyId: company.id, pipelineStatus: 'LEAD_QUALIFIED', startDate: daysAgo(30) },
+  });
+  const manualAt = new Date(Date.now() - 60_000);
+  await prisma.statusChange.create({
+    data: { relationId: record.id, fromStatus: 'LEAD_NEW', toStatus: 'LEAD_QUALIFIED', changedById: ownerId, createdAt: manualAt },
+  });
+
+  const res = await post(request, envelope({ event_type: 'trial_started', external_id: externalId, occurred_at: daysAgo(700).toISOString() }));
+  expect(await res.json()).toMatchObject({ outcome: 'applied', historic: true, relationId: record.id });
+
+  const history = await prisma.statusChange.findMany({ where: { relationId: record.id }, orderBy: { createdAt: 'asc' } });
+  expect(history.map((h) => `${h.fromStatus}>${h.toStatus}`)).toEqual([
+    'LEAD_NEW>LEAD_QUALIFIED',
+    'LEAD_QUALIFIED>TRIAL_ACTIVE',
+    'TRIAL_ACTIVE>TRIAL_EXPIRED',
+  ]);
+  // Strictly in order, and the person's move is no longer the newest: the
+  // replayed moves land right after it, not two years underneath it.
+  const times = history.map((h) => h.createdAt.getTime());
+  expect(times[1]).toBeGreaterThan(times[0]);
+  expect(times[2]).toBeGreaterThan(times[1]);
+  expect(times[0]).toBe(manualAt.getTime());
+  expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: record.id } })).pipelineStatus).toBe('TRIAL_EXPIRED');
 });
 
 test('a recent live event behaves exactly as before', async ({ request }) => {

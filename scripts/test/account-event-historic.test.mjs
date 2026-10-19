@@ -8,7 +8,15 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { HISTORIC_EVENT_AGE_DAYS, backdateFor, historicTrialLanding, isHistoricEvent } = await import(
+const {
+  HISTORIC_EVENT_AGE_DAYS,
+  HISTORY_STEP_MS,
+  backdateFor,
+  historicMoveAt,
+  historicTrialLanding,
+  isHistoricEvent,
+  shouldUndoHistoricExpiry,
+} = await import(
   '../../src/lib/accountEventRule.ts'
 );
 const { DECISION_WINDOW_CLAIM, DEFAULT_DECISION_WINDOW_DAYS } = await import('../../src/lib/trialReminderRule.ts');
@@ -49,7 +57,7 @@ test('a trial that ran out lands at TRIAL_EXPIRED, dated at its end, and its clo
   assert.ok(DECISION_WINDOW_CLAIM < 0, 'the claim is the negative threshold the sweep reads');
 });
 
-test('the expiry is never dated before the record entered the trial', () => {
+test('the expiry is dated strictly after the record entered the trial', () => {
   const landing = historicTrialLanding({
     pipelineStatus: 'TRIAL_ACTIVE',
     trialEndsAt: ago(60),
@@ -58,7 +66,34 @@ test('the expiry is never dated before the record entered the trial', () => {
     decisionWindowDays: 30,
   });
   assert.equal(landing.expire, true);
-  assert.equal(landing.expiredAt?.toISOString(), ago(50).toISOString());
+  assert.equal(landing.expiredAt?.getTime(), ago(50).getTime() + HISTORY_STEP_MS, 'an end before the start');
+  // An end exactly at the start must not tie with the move into the trial.
+  const tie = historicTrialLanding({ pipelineStatus: 'TRIAL_ACTIVE', trialEndsAt: ago(50), enteredAt: ago(50), now: NOW, decisionWindowDays: 30 });
+  assert.ok(tie.expiredAt && tie.expiredAt.getTime() > ago(50).getTime());
+});
+
+test('a historic move is never dated at or before the record\'s newest history, nor before its start', () => {
+  const at = ago(700);
+  assert.equal(historicMoveAt(at, { startDate: null, newestHistoryAt: null }).toISOString(), at.toISOString());
+  assert.equal(historicMoveAt(at, { startDate: ago(800), newestHistoryAt: ago(750) }).toISOString(), at.toISOString(), 'older history: the event');
+  assert.equal(historicMoveAt(at, { startDate: ago(650), newestHistoryAt: null }).toISOString(), ago(650).toISOString(), 'not before the start');
+  // A person moved the record today: the replayed move lands right after it.
+  const manual = new Date(NOW.getTime() - 60_000);
+  assert.equal(historicMoveAt(at, { startDate: ago(800), newestHistoryAt: manual }).getTime(), manual.getTime() + HISTORY_STEP_MS);
+  assert.equal(historicMoveAt(at, { startDate: null, newestHistoryAt: at }).getTime(), at.getTime() + HISTORY_STEP_MS, 'never a tie');
+});
+
+test('a move from before the replay\'s own expiry takes that expiry back; nothing else is touched', () => {
+  const expiry = { fromStatus: 'TRIAL_ACTIVE', toStatus: 'TRIAL_EXPIRED', changedById: null, createdAt: ago(370) };
+  const base = { pipelineStatus: 'TRIAL_EXPIRED', toStage: 'DEAL_WON', at: ago(390), newest: expiry };
+  assert.equal(shouldUndoHistoricExpiry(base), true, 'paid during the trial: the expiry never happened');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, at: ago(350) }), false, 'paid after the expiry: it stays');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, at: ago(370) }), false, 'at the very moment: it stays');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, newest: { ...expiry, changedById: 'user-1' } }), false, 'a person\'s move');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, newest: { ...expiry, fromStatus: 'LEAD_QUALIFIED' } }), false, 'not the system expiry');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, newest: null }), false, 'no history');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, pipelineStatus: 'TRIAL_ACTIVE' }), false, 'not expired');
+  assert.equal(shouldUndoHistoricExpiry({ ...base, toStage: 'TRIAL_ACTIVE' }), false, 'a second trial start is not a move past the expiry');
 });
 
 test('the same calendar-day rule as the daily expiry: the last day is still the customer\'s', () => {

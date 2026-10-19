@@ -226,6 +226,12 @@ export const HISTORIC_EVENT_AGE_DAYS = 3;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
+ * The smallest step that keeps two history rows apart: Prisma's DateTime is a
+ * DATETIME(3), so one millisecond is what the column can still tell apart.
+ */
+export const HISTORY_STEP_MS = 1;
+
+/**
  * Does this event replay the past (true) or report the present (false)?
  * Strictly older than the threshold; an event dated in the future is live.
  */
@@ -280,7 +286,63 @@ export function historicTrialLanding(input: {
   const closes = decisionWindowEndsAt(trialEndsAt, input.decisionWindowDays);
   return {
     expire,
-    expiredAt: expire ? new Date(Math.max(trialEndsAt.getTime(), input.enteredAt.getTime())) : null,
+    // Strictly after the entry: a source that sends an end at or before its
+    // start must not tie the expiry with the move into the trial, or a reader
+    // ordering by createdAt alone could show the expiry first.
+    expiredAt: expire ? new Date(Math.max(trialEndsAt.getTime(), input.enteredAt.getTime() + HISTORY_STEP_MS)) : null,
     preclaimDecisionWindow: expired && !!closes && closes.getTime() <= now.getTime(),
   };
+}
+
+/**
+ * The moment a historic move of ONE record is dated: the event's own moment,
+ * but never before the record's start and never at or before the newest row
+ * already in its history. The out-of-order guard (`isStaleEvent`) only knows
+ * the feed's own earlier events; a person's move from today, or the import's,
+ * is history the replay must not slide underneath — every "last move" reader
+ * (the stage clock, the board's ordering, the timeline) reads the newest row.
+ * A replay into a record somebody already worked on lands right after that
+ * work, which is the earliest moment the record could truly have made the move.
+ */
+export function historicMoveAt(at: Date, record: { startDate: Date | null; newestHistoryAt: Date | null }): Date {
+  let t = at.getTime();
+  if (record.startDate) t = Math.max(t, record.startDate.getTime());
+  if (record.newestHistoryAt) t = Math.max(t, record.newestHistoryAt.getTime() + HISTORY_STEP_MS);
+  return new Date(t);
+}
+
+/** The newest history row of a record, as the undo rule needs to see it. */
+export interface HistoryRowLike {
+  fromStatus: string;
+  toStatus: string;
+  changedById: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Should a historic move first take back the record's system expiry?
+ *
+ * The replay expires a trial as soon as the trial's own event is applied
+ * (`historicTrialLanding`), looking at today's date — it cannot know what the
+ * replay says next. When the next event is a move that happened BEFORE that
+ * expiry (a customer who paid during the trial), the expiry never happened:
+ * the record goes on from TRIAL_ACTIVE, and the expiry row is removed rather
+ * than left as a "TRIAL_EXPIRED → DEAL_WON" dated before the expiry itself.
+ *
+ * Only ever the system's own expiry (`changedById` null, TRIAL_ACTIVE →
+ * TRIAL_EXPIRED), only when it is the newest row of the record, and only when
+ * it is dated after the event — anything a person did is never touched.
+ */
+export function shouldUndoHistoricExpiry(input: {
+  pipelineStatus: string;
+  toStage: string;
+  at: Date;
+  newest: HistoryRowLike | null;
+}): boolean {
+  const { newest } = input;
+  if (input.pipelineStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
+  if (input.toStage === TRIAL_ACTIVE_STAGE_KEY || input.toStage === TRIAL_EXPIRED_STAGE_KEY) return false;
+  if (!newest || newest.changedById !== null) return false;
+  if (newest.fromStatus !== TRIAL_ACTIVE_STAGE_KEY || newest.toStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
+  return newest.createdAt.getTime() > input.at.getTime();
 }

@@ -49,6 +49,12 @@
 // that has already closed is claimed up front so the daily sweep never rings
 // it, and the per-event activity lines fold into ONE aggregated line per
 // request (`ReplayLog`). A live event is written exactly as before.
+// Two guards keep a record's history in order: a historic move is never dated
+// at or before the newest row the record already has (`historicMoveAt` — a
+// person's move from today stays the newest), and a move that happened before
+// the replay's own eager expiry takes that expiry back first
+// (`shouldUndoHistoricExpiry` — a customer who paid during the trial never
+// expired).
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { runWithOrg } from '@/lib/orgContext';
@@ -72,11 +78,13 @@ import {
   accountNameFor,
   backdateFor,
   contactFullName,
+  historicMoveAt,
   historicTrialLanding,
   ingestIntent,
   ingestTrialWindow,
   isHistoricEvent,
   isStaleEvent,
+  shouldUndoHistoricExpiry,
 } from '@/lib/accountEventRule';
 import type { AccountEvent } from '@/lib/accountEventSchema';
 
@@ -177,6 +185,7 @@ const RELATION_SELECT = {
   companyId: true,
   trialStartedAt: true,
   trialEndsAt: true,
+  startDate: true,
 } as const;
 type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION_SELECT }>;
 
@@ -430,7 +439,21 @@ async function moveAccount(ctx: Ctx, companyId: string, toStage: string, stages:
   return { outcome: 'applied', companyId, relationId: relation.id };
 }
 
-/** One transaction: the stage, its trial window, and the history row. */
+/** The newest row of a record's stage history (null when it has none). */
+function newestHistory(db: Prisma.TransactionClient, relationId: string) {
+  return db.statusChange.findFirst({
+    where: { relationId },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, fromStatus: true, toStatus: true, changedById: true, createdAt: true },
+  });
+}
+
+/**
+ * One transaction: the stage, its trial window, and the history row. A
+ * historic move first takes back the replay's own expiry when the move came
+ * before it (`shouldUndoHistoricExpiry`), and is dated at the event but never
+ * at or before the record's newest history row (`historicMoveAt`).
+ */
 async function moveRelation(ctx: Ctx, relation: RelationRow, toStage: string): Promise<void> {
   const { orgId, event } = ctx;
   const window =
@@ -449,18 +472,41 @@ async function moveRelation(ctx: Ctx, relation: RelationRow, toStage: string): P
           }),
         )
       : {};
-  const history = statusChangeData({
-    relationId: relation.id,
-    fromStatus: relation.pipelineStatus,
-    toStatus: toStage,
-    changedById: null,
-    // Historic: the move happened at the event, not at the replay.
-    ...(ctx.at ? { createdAt: ctx.at } : {}),
+  const undone = await prisma.$transaction(async (tx) => {
+    let fromStatus = relation.pipelineStatus;
+    let createdAt: Date | undefined;
+    let undoneExpiry = false;
+    if (ctx.at) {
+      let newest = await newestHistory(tx, relation.id);
+      if (newest && shouldUndoHistoricExpiry({ pipelineStatus: fromStatus, toStage, at: ctx.at, newest })) {
+        // Conditional, like the expiry itself: only the state just read.
+        const back = await tx.mentorshipRelation.updateMany({
+          where: { id: relation.id, pipelineStatus: TRIAL_EXPIRED_STAGE_KEY },
+          data: { pipelineStatus: TRIAL_ACTIVE_STAGE_KEY },
+        });
+        if (back.count === 1) {
+          await tx.statusChange.delete({ where: { id: newest.id } });
+          fromStatus = TRIAL_ACTIVE_STAGE_KEY;
+          undoneExpiry = true;
+          newest = await newestHistory(tx, relation.id);
+        }
+      }
+      // Historic: the move happened at the event, not at the replay — but not
+      // underneath history the record already has.
+      createdAt = historicMoveAt(ctx.at, { startDate: relation.startDate, newestHistoryAt: newest?.createdAt ?? null });
+    }
+    const history = statusChangeData({
+      relationId: relation.id,
+      fromStatus,
+      toStatus: toStage,
+      changedById: null,
+      ...(createdAt ? { createdAt } : {}),
+    });
+    await tx.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } });
+    if (history) await tx.statusChange.create({ data: history });
+    return undoneExpiry;
   });
-  await prisma.$transaction([
-    prisma.mentorshipRelation.update({ where: { id: relation.id }, data: { pipelineStatus: toStage, ...window } }),
-    ...(history ? [prisma.statusChange.create({ data: history })] : []),
-  ]);
+  if (undone) tally(ctx, 'trial_expiry_undone');
 }
 
 /**
@@ -478,6 +524,14 @@ async function newJourney(
 ): Promise<IngestResult> {
   const { orgId, source, event } = ctx;
   if (!stages.some((s) => s.key === toStage)) return { outcome: 'conflict', detail: `the org has no ${toStage} stage` };
+  // Historic: the old record ends, and the new one starts, at the event — but
+  // never underneath what the old record already went through.
+  const at = ctx.at
+    ? historicMoveAt(ctx.at, {
+        startDate: previous.startDate,
+        newestHistoryAt: (await newestHistory(prisma, previous.id))?.createdAt ?? null,
+      })
+    : undefined;
   const window = ingestTrialWindow(
     { trialStartedAt: null, trialEndsAt: null },
     { trialStartedAt: event.trial_started_at ?? null, trialEndsAt: event.trial_ends_at ?? null },
@@ -487,7 +541,7 @@ async function newJourney(
     if (previous.status === 'ACTIVE') {
       await tx.mentorshipRelation.update({
         where: { id: previous.id, status: 'ACTIVE' },
-        data: { status: 'COMPLETED', completedAt: ctx.at ?? new Date() },
+        data: { status: 'COMPLETED', completedAt: at ?? new Date() },
       });
     }
     return tx.mentorshipRelation.create({
@@ -498,7 +552,7 @@ async function newJourney(
         menteeId: previous.menteeId,
         pipelineStatus: toStage,
         previousRelationId: previous.id,
-        ...(ctx.at ? { startDate: ctx.at } : {}),
+        ...(at ? { startDate: at } : {}),
         ...window,
       },
       select: { id: true },
@@ -529,13 +583,19 @@ async function settleHistoricTrial(ctx: Ctx, relationId: string, stages: Stages)
   const hasExpired = stages.some((s) => s.key === TRIAL_EXPIRED_STAGE_KEY);
   const relation = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
-    select: { pipelineStatus: true, trialEndsAt: true },
+    select: { pipelineStatus: true, trialEndsAt: true, startDate: true },
   });
   if (!relation) return;
+  // The record entered the trial at its newest history row (the move just
+  // written, possibly held after a person's newer move) or at its start.
+  const newest = await newestHistory(prisma, relationId);
+  const enteredAt = new Date(
+    Math.max(ctx.at.getTime(), relation.startDate.getTime(), newest?.createdAt.getTime() ?? 0),
+  );
   const landing = historicTrialLanding({
     pipelineStatus: relation.pipelineStatus,
     trialEndsAt: relation.trialEndsAt,
-    enteredAt: ctx.at,
+    enteredAt,
     now: ctx.now,
     decisionWindowDays: await decisionWindowDaysFor(ctx.orgId),
   });
