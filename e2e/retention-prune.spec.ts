@@ -211,6 +211,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'message',
         'notification',
         'orphanApplicant',
+        'outboundDraft',
         'pageView',
         'pushSubscription',
         'trialReminder',

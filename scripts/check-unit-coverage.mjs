@@ -131,6 +131,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'the portal completeness meter: blanks never count as filled, weights sum to 100, missing list is deterministic' },
   ],
   [
+    'src/lib/outboundApprovalRule.ts',
+    { floor: 95, measured: 100.0, why: 'which automated mail an org holds for approval: unknown category held, staff and the essential group never (#2960)' },
+  ],
+  [
     'src/lib/verticals.ts',
     { floor: 95, measured: 100.0, why: 'vertical catalogue: unknown key must fall back, never blank a tenant (#2350)' },
   ],

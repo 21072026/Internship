@@ -5,6 +5,7 @@ import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
 import { forgetQueuedMail } from '@/lib/mailOutbox';
+import { forgetOutboundDrafts } from '@/lib/outboundDrafts';
 import {
   accountlessTombstoneId,
   companyContactErasureData,
@@ -59,8 +60,13 @@ import {
 // as a sha256 (`payload.rcpt`). It is deleted by that hash, under the same
 // two-world rule: only this account's own rows while the address lives on.
 async function forgetEmailLog(userId: string): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
   if (!user?.email) return;
+  // Held drafts (#2960): every draft addressed to this account, and every one
+  // addressed to its address inside its OWN org (held before the account
+  // existed). Org-bound by construction, so the other world's drafts for the
+  // same address are untouched — no two-world branch needed.
+  await forgetOutboundDrafts({ userId, address: user.email, orgId: user.orgId });
   const addressStillHeld =
     (await runUnscoped(() => prisma.user.count({ where: { email: user.email, id: { not: userId } } }))) > 0;
   if (addressStillHeld) {
@@ -151,6 +157,9 @@ export async function forgetCompanyContact(
   const [inquiries, companies, contacts] = await prisma.$transaction(
     contactScrubOps(normalizeContactEmail(email), orgId, accountlessTombstoneId(randomId), await defaultOrgId()),
   );
+  // A held mail to this contact (#2960) carries their address and the words
+  // about them: it goes with them, inside the requesting org only.
+  await forgetOutboundDrafts({ address: normalizeContactEmail(email), orgId: orgId ?? (await defaultOrgId()) });
   return { inquiries: inquiries.count, companies: companies.count, contacts: contacts.count };
 }
 

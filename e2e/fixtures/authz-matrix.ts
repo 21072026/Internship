@@ -300,6 +300,30 @@ export const SUPER_ADMIN_ONLY: SuperAdminProbe[] = [
  */
 export const MAIL_JOB_ID_PARAM = ':jobId';
 
+/**
+ * The outbound approval inbox (#2960): a held mail of the FOREIGN (MARKETING)
+ * tenant. Every role here is refused — the matrix's own ADMIN and MENTOR live
+ * in an internship org, which has no outbox (403), the other roles have no
+ * outbox at all (401), and nobody may reach another tenant's draft (404 from
+ * inside a MARKETING org, e2e/outbound-approval.spec.ts). `:draftId` is that
+ * foreign draft, so an action that got through would show on the row.
+ */
+export const OUTBOX_DRAFT_ID_PARAM = ':draftId';
+
+export const OUTBOX_FOREIGN: Array<{ method: 'GET' | 'POST'; path: string; why: string; body?: Record<string, unknown> }> = [
+  { method: 'GET', path: '/api/admin/outbox', why: 'the outbox list' },
+  { method: 'GET', path: `/api/admin/outbox/${OUTBOX_DRAFT_ID_PARAM}`, why: 'preview a held mail' },
+  { method: 'POST', path: `/api/admin/outbox/${OUTBOX_DRAFT_ID_PARAM}/send`, why: 'send a held mail' },
+  { method: 'POST', path: `/api/admin/outbox/${OUTBOX_DRAFT_ID_PARAM}/discard`, why: 'discard a held mail' },
+  {
+    method: 'POST',
+    path: `/api/admin/outbox/${OUTBOX_DRAFT_ID_PARAM}/schedule`,
+    why: 'schedule a held mail',
+    body: { at: '2099-01-01T09:00:00.000Z' },
+  },
+  { method: 'POST', path: '/api/admin/outbox/bulk', why: 'bulk-discard held mail', body: { action: 'discard', ids: [OUTBOX_DRAFT_ID_PARAM] } },
+];
+
 export const MAIL_QUEUE_OPERATOR_ONLY: Array<{ method: 'GET' | 'POST'; path: string; why: string }> = [
   { method: 'GET', path: '/api/admin/mail-queue', why: 'the deployment-wide mail queue view' },
   { method: 'GET', path: '/api/admin/mail-queue?probe=1', why: 'the Queue tab probe' },

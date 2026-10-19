@@ -375,7 +375,8 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 | `GET/PUT /api/mentorship/[id]` başka org'un | 404 | İlişki çağıranın kiracısı içinde aranır (#2613); ADMIN dahil |
 | `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |
 | `POST /api/invite` | **403** `capability_unavailable` | ADMIN dışı davet artık `mentorship` yeteneği ister (#2580) |
-| `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır |
+| `/sales/outbox`, `GET /api/admin/outbox[/id]`, `POST /api/admin/outbox/[id]/send` · `/schedule` · `/discard`, `POST /api/admin/outbox/bulk` | ✅ kendi / 404 | Onay bekleyen otomatik postalar (#2960, [`docs/outbound-approval.md`](outbound-approval.md)): yalnızca **şu an sahibi olduğu** kayıtların lead'ine ya da hesabına giden taslaklar (`visibleDraftsWhere`). Başka temsilcinin ya da başka org'un taslağı **404** — okuma da her eylem de. ADMIN org'unun tamamını görür. `mentorship` taşıyan dikeyde (INTERNSHIP) uçlar **403 `capability_unavailable`**. `/api/admin/*` altında MENTOR'a açık ikinci uç ailesi (ilki `duplicates/check`) |
+| `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır (istisna: yukarıdaki outbox) |
 | `GET/PATCH /api/users/[id]` | 401 | ADMIN-only |
 | `POST/PUT/DELETE /api/companies…` | 401 | ADMIN-only |
 | `POST /api/mentorship`, `…/transfer` | 401/403 | Atama ve devir ADMIN'de |
@@ -383,7 +384,9 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` →
 `MARKETING_MENTOR_ADMIN_ONLY`, `MARKETING_MENTOR_ROWS`, `MARKETING_MENTOR_PAGES`;
 koşan spec `e2e/marketing-sales-surface.spec.ts`. Bir satır eklerken ikisini
-birlikte güncelleyin.
+birlikte güncelleyin. Outbox'ın kapsamı `e2e/outbound-approval.spec.ts`'te, başka
+tenant'ın taslağına karşı her rolün reddi `e2e/fixtures/authz-matrix.ts` →
+`OUTBOX_FOREIGN`'da koşar.
 
 ## Bu matrisin dışında kalanlar / Out of scope for this matrix
 

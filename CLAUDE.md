@@ -488,6 +488,22 @@ marketing names redirect there, and their apex now serves **mail only**.
   form's DOI mail is capped at one per address per UTC day (`ContactConfirmationMailCap`, a
   primary-key insert). No advertising mail to account contacts exists yet — the first one must
   call `canSendMarketingEmail()` per recipient.
+- **Outbound approval is one rule and one hook** ([`docs/outbound-approval.md`](docs/outbound-approval.md),
+  #2960): with the per-org setting `outboundApproval = 'lead_mail'` (MARKETING only; `'off'` is the
+  default and reads `'off'` in any vertical with `mentorship`), an automated mail to a lead (MENTEE),
+  a customer (COMPANY) or an account-less contact of the org becomes an `OutboundDraft` instead of
+  leaving. Which mail is held is decided ONLY by `outboundDecision()` in
+  `src/lib/outboundApprovalRule.ts` — every category listed explicitly with its reason, the
+  `account_security` group (incl. the DOI `consent` mail) and the person's own acknowledgement exempt,
+  the org's ADMIN/MENTOR staff never held, an **unknown category HELD**. The ONE hook is in
+  `sendEmail()` (after `prepareEmail()`, before the dispatch), so no sender needs its own check and
+  none may route around it; `sendEmail()` answers `'HELD'` (callers comparing `!== 'SKIPPED'` treat it
+  as handled, so cron claims stamp and no draft is rebuilt; drafts dedupe on `(orgId, dedupeKey)`).
+  A held mail leaves **only** through `applyDraftAction('send' | 'schedule')`
+  (`src/lib/outboundDrafts.ts`, the one writer: guarded `updateMany` from `DRAFT` + AuditLog in one
+  transaction), which hands the sealed mail to `enqueueMail()` with key `draft:<id>`. A new mail
+  category gets an entry in `OUTBOUND_CATEGORIES` (the unit test fails otherwise); never add a
+  "skip approval" flag to `sendEmail()`.
 - **One meeting link resolver, one link check** (`docs/video-calls-jaas.md` § Bring your own
   link, #2007): every meeting-creation path gets its room from `resolveMeetingLink()`
   (`src/lib/meetingRoom.ts`) — pasted link → the organiser's saved `personalMeetingUrl` (under

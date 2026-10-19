@@ -486,7 +486,9 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     // render is: a failed lookup is a failed run, not one recipient marked FAILED.
     const origin = await originFor(user.orgId, brandCache);
 
-    let status: 'SENT' | 'QUEUED' | 'FAILED' | 'SKIPPED' = 'SENT';
+    // HELD (#2960): the reader's org approves automated mail first; counted
+    // with the skipped — it has not reached anyone yet.
+    let status: 'SENT' | 'QUEUED' | 'FAILED' | 'SKIPPED' | 'HELD' = 'SENT';
     let error: string | null = null;
     // The queued copy's identity and the record it settles (#2951).
     const dedupeKey = dedupeKeyFor({ kind: 'newsletter', newsletterId, recipient: user.email });
