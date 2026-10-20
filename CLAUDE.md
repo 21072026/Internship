@@ -542,6 +542,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   Never add a second lease table or a second election mechanism. The job WORKER
   is the opposite case — it claims rows with `SKIP LOCKED`, so more workers are
   better, and it must never take a lease.
+  The worker itself (#1673, [`docs/job-worker.md`](docs/job-worker.md)) runs a job only
+  through a handler registered in `src/jobs/index.ts`; every settle is one guarded
+  `updateMany` on the claim, retries back off with jitter, and `maxAttempts` ends in
+  `DEAD_LETTER`. Handlers are at-least-once — say in each one why a rerun is harmless.
   The **cron is not leased yet**: its schedules are registered once at boot, so
   a lease taken there would never be renewed. Until #1676 makes each tick take
   the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
