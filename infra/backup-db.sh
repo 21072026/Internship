@@ -129,6 +129,11 @@ fi
 
 mv "$tmp" "$out"
 chmod 600 "$out"
+# One owner for every dump (#2989): the directory's. The deploy hook writes as
+# the runner user and the daily cron as root, and a root-owned 0600 dump is one
+# the runner's freshness check (and restore drill) cannot read — the check then
+# reports the newest backup as unverified every morning after the cron ran.
+if [ "$(id -u)" = 0 ]; then chown --reference="$BACKUP_DIR" "$out" || log "WARN: could not hand $out to the owner of $BACKUP_DIR"; fi
 log "Backup written: $out (${size} bytes, ${tables} tables)"
 
 # Prune, but only our own files: the pattern is anchored to <env>-<stamp>.sql.gz
@@ -138,3 +143,4 @@ find "$BACKUP_DIR" -maxdepth 1 -type f -name "${ENV_NAME}-*.sql.gz" -mtime "+${K
 
 # Leave the newest path where the caller (and the health check) can find it.
 printf '%s\n' "$out" > "$BACKUP_DIR/.last-${ENV_NAME}"
+if [ "$(id -u)" = 0 ]; then chown --reference="$BACKUP_DIR" "$BACKUP_DIR/.last-${ENV_NAME}" || true; fi

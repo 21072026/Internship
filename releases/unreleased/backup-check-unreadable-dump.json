@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Backup check: a dump the runner cannot read is named as such, and the cron no longer leaves one behind (#2989):** the daily backup cron runs as root and wrote its dumps root-owned `0600`, so the freshness check — which runs as the runner user — could not read the newest prod dump and reported it as `too small: B; not a valid gzip stream` (with a shell error on the way). `infra/check-backups.sh` now takes the size from the inode and, for an unreadable dump, reports `unreadable by <user> (owner …, mode …): integrity not verified` instead of a false truncation; `infra/backup-db.sh` run as root hands each dump (and `.last-<env>`) to the backup directory's owner. Runbook rows in `docs/disaster-recovery.md` and `infra/README.md` § Daily backup (the cron's installed copy must be re-installed)."
+}
