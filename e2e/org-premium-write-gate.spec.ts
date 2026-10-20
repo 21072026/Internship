@@ -123,7 +123,18 @@ test('the plan, not the admin role, decides who may write branding and SSO', asy
     await plan('ENTERPRISE');
     expect((await patch({ brandName: 'Gate Brand', brandColor: '#2563eb' })).ok()).toBeTruthy();
     expect((await row())?.brandName).toBe('Gate Brand');
-    expect((await patch(SAML)).ok()).toBeTruthy();
+    // The plan unlocks SSO, but the identity provider itself is the operator's
+    // to set (#1575): a tenant admin pasting an IdP is refused even when paid for.
+    const tenantIdp = await patch(SAML);
+    expect(tenantIdp.status()).toBe(403);
+    expect((await tenantIdp.json()).code).toBe('sso_super_admin_only');
+    expect((await row())?.ssoEntryPoint).toBeNull();
+    // Set the way the operator would, the tenant admin switches it on.
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { ssoProvider: SAML.ssoProvider, ssoIssuer: SAML.ssoIssuer, ssoEntryPoint: SAML.ssoEntryPoint, ssoCertificate: SAML.ssoCertificate },
+    });
+    expect((await patch({ ssoEnabled: true })).ok()).toBeTruthy();
     expect((await row())?.ssoEnabled).toBe(true);
     expect((await listed()).sso.active).toBe(true);
 
