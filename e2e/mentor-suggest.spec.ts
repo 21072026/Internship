@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInViaApi } from './helpers/auth';
+import { seedSkillTaxonomy } from '../src/lib/skillsResolve';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -61,5 +63,65 @@ test('mentor suggestion ranks by skill overlap and falls back gracefully without
     await cleanupByEmail(weakEmail);
     await cleanupByEmail(fullEmail);
     await cleanupByEmail(adminEmail);
+  }
+});
+
+// #1821: suggestions score canonical skills with adjacency. A mentee holding
+// React is suggested a mentor holding only Frontend — below an exact match, with
+// the adjacency named — and removing the SkillEdge removes that credit: the
+// relationship is data, not a hardcoded pair.
+test('mentor suggestion counts an adjacent skill below an exact one, from SkillEdge data', async ({ request }) => {
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const pw = 'SuggestPass123';
+  const org = await prisma.organization.create({ data: { name: `Suggest Adj ${stamp}`, slug: `sugg-adj-${stamp}` } });
+  try {
+    await seedSkillTaxonomy(org.id);
+    const skill = (key: string) => prisma.skill.findFirstOrThrow({ where: { orgId: org.id, key } });
+    const [react, frontend] = await Promise.all([skill('react'), skill('frontend')]);
+    const adminEmail = uniqueEmail('sugg-adj-admin');
+    await seedUser(adminEmail, pw, 'ADMIN', 'Adj Admin', org.id);
+    const mk = async (name: string, role: 'MENTOR' | 'MENTEE', skillId: string | null) => {
+      const u = await seedUser(uniqueEmail(`sugg-adj-${role.toLowerCase()}`), 'x', role, name, org.id);
+      if (skillId) await prisma.userSkill.create({ data: { userId: u.id, skillId } });
+      return u;
+    };
+    const mentee = await mk('Adj Mentee', 'MENTEE', react.id);
+    const exact = await mk('Exact Mentor', 'MENTOR', react.id);
+    const near = await mk('Frontend Mentor', 'MENTOR', frontend.id);
+    await mk('Unrelated Mentor', 'MENTOR', null);
+
+    expect((await signInViaApi(request, adminEmail, pw)).ok).toBe(true);
+    const suggest = async () => {
+      const res = await request.post('/api/admin/mentor-suggest', { data: { menteeId: mentee.id } });
+      expect(res.ok()).toBe(true);
+      return (await res.json()) as {
+        aiUsed: boolean;
+        suggestions: { mentorId: string; score: number; sharedSkills: string[]; adjacentSkills: { skill: string; via: string; weight: number }[] }[];
+      };
+    };
+
+    const body = await suggest();
+    expect(body.aiUsed).toBe(false);
+    const ids = body.suggestions.map((s) => s.mentorId);
+    expect(ids.indexOf(exact.id)).toBe(0);
+    expect(ids.indexOf(near.id)).toBe(1);
+    const nearRow = body.suggestions[1];
+    expect(nearRow.score).toBeGreaterThan(0);
+    expect(nearRow.score).toBeLessThan(1);
+    expect(nearRow.adjacentSkills).toEqual([{ skill: frontend.labelEn, via: react.labelEn, weight: nearRow.score }]);
+    expect(body.suggestions[0].sharedSkills).toEqual([react.labelEn]);
+
+    // Remove the edge: the neighbour no longer counts.
+    await prisma.skillEdge.deleteMany({
+      where: { orgId: org.id, OR: [{ fromSkillId: react.id, toSkillId: frontend.id }, { fromSkillId: frontend.id, toSkillId: react.id }] },
+    });
+    const after = await suggest();
+    const nearAfter = after.suggestions.find((s) => s.mentorId === near.id);
+    expect(nearAfter?.adjacentSkills ?? []).toEqual([]);
+    expect(nearAfter?.score ?? 0).toBe(0);
+  } finally {
+    await prisma.matchFeedback.deleteMany({ where: { orgId: org.id } });
+    await prisma.user.deleteMany({ where: { orgId: org.id } });
+    await prisma.organization.delete({ where: { id: org.id } });
   }
 });
