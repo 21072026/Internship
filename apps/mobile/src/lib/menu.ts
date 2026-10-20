@@ -71,6 +71,7 @@ const ICONS: Record<string, string> = {
   reEngagement: 'refresh',
   reportSubscriptions: 'mail-unread',
   retention: 'shield-checkmark',
+  skills: 'sparkles',
   sources: 'radio',
   support: 'help-buoy',
   surveys: 'clipboard',
