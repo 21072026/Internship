@@ -14,6 +14,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
+import { syncUserSkills } from '@/lib/skillsResolve';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { requireCapability } from '@/lib/capabilityGate';
 
@@ -130,6 +131,8 @@ export async function POST(request: Request) {
       skills: capSkills(skills),
     },
   });
+  // Dual-write the canonical twin of the skill list (#1818).
+  await syncUserSkills(mentee.id, mentee.orgId, Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []);
 
   // The application is now a PENDING request the mentor accepts or declines
   // (#1188) — it used to create the ACTIVE relation on the spot, which is
