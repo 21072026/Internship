@@ -750,6 +750,14 @@ sudo crontab -e
 15 3 * * * set -a; . /etc/internship-crm/prod.env; set +a; /usr/local/bin/internship-backup-db --env prod >> /var/log/internship-backup.log 2>&1
 ```
 
+The cron runs as root, the deploy hook and the freshness check as the runner
+user. So a dump written as root is handed to the **owner of the backup
+directory** (`chown --reference`, #2989) — otherwise it stays root-owned `0600`
+and the check reports the newest backup as unreadable every morning after the
+cron ran. `/usr/local/bin/internship-backup-db` is a *copy*: re-run the
+`install` line above after a change to `infra/backup-db.sh`, or the cron keeps
+running the old one.
+
 Dumps land in `/var/backups/internship-crm` (override with `BACKUP_DIR`), are
 kept for `KEEP_DAYS` (default 7) and are written `0600` in a `0700` directory —
 **they contain real personal data** (CVs, phone numbers, mentor notes). Never

@@ -140,6 +140,7 @@ they are fine — a false alarm costs the same trust as a missed one.
 | `no dump found` | backups never ran here, or the directory moved | check `crontab -l` and `BACKUP_DIR` |
 | `stale: Nh old` | the cron or the deploy hook stopped | `tail /var/log/internship-backup.log` |
 | `too small` / `not a valid gzip stream` | the dump is being truncated — disk full, or mysqldump dying mid-stream | `df -h`, then run `infra/backup-db.sh` by hand and read the error |
+| `unreadable by <user> (owner root, mode 600)` | the dump exists but the check's user cannot read it — the daily cron ran an `internship-backup-db` installed before #2989, which leaves its dumps root-owned | re-install the script (infra/README.md → Daily backup), then `sudo chown --reference=/var/backups/internship-crm /var/backups/internship-crm/*.sql.gz` |
 | `history covers only N day(s)` | rotation is deleting faster than it writes, or the box was down | check `KEEP_DAYS` and the log for gaps |
 
 Until it is fixed, assume there is **no usable backup** and do not merge a
