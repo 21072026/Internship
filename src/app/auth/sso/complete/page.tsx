@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { absoluteHere } from '@/lib/safeRedirect';
 
@@ -10,6 +10,15 @@ import { absoluteHere } from '@/lib/safeRedirect';
 // the session, then lands the user in the app.
 function Complete() {
   const params = useSearchParams();
+  // The redemption waits for the SessionProvider's first /api/auth/session
+  // round-trip (#2858). A tab opened from the IdP's redirect holds no NextAuth
+  // cookies yet, and two NextAuth requests in flight at once (that one and
+  // signIn()'s own /api/auth/providers call) EACH mint a CSRF cookie: the
+  // callback POST then carries one token in its body and the other in its
+  // cookie, NextAuth bounces to `signin?csrf=true`, and no session exists —
+  // seen on the CI production build. Once the first round-trip has landed,
+  // every later call reuses its cookie. Same gate as /auth/magic/complete.
+  const { status: sessionStatus } = useSession();
   const [failed, setFailed] = useState(false);
   // The grant is single-use, so this page redeems it exactly once (#2548). The
   // effect can run twice for one visit — React StrictMode re-runs it in dev, and
@@ -20,7 +29,7 @@ function Complete() {
   const started = useRef(false);
 
   useEffect(() => {
-    if (started.current) return;
+    if (sessionStatus === 'loading' || started.current) return;
     started.current = true;
     const token = params.get('token');
     if (!token) {
@@ -28,7 +37,7 @@ function Complete() {
       return;
     }
     signIn('sso', { grant: token, callbackUrl: absoluteHere('/'), redirect: true }).catch(() => setFailed(true));
-  }, [params]);
+  }, [params, sessionStatus]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">

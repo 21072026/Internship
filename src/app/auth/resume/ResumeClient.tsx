@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { useT } from '@/i18n/client';
 import { sameOriginPath } from '@/lib/safeRedirect';
 
@@ -18,10 +18,16 @@ import { sameOriginPath } from '@/lib/safeRedirect';
  */
 export function ResumeClient() {
   const t = useT();
+  // Wait for the SessionProvider's first /api/auth/session round-trip before
+  // signIn() (#2858): a browser with no session holds no NextAuth CSRF cookie
+  // yet either, and signIn()'s own /api/auth/providers call racing that first
+  // request mints a second one — the sign-in POST then fails its CSRF check.
+  // Same gate as /auth/magic/complete and /auth/sso/complete.
+  const { status: sessionStatus } = useSession();
   const started = useRef(false);
 
   useEffect(() => {
-    if (started.current) return;
+    if (sessionStatus === 'loading' || started.current) return;
     started.current = true;
 
     // Only somewhere on this site, so a crafted ?next= cannot turn this into an
@@ -45,7 +51,7 @@ export function ResumeClient() {
         window.location.assign(`/auth/signin?callbackUrl=${encodeURIComponent(next)}`);
       }
     })();
-  }, []);
+  }, [sessionStatus]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
