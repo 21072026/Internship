@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**A release-notes permalink past the first page scrolls to its card again on a busy device (#2750):** `ReleaseNotesList` queued the scroll with `requestAnimationFrame` when the fetch resolved, and on a slow machine that frame ran before React had committed the appended cards — the card loaded but `getElementById` found nothing and the page stayed at the top. The scroll now happens in an effect keyed on the committed entries. `e2e/release-notes-paging.spec.ts` runs the permalink case under 8× CPU throttling, which turned the race from CI-only into 8/8 red before the fix.",
+  "notes": {
+    "en": ["Opening a link to an older release note now reliably scrolls to that entry."],
+    "tr": ["Eski bir sürüm notuna giden bağlantı artık sayfayı güvenilir şekilde o kayda kaydırıyor."],
+    "de": ["Ein Link auf einen älteren Versionshinweis scrollt jetzt zuverlässig zu diesem Eintrag."]
+  }
+}
