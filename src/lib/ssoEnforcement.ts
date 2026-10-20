@@ -39,7 +39,7 @@ import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
 import { runWithOrg } from '@/lib/orgContext';
 import { revokeTrustedDevicesForUsers } from '@/lib/trustedDevice';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 
 /**
  * The message the API doors return. Deliberately identical everywhere, and
@@ -211,13 +211,12 @@ export async function applySsoEnforcement(
   request?: Request
 ): Promise<number> {
   const swept = await sweepSessionsForSsoEnforcement(orgId);
-  await logActivity({
+  await recordOrgWrite({
+    orgId,
     action: 'sso.enforced',
     level: 'warning',
     actorId: actor.id ?? null,
     actorEmail: actor.email ?? null,
-    targetType: 'organization',
-    targetId: orgId,
     detail: `SSO enforcement enabled; ${swept} user${swept === 1 ? '' : 's'} signed out and their trusted devices revoked`,
     request,
   });

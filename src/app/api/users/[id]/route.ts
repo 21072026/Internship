@@ -14,6 +14,7 @@ import { sendRoleChangeEmail } from '@/services/emailService';
 import { isStageTransition } from '@/lib/stageChange';
 import { getLastContacts } from '@/lib/lastContact';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
+import { syncUserSkills } from '@/lib/skillsResolve';
 import { countExemptAdmins } from '@/lib/ssoEnforcement';
 
 // Tenant (#2542): every lookup by id in this file is narrowed to the caller's
@@ -390,8 +391,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const user = await prisma.user.update({
         where: { id },
         data,
-        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true },
+        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true, orgId: true },
       });
+      // Dual-write the canonical twin of the list just saved (#1818).
+      if (data.skills !== undefined) {
+        await syncUserSkills(user.id, user.orgId, Array.isArray(user.skills) ? (user.skills as string[]) : []);
+      }
 
       // A cutoff on its own revokes nothing while a remembered browser can
       // still mint a fresh session on its next visit (docs/remember-me.md), so

@@ -74,6 +74,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // A document's review chain (#1859); the sweep and the token route bind no context and pass orgId.
   'DocumentReview',
   'WeeklyReport',
+  // Org-defined segmentation attributes and their values (#1920).
+  'OrgAttribute',
+  'UserAttributeValue',
   // Scheduled report delivery (#1905).
   'ReportSubscription',
   'ReportSubscriptionSend',
@@ -122,6 +125,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKey',
   // Per-key request counts (#2010) — the key's tenant owns its usage.
   'ApiKeyUsage',
+  // Idempotency keys of /api/v1 writes (#1994) — the key's tenant owns them.
+  'ApiIdempotencyKey',
   // A mentee's practice interview transcript (#2051).
   'PracticeSession',
   // Safeguarding flags (#2056) — one org's review queue; stamped with the
