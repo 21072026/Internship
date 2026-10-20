@@ -23,6 +23,7 @@ import {
   expandAdjacency,
   followMerges,
   skillKeyFromFolded,
+  skillLabel,
 } from '@/lib/skillTaxonomyRule';
 import type { SkillEdgeRow, WeightedSkill } from '@/lib/skillTaxonomyRule';
 
@@ -265,4 +266,38 @@ export async function seedSkillTaxonomy(
   const edges = await prisma.skillEdge.createMany({ data: edgeData, skipDuplicates: true });
 
   return { skills: skills.count, aliases: aliases.count, edges: edges.count };
+}
+
+// ─── Overlap inputs (#1821) ──────────────────────────────────────────────────
+
+/**
+ * The org's edges touching `skillIds` — exactly what `skillOverlap()` /
+ * `requisitionSkillMatch()` need for one-hop adjacency from those skills.
+ * Edges into a retired or merged skill are dropped: a match is never explained
+ * by a skill the org has withdrawn.
+ */
+export async function loadSkillEdges(orgId: string, skillIds: readonly string[]): Promise<SkillEdgeRow[]> {
+  const ids = [...new Set(skillIds)];
+  if (ids.length === 0) return [];
+  const live = { status: 'ACTIVE', mergedIntoId: null };
+  return prisma.skillEdge.findMany({
+    where: {
+      orgId,
+      OR: [{ fromSkillId: { in: ids } }, { toSkillId: { in: ids } }],
+      from: live,
+      to: live,
+    },
+    select: { fromSkillId: true, toSkillId: true, weight: true, kind: true },
+  });
+}
+
+/** Display labels for skill ids, in `locale` (EN fallback). */
+export async function skillLabels(orgId: string, skillIds: readonly string[], locale: string): Promise<Map<string, string>> {
+  const ids = [...new Set(skillIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.skill.findMany({
+    where: { orgId, id: { in: ids } },
+    select: { id: true, labelEn: true, labelTr: true, labelDe: true },
+  });
+  return new Map(rows.map((r) => [r.id, skillLabel(r, locale)]));
 }
