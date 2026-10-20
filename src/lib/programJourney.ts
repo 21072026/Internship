@@ -45,8 +45,11 @@ import {
   satisfiedReason,
   stepTitle,
   stepUnresolvable,
+  journeyStepStatus,
   type JourneyAction,
+  type JourneySkipCondition,
   type SatisfactionFacts,
+  type StepTimelineEntry,
 } from '@/lib/programJourneyRule';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -74,16 +77,23 @@ type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION
   statusChanges?: { toStatus: string; createdAt: Date }[];
 };
 
-/** The observable facts a step's `skipIf` may name, for one relation. */
+/** The observable facts behind `skipIf`, for one relation — only the ones asked for are counted. */
+async function satisfactionFacts(relationId: string, conditions: readonly JourneySkipCondition[]): Promise<SatisfactionFacts> {
+  const facts: SatisfactionFacts = {};
+  for (const cond of new Set(conditions)) {
+    if (cond === 'meeting_exists') facts.meeting_exists = (await prisma.meeting.count({ where: { relationId, status: { not: 'CANCELLED' } } })) > 0;
+    if (cond === 'goal_exists') facts.goal_exists = (await prisma.goal.count({ where: { relationId } })) > 0;
+    if (cond === 'message_exists') facts.message_exists = (await prisma.message.count({ where: { relationId } })) > 0;
+    if (cond === 'interaction_logged') facts.interaction_logged = (await prisma.interactionLog.count({ where: { relationId } })) > 0;
+  }
+  return facts;
+}
+
+/** Why a step is already satisfied for one relation, or null when it should be delivered. */
 export async function isSatisfied(step: Pick<StepRow, 'payload'>, relationId: string): Promise<string | null> {
   const cond = readStepPayload(step.payload).skipIf;
   if (!cond) return null;
-  const facts: SatisfactionFacts = {};
-  if (cond === 'meeting_exists') facts.meeting_exists = (await prisma.meeting.count({ where: { relationId, status: { not: 'CANCELLED' } } })) > 0;
-  if (cond === 'goal_exists') facts.goal_exists = (await prisma.goal.count({ where: { relationId } })) > 0;
-  if (cond === 'message_exists') facts.message_exists = (await prisma.message.count({ where: { relationId } })) > 0;
-  if (cond === 'interaction_logged') facts.interaction_logged = (await prisma.interactionLog.count({ where: { relationId } })) > 0;
-  return satisfiedReason(step, facts);
+  return satisfiedReason(step, await satisfactionFacts(relationId, [cond]));
 }
 
 /**
@@ -273,6 +283,34 @@ export async function runProgramJourney(opts: { now?: Date; orgIds?: string[]; b
     logger.warning('Program journey: steps the org cannot schedule', { steps: result.unresolved.slice(0, 20) });
   }
   return result;
+}
+
+/**
+ * The dry-run timeline of a programme's journey against one of its relations
+ * (#1853): every step, its computed date and what the sweep would do with it.
+ * READS ONLY — it never claims a run, so previewing cannot deliver anything.
+ * Null when the relation is not in the programme.
+ */
+export async function previewJourney(programId: string, relationId: string, now = new Date()): Promise<{ stepId: string; entry: StepTimelineEntry }[] | null> {
+  const rel = await prisma.mentorshipRelation.findFirst({
+    where: { id: relationId, cohortId: programId },
+    select: {
+      ...RELATION_SELECT,
+      statusChanges: { orderBy: { createdAt: 'asc' }, select: { toStatus: true, createdAt: true } },
+      programStepRuns: { select: { stepId: true, dueAt: true, deliveredAt: true, skippedReason: true } },
+    },
+  });
+  if (!rel) return null;
+  const steps = await prisma.programStep.findMany({ where: { programId }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] });
+  const stageKeys = new Set((await resolvePipelineStages(rel.orgId)).map((s) => s.key));
+  const conditions = steps.flatMap((s) => {
+    const c = readStepPayload(s.payload).skipIf;
+    return c ? [c] : [];
+  });
+  const satisfaction = await satisfactionFacts(rel.id, conditions);
+  const runs = new Map(rel.programStepRuns.map((r) => [r.stepId, r]));
+  const facts = anchorFacts(rel);
+  return steps.map((step) => ({ stepId: step.id, entry: journeyStepStatus(step, runs.get(step.id) ?? null, facts, stageKeys, satisfaction, now) }));
 }
 
 // ── Scheduling ───────────────────────────────────────────────────────────────

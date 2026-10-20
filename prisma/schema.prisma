@@ -2953,6 +2953,9 @@ model ProgramStep {
   orgId        String?
   programId    String
   order        Int       @default(0)
+  // The milestone the builder groups the step under (#1853) — a label, not a
+  // row: a journey stays one flat, serialisable list a template can copy.
+  milestone    String?   @db.VarChar(120)
   // RELATION_START | PROGRAM_START | STAGE_ENTRY (payload.stageKey names the stage).
   anchor       String    @default("RELATION_START") @db.VarChar(32)
   offsetDays   Int       @default(0)
