@@ -15,6 +15,7 @@ const ICONS: Record<string, string> = {
   board: 'albums',
   companies: 'business',
   myCompanies: 'business',
+  hiring: 'file-tray-full',
   requisitions: 'briefcase',
   offers: 'ribbon',
   interviewRequests: 'calendar',

@@ -65,7 +65,7 @@ test('MARKETING drops the mentorship/placement/sourcing admin links, keeps the r
   // Gone: the modules MARKETING does not carry.
   for (const href of [
     '/admin/mentors', '/admin/mentorship', '/admin/mentor-applications',
-    '/admin/mentee-activity', '/admin/offers', '/admin/requisitions',
+    '/admin/mentee-activity', '/admin/hiring', '/admin/offers', '/admin/requisitions',
     '/admin/interview-requests', '/interviews', '/admin/sources',
   ]) {
     assert.ok(!shown.has(href), `${href} should be hidden for MARKETING`);

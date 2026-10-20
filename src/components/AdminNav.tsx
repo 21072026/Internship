@@ -30,6 +30,7 @@ export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: 
   const nav = t.nav as Record<string, string>;
   const [pendingApplications, setPendingApplications] = useState(0);
   const [outstandingOffers, setOutstandingOffers] = useState(0);
+  const [hiringActionable, setHiringActionable] = useState(0);
 
   // Mentor applications are the one queue an admin is expected to drain, so the
   // nav carries its pending count. Refetched on navigation rather than on a
@@ -55,6 +56,20 @@ export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: 
       .catch(() => {});
     return () => { cancelled = true; };
   }, [pathname]);
+
+  // The hiring desk (#1874): interview requests awaiting a decision plus offers
+  // expiring this week — the two queues there that a person must act on.
+  // Asked only where the desk exists (the link survived the vertical filter).
+  const hasHiring = LINKS.some((l) => l.key === 'hiring');
+  useEffect(() => {
+    if (!hasHiring) return;
+    let cancelled = false;
+    fetch('/api/admin/hiring/queues?summary=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setHiringActionable(d?.actionable ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [pathname, hasHiring]);
 
   // Mail held for approval (#2960) — the third queue an admin drains. Asked
   // only where the outbox exists (the link survived the vertical filter).
@@ -106,6 +121,16 @@ export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: 
               </span>
             )}
             {l.key === 'outbox' && outboxPending > 0 && <OutboxBadge count={outboxPending} />}
+            {l.key === 'hiring' && hiringActionable > 0 && (
+              <span
+                data-testid="admin-hiring-badge"
+                title={t.hiringDesk.actionableBadge.replace('{count}', String(hiringActionable))}
+                aria-label={t.hiringDesk.actionableBadge.replace('{count}', String(hiringActionable))}
+                className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-600 dark:!text-white"
+              >
+                {hiringActionable > 9 ? '9+' : hiringActionable}
+              </span>
+            )}
             {l.key === 'offers' && outstandingOffers > 0 && (
               <span
                 data-testid="admin-offers-badge"

@@ -61,6 +61,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin', icon: LayoutDashboard, key: 'dashboard', exact: true },
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
+  // The hiring desk (#1874): the four queues waiting on the programme owner.
+  { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },
   { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements' },
   { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements' },
