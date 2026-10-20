@@ -350,6 +350,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'AffiliateCommission',
   'AffiliatePayout',
   'AffiliateClick',
+  'AffiliateProgramSettings',
+  'AffiliateContractAcceptance',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

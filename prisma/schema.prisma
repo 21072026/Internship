@@ -181,75 +181,77 @@ model Organization {
   // `db push`). Literal default, so `db push` fills existing rows itself.
   conferencingPolicy ConferencingPolicy @default(BUILTIN)
 
-  users                   User[]
-  sources                 Source[]
-  cohorts                 Cohort[]
-  companies               Company[]
-  projects                Project[]
-  relations               MentorshipRelation[]
-  pipelineStages          PipelineStage[]
-  evaluationTemplates     EvaluationTemplate[]
-  stageSlas               StageSla[]
-  tags                    Tag[]
-  mentorApplications      MentorApplication[]
-  companyInquiries        CompanyInquiry[]
-  documentRequirements    DocumentRequirement[]
-  weeklyReports           WeeklyReport[]
+  users                        User[]
+  sources                      Source[]
+  cohorts                      Cohort[]
+  companies                    Company[]
+  projects                     Project[]
+  relations                    MentorshipRelation[]
+  pipelineStages               PipelineStage[]
+  evaluationTemplates          EvaluationTemplate[]
+  stageSlas                    StageSla[]
+  tags                         Tag[]
+  mentorApplications           MentorApplication[]
+  companyInquiries             CompanyInquiry[]
+  documentRequirements         DocumentRequirement[]
+  weeklyReports                WeeklyReport[]
   // Scheduled report delivery (#1905).
-  reportSubscriptions     ReportSubscription[]
-  reportSubscriptionSends ReportSubscriptionSend[]
+  reportSubscriptions          ReportSubscription[]
+  reportSubscriptionSends      ReportSubscriptionSend[]
   // Nightly relationship-health snapshots (#1901).
-  relationHealthSnapshots RelationHealthSnapshot[]
-  surveys                 Survey[]
-  surveyCampaigns         SurveyCampaign[]
-  savedViews              SavedView[]
-  aiArtifacts             AiArtifact[]
-  aiFeatureSettings       AiFeatureSetting[]
-  meetingAttendance       MeetingAttendance[]
-  evaluationDues          EvaluationDue[]
-  surveyInvitations       SurveyInvitation[]
-  surveyResponses         SurveyResponse[]
-  meetingFeedback         MeetingFeedback[]
-  offers                  Offer[]
-  affiliatePartners       AffiliatePartner[]
-  affiliateCustomers      AffiliateCustomer[]
-  affiliatePayments       AffiliatePayment[]
-  affiliateCommissions    AffiliateCommission[]
-  affiliatePayouts        AffiliatePayout[]
-  affiliateClicks         AffiliateClick[]
-  requisitions            Requisition[]
-  interviewRequests       InterviewRequest[]
-  applications            Application[]
-  messageTemplates        MessageTemplate[]
-  apiKeys                 ApiKey[]
-  matchFeedback           MatchFeedback[]
-  settings                Setting[]
-  programCosts            ProgramCost[]
-  placements              Placement[]
-  rosterFeeds             RosterFeed[]
-  subscription            Subscription?
-  orgEntitlements         OrgEntitlement[]
-  usageRollups            UsageRollup[]
-  companyUsage            CompanyUsage[]
-  contactPermissions      ContactPermission[]
-  integrationEvents       IntegrationEvent[]
-  integrationSources      IntegrationSource[]
-  companyContacts         CompanyContact[]
-  postCampaigns           PostCampaign[]
-  postRecipients          PostCampaignRecipient[]
-  contactSuppressions     ContactSuppression[]
-  companyChannels         CompanyChannel[]
-  webhooks                Webhook[]
-  auditDrains             AuditDrain[]
-  announcements           Announcement[]
-  newsletters             Newsletter[]
-  trialReminders          TrialReminder[]
-  outboundDrafts          OutboundDraft[]
-  relationValues          RelationValue[]
-  ssoClaimMappings        SsoClaimMapping[]
-  agendaTemplates         AgendaTemplate[]
-  safeguardingFlags       SafeguardingFlag[]
-  brandAssets             BrandAsset[]
+  relationHealthSnapshots      RelationHealthSnapshot[]
+  surveys                      Survey[]
+  surveyCampaigns              SurveyCampaign[]
+  savedViews                   SavedView[]
+  aiArtifacts                  AiArtifact[]
+  aiFeatureSettings            AiFeatureSetting[]
+  meetingAttendance            MeetingAttendance[]
+  evaluationDues               EvaluationDue[]
+  surveyInvitations            SurveyInvitation[]
+  surveyResponses              SurveyResponse[]
+  meetingFeedback              MeetingFeedback[]
+  offers                       Offer[]
+  affiliatePartners            AffiliatePartner[]
+  affiliateCustomers           AffiliateCustomer[]
+  affiliatePayments            AffiliatePayment[]
+  affiliateCommissions         AffiliateCommission[]
+  affiliatePayouts             AffiliatePayout[]
+  affiliateClicks              AffiliateClick[]
+  affiliateProgramSettings     AffiliateProgramSettings?
+  affiliateContractAcceptances AffiliateContractAcceptance[]
+  requisitions                 Requisition[]
+  interviewRequests            InterviewRequest[]
+  applications                 Application[]
+  messageTemplates             MessageTemplate[]
+  apiKeys                      ApiKey[]
+  matchFeedback                MatchFeedback[]
+  settings                     Setting[]
+  programCosts                 ProgramCost[]
+  placements                   Placement[]
+  rosterFeeds                  RosterFeed[]
+  subscription                 Subscription?
+  orgEntitlements              OrgEntitlement[]
+  usageRollups                 UsageRollup[]
+  companyUsage                 CompanyUsage[]
+  contactPermissions           ContactPermission[]
+  integrationEvents            IntegrationEvent[]
+  integrationSources           IntegrationSource[]
+  companyContacts              CompanyContact[]
+  postCampaigns                PostCampaign[]
+  postRecipients               PostCampaignRecipient[]
+  contactSuppressions          ContactSuppression[]
+  companyChannels              CompanyChannel[]
+  webhooks                     Webhook[]
+  auditDrains                  AuditDrain[]
+  announcements                Announcement[]
+  newsletters                  Newsletter[]
+  trialReminders               TrialReminder[]
+  outboundDrafts               OutboundDraft[]
+  relationValues               RelationValue[]
+  ssoClaimMappings             SsoClaimMapping[]
+  agendaTemplates              AgendaTemplate[]
+  safeguardingFlags            SafeguardingFlag[]
+  brandAssets                  BrandAsset[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -6413,31 +6415,32 @@ enum AffiliatePayoutMethod {
 }
 
 model AffiliatePartner {
-  id                  String                 @id @default(cuid())
+  id                  String                        @id @default(cuid())
   orgId               String?
-  org                 Organization?          @relation(fields: [orgId], references: [id])
-  userId              String                 @unique
-  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org                 Organization?                 @relation(fields: [orgId], references: [id])
+  userId              String                        @unique
+  user                User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
   // The ?ref= value. Permanent once issued.
-  code                String                 @db.VarChar(100)
-  rank                String                 @default("STANDARD") @db.VarChar(40)
-  status              AffiliatePartnerStatus @default(ACTIVE)
+  code                String                        @db.VarChar(100)
+  rank                String                        @default("STANDARD") @db.VarChar(40)
+  status              AffiliatePartnerStatus        @default(ACTIVE)
   contractAcceptedAt  DateTime?
   // When a 30-day termination takes effect. Null while the partner is active.
   noticeEffectiveAt   DateTime?
   // IBAN and account holder, sealed by src/lib/secretBox.ts. Admin reads them
   // for manual transfers; nobody else does.
-  payoutDetailsCipher String?                @db.Text
+  payoutDetailsCipher String?                       @db.Text
   // One-time legacy password check (decision 5). Deleted once the partner sets
   // a new password; purged 90 days after import if never used.
-  legacyPasswordHash  String?                @db.VarChar(255)
+  legacyPasswordHash  String?                       @db.VarChar(255)
   legacyHashPurgeAt   DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
   customers           AffiliateCustomer[]
   commissions         AffiliateCommission[]
   payouts             AffiliatePayout[]
   clicks              AffiliateClick[]
+  contractAcceptances AffiliateContractAcceptance[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
@@ -6542,4 +6545,33 @@ model AffiliateClick {
   createdAt     DateTime         @default(now())
 
   @@index([partnerId, createdAt])
+}
+
+// Each organisation writes its own programme copy and partner contract. The text is
+// tenant data, never code. Locale maps: {"en": …, "tr": …, "de": …}.
+model AffiliateProgramSettings {
+  id              String       @id @default(cuid())
+  orgId           String       @unique
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // { en: { title, body }, tr: {…}, de: {…} } — the public sign-in page.
+  landing         Json
+  // { en: "…", tr: "…", de: "…" } — the contract the partner accepts.
+  contract        Json
+  // Bumped whenever the contract text changes. Every partner must accept the current
+  // version again (docs/affiliate-module.md, decision 14).
+  contractVersion Int          @default(1)
+  updatedAt       DateTime     @updatedAt
+}
+
+model AffiliateContractAcceptance {
+  id         String           @id @default(cuid())
+  orgId      String?
+  org        Organization?    @relation(fields: [orgId], references: [id])
+  partnerId  String
+  partner    AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  version    Int
+  acceptedAt DateTime         @default(now())
+
+  @@unique([partnerId, version])
+  @@index([orgId])
 }

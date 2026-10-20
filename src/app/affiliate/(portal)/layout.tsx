@@ -12,6 +12,8 @@ import { BrandWordmark } from '@/components/BrandWordmark';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { APP_VERSION } from '@/lib/version';
 import { PartnerSidebar } from './PartnerSidebar';
+import { affiliateOrgForRequest } from '@/lib/affiliateProgram';
+import { needsContractAcceptance } from '@/lib/affiliateContractRule';
 
 // The partner portal's shell (docs/affiliate-module.md). Gate order matches the
 // other role shells: session, then 2FA (before any redirect that could send the
@@ -34,6 +36,26 @@ export default async function AffiliateLayout({ children }: { children: React.Re
 
   const capabilities = await shellCapabilities(session.user.orgId);
   if (!capabilities.includes('affiliate')) notFound();
+
+  // The host must belong to the partner's own organisation: a partner of one programme
+  // does not get another organisation's portal by visiting its host.
+  const hostOrg = await affiliateOrgForRequest();
+  if (!hostOrg || hostOrg.id !== session.user.orgId) notFound();
+
+  // A partner must accept the current contract before the portal opens.
+  const settings = await prisma.affiliateProgramSettings.findUnique({
+    where: { orgId: hostOrg.id },
+    select: { contractVersion: true },
+  });
+  if (settings) {
+    const partner = await prisma.affiliatePartner.findFirst({
+      where: { userId: session.user.id, orgId: hostOrg.id },
+      select: { contractAcceptances: { select: { version: true } } },
+    });
+    if (!partner || needsContractAcceptance(partner.contractAcceptances.map((a) => a.version), settings.contractVersion)) {
+      redirect('/affiliate/sozlesme');
+    }
+  }
 
   const { locale, t } = await getServerDictionary();
   const labels = {
