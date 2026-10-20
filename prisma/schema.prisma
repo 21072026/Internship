@@ -207,6 +207,8 @@ model Organization {
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
+  // Org-defined segmentation attributes (#1920).
+  orgAttributes           OrgAttribute[]
   aiArtifacts             AiArtifact[]
   aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
@@ -753,6 +755,8 @@ model User {
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
   savedViews                        SavedView[]                   @relation("SavedViewAuthor")
+  // Segmentation attribute values (#1920); removed with the user.
+  attributeValues                   UserAttributeValue[]
   aiArtifacts                       AiArtifact[]                  @relation("AiArtifactSubject")
   attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
@@ -2641,8 +2645,17 @@ model Webhook {
   events    Json          @default("[]")
   active    Boolean       @default(true)
   createdAt DateTime      @default(now())
+  // A subscription a connector made for itself through POST /api/v1/hooks
+  // (#2002): the key that owns it — the only key that may list or delete it —
+  // and where it came from (`admin` | `api`). Both null on every admin-created
+  // row; additive and nullable on purpose, never a re-key of Webhook. A
+  // revoked or expired owner key stops its deliveries (src/lib/webhooks.ts).
+  apiKeyId  String?
+  apiKey    ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  source    String?       @db.VarChar(20)
 
   @@index([orgId, active])
+  @@index([apiKeyId])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
@@ -2663,31 +2676,33 @@ model Webhook {
 // in without a migration. ENFORCEMENT of expiry/revocation/scope at the door is
 // #1546; this model only stores the facts.
 model ApiKey {
-  orgId       String?
-  org         Organization? @relation(fields: [orgId], references: [id])
-  id          String        @id @default(cuid())
-  name        String
-  hashedKey   String        @unique
+  orgId           String?
+  org             Organization?       @relation(fields: [orgId], references: [id])
+  id              String              @id @default(cuid())
+  name            String
+  hashedKey       String              @unique
   // Comma-separated `<resource>:<action>` scopes. Defaulted (not nullable) so
   // `db push` fills existing rows non-destructively; the backfill normalises
   // any row that ended up empty.
-  scopes      String        @default("candidates:read")
+  scopes          String              @default("candidates:read")
   // The admin who minted the key. Nullable: rows that predate #1545 have no
   // recorded owner, and a deleted admin must not take the key's history away.
-  createdById String?
-  createdBy   User?         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  createdById     String?
+  createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
   // Null means "never expires" — allowed, but flagged in the admin UI.
-  expiresAt   DateTime?
+  expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
-  revokedAt   DateTime?
-  lastUsedAt  DateTime?
-  createdAt   DateTime      @default(now())
+  revokedAt       DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime            @default(now())
   // Period allowance (#2010). Both null = no period quota (the per-minute
   // limit still applies) — every key minted before this stays exactly as it
   // was. `quotaPeriod` is 'day' | 'month' (UTC calendar periods).
-  quotaPeriod String?       @db.VarChar(10)
-  quotaLimit  Int?
-  usage       ApiKeyUsage[]
+  quotaPeriod     String?             @db.VarChar(10)
+  quotaLimit      Int?
+  usage           ApiKeyUsage[]
+  idempotencyKeys ApiIdempotencyKey[]
+  webhooks        Webhook[]
 
   @@index([orgId])
   @@index([createdById])
@@ -2712,6 +2727,35 @@ model ApiKeyUsage {
 
   @@unique([apiKeyId, periodStart])
   @@index([orgId])
+}
+
+// One Idempotency-Key a key sent to an /api/v1 write (#1994). The first request
+// claims the row (responseStatus null while it runs); a retry with the same
+// key AND the same request hash replays the stored 2xx response instead of
+// writing twice; the same key with a different hash is 409
+// `idempotency_key_reused`. Only successes are kept — a refused or failed
+// write frees its key so the caller can retry. Rows older than
+// IDEMPOTENCY_TTL_MS are ignored and swept nightly. A brand-new model: the
+// key must never be attached by re-keying ApiKey (drop-and-recreate under
+// --accept-data-loss).
+model ApiIdempotencyKey {
+  id             String   @id @default(cuid())
+  orgId          String
+  apiKeyId       String
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  key            String   @db.VarChar(200)
+  method         String   @db.VarChar(10)
+  path           String   @db.VarChar(191)
+  // sha256 hex of method + path + raw body.
+  requestHash    String   @db.Char(64)
+  responseStatus Int?
+  // Capped (IDEMPOTENT_BODY_MAX); a larger response is replayed without its body.
+  responseBody   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@unique([apiKeyId, key])
+  @@index([orgId])
+  @@index([createdAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
@@ -3105,6 +3149,9 @@ model ProgramStep {
   orgId        String?
   programId    String
   order        Int       @default(0)
+  // The milestone the builder groups the step under (#1853) — a label, not a
+  // row: a journey stays one flat, serialisable list a template can copy.
+  milestone    String?   @db.VarChar(120)
   // RELATION_START | PROGRAM_START | STAGE_ENTRY (payload.stageKey names the stage).
   anchor       String    @default("RELATION_START") @db.VarChar(32)
   offsetDays   Int       @default(0)
@@ -6540,6 +6587,56 @@ model SavedView {
 
   @@unique([orgId, surface, createdById, name])
   @@index([orgId, surface])
+}
+
+// Org-defined segmentation attributes (#1920) — the dimensions a registry report
+// can be sliced by (department, level, location, a start date…). Generic on
+// purpose: `type` is SELECT | TEXT | DATE | NUMBER and the labels are the
+// admin's own words in EN/TR/DE, never a dictionary key. No special-category
+// preset ships (docs/analytics.md § Dimensions). Vocabularies are VARCHAR + a
+// whitelist in src/lib/orgAttributesRule.ts, never a Prisma enum (#747).
+// Tenure is DERIVED from a DATE attribute at read time, never stored.
+model OrgAttribute {
+  id            String               @id @default(cuid())
+  orgId         String
+  org           Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Stable machine key (a-z, 0-9, _), what `segmentBy` and the import name.
+  key           String               @db.VarChar(64)
+  labelEn       String               @db.VarChar(191)
+  labelTr       String               @db.VarChar(191)
+  labelDe       String               @db.VarChar(191)
+  /// SELECT | TEXT | DATE | NUMBER
+  type          String               @db.VarChar(16)
+  /// SELECT only: the allowed values, as a string array.
+  options       Json?
+  /// USER today; RELATION is reserved for a later slice.
+  appliesTo     String               @default("USER") @db.VarChar(16)
+  isSegmentable Boolean              @default(true)
+  sortOrder     Int                  @default(0)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  values        UserAttributeValue[]
+
+  @@unique([orgId, key])
+  @@index([orgId, sortOrder])
+}
+
+/// One person's value of one attribute. The (orgId, attributeId, value) index
+/// is what makes a segmented report one grouped query rather than a scan.
+model UserAttributeValue {
+  id          String       @id @default(cuid())
+  orgId       String
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   OrgAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String       @db.VarChar(191)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([userId, attributeId])
+  @@index([orgId, attributeId, value])
+  @@index([attributeId])
 }
 
 // A text-only practice interview (#2051): the mentee answers, an AI interviewer

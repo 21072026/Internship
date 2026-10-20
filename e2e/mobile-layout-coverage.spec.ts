@@ -89,6 +89,7 @@ const standalone = (...paths: string[]): Route[] =>
 /** The hiring funnel: requisition → offer → interview → decision. */
 const FUNNEL: Route[] = [
   ...shell(
+    '/admin/hiring',
     '/admin/requisitions',
     '/admin/offers',
     '/admin/interview-requests',
@@ -120,6 +121,8 @@ const SETUP: Route[] = [
     '/admin/message-templates',
     '/admin/cohorts',
     '/admin/tags',
+    // The canonical skill vocabulary (#1817).
+    '/admin/skills',
     '/admin/sources',
     '/admin/invite'
   ),

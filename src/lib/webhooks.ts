@@ -1,4 +1,5 @@
 import { createHmac } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
@@ -39,6 +40,10 @@ export const WEBHOOK_EVENTS = [
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
+// Subscriptions one API key may hold through POST /api/v1/hooks (#2002): an
+// unbounded subscribe endpoint is an amplifier for whatever it points at.
+export const MAX_HOOKS_PER_KEY = 25;
+
 // Deliver one signed payload to one receiver. Unlike `dispatchWebhook` this
 // THROWS on failure — the test-ping route reports the error back to the admin,
 // so it must not be swallowed here. `event` is widened beyond WEBHOOK_EVENTS
@@ -67,6 +72,19 @@ export async function deliverToWebhook(
   return { status: res.status, ms: Date.now() - startedAt };
 }
 
+// Which subscriptions a tenant's event may reach: the active ones of that
+// tenant (#2357) whose owner is still allowed to receive (#2002). An
+// admin-created hook has no owner key; a connector's hook (POST /api/v1/hooks)
+// stops the moment its key is revoked or expires — a revoked credential must
+// not keep receiving the tenant's events through a subscription it left behind.
+export function liveSubscriptionsWhere(orgId: string | null | undefined, now: Date = new Date()): Prisma.WebhookWhereInput {
+  return {
+    active: true,
+    orgId: orgId ?? null,
+    OR: [{ apiKeyId: null }, { apiKey: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } }],
+  };
+}
+
 // Fire-and-forget: POST a signed payload to every active webhook subscribed to
 // the event. Never throws — delivery failures are logged, not propagated.
 export async function dispatchWebhook(
@@ -82,7 +100,7 @@ export async function dispatchWebhook(
     // is on), so one tenant's event must never fan out to another's endpoint.
     // A null orgId (a legacy/system caller) matches only the legacy null-org
     // webhooks, which the deploy backfill moves to the default org.
-    hooks = await prisma.webhook.findMany({ where: { active: true, orgId: orgId ?? null } });
+    hooks = await prisma.webhook.findMany({ where: liveSubscriptionsWhere(orgId) });
   } catch (e) {
     logger.error('Webhook lookup failed', { error: String(e) });
     return;

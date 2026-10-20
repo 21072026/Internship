@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**`/admin/skills` — curate the canonical skill vocabulary (#1817, epic #1810):** a new admin screen (nav entry \"Skills\", EN/TR/DE, dark mode) lists the org's skills with usage counts (people · requisitions), spellings and neighbours, and lets an admin create a skill, relabel it in all three languages, add/remove spellings, retire/reactivate it, set weighted neighbours, and merge one skill into another — the merge dialog states how many people and requisitions move (and how many already hold both) before it commits. Its second tab mounts the #1819 review queue (promote / alias / discard). Routes: `GET|POST /api/admin/skills`, `PATCH /api/admin/skills/[id]`, `POST /api/admin/skills/[id]/aliases`, `DELETE …/aliases/[aliasId]`, `GET|POST /api/admin/skills/[id]/merge`, `PUT /api/admin/skills/[id]/edges` — ADMIN only in every handler, org from the session, another org's skill answers 404, `MAX_SKILLS_PER_ORG` enforced on create, every mutation writes an activity row. Rules in `src/lib/skillCuration.ts`: a spelling is unique per org across keys and aliases; a merge runs in one transaction (people and requisitions move with duplicates dropped, aliases and edges re-pointed) and never deletes the losing row, which stays RETIRED with `mergedIntoId` so every old spelling still resolves; retiring removes nobody's row.",
+  "notes": {
+    "en": [
+      "Admins can now curate the skill list under Admin → Skills: fix labels in English, Turkish and German, add spellings, merge duplicates (with a preview of who is affected), retire skills and mark which skills are close neighbours."
+    ],
+    "tr": [
+      "Yöneticiler artık beceri listesini Yönetim → Beceriler altında düzenleyebilir: etiketleri İngilizce, Türkçe ve Almanca düzelt, yazımlar ekle, kopyaları birleştir (kimin etkileneceğini önceden görerek), becerileri emekliye ayır ve hangi becerilerin yakın komşu olduğunu işaretle."
+    ],
+    "de": [
+      "Admins können die Skill-Liste jetzt unter Admin → Skills pflegen: Bezeichnungen auf Englisch, Türkisch und Deutsch korrigieren, Schreibweisen ergänzen, Duplikate zusammenführen (mit Vorschau, wer betroffen ist), Skills stilllegen und enge Nachbarn markieren."
+    ]
+  }
+}

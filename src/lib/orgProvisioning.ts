@@ -25,7 +25,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { slugifyOrg } from '@/lib/orgSlug';
@@ -135,12 +135,13 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
     throw e;
   }
 
-  await logActivity({
+  // Filed under the NEW organization (#1575): left to the actor's org, the
+  // customer's name landed in the operator org's own activity feed.
+  await recordOrgWrite({
+    orgId: created.organization.id,
     action: 'org.created',
     actorId: input.actor.id,
     actorEmail: input.actor.email ?? null,
-    targetType: 'organization',
-    targetId: created.organization.id,
     detail: created.organization.name,
     request: input.request,
   });
@@ -150,12 +151,11 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
     const inv = invitationInput(created.organization.id);
     await logInvitationCreated(inv, created.persisted.invitationId);
     const { emailSent } = await deliverInvitation(inv, created.persisted);
-    await logActivity({
+    await recordOrgWrite({
+      orgId: created.organization.id,
       action: 'organization.admin_invited',
       actorId: input.actor.id,
       actorEmail: input.actor.email ?? null,
-      targetType: 'organization',
-      targetId: created.organization.id,
       detail: `ADMIN · email · invitation ${created.persisted.invitationId}`,
       request: input.request,
     });

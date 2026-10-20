@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { syncRequisitionSkills } from '@/lib/skillsResolve';
 import { andScope, logScopeDenial, scopeForRole } from '@/lib/authzScope';
 import {
   REQUISITION_LIMITS, REQUISITION_STATUSES, closedAtForStatus, normalizeSkills,
@@ -122,6 +123,8 @@ export async function POST(request: Request) {
       },
       include: { company: { select: { id: true, name: true } }, owner: { select: { id: true, fullName: true } } },
     });
+    // Dual-write the canonical twin of the required skills (#1818).
+    await syncRequisitionSkills(requisition.id, scope.orgId, skills);
     return NextResponse.json({ requisition }, { status: 201 });
   });
 }
