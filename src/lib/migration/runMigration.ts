@@ -329,6 +329,8 @@ async function runLocked(input: MigrationInput, opts: MigrationOptions): Promise
                     pipelineStatus: startStage,
                     startDate: v.startDate ?? now,
                     ...(v.status === 'COMPLETED' ? { completedAt: now } : {}),
+                    // ACTIVE and COMPLETED are lifecycle states too (#1768) — keep the two columns agreeing.
+                    lifecycleState: v.status,
                     // A start stage that is a trial (the MARKETING funnel) opens its window.
                     ...(await stageTrialWindow({ orgId, toStage: startStage, enteredAt: v.startDate ?? now })),
                   },
@@ -342,7 +344,7 @@ async function runLocked(input: MigrationInput, opts: MigrationOptions): Promise
                   const rel = await tx.mentorshipRelation.findUnique({ where: { id: v.relationId }, select: { menteeId: true } });
                   if (rel && (await findActiveMentorship(tx, rel.menteeId, { exceptRelationId: v.relationId }))) throw new AlreadyActive();
                 }
-                await tx.mentorshipRelation.update({ where: { id: v.relationId }, data: { status: v.status, completedAt: v.status === 'COMPLETED' ? now : null } });
+                await tx.mentorshipRelation.update({ where: { id: v.relationId }, data: { status: v.status, lifecycleState: v.status, pausedAt: null, completedAt: v.status === 'COMPLETED' ? now : null } });
               });
               const known = pairs.get(p.key);
               if (known) known.status = v.status;

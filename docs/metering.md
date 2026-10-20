@@ -19,7 +19,7 @@ screen renders the same words the code enforces. Every clause is load-bearing:
 
 | Clause | How the code makes it true |
 |--------|----------------------------|
-| **ACTIVE state** | `BILLABLE_RELATION_STATES` — an **allowlist**. A lifecycle state added later (`PAUSED`, `BENCHED`) is non-billable the moment it exists; making one billable is that one array and nothing else. |
+| **ACTIVE state** | `BILLABLE_RELATION_STATES` — an **allowlist** of *lifecycle* states (`MentorshipRelation.lifecycleState`, `src/lib/relationLifecycle.ts`, #1768), not of the derived `status` flag, which reads ACTIVE for a paused pair too. `PAUSED` (and a later `BENCHED`) is non-billable because it is not in the array; making one billable is that one array and nothing else. The SQL filter is `billableRelationWhere()` — `status = ACTIVE` (liveness) and `lifecycleState IN (allowlist)` — shared by the invoice and the plan gate's capacity count. |
 | **any logged activity** | At least one row in any of the seven per-relation signals below, inside the month. One query with `some` filters, not seven round trips. |
 | **calendar month** | UTC month boundaries from `periodRange(period)`, half-open `[gte, lt)`. Nobody computes their own month, so nobody drifts the invoice by a timezone — and no row lands in two months or in none. |
 | **completed not counted** | Falls out of the allowlist; a COMPLETED pair with plenty of activity is still not billed. |
