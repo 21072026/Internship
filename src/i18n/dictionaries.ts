@@ -5703,7 +5703,8 @@ const en = {
   documentRequirements: {
     organization: 'Organization', configurationTitle: 'Document requirements', missingTitle: 'Missing mandatory documents',
     key: 'Stable key', labelEn: 'English label', labelTr: 'Turkish label', labelDe: 'German label', stage: 'Pipeline stage', role: 'Role', order: 'Order', mandatory: 'Mandatory', active: 'Active',
-    allStages: 'All stages', allRoles: 'All roles', add: 'Add requirement', save: 'Save changes', edit: 'Edit', disable: 'Disable', enable: 'Enable',
+    allStages: 'All stages', allRoles: 'All roles',
+    roles: { MENTEE: 'Mentee', MENTOR: 'Mentor', COMPANY: 'Company', SOURCE: 'Source', ADMIN: 'Admin' }, add: 'Add requirement', save: 'Save changes', edit: 'Edit', disable: 'Disable', enable: 'Enable',
     noneConfigured: 'No document requirements configured for this organization.', noneMissing: 'No missing mandatory documents.', noStage: 'No active stage', stageFilter: 'Filter by stage', search: 'Search candidates', eligibleUsers: '{count} eligible users', page: 'Page {page}',
     loadFailed: 'Could not load document requirements.', saveFailed: 'Could not save the document requirement.',
     portalTitle: 'Missing documents', portalHint: 'Upload the following mandatory documents to complete your file.', uploadCta: 'Upload documents',
@@ -13516,7 +13517,8 @@ const tr: Dict = {
   documentRequirements: {
     organization: 'Kuruluş', configurationTitle: 'Belge gereksinimleri', missingTitle: 'Eksik zorunlu belgeler',
     key: 'Sabit anahtar', labelEn: 'İngilizce etiket', labelTr: 'Türkçe etiket', labelDe: 'Almanca etiket', stage: 'Pipeline aşaması', role: 'Rol', order: 'Sıra', mandatory: 'Zorunlu', active: 'Aktif',
-    allStages: 'Tüm aşamalar', allRoles: 'Tüm roller', add: 'Gereksinim ekle', save: 'Değişiklikleri kaydet', edit: 'Düzenle', disable: 'Devre dışı bırak', enable: 'Etkinleştir',
+    allStages: 'Tüm aşamalar', allRoles: 'Tüm roller',
+    roles: { MENTEE: 'Mentee', MENTOR: 'Mentor', COMPANY: 'Şirket', SOURCE: 'Kaynak', ADMIN: 'Yönetici' }, add: 'Gereksinim ekle', save: 'Değişiklikleri kaydet', edit: 'Düzenle', disable: 'Devre dışı bırak', enable: 'Etkinleştir',
     noneConfigured: 'Bu kuruluş için belge gereksinimi tanımlanmamış.', noneMissing: 'Eksik zorunlu belge yok.', noStage: 'Aktif aşama yok', stageFilter: 'Aşamaya göre filtrele', search: 'Aday ara', eligibleUsers: '{count} uygun kullanıcı', page: 'Sayfa {page}',
     loadFailed: 'Belge gereksinimleri yüklenemedi.', saveFailed: 'Belge gereksinimi kaydedilemedi.',
     portalTitle: 'Eksik belgelerim', portalHint: 'Dosyanı tamamlamak için aşağıdaki zorunlu belgeleri yükle.', uploadCta: 'Belgeleri yükle',
@@ -21294,7 +21296,8 @@ const de: Dict = {
   documentRequirements: {
     organization: 'Organisation', configurationTitle: 'Dokumentanforderungen', missingTitle: 'Fehlende Pflichtdokumente',
     key: 'Stabiler Schlüssel', labelEn: 'Englische Bezeichnung', labelTr: 'Türkische Bezeichnung', labelDe: 'Deutsche Bezeichnung', stage: 'Pipeline-Phase', role: 'Rolle', order: 'Reihenfolge', mandatory: 'Pflicht', active: 'Aktiv',
-    allStages: 'Alle Phasen', allRoles: 'Alle Rollen', add: 'Anforderung hinzufügen', save: 'Änderungen speichern', edit: 'Bearbeiten', disable: 'Deaktivieren', enable: 'Aktivieren',
+    allStages: 'Alle Phasen', allRoles: 'Alle Rollen',
+    roles: { MENTEE: 'Mentee', MENTOR: 'Mentor:in', COMPANY: 'Unternehmen', SOURCE: 'Quelle', ADMIN: 'Admin' }, add: 'Anforderung hinzufügen', save: 'Änderungen speichern', edit: 'Bearbeiten', disable: 'Deaktivieren', enable: 'Aktivieren',
     noneConfigured: 'Für diese Organisation sind keine Dokumentanforderungen eingerichtet.', noneMissing: 'Keine Pflichtdokumente fehlen.', noStage: 'Keine aktive Phase', stageFilter: 'Nach Phase filtern', search: 'Kandidaten suchen', eligibleUsers: '{count} passende Benutzer', page: 'Seite {page}',
     loadFailed: 'Dokumentanforderungen konnten nicht geladen werden.', saveFailed: 'Die Dokumentanforderung konnte nicht gespeichert werden.',
     portalTitle: 'Fehlende Dokumente', portalHint: 'Lade die folgenden Pflichtdokumente hoch, um deine Unterlagen zu vervollständigen.', uploadCta: 'Dokumente hochladen',

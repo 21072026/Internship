@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**MARKETING: no internship wording left on any surface a sales tenant can reach:** the MARKETING overlay (`src/i18n/verticalOverlays.ts`) now covers every remaining reachable string — landing, notifications, the feature catalogue, pricing, deals, the rep directory, newsletters, projects, empty states and more — in EN/TR/DE (lead / sales rep / account / deal). Nineteen internship-only namespaces that a MARKETING org cannot render (behind the `mentorship`/`sourcing` gates, the mentor shell, the portal or capability-gated mail sweeps) move into `LEAK_EXEMPT` with the gate that closes each. The leak ratchet in `scripts/check-i18n.ts` drops from en 398 · tr 401 · de 396 to **0 in every locale**, so any new internship word a MARKETING tenant could read fails CI.",
+  "notes": {
+    "en": ["The sales product now speaks only in leads, sales reps, accounts and deals — no mentoring or internship wording is left on its screens, e-mails or notifications."],
+    "tr": ["Satış ürünü artık yalnızca müşteri adayı, satış temsilcisi, hesap ve fırsat diliyle konuşuyor — ekranlarında, e-postalarında ve bildirimlerinde mentorluk ya da staj ifadesi kalmadı."],
+    "de": ["Das Vertriebsprodukt spricht jetzt nur noch von Leads, Vertriebsmitarbeitern, Accounts und Deals — auf Bildschirmen, in E-Mails und Benachrichtigungen ist keine Mentoring- oder Praktikumsformulierung mehr übrig."]
+  }
+}
