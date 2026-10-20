@@ -36,8 +36,22 @@ A tenant maps an IdP claim value to a role, so programme staff who sign in
 through their own IdP stop landing in the mentee portal. Admin UI: the
 Enterprise SSO card on `/admin/organizations`; API:
 `/api/admin/organizations/[id]/sso-role-mappings` (GET list, POST add, PATCH
-`{ syncRole }`, DELETE `?mappingId=`), writable by exactly who may write the
-org's SSO config (its own ADMIN, or a super admin of its world).
+`{ syncRole }`, DELETE `?mappingId=`), writable by the org's own ADMIN or a
+super admin of its world.
+
+## Who may set the identity provider (#1575)
+
+The **issuer, entry point and certificate** (and the provider) are the IdP trust
+anchor: the ACS signs in *any* existing account of the org, of any role, from an
+assertion verified only against that certificate, with no password and no second
+factor. Writing them is writing who an admin of the org is — and the org that
+holds the seeded super admin is a tenant too. So `PATCH /api/admin/organizations`
+lets **only a super admin of the org's world** set or change them; a tenant ADMIN
+gets `403 { code: 'sso_super_admin_only' }`. A value echoed back unchanged is not
+a change, and clearing them is always allowed. The tenant's own ADMIN keeps the
+policy switches over a trust the operator configured: `ssoEnabled` on/off and
+`ssoEnforced` (with its anti-lockout interlock below). Pinned by the `@smoke`
+test in `e2e/admin-organizations.spec.ts`.
 
 - **Storage** — `SsoClaimMapping` (`orgId`, `claim`, `matchValue`, `role`,
   `priority`; unique per `(orgId, claim, matchValue)`), a registered tenant model.

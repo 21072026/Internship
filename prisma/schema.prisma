@@ -183,6 +183,7 @@ model Organization {
   users                   User[]
   sources                 Source[]
   cohorts                 Cohort[]
+  programSteps            ProgramStep[]
   companies               Company[]
   projects                Project[]
   relations               MentorshipRelation[]
@@ -190,6 +191,10 @@ model Organization {
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
   tags                    Tag[]
+  skills                  Skill[]
+  skillAliases            SkillAlias[]
+  skillEdges              SkillEdge[]
+  unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
@@ -317,6 +322,145 @@ model UserTag {
   @@unique([userId, tagId])
   @@index([tagId])
   @@index([userId])
+}
+
+// ─── Canonical skill taxonomy (#1815, epic #1810) ──────────────────────────
+// The vocabulary a skill list resolves TO. Same shape as Tag/UserTag: required
+// orgId, unique per org, cascade from Organization. Purely additive — the
+// free-text `User.skills` / `Requisition.requiredSkills` JSON keeps being
+// written as it is today. The pure rules live in src/lib/skillTaxonomyRule.ts,
+// the DB-side resolver in src/lib/skillsResolve.ts; the starter rows come from
+// src/lib/skillSeed.ts (#1816).
+//
+// `status` and `kind` are Strings (like Requisition.status) so the vocabulary
+// can grow without an enum change under `db push`.
+model Skill {
+  id           String   @id @default(cuid())
+  orgId        String
+  // The fold of the canonical name (`skillKey()`), or the seed key for a
+  // starter skill ("react"). Never renamed: aliases, edges and user rows
+  // point at the row, but a backfill matches on this.
+  key          String   @db.VarChar(64)
+  labelEn      String   @db.VarChar(60)
+  labelTr      String   @db.VarChar(60)
+  labelDe      String   @db.VarChar(60)
+  category     String?  @db.VarChar(32)
+  // ACTIVE | RETIRED. A retired skill is no longer offered, but the rows that
+  // point at it keep their meaning.
+  status       String   @default("ACTIVE") @db.VarChar(16)
+  // Set when an admin merges this skill into another: the row stays so every
+  // old reference still resolves (the resolver follows the chain).
+  mergedIntoId String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  org          Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  mergedInto   Skill?             @relation("SkillMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom   Skill[]            @relation("SkillMerge")
+  aliases      SkillAlias[]
+  edgesFrom    SkillEdge[]        @relation("SkillEdgeFrom")
+  edgesTo      SkillEdge[]        @relation("SkillEdgeTo")
+  users        UserSkill[]
+  requisitions RequisitionSkill[]
+
+  @@unique([orgId, key])
+  @@index([orgId, status])
+  @@index([mergedIntoId])
+}
+
+// A spelling people type ("ReactJS", "React.js"), folded. Unique per org, so
+// an alias can never point at two canonical skills.
+model SkillAlias {
+  id      String @id @default(cuid())
+  orgId   String
+  skillId String
+  key     String @db.VarChar(64)
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  skill Skill        @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, key])
+  @@index([skillId])
+}
+
+// "Close enough to be worth showing for the other". ADJACENT is undirected
+// (stored once, read both ways); BROADER / NARROWER read from → to only.
+// weight is 0..1 and is what adjacency-aware scoring multiplies by (#1821).
+model SkillEdge {
+  id          String @id @default(cuid())
+  orgId       String
+  fromSkillId String
+  toSkillId   String
+  weight      Float  @default(0.5)
+  kind        String @default("ADJACENT") @db.VarChar(16)
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  from Skill        @relation("SkillEdgeFrom", fields: [fromSkillId], references: [id], onDelete: Cascade)
+  to   Skill        @relation("SkillEdgeTo", fields: [toSkillId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, fromSkillId, toSkillId])
+  @@index([toSkillId])
+}
+
+// A person holds a canonical skill. Reached only through its User (scoped) or
+// its Skill (scoped), exactly like UserTag — so no orgId and deliberately not
+// in TENANT_MODELS. Removing a skill removes the row, never the person.
+// Proficiency columns are #1814's.
+model UserSkill {
+  id        String   @id @default(cuid())
+  userId    String
+  skillId   String
+  // Where the row came from: SELF | ADMIN | BACKFILL | CV | IMPORT.
+  source    String   @default("SELF") @db.VarChar(16)
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@index([skillId])
+}
+
+// A requisition asks for a canonical skill. Child of Requisition (scoped),
+// same reasoning as UserSkill: no orgId, not in TENANT_MODELS.
+model RequisitionSkill {
+  id            String  @id @default(cuid())
+  requisitionId String
+  skillId       String
+  required      Boolean @default(true)
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  skill       Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, skillId])
+  @@index([skillId])
+}
+
+// A free-text skill the backfill (#1819) could not resolve onto the org's
+// vocabulary — parked for an admin instead of guessed or dropped. One row per
+// org × folded term; `occurrences` is recomputed absolutely on every run
+// (people holding it + requisitions asking for it), so a re-run is a no-op.
+// The admin's decision (PROMOTED to a new skill, ALIASED onto an existing one,
+// DISCARDED) is never overwritten by the backfill.
+model UnmappedSkillTerm {
+  id              String    @id @default(cuid())
+  orgId           String
+  // `skillKey()` fold of the term — what makes "Yazılım" and "yazilim" one row.
+  normalizedKey   String    @db.VarChar(64)
+  // The spelling seen most often, for display.
+  term            String    @db.VarChar(60)
+  occurrences     Int       @default(0)
+  firstSeenAt     DateTime  @default(now())
+  // PENDING | PROMOTED | ALIASED | DISCARDED
+  resolution      String    @default("PENDING") @db.VarChar(16)
+  resolvedSkillId String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, normalizedKey])
+  @@index([orgId, resolution, occurrences])
 }
 
 model StageSla {
@@ -555,6 +699,9 @@ model User {
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                     @relation("UserTags")
+  // Canonical skills (#1815). `skills` above stays the free-text JSON until a
+  // separate contract PR retires it; this is the joinable twin.
+  skillRows                         UserSkill[]
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -646,6 +793,8 @@ model User {
   @@index([role])
   @@index([referredById])
   @@index([orgId, externalId])
+  // The /api/v1 keyset (#1988): candidates page over (updatedAt, id) within one org.
+  @@index([orgId, updatedAt, id])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
@@ -1633,6 +1782,8 @@ model Company {
   // whole table row by row.
   @@index([orgId, externalId])
   @@index([orgId, createdBySource])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // One sales channel of one account (#2408): a marketplace, a shop system or a
@@ -2322,6 +2473,8 @@ model Offer {
   @@index([orgId, status])
   @@index([relationId])
   @@index([orgId, currency])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -2515,31 +2668,32 @@ model Webhook {
 // in without a migration. ENFORCEMENT of expiry/revocation/scope at the door is
 // #1546; this model only stores the facts.
 model ApiKey {
-  orgId       String?
-  org         Organization? @relation(fields: [orgId], references: [id])
-  id          String        @id @default(cuid())
-  name        String
-  hashedKey   String        @unique
+  orgId           String?
+  org             Organization?       @relation(fields: [orgId], references: [id])
+  id              String              @id @default(cuid())
+  name            String
+  hashedKey       String              @unique
   // Comma-separated `<resource>:<action>` scopes. Defaulted (not nullable) so
   // `db push` fills existing rows non-destructively; the backfill normalises
   // any row that ended up empty.
-  scopes      String        @default("candidates:read")
+  scopes          String              @default("candidates:read")
   // The admin who minted the key. Nullable: rows that predate #1545 have no
   // recorded owner, and a deleted admin must not take the key's history away.
-  createdById String?
-  createdBy   User?         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  createdById     String?
+  createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
   // Null means "never expires" — allowed, but flagged in the admin UI.
-  expiresAt   DateTime?
+  expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
-  revokedAt   DateTime?
-  lastUsedAt  DateTime?
-  createdAt   DateTime      @default(now())
+  revokedAt       DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime            @default(now())
   // Period allowance (#2010). Both null = no period quota (the per-minute
   // limit still applies) — every key minted before this stays exactly as it
   // was. `quotaPeriod` is 'day' | 'month' (UTC calendar periods).
-  quotaPeriod String?       @db.VarChar(10)
-  quotaLimit  Int?
-  usage       ApiKeyUsage[]
+  quotaPeriod     String?             @db.VarChar(10)
+  quotaLimit      Int?
+  usage           ApiKeyUsage[]
+  idempotencyKeys ApiIdempotencyKey[]
 
   @@index([orgId])
   @@index([createdById])
@@ -2564,6 +2718,35 @@ model ApiKeyUsage {
 
   @@unique([apiKeyId, periodStart])
   @@index([orgId])
+}
+
+// One Idempotency-Key a key sent to an /api/v1 write (#1994). The first request
+// claims the row (responseStatus null while it runs); a retry with the same
+// key AND the same request hash replays the stored 2xx response instead of
+// writing twice; the same key with a different hash is 409
+// `idempotency_key_reused`. Only successes are kept — a refused or failed
+// write frees its key so the caller can retry. Rows older than
+// IDEMPOTENCY_TTL_MS are ignored and swept nightly. A brand-new model: the
+// key must never be attached by re-keying ApiKey (drop-and-recreate under
+// --accept-data-loss).
+model ApiIdempotencyKey {
+  id             String   @id @default(cuid())
+  orgId          String
+  apiKeyId       String
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  key            String   @db.VarChar(200)
+  method         String   @db.VarChar(10)
+  path           String   @db.VarChar(191)
+  // sha256 hex of method + path + raw body.
+  requestHash    String   @db.Char(64)
+  responseStatus Int?
+  // Capped (IDEMPOTENT_BODY_MAX); a larger response is replayed without its body.
+  responseBody   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@unique([apiKeyId, key])
+  @@index([orgId])
+  @@index([createdAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
@@ -2939,6 +3122,72 @@ model Cohort {
 
   relations    MentorshipRelation[]
   programCosts ProgramCost[]
+  steps        ProgramStep[]
+}
+
+// ── Program journey (#1852) ──────────────────────────────────────────────────
+// "What happens in week 6": one scheduled step of a programme's journey, an
+// offset from an anchor (the relation's start, the programme's start, or the
+// day the relation entered a stage). Hangs off the programme container — the
+// Cohort row, which #1622 renames to Program behind @@map("Cohort"), so this FK
+// survives that rename untouched. The vocabularies (anchor, audience, action,
+// the skip conditions in payload) are whitelists in src/lib/programJourneyRule.ts,
+// free Strings here by repo convention. A step is live only once published and
+// until archived; it is never deleted while it has runs, so the journey of a
+// relation can still say what it was sent.
+model ProgramStep {
+  id           String    @id @default(cuid())
+  orgId        String?
+  programId    String
+  order        Int       @default(0)
+  // The milestone the builder groups the step under (#1853) — a label, not a
+  // row: a journey stays one flat, serialisable list a template can copy.
+  milestone    String?   @db.VarChar(120)
+  // RELATION_START | PROGRAM_START | STAGE_ENTRY (payload.stageKey names the stage).
+  anchor       String    @default("RELATION_START") @db.VarChar(32)
+  offsetDays   Int       @default(0)
+  // MENTOR | MENTEE | BOTH — who of the pair receives it.
+  audience     String    @default("BOTH") @db.VarChar(16)
+  // NUDGE | ASSIGN_TODO | PUBLISH_CONTENT | SUGGEST_AGENDA | GROUP_SESSION
+  action       String    @db.VarChar(32)
+  // Per-action detail: { stageKey?, url?, agendaTemplateId?, skipIf? }.
+  payload      Json?
+  // The fallback wording; `translations` carries { en?, tr?, de? }.
+  title        String    @db.VarChar(191)
+  translations Json?
+  publishedAt  DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  org     Organization?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  program Cohort           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  runs    ProgramStepRun[]
+
+  @@index([orgId])
+  @@index([programId, order])
+}
+
+// One step delivered (or deliberately skipped) for one relation. The unique is
+// the claim: two sweeps on the same day — or two replicas — insert one row, and
+// the loser's P2002 is the "already done" answer, not a query beforehand.
+// Reached through its step, which is tenant-scoped; deliberately not in
+// TENANT_MODELS (no orgId of its own, the same shape as ApplicationEvent).
+model ProgramStepRun {
+  id            String    @id @default(cuid())
+  stepId        String
+  relationId    String
+  dueAt         DateTime
+  deliveredAt   DateTime?
+  // Why it was recorded and not delivered (e.g. "satisfied:meeting_exists").
+  skippedReason String?   @db.VarChar(64)
+  createdAt     DateTime  @default(now())
+
+  step     ProgramStep        @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, relationId])
+  @@index([relationId])
 }
 
 model CompanyNeed {
@@ -2970,6 +3219,9 @@ model MentorshipRelation {
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
   completedAt             DateTime?
+  // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
+  // table with rows; existing rows start at the deploy instant.
+  updatedAt               DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
@@ -3089,6 +3341,7 @@ model MentorshipRelation {
   evaluations           Evaluation[]
   // INTERIM/FINAL due dates and their reminders (#1891).
   evaluationDues        EvaluationDue[]
+  programStepRuns       ProgramStepRun[]
   goals                 Goal[]
   sessionAgendas        SessionAgenda[]
   sessionNotes          SessionNote[]
@@ -3127,6 +3380,8 @@ model MentorshipRelation {
   // The daily follow-up sweep asks for the ACTIVE relations whose next action
   // falls on or before today (#2563).
   @@index([nextActionAt])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3651,6 +3906,8 @@ model InteractionLog {
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
   notes      String          @db.Text
   type       InteractionType
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt  DateTime        @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
@@ -3674,6 +3931,8 @@ model InteractionLog {
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@unique([relationId, sourceRef])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 enum RsvpStatus {
@@ -3733,6 +3992,8 @@ model Meeting {
   createdById         String
   reminderSentAt      DateTime?
   createdAt           DateTime      @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime      @default(now()) @updatedAt
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
@@ -3784,6 +4045,8 @@ model Meeting {
   @@index([conversationId])
   @@index([seriesId])
   @@index([batchKey])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -4946,6 +5209,8 @@ model Requisition {
   ownerId             String?
   legacyCompanyNeedId String?   @unique
   createdAt           DateTime  @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime  @default(now()) @updatedAt
   closedAt            DateTime?
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -4955,10 +5220,14 @@ model Requisition {
   interests         CompanyInterest[]
   interviewRequests InterviewRequest[]
   applications      Application[]
+  // Canonical twin of `requiredSkills` (#1815), written alongside it.
+  skills            RequisitionSkill[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted
@@ -5007,6 +5276,8 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 /// One person being considered for one role, and where they are in it (#1828).

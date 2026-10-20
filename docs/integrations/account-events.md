@@ -191,6 +191,7 @@ Its limits:
 - It answers for the database as it is **at that moment**. A live event arriving between the dry run and the real run can change an outcome.
 - It holds the row locks a real run would take for as long as it runs (at most two minutes, `DRY_RUN_TIMEOUT_MS`), so a live event for an account in the batch waits for it. Dry-run before switching a live feed on, not during peak traffic.
 - One dry run at a time per application process (`DRY_RUN_CONCURRENCY`): it holds a database connection for its whole run. A second one meanwhile is refused with `429 { "code": "dry_run_busy" }` and `Retry-After`, before anything is read.
+- An event whose write **fails partway** ends it: `409 { "code": "dry_run_inconclusive", "index", "event_id", "outcome", "detail"? }`, and nothing is handled. Inside the dry run's one transaction the writes that event made before it failed cannot be taken back (MySQL refuses savepoints over the protocol the app speaks), so the events after it would see them, where the real run, whose failed write rolls back on its own, would not. A win-back refused before anything is written (the record changed meanwhile, the lead already has another active record) is an ordinary `conflict` and does not end it.
 
 ## Idempotency
 
@@ -213,6 +214,7 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 | `404` | `{ "code": "unknown_source" }` | No such source for this organization, or it is switched off. Nothing was written; park the event and retry later rather than dropping it. |
 | `409` | `{ "code": "no_default_owner" }` | Retry once the organization has a default lead owner. |
 | `409` | `{ "code": "missing_stages", "stages": [ … ] }` | Batch only: the organization's funnel lacks a stage a replay writes into. Nothing was handled; resend once the stages exist. |
+| `409` | `{ "code": "dry_run_inconclusive", "index", "event_id", "outcome", "detail"? }` | Batch dry run only: the named event's write failed partway, so the dry run cannot answer like the real run (see [Dry run](#dry-run)). Nothing was handled. |
 | `429` | `{ "type": "rate_limited" \| "quota_exceeded" }`, `{ "code": "dry_run_busy" }` | Back off; `Retry-After` says how long. `dry_run_busy`: batch dry run only, another one is running. |
 
 ## Registering a source

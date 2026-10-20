@@ -7,8 +7,9 @@ import { stageDeadlineUpdate } from '@/lib/stageSla';
 import type { WinBackStage } from '@/lib/winBackRule';
 
 // The Prisma half of a win-back (#2842); the rule is src/lib/winBackRule.ts.
-// One transaction: close the lost journey, re-ask the one-active-mentor
-// question INSIDE it (#419, src/lib/activeMentorship.ts), open the new one.
+// One transaction: re-ask the one-active-mentor question INSIDE it (#419,
+// src/lib/activeMentorship.ts), close the lost journey, open the new one —
+// every refusal answered before the first write (#2988).
 // Nothing is copied across but the account, the lead and the owner — a win-back
 // is a new journey, so its trial window, deal value and notice period start
 // empty. No StatusChange for the new relation: a relation CREATED at a stage
@@ -43,7 +44,7 @@ export async function winBack(input: {
   db?: Db;
 }): Promise<{ newRelationId: string }> {
   const now = input.at ?? new Date();
-  return inTransaction(input.db ?? prisma, async (tx) => {
+  const done = await inTransaction(input.db ?? prisma, async (tx) => {
     // FIRST, before any plain read: lock the predecessor. Two win-backs of one
     // record then run one after the other, and the second one's reads (its
     // snapshot is taken at its first plain read, i.e. after this lock is
@@ -54,20 +55,30 @@ export async function winBack(input: {
     await tx.$queryRaw`SELECT id FROM \`MentorshipRelation\` WHERE id = ${input.relationId} FOR UPDATE`;
     const old = await tx.mentorshipRelation.findUniqueOrThrow({
       where: { id: input.relationId },
-      select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true },
+      select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true, pipelineStatus: true },
     });
-    if (input.expect.closed) {
-      if (old.status === 'ACTIVE') throw new WinBackConflictError();
-    } else {
+    // Every refusal is decided BEFORE the first write and answered, not thrown
+    // from inside the unit: joined to a caller's transaction (the batch dry
+    // run) there is no savepoint to roll a refusal's earlier writes back to
+    // (src/lib/dbHandle.ts). The order of the answers is the one the close-first
+    // version gave: a changed record before another active one.
+    const changed = input.expect.closed
+      ? old.status === 'ACTIVE'
+      : old.status !== 'ACTIVE' || old.pipelineStatus !== input.expect.pipelineStatus;
+    if (changed) return { refused: 'changed' as const };
+
+    const other = await findActiveMentorship(tx, old.menteeId, { exceptRelationId: old.id });
+    if (other) return { refused: 'mentored' as const, menteeId: old.menteeId, otherId: other.id };
+
+    if (!input.expect.closed) {
+      // Still guarded: the authority on "changed" is this conditional write,
+      // and as the unit's first write a refusal here leaves nothing behind.
       const closed = await tx.mentorshipRelation.updateMany({
         where: { id: old.id, status: 'ACTIVE', pipelineStatus: input.expect.pipelineStatus },
         data: { status: 'COMPLETED', lifecycleState: ENDED_CHURNED, completedAt: now },
       });
-      if (closed.count === 0) throw new WinBackConflictError();
+      if (closed.count === 0) return { refused: 'changed' as const };
     }
-
-    const other = await findActiveMentorship(tx, old.menteeId, { exceptRelationId: old.id });
-    if (other) throw new AlreadyMentoredError(old.menteeId, other.id);
 
     const trialWindow =
       input.trialWindow ?? (await stageTrialWindow({ orgId: old.orgId, toStage: input.toStage, enteredAt: now, existing: null }));
@@ -88,6 +99,11 @@ export async function winBack(input: {
     });
     return { newRelationId: created.id };
   });
+  if ('refused' in done) {
+    if (done.refused === 'mentored') throw new AlreadyMentoredError(done.menteeId, done.otherId);
+    throw new WinBackConflictError();
+  }
+  return { newRelationId: done.newRelationId };
 }
 
 export class WinBackConflictError extends Error {

@@ -495,3 +495,39 @@ test('dry_run answers like the real run and writes nothing', async ({ request })
     ['ACTIVE', 'DEAL_WON'],
   ]);
 });
+
+test('a win-back refused before it writes is a conflict that keeps a dry run going, as in the real run (#2988)', async ({ request }) => {
+  // The lead already has another ACTIVE record (seeded straight into the table,
+  // past the #419 helper, on purpose): winBack() refuses the `converted` on the
+  // lost record BEFORE it closes anything. A dry run's writers join its one
+  // transaction with no savepoint (src/lib/dbHandle.ts), so a refusal made after
+  // the close would leave the record closed for the next event of the account —
+  // or end the dry run as inconclusive.
+  const lost = await seedAccount('DEAL_LOST', { wonBefore: true });
+  const elsewhere = await prisma.company.create({ data: { orgId, name: `Acme Sales elsewhere ${randomBytes(3).toString('hex')} ${STAMP}` } });
+  await prisma.mentorshipRelation.create({
+    data: { orgId, mentorId: ownerId, menteeId: lost.leadId, companyId: elsewhere.id, pipelineStatus: 'TRIAL_ACTIVE', startDate: daysAgo(10) },
+  });
+  const events = [
+    envelope({ event_type: 'converted', external_id: lost.externalId, occurred_at: daysAgo(30).toISOString(), contact: null }),
+    envelope({ event_type: 'cancelled', external_id: lost.externalId, occurred_at: daysAgo(20).toISOString(), contact: null }),
+    envelope({ occurred_at: daysAgo(15).toISOString() }),
+  ];
+
+  const before = await footprint();
+  const dry = await postBatch(request, { events, dry_run: true });
+  expect(dry.status(), await dry.text()).toBe(200);
+  const dryBody = await dry.json();
+  expect(await footprint()).toEqual(before);
+
+  const real = await (await postBatch(request, { events })).json();
+  const shape = (rs: { index: number; outcome: string; detail?: string }[]) => rs.map((r) => [r.index, r.outcome, r.detail ?? null]);
+  expect(shape(dryBody.results)).toEqual(shape(real.results));
+  expect(real.results[0]).toMatchObject({ outcome: 'conflict', detail: 'the lead already has another active record' });
+  expect(real.results[2].outcome).toBe('applied');
+  // The refusal closed nothing.
+  expect(await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: lost.relationId } })).toMatchObject({
+    status: 'ACTIVE',
+    pipelineStatus: 'DEAL_LOST',
+  });
+});

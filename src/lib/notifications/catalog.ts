@@ -256,6 +256,14 @@ export const NOTIFICATION_EVENTS = [
   // the mail goes in the existing `goals-evaluation` category (src/lib/evaluationDue.ts).
   { key: 'evaluation.dueInterim', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
   { key: 'evaluation.dueFinal', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
+  // Program journey steps (#1852): in-app only — the daily sweep delivers each
+  // step to the pair once, under the recipient's `mentorship` preference
+  // (src/lib/programJourney.ts). No mail: #1703's automation engine owns that.
+  { key: 'programStep.nudge', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'relation', params: ['title'] },
+  { key: 'programStep.todo', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'relation', params: ['title'] },
+  { key: 'programStep.content', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'relation', params: ['title'] },
+  { key: 'programStep.agenda', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'relation', params: ['title'] },
+  { key: 'programStep.groupSession', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'relation', params: ['title'] },
   { key: 'testimonial.approvalRequested', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'testimonial.declined', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'project.goalAssigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title'] },

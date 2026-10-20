@@ -107,6 +107,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // are reached only through a scoped parent and are deliberately not listed
   // (schema comment).
   'AgendaTemplate',
+  // Program journey steps (#1852). ProgramStepRun is reached through its step
+  // and carries no orgId of its own — deliberately unregistered.
+  'ProgramStep',
   // Brute-force lockouts (#1541). Rows are written by the sign-in path, which
   // runs outside any tenant scope (there is no session yet) and stamps orgId
   // itself; listing this here is what keeps one tenant's admin from seeing or
@@ -117,6 +120,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKey',
   // Per-key request counts (#2010) — the key's tenant owns its usage.
   'ApiKeyUsage',
+  // Idempotency keys of /api/v1 writes (#1994) — the key's tenant owns them.
+  'ApiIdempotencyKey',
   // A mentee's practice interview transcript (#2051).
   'PracticeSession',
   // Safeguarding flags (#2056) — one org's review queue; stamped with the
@@ -244,6 +249,16 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // that key alone resolves to whichever row the database happened to return
   // unless something narrows it by tenant. This is what narrows it.
   'Tag',
+  // The canonical skill vocabulary (#1815): same shape and reasoning as Tag —
+  // REQUIRED orgId and a per-org natural key (orgId + key). UserSkill and
+  // RequisitionSkill carry no orgId and are deliberately not listed: like
+  // UserTag they are reached only through a scoped parent (User / Requisition
+  // on one side, Skill on the other).
+  'Skill',
+  'SkillAlias',
+  'SkillEdge',
+  // The backfill's review queue (#1819): one org's unresolved terms.
+  'UnmappedSkillTerm',
   'StageSla',
   'PipelineStage',
   // The per-tenant competency framework (#822) — the questions a tenant decided

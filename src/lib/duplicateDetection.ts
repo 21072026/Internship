@@ -207,11 +207,17 @@ export interface DuplicatePair {
 //   nameFuzzy + university 30+25 → the same `uni:` key; a fuzzy name alone is
 //              30 and never qualifies, and the university signal is only ever
 //              awarded on top of a name signal.
-// Inside a `uni:` bucket only pairs whose name keys differ in length by ≤ 2 are
-// compared: Levenshtein ≤ 2 is impossible otherwise. Nothing here changes WHAT
-// counts as a duplicate — matchSignals/scoreSignals still decide every pair —
-// only which pairs are handed to them. Lossless by construction, and pinned by
-// e2e/duplicate-blocking.unit.spec.ts against the all-pairs scan.
+// A `uni:` bucket is not small: an org that serves one university has ONE
+// bucket holding every mentee, and comparing inside it by name length alone
+// took 12 s at 5 000 mentees. So inside a university the fuzzy door is blocked
+// again, on the deletion neighbourhood of the name key (SymSpell): if
+// Levenshtein(a, b) ≤ 2, deleting at most two characters from each yields a
+// common string (a substitution is a deletion on both sides, an insertion a
+// deletion on the other), so every such pair shares a `uni + variant` key.
+// Nothing here changes WHAT counts as a duplicate — matchSignals/scoreSignals
+// still decide every pair — only which pairs are handed to them. Lossless by
+// construction, and pinned by e2e/duplicate-blocking.unit.spec.ts against the
+// all-pairs scan.
 function blockingKeys(u: CandidateRecord): { exact: string[]; uni: string | null; name: string } {
   const exact: string[] = [];
   const email = normalizeEmailKey(u.email);
@@ -228,38 +234,65 @@ function blockingKeys(u: CandidateRecord): { exact: string[]; uni: string | null
   return { exact, uni, name };
 }
 
-/**
- * Every suspicious pair among `users`, strongest first, capped. Pure — the
- * scan and its test share it. Ordering is exactly the old all-pairs scan's:
- * score descending, then the pair's position in `users` (i, then j).
- */
-export function findDuplicatePairs(users: CandidateRecord[], cap = 200): DuplicatePair[] {
+// Every string reachable from `s` by deleting at most two characters.
+function deletionVariants(s: string): Set<string> {
+  const out = new Set<string>([s]);
+  for (let i = 0; i < s.length; i++) {
+    const one = s.slice(0, i) + s.slice(i + 1);
+    out.add(one);
+    for (let j = i; j < one.length; j++) out.add(one.slice(0, j) + one.slice(j + 1));
+  }
+  return out;
+}
+
+interface FoundPair {
+  i: number;
+  j: number;
+  signals: DuplicateSignal[];
+  score: number;
+}
+
+// How many candidate pairs are handed to matchSignals between two yields.
+const STEP = 2_000;
+
+// The walk itself, as a generator that yields every STEP comparisons so the
+// async caller can hand the event loop back (#1436: the scan ran on the request
+// thread and held /api/health for seconds). The sync caller just drains it.
+function* walkDuplicatePairs(users: CandidateRecord[]): Generator<void, FoundPair[]> {
   const exactBuckets = new Map<string, number[]>();
-  const uniBuckets = new Map<string, number[]>();
+  // university → name-key variant → the users holding it
+  const fuzzyBuckets = new Map<string, Map<string, number[]>>();
   const names: string[] = [];
-  users.forEach((u, i) => {
-    const { exact, uni, name } = blockingKeys(u);
+  const push = (map: Map<string, number[]>, key: string, i: number) => {
+    const bucket = map.get(key);
+    if (bucket) bucket.push(i);
+    else map.set(key, [i]);
+  };
+  for (let i = 0; i < users.length; i++) {
+    const { exact, uni, name } = blockingKeys(users[i]);
     names[i] = name;
-    for (const key of exact) {
-      const bucket = exactBuckets.get(key);
-      if (bucket) bucket.push(i);
-      else exactBuckets.set(key, [i]);
-    }
+    for (const key of exact) push(exactBuckets, key, i);
     if (uni) {
-      const bucket = uniBuckets.get(uni);
-      if (bucket) bucket.push(i);
-      else uniBuckets.set(uni, [i]);
+      let variants = fuzzyBuckets.get(uni);
+      if (!variants) fuzzyBuckets.set(uni, (variants = new Map()));
+      for (const variant of deletionVariants(name)) push(variants, variant, i);
     }
-  });
+    // ~80 variants per name: indexing is the expensive half, so it may yield
+    // after every user (the async driver still only yields every ~10 ms).
+    yield;
+  }
 
   const seen = new Set<number>();
-  const found: { i: number; j: number; signals: DuplicateSignal[]; score: number }[] = [];
-  const consider = (x: number, y: number) => {
-    const i = Math.min(x, y);
-    const j = Math.max(x, y);
+  const found: FoundPair[] = [];
+  let work = 0;
+  // Returns true when the pair had not been seen yet.
+  const claim = (i: number, j: number) => {
     const id = i * users.length + j;
-    if (seen.has(id)) return;
+    if (seen.has(id)) return false;
     seen.add(id);
+    return true;
+  };
+  const decide = (i: number, j: number) => {
     const signals = matchSignals(users[i], users[j]);
     const score = scoreSignals(signals);
     if (score >= DUPLICATE_SCORE_THRESHOLD) found.push({ i, j, signals, score });
@@ -267,28 +300,63 @@ export function findDuplicatePairs(users: CandidateRecord[], cap = 200): Duplica
 
   for (const bucket of exactBuckets.values()) {
     for (let a = 0; a < bucket.length; a++) {
-      for (let b = a + 1; b < bucket.length; b++) consider(bucket[a], bucket[b]);
-    }
-  }
-  // In a university bucket the only door left is the fuzzy name, so the
-  // precomputed keys are checked first with the same bounded Levenshtein
-  // matchSignals uses; only a pair that passes is handed to matchSignals (which
-  // still decides). Equal keys are already in a `name:` bucket.
-  for (const bucket of uniBuckets.values()) {
-    const byLen = [...bucket].sort((x, y) => names[x].length - names[y].length);
-    for (let a = 0; a < byLen.length; a++) {
-      const na = names[byLen[a]];
-      for (let b = a + 1; b < byLen.length && names[byLen[b]].length - na.length <= 2; b++) {
-        const nb = names[byLen[b]];
-        if (na !== nb && levenshtein(na, nb, 2) <= 2) consider(byLen[a], byLen[b]);
+      for (let b = a + 1; b < bucket.length; b++) {
+        if (claim(bucket[a], bucket[b])) decide(bucket[a], bucket[b]);
+        if (++work % STEP === 0) yield;
       }
     }
   }
+  // In a university+variant bucket the only door left is the fuzzy name, so
+  // the precomputed keys are checked first with the same bounded Levenshtein
+  // matchSignals uses; only a pair that passes is handed to matchSignals (which
+  // still decides). Equal keys were already compared in their `name:` bucket.
+  for (const variants of fuzzyBuckets.values()) {
+    for (const bucket of variants.values()) {
+      for (let a = 0; a < bucket.length; a++) {
+        for (let b = a + 1; b < bucket.length; b++) {
+          const x = bucket[a];
+          const y = bucket[b];
+          if (names[x] !== names[y] && claim(x, y) && levenshtein(names[x], names[y], 2) <= 2) decide(x, y);
+          if (++work % STEP === 0) yield;
+        }
+      }
+    }
+  }
+  return found;
+}
 
+function rankPairs(users: CandidateRecord[], found: FoundPair[], cap: number): DuplicatePair[] {
   return found
     .sort((x, y) => y.score - x.score || x.i - y.i || x.j - y.j)
     .slice(0, cap)
     .map(({ i, j, signals, score }) => ({ a: users[i], b: users[j], signals, score }));
+}
+
+/**
+ * Every suspicious pair among `users`, strongest first, capped. Pure — the
+ * scan and its test share it. Ordering is exactly the old all-pairs scan's:
+ * score descending, then the pair's position in `users` (i, then j).
+ */
+export function findDuplicatePairs(users: CandidateRecord[], cap = 200): DuplicatePair[] {
+  const walk = walkDuplicatePairs(users);
+  let step = walk.next();
+  while (!step.done) step = walk.next();
+  return rankPairs(users, step.value, cap);
+}
+
+/** The same result as findDuplicatePairs, handing the event loop back every ~10 ms. */
+export async function findDuplicatePairsYielding(users: CandidateRecord[], cap = 200): Promise<DuplicatePair[]> {
+  const walk = walkDuplicatePairs(users);
+  let slice = performance.now();
+  let step = walk.next();
+  while (!step.done) {
+    if (performance.now() - slice > 10) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      slice = performance.now();
+    }
+    step = walk.next();
+  }
+  return rankPairs(users, step.value, cap);
 }
 
 // One-time/bulk scan: every suspicious MENTEE pair in the org, strongest first.
@@ -301,5 +369,5 @@ export async function scanDuplicatePairs(orgId: string | null, cap = 200): Promi
     select: CANDIDATE_SELECT,
     orderBy: { createdAt: 'asc' },
   });
-  return findDuplicatePairs(users, cap);
+  return findDuplicatePairsYielding(users, cap);
 }

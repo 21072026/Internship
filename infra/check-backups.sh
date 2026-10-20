@@ -66,7 +66,10 @@ for env_name in "${ENVS[@]}"; do
     continue
   fi
 
-  size=$(wc -c < "$newest")
+  # Size from the inode, not by reading the file: a dump the checking user
+  # cannot read (#2989 — the daily cron runs as root and writes 0600, this
+  # check runs as the runner user) still has a size and an age to report.
+  size=$(stat -c %s "$newest" 2>/dev/null || echo 0)
   # Age from the STAMP in the filename (<env>-YYYYmmddTHHMMSSZ.sql.gz), falling
   # back to mtime for a file that predates that naming.
   stamp="${newest##*/}"; stamp="${stamp#${env_name}-}"; stamp="${stamp%.sql.gz}"
@@ -85,7 +88,13 @@ for env_name in "${ENVS[@]}"; do
   problems=()
   [ "$age_h" -le "$MAX_AGE_HOURS" ] || problems+=("stale: ${age_h}h old (limit ${MAX_AGE_HOURS}h)")
   [ "$size" -ge "$MIN_BYTES" ] || problems+=("too small: ${size}B (min ${MIN_BYTES}B)")
-  gzip -t "$newest" 2>/dev/null || problems+=("not a valid gzip stream (truncated?)")
+  if [ ! -r "$newest" ]; then
+    # Not "truncated": we could not look. Name who owns it, so the fix is
+    # obvious (docs/disaster-recovery.md → "When the check fails").
+    problems+=("unreadable by $(id -un) (owner $(stat -c %U "$newest" 2>/dev/null || echo '?'), mode $(stat -c %a "$newest" 2>/dev/null || echo '?')): integrity not verified")
+  else
+    gzip -t "$newest" 2>/dev/null || problems+=("not a valid gzip stream (truncated?)")
+  fi
   [ "$history" -ge "$MIN_HISTORY_DAYS" ] || problems+=("history covers only ${history} day(s) (min ${MIN_HISTORY_DAYS})")
 
   if [ "${#problems[@]}" -eq 0 ]; then

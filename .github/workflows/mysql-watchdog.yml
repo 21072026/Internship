@@ -126,6 +126,34 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           [ "$status" = ok ]
 
+  # The SMTP-free trail (#2322): the e-mail below cannot leave a GitHub-hosted
+  # runner, which made "the database is down" the alert least likely to arrive.
+  # One `ci-alert` issue while the watchdog is red (one comment per UTC day at
+  # most — this runs every 10 minutes), closed by the next green check.
+  alert:
+    name: Record the result as an issue (no SMTP)
+    needs: [watchdog]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Open, refresh or close the database alert
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: mysql-watchdog
+          ALERT_TITLE: '🛑 mysql-watchdog — the database is DOWN'
+          ALERT_SUMMARY: |
+            MySQL is not answering on the server and the watchdog could not restart it. Every page that touches data is failing.
+            First move: `systemctl status mysql` and `journalctl -u mysql -n 50` on the box; the run log carries the watchdog's report. See infra/README.md → "MySQL watchdog".
+        run: node scripts/ci-alert-issue.mjs ${{ needs.watchdog.result == 'success' && 'green' || 'red' }}
+
   notify:
     name: Email alert when the database is down
     needs: [watchdog]
@@ -137,6 +165,11 @@ jobs:
         with:
           node-version: 20
       - name: Send alert email
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

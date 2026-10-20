@@ -330,6 +330,11 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Email the transitions
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
         if: steps.transition.outputs.any == 'true'
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}

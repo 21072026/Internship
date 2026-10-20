@@ -526,7 +526,9 @@ export default function AdminOrganizationsPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      const failure = data.code === 'feature_locked' ? t.organizations.featureLocked : data.error || t.common.error;
+      const failure = data.code === 'feature_locked'
+        ? t.organizations.featureLocked
+        : data.code === 'sso_super_admin_only' ? t.organizations.ssoTrustOperatorOnly : data.error || t.common.error;
       setSsoMsg(res.ok ? t.organizations.ssoSaved : failure);
       if (res.ok) { setSsoCertificate(''); await load(); }
     } finally {
@@ -540,6 +542,10 @@ export default function AdminOrganizationsPage() {
   const ssoOrg = orgs.find((o) => o.id === ssoOrgId);
   const brandLocked = !!brandOrgId && !orgPlanHasFeature(brandOrg?.plan, 'WHITE_LABEL');
   const ssoLocked = !!ssoOrgId && !orgPlanHasFeature(ssoOrg?.plan, 'SSO_SAML');
+  // The identity provider itself is the operator's to set (#1575); a tenant
+  // admin keeps the on/off switch and enforcement. Cosmetic — the API's 403 is
+  // the control.
+  const ssoTrustLocked = ssoLocked || !superAdmin;
 
   // Undoing is never gated (the API exempts a payload that can only null
   // columns), so a locked editor still offers the way out: branding a tenant
@@ -827,6 +833,7 @@ export default function AdminOrganizationsPage() {
               </select>
             </div>
             {ssoLocked && <LockedNote testId="sso-locked" text={t.organizations.ssoLocked} />}
+            {!ssoLocked && !superAdmin && ssoOrgId && <LockedNote testId="sso-trust-operator-only" text={t.organizations.ssoTrustOperatorOnly} />}
             {ssoLocked && ssoOrg?.sso.ssoEnabled && (
               <Button type="button" variant="outline" loading={saving} onClick={disableSso} data-testid="sso-disable">
                 {t.organizations.ssoDisable}
@@ -850,7 +857,7 @@ export default function AdminOrganizationsPage() {
                 <div className="flex flex-wrap gap-3">
                   <div className="min-w-[140px]">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoProvider}</label>
-                    <select value={ssoProvider} disabled={ssoLocked} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
+                    <select value={ssoProvider} disabled={ssoTrustLocked} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
                       {/* OIDC is a roadmap item: the login route always builds a
@@ -859,14 +866,14 @@ export default function AdminOrganizationsPage() {
                       <option value="oidc" disabled>{`OIDC — ${t.organizations.ssoOidcSoon}`}</option>
                     </select>
                   </div>
-                  <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
-                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
+                  <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoTrustLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
+                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoCertificate}</label>
                   <textarea
                     value={ssoCertificate}
-                    disabled={ssoLocked}
+                    disabled={ssoTrustLocked}
                     onChange={(e) => setSsoCertificate(e.target.value)}
                     rows={3}
                     placeholder="-----BEGIN CERTIFICATE-----"
