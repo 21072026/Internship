@@ -7,6 +7,7 @@ import { accountEventSchema, type AccountEvent } from '@/lib/accountEventSchema'
 import {
   ACCOUNT_EVENT_BATCH_MAX,
   DryRunBusyError,
+  DryRunInconclusiveError,
   ingestAccountEventBatch,
   MissingReplayStagesError,
 } from '@/lib/accountEventIngest';
@@ -36,7 +37,9 @@ import {
 // `no_default_owner` is one of them, not a 409 for the batch. Two refusals
 // come before any event is claimed: 409 `missing_stages` (the org's funnel
 // lacks a stage a replay writes into) and, for a dry run, 429 `dry_run_busy`
-// (another dry run is running in this process).
+// (another dry run is running in this process). A dry run that reaches an event
+// whose write failed partway stops there: 409 `dry_run_inconclusive` names it
+// (its index, id, outcome and detail — never the ids of rolled-back rows).
 //
 // Listed in scripts/check-api-key-routes.mjs next to the single route.
 
@@ -105,6 +108,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
               code: 'missing_stages',
               stages: e.stages,
               error: 'The organization\'s funnel lacks stages a replay writes into. Nothing was handled; resend once they exist.',
+            },
+            { status: 409 },
+          );
+        }
+        if (e instanceof DryRunInconclusiveError) {
+          const { index, event_id, outcome, detail } = e.item;
+          return NextResponse.json(
+            {
+              code: 'dry_run_inconclusive',
+              index,
+              event_id,
+              outcome,
+              ...(detail ? { detail } : {}),
+              error:
+                'This event\'s write failed partway, which a dry run cannot undo, so the events after it could not be judged as the real run would judge them. Nothing was handled.',
             },
             { status: 409 },
           );
