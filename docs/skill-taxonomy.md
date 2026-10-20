@@ -13,6 +13,7 @@ generalise "React" to "Frontend". The taxonomy is the vocabulary those strings r
 | Tables `Skill`, `SkillAlias`, `SkillEdge`, `UserSkill`, `RequisitionSkill` | `prisma/schema.prisma` (next to `Tag`) | #1815 |
 | Pure rules: caps, labels, new-skill keys, merge chain, adjacency walk | `src/lib/skillTaxonomyRule.ts` (unit test `scripts/test/skill-taxonomy.test.mjs`) | #1815 |
 | DB resolver: `resolveSkill` / `resolveMany` / `expandAdjacent` / `seedSkillTaxonomy` | `src/lib/skillsResolve.ts` (e2e `e2e/skill-taxonomy.spec.ts`) | #1815 |
+| Curation screen `/admin/skills` (vocabulary + review-queue tab) | `src/lib/skillCuration.ts`, `src/components/admin/SkillManager.tsx`, `/api/admin/skills/**` (e2e `e2e/skill-admin.spec.ts`) | #1817 |
 | Backfill of the free text + unmapped-term queue | `prisma/backfill-skill-taxonomy.mjs`, `src/lib/skillQueue.ts`, `/api/admin/skills/unmapped` (e2e `e2e/skill-backfill.spec.ts`) | #1819 |
 
 ## Rules that carry weight
@@ -65,6 +66,26 @@ The queue: `GET /api/admin/skills/unmapped[?resolution=…]` (most frequent firs
 labelEn?, labelTr?, labelDe? }`. ADMIN only, org from the session, another org's term answers
 404. Each decision is one guarded `updateMany` out of `PENDING` (a second decision answers 409);
 promote and alias then link everybody whose free text carries the term (`linkFreeTextHolders`).
+
+## Curation (#1817)
+
+`/admin/skills` — ADMIN only, in the page and in every route handler; org from the session; another
+org's skill answers 404. The rules live in `src/lib/skillCuration.ts`:
+
+- **A spelling is unique per org across keys and aliases.** Adding an alias, creating a skill or
+  relabelling one to a spelling another skill owns answers `409 duplicate` — that is a merge, not a
+  rename. A relabel keeps the key (keys are forever) and adds the new English label's fold as an
+  alias so the label still resolves.
+- **Merge** (`POST /api/admin/skills/[id]/merge { targetId }`, previewed by the GET twin) is one
+  transaction, guarded on the loser's `mergedIntoId IS NULL`: `UserSkill` / `RequisitionSkill` rows
+  move (a row that would duplicate the target's is dropped), aliases move, edges are re-pointed (a
+  self-loop or an existing pair is dropped), and the loser stays as a RETIRED row with
+  `mergedIntoId` — its key and every alias keep resolving to the target.
+- **Retire** hides a skill from suggestions and resolution; nobody's row is removed, so reactivating
+  restores it. A merged skill cannot be reactivated.
+- **Edges** (`PUT …/edges`) replace a skill's neighbours: every edge leaving it plus every ADJACENT
+  edge arriving at it; weights are clamped to 0..1, at most 50, no self-edge.
+- `MAX_SKILLS_PER_ORG` is enforced on create; every mutation writes an activity row (`skill.*`).
 
 ## Skill filters in SQL (#1820)
 
