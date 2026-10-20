@@ -4904,35 +4904,39 @@ model ExternalConnection {
 // The consent summary is information only: it never creates a contact
 // permission (docs/contact-permission.md — a machine writes NONE only).
 model ExternalProfileLink {
-  id               String             @id @default(cuid())
+  id               String              @id @default(cuid())
   orgId            String
-  org              Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  connectionId     String
-  connection       ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  provider         String             @db.VarChar(40)
+  org              Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // SetNull, not Cascade: disconnecting deletes the LIVE links itself
+  // (deleteKlaviyoConnection) but an erasure tombstone must outlive the
+  // connection, or reconnecting would import the erased person again.
+  connectionId     String?
+  connection       ExternalConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  provider         String              @db.VarChar(40)
   // The provider's profile id.
-  externalId       String             @db.VarChar(64)
+  externalId       String              @db.VarChar(64)
   // Cascade: deleting (or erasing) the account takes its provider link.
   companyId        String?
-  company          Company?           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company          Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // The lead person (a stand-in MENTEE); a plain id, the account is the anchor.
-  leadUserId       String?            @db.VarChar(191)
+  leadUserId       String?             @db.VarChar(191)
   // The Source name the profile was attributed to (leadSourceName()).
-  sourceName       String?            @db.VarChar(120)
-  consent          String?            @db.Text
-  attributes       String?            @db.Text
+  sourceName       String?             @db.VarChar(120)
+  consent          String?             @db.Text
+  attributes       String?             @db.Text
   profileUpdatedAt DateTime?
   // sha256 of the profile's lower-cased address, so an erasure of that person
   // (src/lib/accountErasure.ts) finds this link without an address stored on it.
-  emailHash        String?            @db.Char(64)
+  emailHash        String?             @db.Char(64)
   // Set when the person this profile describes was erased: the link becomes a
   // tombstone (externalId only — every other column nulled) and every later
   // sync SKIPS the profile instead of writing the person back.
   erasedAt         DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@unique([connectionId, externalId])
+  @@index([orgId, provider, externalId])
   @@index([orgId, companyId])
   @@index([orgId, emailHash])
   @@index([orgId, leadUserId])

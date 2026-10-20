@@ -191,10 +191,19 @@ export async function setKlaviyoEnabled(orgId: string, enabled: boolean): Promis
   return count > 0;
 }
 
-/** Disconnect: the key and the links go; the accounts and leads stay. */
+/**
+ * Disconnect: the key and the live links go; the accounts and leads stay. An
+ * erasure tombstone stays too (its connection is set null), so a later
+ * reconnect still SKIPS the erased person's profile.
+ */
 export async function deleteKlaviyoConnection(orgId: string): Promise<boolean> {
-  const { count } = await prisma.externalConnection.deleteMany({ where: { orgId, provider: KLAVIYO_PROVIDER } });
-  return count > 0;
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.externalConnection.findFirst({ where: { orgId, provider: KLAVIYO_PROVIDER }, select: { id: true } });
+    if (!row) return false;
+    await tx.externalProfileLink.deleteMany({ where: { orgId, connectionId: row.id, erasedAt: null } });
+    const { count } = await tx.externalConnection.deleteMany({ where: { id: row.id, orgId } });
+    return count > 0;
+  });
 }
 
 /** The org's saved key, opened — for "Test connection" without pasting it again. */
@@ -332,7 +341,14 @@ async function resolvePage(
 
   const [links, leadsByEmail, companiesByEmail] = await Promise.all([
     prisma.externalProfileLink.findMany({
-      where: { orgId, connectionId: ctx.connectionId, externalId: { in: ids } },
+      // This connection's links, plus the org's erasure tombstones from any
+      // connection (one made before a disconnect has none).
+      where: {
+        orgId,
+        provider: KLAVIYO_PROVIDER,
+        externalId: { in: ids },
+        OR: [{ connectionId: ctx.connectionId }, { erasedAt: { not: null } }],
+      },
       select: {
         id: true,
         externalId: true,
@@ -355,7 +371,11 @@ async function resolvePage(
       ? prisma.company.findMany({ where: { orgId, contactEmail: { in: emails } }, select: { id: true, contactEmail: true } })
       : Promise.resolve([] as { id: string; contactEmail: string | null }[]),
   ]);
-  const linkById = new Map(links.map((l) => [l.externalId, l]));
+  const linkById = new Map<string, (typeof links)[number]>();
+  for (const l of links) {
+    // A tombstone wins over a live link of the same profile.
+    if (!linkById.get(l.externalId)?.erasedAt) linkById.set(l.externalId, l);
+  }
   const leadByEmail = new Map(leadsByEmail.map((u) => [u.email.toLowerCase(), u]));
   const companiesForEmail = new Map<string, string[]>();
   for (const c of companiesByEmail) {
@@ -587,10 +607,20 @@ const MAX_CREATE_PASSES = 8;
  * Nothing is dropped silently: a row still unplaced after the last pass is an
  * ERROR, which holds the cursor so the next query reads it again.
  */
-async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): Promise<RowResult<KlaviyoPlan>[]> {
+async function applyCreates(
+  ctx: PageContext,
+  rows: PlannedRow<KlaviyoPlan>[],
+  dryRun: boolean,
+): Promise<RowResult<KlaviyoPlan>[]> {
   type Pending = { row: PlannedRow<KlaviyoPlan>; name: string; disambiguated: boolean };
   const results = new Map<number, RowResult<KlaviyoPlan>>();
   let pending: Pending[] = rows.map((row) => ({ row, name: row.value.lead.accountName, disambiguated: false }));
+  // A dry run writes nothing, so a later pass cannot find the account an
+  // earlier pass "created": remember them by name key and answer the way the
+  // real run's next pass would (link to it, or retry under a person's name).
+  const plannedByName = new Map<string, string>();
+  const link = (plan: KlaviyoPlan, companyId: string, leadUserId: string | null) =>
+    dryRun ? Promise.resolve() : upsertLink(prisma, ctx, plan, companyId, leadUserId).then(() => undefined);
 
   for (let pass = 0; pass < MAX_CREATE_PASSES && pending.length; pass++) {
     const batch: Pending[] = [];
@@ -598,6 +628,25 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
     const names = new Set<string>();
     for (const p of pending) {
       const k = normalizeNameKey(p.name);
+      const plannedContact = plannedByName.get(k);
+      if (plannedContact !== undefined) {
+        const plan = p.row.value;
+        if (plan.lead.accountNameIsOrganization || !plannedContact || plannedContact === plan.lead.email) {
+          results.set(p.row.row, {
+            row: p.row.row,
+            key: p.row.key,
+            status: 'UPDATE',
+            targetId: null,
+            reason: 'matched an account this sync creates',
+            value: { ...plan, companyId: null, leadUserId: null },
+          });
+        } else if (!p.disambiguated) {
+          deferred.push({ row: p.row, name: disambiguatedAccountName(plan.lead), disambiguated: true });
+        } else {
+          results.set(p.row.row, { row: p.row.row, key: p.row.key, status: 'ERROR', targetId: null, reason: 'an account of this name already exists for another contact', value: plan });
+        }
+        continue;
+      }
       if (names.has(k)) deferred.push(p);
       else {
         names.add(k);
@@ -608,6 +657,7 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
       owner: ctx.owner,
       rows: batch.map((p) => accountFields(p.row.value, ctx.startStage, p.name)),
       createdBySource: KLAVIYO_CREATED_BY,
+      dryRun,
     });
     const leadIds = await standInLeads(
       ctx.orgId,
@@ -634,8 +684,13 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
         continue;
       }
       const marketReason = outcome.reason;
+      if (outcome.status === 'CREATE' && dryRun) {
+        plannedByName.set(normalizeNameKey(item.name), plan.lead.email ?? '');
+        done('CREATE', null, marketReason);
+        continue;
+      }
       if (outcome.status === 'CREATE' && outcome.targetId) {
-        await upsertLink(prisma, ctx, plan, outcome.targetId, leadUserId);
+        await link(plan, outcome.targetId, leadUserId);
         done('CREATE', outcome.targetId, marketReason);
         continue;
       }
@@ -651,7 +706,7 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
         });
         const sameContact = !existing?.contactEmail || existing.contactEmail.toLowerCase() === plan.lead.email;
         if (plan.lead.accountNameIsOrganization || sameContact) {
-          await upsertLink(prisma, ctx, plan, outcome.targetId, leadUserId);
+          await link(plan, outcome.targetId, leadUserId);
           done('UPDATE', outcome.targetId, 'matched an existing account by name');
         } else if (!item.disambiguated) {
           retry.push({ row, name: disambiguatedAccountName(plan.lead), disambiguated: true });
@@ -668,7 +723,7 @@ async function applyCreates(ctx: PageContext, rows: PlannedRow<KlaviyoPlan>[]): 
           ? await prisma.user.findFirst({ where: { id: leadId, orgId: ctx.orgId }, select: { companyId: true } })
           : null;
         if (lead?.companyId) {
-          await upsertLink(prisma, ctx, plan, lead.companyId, leadId);
+          await link(plan, lead.companyId, leadId);
           done('UPDATE', lead.companyId, 'matched an existing lead by e-mail');
         } else {
           done('SKIP', null, CONTACT_IN_FUNNEL);
@@ -728,20 +783,12 @@ export async function syncProfilesPage(
       return { ok: true, row: row.row, key: mapped.lead.profileId, value: mapped.lead };
     },
     resolve: (rows) => resolvePage(ctx, rows),
+    // ONE writer for the run and the preview (#1432): creates go through the
+    // same account writer in its preview mode, so a profile that the real run
+    // would link to an existing account by name previews as that UPDATE too.
     apply: async (chunk, { dryRun }) => {
-      if (dryRun) {
-        return chunk.map((row) => ({
-          row: row.row,
-          key: row.key,
-          status: row.status,
-          targetId: row.targetId ?? null,
-          changed: row.changed ?? [],
-          ...(row.reason ? { reason: row.reason } : {}),
-          value: row.value,
-        }));
-      }
       const creates = chunk.filter((r) => r.status === 'CREATE');
-      const created = creates.length ? await applyCreates(ctx, creates) : [];
+      const created = creates.length ? await applyCreates(ctx, creates, dryRun) : [];
       const createdByRow = new Map(created.map((r) => [r.row, r]));
       const out: RowResult<KlaviyoPlan>[] = [];
       for (const row of chunk) {
@@ -751,7 +798,7 @@ export async function syncProfilesPage(
         }
         if (row.status === 'UPDATE') {
           try {
-            await applyUpdate(ctx, row);
+            if (!dryRun) await applyUpdate(ctx, row);
             out.push({ row: row.row, key: row.key, status: 'UPDATE', targetId: row.targetId ?? null, changed: row.changed ?? [], ...(row.reason ? { reason: row.reason } : {}), value: row.value });
           } catch (error) {
             out.push({ row: row.row, key: row.key, status: 'ERROR', reason: importErrorMessage(error), value: row.value });
@@ -876,7 +923,7 @@ async function runLocked(
     const failures = row.failures + 1;
     const at = clock();
     await prisma.externalConnection.updateMany({
-      where: { id: row.id, orgId },
+      where: { id: row.id, orgId, sealedKey: row.sealedKey },
       data: {
         lastSyncAt: at,
         lastStatus: 'error',
@@ -941,8 +988,11 @@ async function runLocked(
       const step = afterPage(cursor, page.data.nextCursor, oldestErrored(report.rows));
       cursor = step.cursor;
       const completesInitial = step.queryDone && initial;
-      await prisma.externalConnection.updateMany({
-        where: { id: row.id, orgId },
+      // Guarded on the key this run opened: a key saved (or the connection
+      // dropped) mid-run reset the cursor, and this run must not write the
+      // old account's position over that reset — it stops instead.
+      const { count: kept } = await prisma.externalConnection.updateMany({
+        where: { id: row.id, orgId, sealedKey: row.sealedKey },
         data: {
           profilesSince: cursor.since,
           profilesQueryStartedAt: cursor.queryStartedAt,
@@ -952,18 +1002,21 @@ async function runLocked(
           ...(completesInitial ? { initialSyncDoneAt: clock() } : {}),
         },
       });
+      if (kept === 0) return { outcome: 'missing', pages, counts, initial, initialCompleted: false };
       if (completesInitial) initialCompleted = true;
       if (step.queryDone) break;
     }
   } catch (error) {
-    logger.error('klaviyo sync threw', { connectionId: row.id, orgId, error: String(error).slice(0, 300) });
+    // The error's name only: a Prisma error's message can quote the call's
+    // arguments, which here carry a lead's address and phone.
+    logger.error('klaviyo sync threw', { connectionId: row.id, orgId, error: error instanceof Error ? error.name : 'unknown' });
     return fail('internal');
   }
 
   const outcome: KlaviyoRunOutcome = counts.ERROR > 0 ? 'partial' : 'ok';
   const at = clock();
   await prisma.externalConnection.updateMany({
-    where: { id: row.id, orgId },
+    where: { id: row.id, orgId, sealedKey: row.sealedKey },
     data: {
       lastSyncAt: at,
       lastSyncOkAt: at,
@@ -1075,7 +1128,7 @@ export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoC
       tick.created += r.counts.CREATE;
     } catch (e) {
       tick.failed += 1;
-      logger.error('klaviyo sync crashed', { connectionId: row.id, error: String(e).slice(0, 300) });
+      logger.error('klaviyo sync crashed', { connectionId: row.id, error: e instanceof Error ? e.name : 'unknown' });
     }
   }
   return tick;
@@ -1097,7 +1150,7 @@ export function initKlaviyoSyncCron(): void {
       const tick = await runKlaviyoTick();
       if (tick.due > 0) logger.info('klaviyo sync tick', { ...tick });
     } catch (e) {
-      logger.error('klaviyo sync cron failed', { error: String(e).slice(0, 300) });
+      logger.error('klaviyo sync cron failed', { error: e instanceof Error ? e.name : 'unknown' });
     }
   });
 }

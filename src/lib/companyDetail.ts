@@ -203,7 +203,7 @@ export async function loadCompanyDetail({
     // information only, shown as the provider sent it on its last sync.
     const externalProfiles = (
       await prisma.externalProfileLink.findMany({
-        where: { companyId: company.id },
+        where: withinTenant({ companyId: company.id, erasedAt: null }, tenant),
         select: { provider: true, sourceName: true, consent: true, attributes: true, profileUpdatedAt: true },
         orderBy: { createdAt: 'asc' },
         take: 5,

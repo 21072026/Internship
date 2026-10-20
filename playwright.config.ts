@@ -146,7 +146,8 @@ export const E2E_HIBP_MOCK_PORT = 4602;
 // Shared with e2e/klaviyo-connector.spec.ts. A local stand-in for the Klaviyo
 // API (profiles + lists, JSON:API paging, 429 + Retry-After): the pull
 // connector runs for real against it, and no run ever calls the provider.
-// KLAVIYO_API_BASE_URL points the app at it — a test-only switch no deployment sets.
+// KLAVIYO_API_BASE_URL points the app at it, honoured only with KLAVIYO_ALLOW_INSECURE_STUB=1
+// (which also skips the SSRF guard for it) — a test-only pair no deployment sets.
 export const E2E_KLAVIYO_MOCK_PORT = 4603;
 // The marketing product's host (#2926). There is no built-in one any more, so the
 // suite names its own (e2e/helpers/marketingHost.ts). Set on process.env, not only
@@ -334,6 +335,7 @@ export default defineConfig({
           // The Klaviyo pull connector (docs/integrations/klaviyo.md) against
           // the local stand-in above. Test-only switch.
           KLAVIYO_API_BASE_URL: `http://127.0.0.1:${E2E_KLAVIYO_MOCK_PORT}`,
+          KLAVIYO_ALLOW_INSECURE_STUB: '1',
           // The marketing hosts this server serves: the default list FIRST
           // (unchanged, so it stays the primary marketing host every link and
           // spec already uses) plus one host of the suite's own (#2922), which

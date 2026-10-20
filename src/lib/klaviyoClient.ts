@@ -3,15 +3,18 @@
 // status means, how long a 429 is waited out — are the pure ones in
 // src/lib/klaviyoRule.ts.
 //
-// THE HOST IS OURS, NOT THE TENANT'S. A tenant supplies a key, never a URL, so
-// there is no SSRF surface here: every request goes to KLAVIYO_API_BASE.
-// `KLAVIYO_API_BASE_URL` exists for the e2e suite only, which points the app at
-// a local stand-in that speaks the same wire format (e2e/support/klaviyo-mock.mjs);
-// no deployment sets it, and a set value is logged on first use.
+// THE HOST IS OURS, NOT THE TENANT'S. A tenant supplies a key, never a URL:
+// every request goes to KLAVIYO_API_BASE, through the SSRF guard like every
+// other server-side fetch. The e2e suite points the app at a local stand-in that
+// speaks the same wire format (e2e/support/klaviyo-mock.mjs) with
+// `KLAVIYO_API_BASE_URL`, honoured ONLY together with
+// `KLAVIYO_ALLOW_INSECURE_STUB=1`, which also skips the guard for it — a
+// test-only pair no deployment sets, logged on first use.
 //
 // NOTHING FROM A RESPONSE BODY IS EVER LOGGED OR STORED AS AN ERROR: a body can
 // echo a profile. A failure is reduced to a code (KLAVIYO_ERROR_CODES).
 import { logger } from '@/lib/logger';
+import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
 import {
   KLAVIYO_API_BASE,
   KLAVIYO_INLINE_WAIT_MAX_MS,
@@ -44,10 +47,14 @@ export type KlaviyoResult<T> =
 
 let warnedOverride = false;
 
-/** The API origin: the provider's, or the e2e stand-in's when the test switch names one. */
+export function insecureKlaviyoStubAllowed(): boolean {
+  return process.env.KLAVIYO_ALLOW_INSECURE_STUB === '1';
+}
+
+/** The API origin: the provider's, or the e2e stand-in's when BOTH test switches are set. */
 export function klaviyoBaseUrl(): string {
   const override = (process.env.KLAVIYO_API_BASE_URL || '').trim().replace(/\/+$/, '');
-  if (!override) return KLAVIYO_API_BASE;
+  if (!override || !insecureKlaviyoStubAllowed()) return KLAVIYO_API_BASE;
   if (!warnedOverride) {
     warnedOverride = true;
     logger.warning('Klaviyo connector: KLAVIYO_API_BASE_URL overrides the provider host (test switch)');
@@ -60,9 +67,23 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
 async function readBody(res: Response): Promise<unknown> {
   const declared = Number(res.headers.get('content-length') || '0');
   if (declared > MAX_BODY_BYTES) throw new Error('body too large');
-  const textBody = await res.text();
-  if (textBody.length > MAX_BODY_BYTES) throw new Error('body too large');
-  return JSON.parse(textBody);
+  if (!res.body) return JSON.parse(await res.text());
+  // Read in chunks so a body without a Content-Length stops at the cap
+  // instead of being buffered whole first.
+  const reader = res.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new Error('body too large');
+    }
+    parts.push(value);
+  }
+  return JSON.parse(Buffer.concat(parts).toString('utf8'));
 }
 
 /**
@@ -75,6 +96,14 @@ export async function klaviyoGet(path: string, key: string, opts: KlaviyoClientO
   const fetchImpl = opts.fetchImpl ?? (fetch as FetchLike);
   const sleep = opts.sleep ?? defaultSleep;
   const url = `${klaviyoBaseUrl()}${path}`;
+  // An injected fetch (unit tests) never leaves the process; the real one is guarded.
+  if (!opts.fetchImpl && !insecureKlaviyoStubAllowed()) {
+    try {
+      await assertPublicHttpsUrl(url);
+    } catch {
+      return { ok: false, code: 'network' };
+    }
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     let res: Response;
     try {

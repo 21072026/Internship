@@ -40,8 +40,11 @@ again keeps the cursor. Saving a **different** key starts the profile query over
 quiet first import: a key cannot tell us whether it belongs to the same Klaviyo account,
 and a key of another account must not inherit a cursor that would skip all of its older
 profiles. For a rotated key of the same account that costs one re-read, in which every
-linked profile comes back UNCHANGED. *Disconnect* deletes the key and the profile links,
-never an account or a lead.
+linked profile comes back UNCHANGED. A run already in flight when the key changes stops
+after its current page: every cursor write is guarded on the key that run opened, so it
+cannot write the old account's position over the reset. *Disconnect* deletes the key and
+the live profile links, never an account or a lead — and never an erasure tombstone (see
+[Erasure](#erasure)), whose connection is set null so a later reconnect still skips it.
 
 ## What is imported
 
@@ -97,7 +100,9 @@ columns only when it is the contact (same address) or the account names nobody.
 Each page runs through the shared engine, `runImport({ parse, validate, resolve, apply })`
 ([roster-feed.md](../roster-feed.md)): the page is the table, the mapping is the
 validator, the batched diff is `resolve`, and the preview is the same call with a writer
-that does not write.
+that does not write. That writer is the run's own path: creates go through the marketing
+account writer in its preview mode, so a profile the run would link to an existing account
+by name previews as that UPDATE, not as a CREATE.
 
 ### What a re-sync may overwrite
 
@@ -150,7 +155,8 @@ contact) also turns their profile links into **tombstones**
 (sha256 of the lower-cased address, kept on a live link only), they keep the Klaviyo
 profile id and `erasedAt` and nothing else — no account, no lead, no hash, no
 attributes. Every later sync **SKIPS** that profile id, so the person is not written back
-onto the scrubbed account nor re-created as a new one. A person who signs up again under
+onto the scrubbed account nor re-created as a new one — also after a disconnect and
+reconnect, because tombstones are matched org-wide, not per connection. A person who signs up again under
 a new Klaviyo profile is a new lead.
 
 ## Quiet first import
@@ -174,5 +180,7 @@ No run ever sends mail to a lead.
 - `GET /api/lists`: ≤ 10 per page, read once per run (≤ 10 pages).
 - 429 carries `Retry-After` in seconds.
 
-The e2e suite points the app at `e2e/support/klaviyo-mock.mjs` through
-`KLAVIYO_API_BASE_URL`; no deployment sets it.
+Every request goes through the SSRF guard (`assertPublicHttpsUrl`). The e2e suite points
+the app at `e2e/support/klaviyo-mock.mjs` through `KLAVIYO_API_BASE_URL`, which is honoured
+only together with `KLAVIYO_ALLOW_INSECURE_STUB=1` (that switch also skips the guard for the
+plain-http loopback stub); no deployment sets either.

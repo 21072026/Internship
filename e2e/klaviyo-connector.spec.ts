@@ -537,7 +537,7 @@ test('a second person of the same company — same page or a later sync — is l
   }
 });
 
-test('an erased person is never written back by the next sync — neither onto the account nor as a new one', { tag: '@smoke' }, async ({ playwright }) => {
+test('an erased person is never written back by the next sync — neither onto the account nor as a new one, nor after a reconnect', { tag: '@smoke' }, async ({ playwright }) => {
   test.setTimeout(150_000);
   const stamp = `${Date.now()}-${Math.round(performance.now())}`;
   const { org } = await marketingOrg(`erase-${stamp}`);
@@ -615,6 +615,18 @@ test('an erased person is never written back by the next sync — neither onto t
     expect(anon).toEqual({ phone: null, city: null });
     expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(2);
     expect(await prisma.company.count({ where: { orgId: org.id, contactEmail: `eve@${domain}` } })).toBe(0);
+
+    // Disconnect and connect again: the tombstones outlive the connection, so
+    // the fresh connection's quiet first import still skips both people.
+    expect((await api.delete('/api/admin/integrations/klaviyo')).status()).toBe(200);
+    expect(await prisma.externalProfileLink.count({ where: { orgId: org.id, erasedAt: { not: null } } })).toBe(2);
+    expect(await prisma.externalProfileLink.count({ where: { orgId: org.id, erasedAt: null } })).toBe(0);
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key } })).status()).toBe(200);
+    const again = await sync();
+    expect(again.counts.SKIP).toBe(2);
+    expect(again.counts.CREATE).toBe(0);
+    expect(again.counts.UPDATE).toBe(0);
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(2);
   } finally {
     await api.dispose();
     await cleanupOrg(org.id, [adminEmail]);
