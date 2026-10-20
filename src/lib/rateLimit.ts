@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { logActivity } from '@/lib/activity';
 import { clientIp } from '@/lib/clientIp';
 import { logger } from '@/lib/logger';
+import { outsideApiKeyRequest } from '@/lib/orgContext';
 import {
   countRequest,
   createMemoryRateLimitStore,
@@ -144,12 +145,18 @@ export function enforceRateLimit(
   // per-process even with a shared store, which is the safe direction: with N
   // replicas a sustained flood costs at most N rows a minute, never N inserts a
   // request.
+  //
+  // A platform-level row, also when the breach is an API key's (/api/v1): it
+  // is written outside that request's tenant marker, which refuses a
+  // tenant-model write before the key's org is bound.
   if (shouldLogBreach(key)) {
-    void logActivity({
-      action: 'ratelimit.exceeded',
-      level: 'warning',
-      detail: `${bucket} · ${identity}`,
-    }).catch(() => {});
+    void outsideApiKeyRequest(() =>
+      logActivity({
+        action: 'ratelimit.exceeded',
+        level: 'warning',
+        detail: `${bucket} · ${identity}`,
+      }),
+    ).catch(() => {});
   }
   return NextResponse.json(
     { error: 'Too many requests. Please try again later.' },
