@@ -3339,6 +3339,8 @@ const en = {
     events: {
       'stale_mentee.noContact': 'No recent contact with {menteeName}.',
       'deadline.stagePassed': 'Stage deadline passed for {menteeName}.',
+      'deadline.slaEscalated': '{menteeName} has been past the stage deadline for {days} days and the stage has not moved (mentor: {mentorName}).',
+      'deadline.slaResolved': 'The overdue stage for {menteeName} has moved on.',
       'trial.endingSoon': '{company}: {days} days left on the trial.',
       'contract.endsToday': '{company}: the contract ends today — decide whether the customer is lost or stays.',
       'trial.decisionWindowClosing': '{company}: the decision window closes on {date} — call before it closes.',
@@ -3538,6 +3540,12 @@ const en = {
       subject: "Overdue: {mentee}'s stage deadline",
       greeting: 'Hi {mentor},',
       body: 'The stage deadline for {mentee} has passed. Please review their progress.',
+    },
+    // #1722 — the escalation ladder's second rung, to the org's administrators.
+    slaEscalationEmail: {
+      subject: 'Escalated: {mentee} is {days} days past the stage deadline',
+      greeting: 'Hi {admin},',
+      body: 'The stage deadline for {mentee} passed {days} days ago and the stage has not moved since. Their mentor, {mentor}, was reminded when it passed. Acknowledge it on the SLA queue if it is in hand.',
     },
     // #2563 — the owner's own follow-up date. Same 'stage-deadline' mail
     // category (and unsubscribe group) as the SLA reminder above.
@@ -4265,6 +4273,8 @@ const en = {
     wipLimit: 'Board limit',
     wipLimitDefault: 'default {n}',
     wipLimitOff: 'off',
+    escalateAfter: 'Escalate after',
+    escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the mentor is reminded, as before.',
     wipLimitHint: 'The board limit is the column depth above which this stage’s count turns amber on the board. Leave it empty and the organisation-wide number applies; type 0 for a stage nobody should ever be warned about, which is the honest setting for a first-contact column that is supposed to be full.',
   },
   reEngagement: {
@@ -11323,6 +11333,8 @@ const tr: Dict = {
     events: {
       'stale_mentee.noContact': '{menteeName} ile bir süredir etkileşim kaydedilmedi.',
       'deadline.stagePassed': '{menteeName} için aşama son tarihi geçti.',
+      'deadline.slaEscalated': '{menteeName} {days} gündür aşama son tarihini geçmiş durumda ve aşama ilerlemedi (mentor: {mentorName}).',
+      'deadline.slaResolved': '{menteeName} için geciken aşama ilerledi.',
       'trial.endingSoon': '{company}: denemenin bitmesine {days} gün kaldı.',
       'contract.endsToday': '{company}: sözleşme bugün bitiyor — müşteri kaybedildi mi, kalıyor mu, karar verin.',
       'trial.decisionWindowClosing': '{company}: karar penceresi {date} tarihinde kapanıyor — pencere kapanmadan arayın.',
@@ -11510,6 +11522,11 @@ const tr: Dict = {
       subject: 'Gecikmiş: {mentee} için aşama son tarihi',
       greeting: 'Merhaba {mentor},',
       body: '{mentee} için aşama son tarihi geçti. Lütfen ilerleme durumunu gözden geçirin.',
+    },
+    slaEscalationEmail: {
+      subject: 'Üst kademeye iletildi: {mentee} aşama son tarihini {days} gün geçti',
+      greeting: 'Merhaba {admin},',
+      body: '{mentee} için aşama son tarihi {days} gün önce geçti ve aşama o günden beri ilerlemedi. Mentoru {mentor}, süre dolduğunda hatırlatıldı. Konu ele alındıysa SLA kuyruğunda onaylayın.',
     },
     nextActionEmail: {
       subject: 'Takip zamanı: {name}',
@@ -12222,6 +12239,8 @@ const tr: Dict = {
     wipLimit: 'Pano limiti',
     wipLimitDefault: 'varsayılan {n}',
     wipLimitOff: 'kapalı',
+    escalateAfter: 'Üst kademe',
+    escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca mentora hatırlatılır.',
     wipLimitHint: 'Pano limiti, bu aşamadaki sayacın hangi derinlikten sonra panoda turuncuya döneceğidir. Boş bırakırsan kurum genelindeki sayı geçerli olur; hiç uyarı istemediğin bir aşama için 0 yaz — dolu olması beklenen ilk temas sütunu için dürüst ayar budur.',
   },
   reEngagement: {
@@ -19211,6 +19230,8 @@ const de: Dict = {
     events: {
       'stale_mentee.noContact': 'Kein aktueller Kontakt mit {menteeName}.',
       'deadline.stagePassed': 'Die Phasen-Frist für {menteeName} ist abgelaufen.',
+      'deadline.slaEscalated': 'Die Phasen-Frist für {menteeName} ist seit {days} Tagen überschritten, und die Phase hat sich nicht bewegt (Mentor: {mentorName}).',
+      'deadline.slaResolved': 'Die überfällige Phase von {menteeName} ist weitergegangen.',
       'trial.endingSoon': '{company}: noch {days} Tage Testphase.',
       'contract.endsToday': '{company}: Der Vertrag endet heute — entscheiden Sie, ob der Kunde verloren ist oder bleibt.',
       'trial.decisionWindowClosing': '{company}: Das Entscheidungsfenster schließt am {date} — rufen Sie an, bevor es sich schließt.',
@@ -19399,6 +19420,11 @@ const de: Dict = {
       subject: 'Überfällig: Phasenfrist für {mentee}',
       greeting: 'Hallo {mentor},',
       body: 'Die Phasenfrist für {mentee} ist abgelaufen. Bitte prüfe den Fortschritt.',
+    },
+    slaEscalationEmail: {
+      subject: 'Eskaliert: {mentee} ist {days} Tage über der Phasenfrist',
+      greeting: 'Hallo {admin},',
+      body: 'Die Phasenfrist für {mentee} ist vor {days} Tagen abgelaufen, und die Phase hat sich seitdem nicht bewegt. Der Mentor, {mentor}, wurde beim Ablauf erinnert. Bestätige sie in der SLA-Warteschlange, wenn sich jemand darum kümmert.',
     },
     nextActionEmail: {
       subject: 'Wiedervorlage fällig: {name}',
@@ -20111,6 +20137,8 @@ const de: Dict = {
     wipLimit: 'Board-Limit',
     wipLimitDefault: 'Standard {n}',
     wipLimitOff: 'aus',
+    escalateAfter: 'Eskalieren nach',
+    escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur der Mentor erinnert.',
     wipLimitHint: 'Das Board-Limit ist die Spaltentiefe, ab der die Zahl dieser Phase auf dem Board bernsteinfarben wird. Bleibt es leer, gilt die organisationsweite Zahl; eine 0 steht für eine Phase, vor der nie gewarnt werden soll — die ehrliche Einstellung für eine Erstkontakt-Spalte, die voll sein darf.',
   },
   reEngagement: {
