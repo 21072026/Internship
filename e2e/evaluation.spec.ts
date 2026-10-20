@@ -139,12 +139,15 @@ test('mentor received feedback is private, read-only, and uses only mentor crite
     await expect(mentorPage.locator('p').filter({ hasText: /^Expertise$/ }).locator('..')).toContainText('4.0/5');
     await expect(mentorPage.locator('p').filter({ hasText: /^Support$/ }).locator('..')).toContainText('3.0/5');
 
-    const trendMonths = mentorPage.getByTestId('mentor-feedback-trend').locator(':scope > div');
+    // One bar per month with feedback, labelled with the month (#1890: SVG
+    // rects from the chart layer, each carrying its label and value).
+    const trendMonths = mentorPage.getByTestId('mentor-feedback-trend').locator('[data-testid^="mentor-feedback-bar-"]');
     await expect(trendMonths).toHaveCount(2);
-    await expect(trendMonths.nth(0)).toContainText(new Intl.DateTimeFormat('en', { month: 'short' }).format(previousMonth));
-    await expect(trendMonths.nth(0)).toContainText('3.5');
-    await expect(trendMonths.nth(1)).toContainText(new Intl.DateTimeFormat('en', { month: 'short' }).format(now));
-    await expect(trendMonths.nth(1)).toContainText('3.5');
+    await expect(trendMonths.nth(0)).toHaveAttribute('data-label', new Intl.DateTimeFormat('en', { month: 'short' }).format(previousMonth));
+    await expect(trendMonths.nth(0)).toHaveAttribute('data-value', '3.5');
+    await expect(trendMonths.nth(1)).toHaveAttribute('data-label', new Intl.DateTimeFormat('en', { month: 'short' }).format(now));
+    await expect(trendMonths.nth(1)).toHaveAttribute('data-value', '3.5');
+    await expect(mentorPage.getByTestId('mentor-feedback-trend')).toContainText('3.5');
 
     const firstFeedback = mentorPage.getByTestId('mentor-feedback-item').filter({ hasText: 'Feedback Mentee One' });
     await expect(firstFeedback).toContainText('Interim');
