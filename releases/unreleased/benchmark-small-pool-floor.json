@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security: the cross-program benchmark no longer reveals one other program's rates (#1575).** `GET /api/admin/analytics/benchmark` applied its k-anonymity floor per program (≥ 5 relations) but returned the platform averages for any pool size and counted the viewer's own program in it, so with one other qualifying program in the world the \"platform average\" was that program's exact conversion and drop-off rate, and with two it was one subtraction away. The pool now excludes the viewer's own program, and the averages and the percentile are returned only when at least `MIN_OTHER_PROGRAMS` (3) other programs qualify (`platform.minPrograms` in the payload; `poolSize` now counts the other programs). The arithmetic moved into the pure `src/lib/benchmarkPool.ts`, unit-tested in `scripts/test/benchmark-pool.test.mjs`."
+}
