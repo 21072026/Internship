@@ -143,6 +143,9 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // The domain-event record (#1691, DomainEvent). Held only as long as a
+  // receiver could still ask for a replay or a timeline could still read it.
+  domainEventRetentionDays: '90',
   // Company enquiries (#2559): an unconverted one is deleted after this many
   // days, a converted one keeps its row and loses its personal columns.
   companyInquiryRetentionDays: '730',
@@ -335,6 +338,7 @@ export const GLOBAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set<SettingKey>(
   'pageViewRetentionDays',
   'pushSubscriptionStaleDays',
   'jobRetentionDays',
+  'domainEventRetentionDays',
   'viewLogWindowMinutes',
   'orphanApplicantGraceDays',
 ]);

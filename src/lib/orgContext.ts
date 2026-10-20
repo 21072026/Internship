@@ -284,6 +284,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // INTERNSHIP tenant's endpoint, and one global newsletter cadence reaches
   // both tenants' members.
   'Webhook',
+  // The domain-event record (#1691): one tenant's history of what happened.
+  // The outbox relay (#1680) and the retention sweep read it with no session,
+  // so once MT_ENFORCE_ISOLATION is on they must pass `orgId` themselves or
+  // run in an explicit context — otherwise they silently see zero rows.
+  'DomainEvent',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a

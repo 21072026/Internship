@@ -238,6 +238,7 @@ model Organization {
   contactSuppressions     ContactSuppression[]
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
+  domainEvents            DomainEvent[]
   auditDrains             AuditDrain[]
   announcements           Announcement[]
   newsletters             Newsletter[]
@@ -2643,6 +2644,39 @@ model Webhook {
   createdAt DateTime      @default(now())
 
   @@index([orgId, active])
+}
+
+// THE event table (#1691): one append-only row per domain event the product
+// raised. The vocabulary — which names exist, at which version, with which
+// payload — is src/lib/events/catalog.ts and nowhere else; `name` + `version`
+// here always name an entry there. This is the ONE event table of the
+// programme: the transactional outbox (#1680) adds its relay columns
+// (status / relayedAt / attempts) to THIS model, there is no second
+// OutboxEvent table. Tenant data, registered in TENANT_MODELS; background
+// readers (the relay, the retention sweep) have no session and must pass
+// `orgId` / run in an explicit context. Pruned by the `domainEvent` entry of
+// the retention registry (`domainEventRetentionDays`). docs/domain-events.md.
+model DomainEvent {
+  id            String        @id @default(cuid())
+  orgId         String?
+  org           Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name          String        @db.VarChar(96)
+  version       Int           @default(1)
+  payload       Json
+  // 'user' | 'system' | 'apikey' (EVENT_ACTOR_TYPES)
+  actorId       String?
+  actorType     String?       @db.VarChar(16)
+  // A Prisma model name (the catalogue entry's subjectType) + that row's id.
+  subjectType   String?       @db.VarChar(64)
+  subjectId     String?
+  correlationId String?
+  createdAt     DateTime      @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([name, createdAt])
+  @@index([subjectType, subjectId, createdAt])
+  // The retention sweep's cross-tenant range (pruneDomainEvents).
+  @@index([createdAt])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.

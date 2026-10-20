@@ -205,6 +205,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'activityLog',
         'companyInquiry',
         'companyUsage',
+        'domainEvent',
         'emailLog',
         'job',
         'mailOutbox',

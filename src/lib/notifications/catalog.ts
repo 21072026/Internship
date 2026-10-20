@@ -35,8 +35,8 @@
 //   derived from `params` in one line the day a caller needs one.
 //
 // NOT A SECOND EVENT VOCABULARY
-//   `WEBHOOK_EVENTS` (src/lib/webhooks.ts — seven names) and the versioned
-//   domain-event catalogue of #1691 describe what HAPPENED, for consumers
+//   The versioned domain-event catalogue (src/lib/events/catalog.ts, #1691),
+//   whose public entries ARE `WEBHOOK_EVENTS`, describes what HAPPENED, for consumers
 //   outside this app. These keys describe what a PERSON IS TOLD, and they are
 //   the keys the dictionary and every existing `Notification.type` row already
 //   use. The two map onto each other (a `pipeline.stage_change` domain event is
