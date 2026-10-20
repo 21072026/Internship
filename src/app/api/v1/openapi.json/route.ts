@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
@@ -65,6 +65,38 @@ function listPath(scope: string, schema: string, summary: string, description: s
     },
   };
 }
+// A write operation (#1994/#1996): the Idempotency-Key, the 422 body contract,
+// the idempotency 409 and the operation's own domain 409, documented the same
+// way on every write.
+function writeOp(scope: string, summary: string, description: string, body: object, schema: string, status: '200' | '201', conflict: string, extraParams: object[] = []) {
+  return {
+    summary,
+    description: `Requires a key holding \`${scope}\`. ${description}`,
+    security: [{ apiKey: [scope] }],
+    parameters: [...extraParams, { $ref: '#/components/parameters/IdempotencyKey' }],
+    requestBody: { required: true, content: { 'application/json': { schema: body } } },
+    responses: {
+      [status]: {
+        description: status === '201' ? 'Created' : 'Updated',
+        headers: rateLimitResponseHeaders,
+        content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: `#/components/schemas/${schema}` } } } } },
+      },
+      '404': { $ref: '#/components/responses/NotFound' },
+      '409': { description: `${conflict} Or \`idempotency_key_reused\` / \`idempotency_in_progress\`.`, content: problem },
+      '422': { $ref: '#/components/responses/UnprocessableEntity' },
+      ...errorResponses,
+    },
+  };
+}
+const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' } };
+const profileProps = {
+  fullName: { type: 'string', maxLength: 191 },
+  university: { type: 'string', maxLength: 191 },
+  department: { type: 'string', maxLength: 191 },
+  graduationYear: { type: 'integer', minimum: 1950, maximum: 2100 },
+  skills: { type: 'array', items: { type: 'string' }, description: 'At most 40 skills of 60 characters; a longer list is refused, not truncated.' },
+};
+
 function itemPath(scope: string, schema: string, summary: string) {
   return {
     get: {
@@ -100,7 +132,7 @@ export async function GET(request: Request) {
       title: `${brandProductName(brand)} Public API`,
       version: '1.0.0',
       description:
-        'Read access to candidates, relationships, interactions, meetings, companies and the hiring resources (Bearer API key) plus outgoing webhooks. No resource carries an e-mail address or phone number; an interaction’s note body needs its own scope. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
+        'Read access to candidates, relationships, interactions, meetings, companies and the hiring resources (Bearer API key) plus outgoing webhooks. No resource carries an e-mail address or phone number; an interaction’s note body needs its own scope. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Writes need a `<resource>:write` scope, have their own tighter limit of 30 a minute per key, accept an `Idempotency-Key` and answer an invalid body with 422 and per-field `errors`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
     },
     servers: [{ url: '/api/v1' }],
     components: {
@@ -138,6 +170,13 @@ export async function GET(request: Request) {
             'Opaque cursor from `page.nextCursor` of the previous page. Pages walk `(updatedAt, id)` ascending, so a row changed during a walk is met again at the end rather than skipped. A cursor that was altered, or minted by another list, answers 400 `validation_failed` — never the first page.',
           schema: { type: 'string' },
         },
+        IdempotencyKey: {
+          name: 'Idempotency-Key',
+          in: 'header',
+          description:
+            'Optional on every write (1-200 printable ASCII characters). A retry with the same key and the same request replays the stored success (with `Idempotent-Replayed: true`) and writes nothing; the same key with a different request is 409 `idempotency_key_reused`; a retry while the first is still running is 409 `idempotency_in_progress`. Only successes are remembered, for 24 hours; a refused write frees its key.',
+          schema: { type: 'string', maxLength: 200 },
+        },
         UpdatedSince: {
           name: 'updatedSince',
           in: 'query',
@@ -164,6 +203,11 @@ export async function GET(request: Request) {
             status: { type: 'integer' },
             detail: { type: 'string' },
             error: { type: 'string', deprecated: true },
+            errors: {
+              type: 'array',
+              description: 'On a 422 `validation_failed`: one entry per invalid body field.',
+              items: { type: 'object', required: ['path', 'code', 'message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } },
+            },
             fields: {
               type: 'array',
               description: 'On `validation_failed`: one entry per offending parameter or field.',
@@ -247,6 +291,28 @@ export async function GET(request: Request) {
             createdAt: when, updatedAt: when,
           },
         },
+        Hook: {
+          type: 'object',
+          description: 'A webhook subscription owned by the calling key.',
+          required: ['id', 'targetUrl', 'event', 'events', 'active', 'createdAt'],
+          properties: {
+            id: str, targetUrl: str, event: { type: ['string', 'null'] },
+            events: { type: 'array', items: { type: 'string', enum: [...WEBHOOK_EVENTS] } },
+            active: { type: 'boolean' }, createdAt: when,
+          },
+        },
+        Me: {
+          type: 'object',
+          description: 'What the presented key implies — and nothing else: no user, no candidate data.',
+          required: ['keyId', 'orgId', 'scopes', 'rateLimit'],
+          properties: {
+            keyId: str, orgId: str, orgName: nstr,
+            scopes: { type: 'array', items: str },
+            expiresAt: nwhen,
+            rateLimit: { type: 'object', properties: { limit: { type: 'integer' }, remaining: { type: 'integer' }, resetAt: when } },
+            quota: { type: ['object', 'null'], properties: { period: { type: 'string', enum: ['day', 'month'] }, limit: { type: 'integer' } } },
+          },
+        },
         InterviewRequest: {
           type: 'object',
           required: ['id', 'requisitionId', 'menteeId', 'companyId', 'status', 'updatedAt'],
@@ -258,6 +324,14 @@ export async function GET(request: Request) {
       },
       responses: {
         NotFound: { description: '`not_found` — no such resource in the key’s organisation.', content: problem },
+        UnprocessableEntity: {
+          description: '`validation_failed` — the write body is invalid; `errors` names each field (`path`, `code`, `message`).',
+          content: problem,
+        },
+        Conflict: {
+          description: '`limit_reached` — a per-key cap (subscriptions); `idempotency_key_reused` — the Idempotency-Key was used with a different request; `idempotency_in_progress` — a request with it is still running (Retry-After).',
+          content: problem,
+        },
         BadRequest: { description: '`validation_failed` — a parameter is malformed (see `fields`).', content: problem },
         Unauthorized: { description: '`invalid_api_key` — missing, unknown, expired or revoked API key.', content: problem },
         Forbidden: {
@@ -302,6 +376,129 @@ export async function GET(request: Request) {
             ...errorResponses,
           },
         },
+        post: writeOp(
+          'candidates:write',
+          'Create a candidate',
+          'Creates a candidate in the key\u2019s organisation. Never a near-duplicate: an e-mail address already in use is always 409 `duplicate_candidate` (`matches` carries the id only when it is in your organisation); a look-alike by name, phone or university is 409 with `matches` unless `allowPossibleDuplicate` is true. The account is claimed by the person through a password reset.',
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['fullName', 'email'],
+            properties: { ...profileProps, email: { type: 'string', format: 'email', maxLength: 191 }, allowPossibleDuplicate: { type: 'boolean' } },
+          },
+          'Candidate',
+          '201',
+          '`duplicate_candidate` — with `matches: [{ id, signals, score? }]`.',
+        ),
+      },
+      '/candidates/{id}': {
+        ...itemPath('candidates:read', 'Candidate', 'Get a candidate'),
+        patch: writeOp(
+          'candidates:write',
+          'Update a candidate',
+          'Only the profile fields the read endpoint exposes. Any other key (`role`, `orgId`, `email`, credentials …) is refused with 422 `unrecognized_keys`, never ignored. A blank value is no opinion: a PATCH cannot empty a field.',
+          { type: 'object', additionalProperties: false, minProperties: 1, properties: profileProps },
+          'Candidate',
+          '200',
+          'Not used.',
+          [idParam],
+        ),
+      },
+      '/relationships/{id}/stage': {
+        patch: writeOp(
+          'relationships:write',
+          'Move a relationship’s pipeline stage',
+          'The same write path as the board: history row, notification, `pipeline.stage_change` webhook and stage SLA. `stage` is a stage KEY of the organisation (422 `unknown_stage` otherwise); a move into an off-path stage needs `reasonCode` (and `reasonNote` for OTHER). The stage it already has answers 200 with `changed: false`.',
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['stage'],
+            properties: { stage: { type: 'string', maxLength: 60 }, reasonCode: { type: 'string', maxLength: 40 }, reasonNote: { type: 'string', maxLength: 2000 } },
+          },
+          'Relationship',
+          '200',
+          '`invalid_transition` — the relationship is not ACTIVE (`currentStage` in the body); `stage_conflict` — the stage changed meanwhile (`currentStage`).',
+          [idParam],
+        ),
+      },
+      '/me': {
+        get: {
+          summary: 'Who am I (connector auth test)',
+          description: 'Any live key may call this: it answers the key\u2019s organisation, scopes, expiry and limits — no user or candidate data. Use it to validate a credential instead of reading real data.',
+          security: [{ apiKey: [] }],
+          responses: {
+            '200': {
+              description: 'The key',
+              headers: rateLimitResponseHeaders,
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/Me' } } } } },
+            },
+            ...errorResponses,
+          },
+        },
+      },
+      '/hooks': {
+        get: {
+          summary: 'List this key\u2019s subscriptions',
+          description: 'Requires `hooks:write`. Only the subscriptions the calling key made — never another key\u2019s or an admin-created one. Secrets are never listed.',
+          security: [{ apiKey: ['hooks:write'] }],
+          responses: {
+            '200': {
+              description: 'The subscriptions',
+              headers: rateLimitResponseHeaders,
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { type: 'array', items: { $ref: '#/components/schemas/Hook' } } } } } },
+            },
+            ...errorResponses,
+          },
+        },
+        post: {
+          summary: 'Subscribe (REST hook)',
+          description:
+            'Requires `hooks:write`. The platform subscribes itself: send `{ targetUrl, event }` when the user turns the automation on, keep the returned `id`, and DELETE it when they turn it off. `targetUrl` must be a public https URL (private, loopback and metadata addresses are refused, 422 `unreachable_target`). The `secret` is returned once: every delivery is POSTed with `X-Event` and `X-Signature` (HMAC-SHA256 of the body with that secret). A key holds at most ' +
+            MAX_HOOKS_PER_KEY +
+            ' subscriptions (409 `limit_reached`). Deliveries stop when the key is revoked or expires.',
+          security: [{ apiKey: ['hooks:write'] }],
+          parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['targetUrl', 'event'],
+                  properties: { targetUrl: { type: 'string', format: 'uri' }, event: { type: 'string', enum: [...WEBHOOK_EVENTS] } },
+                },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Subscribed; `secret` is shown only now',
+              headers: rateLimitResponseHeaders,
+              content: {
+                'application/json': {
+                  schema: { type: 'object', required: ['data'], properties: { data: { allOf: [{ $ref: '#/components/schemas/Hook' }, { type: 'object', required: ['secret'], properties: { secret: str } }] } } },
+                },
+              },
+            },
+            '409': { $ref: '#/components/responses/Conflict' },
+            '422': { $ref: '#/components/responses/UnprocessableEntity' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/hooks/{id}': {
+        delete: {
+          summary: 'Unsubscribe',
+          description: 'Requires `hooks:write`. Deletes a subscription the calling key owns. Any other id — another key\u2019s, an admin-created one, another organisation\u2019s — is 404, exactly like a missing one.',
+          security: [{ apiKey: ['hooks:write'] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { $ref: '#/components/parameters/IdempotencyKey' }],
+          responses: {
+            '200': { description: 'Deleted', content: { 'application/json': { schema: { type: 'object', properties: { data: { type: 'object', properties: { id: str, deleted: { type: 'boolean' } } } } } } } },
+            '404': { $ref: '#/components/responses/NotFound' },
+            ...errorResponses,
+          },
+        },
       },
       '/relationships': listPath('relationships:read', 'Relationship', 'List relationships', 'Mentor ↔ mentee relationships with their pipeline stage.', [
         eqFilter('status', 'Only relationships in this status.', ['ACTIVE', 'COMPLETED']),
@@ -310,9 +507,31 @@ export async function GET(request: Request) {
         eqFilter('companyId', 'Only relationships placed with this company.'),
       ]),
       '/relationships/{id}': itemPath('relationships:read', 'Relationship', 'Get a relationship'),
-      '/interactions': listPath('interactions:read', 'Interaction', 'List interactions', 'Logged interactions per relationship. The note body is included only when the key also holds `interactions:read_notes`.', [
-        eqFilter('relationId', 'Only this relationship’s interactions.'),
-      ]),
+      '/interactions': {
+        ...listPath('interactions:read', 'Interaction', 'List interactions', 'Logged interactions per relationship. The note body is included only when the key also holds `interactions:read_notes`.', [
+          eqFilter('relationId', 'Only this relationship’s interactions.'),
+        ]),
+        post: writeOp(
+          'interactions:write',
+          'Log an interaction',
+          'The same write path as the app: one `interaction.logged` webhook and the mentee\u2019s notification. The response includes `notes` only for a key that also holds `interactions:read_notes`.',
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['relationId', 'type', 'date', 'notes'],
+            properties: {
+              relationId: { type: 'string' },
+              type: { type: 'string', enum: ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] },
+              date: { type: 'string', format: 'date-time' },
+              subject: { type: 'string', maxLength: 191 },
+              notes: { type: 'string', maxLength: 5000 },
+            },
+          },
+          'Interaction',
+          '201',
+          'Not used.',
+        ),
+      },
       '/interactions/{id}': itemPath('interactions:read', 'Interaction', 'Get an interaction'),
       '/meetings': listPath('meetings:read', 'Meeting', 'List meetings', 'Meetings of a relationship or a project.'),
       '/meetings/{id}': itemPath('meetings:read', 'Meeting', 'Get a meeting'),

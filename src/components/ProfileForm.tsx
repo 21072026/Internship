@@ -1,5 +1,5 @@
 'use client';
-import { useT } from "@/i18n/client";
+import { useLocale, useT } from "@/i18n/client";
 
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
@@ -22,6 +22,7 @@ import { useToast } from '@/components/ui/Toast';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SKILL_LIMITS, parseSkills } from '@/lib/skills';
+import { resolveSkill as resolveSeedSkill, skillLabel as seedSkillLabel } from '@/lib/skillVocabulary';
 import { FALLBACK_TIMEZONE, timeZoneOptions } from '@/lib/timezone';
 import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
 import {
@@ -88,6 +89,7 @@ function resolveTimezone(tz: string | null | undefined): string {
 
 export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   const t = useT();
+  const locale = useLocale();
   const graduationYearOptions = [
     { value: '0', label: t.profileForm.graduationYearNotSet },
     ...Array.from({ length: MAX_GRAD_YEAR - MIN_GRAD_YEAR + 1 }, (_, i) => ({
@@ -136,8 +138,16 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   // Merge CV-suggested skills into the list, keeping the user's own entries.
   // `parseSkills` does the dedup (Turkish-aware) and the splitting, so a
   // suggestion that arrives as one comma-joined string still lands as skills.
+  // CV-derived terms (the local parser and the AI extractor alike) arrive as
+  // canonical chips (#1818): "reactjs" lands as "React", in the reader's
+  // language, so it dedupes against what is already there and resolves to the
+  // same Skill row on save. A term the vocabulary does not know stays as typed.
   const applySuggestedSkills = (incoming: string[]) => {
-    setSkills((current) => parseSkills([...current, ...incoming]).skills.slice(0, SKILL_LIMITS.maxSkills));
+    const canonical = incoming.map((raw) => {
+      const entry = resolveSeedSkill(raw);
+      return entry ? seedSkillLabel(entry, locale) : raw;
+    });
+    setSkills((current) => parseSkills([...current, ...canonical]).skills.slice(0, SKILL_LIMITS.maxSkills));
   };
 
   useEffect(() => {

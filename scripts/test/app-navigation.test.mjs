@@ -17,7 +17,16 @@ const hrefs = (l) => l.map((x) => x.href);
 test('internship: every role gets its full web sidebar', () => {
   // Less the links that exist only where a module is absent (the sales
   // vertical's outbox, #2960) — INTERNSHIP carries every module.
-  assert.deepEqual(hrefs(appNavLinks('ADMIN', INTERNSHIP)), hrefs(ADMIN_NAV_LINKS.filter((l) => !l.withoutCapability)));
+  assert.deepEqual(
+    hrefs(appNavLinks('ADMIN', INTERNSHIP)),
+    hrefs(ADMIN_NAV_LINKS.filter((l) => !l.withoutCapability && !l.superAdminOnly)),
+  );
+  // The deployment-wide destinations (#1575) only for a super admin.
+  assert.deepEqual(
+    hrefs(appNavLinks('ADMIN', INTERNSHIP, { superAdmin: true })),
+    hrefs(ADMIN_NAV_LINKS.filter((l) => !l.withoutCapability)),
+  );
+  assert.ok(!hrefs(appNavLinks('ADMIN', INTERNSHIP)).includes('/admin/api-explorer'));
   assert.deepEqual(hrefs(appNavLinks('MENTOR', INTERNSHIP)), hrefs(MENTOR_NAV_LINKS));
   assert.deepEqual(hrefs(appNavLinks('MENTEE', INTERNSHIP)), hrefs(PORTAL_NAV_LINKS));
 });
