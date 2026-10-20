@@ -91,6 +91,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts', capability: 'mentorship' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },
+  // The canonical skill vocabulary and its review queue (#1817).
+  { href: '/admin/skills', icon: Sparkles, key: 'skills' },
   { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing' },
   { href: '/admin/users', icon: UserCog, key: 'users' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },

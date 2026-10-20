@@ -120,6 +120,8 @@ const SETUP: Route[] = [
     '/admin/message-templates',
     '/admin/cohorts',
     '/admin/tags',
+    // The canonical skill vocabulary (#1817).
+    '/admin/skills',
     '/admin/sources',
     '/admin/invite'
   ),

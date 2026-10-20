@@ -1,0 +1,33 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { logActivity } from '@/lib/activity';
+import { removeAlias } from '@/lib/skillCuration';
+
+// Remove one spelling from a skill (#1817). The people already linked keep
+// their rows; the spelling simply stops resolving.
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string; aliasId: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { id, aliasId } = await params;
+  return await withTenantScope(session, async () => {
+    const orgId = resolveOrgId(session);
+    if (!orgId) return NextResponse.json({ error: 'not_found', code: 'not_found' }, { status: 404 });
+    const result = await removeAlias(orgId, id, aliasId);
+    if (!result.ok) return NextResponse.json({ error: result.code, code: result.code }, { status: result.status });
+    await logActivity({
+      action: 'skill.alias_removed',
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+      targetType: 'skill',
+      targetId: id,
+      detail: aliasId,
+      request,
+    });
+    return NextResponse.json({ ok: true });
+  });
+}
