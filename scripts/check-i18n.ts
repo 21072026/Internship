@@ -137,6 +137,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   mentorFeedback: 'Read only by /mentor/feedback — the mentor layout sends a MARKETING MENTOR to /sales.',
   mentors: '/admin/mentors — gatePage closes it for an org without `mentorship`; the other reader, MentorshipRequestPanel, is mounted only in /portal, whose layout redirects such an org.',
   mentorshipRequests: 'Read only by MentorshipRequestQueue (/admin/mentorship, gatePage) and MentorshipRequestPanel (/portal only, whose layout redirects an org without `mentorship`); the request APIs refuse (requireCapability).',
+  relationLifecycle: 'Read only by RelationLifecycleControls (#1770), mounted on /admin/mentorship (gatePage, `mentorship`) and /mentor/mentees/[id] — the mentor layout sends a MARKETING MENTOR to /sales.',
   relationNotes: 'Read only by RelationNotesPanel, mounted only on /mentor/mentees/[id] — the mentor layout sends a MARKETING MENTOR to /sales.',
   rematchRequest: 'Read only by /admin/mentorship and its MentorshipRequestQueue (gatePage) and by MentorshipRequestPanel (/portal only, whose layout redirects an org without `mentorship`); /api/mentorship/[id]/rematch refuses (requireCapability).',
   sources: '/admin/sources — gatePage closes it for an org without the `sourcing` capability (MARKETING lacks it); the other files only read `d.sources` from API JSON, never the namespace.',

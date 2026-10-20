@@ -11,15 +11,11 @@ import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
-import {
-  findActiveMentorship,
-  hasOtherActiveMentorship,
-  ALREADY_MENTORED_ERROR,
-  AlreadyMentoredError,
-} from '@/lib/activeMentorship';
 
+// No `status` here any more (#1770): a pairing's state moves only through
+// POST /api/mentorship/[id]/lifecycle, which derives `status` from it. A body
+// that still sends one is refused below rather than silently ignored.
 const updateRelationSchema = z.object({
-  status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
   // Stage key is a free string now (#747) so tenants can use their own stages;
   // the UI only offers the tenant's resolved stages. Bounded to the PipelineStage
   // key constraint.
@@ -184,6 +180,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const body = await request.json();
+      if (body && typeof body === 'object' && 'status' in body) {
+        return NextResponse.json(
+          { error: 'Use POST /api/mentorship/[id]/lifecycle to change the state', code: 'use_lifecycle_endpoint' },
+          { status: 400 }
+        );
+      }
       const parsed = updateRelationSchema.safeParse(body);
 
       if (!parsed.success) {
@@ -242,33 +244,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         }
       }
 
-      // Back door (#419): reopening a COMPLETED relation to ACTIVE is a second
-      // assignment by another name, so it owes the same 409 POST /api/mentorship
-      // answers. `exceptRelationId` because this relation is itself part of the
-      // comparison. Checked before anything is written — clearing `completedAt`
-      // below also silently reopens the post-mentorship document window (#854).
-      if (parsed.data.status === 'ACTIVE' && relation.status !== 'ACTIVE') {
-        if (await hasOtherActiveMentorship(prisma, relation.menteeId, { exceptRelationId: id })) {
-          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
-        }
-      }
-
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
         ...rest,
         // The stage columns come from the shared write path (#2658): the stage,
         // and the trial window a move into TRIAL_ACTIVE stamps (#2551).
         ...(stageChanging ? await stageMoveData(relation, pipelineStatus!) : {}),
       };
-      // Stamp/clear the end of the relation — it anchors the post-mentorship
-      // CV/document access window (#854).
-      if (parsed.data.status && parsed.data.status !== relation.status) {
-        data.completedAt = parsed.data.status === 'COMPLETED' ? new Date() : null;
-        // ACTIVE and COMPLETED are lifecycle states too (#1768): keep the column
-        // agreeing with `status`, or a reopened pairing would still read as
-        // ended to everything that filters on the lifecycle (the meter first).
-        data.lifecycleState = parsed.data.status;
-        data.pausedAt = null;
-      }
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
         // A fresh deadline (or cleared) re-arms the overdue reminder.
@@ -292,31 +273,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ relation, changed: false });
       }
 
-      // Guard + write in one transaction, mirroring the two front doors: a
-      // reopen must not slip past a mentor assigned in between.
-      let updated;
-      try {
-        updated = await prisma.$transaction(async (tx) => {
-          if (parsed.data.status === 'ACTIVE' && relation.status !== 'ACTIVE') {
-            const active = await findActiveMentorship(tx, relation.menteeId, { exceptRelationId: id });
-            if (active) throw new AlreadyMentoredError(relation.menteeId, active.id);
-          }
-          return tx.mentorshipRelation.update({
-            where: { id },
-            data,
-            include: {
-              mentor: { select: { id: true, fullName: true, email: true } },
-              mentee: { select: { id: true, fullName: true, email: true } },
-              company: { select: { id: true, name: true } },
-            },
-          });
-        });
-      } catch (e) {
-        if (e instanceof AlreadyMentoredError) {
-          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
-        }
-        throw e;
-      }
+      const updated = await prisma.mentorshipRelation.update({
+        where: { id },
+        data,
+        include: {
+          mentor: { select: { id: true, fullName: true, email: true } },
+          mentee: { select: { id: true, fullName: true, email: true } },
+          company: { select: { id: true, name: true } },
+        },
+      });
 
       // The audit row, activity entry and notification/webhook/SLA effects,
       // through the shared write path (#2658). `relation` still holds the

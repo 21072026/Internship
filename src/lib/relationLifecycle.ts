@@ -48,6 +48,7 @@ export const LIVE_LIFECYCLE_STATES = ['ACTIVE', 'PAUSED'] as const;
 export const RELATION_LIFECYCLE_STATES = [
   ...LIVE_LIFECYCLE_STATES,
   'COMPLETED',
+  'ENDED_EARLY',
   'ENDED_REMATCHED',
   'ENDED_REASSIGNED',
   'ENDED_CHURNED',
@@ -61,6 +62,13 @@ export const ACTIVE: RelationLifecycleState = 'ACTIVE';
 export const PAUSED: RelationLifecycleState = 'PAUSED';
 /** The pairing ran its course — the only terminal state that reads as a success. */
 export const COMPLETED: RelationLifecycleState = 'COMPLETED';
+/**
+ * The pairing stopped before it finished and nothing replaced it (#1770) — the
+ * mentor left, the mentee became unavailable, it was not a fit. WHY is the
+ * relation's `endReasonCode` (LIFECYCLE_END_REASON_CODES); the state only says
+ * "ended, not completed", so no report or certificate reads it as a success.
+ */
+export const ENDED_EARLY: RelationLifecycleState = 'ENDED_EARLY';
 
 export function isRelationLifecycleState(value: unknown): value is RelationLifecycleState {
   return typeof value === 'string' && (RELATION_LIFECYCLE_STATES as readonly string[]).includes(value);
@@ -92,9 +100,10 @@ export function statusForLifecycle(state: RelationLifecycleState): 'ACTIVE' | 'C
  * state never becomes another terminal state: how a pairing ended is history.
  */
 export const LEGAL_TRANSITIONS: Readonly<Record<RelationLifecycleState, readonly RelationLifecycleState[]>> = {
-  ACTIVE: ['PAUSED', 'COMPLETED', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'],
-  PAUSED: ['ACTIVE', 'COMPLETED', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'],
+  ACTIVE: ['PAUSED', 'COMPLETED', 'ENDED_EARLY', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'],
+  PAUSED: ['ACTIVE', 'COMPLETED', 'ENDED_EARLY', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'],
   COMPLETED: ['ACTIVE'],
+  ENDED_EARLY: ['ACTIVE'],
   ENDED_REMATCHED: ['ACTIVE'],
   ENDED_REASSIGNED: ['ACTIVE'],
   ENDED_CHURNED: ['ACTIVE'],
@@ -243,4 +252,120 @@ export function billableRelationWhere() {
     status: 'ACTIVE' as const,
     lifecycleState: { in: [...BILLABLE_RELATION_STATES] as string[] },
   };
+}
+
+/**
+ * True when the pairing is over but did not COMPLETE — ended early, re-matched,
+ * reassigned, churned. The question a certificate, a completion count or a
+ * placement report asks; ask it here rather than listing the states.
+ */
+export function endedWithoutCompleting(relation: { lifecycleState?: string | null }): boolean {
+  return isTerminal(relation.lifecycleState) && relation.lifecycleState !== COMPLETED;
+}
+
+// ── The lifecycle endpoint's rules (#1770) ──────────────────────────────────
+// POST /api/mentorship/[id]/lifecycle is the one writer of the moves below; the
+// rules live here, pure, so the route, the dialogs and the unit test agree.
+
+/**
+ * The states the lifecycle endpoint may move a relation INTO. The other three
+ * ENDED_* states each belong to a flow that also creates the successor
+ * relation (re-match, transfer, win-back) — ending a pairing as "re-matched"
+ * without one would be the very lie those flows exist to stop.
+ */
+export const LIFECYCLE_ENDPOINT_TARGETS = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ENDED_EARLY'] as const;
+export type LifecycleEndpointTarget = (typeof LIFECYCLE_ENDPOINT_TARGETS)[number];
+
+export function isLifecycleEndpointTarget(value: unknown): value is LifecycleEndpointTarget {
+  return typeof value === 'string' && (LIFECYCLE_ENDPOINT_TARGETS as readonly string[]).includes(value);
+}
+
+/**
+ * Why a pairing ended, for an end through the lifecycle endpoint. Builds on
+ * END_REASON_CODES (the same lowercase vocabulary, not a parallel one) with the
+ * reasons an end without a successor needs. `finished` and `programme_ended`
+ * close as COMPLETED; every other code closes as ENDED_EARLY.
+ */
+export const LIFECYCLE_END_REASON_CODES = [
+  'finished',
+  'programme_ended',
+  'mentor_unavailable',
+  'mentee_unavailable',
+  'no_fit',
+  'schedule_conflict',
+  'changed_goals',
+  'other',
+] as const;
+export type LifecycleEndReasonCode = (typeof LIFECYCLE_END_REASON_CODES)[number];
+
+/** The reasons that mean the pairing ran its course. */
+export const COMPLETION_REASON_CODES: readonly LifecycleEndReasonCode[] = ['finished', 'programme_ended'];
+
+export function isLifecycleEndReasonCode(value: unknown): value is LifecycleEndReasonCode {
+  return typeof value === 'string' && (LIFECYCLE_END_REASON_CODES as readonly string[]).includes(value);
+}
+
+/**
+ * The terminal state a reason closes a pairing in. One mapping, so the end
+ * dialog asks for the reason alone and the server decides the state — nobody
+ * can record "no fit" as a COMPLETED.
+ */
+export function endStateForReason(code: LifecycleEndReasonCode): 'COMPLETED' | 'ENDED_EARLY' {
+  return COMPLETION_REASON_CODES.includes(code) ? 'COMPLETED' : 'ENDED_EARLY';
+}
+
+export type LifecycleRefusal =
+  | { ok: false; status: 400; code: 'invalid_state' | 'reason_required' | 'invalid_reason' | 'note_required' | 'reason_mismatch' }
+  | { ok: false; status: 403; code: 'forbidden' }
+  | { ok: false; status: 409; code: 'illegal_transition'; from: RelationLifecycleState; to: string };
+
+export type LifecycleCheck = { ok: true; from: RelationLifecycleState; to: LifecycleEndpointTarget } | LifecycleRefusal;
+
+/**
+ * Whether this actor may make this move, with this reason. ONE rule, read by
+ * the endpoint before anything is written:
+ *
+ *   · ADMIN — any legal move, including the reopen (terminal → ACTIVE)
+ *   · the relation's own MENTOR — pause, resume (PAUSED → ACTIVE) and end
+ *     their own pairing; never a reopen (that is a fresh assignment, an admin
+ *     decision under the one-active-mentor rule)
+ *   · anyone else — refused. A mentee's way out is the re-match request
+ *     (#1801), not this endpoint.
+ *
+ * An end needs a reason from LIFECYCLE_END_REASON_CODES whose end state
+ * matches `to`; `other` needs a note.
+ */
+export function checkLifecycleMove(input: {
+  role: string;
+  isOwnMentor: boolean;
+  relation: { status: string; lifecycleState?: string | null };
+  to: unknown;
+  reasonCode?: string | null;
+  reasonNote?: string | null;
+}): LifecycleCheck {
+  const { role, isOwnMentor, to } = input;
+  if (!isLifecycleEndpointTarget(to)) return { ok: false, status: 400, code: 'invalid_state' };
+  const from = effectiveLifecycleState(input.relation);
+  if (role !== 'ADMIN') {
+    if (role !== 'MENTOR' || !isOwnMentor) return { ok: false, status: 403, code: 'forbidden' };
+    if (to === ACTIVE && from !== PAUSED) return { ok: false, status: 403, code: 'forbidden' };
+  }
+  if (!canTransition(from, to)) return { ok: false, status: 409, code: 'illegal_transition', from, to };
+  if (isTerminal(to)) {
+    const code = input.reasonCode;
+    if (!code) return { ok: false, status: 400, code: 'reason_required' };
+    if (!isLifecycleEndReasonCode(code)) return { ok: false, status: 400, code: 'invalid_reason' };
+    if (endStateForReason(code) !== to) return { ok: false, status: 400, code: 'reason_mismatch' };
+    if (code === REASON_NOTE_REQUIRED_FOR && !input.reasonNote?.trim()) {
+      return { ok: false, status: 400, code: 'note_required' };
+    }
+  }
+  return { ok: true, from, to };
+}
+
+/** The notification a move sends to the pair (`notifications.events`). */
+export function lifecycleNotificationType(from: RelationLifecycleState, to: LifecycleEndpointTarget): string {
+  if (to === PAUSED) return 'relation.lifecycle_paused';
+  if (to === ACTIVE) return from === PAUSED ? 'relation.lifecycle_resumed' : 'relation.lifecycle_reopened';
+  return 'relation.lifecycle_ended';
 }

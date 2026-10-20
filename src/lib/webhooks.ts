@@ -23,6 +23,10 @@ export const WEBHOOK_EVENTS = [
   // Every assigned interviewer has submitted (or an admin closed the panel):
   // the scores are now comparable (#824).
   'interview_panel.completed',
+  // A pairing paused, resumed, ended or reopened: { relationId, from, to, reasonCode } (#1770).
+  // Registered, not yet dispatched — a direct call would be the eleventh that
+  // scripts/check-events.mjs caps; it is raised through emit() once that exists.
+  'mentorship.lifecycle_changed',
   // A closed panel's decision: ADVANCE | REJECT | OFFER (#1846). Registered, not yet dispatched.
   'interview_panel.outcome',
   // An approved interview request got a real meeting / was called off (#1844).
