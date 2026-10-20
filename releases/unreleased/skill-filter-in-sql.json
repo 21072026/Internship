@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Skill filters run in SQL — no capped scan, honest totals (#1820, epic #1810):** the mentor directory (`/api/mentors?skill=`), the admin candidate list (`/api/candidates?skills=`) and the company talent pool (`/api/company/talent-pool?skill=`) no longer load the visible set and filter `User.skills` in JavaScript. One shared `skillTermWhere()` (`src/lib/skillFilter.ts`) turns a typed term into a `where`: a canonical skill (`UserSkill` → `Skill`) whose label or alias contains it, or a case-insensitive substring of the free-text list (an id pre-query, `LIKE` over the JSON text, so a half-typed or not-yet-curated term still matches). Counts and pages come from the same SQL; a mentor sorting past the old 2 000-row scan cap is found. The directory's JS branch — and its `partial` flag — remains only for the language and accepting filters. Topic and demo environments now run the taxonomy backfill so their seeded people have `UserSkill` rows.",
+  "notes": {
+    "en": ["Searching mentors, candidates or the talent pool by skill now finds everyone who has it — no matter how long the list is — and the count is exact."],
+    "tr": ["Mentorları, adayları veya yetenek havuzunu beceriye göre aramak artık o beceriye sahip herkesi buluyor — liste ne kadar uzun olursa olsun — ve sayı tam doğru."],
+    "de": ["Die Skill-Suche in Mentor:innen, Kandidat:innen und im Talentpool findet jetzt alle, die den Skill haben — egal wie lang die Liste ist — und die Anzahl stimmt genau."]
+  }
+}

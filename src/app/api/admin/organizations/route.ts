@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
@@ -421,6 +422,7 @@ export async function PATCH(request: Request) {
         targetId: id,
         detail: `to ${toVerticalKey(vertical)}: ${conflicts} e-mail address(es) already have an account in that product`,
         request,
+        orgId: id,
       });
       return NextResponse.json(
         {
@@ -646,7 +648,10 @@ export async function PATCH(request: Request) {
     );
   }
 
-  await logActivity({
+  // Field NAMES only — never a value: the SSO fields include the IdP
+  // certificate, and this row reaches the tenant's audit drain (#1575).
+  await recordOrgWrite({
+    orgId: organization.id,
     // SSO config lives behind this endpoint, so a change to it can redirect
     // authentication itself — warning rather than info when that is touched.
     action: 'org.updated',
@@ -656,8 +661,6 @@ export async function PATCH(request: Request) {
         : 'info',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
-    targetType: 'organization',
-    targetId: organization.id,
     detail: Object.keys(data).join(', '),
     request,
   });

@@ -18,6 +18,7 @@ import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 import { daysInStage } from '@/lib/stageClock';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { PortalCertificateCard } from '@/components/PortalCertificateCard';
+import { JourneyView } from '@/components/JourneyView';
 
 // ACTIVE, else the latest COMPLETED one shown as an archive (#1408).
 async function getMenteeRelation(menteeId: string) {
@@ -68,6 +69,14 @@ export default async function PortalJourneyPage() {
             daysInStage={isArchived ? null : daysInStage(relation)}
             stageDeadline={relation.stageDeadline?.toISOString() ?? null}
           />
+        </div>
+      )}
+
+      {/* The programme journey (#1855): what is due now and what comes next —
+          the same list, with the same dates, the mentor sees. */}
+      {relation && (
+        <div className="mb-6">
+          <JourneyView relationId={relation.id} />
         </div>
       )}
 

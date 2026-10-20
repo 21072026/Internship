@@ -114,7 +114,7 @@ export default function NotificationsTab() {
           <Pressable accessibilityRole="button" onPress={markAll} style={styles.markAll}>
             <Text style={[styles.markAllText, { color: tint }]}>{t.markAllRead}</Text>
           </Pressable>
-        ) : null
+        ) : undefined
       }
       ListEmptyComponent={
         <View style={styles.center}>

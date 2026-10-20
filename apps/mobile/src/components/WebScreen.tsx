@@ -41,7 +41,10 @@ export function WebScreen({
   const { origin, product, signOut } = useSession();
   const { c } = useAppTheme();
   const t = strings();
-  const ref = useRef<WebView>(null);
+  // react-native-webview 14 declares `WebView<P = undefined>` and types its
+  // props as `WebViewProps & P`, so a bare `WebView` has `never` props and the
+  // ref alone fails the whole element. `object` adds nothing to the props.
+  const ref = useRef<WebView<object>>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const canGoBackRef = useRef(false);
   const loadedRef = useRef(false);

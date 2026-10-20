@@ -6,6 +6,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
 import { getSetting } from '@/lib/settings';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { skillTermWhere } from '@/lib/skillFilter';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // GET — premium talent-pool search for companies (Faz 1, #528). Gated by the
 // TALENT_POOL_SEARCH entitlement. Privacy-safe: only surfaces mentees who have
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') || '').trim().slice(0, 100);
-  const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
+  const skill = (searchParams.get('skill') || '').trim().slice(0, 60);
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const pageSize = Math.min(60, Math.max(1, parseInt(searchParams.get('pageSize') || '24', 10) || 24));
 
@@ -75,35 +77,19 @@ export async function GET(request: Request) {
   } as const;
   const orderBy = { updatedAt: 'desc' } as const;
 
-  // Two branches, the same shape as /api/candidates (#1392). The filter used to
-  // run AFTER `take: 60`, so a skill held only by the 61st-most-recently-updated
-  // mentee simply did not exist as far as the search was concerned — and the
-  // response carried no total, so nothing on screen could hint that the answer
-  // was partial. Raising the cap would only move the threshold; the count has to
-  // come from the same set the page is sliced from.
-  let candidates;
-  let total: number;
-  if (!skill) {
-    // Nothing needs JS: the database can count and paginate.
-    total = await prisma.user.count({ where });
-    candidates = await prisma.user.findMany({
-      where,
-      select,
-      orderBy,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    });
-  } else {
-    // `skills` is a JSON array and MySQL cannot match inside one, so this branch
-    // has to fetch the visible set and filter in memory — then total and slice
-    // from the FILTERED rows, never from a truncated read.
-    const rows = await prisma.user.findMany({ where, select, orderBy });
-    const filtered = rows.filter(
-      (r) => Array.isArray(r.skills) && (r.skills as string[]).some((s) => String(s).toLowerCase().includes(skill))
-    );
-    total = filtered.length;
-    candidates = filtered.slice((page - 1) * pageSize, page * pageSize);
-  }
+  // The count has to come from the same set the page is sliced from (#1392) —
+  // and since #1820 the skill is part of that set's SQL too (`skillTermWhere`:
+  // the canonical skill's labels/aliases, or a substring of the free text), so
+  // this no longer loads the whole visible pool to filter it in memory.
+  if (skill) where.AND = [await skillTermWhere(resolveOrgId(session), skill)];
+  const total = await prisma.user.count({ where });
+  const candidates = await prisma.user.findMany({
+    where,
+    select,
+    orderBy,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
 
   return NextResponse.json({ candidates, total, page, pageSize });
   });

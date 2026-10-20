@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { orgPlanHasFeature } from '@/lib/orgPlans';
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -100,12 +100,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       data: { orgId: id, claim, matchValue, role, priority },
       select: mappingSelect,
     });
-    await logActivity({
+    await recordOrgWrite({
+      orgId: id,
       action: 'sso.role_mapping_created',
       actorId: gate.session.user.id,
       actorEmail: gate.session.user.email ?? null,
-      targetType: 'organization',
-      targetId: id,
+      targetType: 'ssoClaimMapping',
+      targetId: mapping.id,
       detail: `${claim} = ${matchValue} -> ${role} (priority ${priority})`,
       request,
     });
@@ -131,13 +132,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'SSO is not part of this plan', code: 'plan_feature_required' }, { status: 403 });
   }
   await prisma.organization.update({ where: { id }, data: { ssoSyncRole: parsed.data.syncRole } });
-  await logActivity({
+  await recordOrgWrite({
+    orgId: id,
     action: 'sso.role_sync_toggled',
     level: 'warning',
     actorId: gate.session.user.id,
     actorEmail: gate.session.user.email ?? null,
-    targetType: 'organization',
-    targetId: id,
     detail: `ssoSyncRole ${gate.org.ssoSyncRole} -> ${parsed.data.syncRole}`,
     request,
   });
@@ -154,13 +154,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!mappingId) return NextResponse.json({ error: 'mappingId is required' }, { status: 400 });
   const removed = await prisma.ssoClaimMapping.deleteMany({ where: { id: mappingId, orgId: id } });
   if (removed.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  await logActivity({
+  await recordOrgWrite({
+    orgId: id,
     action: 'sso.role_mapping_deleted',
     actorId: gate.session.user.id,
     actorEmail: gate.session.user.email ?? null,
-    targetType: 'organization',
-    targetId: id,
-    detail: mappingId,
+    targetType: 'ssoClaimMapping',
+    targetId: mappingId,
     request,
   });
   return NextResponse.json({ ok: true });

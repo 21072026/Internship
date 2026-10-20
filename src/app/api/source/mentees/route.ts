@@ -12,6 +12,7 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { notify } from '@/lib/notify';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { capSkills } from '@/lib/skills';
+import { syncUserSkills } from '@/lib/skillsResolve';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 // The source a SOURCE user represents (their own sourceId).
@@ -101,8 +102,10 @@ export async function POST(request: Request) {
         skills: capSkills(skills),
         password,
       },
-      select: { id: true, fullName: true, email: true, orgId: true },
+      select: { id: true, fullName: true, email: true, orgId: true, skills: true },
     });
+    // Dual-write the canonical twin of the skill list (#1818).
+    await syncUserSkills(mentee.id, mentee.orgId, Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []);
     await logActivity({ action: 'source.mentee_added', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'user', targetId: mentee.id });
 
     // Duplicate post-check (#841): fire-and-forget — the submission already

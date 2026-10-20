@@ -72,6 +72,10 @@ export const SETTING_DEFAULTS = {
   // holding the EARLY_ACCESS entitlement, before opening to all subscribers.
   // '0' disables the window (everyone sees new candidates immediately).
   earlyAccessWindowDays: '7',
+  // The hiring desk's stall clock (#1874): an open application whose latest
+  // stage change is older than this many days is listed as stalled on
+  // /admin/hiring. Clamped to 1…365 on read (src/lib/hiringQueues.ts).
+  hiringStallDays: '14',
   // Open sign-up policy. 'auto' (default) = a self-registered account activates
   // itself the moment its email is verified, so the front door is genuinely
   // open; 'manual' = it stays inactive and waits for an admin (pendingApproval),

@@ -53,7 +53,16 @@ const userHref = (u: UserHit) =>
  * code. Those rules already paint the panel #111827 with #f3f4f6 / #9ca3af
  * text, a #374151 active row and a #1f2937 hover row.
  */
-export function CommandPalette({ role, capabilities }: { role: NavRole; capabilities?: readonly VerticalCapability[] }) {
+export function CommandPalette({
+  role,
+  capabilities,
+  superAdmin = false,
+}: {
+  role: NavRole;
+  capabilities?: readonly VerticalCapability[];
+  /** Shows the super-admin-only destinations (#1575); off unless the layout says so. */
+  superAdmin?: boolean;
+}) {
   const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -187,7 +196,9 @@ export function CommandPalette({ role, capabilities }: { role: NavRole; capabili
     const needle = q.trim().toLowerCase();
     const matches = (label: string) => !needle || label.toLowerCase().includes(needle);
 
-    const baseLinks = capabilities ? visibleNavLinks(navLinksForRole(role), capabilities) : navLinksForRole(role);
+    const baseLinks = capabilities
+      ? visibleNavLinks(navLinksForRole(role), capabilities, { superAdmin })
+      : navLinksForRole(role).filter((l) => !l.superAdminOnly || superAdmin);
     const links = baseLinks
       .map((l) => ({ link: l, label: navLabels[l.key] ?? l.key }))
       .filter(({ label }) => matches(label));
@@ -210,7 +221,7 @@ export function CommandPalette({ role, capabilities }: { role: NavRole; capabili
     ];
 
     return [...goTo, ...hits, ...actions.filter((a) => matches(a.label))];
-  }, [q, role, navLabels, users, companies, actions, t.search.company, capabilities]);
+  }, [q, role, navLabels, users, companies, actions, t.search.company, capabilities, superAdmin]);
 
   // Reset the cursor whenever the candidate set changes shape, so the highlight
   // can never point past the end of the list.

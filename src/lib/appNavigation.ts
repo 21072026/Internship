@@ -22,7 +22,11 @@ import type { VerticalCapability } from '@/lib/verticals';
  * mentor sidebar, or the sales one where the vertical has no mentorship
  * (src/lib/salesSurface.ts); everyone else → the portal. Pure.
  */
-export function appNavLinks(role: string | null | undefined, capabilities: readonly VerticalCapability[]): NavLink[] {
+export function appNavLinks(
+  role: string | null | undefined,
+  capabilities: readonly VerticalCapability[],
+  opts: { superAdmin?: boolean } = {},
+): NavLink[] {
   const links =
     role === 'ADMIN'
       ? ADMIN_NAV_LINKS
@@ -31,5 +35,5 @@ export function appNavLinks(role: string | null | undefined, capabilities: reado
           ? SALES_NAV_LINKS
           : MENTOR_NAV_LINKS
         : PORTAL_NAV_LINKS;
-  return visibleNavLinks(links, capabilities);
+  return visibleNavLinks(links, capabilities, opts);
 }

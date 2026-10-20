@@ -152,6 +152,8 @@ export function ApplyMentorForm() {
                 onChange={(next) => { setExpertise(next); if (next.length > 0) setExpertiseError(false); }}
                 error={expertiseError ? t.applyMentor.expertiseRequired : undefined}
                 testId="mentor-expertise"
+                // Signed out, the vocabulary is the one the application is filed into.
+                suggestUrl="/api/skills/suggest?context=mentor-application"
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
