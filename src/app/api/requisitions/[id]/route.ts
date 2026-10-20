@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { closedAtForStatus, normalizeSkills, protectedFields, requisitionPatchSchema } from '@/lib/requisitions';
+import { syncRequisitionSkills } from '@/lib/skillsResolve';
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -53,7 +54,11 @@ export async function PATCH(request: Request, { params }: Context) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
     if (!Object.keys(parsed.data).length) return NextResponse.json({ error: 'No changes supplied', code: 'validation_failed' }, { status: 400 });
 
-    return prisma.$transaction(async (tx) => {
+    // Set inside the transaction, mirrored AFTER it commits (#1818): the mirror
+    // inserts rows that reference the requisition, and inside the transaction
+    // that row is locked by this very write.
+    let mirror: { id: string; skills: string[] } | null = null;
+    const response = await prisma.$transaction(async (tx) => {
       const current = await tx.requisition.findFirst({
         where: { id, orgId: scope.orgId, ...(scope.session.user.role === 'COMPANY' ? { companyId: scope.session.user.companyId! } : {}) },
       });
@@ -83,7 +88,11 @@ export async function PATCH(request: Request, { params }: Context) {
       });
       if (changed.count !== 1) return NextResponse.json({ error: 'Requisition changed concurrently; reload and try again', code: 'concurrent_update' }, { status: 409 });
       const requisition = await tx.requisition.findUnique({ where: { id: current.id }, include: { company: { select: { id: true, name: true } }, owner: { select: { id: true, fullName: true } } } });
+      if (skills) mirror = { id: current.id, skills };
       return NextResponse.json({ requisition });
     });
+    const synced = mirror as { id: string; skills: string[] } | null;
+    if (synced) await syncRequisitionSkills(synced.id, scope.orgId, synced.skills);
+    return response;
   });
 }

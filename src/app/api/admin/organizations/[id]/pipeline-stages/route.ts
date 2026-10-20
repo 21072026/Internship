@@ -8,6 +8,7 @@ import { resolvePipelineStages, defaultPipelineStages, replaceStages } from '@/l
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
+import { recordOrgWrite } from '@/lib/orgAudit';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
 // stages require a paid plan). Phase A: label / order / color / on-path grouping
@@ -38,7 +39,7 @@ async function requireAdminOrg(id: string, route: string) {
   }
   const org = await prisma.organization.findUnique({ where: { id } });
   if (!org) return { error: 'Organization not found' as const, status: 404 };
-  return { org };
+  return { org, session };
 }
 
 // GET — the org's resolved stages plus whether they are customized.
@@ -94,17 +95,36 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // and this editor never drift in how a stage row is shaped (label
   // normalization, defaults). The authz + plan gate above is what differs.
   await replaceStages(id, stages);
+  // Keys only: the labels are the tenant's own copy, not the audit's business.
+  await recordOrgWrite({
+    orgId: id,
+    action: 'org.pipeline_stages_replaced',
+    actorId: gate.session.user.id,
+    actorEmail: gate.session.user.email ?? null,
+    detail: `${stages.length} stage(s): ${keys.join(', ')}`.slice(0, 1000),
+    request: req,
+  });
 
   const resolved = await resolvePipelineStages(id, await getLocale());
   return NextResponse.json({ stages: resolved, custom: true });
 }
 
 // DELETE — reset to the built-in canonical stages (drop all custom rows).
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const gate = await requireAdminOrg(id, 'DELETE /api/admin/organizations/[id]/pipeline-stages');
   if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
-  await prisma.pipelineStage.deleteMany({ where: { orgId: id } });
+  const removed = await prisma.pipelineStage.deleteMany({ where: { orgId: id } });
+  if (removed.count > 0) {
+    await recordOrgWrite({
+      orgId: id,
+      action: 'org.pipeline_stages_reset',
+      actorId: gate.session.user.id,
+      actorEmail: gate.session.user.email ?? null,
+      detail: `${removed.count} custom stage(s) removed`,
+      request: req,
+    });
+  }
   return NextResponse.json({ stages: defaultPipelineStages(await getLocale()), custom: false });
 }

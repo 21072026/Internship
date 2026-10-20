@@ -73,6 +73,64 @@ existing rows start at the deploy instant. It is stamped by Prisma; a raw SQL
 `UPDATE` does not move it.
 
 The async bulk export is #3002.
+## Writes (#1994, `src/lib/api/v1Write.ts`)
+
+A write route is `withApiKey(request, '<resource>:write', (key) => apiWrite(request, key, schema, handler))`.
+`withApiKey` stays the one door (the static guards look for it); `apiWrite` adds:
+
+| Step | Rule |
+|---|---|
+| Write bucket | 30 writes a minute per key (`WRITE_RATE_LIMIT`), on top of the shared 120/min window → `429 rate_limited` |
+| Body | JSON, ≤ 64 KB, the route's zod schema → `422 validation_failed` with `errors: [{ path, code, message }]` |
+| `Idempotency-Key` | optional, 1–200 printable ASCII. Same key + same request → the stored 2xx replayed with `Idempotent-Replayed: true`, handler not run. Same key + different request → `409 idempotency_key_reused`. Still running → `409 idempotency_in_progress` + `Retry-After` |
+| Record | every 2xx leaves a `logActivity` row whose detail names `api key <id>`; the handler names the action and target with `writeOk(response, { action, targetType, targetId })` |
+
+Only successes are remembered (`ApiIdempotencyKey`, a tenant model): a refused
+or failed write frees its key, so a caller that fixes its body can retry with
+it. Rows are replayed for 24 hours and swept nightly at 03:40 (the count is
+logged every night). A stored body over 32 KB is replayed as its status alone.
+Domain events are emitted by the domain writer the handler calls, never by
+`apiWrite`, so an API write and a UI write of the same thing emit the same event.
+
+Query-parameter problems stay `400` with `fields[]`; body problems are `422` with
+`errors[]`.
+
+**Demo:** the demo instance refuses `/api/admin/api-keys` (`src/lib/demoMode.ts`),
+so no key can exist there and the write API is unreachable — no entry of its own.
+
+## Write endpoints (#1996)
+
+| Operation | Scope | Domain path | Domain refusals |
+|---|---|---|---|
+| `POST /candidates` | `candidates:write` | `prisma.user.create` as MENTEE in the key's org, password nobody knows (claimed by reset) — like the CSV import | `409 duplicate_candidate` (`matches[]`): e-mail in use in this world (id only if in the key's org); a look-alike by `findPossibleDuplicates` unless `allowPossibleDuplicate: true` |
+| `PATCH /candidates/{id}` | `candidates:write` | `planFieldUpdates(…, { authoritative: true })` (`src/lib/externalSyncPolicy.ts`) — a blank value is no opinion | `.strict()`: `role`, `orgId`, `email`, credentials → `422 unrecognized_keys` |
+| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_conflict` (moved meanwhile) |
+| `POST /interactions` | `interactions:write` | `createInteraction()` (`src/lib/interactionWrite.ts`), shared with `POST /api/interactions` — one `interaction.logged` | `404` for another org's relationship |
+
+The free-core rule holds: the scopes gate *programmatic* access only; a mentor
+logging the same interaction in the app never meets a gate. The queued bulk
+import is #3015.
+
+## Connector handshake and REST hooks (#2002)
+
+- **`GET /me`** — the one route any live key may call (`withApiKey(request,
+  ANY_LIVE_KEY, …)`; `check:api-key-routes` allows it only for the files in
+  `ANY_SCOPE_ROUTES`). It answers the key's id, org, scopes, expiry, minute
+  window and period quota — no user or candidate data. Plan gating still applies.
+- **`POST /hooks`** `{ targetUrl, event }` → `201 { data: { id, …, secret } }`
+  (scope `hooks:write`, on the write floor). Same SSRF guard as the admin form
+  (`422 unreachable_target`), at most `MAX_HOOKS_PER_KEY` (25) per key
+  (`409 limit_reached`), the secret returned once.
+- **`GET /hooks`** — the calling key's own subscriptions, no secrets.
+- **`DELETE /hooks/{id}`** — ownership is in the delete's own `where`
+  (`apiKeyId` AND `orgId`); any other id (another key's, an admin's, another
+  org's) is the same `404`.
+
+`Webhook.apiKeyId` / `source` are nullable and additive; admin-created rows keep
+`null`. Delivery uses `liveSubscriptionsWhere()` (`src/lib/webhooks.ts`): a
+key-owned subscription stops receiving the moment its key is revoked or expires.
+`/api/v1/hooks` is on the demo blocklist for the same reason as
+`/api/admin/webhooks`.
 
 ## Deprecations
 

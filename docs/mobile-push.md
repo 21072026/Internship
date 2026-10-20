@@ -123,10 +123,10 @@ The table is new and has no required column without a database default, so
   at launch, after a product switch, and on a token change (`addPushTokenListener`).
   - On Android, expo-notifications fires `onDevicePushToken` on **every** token fetch,
     `getExpoPushTokenAsync` included (`PushTokenModule.kt` calls `onNewToken` after each
-    fetch). A listener that re-registers on every event therefore loops: about 24 requests
-    a second on the emulator. `deviceTokenEvent()` (`push.ts`) records the first token and
-    re-registers only when a later one differs, and `registerPush` runs one registration
-    per host at a time.
+    fetch; re-checked in expo-notifications 58.1, SDK 58). A listener that re-registers on
+    every event therefore loops: about 24 requests a second on the emulator.
+    `deviceTokenEvent()` (`push.ts`) records the first token and re-registers only when a
+    later one differs, and `registerPush` runs one registration per host at a time.
   - The token last registered on each host is kept in AsyncStorage.
   - A **sign-in** or a **different token** registers (create or take over).
   - The **same token** only refreshes. A phone revoked on /account therefore stays revoked
@@ -143,6 +143,9 @@ The table is new and has no required column without a database default, so
     signed in again on that phone (a takeover) or the token dies. A tap lands on sign-in.
 - **Foreground.** The handler shows no banner for the thread on screen in its own product.
   That thread reloads at once instead. The tab badges refresh on every push received.
+  - Since SDK 58, expo-notifications shows a foreground notification by default and no
+    longer drops one whose handler is slower than 3 seconds. The handler in
+    `pushDevice.ts` answers every push explicitly, so the rule above is unchanged.
 - **Tap.** Cold start is included: `useLastNotificationResponse`, then
   `clearLastNotificationResponseAsync`, so a reload does not reopen it. The tap is acted on
   only after the launch has settled which product and session are active.
