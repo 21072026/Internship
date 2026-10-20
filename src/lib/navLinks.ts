@@ -10,6 +10,7 @@ import {
   Lightbulb,
   Sparkles,
   ArrowRightLeft,
+  SlidersHorizontal,
   type LucideIcon,
   ShieldAlert,
 } from 'lucide-react';
@@ -138,6 +139,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/ai', icon: Sparkles, key: 'aiConsole' },
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
+  // Segmentation attributes the reports slice by (#1920). Untagged: every vertical reports.
+  { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
