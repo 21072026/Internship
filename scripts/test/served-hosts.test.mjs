@@ -144,6 +144,8 @@ test('resolveRedirectTarget: a served host is kept, re-assembled; everything els
   assert.equal(resolveRedirectTarget('https://marketing.example.test/auth/signin', B), 'https://marketing.example.test/auth/signin');
   assert.equal(resolveRedirectTarget('https://MARKETING.example.test/a?b=1#c', B), 'https://marketing.example.test/a?b=1#c');
   assert.equal(resolveRedirectTarget('https://marketing.example.test:8443/a', B), 'https://marketing.example.test/a', 'a received port is dropped');
+  // This deployment's own port survives: a local dev server on :3000 serves its marketing host there too.
+  assert.equal(resolveRedirectTarget('https://marketing.example.test:3000/a', 'https://interncrm.com:3000'), 'https://marketing.example.test:3000/a');
   for (const bad of [
     'https://evil.example/',
     'https://interncrm.com.evil.example/',

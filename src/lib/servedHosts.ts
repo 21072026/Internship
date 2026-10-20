@@ -140,7 +140,11 @@ export function resolveRedirectTarget(url: string, baseUrl: string): string {
   if (target.protocol !== 'https:' && target.protocol !== base.protocol) return baseUrl;
   if (target.origin === base.origin) return url;
   if (!servedHosts().has(target.hostname.toLowerCase())) return baseUrl;
-  return `${target.protocol}//${target.hostname}${target.pathname}${target.search}${target.hash}`;
+  // A port is kept only when it is this deployment's own port (a local dev server on
+  // :3000 serves its marketing host on the same port). Any other port is still dropped.
+  const port = target.port === base.port ? target.port : '';
+  const host = port ? `${target.hostname}:${port}` : target.hostname;
+  return `${target.protocol}//${host}${target.pathname}${target.search}${target.hash}`;
 }
 
 // ── Links that cannot follow a request: e-mail (#2495) ──────────────────────

@@ -9,12 +9,15 @@ import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
 import { AccountMenu } from '@/components/AccountMenu';
 import { BrandWordmark } from '@/components/BrandWordmark';
+import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { APP_VERSION } from '@/lib/version';
+import { PartnerSidebar } from './PartnerSidebar';
 
 // The partner portal's shell (docs/affiliate-module.md). Gate order matches the
 // other role shells: session, then 2FA (before any redirect that could send the
-// person elsewhere), then role, then the vertical's capability. The header is the
-// partner's way out: the brand, and the account menu with sign-out.
+// person elsewhere), then role, then the vertical's capability. The shell is the
+// same one the marketing CRM uses: brand, a left menu with sign-out, and the
+// account menu in the header.
 export default async function AffiliateLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
@@ -32,12 +35,18 @@ export default async function AffiliateLayout({ children }: { children: React.Re
   const capabilities = await shellCapabilities(session.user.orgId);
   if (!capabilities.includes('affiliate')) notFound();
 
-  const { locale } = await getServerDictionary();
+  const { locale, t } = await getServerDictionary();
+  const labels = {
+    portal: t.affiliates.navPortal,
+    account: t.affiliates.navAccount,
+    signOut: t.affiliates.signOut,
+  };
 
   return (
-    <>
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <BrandWordmark />
+    <ResponsiveShell
+      brand={<BrandWordmark oneLine />}
+      sidebar={<PartnerSidebar brand={<BrandWordmark />} labels={labels} />}
+      headerExtra={
         <AccountMenu
           name={session.user.name}
           email={session.user.email}
@@ -48,8 +57,9 @@ export default async function AffiliateLayout({ children }: { children: React.Re
           locale={locale}
           version={APP_VERSION}
         />
-      </header>
+      }
+    >
       <main className="mx-auto max-w-3xl p-4 md:p-6">{children}</main>
-    </>
+    </ResponsiveShell>
   );
 }
