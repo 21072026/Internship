@@ -164,4 +164,15 @@ works on synthetic data in development (CLAUDE.md, "Develop on synthetic data on
 - `src/lib/affiliateCommissionRule.ts`: the contract's commission rule, pure
   (tiers, 20 %, 10-customer switch, 24-month window, termination). Integer cents.
 - `scripts/test/affiliate-commission-rule.test.mjs`: 12 unit tests, passing.
-- Not yet: Prisma models, writer, admin and partner screens, migration.
+- `prisma/schema.prisma`: six tenant models (partner, customer, payment,
+  commission, payout, click), registered in `TENANT_MODELS`. The `AFFILIATE`
+  role is deliberately not added yet: it changes the role unions in
+  notifications and registration and gets its own change.
+- `src/lib/affiliatePaymentPlan.ts`: pure plan for one payment (which rows to
+  create or update). `scripts/test/affiliate-payment-plan.test.mjs`: 11 tests.
+- `src/lib/affiliatePaymentWriter.ts`: the one writer. It locks the partner row
+  (`SELECT … FOR UPDATE`), reads the facts, applies the plan. Covered by an
+  end-to-end spec later, not by unit tests.
+- Every payment needs an external reference, manual entries included. Without
+  it a double entry could not be detected.
+- Not yet: admin and partner screens, the AFFILIATE role, migration.
