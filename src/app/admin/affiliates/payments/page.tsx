@@ -5,9 +5,10 @@
 //
 // Every write goes through the /api/admin/affiliate routes, which call the single
 // writer, so the rules here are the same as for any other source of payments.
-// Copy is English for now; it moves into the dictionaries before this ships.
+// Copy comes from the `affiliates` block of src/i18n/dictionaries.ts.
 
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '@/i18n/client';
 
 interface Partner {
   id: string;
@@ -34,6 +35,8 @@ interface PayoutDetails {
 const eur = (minor: number) => `€${(minor / 100).toFixed(2)}`;
 
 export default function AffiliatePaymentsPage() {
+  const t = useT();
+  const a = t.affiliates;
   const [partners, setPartners] = useState<Partner[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -46,7 +49,7 @@ export default function AffiliatePaymentsPage() {
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/affiliate/payments');
     if (!res.ok) {
-      setMessage(`Could not load (${res.status}).`);
+      setMessage(`${a.msgLoadFailed} (${res.status}).`);
       return;
     }
     const data = await res.json();
@@ -86,7 +89,7 @@ export default function AffiliatePaymentsPage() {
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    setMessage(res.ok ? 'Payment recorded.' : `Not recorded: ${data.error ?? res.status}`);
+    setMessage(res.ok ? a.msgRecorded : `${a.msgNotRecorded}: ${data.error ?? res.status}`);
     if (res.ok) {
       form.reset();
       await load();
@@ -105,10 +108,10 @@ export default function AffiliatePaymentsPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setMessage(`Bank details not saved: ${data.error ?? res.status}`);
+      setMessage(`${a.msgBankNotSaved}: ${data.error ?? res.status}`);
       return;
     }
-    setMessage('Bank details saved.');
+    setMessage(a.msgBankSaved);
     const reread = await fetch(`/api/admin/affiliate/partners/${partnerId}/payout-details`).then((r) => r.json());
     setDetails(reread.details ?? null);
   }
@@ -124,7 +127,7 @@ export default function AffiliatePaymentsPage() {
     if (rows.length === 0) return;
     const partnerIds = [...new Set(rows.map((p) => p.customer.partner.id))];
     if (partnerIds.length !== 1) {
-      setMessage('Select commissions of one partner at a time.');
+      setMessage(a.msgOnePartner);
       return;
     }
     const res = await fetch('/api/admin/affiliate/payouts', {
@@ -138,7 +141,7 @@ export default function AffiliatePaymentsPage() {
       }),
     });
     const data = await res.json().catch(() => ({}));
-    setMessage(res.ok ? `Marked as paid: ${eur(data.amountMinor)}.` : `Not paid: ${data.error ?? res.status}. Reload and try again.`);
+    setMessage(res.ok ? `${a.msgPaid}: ${eur(data.amountMinor)}.` : `${a.msgNotPaid}: ${data.error ?? res.status}.`);
     if (res.ok) {
       setSelected([]);
       setPayRef('');
@@ -148,11 +151,11 @@ export default function AffiliatePaymentsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4 md:p-6">
-      <h1 className="text-2xl font-semibold">Affiliate payments</h1>
+      <h1 className="text-2xl font-semibold">{a.title}</h1>
       {message && <p role="status" className="text-sm">{message}</p>}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">Record a payment</h2>
+        <h2 className="text-lg font-medium">{a.recordTitle}</h2>
         <form
           className="grid gap-3 md:grid-cols-2"
           onSubmit={(e) => {
@@ -161,22 +164,22 @@ export default function AffiliatePaymentsPage() {
           }}
         >
           <select name="partnerId" required className="rounded border p-2" value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
-            <option value="">Partner</option>
+            <option value="">{a.partner}</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.code} — {p.user.fullName}</option>
             ))}
           </select>
-          <input name="externalCustomerRef" required placeholder="Customer ID (marketing side)" className="rounded border p-2" />
-          <input name="amount" required type="number" step="0.01" min="0.01" placeholder="Amount (EUR)" className="rounded border p-2" />
-          <input name="receivedAt" required type="datetime-local" className="rounded border p-2" />
-          <input name="externalPaymentRef" required placeholder="Payment reference (invoice no.)" className="rounded border p-2 md:col-span-2" />
-          <button type="submit" className="rounded bg-black px-4 py-2 text-white md:col-span-2 md:w-fit">Record payment</button>
+          <input name="externalCustomerRef" required placeholder={a.customerRef} className="rounded border p-2" />
+          <input name="amount" required type="number" step="0.01" min="0.01" placeholder={a.amount} className="rounded border p-2" />
+          <input name="receivedAt" required type="datetime-local" aria-label={a.receivedAt} className="rounded border p-2" />
+          <input name="externalPaymentRef" required placeholder={a.paymentRef} className="rounded border p-2 md:col-span-2" />
+          <button type="submit" className="rounded bg-black px-4 py-2 text-white md:col-span-2 md:w-fit">{a.recordButton}</button>
         </form>
       </section>
 
       {partnerId && (
         <section className="space-y-3">
-          <h2 className="text-lg font-medium">Bank details for transfer</h2>
+          <h2 className="text-lg font-medium">{a.bankTitle}</h2>
           {details && (
             <p className="text-sm">{details.accountHolder} · <span className="font-mono">{details.iban}</span></p>
           )}
@@ -187,17 +190,17 @@ export default function AffiliatePaymentsPage() {
               saveDetails(e.currentTarget);
             }}
           >
-            <input name="accountHolder" required placeholder="Account holder" className="rounded border p-2" />
-            <input name="iban" required placeholder="IBAN" className="rounded border p-2" />
-            <button type="submit" className="rounded border px-4 py-2 md:w-fit">Save bank details</button>
+            <input name="accountHolder" required placeholder={a.accountHolder} className="rounded border p-2" />
+            <input name="iban" required placeholder={a.iban} className="rounded border p-2" />
+            <button type="submit" className="rounded border px-4 py-2 md:w-fit">{a.saveBank}</button>
           </form>
         </section>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">Unpaid commissions</h2>
+        <h2 className="text-lg font-medium">{a.unpaidTitle}</h2>
         {openCommissions.length === 0 ? (
-          <p className="text-sm">Nothing waiting to be paid.</p>
+          <p className="text-sm">{a.nothingToPay}</p>
         ) : (
           <>
             <ul className="space-y-1 text-sm">
@@ -215,10 +218,10 @@ export default function AffiliatePaymentsPage() {
               ))}
             </ul>
             <div className="flex flex-wrap items-center gap-3">
-              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="rounded border p-2" />
-              <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Transfer reference" className="rounded border p-2" />
+              <input type="date" aria-label={a.transferDate} value={payDate} onChange={(e) => setPayDate(e.target.value)} className="rounded border p-2" />
+              <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder={a.transferRef} className="rounded border p-2" />
               <button type="button" onClick={markPaid} disabled={selected.length === 0} className="rounded border px-4 py-2 disabled:opacity-50">
-                Mark {selected.length} as paid
+                {a.markPaid} ({selected.length})
               </button>
             </div>
           </>
@@ -226,16 +229,16 @@ export default function AffiliatePaymentsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">Recent payments</h2>
+        <h2 className="text-lg font-medium">{a.recentTitle}</h2>
         <table className="w-full text-left text-sm">
           <thead>
             <tr>
-              <th className="p-2">Received</th>
-              <th className="p-2">Partner</th>
-              <th className="p-2">Customer</th>
-              <th className="p-2">Amount</th>
-              <th className="p-2">Reference</th>
-              <th className="p-2">Commission</th>
+              <th className="p-2">{a.colReceived}</th>
+              <th className="p-2">{a.colPartner}</th>
+              <th className="p-2">{a.colCustomer}</th>
+              <th className="p-2">{a.colAmount}</th>
+              <th className="p-2">{a.colReference}</th>
+              <th className="p-2">{a.colCommission}</th>
             </tr>
           </thead>
           <tbody>
