@@ -29,7 +29,9 @@ on:
 # Cancel superseded runs on the same ref so the gate stays fast.
 concurrency:
   group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs only: a push to main is never superseded, and cancelling it left most
+  # merged commits without a smoke verdict on the code that actually ships (#3022).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Does this PR change anything the smoke suite could notice? The paths that
