@@ -82,6 +82,11 @@ jobs:
       # secrets. Recipient defaults to the maintainer; set an ALERT_EMAIL_TO
       # secret to override (e.g. a shared alias / multiple comma-separated addrs).
       - name: Email alert on failure
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
         if: failure()
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
