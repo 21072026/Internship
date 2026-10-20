@@ -18,8 +18,8 @@
 #   3. back up the database (infra/backup-db.sh), refuse a data-destroying
 #      schema diff (infra/schema-guard.sh), then prisma db push
 #      --accept-data-loss (schema sync, same as CI)
-#   4. seed-templates + seed-goal-templates + seed-agenda-templates + backfill-project-members
-#      + backfill-sso-plan (all idempotent)
+#   4. the data migrations: prisma/run-backfills.mjs over prisma/backfills/registry.mjs
+#      (#1540), then the read-only reports
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — the same flags the retired deploy.yml used. With
 #      REPLICAS>1 the replicas are swapped ONE AT A TIME, each drained out of
@@ -740,43 +740,20 @@ run_tool npx prisma db push --accept-data-loss
 log "repair invalid Json column values (idempotent)"
 run_tool node prisma/backfill-json-columns.mjs --repair || true
 
-# ── 4. Idempotent seeds / backfills ──────────────────────────────────────────
-log "seed-templates + project-member backfill (idempotent)"
-run_tool node prisma/seed-templates.mjs || true
-# The shared project-goal template pool (#51) — every project sees these on top
-# of its own. Only ever adds missing titles.
-run_tool node prisma/seed-goal-templates.mjs || true
-# The guided-conversation library (#1841) — the six starter session agendas
-# of the default org. Only ever adds missing titles and missing items.
-run_tool node prisma/seed-agenda-templates.mjs || true
-# Contributor terms v1.0 (#1025) — versioned rows; never edits an existing one.
-run_tool node prisma/seed-contributor-terms.mjs || true
-run_tool node prisma/backfill-project-members.mjs || true
-# Tenant backfill (#1557): the script now exits non-zero when a nullable orgId
-# column still holds NULLs after its retry passes. `|| true` stays for now — a
-# deploy must not abort on it, and #1540 is replacing this whole `|| true`
-# pattern with a backfill registry — but the failure is announced instead of
-# swallowed, because an incomplete backfill is the one thing that must block
-# MT_ENFORCE_ISOLATION. The warning describes the exit code, not the database:
-# the script also exits non-zero when the DB is unreachable or the run never
-# got as far as counting anything.
-# Attribute ActivityLog / ProjectTaskTemplate / AiUsage rows to their own tenant FIRST
-# (cross-world isolation): backfill-organization.mjs below fills every NULL
-# orgId with the default org, which would hand a MARKETING tenant's audit trail
-# and goal pool to the INTERNSHIP admin. Only fills NULLs — idempotent.
-run_tool node prisma/backfill-activity-log-org.mjs || true
-# Same shape for the audit trail (#2012): the actor's org, then the target
-# user's; system rows fall to the default org below.
-run_tool node prisma/backfill-audit-log-org.mjs || true
-run_tool node prisma/backfill-task-template-org.mjs || true
-run_tool node prisma/backfill-ai-usage-org.mjs || true
-run_tool node prisma/backfill-ai-usage-task.mjs || true
-run_tool node prisma/backfill-organization.mjs \
-  || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
-run_tool node scripts/backfill-requisitions.mjs || true
-# One Application per CompanyInterest that names a requisition (#1828). Only
-# ever adds rows; a second run reports created=0.
-run_tool node scripts/backfill-applications.mjs || true
+# ── 4. Data migrations (seeds and backfills) ─────────────────────────────────
+# One runner, one ordered registry (#1540): prisma/backfills/registry.mjs lists
+# every seed/backfill with its reason, whether it is one-shot (`once`, skipped
+# after a recorded success) and whether a failure may let the deploy go on
+# (`optional`). The ledger is the BackfillRun table. The runner prints one line
+# per entry and a summary (`backfills: N registered, …`). Ordering constraints
+# — tenant attribution before backfill-organization, api-key-lifecycle after
+# it, skill-lists before skill-taxonomy — live in the registry and are pinned
+# by scripts/test/backfill-registry.test.mjs. A NEW backfill is an entry there,
+# never a new line here.
+log "data migrations (prisma/backfills/registry.mjs)"
+run_tool node prisma/run-backfills.mjs
+
+# ── Reports (read only; after the backfills so they read the converged state) ─
 # Detector, NOT a gate (#419): reports mentees holding more than one ACTIVE
 # mentorship. Exits 0 by design, and `|| true` on top — this must never be the
 # reason a deploy fails. The DB-level @@unique([activeMenteeKey]) backstop lands
@@ -795,99 +772,6 @@ run_tool node prisma/set-public-host.mjs --list || true
 # database connection. Never fails a deploy, never writes, no PII.
 log "marketing org readiness (report only)"
 run_tool node prisma/check-marketing-orgs.mjs || true
-# API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
-# default org and the 'candidates:read' scope they already had in practice.
-# Must run AFTER backfill-organization.mjs, which creates the default org.
-run_tool node prisma/backfill-api-key-lifecycle.mjs || true
-# One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
-# email out history. Self-skips once applied (Setting 'cronBaselineAt').
-run_tool node prisma/backfill-cron-baseline.mjs || true
-# Stamp completedAt on relations that were COMPLETED before the column existed,
-# so the post-mentorship CV access window (#854) has an anchor instead of
-# revoking access outright. Only ever fills NULLs — idempotent.
-run_tool node prisma/backfill-relation-completed-at.mjs || true
-# Remove the Meeting rows the old recurring-meeting generator materialised. A
-# series is a rule now; those rows outlived their cancelled series and haunted
-# the calendar (#1110). Nothing writes them any more, so this converges to a
-# no-op on the next deploy.
-run_tool node prisma/backfill-series-meetings.mjs || true
-# Grandfather tenants whose SAML SSO was live BEFORE it became a paid feature
-# (#1742). plan defaults to FREE, so the new entitlement in isSsoActive() would
-# otherwise take them offline on this very deploy — and their users are
-# provisioned with no usable password, so there is no fallback to sign in with.
-# Converges to a no-op once every such tenant sits on ENTERPRISE.
-run_tool node prisma/backfill-sso-plan.mjs || true
-
-# Move pre-#1806 review notes out of MentorApplication.rejectReason into the
-# new adminNote column — non-rejected rows only, where the value can only be a
-# note. Only ever fills NULLs — idempotent.
-run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
-
-# Fill WeeklyReportReminder.recipientId for rows written before #2287, so the
-# weekly reminder can be capped per PERSON rather than per relation. The column
-# ships nullable because db push refuses a required one on a populated table
-# (#2298); this is the expand half. It also PRINTS how many (recipient, week)
-# pairs still hold more than one row — the number the @@unique contract step is
-# gated on. Only ever fills NULLs — idempotent.
-run_tool node prisma/backfill-weekly-report-reminder-recipient.mjs || true
-
-# Move relations that were created on the schema default (APPLICATION_100) in a
-# tenant whose custom stage set does not contain that key (#1634). They render
-# in no board column and count in no funnel row; each move writes a StatusChange
-# so it is auditable.
-#
-# It moves ONLY rows that can just be the bug: still on APPLICATION_100, still
-# ACTIVE, and never moved (zero StatusChange rows). It deliberately does NOT
-# repair every relation whose key is outside the org's current set — renaming a
-# stage in the editor puts a tenant's whole in-flight pipeline in that state for
-# a moment, and sweeping it would drag placed and completed mentees back to
-# stage 1 unattended. The script is dry-run by default; `--apply` is this line's
-# deliberate choice. Converges to a no-op after the first deploy.
-run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
-
-# Give every Organization a Subscription row matching the plan it already had
-# (#1731). The commercial state moved from the `Organization.plan` enum to its
-# own table on this deploy; an org without a row would be read as the free tier.
-# Creates only what is missing and never edits an existing subscription, so it
-# converges to a no-op — and the app's own getOrCreateSubscription() covers any
-# org created after this ran.
-run_tool node prisma/backfill-org-subscription.mjs || true
-
-# Retire the premiumAnalytics setting into ADVANCED_ANALYTICS org grants (#1740).
-# Analytics gating moved to entitled(orgId, …); an org that had the tier on gets
-# a permanent grant, then the dead setting rows are deleted so a re-run grants
-# nothing (a global 'true' row would otherwise leak the tier to every new org).
-run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
-
-# Grandfather every org that exists when the REPORT_EXPORT gate goes live
-# (#1740): exports were free until now. Runs ONCE — its grants carry a marker
-# note and a later run that finds one does nothing, so orgs created after the
-# gate do not inherit it.
-run_tool node prisma/backfill-report-export-grandfather.mjs || true
-
-# Same for the admin AI tools (AI_PACKAGE, #1738): every org that exists keeps them, ONCE (marker note).
-run_tool node prisma/backfill-ai-package-grandfather.mjs || true
-
-# Grandfather every org already running an integration when the
-# INTEGRATIONS_API gate goes live (#1744): a live public-API key or an active
-# webhook. Runs ONCE (marker note), for the same reason as the one above.
-run_tool node prisma/backfill-integrations-api-grandfather.mjs || true
-
-# Re-split skill lists stored as one blob before anything split them (#2314).
-# Every form used to write `skills.split(',')` from a single-line input, and a
-# browser drops the line breaks out of a multi-line paste — so a pasted CV list
-# landed as ONE 300-character "skill" that filled half the dashboard card it
-# rendered in. The rule is a fixed point, so this converges to a no-op; the
-# blobs whose separators were already gone are truncated to the cap and counted
-# in the output rather than guessed at.
-run_tool node prisma/backfill-skill-lists.mjs --apply || true
-
-# Map the free-text skills onto the canonical taxonomy (#1819): seeds each
-# org's starter vocabulary (insert-missing only, so curation is never undone),
-# creates UserSkill / RequisitionSkill rows for what resolves and queues the
-# rest in UnmappedSkillTerm for /admin/skills. Runs AFTER the re-split above so
-# it maps the split entries; skipDuplicates makes a re-run a no-op.
-run_tool node prisma/backfill-skill-taxonomy.mjs --apply || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
