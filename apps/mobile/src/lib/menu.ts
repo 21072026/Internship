@@ -67,6 +67,7 @@ const ICONS: Record<string, string> = {
   aiConsole: 'sparkles',
   myMentees: 'people',
   organizations: 'business',
+  orgAttributes: 'options',
   outbox: 'paper-plane',
   reEngagement: 'refresh',
   reportSubscriptions: 'mail-unread',
