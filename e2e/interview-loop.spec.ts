@@ -59,6 +59,8 @@ test.beforeAll(async ({ playwright }, info) => {
   for (const r of [req, req2, req3]) {
     await prisma.companyInterest.create({ data: { companyId: company.id, menteeId: menteeUser.id, requisitionId: r.id, status: 'SHORTLISTED', scopeKey: companyInterestScopeKey(company.id, menteeUser.id, r.id) } });
   }
+  // The first role's shortlist as the deploy backfill leaves it — an application — so the company board (#1838) has a card to show the outcome on.
+  await prisma.application.create({ data: { orgId: org.id, requisitionId: req.id, menteeId: menteeUser.id, companyId: company.id, stage: 'SHORTLISTED', status: 'ACTIVE', source: 'SHORTLIST' } });
   const baseURL = info.project.use.baseURL;
   [admin, companyCtx, mentee, mentorCtx] = await Promise.all([1, 2, 3, 4].map(() => playwright.request.newContext({ baseURL })));
   expect((await signInViaApi(admin, emails.admin, PW)).ok).toBe(true);

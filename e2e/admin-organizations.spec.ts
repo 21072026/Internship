@@ -217,6 +217,69 @@ test('non-admin cannot list or create organizations', async ({ page }) => {
 // certificate: whoever can write it decides who may mint a login for that
 // tenant. Both directions are asserted — a tenant admin keeps their own
 // organisation, and is refused everything belonging to somebody else.
+// #1575: the IdP trust anchor (issuer, entry point, certificate) decides whom
+// the ACS signs in — any account of the org, super admin included, with no
+// password and no second factor. A tenant ADMIN who could write it for their
+// OWN org could sign in as anyone in it, so it is the operator's to set; the
+// on/off switch and enforcement stay the tenant's.
+test('a tenant admin cannot set their own organization\'s identity provider', { tag: '@smoke' }, async ({ page }) => {
+  const tag = Date.now();
+  const slug = `e2e-own-idp-${tag}`;
+  createdSlugs.push(slug);
+  const IDP = {
+    ssoProvider: 'saml',
+    ssoIssuer: 'https://idp.own.test/metadata',
+    ssoEntryPoint: 'https://idp.own.test/sso',
+    ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBoperator\n-----END CERTIFICATE-----',
+  };
+  // ENTERPRISE, so the plan gate is not what refuses anything below.
+  const own = await prisma.organization.create({ data: { slug, name: `Own IdP Tenant ${tag}`, plan: 'ENTERPRISE' } });
+  const adminEmail = uniqueEmail('own-idp-admin');
+  const admin = await seedUser(adminEmail, 'TenantPass123', 'ADMIN', 'Own IdP Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: own.id } });
+  const row = () => prisma.organization.findUniqueOrThrow({ where: { id: own.id } });
+  const patch = (data: Record<string, unknown>) => page.request.patch('/api/admin/organizations', { data: { id: own.id, ...data } });
+
+  try {
+    await signInAndSettle(page, adminEmail, 'TenantPass123', '/admin');
+
+    // A whole IdP, and each trust field on its own, is refused and stores nothing.
+    for (const data of [
+      { ...IDP, ssoEnabled: true },
+      { ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBattacker\n-----END CERTIFICATE-----' },
+      { ssoEntryPoint: 'https://attacker.test/sso' },
+      { ssoIssuer: 'https://attacker.test/metadata' },
+      { ssoProvider: 'saml' },
+    ]) {
+      const res = await patch(data);
+      expect(res.status(), JSON.stringify(Object.keys(data))).toBe(403);
+      expect((await res.json()).code).toBe('sso_super_admin_only');
+    }
+    const untouched = await row();
+    expect(untouched.ssoProvider).toBeNull();
+    expect(untouched.ssoCertificate).toBeNull();
+    expect(untouched.ssoEntryPoint).toBeNull();
+    expect(untouched.ssoEnabled).toBe(false);
+
+    // Configured by the operator, the tenant admin may switch it on (echoing the
+    // stored values, as the form does) and off, and may clear it.
+    await prisma.organization.update({ where: { id: own.id }, data: IDP });
+    const on = await patch({ ssoEnabled: true, ssoProvider: IDP.ssoProvider, ssoIssuer: IDP.ssoIssuer, ssoEntryPoint: IDP.ssoEntryPoint });
+    expect(on.ok(), await on.text()).toBeTruthy();
+    expect((await row()).ssoEnabled).toBe(true);
+    // …but swapping the certificate under a live config is still refused.
+    expect((await patch({ ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBswap\n-----END CERTIFICATE-----' })).status()).toBe(403);
+    expect((await row()).ssoCertificate).toContain('MIIBoperator');
+    expect((await patch({ ssoEnabled: false })).ok()).toBeTruthy();
+    expect((await patch({ ssoProvider: '', ssoIssuer: '', ssoEntryPoint: '', ssoCertificate: '' })).ok()).toBeTruthy();
+    const cleared = await row();
+    expect(cleared.ssoEnabled).toBe(false);
+    expect(cleared.ssoCertificate).toBeNull();
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 test('a tenant admin can only reach their own organization', async ({ page }) => {
   const tag = Date.now();
   const ownSlug = `e2e-own-${tag}`;
