@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { AffiliatePaymentError } from '@/lib/affiliatePaymentPlan';
@@ -43,6 +44,8 @@ export async function GET() {
   const session = await requireAdminOrg();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const orgId = session.user.orgId as string;
+  const refusal = await requireCapability(orgId, 'affiliate');
+  if (refusal) return refusal;
 
   return withTenantScope(session, async () => {
     const [partners, payments] = await Promise.all([
@@ -75,6 +78,8 @@ export async function POST(request: Request) {
   const session = await requireAdminOrg();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const orgId = session.user.orgId as string;
+  const refusal = await requireCapability(orgId, 'affiliate');
+  if (refusal) return refusal;
 
   const parsed = recordSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

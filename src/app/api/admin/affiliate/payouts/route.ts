@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const orgId = session.user.orgId;
+  const refusal = await requireCapability(orgId, 'affiliate');
+  if (refusal) return refusal;
 
   const parsed = payoutSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

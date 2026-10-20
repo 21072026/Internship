@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { open, seal } from '@/lib/secretBox';
@@ -32,6 +33,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
+  const refusal = await requireCapability(session.user.orgId, 'affiliate');
+  if (refusal) return refusal;
 
   return withTenantScope(session, async () => {
     const partner = await prisma.affiliatePartner.findFirst({
@@ -52,6 +55,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
+  const refusal = await requireCapability(session.user.orgId, 'affiliate');
+  if (refusal) return refusal;
 
   const parsed = putSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
