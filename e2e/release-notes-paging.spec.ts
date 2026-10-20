@@ -16,7 +16,15 @@ test('release notes load one page at a time', async ({ page }) => {
   await expect(page.getByTestId('release-notes-count')).toContainText('40');
 });
 
+// The scroll used to be queued with requestAnimationFrame when the fetch
+// resolved, which on a busy machine ran before React committed the appended
+// cards: the card loaded but the page never moved (#2750, red on CI only). The
+// CPU throttle makes that ordering the normal case here — 8/8 red before the
+// fix — so this guards the race rather than hoping to hit it.
 test('a permalink past the first page loads down to its card', async ({ page, request }) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+
   const res = await request.get('/release-notes/entries?offset=60&limit=1');
   expect(res.status()).toBe(200);
   const { entries } = (await res.json()) as { entries: { version: string }[] };

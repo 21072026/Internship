@@ -250,6 +250,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Skill',
   'SkillAlias',
   'SkillEdge',
+  // The backfill's review queue (#1819): one org's unresolved terms.
+  'UnmappedSkillTerm',
   'StageSla',
   'PipelineStage',
   // The per-tenant competency framework (#822) — the questions a tenant decided

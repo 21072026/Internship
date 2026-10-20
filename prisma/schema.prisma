@@ -194,6 +194,7 @@ model Organization {
   skills                  Skill[]
   skillAliases            SkillAlias[]
   skillEdges              SkillEdge[]
+  unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
@@ -431,6 +432,33 @@ model RequisitionSkill {
 
   @@unique([requisitionId, skillId])
   @@index([skillId])
+}
+
+// A free-text skill the backfill (#1819) could not resolve onto the org's
+// vocabulary — parked for an admin instead of guessed or dropped. One row per
+// org × folded term; `occurrences` is recomputed absolutely on every run
+// (people holding it + requisitions asking for it), so a re-run is a no-op.
+// The admin's decision (PROMOTED to a new skill, ALIASED onto an existing one,
+// DISCARDED) is never overwritten by the backfill.
+model UnmappedSkillTerm {
+  id              String    @id @default(cuid())
+  orgId           String
+  // `skillKey()` fold of the term — what makes "Yazılım" and "yazilim" one row.
+  normalizedKey   String    @db.VarChar(64)
+  // The spelling seen most often, for display.
+  term            String    @db.VarChar(60)
+  occurrences     Int       @default(0)
+  firstSeenAt     DateTime  @default(now())
+  // PENDING | PROMOTED | ALIASED | DISCARDED
+  resolution      String    @default("PENDING") @db.VarChar(16)
+  resolvedSkillId String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, normalizedKey])
+  @@index([orgId, resolution, occurrences])
 }
 
 model StageSla {
