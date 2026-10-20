@@ -4880,6 +4880,7 @@ const en = {
   },
   apiExplorer: {
     title: 'API explorer',
+    superAdminOnly: 'The API explorer describes every endpoint of the whole deployment, so it is open to the platform operator (a super admin) only. Your organization\'s integrations use the public API: see the API documentation.',
     subtitle: 'Browse and call every endpoint in this instance, signed in as yourself',
     warning: 'This page documents the complete internal surface — admin, cron and webhook endpoints included — and “Try it out” sends real requests against this environment. Some operations are destructive and there is no undo.',
     tryItGateNote: 'Destructive operations — and every DELETE, whether the document flags it or not — ask you to confirm before the request is sent. Declining cancels it: nothing leaves the browser.',
@@ -12711,6 +12712,7 @@ const tr: Dict = {
   },
   apiExplorer: {
     title: 'API gezgini',
+    superAdminOnly: 'API gezgini tüm kurulumun her uç noktasını tarif eder, bu yüzden yalnızca platform operatörüne (süper admin) açıktır. Kurumunuzun entegrasyonları herkese açık API\'yi kullanır: API belgelerine bakın.',
     subtitle: 'Bu kurulumdaki tüm uç noktaları kendi hesabınla gez ve çağır',
     warning: 'Bu sayfa iç yüzeyin tamamını belgeler — yönetim, cron ve webhook uç noktaları dahil — ve “Try it out” bu ortama gerçek istek gönderir. Bazı işlemler geri alınamaz.',
     tryItGateNote: 'Yıkıcı işlemler — ve belge işaretlemiş olsun ya da olmasın her DELETE — istek gönderilmeden önce onay ister. Vazgeçersen istek iptal edilir: tarayıcıdan hiçbir şey çıkmaz.',
@@ -20495,6 +20497,7 @@ const de: Dict = {
   },
   apiExplorer: {
     title: 'API-Explorer',
+    superAdminOnly: 'Der API-Explorer beschreibt jeden Endpunkt der gesamten Installation und ist deshalb nur für den Plattformbetreiber (einen Super-Admin) zugänglich. Die Integrationen Ihrer Organisation nutzen die öffentliche API: siehe API-Dokumentation.',
     subtitle: 'Alle Endpunkte dieser Instanz durchsuchen und als du selbst aufrufen',
     warning: 'Diese Seite dokumentiert die komplette interne Oberfläche — inklusive Admin-, Cron- und Webhook-Endpunkten — und „Try it out“ sendet echte Anfragen an diese Umgebung. Manche Operationen sind nicht rückgängig zu machen.',
     tryItGateNote: 'Destruktive Operationen — und jedes DELETE, ob das Dokument es markiert oder nicht — fragen vor dem Senden nach einer Bestätigung. Wer abbricht, verhindert die Anfrage: es verlässt nichts den Browser.',
