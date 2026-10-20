@@ -232,7 +232,8 @@ marketing names redirect there, and their apex now serves **mail only**.
 
 - **Schema first**: change `prisma/schema.prisma`, run `prisma format && prisma validate &&
   prisma generate`. This project uses **`db push`**, there is **no `migrations/` folder** — do
-  not author SQL migrations.
+  not author SQL migrations. Expand/contract, rollback, a half-applied push and the
+  dangerous-change list: [`docs/migrations.md`](docs/migrations.md).
 - **"Additive" is not the same as "appliable"** (#2298): `db push` outright *refuses* — not
   warns, and `--accept-data-loss` does not cover it — a new **required** column whose default
   is client-side (`@default(cuid()/uuid()/nanoid())`) or absent, and any `@id`/`@@id` change,
