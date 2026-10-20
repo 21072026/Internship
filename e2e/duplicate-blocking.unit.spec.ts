@@ -12,6 +12,7 @@ import { test, expect } from '@playwright/test';
 import {
   DUPLICATE_SCORE_THRESHOLD,
   findDuplicatePairs,
+  findDuplicatePairsYielding,
   matchSignals,
   scoreSignals,
 } from '@/lib/duplicateDetection';
@@ -63,7 +64,7 @@ function typo(name: string, r: () => number): string {
   return name.slice(0, i) + 'q' + name.slice(i + 1); // substitute
 }
 
-function population(n: number, seed: number): CandidateRecord[] {
+function population(n: number, seed: number, unis: (string | null)[] = UNIS): CandidateRecord[] {
   const r = rng(seed);
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)];
   const phones = Array.from({ length: Math.max(3, Math.floor(n / 6)) }, (_, k) => `0555 ${String(1000000 + k)}`);
@@ -85,7 +86,7 @@ function population(n: number, seed: number): CandidateRecord[] {
       email: r() < 0.5 ? email.toUpperCase() : email,
       phone: r() < 0.4 ? pick(phones) : null,
       whatsapp: r() < 0.2 ? `+90${pick(phones).replace(/\D/g, '').slice(1)}` : null,
-      university: pick(UNIS),
+      university: pick(unis),
       createdAt: new Date(2026, 0, 1 + k),
       isActive: true,
     });
@@ -150,4 +151,51 @@ test('at scale: identical at 1 500 mentees, and 5 000 blocked in well under a se
   // The acceptance bar in the issue is the whole request under 1 s. This
   // population is deliberately collision-heavy (80 names, 6 universities).
   expect(t4 - t3).toBeLessThan(1000);
+});
+
+// An org that serves ONE university puts every mentee in one `uni:` bucket.
+// Blocking that bucket by name length alone still compared most of it — 12 s
+// at 5 000 mentees, 46 s at 10 000 — so the fuzzy door is blocked again on the
+// name key's deletion neighbourhood. Same result, pinned against all pairs.
+test('one university: identical to all pairs, and 5 000 mentees still well under a second', () => {
+  test.setTimeout(120_000);
+  for (let seed = 1; seed <= 20; seed++) {
+    const users = population(60 + seed * 15, seed, ['ODTÜ', 'odtu']);
+    expect(ids(findDuplicatePairs(users, Number.MAX_SAFE_INTEGER)), `seed ${seed}`).toEqual(
+      ids(allPairs(users, Number.MAX_SAFE_INTEGER)),
+    );
+  }
+  const mid = population(1500, 99, ['ODTÜ']);
+  expect(ids(findDuplicatePairs(mid))).toEqual(ids(allPairs(mid)));
+
+  const big = population(5000, 4242, ['ODTÜ']);
+  const t0 = performance.now();
+  findDuplicatePairs(big);
+  const ms = performance.now() - t0;
+  console.log(`[#1436] 5000 mentees, one university: ${Math.round(ms)} ms`);
+  expect(ms).toBeLessThan(1000);
+});
+
+// The request path awaits the yielding variant: it must give the same answer
+// and must not hold the event loop for the length of the scan — a timer due
+// every 20 ms has to keep firing while it runs (#1436: /api/health 2 930 ms).
+test('the yielding scan returns the same pairs and keeps the event loop responsive', async () => {
+  test.setTimeout(120_000);
+  const users = population(5000, 777, ['ODTÜ', ...UNIS]);
+  const expected = ids(findDuplicatePairs(users));
+
+  let last = performance.now();
+  let worstGap = 0;
+  const timer = setInterval(() => {
+    const now = performance.now();
+    worstGap = Math.max(worstGap, now - last);
+    last = now;
+  }, 20);
+  try {
+    expect(ids(await findDuplicatePairsYielding(users))).toEqual(expected);
+  } finally {
+    clearInterval(timer);
+  }
+  console.log(`[#1436] longest event-loop stall during the yielding scan: ${Math.round(worstGap)} ms`);
+  expect(worstGap).toBeLessThan(100);
 });
