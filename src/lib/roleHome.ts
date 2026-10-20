@@ -4,5 +4,8 @@ export function roleHome(role?: string | null): string {
   if (role === 'MENTOR') return '/mentor';
   if (role === 'COMPANY') return '/company';
   if (role === 'SOURCE') return '/source';
+  // Named explicitly: the fallback below is the mentee portal, and an affiliate
+  // must never land there.
+  if (role === 'AFFILIATE') return '/affiliate';
   return '/portal';
 }

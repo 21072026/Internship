@@ -158,6 +158,11 @@ export async function POST(request: Request) {
       if (invitation.email && invitation.email.toLowerCase() !== email.toLowerCase()) {
         return NextResponse.json({ error: 'Email does not match the invitation' }, { status: 400 });
       }
+      // Affiliate partners are created by the programme's own writer, never by an
+      // invitation: refuse here rather than widen this route's role union.
+      if (invitation.role === 'AFFILIATE') {
+        return NextResponse.json({ error: 'This invitation cannot create an account' }, { status: 400 });
+      }
       invitationEmail = invitation.email;
       role = invitation.role;
       referredById = invitation.invitedById;

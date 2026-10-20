@@ -5,7 +5,7 @@ import {
   type NotificationRole,
 } from '@/lib/notificationLink';
 
-const roles = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const satisfies readonly NotificationRole[];
+const roles = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE'] as const satisfies readonly NotificationRole[];
 const kinds = ['relation', 'thread', 'mentee', 'support', 'project', 'dashboard'] as const satisfies readonly LinkKind[];
 const ids = { relationId: 'rel_1', menteeId: 'mentee_1', projectId: 'project_1' };
 
@@ -29,6 +29,10 @@ const expected = {
   SOURCE: {
     relation: '/source', thread: '/messages/rel_1', mentee: '/source',
     support: '/messages/support', project: '/projects/project_1', dashboard: '/source',
+  },
+  AFFILIATE: {
+    relation: '/affiliate', thread: '/messages/rel_1', mentee: '/affiliate',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/affiliate',
   },
 } as const satisfies Record<NotificationRole, Record<LinkKind, string>>;
 

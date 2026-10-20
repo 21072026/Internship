@@ -21,6 +21,7 @@ enum Role {
   MENTEE
   COMPANY
   SOURCE
+  AFFILIATE
 }
 
 enum MentorshipStatus {

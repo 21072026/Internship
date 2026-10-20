@@ -6,7 +6,7 @@ import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { TwoFactorSetupGate } from '@/components/TwoFactorSetupGate';
 
-const HOME: Record<string, string> = { ADMIN: '/admin', MENTOR: '/mentor', MENTEE: '/portal', COMPANY: '/company', SOURCE: '/source' };
+const HOME: Record<string, string> = { ADMIN: '/admin', MENTOR: '/mentor', MENTEE: '/portal', COMPANY: '/company', SOURCE: '/source', AFFILIATE: '/affiliate' };
 
 // The 2FA enforcement gate. Reached only when the org policy requires 2FA for
 // the user's role and they haven't enabled it. Lives outside the role layouts so
