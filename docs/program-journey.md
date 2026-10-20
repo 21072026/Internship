@@ -57,3 +57,20 @@ deleted — the runs they produced stay readable).
   dates, no tenant, so a clone (#1641/#1643) is a data copy.
 - **Unpublish** clears `publishedAt`: the sweep stops picking the step; runs already
   recorded are untouched.
+
+## The participant view (#1855)
+
+`GET /api/journey?relationId=` → `JourneyView` (`src/components/JourneyView.tsx`), mounted
+on `/portal/journey` and `/mentor/mentees/[id]` (above the relation timeline, which is the
+backward-looking record — the journey does not repeat it).
+
+- **One list for the pair.** The onboarding checklist (`loadOnboardingState()`) is its first
+  milestone ("Getting started"); the programme's steps follow. Both seats get the same rows
+  and the same dates.
+- **Groups** come from `participantGroup()`: `due` → now; `upcoming`/`waiting` → next;
+  `delivered`/`skipped`/`would_skip`/`claimed` → done. Drafts, archived, `missed` and
+  `unresolved` steps are not shown to the pair.
+- **Evidence, not a nag.** A satisfied step carries `{ condition, at }` from
+  `satisfactionEvidence()` — when the meeting, goal, message or interaction first happened.
+- **Authorization** by relation membership: the mentor, the mentee, or an ADMIN of the
+  relation's tenant. Another relation of the tenant is 403; another tenant's is 404.

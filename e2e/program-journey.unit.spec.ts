@@ -6,6 +6,8 @@ import {
   isSafeContentUrl,
   journeyStepStatus,
   journeyTemplate,
+  participantGroup,
+  satisfiedCondition,
   readStepPayload,
   recipientsFor,
   resolveDueAt,
@@ -84,4 +86,15 @@ test('the preview status says what the sweep would do; a template is a plain dat
   ]);
   expect(tpl).toEqual([{ order: 0, milestone: 'Month 1', anchor: 'RELATION_START', offsetDays: 7, audience: 'MENTEE', action: 'ASSIGN_TODO', payload: { skipIf: 'goal_exists' }, title: 'First goal', translations: { de: 'Erstes Ziel' } }]);
   expect(JSON.parse(JSON.stringify(tpl))).toEqual(tpl);
+});
+
+test('the participant sees now / next / done — never a draft, a missed or an unschedulable step', async () => {
+  expect(participantGroup('due')).toBe('now');
+  expect(participantGroup('upcoming')).toBe('next');
+  expect(participantGroup('waiting')).toBe('next');
+  for (const s of ['delivered', 'skipped', 'would_skip', 'claimed'] as const) expect(participantGroup(s)).toBe('done');
+  for (const s of ['draft', 'archived', 'missed', 'unresolved'] as const) expect(participantGroup(s)).toBeNull();
+  expect(satisfiedCondition('satisfied:meeting_exists')).toBe('meeting_exists');
+  expect(satisfiedCondition('satisfied:nope')).toBeNull();
+  expect(satisfiedCondition(null)).toBeNull();
 });
