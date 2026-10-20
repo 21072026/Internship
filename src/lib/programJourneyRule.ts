@@ -180,3 +180,100 @@ export function stepTitle(step: { title: string; translations?: unknown }, local
 export function notificationTypeFor(action: JourneyAction): string {
   return `programStep.${action === 'NUDGE' ? 'nudge' : action === 'ASSIGN_TODO' ? 'todo' : action === 'PUBLISH_CONTENT' ? 'content' : action === 'SUGGEST_AGENDA' ? 'agenda' : 'groupSession'}`;
 }
+
+// ── Preview and export (#1853) ───────────────────────────────────────────────
+
+/**
+ * Where one step stands for one relation — the journey builder's dry-run
+ * preview and the participant view (#1855) both read this, so the timeline an
+ * admin previews is the one the sweep keeps.
+ */
+export type StepStatus =
+  | 'delivered'   // a run was delivered
+  | 'skipped'     // a run was recorded as satisfied
+  | 'claimed'     // a run row without a confirmed outcome (at-most-once)
+  | 'due'         // the next sweep delivers it
+  | 'would_skip'  // the next sweep records it as satisfied
+  | 'upcoming'    // its date is still ahead
+  | 'missed'      // its date fell before the lookback window; never delivered
+  | 'waiting'     // its anchor has not happened yet (a stage not entered)
+  | 'unresolved'  // the org cannot schedule it at all
+  | 'draft'       // not published
+  | 'archived';
+
+export interface StepTimelineEntry {
+  status: StepStatus;
+  dueAt: Date | null;
+  reason: string | null;
+}
+
+export function journeyStepStatus(
+  step: { anchor: string; offsetDays: number; payload?: unknown; publishedAt: Date | null; archivedAt: Date | null; action: string },
+  run: { deliveredAt: Date | null; skippedReason: string | null; dueAt: Date } | null,
+  facts: AnchorFacts,
+  stageKeys: ReadonlySet<string>,
+  satisfaction: SatisfactionFacts,
+  now: Date,
+): StepTimelineEntry {
+  if (run) {
+    if (run.deliveredAt) return { status: 'delivered', dueAt: run.dueAt, reason: null };
+    if (run.skippedReason) return { status: 'skipped', dueAt: run.dueAt, reason: run.skippedReason };
+    return { status: 'claimed', dueAt: run.dueAt, reason: null };
+  }
+  const unresolvable = stepUnresolvable(step, stageKeys);
+  if (unresolvable) return { status: 'unresolved', dueAt: null, reason: unresolvable };
+  const due = resolveDueAt(step, facts, stageKeys);
+  const dueAt = due.kind === 'due' ? due.dueAt : null;
+  if (step.archivedAt) return { status: 'archived', dueAt, reason: null };
+  if (!step.publishedAt || !isLiveStep(step, now)) return { status: 'draft', dueAt, reason: null };
+  if (due.kind !== 'due') return { status: 'waiting', dueAt: null, reason: due.reason };
+  if (due.dueAt.getTime() > now.getTime()) return { status: 'upcoming', dueAt, reason: null };
+  if (!isDeliverable(due.dueAt, now)) return { status: 'missed', dueAt, reason: null };
+  const skip = satisfiedReason(step, satisfaction);
+  return skip ? { status: 'would_skip', dueAt, reason: skip } : { status: 'due', dueAt, reason: null };
+}
+
+/** One step as a template carries it: no ids, no dates, no tenant — a clone is a data copy (#1641/#1643). */
+export interface JourneyTemplateStep {
+  order: number;
+  milestone: string | null;
+  anchor: JourneyAnchor;
+  offsetDays: number;
+  audience: JourneyAudience;
+  action: JourneyAction;
+  payload: StepPayload;
+  title: string;
+  translations: Partial<Record<'en' | 'tr' | 'de', string>>;
+}
+
+export function journeyTemplate(
+  steps: { order: number; milestone?: string | null; anchor: string; offsetDays: number; audience: string; action: string; payload?: unknown; title: string; translations?: unknown; archivedAt?: Date | null }[],
+): JourneyTemplateStep[] {
+  const out: JourneyTemplateStep[] = [];
+  for (const s of [...steps].sort((a, b) => a.order - b.order)) {
+    if (s.archivedAt || !isJourneyAnchor(s.anchor) || !isJourneyAudience(s.audience) || !isJourneyAction(s.action)) continue;
+    out.push({
+      order: out.length,
+      milestone: s.milestone ?? null,
+      anchor: s.anchor,
+      offsetDays: s.offsetDays,
+      audience: s.audience,
+      action: s.action,
+      payload: readStepPayload(s.payload),
+      title: s.title,
+      translations: readStepTranslations(s.translations),
+    });
+  }
+  return out;
+}
+
+/** The per-locale titles as stored, narrowed to en/tr/de non-empty strings. */
+export function readStepTranslations(value: unknown): Partial<Record<'en' | 'tr' | 'de', string>> {
+  const out: Partial<Record<'en' | 'tr' | 'de', string>> = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const l of ['en', 'tr', 'de'] as const) {
+    const v = (value as Record<string, unknown>)[l];
+    if (typeof v === 'string' && v.trim()) out[l] = v.trim();
+  }
+  return out;
+}
