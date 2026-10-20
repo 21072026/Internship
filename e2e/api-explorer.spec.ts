@@ -45,6 +45,22 @@ test('the API description is not readable without an admin session', { tag: '@sm
     await cleanupByEmail(email);
   }
 
+  // A tenant ADMIN is refused too (#1575): the document maps the whole
+  // deployment, so it is the operator's — and the page says so instead of
+  // rendering the explorer.
+  const adminEmail = uniqueEmail('apiexp-tenant-admin');
+  await seedUser(adminEmail, pw, 'ADMIN', 'API Explorer Tenant Admin');
+  try {
+    await login(page, adminEmail, pw);
+    const asTenantAdmin = await page.request.get('/api/admin/openapi');
+    expect(asTenantAdmin.status()).toBe(403);
+    expect((await asTenantAdmin.json()).code).toBe('super_admin_only');
+    await page.goto('/admin/api-explorer');
+    await expect(page.getByTestId('api-explorer-super-admin-only')).toBeVisible();
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+
   // The PUBLIC spec is deliberately still public — this feature must not have
   // taken the documented integrator surface away.
   const pub = await page.request.get('/api/v1/openapi.json');
@@ -55,7 +71,9 @@ test('the API description is not readable without an admin session', { tag: '@sm
 test('an admin gets a description covering both the public and the internal surface', async ({ page }) => {
   const email = uniqueEmail('apiexp-admin');
   const pw = 'ApiExpPass123!';
-  await seedUser(email, pw, 'ADMIN', 'API Explorer Admin');
+  const superAdmin = await seedUser(email, pw, 'ADMIN', 'API Explorer Admin');
+  // The explorer is the operator's (#1575): a super admin.
+  await prisma.user.update({ where: { id: superAdmin.id }, data: { isSuperAdmin: true } });
   try {
     await login(page, email, pw);
 
@@ -96,6 +114,7 @@ test('Swagger UI renders the operations and the token button pre-authorizes it',
   const email = uniqueEmail('apiexp-ui');
   const pw = 'ApiExpPass123!';
   const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer UI Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
   // A key minted for an org-less admin is refused by withApiKey() ("not bound
   // to an organization", #1546) — real accounts always get an org at
   // registration (defaultOrgId(), see src/lib/defaultOrg.ts), but seedUser()
@@ -204,6 +223,7 @@ test('a guarded operation asks before it fires, and declining sends nothing', as
   const email = uniqueEmail('apiexp-gate');
   const pw = 'ApiExpPass123!';
   const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer Gate Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
 
   // The gate's only real claim is "declining means the request never left the
   // browser", so watch the wire rather than the widget.
@@ -287,6 +307,7 @@ test('a failed spec load is recoverable without reloading the page', async ({ pa
   const email = uniqueEmail('apiexp-retry');
   const pw = 'ApiExpPass123!';
   const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer Retry Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
   // The mint button creates a real credential even on the sad path, so track it
   // by id and clean it up the same way the rendering test does.
   const mintedIds: string[] = [];

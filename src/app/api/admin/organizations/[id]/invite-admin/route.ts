@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { superAdminReaches } from '@/lib/superAdminWorld';
@@ -120,12 +120,11 @@ async function handlePost(request: Request, params: Promise<{ id: string }>) {
     // `invite.created` (written by createInvitation) already records the
     // invitation itself; this row records the cross-tenant act against the org.
     // No address in the detail — the invitation row it names carries it.
-    await logActivity({
+    await recordOrgWrite({
+      orgId: org.id,
       action: 'organization.admin_invited',
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
-      targetType: 'organization',
-      targetId: org.id,
       detail: `ADMIN · ${email ? 'email' : 'link'} · invitation ${invitationId}`,
       request,
     });

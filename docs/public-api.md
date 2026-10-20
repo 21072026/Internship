@@ -98,6 +98,40 @@ Query-parameter problems stay `400` with `fields[]`; body problems are `422` wit
 **Demo:** the demo instance refuses `/api/admin/api-keys` (`src/lib/demoMode.ts`),
 so no key can exist there and the write API is unreachable — no entry of its own.
 
+## Write endpoints (#1996)
+
+| Operation | Scope | Domain path | Domain refusals |
+|---|---|---|---|
+| `POST /candidates` | `candidates:write` | `prisma.user.create` as MENTEE in the key's org, password nobody knows (claimed by reset) — like the CSV import | `409 duplicate_candidate` (`matches[]`): e-mail in use in this world (id only if in the key's org); a look-alike by `findPossibleDuplicates` unless `allowPossibleDuplicate: true` |
+| `PATCH /candidates/{id}` | `candidates:write` | `planFieldUpdates(…, { authoritative: true })` (`src/lib/externalSyncPolicy.ts`) — a blank value is no opinion | `.strict()`: `role`, `orgId`, `email`, credentials → `422 unrecognized_keys` |
+| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_conflict` (moved meanwhile) |
+| `POST /interactions` | `interactions:write` | `createInteraction()` (`src/lib/interactionWrite.ts`), shared with `POST /api/interactions` — one `interaction.logged` | `404` for another org's relationship |
+
+The free-core rule holds: the scopes gate *programmatic* access only; a mentor
+logging the same interaction in the app never meets a gate. The queued bulk
+import is #3015.
+
+## Connector handshake and REST hooks (#2002)
+
+- **`GET /me`** — the one route any live key may call (`withApiKey(request,
+  ANY_LIVE_KEY, …)`; `check:api-key-routes` allows it only for the files in
+  `ANY_SCOPE_ROUTES`). It answers the key's id, org, scopes, expiry, minute
+  window and period quota — no user or candidate data. Plan gating still applies.
+- **`POST /hooks`** `{ targetUrl, event }` → `201 { data: { id, …, secret } }`
+  (scope `hooks:write`, on the write floor). Same SSRF guard as the admin form
+  (`422 unreachable_target`), at most `MAX_HOOKS_PER_KEY` (25) per key
+  (`409 limit_reached`), the secret returned once.
+- **`GET /hooks`** — the calling key's own subscriptions, no secrets.
+- **`DELETE /hooks/{id}`** — ownership is in the delete's own `where`
+  (`apiKeyId` AND `orgId`); any other id (another key's, an admin's, another
+  org's) is the same `404`.
+
+`Webhook.apiKeyId` / `source` are nullable and additive; admin-created rows keep
+`null`. Delivery uses `liveSubscriptionsWhere()` (`src/lib/webhooks.ts`): a
+key-owned subscription stops receiving the moment its key is revoked or expires.
+`/api/v1/hooks` is on the demo blocklist for the same reason as
+`/api/admin/webhooks`.
+
 ## Deprecations
 
 | What | Since | Removed on |

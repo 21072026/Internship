@@ -18,6 +18,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { JourneyView } from '@/components/JourneyView';
 import { AgendaPanel } from '@/components/AgendaPanel';
 import { SessionNotePanel } from '@/components/SessionNotePanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
@@ -624,6 +625,10 @@ export default function MenteeDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* The programme journey (#1855) — forward-looking, onboarding as its
+              first milestone; the timeline right below is the record behind it. */}
+          <JourneyView relationId={id} />
 
           {/* The merged history (#1702) — the handover artefact when a mentor
               changes, right under the interaction log it summarizes. */}
