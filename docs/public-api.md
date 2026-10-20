@@ -1,0 +1,129 @@
+# The public API (`/api/v1`)
+
+The key-authenticated, read-mostly API integrators build on (epic #1977). The
+machine-readable description is `GET /api/v1/openapi.json`; this page is the
+contract behind it and the rules for adding to it.
+
+## The door
+
+Every `/api/v1` route goes through `withApiKey(request, scope, handler)`
+(`src/lib/apiKey.ts`, #1546): rate limit → key → scope → organisation binding →
+plan (`INTEGRATIONS_API`) → period quota, then the handler runs inside the
+key's tenant context. `npm run check:api-key-routes` fails a route that skips it,
+asks for an unknown scope, or is missing from the OpenAPI document. A handler
+still scopes its own query by `key.orgId` — a cross-tenant read must not wait
+for `MT_ENFORCE_ISOLATION`.
+
+## The contract (#1988, `src/lib/api/v1.ts`)
+
+One module, so the eighth endpoint does not invent its own shape.
+
+| Piece | Helper | Rule |
+|---|---|---|
+| List envelope | `apiOk(data, page)` | `{ data, page: { nextCursor, hasMore } }`; a single resource is `{ data }` |
+| Errors | `apiError(status, type, title, detail?, extra?)` | RFC 9457, `application/problem+json`, a stable `type` slug from `API_ERROR_TYPES`; clients switch on `type`, never on `title`/`detail`. `error` repeats the message for pre-#1988 clients |
+| Query | `parseListQuery(request, resource)` | `limit` (default 50, **clamped** to 200), `cursor`, `updatedSince` (strict ISO-8601 with a zone, inclusive) |
+| Cursor | `encodeCursor` / `decodeCursor` | opaque base64url of `(updatedAt, id)` + an HMAC that also binds the resource |
+| Keyset | `keysetWhere(query)`, `KEYSET_ORDER`, `paginate(resource, rows, limit)` | ascending `(updatedAt, id)`, fetch `limit + 1` |
+
+Error types: `invalid_api_key` (401 — unknown, expired and revoked look the
+same on purpose), `insufficient_scope`, `org_unbound`, `feature_locked` (403),
+`rate_limited`, `quota_exceeded` (429, with `Retry-After`), `validation_failed`
+(400, with `fields[]`), `not_found` (404).
+
+Three rules are load-bearing:
+
+- **A bad cursor is a 400, never page one.** A tampered cursor, a cursor that
+  is not one, and a cursor minted by another list are all `validation_failed`.
+  Falling back to the first page would hand a broken client the whole set again
+  while looking healthy (the #831 "allowlist by omission" lesson).
+- **The walk is ascending.** A row edited while a client pages moves to the end
+  of the walk and is met again, rather than slipping behind the cursor. Clients
+  dedupe on `id`.
+- **Every paged model has the index.** A resource paged by `(updatedAt, id)`
+  carries `@@index([orgId, updatedAt, id])` (additive only, never a re-key).
+
+## Resources (#1990)
+
+| Path | Scope | Tenant anchor | Filters |
+|---|---|---|---|
+| `/candidates` | `candidates:read` | `User.orgId` | — |
+| `/relationships` | `relationships:read` | `MentorshipRelation.orgId` | `status`, `stage`, `mentorId`, `companyId` |
+| `/interactions` | `interactions:read` (+ `interactions:read_notes` for the note body) | the relationship's org | `relationId` |
+| `/meetings` | `meetings:read` | the relationship's or project's org | — |
+| `/companies` | `companies:read` | `Company.orgId` | — |
+| `/requisitions` | `hiring:read` | `Requisition.orgId` | `status`, `companyId` |
+| `/offers` | `hiring:read` | the relationship's org (`Offer.orgId` is nullable) | `relationId`, `companyId` |
+| `/interview-requests` | `hiring:read` | `InterviewRequest.orgId` | `requisitionId`, `companyId` |
+
+Every list has a `/{id}` twin returning the same object (`src/lib/api/v1Resources.ts`
+holds the one `select` + serializer per resource); another org's id is a `404
+not_found`, exactly like a missing one. Filters go through `parseFilters()` — an
+unknown value is a `400`, never an empty page.
+
+**The PII line:** no resource carries an e-mail address or phone number; an
+interaction's note body is returned only to a key that also holds
+`interactions:read_notes`; an offer never carries compensation; a meeting's
+external guests are a count, never names. A meeting with neither a relationship
+nor a project (a group-conversation call) has no org anchor and is not exposed.
+
+`updatedAt` on `MentorshipRelation`, `InteractionLog`, `Meeting` and
+`Requisition` was added for the keyset (#1990) with `@default(now())`, so
+existing rows start at the deploy instant. It is stamped by Prisma; a raw SQL
+`UPDATE` does not move it.
+
+The async bulk export is #3002.
+## Writes (#1994, `src/lib/api/v1Write.ts`)
+
+A write route is `withApiKey(request, '<resource>:write', (key) => apiWrite(request, key, schema, handler))`.
+`withApiKey` stays the one door (the static guards look for it); `apiWrite` adds:
+
+| Step | Rule |
+|---|---|
+| Write bucket | 30 writes a minute per key (`WRITE_RATE_LIMIT`), on top of the shared 120/min window → `429 rate_limited` |
+| Body | JSON, ≤ 64 KB, the route's zod schema → `422 validation_failed` with `errors: [{ path, code, message }]` |
+| `Idempotency-Key` | optional, 1–200 printable ASCII. Same key + same request → the stored 2xx replayed with `Idempotent-Replayed: true`, handler not run. Same key + different request → `409 idempotency_key_reused`. Still running → `409 idempotency_in_progress` + `Retry-After` |
+| Record | every 2xx leaves a `logActivity` row whose detail names `api key <id>`; the handler names the action and target with `writeOk(response, { action, targetType, targetId })` |
+
+Only successes are remembered (`ApiIdempotencyKey`, a tenant model): a refused
+or failed write frees its key, so a caller that fixes its body can retry with
+it. Rows are replayed for 24 hours and swept nightly at 03:40 (the count is
+logged every night). A stored body over 32 KB is replayed as its status alone.
+Domain events are emitted by the domain writer the handler calls, never by
+`apiWrite`, so an API write and a UI write of the same thing emit the same event.
+
+Query-parameter problems stay `400` with `fields[]`; body problems are `422` with
+`errors[]`.
+
+**Demo:** the demo instance refuses `/api/admin/api-keys` (`src/lib/demoMode.ts`),
+so no key can exist there and the write API is unreachable — no entry of its own.
+
+## Write endpoints (#1996)
+
+| Operation | Scope | Domain path | Domain refusals |
+|---|---|---|---|
+| `POST /candidates` | `candidates:write` | `prisma.user.create` as MENTEE in the key's org, password nobody knows (claimed by reset) — like the CSV import | `409 duplicate_candidate` (`matches[]`): e-mail in use in this world (id only if in the key's org); a look-alike by `findPossibleDuplicates` unless `allowPossibleDuplicate: true` |
+| `PATCH /candidates/{id}` | `candidates:write` | `planFieldUpdates(…, { authoritative: true })` (`src/lib/externalSyncPolicy.ts`) — a blank value is no opinion | `.strict()`: `role`, `orgId`, `email`, credentials → `422 unrecognized_keys` |
+| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_conflict` (moved meanwhile) |
+| `POST /interactions` | `interactions:write` | `createInteraction()` (`src/lib/interactionWrite.ts`), shared with `POST /api/interactions` — one `interaction.logged` | `404` for another org's relationship |
+
+The free-core rule holds: the scopes gate *programmatic* access only; a mentor
+logging the same interaction in the app never meets a gate. The queued bulk
+import is #3015.
+
+## Deprecations
+
+| What | Since | Removed on |
+|---|---|---|
+| `candidates` key on `GET /api/v1/candidates` (alias of `data`) | #1988 | 2027-01-31 |
+
+## Adding an endpoint
+
+1. A scope in `API_SCOPES` with its `SCOPE_ENTITLEMENT` entry (`src/lib/apiScopes.ts`).
+2. The route: `withApiKey` → `parseListQuery` → a query filtered by `key.orgId`
+   and `keysetWhere` → `paginate` → `apiOk`. No raw `NextResponse.json` for an
+   error.
+3. The path in `src/app/api/v1/openapi.json/route.ts`, reusing the
+   `Limit`/`Cursor`/`UpdatedSince` parameters and the shared error responses.
+4. An e2e spec; a security boundary (scope, tenant) is tagged `@smoke`.
+5. Never add `/api/v1/*` to a k6 scenario (rate-limited, one shared runner IP).

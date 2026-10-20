@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Org-defined segmentation attributes (#1920, part 1):** new tenant models `OrgAttribute` (key, EN/TR/DE labels, `SELECT|TEXT|DATE|NUMBER`, options, segmentable, order; `@@unique([orgId, key])`) and `UserAttributeValue` (`@@unique([userId, attributeId])`, `@@index([orgId, attributeId, value])`), both in `TENANT_MODELS`. `/admin/attributes` + `/api/admin/attributes` define, relabel, reorder and delete them with per-attribute value counts (two queries); deleting one a saved view or report subscription slices by answers `409 referenced` and, confirmed, degrades those to the unsliced report in the same transaction. Rules are pure in `src/lib/orgAttributesRule.ts` (value normalisation per type, derived tenure buckets). No presets — none for special-category data; `docs/analytics.md` records why, plus the DEI and participant-retention deferrals.",
+  "notes": {
+    "en": ["Admins can define their own attributes — such as department, level, location or start date — in three languages, as the dimensions reports will be sliced by."],
+    "tr": ["Yöneticiler bölüm, seviye, konum veya başlangıç tarihi gibi kendi özniteliklerini üç dilde tanımlayabilir; raporlar bu boyutlara göre kırılacak."],
+    "de": ["Admins können eigene Attribute wie Abteilung, Ebene, Standort oder Eintrittsdatum in drei Sprachen anlegen — die Dimensionen, nach denen Berichte aufgeschlüsselt werden."]
+  }
+}
