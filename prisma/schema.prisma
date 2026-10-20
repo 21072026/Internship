@@ -183,6 +183,7 @@ model Organization {
   users                   User[]
   sources                 Source[]
   cohorts                 Cohort[]
+  programSteps            ProgramStep[]
   companies               Company[]
   projects                Project[]
   relations               MentorshipRelation[]
@@ -3054,6 +3055,69 @@ model Cohort {
 
   relations    MentorshipRelation[]
   programCosts ProgramCost[]
+  steps        ProgramStep[]
+}
+
+// ── Program journey (#1852) ──────────────────────────────────────────────────
+// "What happens in week 6": one scheduled step of a programme's journey, an
+// offset from an anchor (the relation's start, the programme's start, or the
+// day the relation entered a stage). Hangs off the programme container — the
+// Cohort row, which #1622 renames to Program behind @@map("Cohort"), so this FK
+// survives that rename untouched. The vocabularies (anchor, audience, action,
+// the skip conditions in payload) are whitelists in src/lib/programJourneyRule.ts,
+// free Strings here by repo convention. A step is live only once published and
+// until archived; it is never deleted while it has runs, so the journey of a
+// relation can still say what it was sent.
+model ProgramStep {
+  id           String    @id @default(cuid())
+  orgId        String?
+  programId    String
+  order        Int       @default(0)
+  // RELATION_START | PROGRAM_START | STAGE_ENTRY (payload.stageKey names the stage).
+  anchor       String    @default("RELATION_START") @db.VarChar(32)
+  offsetDays   Int       @default(0)
+  // MENTOR | MENTEE | BOTH — who of the pair receives it.
+  audience     String    @default("BOTH") @db.VarChar(16)
+  // NUDGE | ASSIGN_TODO | PUBLISH_CONTENT | SUGGEST_AGENDA | GROUP_SESSION
+  action       String    @db.VarChar(32)
+  // Per-action detail: { stageKey?, url?, agendaTemplateId?, skipIf? }.
+  payload      Json?
+  // The fallback wording; `translations` carries { en?, tr?, de? }.
+  title        String    @db.VarChar(191)
+  translations Json?
+  publishedAt  DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  org     Organization?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  program Cohort           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  runs    ProgramStepRun[]
+
+  @@index([orgId])
+  @@index([programId, order])
+}
+
+// One step delivered (or deliberately skipped) for one relation. The unique is
+// the claim: two sweeps on the same day — or two replicas — insert one row, and
+// the loser's P2002 is the "already done" answer, not a query beforehand.
+// Reached through its step, which is tenant-scoped; deliberately not in
+// TENANT_MODELS (no orgId of its own, the same shape as ApplicationEvent).
+model ProgramStepRun {
+  id            String    @id @default(cuid())
+  stepId        String
+  relationId    String
+  dueAt         DateTime
+  deliveredAt   DateTime?
+  // Why it was recorded and not delivered (e.g. "satisfied:meeting_exists").
+  skippedReason String?   @db.VarChar(64)
+  createdAt     DateTime  @default(now())
+
+  step     ProgramStep        @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, relationId])
+  @@index([relationId])
 }
 
 model CompanyNeed {
@@ -3204,6 +3268,7 @@ model MentorshipRelation {
   evaluations           Evaluation[]
   // INTERIM/FINAL due dates and their reminders (#1891).
   evaluationDues        EvaluationDue[]
+  programStepRuns       ProgramStepRun[]
   goals                 Goal[]
   sessionAgendas        SessionAgenda[]
   sessionNotes          SessionNote[]
