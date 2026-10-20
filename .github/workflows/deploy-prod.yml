@@ -266,6 +266,36 @@ jobs:
           ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
           ./infra/deploy-prod.sh --no-pull --pull-image
 
+  # ── The SMTP-free trail (#2322) ─────────────────────────────────────────────
+  # The e-mail below cannot leave a GitHub-hosted runner (ETIMEDOUT on CONN), so
+  # a failed deploy also opens — or refreshes — one `ci-alert` issue, and the
+  # next deploy that actually ran green closes it. A run the drift gate turned
+  # into a no-op (nothing to deploy) touches nothing. Never fails the run.
+  alert:
+    name: Record the result as an issue (no SMTP)
+    needs: [gate, build, deploy]
+    if: ${{ !cancelled() && (failure() || needs.deploy.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Open, refresh or close the deploy alert
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: deploy-prod
+          ALERT_SIGNATURE: ${{ needs.gate.outputs.sha || github.sha }}
+          ALERT_TITLE: '⚠️ deploy-prod is red'
+          ALERT_SUMMARY: |
+            The production deploy of `${{ needs.gate.outputs.sha || github.ref_name }}` failed (event: ${{ github.event_name }}; gate **${{ needs.gate.result }}**, build **${{ needs.build.result }}**, deploy **${{ needs.deploy.result }}**).
+            The production container may be down or serving an older build — check `/api/health` before assuming a merge is live.
+        run: node scripts/ci-alert-issue.mjs ${{ needs.deploy.result == 'success' && 'green' || 'red' }}
+
   # ── 4. Alert ────────────────────────────────────────────────────────────────
   # A failed deploy leaves the container swapped out (docker stop precedes
   # docker run), so silence here is the worst case: the env can be down, or
@@ -284,6 +314,11 @@ jobs:
         with:
           node-version: 20
       - name: Send alert email
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

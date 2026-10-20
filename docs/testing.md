@@ -594,31 +594,56 @@ back to red-only alerts.
 
 ## How a red scheduled net reaches a person (#2322)
 
-Every scheduled safety net is **silent when green**: `e2e-full`, `k6-load`, `stress`
-and `backup-verify`. So a broken alert channel looks exactly like a healthy repo.
-The e-mail alerts above cannot leave a GitHub-hosted runner at the moment. The SMTP
-connect dies on `ETIMEDOUT` at `CONN` after about two minutes. That is a network
-reachability failure, not an auth one, and not an empty secret either: an unset
-`SMTP_HOST` fails fast on localhost with `ECONNREFUSED`. So each net now also leaves a
-trail that needs no SMTP:
+Every scheduled safety net is **silent when green**: `e2e-full`, `k6-load`, `stress`,
+`backup-verify`, `mysql-watchdog`, `release-compact` and the deploys. So a broken alert
+channel looks exactly like a healthy repo.
+
+**Root cause of the silent e-mails.** None of the e-mail alerts can leave a GitHub-hosted
+runner. The SMTP connect dies on `ETIMEDOUT` at `CONN` after about two minutes. That is a
+network-reachability failure: it is not auth (auth is never reached), and it is not an empty
+secret (an unset `SMTP_HOST` fails fast on localhost with `ECONNREFUSED`). The production box
+does reach the relay. Mail from the app works, so the secret's host and port are what the
+hosted runners cannot reach.
+
+**The alert of record is a GitHub issue.** Every net runs the same script, so none of them
+depends on SMTP:
+
+| Net | `ALERT_KEY` | Signature (one comment per change) | Closed by |
+|---|---|---|---|
+| `e2e-full.yml` | `e2e-full` | commit sha | the next green run |
+| `k6-load.yml` | `k6-load` | UTC day | the next green night |
+| `stress.yml` | `stress` | UTC day | the next green run |
+| `backup-verify.yml` | `backup-verify` | UTC day | the next green check |
+| `mysql-watchdog.yml` | `mysql-watchdog` | UTC day (it runs every 10 min) | the next green check |
+| `release-compact.yml` | `release-compact` | UTC day | the next green compaction |
+| `deploy-prod.yml` / `deploy-preview.yml` | `deploy-prod` / `deploy-preview` | the deployed sha | the next deploy that ran green (a drift-gate no-op touches nothing) |
 
 - [`scripts/ci-alert-issue.mjs`](../scripts/ci-alert-issue.mjs) `red|green`, keyed by
   `ALERT_KEY`. There is **one open issue per net**, labelled `ci-alert` and found by a
-  hidden `<!-- ci-alert: key=… -->` marker, never by its title. A red run opens it, or
-  refreshes it in place. It comments only when `ALERT_SIGNATURE` moved: e2e-full passes
-  the commit sha, and the others default to the UTC day. So a broken commit re-tested
-  4×/day pings once. The next green run closes it. A new issue `cc`s the maintainer,
-  which makes its creation a notification.
-- The issue step runs **before** the e-mail step, so a hanging SMTP connect cannot
-  starve it. It is `continue-on-error`, and the script itself never fails the job.
-- The only permission it needs is `issues: write` on the job's own `GITHUB_TOKEN`. No
-  secret, no port. `release-compact.yml` keeps its own, older version of the same idea
-  (`scripts/release-compact-alert.mjs`, #2323).
+  hidden `<!-- ci-alert: key=… -->` marker, never by its title. A red run opens it or
+  refreshes it in place. It comments only when `ALERT_SIGNATURE` moves, so a broken commit
+  re-tested 4×/day pings once. A new issue `cc`s the maintainer, which makes its creation a
+  notification.
+- The e2e-full issue **names the failing tests** (`file:line — title`, after retries; at
+  most 30). They are read from the shards' JSON reports, so the reader doesn't have to dig
+  through four artifacts. If no report holds a failure, the issue says a shard probably
+  crashed first.
+- The issue step runs **before** the e-mail, so a hanging SMTP connect cannot starve it. It
+  is `continue-on-error`, and the script itself never fails the job. The only permission it
+  needs is `issues: write` on the job's own `GITHUB_TOKEN`: no secret, no port.
+- The e-mail steps stay, but as best effort: `timeout-minutes: 3` and `continue-on-error`.
+  So the dead relay no longer adds a second red job, two minutes long, to every red run. If
+  the relay becomes reachable from hosted runners again, they start delivering with no
+  change needed.
+- `release-compact.yml` also keeps its narrower "the PR could not be opened" issue
+  (`scripts/release-compact-alert.mjs`, #2323), which names the manual step. Uptime keeps its
+  own transition issues (`uptime.yml`).
 
 **To test it:** the pure rules are unit-tested (`scripts/test/ci-alert-issue.test.mjs`).
 For the real thing, run `stress.yml` by hand (`workflow_dispatch`) with a `base_url`
 that cannot answer, e.g. `https://127.0.0.1:9`. That run must open a `ci-alert` issue
-keyed `stress`. The next normal run must close it.
+keyed `stress`, and the next normal run must close it. The e2e-full path has already been
+exercised by real red runs (e.g. #2972).
 
 ## Demo-seed fidelity gate (#2063)
 

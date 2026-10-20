@@ -69,8 +69,12 @@ export function ReleaseNotesList({ initial, total, pageSize, locale, labels }: P
   );
 
   // A feed permalink (`#v0.12.0`, #1383) may point past the first page: load
-  // down to that card once, then scroll to it.
+  // down to that card once, then scroll to it. The scroll waits for the commit
+  // that renders the card (the effect below), not for a timer or a frame: a
+  // requestAnimationFrame queued when the fetch resolved could run before React
+  // had committed the appended cards, find no element and scroll nowhere (#2750).
   const deepLinked = useRef(false);
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   useEffect(() => {
     if (deepLinked.current) return;
     deepLinked.current = true;
@@ -78,10 +82,17 @@ export function ReleaseNotesList({ initial, total, pageSize, locale, labels }: P
     if (!hash.startsWith('v') || document.getElementById(hash)) return;
     const version = hash.slice(1);
     void loadMore(version).then((next) => {
-      if (!next.some((r) => r.version === version)) return;
-      requestAnimationFrame(() => document.getElementById(hash)?.scrollIntoView());
+      if (next.some((r) => r.version === version)) setScrollTarget(hash);
     });
   }, [loadMore]);
+
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const card = document.getElementById(scrollTarget);
+    if (!card) return; // not committed yet — this effect runs again when it is
+    card.scrollIntoView();
+    setScrollTarget(null);
+  }, [scrollTarget, entries]);
 
   const remaining = total - entries.length;
 

@@ -1777,6 +1777,8 @@ model Company {
   // whole table row by row.
   @@index([orgId, externalId])
   @@index([orgId, createdBySource])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // One sales channel of one account (#2408): a marketplace, a shop system or a
@@ -2466,6 +2468,8 @@ model Offer {
   @@index([orgId, status])
   @@index([relationId])
   @@index([orgId, currency])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -2659,31 +2663,32 @@ model Webhook {
 // in without a migration. ENFORCEMENT of expiry/revocation/scope at the door is
 // #1546; this model only stores the facts.
 model ApiKey {
-  orgId       String?
-  org         Organization? @relation(fields: [orgId], references: [id])
-  id          String        @id @default(cuid())
-  name        String
-  hashedKey   String        @unique
+  orgId           String?
+  org             Organization?       @relation(fields: [orgId], references: [id])
+  id              String              @id @default(cuid())
+  name            String
+  hashedKey       String              @unique
   // Comma-separated `<resource>:<action>` scopes. Defaulted (not nullable) so
   // `db push` fills existing rows non-destructively; the backfill normalises
   // any row that ended up empty.
-  scopes      String        @default("candidates:read")
+  scopes          String              @default("candidates:read")
   // The admin who minted the key. Nullable: rows that predate #1545 have no
   // recorded owner, and a deleted admin must not take the key's history away.
-  createdById String?
-  createdBy   User?         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  createdById     String?
+  createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
   // Null means "never expires" — allowed, but flagged in the admin UI.
-  expiresAt   DateTime?
+  expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
-  revokedAt   DateTime?
-  lastUsedAt  DateTime?
-  createdAt   DateTime      @default(now())
+  revokedAt       DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime            @default(now())
   // Period allowance (#2010). Both null = no period quota (the per-minute
   // limit still applies) — every key minted before this stays exactly as it
   // was. `quotaPeriod` is 'day' | 'month' (UTC calendar periods).
-  quotaPeriod String?       @db.VarChar(10)
-  quotaLimit  Int?
-  usage       ApiKeyUsage[]
+  quotaPeriod     String?             @db.VarChar(10)
+  quotaLimit      Int?
+  usage           ApiKeyUsage[]
+  idempotencyKeys ApiIdempotencyKey[]
 
   @@index([orgId])
   @@index([createdById])
@@ -2708,6 +2713,35 @@ model ApiKeyUsage {
 
   @@unique([apiKeyId, periodStart])
   @@index([orgId])
+}
+
+// One Idempotency-Key a key sent to an /api/v1 write (#1994). The first request
+// claims the row (responseStatus null while it runs); a retry with the same
+// key AND the same request hash replays the stored 2xx response instead of
+// writing twice; the same key with a different hash is 409
+// `idempotency_key_reused`. Only successes are kept — a refused or failed
+// write frees its key so the caller can retry. Rows older than
+// IDEMPOTENCY_TTL_MS are ignored and swept nightly. A brand-new model: the
+// key must never be attached by re-keying ApiKey (drop-and-recreate under
+// --accept-data-loss).
+model ApiIdempotencyKey {
+  id             String   @id @default(cuid())
+  orgId          String
+  apiKeyId       String
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  key            String   @db.VarChar(200)
+  method         String   @db.VarChar(10)
+  path           String   @db.VarChar(191)
+  // sha256 hex of method + path + raw body.
+  requestHash    String   @db.Char(64)
+  responseStatus Int?
+  // Capped (IDEMPOTENT_BODY_MAX); a larger response is replayed without its body.
+  responseBody   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@unique([apiKeyId, key])
+  @@index([orgId])
+  @@index([createdAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
@@ -3180,6 +3214,9 @@ model MentorshipRelation {
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
   completedAt             DateTime?
+  // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
+  // table with rows; existing rows start at the deploy instant.
+  updatedAt               DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
@@ -3338,6 +3375,8 @@ model MentorshipRelation {
   // The daily follow-up sweep asks for the ACTIVE relations whose next action
   // falls on or before today (#2563).
   @@index([nextActionAt])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3862,6 +3901,8 @@ model InteractionLog {
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
   notes      String          @db.Text
   type       InteractionType
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt  DateTime        @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
@@ -3885,6 +3926,8 @@ model InteractionLog {
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@unique([relationId, sourceRef])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 enum RsvpStatus {
@@ -3944,6 +3987,8 @@ model Meeting {
   createdById         String
   reminderSentAt      DateTime?
   createdAt           DateTime      @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime      @default(now()) @updatedAt
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
@@ -3995,6 +4040,8 @@ model Meeting {
   @@index([conversationId])
   @@index([seriesId])
   @@index([batchKey])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -5042,6 +5089,8 @@ model Requisition {
   ownerId             String?
   legacyCompanyNeedId String?   @unique
   createdAt           DateTime  @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime  @default(now()) @updatedAt
   closedAt            DateTime?
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -5057,6 +5106,8 @@ model Requisition {
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted
@@ -5105,6 +5156,8 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 /// One person being considered for one role, and where they are in it (#1828).

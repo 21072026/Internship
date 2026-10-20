@@ -15,7 +15,26 @@
 // NOTE: nothing here enforces anything. Checking a scope at the door of an
 // /api/v1 route is #1546; this module defines and parses the vocabulary.
 
-export const API_SCOPES = ['candidates:read', 'companies:write'] as const;
+export const API_SCOPES = [
+  'candidates:read',
+  // Read breadth (#1990): one scope per resource family, so a BI tool can be
+  // given relationships without being given meetings.
+  'relationships:read',
+  'interactions:read',
+  // The free-text body of an interaction log — the most sensitive text in the
+  // product. Never implied by interactions:read; granted on its own, on purpose.
+  'interactions:read_notes',
+  'meetings:read',
+  'companies:read',
+  // Requisitions, offers and interview requests: what an ATS reacts to.
+  'hiring:read',
+  // The /api/v1 write family (#1994). Each is granted on its own: a key that
+  // reads candidates writes nothing until an admin says so.
+  'candidates:write',
+  'relationships:write',
+  'interactions:write',
+  'companies:write',
+] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
 
@@ -36,6 +55,15 @@ export const DEFAULT_API_SCOPES: readonly ApiScope[] = ['candidates:read'];
 //                      switch off the tenant's own data feed.
 export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'candidates:read': 'INTEGRATIONS_API',
+  'relationships:read': 'INTEGRATIONS_API',
+  'interactions:read': 'INTEGRATIONS_API',
+  'interactions:read_notes': 'INTEGRATIONS_API',
+  'meetings:read': 'INTEGRATIONS_API',
+  'companies:read': 'INTEGRATIONS_API',
+  'hiring:read': 'INTEGRATIONS_API',
+  'candidates:write': 'INTEGRATIONS_API',
+  'relationships:write': 'INTEGRATIONS_API',
+  'interactions:write': 'INTEGRATIONS_API',
   'companies:write': null,
 };
 
