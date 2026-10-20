@@ -210,6 +210,12 @@ model Organization {
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
   offers                  Offer[]
+  affiliatePartners       AffiliatePartner[]
+  affiliateCustomers      AffiliateCustomer[]
+  affiliatePayments       AffiliatePayment[]
+  affiliateCommissions    AffiliateCommission[]
+  affiliatePayouts        AffiliatePayout[]
+  affiliateClicks         AffiliateClick[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
   applications            Application[]
@@ -556,6 +562,7 @@ model User {
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
+  affiliatePartner                  AffiliatePartner?
   pushSubscriptions                 PushSubscription[]
   nativePushTokens                  NativePushToken[]
   conversationParticipants          ConversationParticipant[]
@@ -6370,4 +6377,168 @@ model SafeguardingFlag {
   // The queue: one org's open flags, newest first.
   @@index([orgId, reviewedAt, createdAt])
   @@index([reviewedById])
+}
+
+// ── Affiliate programme (docs/affiliate-module.md) ───────────────────────────
+// Money is integer minor units (cents) with an ISO currency code. Never a float.
+// Commission rules live in src/lib/affiliateCommissionRule.ts; the single writer
+// that records payments and commissions is the only code that creates the rows.
+
+enum AffiliatePartnerStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum AffiliateCommissionKind {
+  TIER
+  PERCENT
+}
+
+enum AffiliateCommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum AffiliatePaymentSource {
+  MANUAL
+  API
+}
+
+enum AffiliatePayoutMethod {
+  BANK_TRANSFER
+}
+
+model AffiliatePartner {
+  id                  String                 @id @default(cuid())
+  orgId               String?
+  org                 Organization?          @relation(fields: [orgId], references: [id])
+  userId              String                 @unique
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The ?ref= value. Permanent once issued.
+  code                String                 @db.VarChar(100)
+  rank                String                 @default("STANDARD") @db.VarChar(40)
+  status              AffiliatePartnerStatus @default(ACTIVE)
+  contractAcceptedAt  DateTime?
+  // When a 30-day termination takes effect. Null while the partner is active.
+  noticeEffectiveAt   DateTime?
+  // IBAN and account holder, sealed by src/lib/secretBox.ts. Admin reads them
+  // for manual transfers; nobody else does.
+  payoutDetailsCipher String?                @db.Text
+  // One-time legacy password check (decision 5). Deleted once the partner sets
+  // a new password; purged 90 days after import if never used.
+  legacyPasswordHash  String?                @db.VarChar(255)
+  legacyHashPurgeAt   DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  customers           AffiliateCustomer[]
+  commissions         AffiliateCommission[]
+  payouts             AffiliatePayout[]
+  clicks              AffiliateClick[]
+
+  @@unique([orgId, code])
+  @@index([orgId, status])
+}
+
+model AffiliateCustomer {
+  id                    String                @id @default(cuid())
+  orgId                 String?
+  org                   Organization?         @relation(fields: [orgId], references: [id])
+  partnerId             String
+  partner               AffiliatePartner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // The customer's id on the marketing product's side. Opaque to this module.
+  externalRef           String                @db.VarChar(120)
+  startedAt             DateTime?
+  // Set once, by the writer, when the first payment is recorded.
+  firstPaymentAt        DateTime?
+  firstPaymentMinor     Int?
+  // 1-based: this partner's Nth paying customer. Null until the first payment.
+  payingCustomerOrdinal Int?
+  createdAt             DateTime              @default(now())
+  payments              AffiliatePayment[]
+  commissions           AffiliateCommission[]
+
+  @@unique([orgId, externalRef])
+  @@index([partnerId])
+}
+
+model AffiliatePayment {
+  id                 String                 @id @default(cuid())
+  orgId              String?
+  org                Organization?          @relation(fields: [orgId], references: [id])
+  customerId         String
+  customer           AffiliateCustomer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amountMinor        Int
+  currency           String                 @default("EUR") @db.VarChar(3)
+  receivedAt         DateTime
+  source             AffiliatePaymentSource @default(MANUAL)
+  // Idempotency key from an API import. Null for manual entries.
+  externalPaymentRef String?                @db.VarChar(120)
+  enteredById        String?
+  createdAt          DateTime               @default(now())
+  commission         AffiliateCommission?
+
+  @@unique([customerId, externalPaymentRef])
+  @@index([customerId, receivedAt])
+}
+
+model AffiliateCommission {
+  id           String                    @id @default(cuid())
+  orgId        String?
+  org          Organization?             @relation(fields: [orgId], references: [id])
+  partnerId    String
+  partner      AffiliatePartner          @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     AffiliateCustomer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  // At most one commission per payment (decideCommission returns at most one).
+  paymentId    String?                   @unique
+  payment      AffiliatePayment?         @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  kind         AffiliateCommissionKind
+  amountMinor  Int
+  currency     String                    @default("EUR") @db.VarChar(3)
+  accruedAt    DateTime
+  windowEndsAt DateTime?
+  status       AffiliateCommissionStatus @default(PENDING)
+  payoutId     String?
+  payout       AffiliatePayout?          @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  paidAt       DateTime?
+  createdAt    DateTime                  @default(now())
+
+  @@index([partnerId, status])
+}
+
+model AffiliatePayout {
+  id          String                @id @default(cuid())
+  orgId       String?
+  org         Organization?         @relation(fields: [orgId], references: [id])
+  partnerId   String
+  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  amountMinor Int
+  currency    String                @default("EUR") @db.VarChar(3)
+  method      AffiliatePayoutMethod @default(BANK_TRANSFER)
+  reference   String?               @db.VarChar(120)
+  paidAt      DateTime
+  paidById    String?
+  createdAt   DateTime              @default(now())
+  commissions AffiliateCommission[]
+
+  @@index([partnerId, paidAt])
+}
+
+model AffiliateClick {
+  id            String           @id @default(cuid())
+  orgId         String?
+  org           Organization?    @relation(fields: [orgId], references: [id])
+  partnerId     String
+  partner       AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // HMAC-SHA-256 of the client IP under a server secret, hex. Never the raw address.
+  ipHash        String           @db.VarChar(64)
+  landingPath   String           @db.VarChar(255)
+  referrerHost  String?          @db.VarChar(255)
+  browserFamily String?          @db.VarChar(40)
+  createdAt     DateTime         @default(now())
+
+  @@index([partnerId, createdAt])
 }
