@@ -103,4 +103,48 @@ test.describe('org attributes', () => {
     expect(await prisma.userAttributeValue.count({ where: { attributeId: dept.id } })).toBe(0);
     expect((await prisma.reportSubscription.findUniqueOrThrow({ where: { id: sub.id } })).params).toEqual({});
   });
+  test('import values by CSV: preview writes nothing, apply writes, unmatched and invalid rows are reported', async ({ page }) => {
+    test.setTimeout(180_000);
+    await signInAndSettle(page, admin, PW, '/admin');
+    for (const body of [
+      { key: 'level', labels: { en: 'Level', de: 'Ebene' }, type: 'SELECT', options: ['Junior', 'Senior'] },
+      { key: 'joined', labels: { en: 'Joined' }, type: 'DATE' },
+    ]) {
+      expect((await page.request.post('/api/admin/attributes', { data: body })).status()).toBe(201);
+    }
+    const person = await prisma.user.findFirstOrThrow({ where: { email: mentor, orgId } });
+    const csv = [
+      'email;Ebene;joined',
+      `${mentor.toUpperCase()};senior;01.03.2024`,
+      `nobody-${stamp}@example.com;Junior;`,
+      `${otherAdmin};Junior;`,
+      `${admin};Principal;2024-01-01`,
+    ].join('\n');
+
+    await gotoSettled(page, '/admin/attributes');
+    await page.getByTestId('attribute-import-text').fill(csv);
+    await page.getByTestId('attribute-import-preview').click();
+    await expect(page.getByTestId('attribute-import-counts')).toContainText('1');
+    const issues = page.getByTestId('attribute-import-issues');
+    await expect(issues).toContainText(`nobody-${stamp}@example.com`);
+    // Another organization's person is "not found", like an unknown address.
+    await expect(issues).toContainText(otherAdmin);
+    await expect(issues).toContainText('level: not_an_option');
+    expect(await prisma.userAttributeValue.count({ where: { userId: person.id } })).toBe(0);
+
+    await page.getByTestId('attribute-import-apply').click();
+    await expect(page.getByTestId('attribute-import-report')).toContainText('Imported');
+    const values = await prisma.userAttributeValue.findMany({ where: { userId: person.id }, include: { attribute: { select: { key: true } } } });
+    expect(Object.fromEntries(values.map((v) => [v.attribute.key, v.value]))).toEqual({ level: 'Senior', joined: '2024-03-01' });
+    expect(values.every((v) => v.orgId === orgId)).toBe(true);
+    await expect(page.getByTestId('attribute-level-count')).toContainText('1');
+
+    // A second apply of the same file changes nothing.
+    const again = await page.request.post('/api/admin/attributes/import', { data: { text: csv, apply: true } });
+    expect((await again.json()).counts.UNCHANGED).toBe(1);
+    // A typo in a header refuses the whole file.
+    const typo = await page.request.post('/api/admin/attributes/import', { data: { text: 'email,levle\na@example.com,Junior' } });
+    expect(typo.status()).toBe(400);
+    expect(await typo.json()).toMatchObject({ code: 'unknown_column', column: 'levle' });
+  });
 });

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AttributeValueImport } from '@/components/AttributeValueImport';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { ATTRIBUTE_TYPES, MAX_LABEL_LENGTH, attributeLabel, type AttributeType } from '@/lib/orgAttributesRule';
@@ -212,6 +213,7 @@ export default function AdminAttributesPage() {
           {error && !editingId && <p className="mt-2 text-sm text-red-600" role="alert" data-testid="attribute-error">{error}</p>}
         </Card>
 
+        {attributes.length > 0 && <AttributeValueImport onApplied={load} />}
         <Card className="max-w-4xl">
           <CardHeader>
             <CardTitle>{L.list.replace('{n}', String(attributes.length))}</CardTitle>
