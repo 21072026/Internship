@@ -4709,6 +4709,72 @@ enum EmailStatus {
   HELD
 }
 
+// ── Bounce / complaint suppression (#1692) ──────────────────────────────────
+// What a mailbox told us through the provider's webhook. SENT above is "the
+// relay took it", never "it arrived"; these two tables are the loop that closes
+// that gap: an address that hard-bounced or complained is SUPPRESSED, and
+// sendEmail() (and the queue's drain) refuses it until a human delists it.
+//
+// DELIBERATELY NOT TENANT-SCOPED — the one place the multi-tenancy rule
+// (docs/tenant-isolation.md) is knowingly not applied. Sender reputation is a
+// property of the sending domain, and every tenant shares it: a complaint rate
+// built up by one tenant's mail is charged to all of them. So there is no
+// orgId here and no TENANT_MODELS entry; the admin screen applies its own
+// scope (src/lib/emailSuppression.ts § suppressionScopeWhere).
+// Rules: src/lib/emailSuppressionRule.ts. Doc: docs/EMAIL_DELIVERABILITY.md.
+enum SuppressionReason {
+  HARD_BOUNCE
+  SOFT_BOUNCE_REPEATED
+  COMPLAINT
+  MANUAL
+  UNSUBSCRIBE_ALL
+}
+
+model EmailSuppression {
+  id            String            @id @default(cuid())
+  // Trimmed and lower-cased on write AND on match (normalizeSuppressedAddress):
+  // a suppression that misses on case is not a suppression.
+  email         String            @unique @db.VarChar(320)
+  reason        SuppressionReason
+  // The provider's own words (an SMTP diagnostic, a feedback-loop type) —
+  // shown to the admin, never to the recipient.
+  detail        String?           @db.Text
+  // The provider key the event came in through ('brevo', 'generic'), or
+  // 'admin' for a manual entry.
+  source        String?           @db.VarChar(32)
+  suppressedAt  DateTime          @default(now())
+  // A delist keeps the row (and its history) and stamps these; a new bounce
+  // after a delist re-suppresses the same row.
+  releasedAt    DateTime?
+  releasedById  String?
+  releaseReason String?           @db.Text
+
+  @@index([reason])
+  @@index([releasedAt, suppressedAt])
+}
+
+// One provider event, as received. Exists for two reasons only: idempotency
+// (providers retry; the unique key makes a replay a no-op) and the soft-bounce
+// window (N soft bounces inside it suppress). Pruned by the retention registry
+// (key 'emailDeliveryEvent').
+model EmailDeliveryEvent {
+  id         String   @id @default(cuid())
+  provider   String   @db.VarChar(32)
+  // The provider's event id, or a sha256 of the fields that identify the
+  // event when the provider sends none (emailBounce.ts § normaliser).
+  eventId    String   @db.VarChar(191)
+  email      String   @db.VarChar(320)
+  // 'bounce' | 'complaint'
+  type       String   @db.VarChar(16)
+  hard       Boolean  @default(false)
+  detail     String?  @db.Text
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([email, type, receivedAt])
+  @@index([receivedAt])
+}
+
 // Delivery log for outgoing mail (#1194).
 //
 // Without this there is no record anywhere that a mail was (or wasn't) sent:
