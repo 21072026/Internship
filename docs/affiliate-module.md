@@ -176,3 +176,25 @@ works on synthetic data in development (CLAUDE.md, "Develop on synthetic data on
 - Every payment needs an external reference, manual entries included. Without
   it a double entry could not be detected.
 - Not yet: admin and partner screens, the AFFILIATE role, migration.
+
+## Per-organisation programme page and contract
+
+Decided with the maintainer (decisions 14 and 15):
+
+- **14. One host per organisation.** Each organisation's programme lives on its own
+  public host (`Organization.publicHost`). The host decides which copy and contract a
+  visitor sees; it never widens what data anyone may read. A host in `MARKETING_HOSTS`
+  is required for the marketing product to open there.
+- **14a. Copy and contract are tenant data.** `AffiliateProgramSettings` holds the
+  sign-in copy (`/affiliate/giris`) and the partner contract (`/affiliate/sozlesme`),
+  per locale. The organisation edits them at `/admin/affiliates/settings`. No
+  organisation's wording is written into the repository.
+- **15. Re-acceptance on change.** Saving a changed contract bumps `contractVersion`.
+  Every partner must accept the current version before the portal opens. Acceptance
+  is recorded per partner and version (`AffiliateContractAcceptance`).
+- The portal refuses a host that belongs to another organisation, so a partner of one
+  programme cannot open another's portal by visiting its host.
+
+Open: a marketing sign-in finds an account by e-mail within the marketing world, not
+within the host's organisation. Two marketing organisations sharing an e-mail address
+would be ambiguous. Not yet handled; the rule belongs in `src/lib/userWorld.ts`.
