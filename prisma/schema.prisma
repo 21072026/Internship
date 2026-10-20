@@ -2635,31 +2635,32 @@ model Webhook {
 // in without a migration. ENFORCEMENT of expiry/revocation/scope at the door is
 // #1546; this model only stores the facts.
 model ApiKey {
-  orgId       String?
-  org         Organization? @relation(fields: [orgId], references: [id])
-  id          String        @id @default(cuid())
-  name        String
-  hashedKey   String        @unique
+  orgId           String?
+  org             Organization?       @relation(fields: [orgId], references: [id])
+  id              String              @id @default(cuid())
+  name            String
+  hashedKey       String              @unique
   // Comma-separated `<resource>:<action>` scopes. Defaulted (not nullable) so
   // `db push` fills existing rows non-destructively; the backfill normalises
   // any row that ended up empty.
-  scopes      String        @default("candidates:read")
+  scopes          String              @default("candidates:read")
   // The admin who minted the key. Nullable: rows that predate #1545 have no
   // recorded owner, and a deleted admin must not take the key's history away.
-  createdById String?
-  createdBy   User?         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  createdById     String?
+  createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
   // Null means "never expires" — allowed, but flagged in the admin UI.
-  expiresAt   DateTime?
+  expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
-  revokedAt   DateTime?
-  lastUsedAt  DateTime?
-  createdAt   DateTime      @default(now())
+  revokedAt       DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime            @default(now())
   // Period allowance (#2010). Both null = no period quota (the per-minute
   // limit still applies) — every key minted before this stays exactly as it
   // was. `quotaPeriod` is 'day' | 'month' (UTC calendar periods).
-  quotaPeriod String?       @db.VarChar(10)
-  quotaLimit  Int?
-  usage       ApiKeyUsage[]
+  quotaPeriod     String?             @db.VarChar(10)
+  quotaLimit      Int?
+  usage           ApiKeyUsage[]
+  idempotencyKeys ApiIdempotencyKey[]
 
   @@index([orgId])
   @@index([createdById])
@@ -2684,6 +2685,35 @@ model ApiKeyUsage {
 
   @@unique([apiKeyId, periodStart])
   @@index([orgId])
+}
+
+// One Idempotency-Key a key sent to an /api/v1 write (#1994). The first request
+// claims the row (responseStatus null while it runs); a retry with the same
+// key AND the same request hash replays the stored 2xx response instead of
+// writing twice; the same key with a different hash is 409
+// `idempotency_key_reused`. Only successes are kept — a refused or failed
+// write frees its key so the caller can retry. Rows older than
+// IDEMPOTENCY_TTL_MS are ignored and swept nightly. A brand-new model: the
+// key must never be attached by re-keying ApiKey (drop-and-recreate under
+// --accept-data-loss).
+model ApiIdempotencyKey {
+  id             String   @id @default(cuid())
+  orgId          String
+  apiKeyId       String
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  key            String   @db.VarChar(200)
+  method         String   @db.VarChar(10)
+  path           String   @db.VarChar(191)
+  // sha256 hex of method + path + raw body.
+  requestHash    String   @db.Char(64)
+  responseStatus Int?
+  // Capped (IDEMPOTENT_BODY_MAX); a larger response is replayed without its body.
+  responseBody   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@unique([apiKeyId, key])
+  @@index([orgId])
+  @@index([createdAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support

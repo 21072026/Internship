@@ -73,6 +73,30 @@ existing rows start at the deploy instant. It is stamped by Prisma; a raw SQL
 `UPDATE` does not move it.
 
 The async bulk export is #3002.
+## Writes (#1994, `src/lib/api/v1Write.ts`)
+
+A write route is `withApiKey(request, '<resource>:write', (key) => apiWrite(request, key, schema, handler))`.
+`withApiKey` stays the one door (the static guards look for it); `apiWrite` adds:
+
+| Step | Rule |
+|---|---|
+| Write bucket | 30 writes a minute per key (`WRITE_RATE_LIMIT`), on top of the shared 120/min window → `429 rate_limited` |
+| Body | JSON, ≤ 64 KB, the route's zod schema → `422 validation_failed` with `errors: [{ path, code, message }]` |
+| `Idempotency-Key` | optional, 1–200 printable ASCII. Same key + same request → the stored 2xx replayed with `Idempotent-Replayed: true`, handler not run. Same key + different request → `409 idempotency_key_reused`. Still running → `409 idempotency_in_progress` + `Retry-After` |
+| Record | every 2xx leaves a `logActivity` row whose detail names `api key <id>`; the handler names the action and target with `writeOk(response, { action, targetType, targetId })` |
+
+Only successes are remembered (`ApiIdempotencyKey`, a tenant model): a refused
+or failed write frees its key, so a caller that fixes its body can retry with
+it. Rows are replayed for 24 hours and swept nightly at 03:40 (the count is
+logged every night). A stored body over 32 KB is replayed as its status alone.
+Domain events are emitted by the domain writer the handler calls, never by
+`apiWrite`, so an API write and a UI write of the same thing emit the same event.
+
+Query-parameter problems stay `400` with `fields[]`; body problems are `422` with
+`errors[]`.
+
+**Demo:** the demo instance refuses `/api/admin/api-keys` (`src/lib/demoMode.ts`),
+so no key can exist there and the write API is unreachable — no entry of its own.
 
 ## Deprecations
 
