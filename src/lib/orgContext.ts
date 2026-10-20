@@ -170,6 +170,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // request scope, where the middleware does not engage, so it still sees every
   // tenant.
   'UsageRollup',
+  // A tenant's request to change its plan (#1743): one org reading another's
+  // would leak its plan, pair count and reasons. REQUIRED orgId. The operator
+  // queue reads across the orgs of its world outside any tenant scope, with
+  // an explicit world filter (src/app/api/admin/plan-requests).
+  'PlanChangeRequest',
   // Daily product usage per account (#2446). Commercially sensitive in the same
   // way UsageRollup is — one tenant reading another's merchant volumes is a
   // leak, and writing them would corrupt the churn signal the vertical sells

@@ -662,6 +662,14 @@ export default function AdminOrganizationsPage() {
       )}
 
       {superAdmin && (
+        // The operator queue of plan-change requests (#1743) — a super-admin
+        // surface, so it is linked from here rather than from every sidebar.
+        <Link href="/admin/plan-requests" data-testid="plan-requests-link" className="mb-6 inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          {t.organizations.planRequestsLink}
+        </Link>
+      )}
+
+      {superAdmin && (
       <Card className="mb-6 max-w-2xl" data-testid="new-org-card">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">

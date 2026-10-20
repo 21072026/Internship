@@ -230,6 +230,7 @@ model Organization {
   subscription            Subscription?
   orgEntitlements         OrgEntitlement[]
   usageRollups            UsageRollup[]
+  planChangeRequests      PlanChangeRequest[]
   companyUsage            CompanyUsage[]
   contactPermissions      ContactPermission[]
   integrationEvents       IntegrationEvent[]
@@ -5859,6 +5860,62 @@ model MailBudget {
   dayCount Int     @default(0)
 
   updatedAt DateTime @updatedAt @db.DateTime(3)
+}
+
+// A tenant admin's request to move to another plan (#1743): the recorded,
+// audited step between "I want to upgrade" and a checkout, which a self-serve
+// checkout never removes. An operator (a super admin of the org's world,
+// src/lib/superAdmin.ts) applies or rejects it from /admin/plan-requests.
+//
+// Strings, not enums, for the same reason as Subscription: `db push
+// --accept-data-loss` resolves a MySQL ENUM change as DROP + CREATE. The
+// vocabularies and every rule over them live in src/lib/planChangeRule.ts.
+model PlanChangeRequest {
+  id    String @id @default(cuid())
+  orgId String
+
+  // Who asked. Deliberately NOT a foreign key (same as OrgEntitlement's
+  // grantedById): the record of a commercial request outlives the account.
+  requestedById String
+
+  // A PROGRAM-audience key from src/lib/plans.ts, and MONTHLY | YEARLY.
+  requestedPlan String @db.VarChar(32)
+  billingCycle  String @db.VarChar(16)
+
+  // Snapshots at request time, so the operator decides on what the tenant saw:
+  // the plan it was on, and this month's active pairs as the nightly rollup
+  // last counted them (null = not counted yet; never a live scan).
+  currentPlan String @db.VarChar(32)
+  activePairs Int?
+
+  // Free text — also where "we are over the band" goes.
+  reason         String? @db.Text
+  // The tenant claims the education/non-profit discount; the operator decides.
+  educationClaim Boolean @default(false)
+
+  // NEW | APPLIED | REJECTED (PLAN_CHANGE_STATUSES).
+  status String  @default("NEW") @db.VarChar(16)
+  // The requester's UI language, so a reply can be written in it.
+  locale String? @db.VarChar(8)
+
+  // ONE open request per org: equal to orgId while NEW, NULL once handled. A
+  // second submit therefore updates the open row instead of piling up — the
+  // unique index, not a read-then-write, is what holds that under a race (the
+  // same shape as MentorshipRelation.activeMenteeKey).
+  openKey String? @unique
+
+  handledById String?
+  handledAt   DateTime?
+  // The operator's note, shown to the requester on a rejection.
+  note        String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([status, createdAt])
 }
 
 // ── Usage ledger ─────────────────────────────────────────────────────────────
