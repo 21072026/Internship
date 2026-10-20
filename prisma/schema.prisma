@@ -205,6 +205,8 @@ model Organization {
   // Nightly relationship-health snapshots (#1901).
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
+  formDefinitions         FormDefinition[]
+  formResponses           FormResponse[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
   // Org-defined segmentation attributes (#1920).
@@ -761,6 +763,7 @@ model User {
   attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
+  formResponses                     FormResponse[]
   meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
@@ -6264,6 +6267,98 @@ model RelationHealthSnapshot {
 
   @@unique([relationId, takenOn])
   @@index([orgId, takenOn])
+}
+
+// ── Admin-defined forms (#1800, story #1798) ─────────────────────────────────
+//
+// Questions an admin adds to registration, onboarding, the profile or a
+// mentorship request, and the answers people give. The field-type union and
+// the ONE validator are src/lib/forms/schema.ts (client-safe, shared with the
+// survey engine); the write boundary is src/lib/forms/definitions.ts. Two
+// rules carry the design:
+//   • ANSWERS ARE KEYED BY fieldKey, not by a field id. A published definition
+//     is never edited in place — an edit is version N+1 — so a field id changes
+//     with every version while its key does not; an answer given to v1 still
+//     resolves under v2.
+//   • A KEY'S TYPE IS FIXED across the versions of a form once published (409),
+//     and a free-text field can never be `matchable` (refused at the write).
+// The vocabularies (audience, surface, field type) are Strings validated by
+// whitelists, the house rule for enum-like columns.
+
+model FormDefinition {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // The form's stable name within the org, e.g. "mentee_registration".
+  key         String        @db.VarChar(80)
+  // MENTEE | MENTOR | BOTH
+  audience    String        @db.VarChar(16)
+  // REGISTRATION | ONBOARDING | PROFILE | MENTORSHIP_REQUEST
+  surface     String        @db.VarChar(32)
+  version     Int           @default(1)
+  // { en?, tr?, de? } — the builder's name for it. Nullable: Json columns
+  // carry no default under MariaDB (prisma/backfill-json-columns.mjs).
+  title       Json?
+  publishedAt DateTime?
+  // Set on a version superseded by a newer published one, or retired.
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  fields    FormField[]
+  responses FormResponse[]
+
+  @@unique([orgId, key, version])
+  @@index([orgId, surface])
+}
+
+// Deliberately NOT in TENANT_MODELS: a field is only ever reached through its
+// FormDefinition, which is scoped — the SurveyQuestion reasoning. It carries
+// no orgId, so every nested write stays a plain nested create.
+model FormField {
+  id           String         @id @default(cuid())
+  definitionId String
+  definition   FormDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  // The answer join key: stable across versions, its type fixed once published.
+  key          String         @db.VarChar(80)
+  // A FormFieldType (src/lib/forms/schema.ts).
+  type         String         @db.VarChar(20)
+  // { en?, tr?, de? }. Every writer sets it (no Json default under MariaDB).
+  labels       Json
+  helpText     Json?
+  // [{ value, labels: { en?, tr?, de? } }] for SELECT / MULTI_SELECT; null otherwise.
+  options      Json?
+  required     Boolean        @default(false)
+  // May feed matching (#1803). Only a bounded type — canBeMatchable().
+  matchable    Boolean        @default(false)
+  sortOrder    Int            @default(0)
+  // Removed from the form: no longer asked, its answers still read.
+  archivedAt   DateTime?
+
+  @@unique([definitionId, key])
+  @@index([definitionId, sortOrder])
+}
+
+// One person's answer to one field of one version. Carries orgId itself —
+// the matching engine loads a cohort's answers for one field without a join
+// (@@index([orgId, fieldKey])).
+model FormResponse {
+  id           String         @id @default(cuid())
+  orgId        String?
+  org          Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  definitionId String
+  definition   FormDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  fieldKey     String         @db.VarChar(80)
+  // Every writer sets it (no Json default under MariaDB).
+  value        Json
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([userId, definitionId, fieldKey])
+  @@index([orgId, fieldKey])
+  @@index([definitionId])
 }
 
 // ── Surveys (#1879, epic #1877) ──────────────────────────────────────────────
