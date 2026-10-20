@@ -33,6 +33,12 @@ import { closedAtForStatus } from '@/lib/requisitions';
 // accepting an offer must not be told "no" by a counter; the admin sees the
 // refusal in the offer's history (the route records it) and decides.
 //
+// THE APPLICATION follows in the same transaction (#1854): the candidate's
+// application for this requisition reaches HIRED through the one stage writer,
+// advanceApplicationOnAcceptedOffer() in src/lib/applicationStage.ts — called
+// from the route next to this, not from here, because Application.stage has
+// exactly one writer module.
+//
 // NO DECREMENT, ON PURPOSE. ACCEPTED is terminal (src/lib/offers.ts): an
 // accepted offer cannot be withdrawn or expire, so there is no event that could
 // give the seat back. A later "un-hire" is a human decision about the

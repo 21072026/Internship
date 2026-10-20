@@ -150,6 +150,46 @@ export async function advanceApplicationOnInterview(
   return moved.ok ? { applicationId: app.id, fromStage: app.stage } : null;
 }
 
+/**
+ * Write-through from an accepted offer (#1854): the matching application — the
+ * offer's requisition, the offer's candidate — reaches HIRED inside the
+ * acceptance's own transaction. From OFFER that is one legal step. From
+ * INTERVIEW it is two (INTERVIEW → OFFER → HIRED), and both are true: the offer
+ * the candidate just accepted was extended. Anywhere earlier in the funnel an
+ * accepted offer proves no interview, so nothing is invented and the
+ * application stays where it is — as does a terminal one. The acceptance is
+ * never refused for any of it (the requisition count's rule, hiringOutcome.ts).
+ *
+ * The moves are the system's (#2527): no actor. The candidate accepted an
+ * offer; nobody moved a card.
+ */
+export async function advanceApplicationOnAcceptedOffer(
+  db: StageDb,
+  params: { requisitionId: string; menteeId: string; now?: Date },
+): Promise<{ applicationId: string; fromStage: string } | null> {
+  const app = await db.application.findUnique({
+    where: { requisitionId_menteeId: { requisitionId: params.requisitionId, menteeId: params.menteeId } },
+    select: { id: true, stage: true },
+  });
+  if (!app) return null;
+  const path: ApplicationStage[] = app.stage === 'OFFER' ? ['HIRED'] : app.stage === 'INTERVIEW' ? ['OFFER', 'HIRED'] : [];
+  if (path.length === 0) return null;
+  let from = app.stage;
+  for (const to of path) {
+    const moved = await moveApplicationStage(db, {
+      applicationId: app.id,
+      expectedStage: from,
+      toStage: to,
+      actorId: null,
+      note: 'offer accepted',
+      now: params.now,
+    });
+    if (!moved.ok) return null;
+    from = to;
+  }
+  return { applicationId: app.id, fromStage: app.stage };
+}
+
 // ── Who sees which rows ───────────────────────────────────────────────────────
 
 export interface ApplicationActor {
