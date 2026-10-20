@@ -10,6 +10,8 @@ import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
+import { certificateInfo } from '@/lib/ssoMetadata';
+import { certificateStatus } from '@/lib/ssoCertificateRule';
 import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { creatableVertical, orgInWorld, orgWorldWhere } from '@/lib/superAdminWorld';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -32,6 +34,20 @@ import { invalidateBrandCache } from '@/lib/hostBrand';
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
 // queries, so this screen lets an admin create tenants, set their plan, and see
 // usage vs. the plan's (advisory) limits. Query isolation lands in a later slice.
+
+// What the SSO card's expiry badge reads (#1933). `invalid` is a stored value
+// that no longer parses — written before the certificate was checked at save.
+function ssoCertificateSummary(pem: string | null, now: Date) {
+  if (!pem) return null;
+  const info = certificateInfo(pem);
+  if (!info) return { invalid: true as const };
+  return {
+    invalid: false as const,
+    notAfter: info.notAfter.toISOString(),
+    fingerprintSha256: info.fingerprintSha256,
+    ...certificateStatus(info.notAfter, now),
+  };
+}
 
 // GET — organizations with plan, limits and per-tenant usage.
 // A super admin sees every tenant OF ITS OWN WORLD (docs/worlds.md § Super
@@ -92,6 +108,7 @@ export async function GET() {
     : [[], []];
   const exemptAdmins = new Map(exemptAdminRows.map((r) => [r.orgId, r._count._all]));
   const sweepable = new Map(sweepableRows.map((r) => [r.orgId, r._count._all]));
+  const now = new Date();
 
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
@@ -134,6 +151,9 @@ export async function GET() {
           ssoEntryPoint: o.ssoEntryPoint,
           // Never expose the raw certificate to the list view; just whether one is set.
           ssoCertificateSet: !!o.ssoCertificate,
+          // The stored certificate's expiry, for the card's badge (#1933) —
+          // dates and a status only, never the certificate body.
+          certificate: ssoCertificateSummary(o.ssoCertificate, now),
           active: isSsoActive(o),
           // The three values a customer's IT team registers in their IdP
           // (#1931). Computed here, not in the browser: they hang off
@@ -562,7 +582,12 @@ export async function PATCH(request: Request) {
       ssoEntryPoint: (data.ssoEntryPoint as string | null | undefined) ?? existing.ssoEntryPoint,
       ssoCertificate: (data.ssoCertificate as string | null | undefined) ?? existing.ssoCertificate,
     };
-    const err = validateSsoConfig(effective);
+    // The certificate is judged when this request writes one or switches SSO
+    // on (#1933) — never on a switch-off or an enforcement toggle, which a
+    // tenant with a lapsed certificate still needs.
+    const err = validateSsoConfig(effective, {
+      checkCertificate: (sc !== undefined && sc !== null) || (effective.ssoEnabled && !existing.ssoEnabled),
+    });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
 
     // The public demo shares ONE tenant between every visitor, and enforcing

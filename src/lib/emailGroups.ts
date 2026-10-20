@@ -96,6 +96,9 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     categories: [
       'verification', 'password-reset', 'invitation', 'account', 'security',
       'ops-alert', 'test', 'retention-reminder', 'consent',
+      // The IdP certificate-expiry warning to an org's admins (#1933): a lapsed
+      // certificate locks the whole tenant out of single sign-on.
+      'sso-certificate',
     ],
     legacy: [],
   },

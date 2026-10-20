@@ -32,6 +32,7 @@ import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
 
 export async function GET(request: Request) {
   try {
@@ -179,6 +180,17 @@ export async function GET(request: Request) {
       const orgId = new URL(request.url).searchParams.get('orgId');
       const trialReminders = await runTrialReminders(orgId ? { orgIds: [orgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
+    }
+    // IdP certificate-expiry warnings alone (#1933). `orgId` narrows the sweep
+    // (never broadens it) and `at` moves "now", for the same reason the trial
+    // job takes them: e2e/sso-metadata-import.spec.ts asserts exact mails.
+    if (job === 'sso-certificates') {
+      const params = new URL(request.url).searchParams;
+      const orgId = params.get('orgId');
+      const at = params.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      const ssoCertificates = await runSsoCertificateExpiry({ ...(orgId ? { orgIds: [orgId] } : {}), now });
+      return NextResponse.json({ message: 'SSO certificate warnings ran', ssoCertificates });
     }
     // Recurring-meeting reminders alone (#2013) — the same function the batch
     // runs, and as safe to click twice: every occurrence is claimed in

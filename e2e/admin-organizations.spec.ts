@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { testCertificate } from './support/x509.mjs';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 // Multi-tenancy (#544): super-admin Organizations screen — create a tenant and
@@ -165,7 +166,8 @@ test('admin creates an organization and it appears in the list', async ({ page }
         ssoProvider: 'saml',
         ssoIssuer: 'https://idp.test/metadata',
         ssoEntryPoint: 'https://idp.test/sso',
-        ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----',
+        // A real certificate: the write path parses it since #1933.
+        ssoCertificate: testCertificate(365, 'admin-orgs-idp'),
       },
     });
     expect(goodSso.ok()).toBeTruthy();
@@ -230,7 +232,8 @@ test('a tenant admin cannot set their own organization\'s identity provider', { 
     ssoProvider: 'saml',
     ssoIssuer: 'https://idp.own.test/metadata',
     ssoEntryPoint: 'https://idp.own.test/sso',
-    ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBoperator\n-----END CERTIFICATE-----',
+    // A real certificate: switching SSO on parses it since #1933.
+    ssoCertificate: testCertificate(365, 'operator-idp'),
   };
   // ENTERPRISE, so the plan gate is not what refuses anything below.
   const own = await prisma.organization.create({ data: { slug, name: `Own IdP Tenant ${tag}`, plan: 'ENTERPRISE' } });
@@ -269,7 +272,7 @@ test('a tenant admin cannot set their own organization\'s identity provider', { 
     expect((await row()).ssoEnabled).toBe(true);
     // …but swapping the certificate under a live config is still refused.
     expect((await patch({ ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBswap\n-----END CERTIFICATE-----' })).status()).toBe(403);
-    expect((await row()).ssoCertificate).toContain('MIIBoperator');
+    expect((await row()).ssoCertificate).toBe(IDP.ssoCertificate);
     expect((await patch({ ssoEnabled: false })).ok()).toBeTruthy();
     expect((await patch({ ssoProvider: '', ssoIssuer: '', ssoEntryPoint: '', ssoCertificate: '' })).ok()).toBeTruthy();
     const cleared = await row();
