@@ -81,12 +81,16 @@ export async function POST(request: Request) {
 
   return withTenantScope(session, async () => {
     const { requisitionId, menteeId, note, proposedSlots } = parsed.data;
-    const [requisition, relation, shortlist] = await Promise.all([
+    // Shortlisted means either the company's flag or the application itself
+    // standing at SHORTLISTED — an applicant moved there on the board (#1838)
+    // has no flag, and the application is the record.
+    const [requisition, relation, shortlist, shortlistedApplication] = await Promise.all([
       prisma.requisition.findFirst({ where: { id: requisitionId, orgId, companyId: session.user.companyId! }, select: { id: true } }),
       prisma.mentorshipRelation.findFirst({ where: { orgId, companyId: session.user.companyId!, menteeId, status: 'ACTIVE' }, select: { id: true } }),
       prisma.companyInterest.findFirst({ where: { companyId: session.user.companyId!, menteeId, requisitionId, status: 'SHORTLISTED' }, select: { id: true } }),
+      prisma.application.findFirst({ where: { orgId, requisitionId, menteeId, stage: 'SHORTLISTED' }, select: { id: true } }),
     ]);
-    if (!requisition || !relation || !shortlist) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
+    if (!requisition || !relation || (!shortlist && !shortlistedApplication)) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
     try {
       const created = await prisma.interviewRequest.create({
         data: { requisitionId, menteeId, companyId: session.user.companyId!, orgId, note: note || null, proposedSlots: proposedSlots ?? undefined, activeKey: interviewActiveKey(requisitionId, menteeId) },
