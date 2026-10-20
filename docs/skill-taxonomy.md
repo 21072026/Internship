@@ -65,3 +65,15 @@ The queue: `GET /api/admin/skills/unmapped[?resolution=…]` (most frequent firs
 labelEn?, labelTr?, labelDe? }`. ADMIN only, org from the session, another org's term answers
 404. Each decision is one guarded `updateMany` out of `PENDING` (a second decision answers 409);
 promote and alias then link everybody whose free text carries the term (`linkFreeTextHolders`).
+
+## Skill filters in SQL (#1820)
+
+`skillTermWhere(orgId, term)` (`src/lib/skillFilter.ts`) is the one "has skill X" filter for the
+mentor directory, the admin candidate list and the company talent pool. A term matches a person when
+a canonical skill they hold (`UserSkill` → `Skill`) carries it in a label or an alias, **or** their
+free-text `User.skills` contains it case-insensitively (an id pre-query — `LIKE` over the JSON's text
+in MySQL — so a prefix like "docke" and a term still in the review queue keep working). The result is
+a `where`, so each route counts and pages one SQL set; nothing loads the pool into Node. The
+directory's JavaScript branch remains only for `language` (still a JSON list) and `accepting`
+(derived), and keeps reporting `partial` when its scan cap is reached. Topic and demo environments
+run the taxonomy backfill after seeding so their people have `UserSkill` rows.

@@ -6,6 +6,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isTagMode, parseTagIds } from '@/lib/tags';
 import { markOrphanApplicants, orphanApplicantWhere } from '@/lib/orphanApplicant';
+import { skillTermsWhere } from '@/lib/skillFilter';
+import { resolveOrgId } from '@/lib/orgScope';
 
 export async function GET(request: Request) {
   try {
@@ -83,9 +85,11 @@ export async function GET(request: Request) {
     if (Object.keys(relSome).length) where.menteeRelations = { some: relSome };
     if (city) where.city = { contains: city };
 
-    // skills filtering is applied in-memory after fetching (MySQL JSON arrays don't support hasSome)
+    // Skill terms (#1820): every term must match — a canonical skill's label or
+    // alias, or a substring of the free text ("docke" → "Docker") — expressed as
+    // SQL by `skillTermsWhere`, so the count and the page come from one query.
     const skillList = skills
-      ? skills.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+      ? skills.split(',').map((s) => s.trim()).filter(Boolean)
       : [];
 
     if (graduationYear) {
@@ -136,13 +140,6 @@ export async function GET(request: Request) {
     // Generic so the spread keeps the row's other columns in the type — the
     // `orphan` flag below is attached to these objects and needs `id`.
     const normalize = <T extends { skills: unknown }>(c: T) => ({ ...c, skills: (c.skills ?? []) as string[] });
-    const matchesSkills = (c: { skills: string[] }) => {
-      if (skillList.length === 0) return true;
-      const owned = c.skills.map((k) => k.toLowerCase());
-      // Every typed term must be a substring of at least one skill (so "docke"
-      // matches "Docker"), case-insensitive.
-      return skillList.every((term) => owned.some((k) => k.includes(term)));
-    };
 
     // Composed with AND rather than spread into `where`: the orphan rule already
     // constrains `menteeRelations` and `NOT`, and both of those keys are set
@@ -152,31 +149,21 @@ export async function GET(request: Request) {
     // Tenant (#2542): the caller's own tenant, by hand, as one more conjunct —
     // the middleware injects nothing while MT_ENFORCE_ISOLATION is off, and
     // this is the admin's whole candidate book (src/lib/tenantFilter.ts).
-    const query = withinTenant(
-      orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where,
-      await tenantWhere(session),
-    );
+    const tenant = await tenantWhere(session);
+    const skillWhere = skillList.length ? await skillTermsWhere(resolveOrgId(session), skillList) : null;
+    const base = orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where;
+    const query = withinTenant(skillWhere ? { AND: [base, skillWhere] } : base, tenant);
 
-    let candidates;
-    let total: number;
-    if (skillList.length === 0) {
-      // No JSON-skill filter → paginate at the database level.
-      total = await prisma.user.count({ where: query });
-      const raw = await prisma.user.findMany({
-        where: query,
-        select,
-        orderBy: { createdAt: 'desc' },
-        ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
-      });
-      candidates = raw.map(normalize);
-    } else {
-      // Skill filter is applied in-memory (MySQL JSON arrays don't support
-      // hasSome), so fetch, filter, then slice the page from the filtered set.
-      const raw = await prisma.user.findMany({ where: query, select, orderBy: { createdAt: 'desc' } });
-      const filtered = raw.map(normalize).filter(matchesSkills);
-      total = filtered.length;
-      candidates = all ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize);
-    }
+    // One branch: every filter, the skill terms included, is SQL (#1820), so the
+    // database counts and pages the same set.
+    const total = await prisma.user.count({ where: query });
+    const raw = await prisma.user.findMany({
+      where: query,
+      select,
+      orderBy: { createdAt: 'desc' },
+      ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
+    });
+    const candidates = raw.map(normalize);
 
     // One extra query for the page in hand rather than a per-row check or a
     // second copy of the rule on the client. Skipped for `all=1` (the CSV/Excel
