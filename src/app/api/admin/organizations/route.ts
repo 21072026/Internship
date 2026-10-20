@@ -456,6 +456,35 @@ export async function PATCH(request: Request) {
     return featureLocked('SSO_SAML');
   }
 
+  // WHO may write the IdP trust anchor (#1575). The issuer, entry point and
+  // certificate decide whom the ACS signs in: ANY account of the org, of any
+  // role, from an assertion checked only against the stored certificate, with
+  // no password and no second factor. Writing them is therefore writing who an
+  // admin of this org is — and the org that holds the seeded super admin is a
+  // tenant too, so a tenant ADMIN who could paste their own certificate could
+  // sign in AS that super admin and reach every other tenant. Like the plan and
+  // the palette, it is the operator's call. Switching SSO on or off and
+  // enforcing it stay the tenant's own policy (they only open or close a trust
+  // the operator configured), and clearing the config is always allowed. A
+  // value echoed back unchanged is not a write (the SSO form always sends the
+  // provider, issuer and entry point with the switch).
+  const setsIdpTrust = ([
+    [ssoProvider, existing.ssoProvider],
+    [ssoIssuer, existing.ssoIssuer],
+    [ssoEntryPoint, existing.ssoEntryPoint],
+    [ssoCertificate, existing.ssoCertificate],
+  ] as const).some(([next, current]) => {
+    const value = orNull(next);
+    return value !== undefined && value !== null && value !== (current ?? null);
+  });
+  if (setsIdpTrust && !superAdmin) {
+    await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (sso trust)', id);
+    return NextResponse.json(
+      { code: 'sso_super_admin_only', error: 'Only a super admin may set an organization\'s identity provider' },
+      { status: 403 },
+    );
+  }
+
   // Validate an explicitly-set (non-blank) brand color as a hex value.
   if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {
     return NextResponse.json({ error: 'Brand color must be a hex value like #2563eb' }, { status: 400 });
