@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { appNavLinks } from '@/lib/appNavigation';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getServerDictionary } from '@/i18n/server';
+import { isSuperAdmin } from '@/lib/superAdmin';
 
 // GET — the caller's web sidebar as data, for the native app's menu (#2775).
 // Same list, same capability filter and the same labels as the web shell
@@ -12,9 +13,13 @@ import { getServerDictionary } from '@/i18n/server';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const [capabilities, { t }] = await Promise.all([shellCapabilities(session.user.orgId), getServerDictionary()]);
+  const [capabilities, { t }, superAdmin] = await Promise.all([
+    shellCapabilities(session.user.orgId),
+    getServerDictionary(),
+    isSuperAdmin(session),
+  ]);
   const nav = t.nav as Record<string, string>;
-  const items = appNavLinks(session.user.role, capabilities).map((l) => ({
+  const items = appNavLinks(session.user.role, capabilities, { superAdmin }).map((l) => ({
     key: l.key,
     href: l.href,
     label: nav[l.key] ?? l.key,

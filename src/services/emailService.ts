@@ -11,6 +11,7 @@ import { orgIdsEntitledTo } from '@/lib/subscription';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
+import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
 import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
@@ -5995,6 +5996,11 @@ export function initCronJobs() {
       // year is forgotten, so its next sign-in is "new" again.
       const devices = await purgeStaleSignInDevices();
       if (devices) console.log(`[Cron] Sign-in device purge: ${devices} devices`);
+      // And the /api/v1 Idempotency-Key rows (#1994): past their 24h replay
+      // window they can answer nothing. The count is logged even when zero, so
+      // a sweep that silently stopped running is visible as a missing line.
+      const idem = await purgeExpiredIdempotencyKeys();
+      console.log(`[Cron] API idempotency key purge: ${idem} keys`);
     } catch (e) {
       console.error('[Cron] Trusted device purge error:', e);
     }

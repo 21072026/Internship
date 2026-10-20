@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
 import { removeSampleProgram } from '@/lib/orgSampleProgram';
 
@@ -11,7 +11,7 @@ import { removeSampleProgram } from '@/lib/orgSampleProgram';
 // Nothing without the tag is touched.
 //
 // WHO: that organization's ADMIN, or a super admin of its world (orgAdminGate).
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -19,11 +19,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const refusal = await orgAdminRefusal(session, id, 'DELETE /api/admin/organizations/[id]/sample-data');
   if (refusal) return refusal;
   const removed = await removeSampleProgram(id);
-  await logActivity({
+  await recordOrgWrite({
+    orgId: id,
     action: 'organization.sample_data_removed',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
-    detail: `org ${id}: ${removed.users} people, ${removed.relations} pairs, ${removed.companies} companies, ${removed.requisitions} requisitions`,
+    request: req,
+    detail: `${removed.users} people, ${removed.relations} pairs, ${removed.companies} companies, ${removed.requisitions} requisitions`,
   });
   return NextResponse.json({ removed });
 }

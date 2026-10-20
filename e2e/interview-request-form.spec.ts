@@ -23,6 +23,8 @@ let menteeWithNote: { id: string };
 let menteeBare: { id: string };
 let requisition: { id: string };
 let relationWithNote: { id: string };
+// menteeId → the id of their application to the requisition (the board's card key).
+const appIds = new Map<string, string>();
 
 async function login(page: Page, email: string) {
   await page.context().clearCookies();
@@ -33,12 +35,15 @@ async function login(page: Page, email: string) {
   await page.waitForURL((url) => !url.pathname.startsWith('/auth/signin'));
 }
 
-// Scoped by data-testid (src/app/company/requisitions/[id]/page.tsx) rather
-// than DOM order — the shortlist API returns rows by updatedAt desc, not
-// insertion order, so an order-based locator would silently point at the
-// wrong candidate's form.
-function candidateRow(page: Page, menteeId: string): Locator {
-  return page.getByTestId(`shortlist-candidate-${menteeId}`);
+// Scoped by data-testid (src/app/company/requisitions/[id]/page.tsx, the
+// applicant board of #1838) rather than DOM order: each applicant is a card
+// keyed by its application id, and the interview form sits behind the card's
+// "Request interview" disclosure.
+async function candidateRow(page: Page, menteeId: string): Promise<Locator> {
+  const appId = appIds.get(menteeId)!;
+  const card = page.getByTestId(`applicant-card-${appId}`);
+  await card.getByTestId(`applicant-interview-${appId}`).locator('summary').click();
+  return card;
 }
 
 // datetime-local input value, a few days out, well-formed for `fill()`.
@@ -72,6 +77,14 @@ test.describe.serial('Interview request form (note + proposed slots)', () => {
     await prisma.companyInterest.create({
       data: { companyId: company.id, menteeId: menteeBare.id, requisitionId: requisition.id, status: 'SHORTLISTED', scopeKey: companyInterestScopeKey(company.id, menteeBare.id, requisition.id) },
     });
+    // The deploy backfill gives every requisition-scoped shortlist its application (#1828); the board reads those.
+    for (const m of [menteeWithNote, menteeBare]) {
+      const app = await prisma.application.create({
+        data: { orgId: org.id, requisitionId: requisition.id, menteeId: m.id, companyId: company.id, stage: 'SHORTLISTED', status: 'ACTIVE', source: 'SHORTLIST' },
+        select: { id: true },
+      });
+      appIds.set(m.id, app.id);
+    }
   });
 
   test.afterAll(async () => {
@@ -79,6 +92,7 @@ test.describe.serial('Interview request form (note + proposed slots)', () => {
     await prisma.auditLog.deleteMany({ where: { actorId: { in: [mentor?.id].filter(Boolean) } } }).catch(() => {});
     await prisma.interviewRequest.deleteMany({ where: { requisitionId: requisition?.id } }).catch(() => {});
     await prisma.companyInterest.deleteMany({ where: { requisitionId: requisition?.id } }).catch(() => {});
+    await prisma.application.deleteMany({ where: { requisitionId: requisition?.id } }).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { companyId: company?.id } }).catch(() => {});
     await prisma.requisition.deleteMany({ where: { id: requisition?.id } }).catch(() => {});
     await prisma.user.deleteMany({ where: { email: { in: Object.values(emails) } } }).catch(() => {});
@@ -89,8 +103,8 @@ test.describe.serial('Interview request form (note + proposed slots)', () => {
 
   test('note + slots: a 6th slot is blocked in the UI, remove works, and the ISO instant sent is accepted by the schema', async ({ page }) => {
     await login(page, emails.company);
-    await page.goto(`/company/requisitions/${requisition.id}`);
-    const row = candidateRow(page, menteeWithNote.id);
+    await gotoSettled(page, `/company/requisitions/${requisition.id}`);
+    const row = await candidateRow(page, menteeWithNote.id);
 
     await row.getByTestId('interview-request-note').fill('Please interview this candidate soon.');
 
@@ -130,8 +144,8 @@ test.describe.serial('Interview request form (note + proposed slots)', () => {
 
   test('empty note + no slots still creates a request (both stay fully optional)', async ({ page }) => {
     await login(page, emails.company);
-    await page.goto(`/company/requisitions/${requisition.id}`);
-    const row = candidateRow(page, menteeBare.id);
+    await gotoSettled(page, `/company/requisitions/${requisition.id}`);
+    const row = await candidateRow(page, menteeBare.id);
     await row.getByTestId('interview-request-submit').click();
     await expect(row.getByText('Pending')).toBeVisible({ timeout: 10000 });
 

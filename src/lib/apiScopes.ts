@@ -28,6 +28,14 @@ export const API_SCOPES = [
   'companies:read',
   // Requisitions, offers and interview requests: what an ATS reacts to.
   'hiring:read',
+  // The /api/v1 write family (#1994). Each is granted on its own: a key that
+  // reads candidates writes nothing until an admin says so.
+  'candidates:write',
+  'relationships:write',
+  'interactions:write',
+  // A connector managing its OWN webhook subscriptions (#2002): POST/GET/DELETE
+  // /api/v1/hooks: only the subscriptions this key made, never an admin-created one.
+  'hooks:write',
   'companies:write',
 ] as const;
 
@@ -56,6 +64,10 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'meetings:read': 'INTEGRATIONS_API',
   'companies:read': 'INTEGRATIONS_API',
   'hiring:read': 'INTEGRATIONS_API',
+  'candidates:write': 'INTEGRATIONS_API',
+  'relationships:write': 'INTEGRATIONS_API',
+  'interactions:write': 'INTEGRATIONS_API',
+  'hooks:write': 'INTEGRATIONS_API',
   'companies:write': null,
 };
 
