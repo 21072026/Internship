@@ -3,6 +3,7 @@ import { WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
+import { REQUISITION_STATUSES } from '@/lib/requisitions';
 
 // The day the pre-#1988 `candidates` alias key is removed from GET /candidates.
 const CANDIDATES_ALIAS_SUNSET = '2027-01-31';
@@ -25,6 +26,65 @@ const errorResponses = {
   '429': { $ref: '#/components/responses/TooManyRequests' },
 };
 
+const str = { type: 'string' };
+const nstr = { type: ['string', 'null'] };
+const when = { type: 'string', format: 'date-time' };
+const nwhen = { type: ['string', 'null'], format: 'date-time' };
+const eqFilter = (name: string, description: string, values?: readonly string[]) => ({
+  name,
+  in: 'query',
+  description,
+  schema: values ? { type: 'string', enum: [...values] } : { type: 'string' },
+});
+
+// One list path and one single-read path per resource (#1990): the same
+// envelope, parameters and error responses everywhere, a real schema per item.
+function listPath(scope: string, schema: string, summary: string, description: string, filters: object[] = []) {
+  return {
+    get: {
+      summary,
+      description: `Requires a key holding \`${scope}\`. ${description} Only the rows of the key’s organisation.`,
+      security: [{ apiKey: [scope] }],
+      parameters: [...listParameters, ...filters],
+      responses: {
+        '200': {
+          description: 'One page',
+          headers: rateLimitResponseHeaders,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['data', 'page'],
+                properties: { data: { type: 'array', items: { $ref: `#/components/schemas/${schema}` } }, page: { $ref: '#/components/schemas/PageInfo' } },
+              },
+            },
+          },
+        },
+        ...errorResponses,
+      },
+    },
+  };
+}
+function itemPath(scope: string, schema: string, summary: string) {
+  return {
+    get: {
+      summary,
+      description: `Requires a key holding \`${scope}\`. The same object as one element of the list. An id of another organisation answers 404, exactly like a missing one.`,
+      security: [{ apiKey: [scope] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        '200': {
+          description: 'The resource',
+          headers: rateLimitResponseHeaders,
+          content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: `#/components/schemas/${schema}` } } } } },
+        },
+        '404': { $ref: '#/components/responses/NotFound' },
+        ...errorResponses,
+      },
+    },
+  };
+}
+
 // Minimal OpenAPI 3.1 description of the public, key-authenticated API.
 // Served publicly so integrators can discover the surface and import it into
 // Swagger/Postman.
@@ -40,7 +100,7 @@ export async function GET(request: Request) {
       title: `${brandProductName(brand)} Public API`,
       version: '1.0.0',
       description:
-        'Read-only candidate access (Bearer API key) plus outgoing webhooks. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
+        'Read access to candidates, relationships, interactions, meetings, companies and the hiring resources (Bearer API key) plus outgoing webhooks. No resource carries an e-mail address or phone number; an interaction’s note body needs its own scope. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
     },
     servers: [{ url: '/api/v1' }],
     components: {
@@ -127,8 +187,77 @@ export async function GET(request: Request) {
             updatedAt: { type: 'string', format: 'date-time' },
           },
         },
+        Relationship: {
+          type: 'object',
+          required: ['id', 'mentorId', 'menteeId', 'status', 'pipelineStatus', 'updatedAt'],
+          properties: {
+            id: str, mentorId: str, menteeId: str, companyId: nstr,
+            status: { type: 'string', enum: ['ACTIVE', 'COMPLETED'] },
+            pipelineStatus: { type: 'string', description: 'The pipeline stage key (organisation-specific stages are possible).' },
+            startDate: when, completedAt: nwhen, updatedAt: when,
+          },
+        },
+        Interaction: {
+          type: 'object',
+          required: ['id', 'relationId', 'type', 'date', 'updatedAt'],
+          properties: {
+            id: str, relationId: str,
+            type: { type: 'string', enum: ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] },
+            date: when, meetingId: nstr, updatedAt: when,
+            notes: { type: 'string', description: 'The note body. Present ONLY for a key that also holds `interactions:read_notes`.' },
+          },
+        },
+        Meeting: {
+          type: 'object',
+          required: ['id', 'title', 'status', 'participantIds', 'updatedAt'],
+          properties: {
+            id: str, title: str, scheduledAt: nwhen, durationMinutes: { type: ['integer', 'null'] },
+            status: { type: 'string', enum: ['SCHEDULED', 'CANCELLED'] },
+            relationId: nstr, projectId: nstr,
+            participantIds: { type: 'array', items: str, description: 'Account ids: the organiser and, for a relationship meeting, its mentor and mentee.' },
+            guestCount: { type: 'integer', description: 'External guests without an account (never named).' },
+            endedAt: nwhen, cancelledAt: nwhen, createdAt: when, updatedAt: when,
+          },
+        },
+        Company: {
+          type: 'object',
+          required: ['id', 'name', 'openRequisitionCount', 'updatedAt'],
+          properties: {
+            id: str, name: str, country: nstr, industry: nstr, size: nstr,
+            openRequisitionCount: { type: 'integer' }, createdAt: when, updatedAt: when,
+          },
+        },
+        Requisition: {
+          type: 'object',
+          required: ['id', 'companyId', 'title', 'status', 'openings', 'filled', 'updatedAt'],
+          properties: {
+            id: str, companyId: str, title: str,
+            status: { type: 'string', enum: [...REQUISITION_STATUSES] },
+            city: nstr, openings: { type: 'integer' }, filled: { type: 'integer' },
+            requiredSkills: { type: 'array', items: str }, closedAt: nwhen, createdAt: when, updatedAt: when,
+          },
+        },
+        Offer: {
+          type: 'object',
+          description: 'An offer’s status and dates. Compensation is never part of the public API.',
+          required: ['id', 'relationId', 'status', 'updatedAt'],
+          properties: {
+            id: str, relationId: str, requisitionId: nstr, companyId: nstr, status: str,
+            startDate: nwhen, expiresAt: nwhen, sentAt: nwhen, decidedAt: nwhen, declineReasonCode: nstr,
+            createdAt: when, updatedAt: when,
+          },
+        },
+        InterviewRequest: {
+          type: 'object',
+          required: ['id', 'requisitionId', 'menteeId', 'companyId', 'status', 'updatedAt'],
+          properties: {
+            id: str, requisitionId: str, menteeId: str, companyId: str, status: str,
+            scheduledAt: nwhen, meetingId: nstr, decidedAt: nwhen, cancelledAt: nwhen, createdAt: when, updatedAt: when,
+          },
+        },
       },
       responses: {
+        NotFound: { description: '`not_found` — no such resource in the key’s organisation.', content: problem },
         BadRequest: { description: '`validation_failed` — a parameter is malformed (see `fields`).', content: problem },
         Unauthorized: { description: '`invalid_api_key` — missing, unknown, expired or revoked API key.', content: problem },
         Forbidden: {
@@ -174,6 +303,36 @@ export async function GET(request: Request) {
           },
         },
       },
+      '/relationships': listPath('relationships:read', 'Relationship', 'List relationships', 'Mentor ↔ mentee relationships with their pipeline stage.', [
+        eqFilter('status', 'Only relationships in this status.', ['ACTIVE', 'COMPLETED']),
+        eqFilter('stage', 'Only relationships at this pipeline stage key.'),
+        eqFilter('mentorId', 'Only this mentor’s relationships.'),
+        eqFilter('companyId', 'Only relationships placed with this company.'),
+      ]),
+      '/relationships/{id}': itemPath('relationships:read', 'Relationship', 'Get a relationship'),
+      '/interactions': listPath('interactions:read', 'Interaction', 'List interactions', 'Logged interactions per relationship. The note body is included only when the key also holds `interactions:read_notes`.', [
+        eqFilter('relationId', 'Only this relationship’s interactions.'),
+      ]),
+      '/interactions/{id}': itemPath('interactions:read', 'Interaction', 'Get an interaction'),
+      '/meetings': listPath('meetings:read', 'Meeting', 'List meetings', 'Meetings of a relationship or a project.'),
+      '/meetings/{id}': itemPath('meetings:read', 'Meeting', 'Get a meeting'),
+      '/companies': listPath('companies:read', 'Company', 'List companies', 'Companies with their count of open requisitions. No contact details.'),
+      '/companies/{id}': itemPath('companies:read', 'Company', 'Get a company'),
+      '/requisitions': listPath('hiring:read', 'Requisition', 'List requisitions', 'Open roles and their fill state.', [
+        eqFilter('status', 'Only requisitions in this status.', REQUISITION_STATUSES),
+        eqFilter('companyId', 'Only this company’s requisitions.'),
+      ]),
+      '/requisitions/{id}': itemPath('hiring:read', 'Requisition', 'Get a requisition'),
+      '/offers': listPath('hiring:read', 'Offer', 'List offers', 'Offer status and dates (no compensation).', [
+        eqFilter('relationId', 'Only offers on this relationship.'),
+        eqFilter('companyId', 'Only this company’s offers.'),
+      ]),
+      '/offers/{id}': itemPath('hiring:read', 'Offer', 'Get an offer'),
+      '/interview-requests': listPath('hiring:read', 'InterviewRequest', 'List interview requests', 'Interview requests a company made for a candidate.', [
+        eqFilter('requisitionId', 'Only requests for this requisition.'),
+        eqFilter('companyId', 'Only this company’s requests.'),
+      ]),
+      '/interview-requests/{id}': itemPath('hiring:read', 'InterviewRequest', 'Get an interview request'),
     },
     'x-api-key-scopes': {
       description:

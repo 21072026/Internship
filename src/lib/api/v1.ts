@@ -198,3 +198,36 @@ export function paginate<T extends { updatedAt: Date; id: string }>(
     page: { nextCursor: hasMore && last ? encodeCursor(resource, last) : null, hasMore },
   };
 }
+
+/**
+ * Equality filters a list accepts beyond the shared three (#1990). Each name
+ * maps to its allowed values, or to 'string' for an id-like value. An
+ * unrecognised value is a 400 — a filter that silently matched nothing (or
+ * everything) would look like an empty or complete result.
+ */
+export function parseFilters<K extends string>(
+  request: Request,
+  spec: Record<K, readonly string[] | 'string'>,
+): Partial<Record<K, string>> | NextResponse {
+  const params = new URL(request.url).searchParams;
+  const out: Partial<Record<K, string>> = {};
+  const fields: ApiFieldError[] = [];
+  for (const name of Object.keys(spec) as K[]) {
+    const raw = params.get(name);
+    if (raw === null) continue;
+    const allowed = spec[name];
+    if (allowed === 'string') {
+      if (!raw || raw.length > 191) fields.push({ field: name, message: 'must be a non-empty value' });
+      else out[name] = raw;
+    } else if (!allowed.includes(raw)) {
+      fields.push({ field: name, message: `must be one of ${allowed.join(', ')}` });
+    } else out[name] = raw;
+  }
+  if (fields.length) return apiError(400, 'validation_failed', 'The request has invalid parameters', undefined, { fields });
+  return out;
+}
+
+/** 404 for an id that is not this key's — another tenant's row looks exactly like a missing one. */
+export function apiNotFound(): NextResponse {
+  return apiError(404, 'not_found', 'Not found');
+}
