@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**/api/v1 read breadth (#1990):** `GET /api/v1/relationships`, `/interactions`, `/meetings`, `/companies`, `/requisitions`, `/offers` and `/interview-requests`, each with a `/{id}` twin, all on the v1 contract (cursor, `updatedSince`, problem errors) and each scoped explicitly to the key's org (another org's id is `404 not_found`). New scopes `relationships:read`, `interactions:read`, `interactions:read_notes`, `meetings:read`, `companies:read`, `hiring:read`, all gated on `INTEGRATIONS_API`. No resource carries an e-mail or phone; the interaction note body needs `interactions:read_notes`; offers carry no compensation. One `select` + serializer per resource in `src/lib/api/v1Resources.ts`; `parseFilters()` refuses unknown filter values. Schema (additive): `updatedAt @default(now()) @updatedAt` on `MentorshipRelation`, `InteractionLog`, `Meeting`, `Requisition`, and keyset indexes on those plus `Company`, `Offer`, `InterviewRequest`. `check:api-key-routes` maps `[id]` segments to OpenAPI `{id}`. The async bulk export moves to #3002.",
+  "notes": {
+    "en": ["The public API now also reads relationships, interactions, meetings, companies, requisitions, offers and interview requests — each with its own permission, and interaction notes only with an extra one."],
+    "tr": ["Genel API artık ilişkileri, etkileşimleri, toplantıları, şirketleri, iş taleplerini, teklifleri ve mülakat taleplerini de okuyabiliyor — her biri kendi izniyle; etkileşim notları ise yalnızca ek bir izinle."],
+    "de": ["Die öffentliche API liest jetzt auch Beziehungen, Interaktionen, Meetings, Unternehmen, Stellen, Angebote und Interviewanfragen — jeweils mit eigener Berechtigung, Interaktionsnotizen nur mit einer zusätzlichen."]
+  }
+}

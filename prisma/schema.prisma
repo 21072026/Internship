@@ -1630,6 +1630,8 @@ model Company {
   // whole table row by row.
   @@index([orgId, externalId])
   @@index([orgId, createdBySource])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // One sales channel of one account (#2408): a marketplace, a shop system or a
@@ -2319,6 +2321,8 @@ model Offer {
   @@index([orgId, status])
   @@index([relationId])
   @@index([orgId, currency])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -2967,6 +2971,9 @@ model MentorshipRelation {
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
   completedAt             DateTime?
+  // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
+  // table with rows; existing rows start at the deploy instant.
+  updatedAt               DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
@@ -3124,6 +3131,8 @@ model MentorshipRelation {
   // The daily follow-up sweep asks for the ACTIVE relations whose next action
   // falls on or before today (#2563).
   @@index([nextActionAt])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3648,6 +3657,8 @@ model InteractionLog {
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
   notes      String          @db.Text
   type       InteractionType
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt  DateTime        @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
@@ -3671,6 +3682,8 @@ model InteractionLog {
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@unique([relationId, sourceRef])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 enum RsvpStatus {
@@ -3730,6 +3743,8 @@ model Meeting {
   createdById         String
   reminderSentAt      DateTime?
   createdAt           DateTime      @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime      @default(now()) @updatedAt
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
@@ -3781,6 +3796,8 @@ model Meeting {
   @@index([conversationId])
   @@index([seriesId])
   @@index([batchKey])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -4828,6 +4845,8 @@ model Requisition {
   ownerId             String?
   legacyCompanyNeedId String?   @unique
   createdAt           DateTime  @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime  @default(now()) @updatedAt
   closedAt            DateTime?
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -4841,6 +4860,8 @@ model Requisition {
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted
@@ -4889,6 +4910,8 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 /// One person being considered for one role, and where they are in it (#1828).
