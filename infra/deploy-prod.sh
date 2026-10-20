@@ -882,6 +882,13 @@ run_tool node prisma/backfill-integrations-api-grandfather.mjs || true
 # in the output rather than guessed at.
 run_tool node prisma/backfill-skill-lists.mjs --apply || true
 
+# Map the free-text skills onto the canonical taxonomy (#1819): seeds each
+# org's starter vocabulary (insert-missing only, so curation is never undone),
+# creates UserSkill / RequisitionSkill rows for what resolves and queues the
+# rest in UnmappedSkillTerm for /admin/skills. Runs AFTER the re-split above so
+# it maps the split entries; skipDuplicates makes a re-run a no-op.
+run_tool node prisma/backfill-skill-taxonomy.mjs --apply || true
+
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
 # stopped and removed the running container BEFORE proving the new image works,
