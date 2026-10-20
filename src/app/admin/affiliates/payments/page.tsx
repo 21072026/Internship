@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 interface Partner {
   id: string;
@@ -244,7 +245,7 @@ export default function AffiliatePaymentsPage() {
           <tbody>
             {payments.map((p) => (
               <tr key={p.id} className="border-t">
-                <td className="p-2">{new Date(p.receivedAt).toLocaleDateString()}</td>
+                <td className="p-2"><RelativeTime date={p.receivedAt} /></td>
                 <td className="p-2">{p.customer.partner.code}</td>
                 <td className="p-2">{p.customer.externalRef}</td>
                 <td className="p-2">{eur(p.amountMinor)}</td>

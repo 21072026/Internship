@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 interface Commission {
   id: string;
@@ -117,7 +118,7 @@ export default function AffiliatePortalPage() {
             <tbody>
               {summary.commissions.map((c) => (
                 <tr key={c.id} className="border-t">
-                  <td className="p-2">{new Date(c.accruedAt).toLocaleDateString()}</td>
+                  <td className="p-2"><RelativeTime date={c.accruedAt} /></td>
                   <td className="p-2">{c.kind === 'TIER' ? a.kindTier : a.kindPercent}</td>
                   <td className="p-2">{eur(c.amountMinor)}</td>
                   <td className="p-2">{statusLabel(c.status)}</td>
