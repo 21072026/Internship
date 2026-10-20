@@ -18,6 +18,7 @@ import {
   sendMentorApplicationRejectedEmail,
 } from '@/services/emailService';
 import { capSkills } from '@/lib/skills';
+import { syncUserSkills } from '@/lib/skillsResolve';
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
@@ -275,6 +276,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (result.outcome === 'promoted') {
       const user = result.user;
+      // Dual-write the canonical twin of the (possibly just copied) list (#1818).
+      await syncUserSkills(user.id, user.orgId, Array.isArray(user.skills) ? (user.skills as string[]) : []);
       if (user.email && emailAllowed(user, 'mentorship')) {
         void sendMentorApplicationApprovedEmail({
           to: user.email,

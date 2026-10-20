@@ -13,6 +13,7 @@ generalise "React" to "Frontend". The taxonomy is the vocabulary those strings r
 | Tables `Skill`, `SkillAlias`, `SkillEdge`, `UserSkill`, `RequisitionSkill` | `prisma/schema.prisma` (next to `Tag`) | #1815 |
 | Pure rules: caps, labels, new-skill keys, merge chain, adjacency walk | `src/lib/skillTaxonomyRule.ts` (unit test `scripts/test/skill-taxonomy.test.mjs`) | #1815 |
 | DB resolver: `resolveSkill` / `resolveMany` / `expandAdjacent` / `seedSkillTaxonomy` | `src/lib/skillsResolve.ts` (e2e `e2e/skill-taxonomy.spec.ts`) | #1815 |
+| Autocomplete (`GET /api/skills/suggest`) + dual-write on every skill write path | `src/components/ui/SkillsField.tsx`, `syncUserSkills` / `syncRequisitionSkills` in `src/lib/skillsResolve.ts` (e2e `e2e/skill-picker.spec.ts`, `@smoke`) | #1818 |
 | Backfill of the free text + unmapped-term queue | `prisma/backfill-skill-taxonomy.mjs`, `src/lib/skillQueue.ts`, `/api/admin/skills/unmapped` (e2e `e2e/skill-backfill.spec.ts`) | #1819 |
 
 ## Rules that carry weight
@@ -65,3 +66,24 @@ The queue: `GET /api/admin/skills/unmapped[?resolution=…]` (most frequent firs
 labelEn?, labelTr?, labelDe? }`. ADMIN only, org from the session, another org's term answers
 404. Each decision is one guarded `updateMany` out of `PENDING` (a second decision answers 409);
 promote and alias then link everybody whose free text carries the term (`linkFreeTextHolders`).
+
+## Autocomplete and dual-write (#1818)
+
+`SkillsField` — the one skills editor every form uses (#2314) — asks `GET /api/skills/suggest?q=`
+while typing and offers the org's ACTIVE skills as an ARIA 1.2 combobox. Picking commits the
+canonical **label**; the JSON list still holds strings. A term not in the vocabulary can still be
+committed with Enter.
+
+Whose vocabulary: signed in → the caller's org (any role; free core, never gated). Signed out → only
+`?mentorId=` (a link `/api/apply` would accept → that mentor's org) or
+`?context=mentor-application` (the default org, where `/api/mentor-applications` files it);
+anything else answers an empty list. Signed-out calls are rate-limited per IP.
+
+**Dual-write.** Every path that writes a skill list calls `syncUserSkills(userId, orgId, skills)`
+or `syncRequisitionSkills(...)` after its own write: the `UserSkill` / `RequisitionSkill` rows are
+made to equal what the JSON resolves to (missing created, stale removed); unresolved terms are
+created as PENDING `UnmappedSkillTerm` rows. The sync never throws — a failed mirror is repaired
+by the next deploy's backfill, which also covers the paths that do not sync yet (imports, roster
+feed, SSO sync, duplicate merges). Inside a transaction that wrote the requisition, sync **after**
+commit: the mirror's FK insert would wait on the transaction's own row lock.
+`ensureSkillTaxonomy(orgId)` seeds an org created after the last deploy on first use.

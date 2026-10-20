@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { useEffect, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { X } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import {
@@ -27,6 +27,16 @@ import {
  * take my list?" is answered by looking), the counter and the warnings are
  * visible while typing, and the cap is enforced here with the same numbers
  * `@/lib/skills` gives the routes — a limit only one side holds is not a limit.
+ *
+ * AUTOCOMPLETE (#1818)
+ *   While typing, the field asks `suggestUrl` (default `/api/skills/suggest`)
+ *   for the org's canonical skills and offers them as a listbox — an ARIA 1.2
+ *   combobox: arrows move, Enter picks, Escape closes. Picking one commits its
+ *   canonical LABEL, so what a mentee picks is the same string, and resolves to
+ *   the same `Skill` row, as what a mentor was tagged with. A term nobody
+ *   curated can still be typed and committed with Enter: the server keeps it in
+ *   the free-text list and parks it in the curation queue instead of dropping
+ *   it. `suggestUrl={null}` turns suggestions off.
  */
 export function SkillsField({
   value,
@@ -39,6 +49,7 @@ export function SkillsField({
   testId = 'skills-field',
   max = SKILL_LIMITS.maxSkills,
   maxLength = SKILL_LIMITS.maxSkillLength,
+  suggestUrl = '/api/skills/suggest',
 }: {
   value: string[];
   onChange: (skills: string[]) => void;
@@ -52,6 +63,8 @@ export function SkillsField({
   max?: number;
   /** Characters allowed in one skill. Raised alongside `max`. */
   maxLength?: number;
+  /** Autocomplete endpoint (gets `q`); `null` turns suggestions off. */
+  suggestUrl?: string | null;
 }) {
   const t = useT();
   const copy = t.skillsInput;
@@ -60,6 +73,47 @@ export function SkillsField({
   const [notice, setNotice] = useState<{ tone: 'info' | 'warn'; text: string } | null>(null);
 
   const atLimit = value.length >= max;
+
+  const [options, setOptions] = useState<{ id: string; label: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const listboxId = `${testId}-listbox`;
+
+  // Ask for suggestions while typing: debounced, and a newer keystroke aborts
+  // the older request so a slow answer can never overwrite a fresh one.
+  useEffect(() => {
+    const q = draft.trim();
+    if (!suggestUrl || disabled || atLimit || q.length === 0) {
+      setOptions([]);
+      setActive(-1);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const sep = suggestUrl.includes('?') ? '&' : '?';
+        const res = await fetch(`${suggestUrl}${sep}q=${encodeURIComponent(q)}`, { signal: controller.signal });
+        if (!res.ok) return;
+        const body = (await res.json()) as { suggestions?: { id: string; label: string }[] };
+        const taken = new Set(value.map(skillKey));
+        const next = (body.suggestions ?? []).filter((o) => !taken.has(skillKey(o.label)));
+        setOptions(next);
+        setActive(-1);
+        setOpen(next.length > 0);
+      } catch {
+        /* aborted or offline: typing still works without suggestions */
+      }
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [draft, suggestUrl, disabled, atLimit, value]);
+
+  const closeList = () => {
+    setOpen(false);
+    setActive(-1);
+  };
 
   /**
    * Add candidates (already split) to the list, and say what happened. One
@@ -121,6 +175,7 @@ export function SkillsField({
   };
 
   const commitDraft = () => {
+    closeList();
     if (!draft.trim()) {
       setDraft('');
       return;
@@ -128,7 +183,35 @@ export function SkillsField({
     if (commit(draft)) setDraft('');
   };
 
+  const pick = (label: string) => {
+    closeList();
+    if (commit(label)) setDraft('');
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const listOpen = open && options.length > 0;
+    if (listOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      const last = options.length - 1;
+      setActive((i) => (event.key === 'ArrowDown' ? (i >= last ? 0 : i + 1) : i <= 0 ? last : i - 1));
+      return;
+    }
+    if (!listOpen && event.key === 'ArrowDown' && options.length > 0) {
+      event.preventDefault();
+      setOpen(true);
+      setActive(0);
+      return;
+    }
+    if (event.key === 'Escape' && listOpen) {
+      event.preventDefault();
+      closeList();
+      return;
+    }
+    if (event.key === 'Enter' && listOpen && active >= 0 && active < options.length) {
+      event.preventDefault();
+      pick(options[active].label);
+      return;
+    }
     if (event.key === 'Enter' || event.key === ',' || event.key === ';' || event.key === 'Tab') {
       // Tab only commits when there is something to commit, so the key still
       // moves focus on an empty field.
@@ -220,6 +303,13 @@ export function SkillsField({
         placeholder={atLimit ? copy.full : placeholder}
         aria-label={label}
         aria-describedby={`${testId}-help`}
+        role={suggestUrl ? 'combobox' : undefined}
+        aria-autocomplete={suggestUrl ? 'list' : undefined}
+        aria-expanded={suggestUrl ? open && options.length > 0 : undefined}
+        // Only while the listbox exists: an IDREF to a missing element is an axe violation.
+        aria-controls={suggestUrl && open && options.length > 0 ? listboxId : undefined}
+        aria-activedescendant={open && active >= 0 ? `${listboxId}-${active}` : undefined}
+        autoComplete="off"
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
@@ -230,6 +320,40 @@ export function SkillsField({
             : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-blue-100'
         }`}
       />
+
+      {suggestUrl && open && options.length > 0 && (
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label={copy.suggestions}
+          data-testid={listboxId}
+          className="relative z-20 mt-1 max-h-60 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-lg"
+        >
+          {options.map((option, i) => (
+            <li
+              key={option.id}
+              id={`${listboxId}-${i}`}
+              role="option"
+              aria-selected={i === active}
+              data-testid={`${testId}-option`}
+              // mousedown, not click: a click would blur the input first, and the
+              // blur commits the half-typed draft instead of the option.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(option.label);
+              }}
+              onMouseEnter={() => setActive(i)}
+              className={`cursor-pointer px-3.5 py-2 text-sm ${
+                i === active
+                  ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/60 dark:text-blue-100'
+                  : 'text-gray-800 dark:text-gray-200'
+              }`}
+            >
+              {option.label}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div id={`${testId}-help`} aria-live="polite">
         {error ? (
