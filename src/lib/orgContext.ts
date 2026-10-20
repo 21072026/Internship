@@ -240,6 +240,16 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // that key alone resolves to whichever row the database happened to return
   // unless something narrows it by tenant. This is what narrows it.
   'Tag',
+  // The canonical skill vocabulary (#1815): same shape and reasoning as Tag —
+  // REQUIRED orgId and a per-org natural key (orgId + key). UserSkill and
+  // RequisitionSkill carry no orgId and are deliberately not listed: like
+  // UserTag they are reached only through a scoped parent (User / Requisition
+  // on one side, Skill on the other).
+  'Skill',
+  'SkillAlias',
+  'SkillEdge',
+  // The backfill's review queue (#1819): one org's unresolved terms.
+  'UnmappedSkillTerm',
   'StageSla',
   'PipelineStage',
   // The per-tenant competency framework (#822) — the questions a tenant decided

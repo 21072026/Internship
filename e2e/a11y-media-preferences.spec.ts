@@ -104,11 +104,15 @@ test.describe('prefers-contrast: more', () => {
 
     const normal = await probe();
     await page.emulateMedia({ contrast: 'more' });
-    const boosted = await probe();
 
     // Light theme: "stronger" means darker against the light page background.
-    expect(boosted.border).toBeLessThan(normal.border);
-    expect(boosted.text).toBeLessThan(normal.text);
+    // Polled, not read once: the first `.text-gray-500` on the page is the
+    // language switcher, which carries `transition-colors` (150ms). Right after
+    // the media query flips its computed colour is still the one it is
+    // transitioning FROM, so a single read could see the old value — exactly
+    // the scheduled-run failure (text 113.52 vs 113.52 = rgb(107,114,128)).
+    await expect.poll(async () => (await probe()).border).toBeLessThan(normal.border);
+    await expect.poll(async () => (await probe()).text).toBeLessThan(normal.text);
 
     await expectNoSidewaysScroll(page);
   });

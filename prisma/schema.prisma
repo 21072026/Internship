@@ -191,6 +191,10 @@ model Organization {
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
   tags                    Tag[]
+  skills                  Skill[]
+  skillAliases            SkillAlias[]
+  skillEdges              SkillEdge[]
+  unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
@@ -316,6 +320,145 @@ model UserTag {
   @@unique([userId, tagId])
   @@index([tagId])
   @@index([userId])
+}
+
+// ─── Canonical skill taxonomy (#1815, epic #1810) ──────────────────────────
+// The vocabulary a skill list resolves TO. Same shape as Tag/UserTag: required
+// orgId, unique per org, cascade from Organization. Purely additive — the
+// free-text `User.skills` / `Requisition.requiredSkills` JSON keeps being
+// written as it is today. The pure rules live in src/lib/skillTaxonomyRule.ts,
+// the DB-side resolver in src/lib/skillsResolve.ts; the starter rows come from
+// src/lib/skillSeed.ts (#1816).
+//
+// `status` and `kind` are Strings (like Requisition.status) so the vocabulary
+// can grow without an enum change under `db push`.
+model Skill {
+  id           String   @id @default(cuid())
+  orgId        String
+  // The fold of the canonical name (`skillKey()`), or the seed key for a
+  // starter skill ("react"). Never renamed: aliases, edges and user rows
+  // point at the row, but a backfill matches on this.
+  key          String   @db.VarChar(64)
+  labelEn      String   @db.VarChar(60)
+  labelTr      String   @db.VarChar(60)
+  labelDe      String   @db.VarChar(60)
+  category     String?  @db.VarChar(32)
+  // ACTIVE | RETIRED. A retired skill is no longer offered, but the rows that
+  // point at it keep their meaning.
+  status       String   @default("ACTIVE") @db.VarChar(16)
+  // Set when an admin merges this skill into another: the row stays so every
+  // old reference still resolves (the resolver follows the chain).
+  mergedIntoId String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  org          Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  mergedInto   Skill?             @relation("SkillMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom   Skill[]            @relation("SkillMerge")
+  aliases      SkillAlias[]
+  edgesFrom    SkillEdge[]        @relation("SkillEdgeFrom")
+  edgesTo      SkillEdge[]        @relation("SkillEdgeTo")
+  users        UserSkill[]
+  requisitions RequisitionSkill[]
+
+  @@unique([orgId, key])
+  @@index([orgId, status])
+  @@index([mergedIntoId])
+}
+
+// A spelling people type ("ReactJS", "React.js"), folded. Unique per org, so
+// an alias can never point at two canonical skills.
+model SkillAlias {
+  id      String @id @default(cuid())
+  orgId   String
+  skillId String
+  key     String @db.VarChar(64)
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  skill Skill        @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, key])
+  @@index([skillId])
+}
+
+// "Close enough to be worth showing for the other". ADJACENT is undirected
+// (stored once, read both ways); BROADER / NARROWER read from → to only.
+// weight is 0..1 and is what adjacency-aware scoring multiplies by (#1821).
+model SkillEdge {
+  id          String @id @default(cuid())
+  orgId       String
+  fromSkillId String
+  toSkillId   String
+  weight      Float  @default(0.5)
+  kind        String @default("ADJACENT") @db.VarChar(16)
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  from Skill        @relation("SkillEdgeFrom", fields: [fromSkillId], references: [id], onDelete: Cascade)
+  to   Skill        @relation("SkillEdgeTo", fields: [toSkillId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, fromSkillId, toSkillId])
+  @@index([toSkillId])
+}
+
+// A person holds a canonical skill. Reached only through its User (scoped) or
+// its Skill (scoped), exactly like UserTag — so no orgId and deliberately not
+// in TENANT_MODELS. Removing a skill removes the row, never the person.
+// Proficiency columns are #1814's.
+model UserSkill {
+  id        String   @id @default(cuid())
+  userId    String
+  skillId   String
+  // Where the row came from: SELF | ADMIN | BACKFILL | CV | IMPORT.
+  source    String   @default("SELF") @db.VarChar(16)
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@index([skillId])
+}
+
+// A requisition asks for a canonical skill. Child of Requisition (scoped),
+// same reasoning as UserSkill: no orgId, not in TENANT_MODELS.
+model RequisitionSkill {
+  id            String  @id @default(cuid())
+  requisitionId String
+  skillId       String
+  required      Boolean @default(true)
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  skill       Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, skillId])
+  @@index([skillId])
+}
+
+// A free-text skill the backfill (#1819) could not resolve onto the org's
+// vocabulary — parked for an admin instead of guessed or dropped. One row per
+// org × folded term; `occurrences` is recomputed absolutely on every run
+// (people holding it + requisitions asking for it), so a re-run is a no-op.
+// The admin's decision (PROMOTED to a new skill, ALIASED onto an existing one,
+// DISCARDED) is never overwritten by the backfill.
+model UnmappedSkillTerm {
+  id              String    @id @default(cuid())
+  orgId           String
+  // `skillKey()` fold of the term — what makes "Yazılım" and "yazilim" one row.
+  normalizedKey   String    @db.VarChar(64)
+  // The spelling seen most often, for display.
+  term            String    @db.VarChar(60)
+  occurrences     Int       @default(0)
+  firstSeenAt     DateTime  @default(now())
+  // PENDING | PROMOTED | ALIASED | DISCARDED
+  resolution      String    @default("PENDING") @db.VarChar(16)
+  resolvedSkillId String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, normalizedKey])
+  @@index([orgId, resolution, occurrences])
 }
 
 model StageSla {
@@ -554,6 +697,9 @@ model User {
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                     @relation("UserTags")
+  // Canonical skills (#1815). `skills` above stays the free-text JSON until a
+  // separate contract PR retires it; this is the joinable twin.
+  skillRows                         UserSkill[]
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -645,6 +791,8 @@ model User {
   @@index([role])
   @@index([referredById])
   @@index([orgId, externalId])
+  // The /api/v1 keyset (#1988): candidates page over (updatedAt, id) within one org.
+  @@index([orgId, updatedAt, id])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
@@ -4903,6 +5051,8 @@ model Requisition {
   interests         CompanyInterest[]
   interviewRequests InterviewRequest[]
   applications      Application[]
+  // Canonical twin of `requiredSkills` (#1815), written alongside it.
+  skills            RequisitionSkill[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])

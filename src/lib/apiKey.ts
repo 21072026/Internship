@@ -7,6 +7,7 @@ import { assertApiKeyRequestContext, runAsApiKeyRequest, runWithApiKeyOrg } from
 import { clientIp, enforceRateLimit, rateLimitState } from '@/lib/rateLimit';
 import { consumeApiKeyQuota } from '@/lib/apiKeyQuota';
 import { bindingLimit, rateLimitHeaders, type LimitState } from '@/lib/apiKeyQuotaRules';
+import { apiError } from '@/lib/api/v1';
 
 export function hashApiKey(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');
@@ -79,10 +80,7 @@ export async function authenticateApiKey(request: Request): Promise<ApiKeyIdenti
 // to fix it.
 export function requireApiScope(key: ApiKeyIdentity, scope: ApiScope): NextResponse | null {
   if (key.scopes.includes(scope)) return null;
-  return NextResponse.json(
-    { error: `This API key does not hold the required scope: ${scope}` },
-    { status: 403 },
-  );
+  return apiError(403, 'insufficient_scope', 'Insufficient scope', `This API key does not hold the required scope: ${scope}`, { scope });
 }
 
 /**
@@ -130,10 +128,14 @@ export async function withApiKey(
 
 /** A per-minute refusal, typed so a client can tell it from `quota_exceeded`. */
 function rateLimited(limited: NextResponse): NextResponse {
-  return NextResponse.json(
-    { error: 'Too many requests. Please try again later.', type: 'rate_limited' },
-    { status: 429, headers: { 'Retry-After': limited.headers.get('Retry-After') ?? '60' } },
-  );
+  return apiError(429, 'rate_limited', 'Too many requests', 'Too many requests. Please try again later.', {
+    headers: { 'Retry-After': limited.headers.get('Retry-After') ?? '60' },
+  });
+}
+
+// One body for every 401: unknown, expired and revoked are deliberately alike.
+function invalidKey(): NextResponse {
+  return apiError(401, 'invalid_api_key', 'Invalid or missing API key');
 }
 
 async function door(
@@ -151,7 +153,7 @@ async function door(
     const ipLimited = enforceRateLimit(request, 'v1', V1_RATE_LIMIT);
     limits.minute = ipState();
     if (ipLimited) return rateLimited(ipLimited);
-    return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+    return invalidKey();
   }
   // A key is presented: an address already over its limit (from failed keys)
   // is refused before the lookup costs anything.
@@ -168,7 +170,7 @@ async function door(
       const ipLimited = enforceRateLimit(request, 'v1', V1_RATE_LIMIT);
       limits.minute = ipState();
       if (ipLimited) return rateLimited(ipLimited);
-      return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+      return invalidKey();
     }
 
     // The key's own window on the SAME limiter and the same bucket (#2028's
@@ -183,10 +185,7 @@ async function door(
 
     const orgId = key.orgId;
     if (!orgId) {
-      return NextResponse.json(
-        { error: 'This API key is not bound to an organization' },
-        { status: 403 },
-      );
+      return apiError(403, 'org_unbound', 'This API key is not bound to an organization');
     }
 
     return runWithApiKeyOrg(orgId, async () => {
@@ -200,10 +199,7 @@ async function door(
       // say "wrong key".
       const feature = SCOPE_ENTITLEMENT[scope];
       if (feature && !(await entitled(orgId, feature))) {
-        return NextResponse.json(
-          { error: 'Your plan does not include API access', code: 'feature_locked', feature },
-          { status: 403 },
-        );
+        return apiError(403, 'feature_locked', 'Your plan does not include API access', undefined, { code: 'feature_locked', feature });
       }
       // The period allowance (#2010), last: a request refused for its scope,
       // its org or its plan never spends any of it. Counted in a batched
@@ -211,10 +207,10 @@ async function door(
       const quota = await consumeApiKeyQuota(key);
       limits.quota = quota.state;
       if (!quota.ok) {
-        return NextResponse.json(
-          { error: 'This API key has used its request allowance for the period', type: 'quota_exceeded', resetAt: quota.resetAt.toISOString() },
-          { status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil((quota.resetAt.getTime() - Date.now()) / 1000))) } },
-        );
+        return apiError(429, 'quota_exceeded', 'This API key has used its request allowance for the period', undefined, {
+          resetAt: quota.resetAt.toISOString(),
+          headers: { 'Retry-After': String(Math.max(1, Math.ceil((quota.resetAt.getTime() - Date.now()) / 1000))) },
+        });
       }
       return handler({ ...key, orgId });
     });
