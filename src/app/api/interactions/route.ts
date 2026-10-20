@@ -3,15 +3,12 @@ import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { shellCapabilities } from '@/lib/shellCapabilities';
 import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { z } from 'zod';
-import { dispatchWebhook } from '@/lib/webhooks';
-import { recordPairActivity } from '@/lib/metering';
-import { notifyIfAllowed } from '@/lib/notify';
+import { createInteraction } from '@/lib/interactionWrite';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 
@@ -120,34 +117,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const interaction = await prisma.interactionLog.create({
-      data: {
-        relationId,
-        date: new Date(date),
-        subject: subject || null,
-        notes,
-        type,
-      },
+    // The row and its effects (metering, webhook, the mentee's bell) through
+    // the one write path the public API shares (#1996).
+    const interaction = await createInteraction({
+      relation,
+      date: new Date(date),
+      type,
+      notes,
+      subject,
+      actorId: session.user.id,
     });
-
-    // Metering signal (#1750): activity VOLUME, not the pair count — one pair
-    // logging fifty interactions is still one billable pair. Collected here so
-    // the nightly rollup can eventually read a stream instead of scanning seven
-    // domain tables; until then activeMatchedPairs() is the truth. Never
-    // awaited, and it cannot fail the write.
-    recordPairActivity(relation.orgId);
-
-    await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() }, relation.orgId);
-    // The mentee learns their mentor logged something (#924) — previously this
-    // was completely silent. No echo: only a mentor/admin can reach this point,
-    // but the guard stays cheap insurance against future role changes. The
-    // notification carries no note content, just the fact.
-    // Mentorship only: in a vertical without the module (MARKETING, #2580) the
-    // MENTEE row is the lead on a sales record, not someone with a portal to
-    // read a "your mentor logged something" bell in.
-    if (relation.menteeId !== session.user.id && (await shellCapabilities(relation.orgId)).includes('mentorship')) {
-      await notifyIfAllowed(relation.menteeId, 'interactions', 'interaction.logged', {}, '/portal/journey');
-    }
     return NextResponse.json({ interaction }, { status: 201 });
     });
   } catch (error) {
