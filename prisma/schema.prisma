@@ -644,6 +644,8 @@ model User {
   @@index([role])
   @@index([referredById])
   @@index([orgId, externalId])
+  // The /api/v1 keyset (#1988): candidates page over (updatedAt, id) within one org.
+  @@index([orgId, updatedAt, id])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"

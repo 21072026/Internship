@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**The /api/v1 contract (#1988):** one module, `src/lib/api/v1.ts`, for every public endpoint — the `{ data, page: { nextCursor, hasMore } }` envelope (`apiOk`), RFC 9457 problem documents with a stable `type` slug (`apiError`: `invalid_api_key`, `insufficient_scope`, `org_unbound`, `feature_locked`, `rate_limited`, `quota_exceeded`, `validation_failed`, `not_found`; the old `error` string stays in the body), opaque HMAC-signed keyset cursors over `(updatedAt, id)` bound to their resource (`encodeCursor`/`decodeCursor` — a tampered or foreign cursor is `400 validation_failed`, never page one), and `parseListQuery` (`limit` default 50, clamped to 200; strict ISO-8601 `updatedSince`). Every refusal of the `withApiKey()` door now goes through it. `GET /api/v1/candidates` pages ascending by `(updatedAt, id)` (a row edited mid-walk is met again at the end), filters by `updatedSince`, exposes `createdAt`/`updatedAt`, and keeps `candidates` as a deprecated alias of `data` until 2027-01-31. Additive index `User @@index([orgId, updatedAt, id])`. The public OpenAPI document gains reusable `Limit`/`Cursor`/`UpdatedSince` parameters and `PageInfo`/`Problem`/`Candidate` schemas. Contract: `docs/public-api.md`.",
+  "notes": {
+    "en": ["The public API now pages through candidates with a cursor, can return only what changed since a given time, and answers every error with a stable, machine-readable type."],
+    "tr": ["Genel API artık adayları bir imleçle sayfa sayfa dönüyor, yalnızca belirli bir andan beri değişenleri verebiliyor ve her hatayı makinenin okuyabileceği sabit bir türle yanıtlıyor."],
+    "de": ["Die öffentliche API blättert Kandidaten jetzt per Cursor, liefert auf Wunsch nur seit einem Zeitpunkt Geändertes und beantwortet jeden Fehler mit einem stabilen, maschinenlesbaren Typ."]
+  }
+}
