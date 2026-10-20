@@ -4,6 +4,9 @@
 //
 //   • below the survey's response floor nothing is reported but the count —
 //     no NPS, no distribution, no free text;
+//   • the same floor per QUESTION (#1877): an optional question two people
+//     answered is two people, however many answered the survey — it reports
+//     its count and `suppressed: true`, nothing else;
 //   • every breakdown (by respondent role, cohort, mentor) goes through
 //     applyResponseFloor, residual suppression included (src/lib/surveyPrivacy.ts);
 //   • cohort and mentor breakdowns exist only for surveys whose responses
@@ -29,6 +32,8 @@ export interface QuestionResult {
   type: string;
   label: string;
   answered: number;
+  /** True when fewer than the floor answered THIS question: only `answered` is reported. */
+  suppressed?: boolean;
   nps?: Nps;
   trend?: NpsPoint[];
   distribution?: DistributionBin[];
@@ -108,6 +113,10 @@ export async function loadSurveyResults(surveyId: string, locale: string): Promi
     const out = base.questions[i];
     const rows = answersOf(q.key);
     out.answered = rows.length;
+    if (rows.length > 0 && rows.length < floor) {
+      out.suppressed = true;
+      continue;
+    }
     const options = Array.isArray(q.options) ? (q.options as { value: string; labels: unknown }[]) : [];
     const optionLabel = (v: string) => pickLocalized(options.find((o) => o.value === v)?.labels, locale) || v;
     switch (q.type) {
