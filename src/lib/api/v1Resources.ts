@@ -19,6 +19,33 @@ import { Prisma } from '@prisma/client';
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
+// ── Candidates ───────────────────────────────────────────────────────────────
+export const candidateSelect = {
+  id: true,
+  fullName: true,
+  university: true,
+  department: true,
+  graduationYear: true,
+  skills: true,
+  createdAt: true,
+  updatedAt: true,
+  menteeRelations: { where: { status: 'ACTIVE' }, take: 1, select: { pipelineStatus: true } },
+} satisfies Prisma.UserSelect;
+
+export function serializeCandidate(m: Prisma.UserGetPayload<{ select: typeof candidateSelect }>) {
+  return {
+    id: m.id,
+    fullName: m.fullName,
+    university: m.university,
+    department: m.department,
+    graduationYear: m.graduationYear,
+    skills: m.skills,
+    stage: m.menteeRelations[0]?.pipelineStatus ?? null,
+    createdAt: iso(m.createdAt),
+    updatedAt: iso(m.updatedAt),
+  };
+}
+
 // ── Relationships ────────────────────────────────────────────────────────────
 export const relationshipSelect = {
   id: true,

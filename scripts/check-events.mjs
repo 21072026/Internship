@@ -82,7 +82,10 @@ const DIRECT_DELIVERY_ALLOWED = [
 const PENDING_MIGRATION = [
   ['src/app/api/apply/route.ts', 'application.created', 1, 'public application intake'],
   ['src/app/api/mentorship/route.ts', 'mentorship.created', 1, 'admin assigns a mentor'],
-  ['src/app/api/interactions/route.ts', 'interaction.logged', 1, 'mentor logs an interaction by hand'],
+  // The SAME call site, relocated (#1996): POST /api/interactions and
+  // POST /api/v1/interactions now share src/lib/interactionWrite.ts, so the
+  // count is unchanged — one direct call for every hand-logged interaction.
+  ['src/lib/interactionWrite.ts', 'interaction.logged', 1, 'an interaction logged by hand or through the public API'],
   ['src/lib/meetingAutoLog.ts', 'interaction.logged', 1, 'auto-logged variant — a second payload shape for one event name'],
   ['src/app/api/evaluations/route.ts', 'evaluation.added', 1, 'evaluation submitted'],
   ['src/app/api/meetings/route.ts', 'meeting.scheduled', 1, 'batch invite — payload {title, scheduledAt, count}'],
