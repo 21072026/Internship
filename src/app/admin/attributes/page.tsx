@@ -17,7 +17,7 @@ import { ATTRIBUTE_TYPES, MAX_LABEL_LENGTH, attributeLabel, type AttributeType }
 // The org's segmentation attributes (#1920): the dimensions a report can be
 // sliced by — a department, a level, a location, a start date. The admin names
 // each one in up to three languages; a list's options are typed one per line.
-// Values arrive through the import panel below the form (AttributeValueImport). Deliberately no presets, and above
+// Values arrive through the admin import. Deliberately no presets, and above
 // all no special-category one (docs/analytics.md § Dimensions).
 
 type Labels = Partial<Record<Locale, string>>;
@@ -214,7 +214,6 @@ export default function AdminAttributesPage() {
         </Card>
 
         {attributes.length > 0 && <AttributeValueImport onApplied={load} />}
-
         <Card className="max-w-4xl">
           <CardHeader>
             <CardTitle>{L.list.replace('{n}', String(attributes.length))}</CardTitle>

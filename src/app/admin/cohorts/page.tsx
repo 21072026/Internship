@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Pencil, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Pencil, Route, Trash2 } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
@@ -151,6 +152,7 @@ export default function AdminCohortsPage() {
                       <td className="py-2 pr-4">{hired}</td>
                       <td className="py-2 pr-4">{rate}%</td>
                       <td className="py-2 text-right whitespace-nowrap">
+                        <Link href={`/admin/programs/${c.id}/journey`} aria-label={t.programJourney.journeyLink} title={t.programJourney.journeyLink} data-testid={`cohort-journey-${c.id}`} className="text-gray-400 hover:text-blue-600 mr-3"><Route className="h-4 w-4 inline" /></Link>
                         <button onClick={() => rename(c)} disabled={saving} aria-label={t.common.edit} className="text-gray-400 hover:text-blue-600 mr-3"><Pencil className="h-4 w-4 inline" /></button>
                         <button onClick={() => remove(c)} disabled={saving} aria-label={t.common.delete} className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4 inline" /></button>
                       </td>

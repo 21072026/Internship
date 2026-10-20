@@ -50,12 +50,20 @@ export interface NavLink {
    * the page and its API close themselves on the same rule.
    */
   withoutCapability?: VerticalCapability;
+  /**
+   * Shown only to a super admin of the caller's world (#1575) — a surface about
+   * the whole deployment rather than one tenant (the internal API explorer).
+   * Presentation only: the page and its API refuse a tenant admin themselves.
+   */
+  superAdminOnly?: boolean;
 }
 
 export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin', icon: LayoutDashboard, key: 'dashboard', exact: true },
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
+  // The hiring desk (#1874): the four queues waiting on the programme owner.
+  { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },
   { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements' },
   { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements' },
@@ -92,6 +100,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts', capability: 'mentorship' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },
+  // The canonical skill vocabulary and its review queue (#1817).
+  { href: '/admin/skills', icon: Sparkles, key: 'skills' },
   { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing' },
   { href: '/admin/users', icon: UserCog, key: 'users' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
@@ -132,7 +142,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Segmentation attributes the reports slice by (#1920). Untagged: every vertical reports.
   { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
-  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
+  // The whole deployment's API map — the operator's (#1575).
+  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
@@ -220,13 +231,19 @@ export function navLinksForRole(role: NavRole): NavLink[] {
  * the full capability set — which INTERNSHIP always has — keeps every link, so
  * this is a no-op for today's product and only thins the sidebar for a vertical
  * that switches a module off (e.g. MARKETING has no `mentorship`, so the mentor
- * and mentorship links fall away). Pure: same inputs, same array, no I/O.
+ * and mentorship links fall away). A `superAdminOnly` link survives only when
+ * the caller says it is one (`opts.superAdmin`). Pure: same inputs, same array,
+ * no I/O.
  */
 export function visibleNavLinks(
   links: NavLink[],
   caps: readonly VerticalCapability[],
+  opts: { superAdmin?: boolean } = {},
 ): NavLink[] {
   return links.filter(
-    (l) => (!l.capability || caps.includes(l.capability)) && (!l.withoutCapability || !caps.includes(l.withoutCapability)),
+    (l) =>
+      (!l.capability || caps.includes(l.capability)) &&
+      (!l.withoutCapability || !caps.includes(l.withoutCapability)) &&
+      (!l.superAdminOnly || opts.superAdmin === true),
   );
 }
