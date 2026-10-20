@@ -15,7 +15,15 @@
 // NOTE: nothing here enforces anything. Checking a scope at the door of an
 // /api/v1 route is #1546; this module defines and parses the vocabulary.
 
-export const API_SCOPES = ['candidates:read', 'companies:write'] as const;
+export const API_SCOPES = [
+  'candidates:read',
+  // The /api/v1 write family (#1994). Each is granted on its own: a key that
+  // reads candidates writes nothing until an admin says so.
+  'candidates:write',
+  'relationships:write',
+  'interactions:write',
+  'companies:write',
+] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
 
@@ -36,6 +44,9 @@ export const DEFAULT_API_SCOPES: readonly ApiScope[] = ['candidates:read'];
 //                      switch off the tenant's own data feed.
 export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'candidates:read': 'INTEGRATIONS_API',
+  'candidates:write': 'INTEGRATIONS_API',
+  'relationships:write': 'INTEGRATIONS_API',
+  'interactions:write': 'INTEGRATIONS_API',
   'companies:write': null,
 };
 

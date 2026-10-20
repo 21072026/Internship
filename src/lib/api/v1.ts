@@ -31,6 +31,9 @@ export const API_ERROR_TYPES = [
   'quota_exceeded',
   'validation_failed',
   'not_found',
+  // Writes (#1994, src/lib/api/v1Write.ts).
+  'idempotency_key_reused',
+  'idempotency_in_progress',
 ] as const;
 export type ApiErrorType = (typeof API_ERROR_TYPES)[number];
 
