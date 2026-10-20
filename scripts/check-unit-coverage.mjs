@@ -139,6 +139,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'vertical catalogue: unknown key must fall back, never blank a tenant (#2350)' },
   ],
   [
+    'src/lib/skillTaxonomyRule.ts',
+    { floor: 95, measured: 100.0, why: 'skill taxonomy: a merge loop or a cyclic adjacency graph must terminate, origins stay at weight 1 (#1815)' },
+  ],
+  [
     'src/lib/mentorDirectory.ts',
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
   ],
