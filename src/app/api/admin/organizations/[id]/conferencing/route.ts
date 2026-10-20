@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
 import { CONFERENCING_POLICIES, conferencingPolicyOf } from '@/lib/conferencingRule';
 
@@ -56,13 +56,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     select: { conferencingPolicy: true },
   });
   if (before?.conferencingPolicy !== updated.conferencingPolicy) {
-    await logActivity({
+    await recordOrgWrite({
+      orgId: id,
       action: 'organization.conferencing_policy',
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
-      targetType: 'organization',
-      targetId: id,
       detail: `${before?.conferencingPolicy ?? 'BUILTIN'} -> ${updated.conferencingPolicy}`,
+      request: req,
     });
   }
   return NextResponse.json({ policy: conferencingPolicyOf(updated.conferencingPolicy) });
