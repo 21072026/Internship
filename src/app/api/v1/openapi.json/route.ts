@@ -100,7 +100,7 @@ export async function GET(request: Request) {
       title: `${brandProductName(brand)} Public API`,
       version: '1.0.0',
       description:
-        'Read access to candidates, relationships, interactions, meetings, companies and the hiring resources (Bearer API key) plus outgoing webhooks. No resource carries an e-mail address or phone number; an interaction’s note body needs its own scope. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
+        'Read access to candidates, relationships, interactions, meetings, companies and the hiring resources (Bearer API key) plus outgoing webhooks. No resource carries an e-mail address or phone number; an interaction’s note body needs its own scope. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Writes need a `<resource>:write` scope, have their own tighter limit of 30 a minute per key, accept an `Idempotency-Key` and answer an invalid body with 422 and per-field `errors`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
     },
     servers: [{ url: '/api/v1' }],
     components: {
@@ -138,6 +138,13 @@ export async function GET(request: Request) {
             'Opaque cursor from `page.nextCursor` of the previous page. Pages walk `(updatedAt, id)` ascending, so a row changed during a walk is met again at the end rather than skipped. A cursor that was altered, or minted by another list, answers 400 `validation_failed` — never the first page.',
           schema: { type: 'string' },
         },
+        IdempotencyKey: {
+          name: 'Idempotency-Key',
+          in: 'header',
+          description:
+            'Optional on every write (1-200 printable ASCII characters). A retry with the same key and the same request replays the stored success (with `Idempotent-Replayed: true`) and writes nothing; the same key with a different request is 409 `idempotency_key_reused`; a retry while the first is still running is 409 `idempotency_in_progress`. Only successes are remembered, for 24 hours; a refused write frees its key.',
+          schema: { type: 'string', maxLength: 200 },
+        },
         UpdatedSince: {
           name: 'updatedSince',
           in: 'query',
@@ -164,6 +171,11 @@ export async function GET(request: Request) {
             status: { type: 'integer' },
             detail: { type: 'string' },
             error: { type: 'string', deprecated: true },
+            errors: {
+              type: 'array',
+              description: 'On a 422 `validation_failed`: one entry per invalid body field.',
+              items: { type: 'object', required: ['path', 'code', 'message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } },
+            },
             fields: {
               type: 'array',
               description: 'On `validation_failed`: one entry per offending parameter or field.',
@@ -258,6 +270,14 @@ export async function GET(request: Request) {
       },
       responses: {
         NotFound: { description: '`not_found` — no such resource in the key’s organisation.', content: problem },
+        UnprocessableEntity: {
+          description: '`validation_failed` — the write body is invalid; `errors` names each field (`path`, `code`, `message`).',
+          content: problem,
+        },
+        Conflict: {
+          description: '`idempotency_key_reused` — the Idempotency-Key was used with a different request; `idempotency_in_progress` — a request with it is still running (Retry-After).',
+          content: problem,
+        },
         BadRequest: { description: '`validation_failed` — a parameter is malformed (see `fields`).', content: problem },
         Unauthorized: { description: '`invalid_api_key` — missing, unknown, expired or revoked API key.', content: problem },
         Forbidden: {
