@@ -4,6 +4,10 @@ import {
   isDeliverable,
   isLiveStep,
   isSafeContentUrl,
+  journeyStepStatus,
+  journeyTemplate,
+  participantGroup,
+  satisfiedCondition,
   readStepPayload,
   recipientsFor,
   resolveDueAt,
@@ -63,4 +67,34 @@ test('a satisfied step names its reason; the vocabularies are whitelists', async
   expect(isLiveStep({ publishedAt: now, archivedAt: null, action: 'SEND_MONEY' }, now)).toBe(false);
   expect(stepTitle({ title: 'Week 6 check-in', translations: { tr: '6. hafta' } }, 'tr')).toBe('6. hafta');
   expect(stepTitle({ title: 'Week 6 check-in', translations: { tr: '6. hafta' } }, 'de')).toBe('Week 6 check-in');
+});
+
+test('the preview status says what the sweep would do; a template is a plain data copy', async () => {
+  const step = { anchor: 'RELATION_START', offsetDays: 3, payload: { skipIf: 'goal_exists' }, publishedAt: now, archivedAt: null, action: 'NUDGE' };
+  const started = (daysAgo: number) => facts(new Date(now.getTime() - daysAgo * DAY));
+  expect(journeyStepStatus(step, null, started(3), stages, {}, now).status).toBe('due');
+  expect(journeyStepStatus(step, null, started(3), stages, { goal_exists: true }, now)).toMatchObject({ status: 'would_skip', reason: 'satisfied:goal_exists' });
+  expect(journeyStepStatus(step, null, started(1), stages, {}, now).status).toBe('upcoming');
+  expect(journeyStepStatus(step, null, started(30), stages, {}, now).status).toBe('missed');
+  expect(journeyStepStatus({ ...step, publishedAt: null }, null, started(3), stages, {}, now).status).toBe('draft');
+  expect(journeyStepStatus(step, { deliveredAt: now, skippedReason: null, dueAt: now }, started(3), stages, {}, now).status).toBe('delivered');
+  expect(journeyStepStatus({ ...step, anchor: 'STAGE_ENTRY', payload: { stageKey: 'ON_THE_JOB' } }, null, started(3), stages, {}, now).status).toBe('waiting');
+
+  const tpl = journeyTemplate([
+    { order: 5, milestone: 'Month 1', anchor: 'RELATION_START', offsetDays: 7, audience: 'MENTEE', action: 'ASSIGN_TODO', payload: { skipIf: 'goal_exists', junk: 1 }, title: 'First goal', translations: { de: 'Erstes Ziel', xx: 'no' } },
+    { order: 1, anchor: 'RELATION_START', offsetDays: 1, audience: 'BOTH', action: 'NUDGE', title: 'Hello', archivedAt: now },
+  ]);
+  expect(tpl).toEqual([{ order: 0, milestone: 'Month 1', anchor: 'RELATION_START', offsetDays: 7, audience: 'MENTEE', action: 'ASSIGN_TODO', payload: { skipIf: 'goal_exists' }, title: 'First goal', translations: { de: 'Erstes Ziel' } }]);
+  expect(JSON.parse(JSON.stringify(tpl))).toEqual(tpl);
+});
+
+test('the participant sees now / next / done — never a draft, a missed or an unschedulable step', async () => {
+  expect(participantGroup('due')).toBe('now');
+  expect(participantGroup('upcoming')).toBe('next');
+  expect(participantGroup('waiting')).toBe('next');
+  for (const s of ['delivered', 'skipped', 'would_skip', 'claimed'] as const) expect(participantGroup(s)).toBe('done');
+  for (const s of ['draft', 'archived', 'missed', 'unresolved'] as const) expect(participantGroup(s)).toBeNull();
+  expect(satisfiedCondition('satisfied:meeting_exists')).toBe('meeting_exists');
+  expect(satisfiedCondition('satisfied:nope')).toBeNull();
+  expect(satisfiedCondition(null)).toBeNull();
 });

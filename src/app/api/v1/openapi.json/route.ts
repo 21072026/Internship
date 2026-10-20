@@ -65,6 +65,38 @@ function listPath(scope: string, schema: string, summary: string, description: s
     },
   };
 }
+// A write operation (#1994/#1996): the Idempotency-Key, the 422 body contract,
+// the idempotency 409 and the operation's own domain 409, documented the same
+// way on every write.
+function writeOp(scope: string, summary: string, description: string, body: object, schema: string, status: '200' | '201', conflict: string, extraParams: object[] = []) {
+  return {
+    summary,
+    description: `Requires a key holding \`${scope}\`. ${description}`,
+    security: [{ apiKey: [scope] }],
+    parameters: [...extraParams, { $ref: '#/components/parameters/IdempotencyKey' }],
+    requestBody: { required: true, content: { 'application/json': { schema: body } } },
+    responses: {
+      [status]: {
+        description: status === '201' ? 'Created' : 'Updated',
+        headers: rateLimitResponseHeaders,
+        content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: `#/components/schemas/${schema}` } } } } },
+      },
+      '404': { $ref: '#/components/responses/NotFound' },
+      '409': { description: `${conflict} Or \`idempotency_key_reused\` / \`idempotency_in_progress\`.`, content: problem },
+      '422': { $ref: '#/components/responses/UnprocessableEntity' },
+      ...errorResponses,
+    },
+  };
+}
+const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' } };
+const profileProps = {
+  fullName: { type: 'string', maxLength: 191 },
+  university: { type: 'string', maxLength: 191 },
+  department: { type: 'string', maxLength: 191 },
+  graduationYear: { type: 'integer', minimum: 1950, maximum: 2100 },
+  skills: { type: 'array', items: { type: 'string' }, description: 'At most 40 skills of 60 characters; a longer list is refused, not truncated.' },
+};
+
 function itemPath(scope: string, schema: string, summary: string) {
   return {
     get: {
@@ -344,6 +376,50 @@ export async function GET(request: Request) {
             ...errorResponses,
           },
         },
+        post: writeOp(
+          'candidates:write',
+          'Create a candidate',
+          'Creates a candidate in the key\u2019s organisation. Never a near-duplicate: an e-mail address already in use is always 409 `duplicate_candidate` (`matches` carries the id only when it is in your organisation); a look-alike by name, phone or university is 409 with `matches` unless `allowPossibleDuplicate` is true. The account is claimed by the person through a password reset.',
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['fullName', 'email'],
+            properties: { ...profileProps, email: { type: 'string', format: 'email', maxLength: 191 }, allowPossibleDuplicate: { type: 'boolean' } },
+          },
+          'Candidate',
+          '201',
+          '`duplicate_candidate` — with `matches: [{ id, signals, score? }]`.',
+        ),
+      },
+      '/candidates/{id}': {
+        ...itemPath('candidates:read', 'Candidate', 'Get a candidate'),
+        patch: writeOp(
+          'candidates:write',
+          'Update a candidate',
+          'Only the profile fields the read endpoint exposes. Any other key (`role`, `orgId`, `email`, credentials …) is refused with 422 `unrecognized_keys`, never ignored. A blank value is no opinion: a PATCH cannot empty a field.',
+          { type: 'object', additionalProperties: false, minProperties: 1, properties: profileProps },
+          'Candidate',
+          '200',
+          'Not used.',
+          [idParam],
+        ),
+      },
+      '/relationships/{id}/stage': {
+        patch: writeOp(
+          'relationships:write',
+          'Move a relationship’s pipeline stage',
+          'The same write path as the board: history row, notification, `pipeline.stage_change` webhook and stage SLA. `stage` is a stage KEY of the organisation (422 `unknown_stage` otherwise); a move into an off-path stage needs `reasonCode` (and `reasonNote` for OTHER). The stage it already has answers 200 with `changed: false`.',
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['stage'],
+            properties: { stage: { type: 'string', maxLength: 60 }, reasonCode: { type: 'string', maxLength: 40 }, reasonNote: { type: 'string', maxLength: 2000 } },
+          },
+          'Relationship',
+          '200',
+          '`invalid_transition` — the relationship is not ACTIVE (`currentStage` in the body); `stage_conflict` — the stage changed meanwhile (`currentStage`).',
+          [idParam],
+        ),
       },
       '/me': {
         get: {
@@ -431,9 +507,31 @@ export async function GET(request: Request) {
         eqFilter('companyId', 'Only relationships placed with this company.'),
       ]),
       '/relationships/{id}': itemPath('relationships:read', 'Relationship', 'Get a relationship'),
-      '/interactions': listPath('interactions:read', 'Interaction', 'List interactions', 'Logged interactions per relationship. The note body is included only when the key also holds `interactions:read_notes`.', [
-        eqFilter('relationId', 'Only this relationship’s interactions.'),
-      ]),
+      '/interactions': {
+        ...listPath('interactions:read', 'Interaction', 'List interactions', 'Logged interactions per relationship. The note body is included only when the key also holds `interactions:read_notes`.', [
+          eqFilter('relationId', 'Only this relationship’s interactions.'),
+        ]),
+        post: writeOp(
+          'interactions:write',
+          'Log an interaction',
+          'The same write path as the app: one `interaction.logged` webhook and the mentee\u2019s notification. The response includes `notes` only for a key that also holds `interactions:read_notes`.',
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['relationId', 'type', 'date', 'notes'],
+            properties: {
+              relationId: { type: 'string' },
+              type: { type: 'string', enum: ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] },
+              date: { type: 'string', format: 'date-time' },
+              subject: { type: 'string', maxLength: 191 },
+              notes: { type: 'string', maxLength: 5000 },
+            },
+          },
+          'Interaction',
+          '201',
+          'Not used.',
+        ),
+      },
       '/interactions/{id}': itemPath('interactions:read', 'Interaction', 'Get an interaction'),
       '/meetings': listPath('meetings:read', 'Meeting', 'List meetings', 'Meetings of a relationship or a project.'),
       '/meetings/{id}': itemPath('meetings:read', 'Meeting', 'Get a meeting'),

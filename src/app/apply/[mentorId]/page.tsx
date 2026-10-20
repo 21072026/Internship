@@ -94,7 +94,14 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
                   <Input label={t.apply.university} value={form.university} onChange={(e) => set('university', e.target.value)} />
                   <Input label={t.apply.department} value={form.department} onChange={(e) => set('department', e.target.value)} />
                 </div>
-                <SkillsField label={t.apply.skills} placeholder="React, Python…" value={skills} onChange={setSkills} />
+                <SkillsField
+                  label={t.apply.skills}
+                  placeholder="React, Python…"
+                  value={skills}
+                  onChange={setSkills}
+                  // Signed out: the mentor's link names whose vocabulary to offer.
+                  suggestUrl={`/api/skills/suggest?mentorId=${encodeURIComponent(mentorId)}`}
+                />
                 <Button type="submit" className="w-full" size="lg" loading={sending}>
                   {t.apply.submit}
                 </Button>
