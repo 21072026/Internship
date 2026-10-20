@@ -66,6 +66,7 @@ const ICONS: Record<string, string> = {
   safeguarding: 'shield-checkmark',
   aiConsole: 'sparkles',
   myMentees: 'people',
+  billing: 'receipt',
   organizations: 'business',
   outbox: 'paper-plane',
   reEngagement: 'refresh',
