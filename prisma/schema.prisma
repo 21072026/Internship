@@ -194,6 +194,7 @@ model Organization {
   skills                  Skill[]
   skillAliases            SkillAlias[]
   skillEdges              SkillEdge[]
+  unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
@@ -431,6 +432,33 @@ model RequisitionSkill {
 
   @@unique([requisitionId, skillId])
   @@index([skillId])
+}
+
+// A free-text skill the backfill (#1819) could not resolve onto the org's
+// vocabulary — parked for an admin instead of guessed or dropped. One row per
+// org × folded term; `occurrences` is recomputed absolutely on every run
+// (people holding it + requisitions asking for it), so a re-run is a no-op.
+// The admin's decision (PROMOTED to a new skill, ALIASED onto an existing one,
+// DISCARDED) is never overwritten by the backfill.
+model UnmappedSkillTerm {
+  id              String    @id @default(cuid())
+  orgId           String
+  // `skillKey()` fold of the term — what makes "Yazılım" and "yazilim" one row.
+  normalizedKey   String    @db.VarChar(64)
+  // The spelling seen most often, for display.
+  term            String    @db.VarChar(60)
+  occurrences     Int       @default(0)
+  firstSeenAt     DateTime  @default(now())
+  // PENDING | PROMOTED | ALIASED | DISCARDED
+  resolution      String    @default("PENDING") @db.VarChar(16)
+  resolvedSkillId String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, normalizedKey])
+  @@index([orgId, resolution, occurrences])
 }
 
 model StageSla {
@@ -1749,6 +1777,8 @@ model Company {
   // whole table row by row.
   @@index([orgId, externalId])
   @@index([orgId, createdBySource])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // One sales channel of one account (#2408): a marketplace, a shop system or a
@@ -2438,6 +2468,8 @@ model Offer {
   @@index([orgId, status])
   @@index([relationId])
   @@index([orgId, currency])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -3179,6 +3211,9 @@ model MentorshipRelation {
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
   completedAt             DateTime?
+  // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
+  // table with rows; existing rows start at the deploy instant.
+  updatedAt               DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
@@ -3337,6 +3372,8 @@ model MentorshipRelation {
   // The daily follow-up sweep asks for the ACTIVE relations whose next action
   // falls on or before today (#2563).
   @@index([nextActionAt])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3861,6 +3898,8 @@ model InteractionLog {
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
   notes      String          @db.Text
   type       InteractionType
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt  DateTime        @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
@@ -3884,6 +3923,8 @@ model InteractionLog {
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@unique([relationId, sourceRef])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 enum RsvpStatus {
@@ -3943,6 +3984,8 @@ model Meeting {
   createdById         String
   reminderSentAt      DateTime?
   createdAt           DateTime      @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime      @default(now()) @updatedAt
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
@@ -3994,6 +4037,8 @@ model Meeting {
   @@index([conversationId])
   @@index([seriesId])
   @@index([batchKey])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -5041,6 +5086,8 @@ model Requisition {
   ownerId             String?
   legacyCompanyNeedId String?   @unique
   createdAt           DateTime  @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime  @default(now()) @updatedAt
   closedAt            DateTime?
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -5056,6 +5103,8 @@ model Requisition {
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted
@@ -5104,6 +5153,8 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 /// One person being considered for one role, and where they are in it (#1828).

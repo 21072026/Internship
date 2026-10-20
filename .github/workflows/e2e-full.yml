@@ -339,6 +339,47 @@ jobs:
         with:
           node-version: 22
 
+      # Before the issue step, so the issue can NAME the failing tests: it is the
+      # only alert that reaches a person, and "see the artifacts" sent every
+      # reader digging through four shard reports for the one line that matters.
+      - name: Download per-shard JSON results
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: e2e-json-shard-*
+          path: e2e-json-reports
+          merge-multiple: true
+
+      - name: List the failing tests
+        id: failing
+        continue-on-error: true
+        run: |
+          node --input-type=module -e '
+            import { readdirSync, readFileSync, appendFileSync } from "node:fs";
+            const dir = "e2e-json-reports";
+            let files = [];
+            try { files = readdirSync(dir).filter((f) => f.endsWith(".json")); } catch {}
+            const out = [];
+            const walk = (suites, chain) => {
+              for (const s of suites ?? []) {
+                const next = s.title ? [...chain, s.title] : chain;
+                for (const spec of s.specs ?? []) {
+                  if (spec.ok !== false) continue;
+                  const line = spec.line ? `:${spec.line}` : "";
+                  out.push(`- \`${spec.file || s.file || "?"}${line}\` — ${[...next.slice(1), spec.title].join(" › ").replace(/[\r\n`]/g, " ").slice(0, 200)}`);
+                }
+                walk(s.suites, next);
+              }
+            };
+            for (const f of files) {
+              try { walk(JSON.parse(readFileSync(`${dir}/${f}`, "utf8")).suites, []); } catch {}
+            }
+            const list = out.length
+              ? `Failing (${out.length}, after retries):\n${out.slice(0, 30).join("\n")}${out.length > 30 ? `\n- … and ${out.length - 30} more` : ""}`
+              : `No failing test in the ${files.length} shard report(s) found — a shard may have crashed before writing one; see the run log.`;
+            appendFileSync(process.env.GITHUB_OUTPUT, `list<<FAILING_EOF\n${list}\nFAILING_EOF\n`);
+          '
+
       # The trail that reaches a person even when the e-mail below cannot
       # leave the runner (ETIMEDOUT on CONN, #2322): one `ci-alert` issue,
       # opened or refreshed while red, closed by the next green run. It runs
@@ -353,17 +394,16 @@ jobs:
           ALERT_TITLE: '🚨 e2e-full (scheduled) is red'
           ALERT_SUMMARY: |
             Commit `${{ github.sha }}`. Shards: **${{ needs.e2e-full.result }}**, tenant isolation: **${{ needs.isolation.result }}**.
-            The failing tests and their errors are in the run's `playwright-report-*` artifacts.
+            ${{ steps.failing.outputs.list }}
+            Errors and traces are in the run's `playwright-report-*` artifacts.
         run: node scripts/ci-alert-issue.mjs ${{ (needs.e2e-full.result == 'success' && needs.isolation.result == 'success') && 'green' || 'red' }}
 
-      - name: Download per-shard JSON results
-        uses: actions/download-artifact@v8
-        with:
-          pattern: e2e-json-shard-*
-          path: e2e-json-reports
-          merge-multiple: true
-
       - name: Send summary email
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

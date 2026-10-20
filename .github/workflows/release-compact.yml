@@ -176,6 +176,34 @@ jobs:
               || echo "::warning title=Auto-merge not armed::PR #${PR} is open but auto-merge could not be enabled; merge it manually."
           fi
 
+  # The SMTP-free trail for ANY failure of the compaction (#2322). The narrower
+  # "the PR could not be opened" case keeps its own issue with the manual step
+  # (release-compact-alert.mjs, #2323); this one covers everything else — a
+  # failed fold, a failed push — which used to reach nobody but the e-mail.
+  alert:
+    name: Record the result as an issue (no SMTP)
+    needs: [compact]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Open, refresh or close the compaction alert
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: release-compact
+          ALERT_TITLE: '📓 release-compact is red'
+          ALERT_SUMMARY: |
+            The scheduled fragment compaction failed (${{ needs.compact.outputs.count || '?' }} fragment(s) -> ${{ needs.compact.outputs.version || 'version not computed' }}).
+            The displayed version stays right (it is derived at build time); what stops is the record — CHANGELOG.md and the release notes. If a "compaction is stuck" issue is open too, it names the manual step.
+        run: node scripts/ci-alert-issue.mjs ${{ needs.compact.result == 'success' && 'green' || 'red' }}
+
   notify:
     name: Email alert on failure
     needs: [compact]
@@ -187,6 +215,11 @@ jobs:
         with:
           node-version: 20
       - name: Send alert email
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

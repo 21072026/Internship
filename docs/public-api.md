@@ -43,6 +43,36 @@ Three rules are load-bearing:
 - **Every paged model has the index.** A resource paged by `(updatedAt, id)`
   carries `@@index([orgId, updatedAt, id])` (additive only, never a re-key).
 
+## Resources (#1990)
+
+| Path | Scope | Tenant anchor | Filters |
+|---|---|---|---|
+| `/candidates` | `candidates:read` | `User.orgId` | — |
+| `/relationships` | `relationships:read` | `MentorshipRelation.orgId` | `status`, `stage`, `mentorId`, `companyId` |
+| `/interactions` | `interactions:read` (+ `interactions:read_notes` for the note body) | the relationship's org | `relationId` |
+| `/meetings` | `meetings:read` | the relationship's or project's org | — |
+| `/companies` | `companies:read` | `Company.orgId` | — |
+| `/requisitions` | `hiring:read` | `Requisition.orgId` | `status`, `companyId` |
+| `/offers` | `hiring:read` | the relationship's org (`Offer.orgId` is nullable) | `relationId`, `companyId` |
+| `/interview-requests` | `hiring:read` | `InterviewRequest.orgId` | `requisitionId`, `companyId` |
+
+Every list has a `/{id}` twin returning the same object (`src/lib/api/v1Resources.ts`
+holds the one `select` + serializer per resource); another org's id is a `404
+not_found`, exactly like a missing one. Filters go through `parseFilters()` — an
+unknown value is a `400`, never an empty page.
+
+**The PII line:** no resource carries an e-mail address or phone number; an
+interaction's note body is returned only to a key that also holds
+`interactions:read_notes`; an offer never carries compensation; a meeting's
+external guests are a count, never names. A meeting with neither a relationship
+nor a project (a group-conversation call) has no org anchor and is not exposed.
+
+`updatedAt` on `MentorshipRelation`, `InteractionLog`, `Meeting` and
+`Requisition` was added for the keyset (#1990) with `@default(now())`, so
+existing rows start at the deploy instant. It is stamped by Prisma; a raw SQL
+`UPDATE` does not move it.
+
+The async bulk export is #3002.
 ## Writes (#1994, `src/lib/api/v1Write.ts`)
 
 A write route is `withApiKey(request, '<resource>:write', (key) => apiWrite(request, key, schema, handler))`.
