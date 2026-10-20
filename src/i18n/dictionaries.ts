@@ -5,6 +5,12 @@ import type { Locale } from './config';
 const en = {
   affiliates: {
     title: 'Affiliate payments',
+    yourLink: 'Your referral link',
+    paidTotal: 'Paid',
+    openTotal: 'Open',
+    yourCommissions: 'Your commissions',
+    ibanEnding: 'Account ending',
+    noPartner: 'No partner account is linked to this sign-in.',
     recordTitle: 'Record a payment',
     partner: 'Partner',
     customerRef: 'Customer ID (marketing side)',
@@ -8033,6 +8039,12 @@ type Dict = typeof en;
 const tr: Dict = {
   affiliates: {
     title: 'Ortaklık ödemeleri',
+    yourLink: 'Senin yönlendirme bağlantın',
+    paidTotal: 'Ödenen',
+    openTotal: 'Açık',
+    yourCommissions: 'Komisyonların',
+    ibanEnding: 'Hesap sonu',
+    noPartner: 'Bu girişe bağlı bir ortak hesabı yok.',
     recordTitle: 'Ödeme kaydet',
     partner: 'Ortak',
     customerRef: 'Müşteri kimliği (pazarlama tarafı)',
@@ -15845,6 +15857,12 @@ const tr: Dict = {
 const de: Dict = {
   affiliates: {
     title: 'Partnerzahlungen',
+    yourLink: 'Dein Empfehlungslink',
+    paidTotal: 'Bezahlt',
+    openTotal: 'Offen',
+    yourCommissions: 'Deine Provisionen',
+    ibanEnding: 'Konto endet auf',
+    noPartner: 'Mit dieser Anmeldung ist kein Partnerkonto verknüpft.',
     recordTitle: 'Zahlung erfassen',
     partner: 'Partner',
     customerRef: 'Kunden-ID (Marketing-Seite)',
