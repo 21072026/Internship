@@ -25,8 +25,10 @@ test('INTERNSHIP hides nothing — the filter is a no-op for today’s product',
   // The one exception is by construction: a link tagged `withoutCapability`
   // exists only where a module is ABSENT (the sales vertical's outbox, #2960),
   // and INTERNSHIP carries every module. Nothing else may drop.
+  // (The capability filter only: super-admin-only links (#1575) are asked for
+  // as a super admin here, and pinned in their own test below.)
   for (const links of [ADMIN_NAV_LINKS, MENTOR_NAV_LINKS, PORTAL_NAV_LINKS]) {
-    const out = visibleNavLinks(links, INTERNSHIP);
+    const out = visibleNavLinks(links, INTERNSHIP, { superAdmin: true });
     const expected = links.filter((l) => !l.withoutCapability);
     assert.equal(out.length, expected.length);
     assert.deepEqual(out.map((l) => l.href), expected.map((l) => l.href));
@@ -43,8 +45,19 @@ test('the outbox shows only where there is a pipeline and no mentorship (#2960)'
 
 test('every untagged link survives every vertical', () => {
   const untagged = ADMIN_NAV_LINKS.filter((l) => !l.capability).map((l) => l.href);
-  const shown = new Set(visibleNavLinks(ADMIN_NAV_LINKS, MARKETING).map((l) => l.href));
+  const shown = new Set(visibleNavLinks(ADMIN_NAV_LINKS, MARKETING, { superAdmin: true }).map((l) => l.href));
   for (const href of untagged) assert.ok(shown.has(href), `${href} is untagged and must always show`);
+});
+
+test('a super-admin-only link is shown to a super admin alone (#1575)', () => {
+  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.superAdminOnly).map((l) => l.href), ['/admin/api-explorer']);
+  for (const caps of [INTERNSHIP, MARKETING]) {
+    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps).some((l) => l.href === '/admin/api-explorer'));
+    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: false }).some((l) => l.href === '/admin/api-explorer'));
+    assert.ok(visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: true }).some((l) => l.href === '/admin/api-explorer'));
+  }
+  assert.deepEqual(MENTOR_NAV_LINKS.filter((l) => l.superAdminOnly), []);
+  assert.deepEqual(PORTAL_NAV_LINKS.filter((l) => l.superAdminOnly), []);
 });
 
 test('MARKETING drops the mentorship/placement/sourcing admin links, keeps the rest', () => {

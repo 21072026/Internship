@@ -13,13 +13,17 @@ import { OutboxBadge, useOutboxPending } from '@/components/outbox/OutboxBadge';
 // The route list itself lives in lib/navLinks — shared with the command
 // palette's "Go to" group (#2079), so the two can never drift apart.
 
-export function AdminNav({ capabilities }: { capabilities?: readonly VerticalCapability[] }) {
+export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: readonly VerticalCapability[]; superAdmin?: boolean }) {
   const t = useT();
   // The vertical's capability set, resolved by the layout (#2351). Undefined
-  // means "not passed" — treated as the full product, so nothing is hidden.
+  // means "not passed" — treated as the full product, so nothing is hidden by
+  // capability. Super-admin-only links (#1575) need `superAdmin` either way.
   const LINKS = useMemo(
-    () => (capabilities ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities) : ADMIN_NAV_LINKS),
-    [capabilities],
+    () =>
+      capabilities
+        ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities, { superAdmin })
+        : ADMIN_NAV_LINKS.filter((l) => !l.superAdminOnly || superAdmin),
+    [capabilities, superAdmin],
   );
   const pathname = usePathname();
   const [q, setQ] = useState('');

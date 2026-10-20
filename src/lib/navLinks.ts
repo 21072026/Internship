@@ -49,6 +49,12 @@ export interface NavLink {
    * the page and its API close themselves on the same rule.
    */
   withoutCapability?: VerticalCapability;
+  /**
+   * Shown only to a super admin of the caller's world (#1575) — a surface about
+   * the whole deployment rather than one tenant (the internal API explorer).
+   * Presentation only: the page and its API refuse a tenant admin themselves.
+   */
+  superAdminOnly?: boolean;
 }
 
 export const ADMIN_NAV_LINKS: NavLink[] = [
@@ -129,7 +135,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
-  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
+  // The whole deployment's API map — the operator's (#1575).
+  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
@@ -217,13 +224,19 @@ export function navLinksForRole(role: NavRole): NavLink[] {
  * the full capability set — which INTERNSHIP always has — keeps every link, so
  * this is a no-op for today's product and only thins the sidebar for a vertical
  * that switches a module off (e.g. MARKETING has no `mentorship`, so the mentor
- * and mentorship links fall away). Pure: same inputs, same array, no I/O.
+ * and mentorship links fall away). A `superAdminOnly` link survives only when
+ * the caller says it is one (`opts.superAdmin`). Pure: same inputs, same array,
+ * no I/O.
  */
 export function visibleNavLinks(
   links: NavLink[],
   caps: readonly VerticalCapability[],
+  opts: { superAdmin?: boolean } = {},
 ): NavLink[] {
   return links.filter(
-    (l) => (!l.capability || caps.includes(l.capability)) && (!l.withoutCapability || !caps.includes(l.withoutCapability)),
+    (l) =>
+      (!l.capability || caps.includes(l.capability)) &&
+      (!l.withoutCapability || !caps.includes(l.withoutCapability)) &&
+      (!l.superAdminOnly || opts.superAdmin === true),
   );
 }
