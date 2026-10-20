@@ -27,9 +27,12 @@ interface Summary {
 
 const eur = (minor: number) => `€${(minor / 100).toFixed(2)}`;
 
+
 export default function AffiliatePortalPage() {
   const t = useT();
   const a = t.affiliates;
+  const statusLabel = (status: string) =>
+    ({ PENDING: a.statusPending, APPROVED: a.statusApproved, PAID: a.statusPaid, REJECTED: a.statusRejected } as Record<string, string>)[status] ?? status;
   const [summary, setSummary] = useState<Summary | null>(null);
   const [missing, setMissing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -108,16 +111,16 @@ export default function AffiliatePortalPage() {
                 <th className="p-2">{a.colReceived}</th>
                 <th className="p-2">{a.colCommission}</th>
                 <th className="p-2">{a.colAmount}</th>
-                <th className="p-2">Status</th>
+                <th className="p-2">{a.colStatus}</th>
               </tr>
             </thead>
             <tbody>
               {summary.commissions.map((c) => (
                 <tr key={c.id} className="border-t">
                   <td className="p-2">{new Date(c.accruedAt).toLocaleDateString()}</td>
-                  <td className="p-2">{c.kind}</td>
+                  <td className="p-2">{c.kind === 'TIER' ? a.kindTier : a.kindPercent}</td>
                   <td className="p-2">{eur(c.amountMinor)}</td>
-                  <td className="p-2">{c.status}</td>
+                  <td className="p-2">{statusLabel(c.status)}</td>
                 </tr>
               ))}
             </tbody>
@@ -139,8 +142,8 @@ export default function AffiliatePortalPage() {
             saveDetails(e.currentTarget);
           }}
         >
-          <input name="accountHolder" required placeholder={a.accountHolder} className="rounded border p-2" />
-          <input name="iban" required placeholder={a.iban} className="rounded border p-2" />
+          <input name="accountHolder" required aria-label={a.accountHolder} placeholder={a.accountHolder} className="rounded border p-2" />
+          <input name="iban" required aria-label={a.iban} placeholder={a.iban} className="rounded border p-2" />
           <button type="submit" className="rounded border px-4 py-2 md:w-fit">{a.saveBank}</button>
         </form>
       </section>
