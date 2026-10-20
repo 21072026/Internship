@@ -23,6 +23,7 @@ import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
 import { advanceOnAcceptedOffer } from '@/lib/offerAutoAdvance';
+import { advanceApplicationOnAcceptedOffer } from '@/lib/applicationStage';
 import { logger } from '@/lib/logger';
 
 const baseSelect = {
@@ -194,15 +195,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (actionStr === 'withdraw') data.decidedAt = now;
 
       // One transaction: the guarded status flip, and — for an acceptance — the
-      // seat it takes in the requisition (#1411/#1854). The flip is conditional
-      // on the status the checks above saw, so two concurrent requests cannot
-      // both move the same offer; the loser gets a 409, not a second write.
+      // seat it takes in the requisition (#1411/#1854) and the candidate's
+      // application for that requisition reaching HIRED (#1854). The flip is
+      // conditional on the status the checks above saw, so two concurrent
+      // requests cannot both move the same offer; the loser gets a 409, not a
+      // second write.
       const outcome = await prisma.$transaction(async (tx) => {
         const flip = await tx.offer.updateMany({ where: { id, status: offer.status }, data });
         if (flip.count === 0) return null;
         const count: RequisitionCount =
           actionStr === 'accept' ? await applyAcceptedOffer(tx, offer, now) : { outcome: 'none' };
-        return { count };
+        const hired =
+          actionStr === 'accept' && offer.requisitionId
+            ? await advanceApplicationOnAcceptedOffer(tx, { requisitionId: offer.requisitionId, menteeId: offer.relation.menteeId, now })
+            : null;
+        return { count, hired };
       });
       if (!outcome) {
         return NextResponse.json({ error: 'Offer changed meanwhile', code: 'offer_changed' }, { status: 409 });
@@ -216,7 +223,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           targetId: id,
           orgId: resolveOrgId(session),
           detail:
-            actionStr === 'decline' ? `reason ${declineReasonCode}` : requisitionCountDetail(outcome.count),
+            actionStr === 'decline'
+              ? `reason ${declineReasonCode}`
+              : [requisitionCountDetail(outcome.count), outcome.hired && `application ${outcome.hired.applicationId} ${outcome.hired.fromStage} → HIRED`]
+                  .filter(Boolean)
+                  .join('; ') || undefined,
         },
       });
       await logActivity({

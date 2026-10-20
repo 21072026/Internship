@@ -470,3 +470,64 @@ test('accepted offers fill a requisition: once each, never past openings, and a 
     await s.cleanup();
   }
 });
+
+// #1854 — the candidate's application for the offer's requisition reaches
+// HIRED in the acceptance's own transaction, through the one stage writer: one
+// step from OFFER, two true ones from INTERVIEW (the accepted offer was
+// extended), and nothing invented from earlier in the funnel.
+test('an accepted offer hires the candidate\'s application for its requisition; nothing earlier in the funnel is invented', async ({ page }) => {
+  const s = await seedScenario('apphired');
+  const requisition = (title: string) =>
+    prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title, status: 'OPEN', openings: 2, requiredSkills: [] } });
+  const application = (requisitionId: string, stage: string) =>
+    prisma.application.create({ data: { orgId: s.org.id, requisitionId, menteeId: s.mentee.id, companyId: s.company.id, stage } });
+  const sentOffer = (requisitionId: string, position: string) =>
+    prisma.offer.create({
+      data: {
+        orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, requisitionId,
+        position, status: 'SENT', sentAt: new Date(), createdById: s.admin.id,
+      },
+    });
+  const trail = (applicationId: string) =>
+    prisma.applicationEvent
+      .findMany({ where: { applicationId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+      .then((rows) => rows.map((e) => [e.fromStage, e.toStage, e.actorId, e.note]));
+  try {
+    const [atOfferReq, atInterviewReq, shortlistedReq] = await Promise.all([
+      requisition('At offer'),
+      requisition('At interview'),
+      requisition('Shortlisted only'),
+    ]);
+    const atOffer = await application(atOfferReq.id, 'OFFER');
+    const atInterview = await application(atInterviewReq.id, 'INTERVIEW');
+    const shortlisted = await application(shortlistedReq.id, 'SHORTLISTED');
+
+    await signInAsFreshUser(page, s.menteeEmail, s.pw, '/portal');
+    const accept = (id: string) => page.request.patch(`/api/offers/${id}`, { data: { action: 'accept' } });
+
+    const offerA = await sentOffer(atOfferReq.id, 'From offer');
+    expect((await accept(offerA.id)).status()).toBe(200);
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: atOffer.id } })).toMatchObject({ stage: 'HIRED', status: 'HIRED' });
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: atOffer.id } })).decidedAt).not.toBeNull();
+    expect(await trail(atOffer.id)).toEqual([['OFFER', 'HIRED', null, 'offer accepted']]);
+    const auditA = await prisma.auditLog.findFirstOrThrow({ where: { targetId: offerA.id, action: 'offer.accept' } });
+    expect(auditA.detail).toContain(`application ${atOffer.id} OFFER → HIRED`);
+
+    const offerB = await sentOffer(atInterviewReq.id, 'From interview');
+    expect((await accept(offerB.id)).status()).toBe(200);
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: atInterview.id } })).stage).toBe('HIRED');
+    expect(await trail(atInterview.id)).toEqual([
+      ['INTERVIEW', 'OFFER', null, 'offer accepted'],
+      ['OFFER', 'HIRED', null, 'offer accepted'],
+    ]);
+
+    // A shortlist is not an interview: the acceptance stands, the application stays.
+    const offerC = await sentOffer(shortlistedReq.id, 'From shortlist');
+    expect((await accept(offerC.id)).status()).toBe(200);
+    expect((await prisma.offer.findUniqueOrThrow({ where: { id: offerC.id } })).status).toBe('ACCEPTED');
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: shortlisted.id } })).stage).toBe('SHORTLISTED');
+    expect(await trail(shortlisted.id)).toEqual([]);
+  } finally {
+    await s.cleanup();
+  }
+});
