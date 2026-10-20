@@ -32,8 +32,8 @@ interface Candidate {
   linkedinUrl?: string | null;
   githubUrl?: string | null;
   portfolioUrl?: string | null;
-  pipelineStatus: string;
-  mentorName: string;
+  pipelineStatus: string | null;
+  mentorName: string | null;
 }
 
 interface VerifiedEvaluation {
@@ -172,10 +172,10 @@ export default function CompanyCandidateDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{candidate.fullName}</h1>
-              <Badge variant="info">{label(candidate.pipelineStatus)}</Badge>
+              {candidate.pipelineStatus && <Badge variant="info">{label(candidate.pipelineStatus)}</Badge>}
             </div>
             {candidate.targetPosition && <p className="text-blue-600 dark:text-blue-400 text-sm font-medium mt-0.5">{candidate.targetPosition}</p>}
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.company.mentor}: {candidate.mentorName}</p>
+            {candidate.mentorName && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.company.mentor}: {candidate.mentorName}</p>}
           </div>
         </div>
 
