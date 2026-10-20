@@ -67,7 +67,7 @@
 // expired).
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { inTransaction, type Db } from '@/lib/dbHandle';
+import { inTransaction, unitFailedIn, type Db } from '@/lib/dbHandle';
 import { runWithOrg } from '@/lib/orgContext';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
@@ -865,7 +865,13 @@ async function settleHistoricTrial(ctx: Ctx, relationId: string, stages: Stages)
 // gone with the rollback, so a dry answer carries no `companyId` /
 // `relationId`; the replay's activity line is not written; and while it runs
 // it holds the row locks a real run would take, so a live event for the same
-// account waits for it (seconds, bounded by DRY_RUN_TIMEOUT_MS).
+// account waits for it (seconds, bounded by DRY_RUN_TIMEOUT_MS). And an event
+// whose write fails PARTWAY ends it (#2988): the dry run's writers join its
+// transaction without a savepoint (src/lib/dbHandle.ts), so the writes that
+// event made before failing would stay visible to the events after it — which
+// the real run, where the event's own transaction rolled back, would not see.
+// It answers DryRunInconclusiveError (→ 409 `dry_run_inconclusive`) naming the
+// event, rather than outcomes the real run would not give.
 //
 // THREE GUARDS keep a replay from losing events or starving the app:
 //   • The org's funnel must have every stage a replay writes into
@@ -903,6 +909,18 @@ export class MissingReplayStagesError extends Error {
 export class DryRunBusyError extends Error {
   constructor() {
     super('another dry run is running');
+  }
+}
+
+/**
+ * A dry run stopped at an event whose write failed partway: what that write
+ * left behind cannot be taken back inside the dry run's transaction, so the
+ * later events would not be judged as the real run judges them. Nothing was
+ * written (the whole dry run rolled back).
+ */
+export class DryRunInconclusiveError extends Error {
+  constructor(readonly item: BatchItemResult) {
+    super(`dry run: event ${item.event_id} failed partway`);
   }
 }
 
@@ -948,6 +966,9 @@ export async function ingestAccountEventBatch(
       const { result, released } = await ingestEvent(orgId, source, event, { now, replayLog: log, db });
       if (released) heldBack.set(event.external_id, result.outcome);
       results[index] = { index, event_id: event.event_id, ...result };
+      // Only a dry run hands its own transaction to the writers (the real run
+      // passes the root client, where every unit commits or rolls back whole).
+      if (unitFailedIn(db)) throw new DryRunInconclusiveError(results[index]);
     }
     return results;
   };

@@ -12,31 +12,41 @@ import { prisma } from '@/lib/prisma';
 // it was given, and a writer that needs its own transaction asks
 // `inTransaction` instead of `prisma.$transaction`.
 //
-// Nested, it keeps the all-or-nothing promise with a SAVEPOINT: MySQL has no
-// nested transactions, so the inner unit joins the caller's transaction, and a
-// failure inside it rolls back to the savepoint before the error travels on —
-// exactly what the unit's own transaction would have left behind (nothing),
-// while the caller's transaction stays usable.
+// Nested, the unit JOINS the caller's transaction — with no savepoint (#2988).
+// MySQL has no nested transactions, and it refuses SAVEPOINT / ROLLBACK TO
+// SAVEPOINT over the prepared-statement protocol (error 1295), which is how
+// Prisma 5 sends every raw query; MariaDB accepts them, which is why a
+// savepoint version passed locally and failed on MySQL 8 in CI. So a unit that
+// throws partway leaves the writes it made before the throw in the caller's
+// transaction, and nothing here can take them back. Two rules follow:
+//   • A unit that refuses ON PURPOSE decides before its first write and
+//     answers the refusal instead of throwing it out of the unit (winBack() is
+//     the worked example), so a refusal leaves nothing behind.
+//   • Anything else that throws marks the transaction (`unitFailedIn`). The
+//     owner of a transaction it handed to writers checks that before it trusts
+//     what the transaction holds — the batch dry run stops there and answers
+//     `dry_run_inconclusive` rather than outcomes the real run would not give.
 //
 // SERVER-ONLY (Prisma).
 
 export type Db = typeof prisma | Prisma.TransactionClient;
 
-let savepoints = 0;
+/** Caller transactions in which a joined unit threw (its earlier writes are still there). */
+const failedUnits = new WeakSet<object>();
 
-/** Run `fn` in a transaction: a new one on the root client, a savepoint inside the caller's otherwise. */
+/** Run `fn` in a transaction: a new one on the root client, the caller's own otherwise. */
 export async function inTransaction<T>(db: Db, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   if (db === prisma) return prisma.$transaction(fn);
   const tx = db as Prisma.TransactionClient;
-  // A name of our own making (never input): letters, digits and `_` only.
-  const name = `sp_unit_${(savepoints = (savepoints + 1) % 1_000_000)}`;
-  await tx.$executeRawUnsafe(`SAVEPOINT ${name}`);
   try {
-    const result = await fn(tx);
-    await tx.$executeRawUnsafe(`RELEASE SAVEPOINT ${name}`);
-    return result;
+    return await fn(tx);
   } catch (e) {
-    await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${name}`).catch(() => {});
+    failedUnits.add(tx);
     throw e;
   }
+}
+
+/** Whether a unit joined to this caller transaction threw, leaving part of its writes behind. */
+export function unitFailedIn(db: Db): boolean {
+  return db !== prisma && failedUnits.has(db);
 }
