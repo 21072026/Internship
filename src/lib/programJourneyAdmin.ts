@@ -1,15 +1,14 @@
 // The journey builder's server half (#1853): who may author a programme's
 // steps, what a step input must look like, and how a step leaves the API.
 // Every route under /api/admin/programs/[id]/journey goes through
-// `authorizeJourneyAdmin()` — an ADMIN of the programme's own tenant, in a
-// vertical with mentor ↔ mentee pairs. Another tenant's programme answers 404,
+// the same two halves — the route's own ADMIN check, then `journeyProgramFor()`:
+// the programme's own tenant, in a vertical with mentor ↔ mentee pairs. Another tenant's programme answers 404,
 // exactly like a missing one.
 
 import { NextResponse } from 'next/server';
-import { getServerSession, type Session } from 'next-auth';
+import type { Session } from 'next-auth';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -49,10 +48,13 @@ export interface JourneyProgram {
   term: string | null;
 }
 
-/** The session and the programme, or the response that refuses them. */
-export async function authorizeJourneyAdmin(programId: string): Promise<{ session: Session; program: JourneyProgram } | { refusal: NextResponse }> {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return { refusal: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+/**
+ * The programme for an ADMIN session, or the response that refuses it. Each
+ * route authenticates the caller itself (getServerSession + role, in the route
+ * file, where check:route-auth and the OpenAPI analyser can see it) and hands
+ * the session here for the capability and tenant half.
+ */
+export async function journeyProgramFor(session: Session, programId: string): Promise<{ program: JourneyProgram } | { refusal: NextResponse }> {
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return { refusal: capabilityRefusal };
   const program = await prisma.cohort.findFirst({
@@ -60,7 +62,7 @@ export async function authorizeJourneyAdmin(programId: string): Promise<{ sessio
     select: { id: true, orgId: true, name: true, term: true },
   });
   if (!program) return { refusal: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
-  return { session, program };
+  return { program };
 }
 
 /**
