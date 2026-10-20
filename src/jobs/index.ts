@@ -17,7 +17,10 @@ export function registerAllJobs(): void {
   registered = true;
 
   // A DELETE by age: a second run deletes nothing new.
-  registerJob('jobs.pruneRuns', async (payload) => ({ deleted: await pruneJobRuns(payload?.retentionDays) }));
+  registerJob('jobs.pruneRuns', async (payload) => {
+    const days = typeof payload?.retentionDays === 'number' && Number.isFinite(payload.retentionDays) ? payload.retentionDays : undefined;
+    return { deleted: await pruneJobRuns(days) };
+  });
 
   // Reads the queue and mails one digest. Not idempotent on its own — a second
   // run mails a second digest — so it is enqueued under a per-day

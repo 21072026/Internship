@@ -63,7 +63,9 @@ function worker(): JobWorker {
         targetType: 'Job',
         targetId: job.id,
         orgId: job.orgId,
-        detail: `${job.name} · attempt ${job.attempts}/${job.maxAttempts} · ${sanitizeError(error) ?? ''}`.slice(0, 1_000),
+        // ActivityLog.detail is VARCHAR(191): one line, cut to fit. The whole
+        // error stays on Job.lastError.
+        detail: `${job.name} · attempt ${job.attempts}/${job.maxAttempts} · ${(sanitizeError(error) ?? '').replace(/\s+/g, ' ').trim()}`.slice(0, 190),
       }),
   });
   holder.__jobWorker = w;
