@@ -142,6 +142,14 @@
     "methods": ["POST"],
     "why": "Registration. There is no session to read before the account exists; what authorises the write is the InvitationToken (or the org's open sign-up policy), checked inside the handler."
   },
+  "src/app/api/document-review/[token]/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "An external document reviewer's emailed link (#1859). DocumentReview.reviewToken is the credential — the reviewer has no account — and answers only for the CURRENT EXTERNAL step of one PENDING document; it is cleared when the step is decided, so it works once."
+  },
+  "src/app/api/document-review/[token]/file/route.ts": {
+    "methods": ["GET"],
+    "why": "The file that same external reviewer is asked to decide on (#1859), readable through the same token for exactly as long as the token can still decide its step."
+  },
   "src/app/api/rsvp/route.ts": {
     "methods": ["GET", "POST"],
     "why": "Meeting RSVP from the emailed link (#1446). Meeting.rsvpToken and MeetingGuest.rsvpToken are the credentials — an external guest has no account — and are looked up separately, never as one query over a shared column, with identical answers so a revoked guest invitation cannot be told from a wrong token."

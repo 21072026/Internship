@@ -16,6 +16,7 @@ import {
   sendDormantCheckIns,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
+import { expireDocuments } from '@/lib/documentReviewStore';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
@@ -197,6 +198,9 @@ export async function GET(request: Request) {
     // read the state it just wrote, not race it.
     const dormantSweep = await sweepDormantFirstContacts();
     const dormantCheckIns = await sendDormantCheckIns();
+    // Ahead of the batch for the same reason (#1859): a document that expires
+    // today must already be missing when the reminder below reads the gaps.
+    const documentExpiry = await expireDocuments();
 
     const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
@@ -221,6 +225,7 @@ export async function GET(request: Request) {
       message: 'Scheduled jobs ran',
       dormantSweep,
       dormantCheckIns,
+      documentExpiry,
       interactions,
       meetings,
       projectMeetings,

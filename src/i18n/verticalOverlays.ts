@@ -60,7 +60,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       // Document requirements: the role picker names the seats, not the enum.
-      documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' } },
+      documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Sales rep' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
       // example the base dictionary used to carry, and who reads the note.
       followUp: {
@@ -1221,7 +1221,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
-      documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
+      documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' }, reviewerRoles: { MENTOR: 'Satış temsilcisi' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
       followUp: {
@@ -2242,7 +2242,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
-      documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
+      documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Vertriebsmitarbeiter' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
       // Notiz liest.
