@@ -108,3 +108,15 @@ org's skill answers 404. The rules live in `src/lib/skillCuration.ts`:
 - **Edges** (`PUT …/edges`) replace a skill's neighbours: every edge leaving it plus every ADJACENT
   edge arriving at it; weights are clamped to 0..1, at most 50, no self-edge.
 - `MAX_SKILLS_PER_ORG` is enforced on create; every mutation writes an activity row (`skill.*`).
+
+## Skill filters in SQL (#1820)
+
+`skillTermWhere(orgId, term)` (`src/lib/skillFilter.ts`) is the one "has skill X" filter for the
+mentor directory, the admin candidate list and the company talent pool. A term matches a person when
+a canonical skill they hold (`UserSkill` → `Skill`) carries it in a label or an alias, **or** their
+free-text `User.skills` contains it case-insensitively (an id pre-query — `LIKE` over the JSON's text
+in MySQL — so a prefix like "docke" and a term still in the review queue keep working). The result is
+a `where`, so each route counts and pages one SQL set; nothing loads the pool into Node. The
+directory's JavaScript branch remains only for `language` (still a JSON list) and `accepting`
+(derived), and keeps reporting `partial` when its scan cap is reached. Topic and demo environments
+run the taxonomy backfill after seeding so their people have `UserSkill` rows.

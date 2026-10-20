@@ -6,15 +6,16 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { applyScanCap, matchesTextFilters, pageSlice, toStringArray } from '@/lib/mentorDirectory';
+import { skillTermWhere } from '@/lib/skillFilter';
 import type { Prisma } from '@prisma/client';
 
 // Upper bound on the rows the in-memory filter branch is allowed to scan
-// (#1820). It exists only because the skill/language filters still have to run
-// in JavaScript; it is NOT a page size and it is NOT silent — whenever the scan
-// actually reaches it the response says `partial: true` and names the cap, and
-// the directory renders a "this list may be incomplete" notice. Once the
-// taxonomy join table (#1815) lands, the filter moves into `where` and this
-// whole branch — cap included — goes away.
+// (#1820). The skill filter is SQL now (`skillTermWhere`, over the taxonomy
+// join table and the free-text column); only the language filter (languages
+// are still a JSON list with no taxonomy) and `accepting` (derived, not a
+// column) run in JavaScript. It is NOT a page size and it is NOT silent —
+// whenever the scan reaches it the response says `partial: true` and names the
+// cap, and the directory renders a "this list may be incomplete" notice.
 const JS_FILTER_SCAN_CAP = 2000;
 
 // GET — mentee-facing mentor directory (#938, story #900). Privacy-safe by
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
 
   return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
-    const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
+    const skill = (searchParams.get('skill') || '').trim().slice(0, 60);
     const language = (searchParams.get('language') || '').trim().slice(0, 60).toLowerCase();
     const acceptingOnly = searchParams.get('accepting') === '1';
     // Single-mentor lookup (#1773): the portal's request panel has to resolve
@@ -65,6 +66,13 @@ export async function GET(request: Request) {
     // at". It has to be a narrowing of this object and not a separate query, or
     // the two would drift the first time the visibility rule changes.
     if (mentorId) where.id = mentorId;
+
+    // Skill (#1820): a relation/id `where`, so it narrows the count and the page
+    // in SQL — a mentor holding the skill is found wherever they sort.
+    // Interests stay part of a skill match, as they always were.
+    if (skill) {
+      where.AND = [{ OR: [await skillTermWhere(resolveOrgId(session), skill), { interests: { contains: skill } }] }];
+    }
 
     const select = {
       id: true,
@@ -132,14 +140,12 @@ export async function GET(request: Request) {
     };
 
     // Which filters can the database do, and which are still stuck in JS?
-    //   skill / language — matched inside the `skills` / `languages` JSON
-    //     arrays, which MySQL cannot search case-insensitively. Blocked on the
-    //     Skill/UserSkill join table (#1815); after that this becomes an
-    //     ordinary relation `where`.
-    //   accepting        — derived from getMentorAvailability(), i.e. the
+    //   skill     — SQL since #1820 (above), so it never forces the JS branch.
+    //   language  — matched inside the `languages` JSON array; no taxonomy yet.
+    //   accepting — derived from getMentorAvailability(), i.e. the
     //     mentor's own preference compared against a *counted* number of ACTIVE
     //     relations. Not a column, so not a `where` clause either.
-    if (!(skill || language || acceptingOnly)) {
+    if (!(language || acceptingOnly)) {
       // The whole query is expressible in SQL, so let the database do both jobs:
       // one page of rows, and a count over the SAME where the page came from.
       // This is the branch /api/candidates already uses (#1392).
@@ -176,7 +182,8 @@ export async function GET(request: Request) {
     });
     const { rows: scanRows, truncated: partial } = applyScanCap(scanned, JS_FILTER_SCAN_CAP);
 
-    let matches = scanRows.filter((r) => matchesTextFilters(r, skill, language));
+    // The skill is already part of `where`; only the language is matched here.
+    let matches = scanRows.filter((r) => matchesTextFilters(r, '', language));
     if (acceptingOnly) {
       const counts = await activeCounts(matches.map((r) => r.id));
       matches = matches.filter(
