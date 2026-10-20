@@ -36,6 +36,9 @@ export interface ApiKeyContext extends ApiKeyIdentity {
   orgId: string;
 }
 
+/** The `scope` of a route any live key may call — GET /api/v1/me only (#2002). */
+export const ANY_LIVE_KEY = null;
+
 // Shared by every /api/v1 route: the IP brake for requests without a working
 // key and the per-key allowance behind it use the same bucket and numbers.
 export const V1_RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
@@ -116,7 +119,11 @@ export function requireApiScope(key: ApiKeyIdentity, scope: ApiScope): NextRespo
  */
 export async function withApiKey(
   request: Request,
-  scope: ApiScope,
+  // `ANY_LIVE_KEY` (null) is for GET /api/v1/me alone (#2002): the connector's
+  // "is this key good?" handshake must answer for every live key, whatever it
+  // holds. Everything else still applies — org binding, plan, quota.
+  // scripts/check-api-key-routes.mjs allows it in the routes it lists only.
+  scope: ApiScope | typeof ANY_LIVE_KEY,
   handler: (key: ApiKeyContext) => Promise<NextResponse>,
 ): Promise<NextResponse> {
   const limits: { minute?: LimitState; quota?: LimitState | null } = {};
@@ -140,7 +147,7 @@ function invalidKey(): NextResponse {
 
 async function door(
   request: Request,
-  scope: ApiScope,
+  scope: ApiScope | typeof ANY_LIVE_KEY,
   handler: (key: ApiKeyContext) => Promise<NextResponse>,
   limits: { minute?: LimitState; quota?: LimitState | null },
 ): Promise<NextResponse> {
@@ -180,7 +187,7 @@ async function door(
     limits.minute = rateLimitState('v1', `key:${key.id}`, V1_RATE_LIMIT);
     if (keyLimited) return rateLimited(keyLimited);
 
-    const outOfScope = requireApiScope(key, scope);
+    const outOfScope = scope === ANY_LIVE_KEY ? null : requireApiScope(key, scope);
     if (outOfScope) return outOfScope;
 
     const orgId = key.orgId;
@@ -197,7 +204,8 @@ async function door(
       // lost the feature is not revoked: it answers 403 naming the feature,
       // which tells an integration partner what happened where a 401 would only
       // say "wrong key".
-      const feature = SCOPE_ENTITLEMENT[scope];
+      // A scope-less call (/me) is the public API too.
+      const feature = scope === ANY_LIVE_KEY ? 'INTEGRATIONS_API' : SCOPE_ENTITLEMENT[scope];
       if (feature && !(await entitled(orgId, feature))) {
         return apiError(403, 'feature_locked', 'Your plan does not include API access', undefined, { code: 'feature_locked', feature });
       }

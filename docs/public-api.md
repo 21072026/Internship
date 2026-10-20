@@ -98,6 +98,27 @@ Query-parameter problems stay `400` with `fields[]`; body problems are `422` wit
 **Demo:** the demo instance refuses `/api/admin/api-keys` (`src/lib/demoMode.ts`),
 so no key can exist there and the write API is unreachable — no entry of its own.
 
+## Connector handshake and REST hooks (#2002)
+
+- **`GET /me`** — the one route any live key may call (`withApiKey(request,
+  ANY_LIVE_KEY, …)`; `check:api-key-routes` allows it only for the files in
+  `ANY_SCOPE_ROUTES`). It answers the key's id, org, scopes, expiry, minute
+  window and period quota — no user or candidate data. Plan gating still applies.
+- **`POST /hooks`** `{ targetUrl, event }` → `201 { data: { id, …, secret } }`
+  (scope `hooks:write`, on the write floor). Same SSRF guard as the admin form
+  (`422 unreachable_target`), at most `MAX_HOOKS_PER_KEY` (25) per key
+  (`409 limit_reached`), the secret returned once.
+- **`GET /hooks`** — the calling key's own subscriptions, no secrets.
+- **`DELETE /hooks/{id}`** — ownership is in the delete's own `where`
+  (`apiKeyId` AND `orgId`); any other id (another key's, an admin's, another
+  org's) is the same `404`.
+
+`Webhook.apiKeyId` / `source` are nullable and additive; admin-created rows keep
+`null`. Delivery uses `liveSubscriptionsWhere()` (`src/lib/webhooks.ts`): a
+key-owned subscription stops receiving the moment its key is revoked or expires.
+`/api/v1/hooks` is on the demo blocklist for the same reason as
+`/api/admin/webhooks`.
+
 ## Deprecations
 
 | What | Since | Removed on |
