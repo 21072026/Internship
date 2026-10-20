@@ -89,6 +89,7 @@ const standalone = (...paths: string[]): Route[] =>
 /** The hiring funnel: requisition → offer → interview → decision. */
 const FUNNEL: Route[] = [
   ...shell(
+    '/admin/hiring',
     '/admin/requisitions',
     '/admin/offers',
     '/admin/interview-requests',
