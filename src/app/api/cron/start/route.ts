@@ -11,6 +11,7 @@ import { initReportSubscriptionsCron } from '@/lib/jobs/reportSubscriptions';
 import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
 import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
 import { initEvaluationRemindersCron } from '@/lib/evaluationDue';
+import { initProgramJourneyCron } from '@/lib/programJourney';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -70,6 +71,9 @@ export async function POST(request: Request) {
   initSurveyCampaignsCron();
   // Evaluation due reminders (#1891), daily 08:15 — they mail through emailService too.
   initEvaluationRemindersCron();
+  // Program journey steps (#1852), daily 07:10 — in-app only, but registered
+  // here with the other daily sweeps so #1676 finds every schedule in one place.
+  initProgramJourneyCron();
   // The audit stream (#2012), every five minutes. Not a mail job, but it sits
   // here with the others so every schedule in the product is registered from
   // one place until #1676 leases the scheduler.
