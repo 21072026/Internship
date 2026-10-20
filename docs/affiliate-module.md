@@ -16,7 +16,7 @@ contract is the source of truth for the rules.
 | 2 | Commission rules | **As the contract states**, not the plugin's defaults (see "The contract rules" below). |
 | 3 | Payment source | **Manual entry is the only source today**, and the marketing product has no paid-status data to pull yet. The manual entry goes through the **same writer** a future API import will use (`AffiliatePayment`, `source` = `MANUAL` / `API`). No commission is ever written outside that writer. Designed in from the first commit, not added later. |
 | 4 | Identity | Existing CRM sign-in. A new `AFFILIATE` role for partners; admins stay `ADMIN`. |
-| 5 | Passwords | **Revised (mentor's proposal, pending approval):** a one-time check on first sign-in. The WordPress password hash is imported for that purpose only. A partner who enters the correct old password gets a "set a new password" screen; a wrong one gets the normal reset flow. The old hash is deleted once the partner has set a new password, and any never-used hashes are purged after a fixed period. This is still a password-equivalent secret, so it needs the same rate limit as sign-in and must never be logged. |
+| 5 | Passwords | **Revised (mentor's proposal, pending approval):** a one-time check on first sign-in. The WordPress password hash is imported for that purpose only. A partner who enters the correct old password gets a "set a new password" screen; a wrong one gets the normal reset flow. The old hash is deleted once the partner has set a new password. Any hash never used in that check is purged **90 days after import** (a common retention window for migrated credentials; no formal standard sets it). This is still a password-equivalent secret, so it needs the same rate limit as sign-in and must never be logged. |
 | 6 | Referral links | `?ref=<code>` keeps working for every existing partner, with the same codes. Codes are permanent. |
 | 7 | Suspicious accounts | Not migrated automatically. Listed for manual review. |
 | 8 | Click data | IP addresses are **hashed** (keyed hash, never stored raw). Everything else is kept as is. |
@@ -153,9 +153,9 @@ works on synthetic data in development (CLAUDE.md, "Develop on synthetic data on
   decision first.
 - A first payment of exactly 0.00 is not a paying customer. Customers with two
   free months only count when the first real payment lands.
-- Decision 5 (one-time password check) changes an earlier decision. It needs
-  explicit approval before any code touches password hashes. Also to decide: how
-  long an unused imported hash is kept before it is purged.
+- Decision 5 (one-time password check) is approved. Unused imported hashes are
+  purged 90 days after import. Still open: whether partners get a reminder before
+  that deadline (a mail through `sendEmail()`, its category decided then).
 - Amounts with cents between two tier bands (e.g. 20.50) fall into the higher
   band, because the contract states whole-euro bounds only.
 
