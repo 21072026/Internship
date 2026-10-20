@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The duplicate scan no longer stalls the server for an organization that serves one university (#1436):** every mentee of such an org sat in one `uni:` blocking bucket, and comparing inside it by name length alone took 12 s at 5 000 mentees (46 s at 10 000) on the request thread. Inside a university the fuzzy-name door is now blocked again on the name key's deletion neighbourhood (SymSpell: Levenshtein ≤ 2 ⇒ a common string after ≤ 2 deletions on each side), so the result is unchanged — pinned against the all-pairs scan — and the walk is a generator the request path drives with `findDuplicatePairsYielding()`, handing the event loop back every ~10 ms. Measured on a production build with 5 000 mentees in one university: `GET /api/admin/duplicates` 0.45–0.55 s, `GET /api/health` ≤ 73 ms while scans run."
+}

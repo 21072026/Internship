@@ -20,6 +20,7 @@ import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
 import { sendEvaluationReminders } from '@/lib/evaluationDue';
+import { runProgramJourney } from '@/lib/programJourney';
 import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
@@ -140,6 +141,14 @@ export async function GET(request: Request) {
       const at = new URL(request.url).searchParams.get('at');
       const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
       return NextResponse.json({ message: 'Evaluation reminders ran', evaluations: await sendEvaluationReminders(now, { orgIds: [orgId] }) });
+    }
+    // Program journey steps (#1852): the caller's own org only. `?at=` pins the
+    // clock so a step's due day and the claim's idempotency can be exercised.
+    if (job === 'program-journey') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Program journey ran', programJourney: await runProgramJourney({ orgIds: [orgId], now }) });
     }
     // Survey campaigns (#1887): the caller's own org only, and only this
     // sweep. `?at=` pins the clock so a trigger's window can be exercised.

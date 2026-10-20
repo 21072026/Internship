@@ -183,6 +183,7 @@ model Organization {
   users                   User[]
   sources                 Source[]
   cohorts                 Cohort[]
+  programSteps            ProgramStep[]
   companies               Company[]
   projects                Project[]
   relations               MentorshipRelation[]
@@ -790,6 +791,8 @@ model User {
   @@index([role])
   @@index([referredById])
   @@index([orgId, externalId])
+  // The /api/v1 keyset (#1988): candidates page over (updatedAt, id) within one org.
+  @@index([orgId, updatedAt, id])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
@@ -1774,6 +1777,8 @@ model Company {
   // whole table row by row.
   @@index([orgId, externalId])
   @@index([orgId, createdBySource])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // One sales channel of one account (#2408): a marketplace, a shop system or a
@@ -2463,6 +2468,8 @@ model Offer {
   @@index([orgId, status])
   @@index([relationId])
   @@index([orgId, currency])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -3080,6 +3087,69 @@ model Cohort {
 
   relations    MentorshipRelation[]
   programCosts ProgramCost[]
+  steps        ProgramStep[]
+}
+
+// ── Program journey (#1852) ──────────────────────────────────────────────────
+// "What happens in week 6": one scheduled step of a programme's journey, an
+// offset from an anchor (the relation's start, the programme's start, or the
+// day the relation entered a stage). Hangs off the programme container — the
+// Cohort row, which #1622 renames to Program behind @@map("Cohort"), so this FK
+// survives that rename untouched. The vocabularies (anchor, audience, action,
+// the skip conditions in payload) are whitelists in src/lib/programJourneyRule.ts,
+// free Strings here by repo convention. A step is live only once published and
+// until archived; it is never deleted while it has runs, so the journey of a
+// relation can still say what it was sent.
+model ProgramStep {
+  id           String    @id @default(cuid())
+  orgId        String?
+  programId    String
+  order        Int       @default(0)
+  // RELATION_START | PROGRAM_START | STAGE_ENTRY (payload.stageKey names the stage).
+  anchor       String    @default("RELATION_START") @db.VarChar(32)
+  offsetDays   Int       @default(0)
+  // MENTOR | MENTEE | BOTH — who of the pair receives it.
+  audience     String    @default("BOTH") @db.VarChar(16)
+  // NUDGE | ASSIGN_TODO | PUBLISH_CONTENT | SUGGEST_AGENDA | GROUP_SESSION
+  action       String    @db.VarChar(32)
+  // Per-action detail: { stageKey?, url?, agendaTemplateId?, skipIf? }.
+  payload      Json?
+  // The fallback wording; `translations` carries { en?, tr?, de? }.
+  title        String    @db.VarChar(191)
+  translations Json?
+  publishedAt  DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  org     Organization?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  program Cohort           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  runs    ProgramStepRun[]
+
+  @@index([orgId])
+  @@index([programId, order])
+}
+
+// One step delivered (or deliberately skipped) for one relation. The unique is
+// the claim: two sweeps on the same day — or two replicas — insert one row, and
+// the loser's P2002 is the "already done" answer, not a query beforehand.
+// Reached through its step, which is tenant-scoped; deliberately not in
+// TENANT_MODELS (no orgId of its own, the same shape as ApplicationEvent).
+model ProgramStepRun {
+  id            String    @id @default(cuid())
+  stepId        String
+  relationId    String
+  dueAt         DateTime
+  deliveredAt   DateTime?
+  // Why it was recorded and not delivered (e.g. "satisfied:meeting_exists").
+  skippedReason String?   @db.VarChar(64)
+  createdAt     DateTime  @default(now())
+
+  step     ProgramStep        @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, relationId])
+  @@index([relationId])
 }
 
 model CompanyNeed {
@@ -3111,6 +3181,9 @@ model MentorshipRelation {
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
   completedAt             DateTime?
+  // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
+  // table with rows; existing rows start at the deploy instant.
+  updatedAt               DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
@@ -3230,6 +3303,7 @@ model MentorshipRelation {
   evaluations           Evaluation[]
   // INTERIM/FINAL due dates and their reminders (#1891).
   evaluationDues        EvaluationDue[]
+  programStepRuns       ProgramStepRun[]
   goals                 Goal[]
   sessionAgendas        SessionAgenda[]
   sessionNotes          SessionNote[]
@@ -3268,6 +3342,8 @@ model MentorshipRelation {
   // The daily follow-up sweep asks for the ACTIVE relations whose next action
   // falls on or before today (#2563).
   @@index([nextActionAt])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3792,6 +3868,8 @@ model InteractionLog {
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
   notes      String          @db.Text
   type       InteractionType
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt  DateTime        @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
@@ -3815,6 +3893,8 @@ model InteractionLog {
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@unique([relationId, sourceRef])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 enum RsvpStatus {
@@ -3874,6 +3954,8 @@ model Meeting {
   createdById         String
   reminderSentAt      DateTime?
   createdAt           DateTime      @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime      @default(now()) @updatedAt
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
@@ -3925,6 +4007,8 @@ model Meeting {
   @@index([conversationId])
   @@index([seriesId])
   @@index([batchKey])
+  // The /api/v1 keyset (#1990).
+  @@index([updatedAt, id])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -4972,6 +5056,8 @@ model Requisition {
   ownerId             String?
   legacyCompanyNeedId String?   @unique
   createdAt           DateTime  @default(now())
+  // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
+  updatedAt           DateTime  @default(now()) @updatedAt
   closedAt            DateTime?
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -4987,6 +5073,8 @@ model Requisition {
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted
@@ -5035,6 +5123,8 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+  // The /api/v1 keyset (#1990).
+  @@index([orgId, updatedAt, id])
 }
 
 /// One person being considered for one role, and where they are in it (#1828).
