@@ -186,7 +186,7 @@ Decided with the maintainer (decisions 14 and 15):
   visitor sees; it never widens what data anyone may read. A host in `MARKETING_HOSTS`
   is required for the marketing product to open there.
 - **14a. Copy and contract are tenant data.** `AffiliateProgramSettings` holds the
-  sign-in copy (`/affiliate/giris`) and the partner contract (`/affiliate/sozlesme`),
+  sign-in copy (`/affiliate/signin`) and the partner contract (`/affiliate/contract`),
   per locale. The organisation edits them at `/admin/affiliates/settings`. No
   organisation's wording is written into the repository.
 - **15. Re-acceptance on change.** Saving a changed contract bumps `contractVersion`.

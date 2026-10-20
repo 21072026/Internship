@@ -53,7 +53,7 @@ export default async function AffiliateLayout({ children }: { children: React.Re
       select: { contractAcceptances: { select: { version: true } } },
     });
     if (!partner || needsContractAcceptance(partner.contractAcceptances.map((a) => a.version), settings.contractVersion)) {
-      redirect('/affiliate/sozlesme');
+      redirect('/affiliate/contract');
     }
   }
 

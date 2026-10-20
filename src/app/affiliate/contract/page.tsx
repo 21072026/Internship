@@ -14,7 +14,7 @@ export default async function ContractPage() {
   if (!org) notFound();
 
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/auth/signin?callbackUrl=/affiliate/sozlesme');
+  if (!session) redirect('/auth/signin?callbackUrl=/affiliate/contract');
   if (session.user.role !== 'AFFILIATE' || session.user.orgId !== org.id) notFound();
 
   const settings = await prisma.affiliateProgramSettings.findUnique({
