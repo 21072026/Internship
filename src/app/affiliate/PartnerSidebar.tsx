@@ -1,16 +1,16 @@
 'use client';
 
-// The partner's left menu. Sign-out goes through signOutEverywhere(), the one
-// sign-out path the app allows (CLAUDE.md), so the device trust is revoked too.
+// The partner's left menu. The account menu, with sign-out, sits at the bottom.
 import Link from 'next/link';
-import { signOutEverywhere } from '@/lib/signOutClient';
 
 export function PartnerSidebar({
   brand,
+  account,
   labels,
 }: {
   brand: React.ReactNode;
-  labels: { portal: string; account: string; signOut: string };
+  account: React.ReactNode;
+  labels: { portal: string; account: string };
 }) {
   return (
     <aside className="flex h-full w-64 flex-col border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
@@ -23,15 +23,7 @@ export function PartnerSidebar({
           {labels.account}
         </Link>
       </nav>
-      <div className="mt-auto">
-        <button
-          type="button"
-          onClick={() => signOutEverywhere()}
-          className="w-full rounded border px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800"
-        >
-          {labels.signOut}
-        </button>
-      </div>
+      <div className="mt-auto pt-4">{account}</div>
     </aside>
   );
 }

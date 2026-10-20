@@ -39,23 +39,27 @@ export default async function AffiliateLayout({ children }: { children: React.Re
   const labels = {
     portal: t.affiliates.navPortal,
     account: t.affiliates.navAccount,
-    signOut: t.affiliates.signOut,
   };
 
   return (
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
-      sidebar={<PartnerSidebar brand={<BrandWordmark />} labels={labels} />}
-      headerExtra={
-        <AccountMenu
-          name={session.user.name}
-          email={session.user.email}
-          avatarUrl={me?.avatarUrl}
-          fallback="P"
-          avatarClassName="bg-amber-100 text-amber-700"
-          accountHref="/account"
-          locale={locale}
-          version={APP_VERSION}
+      sidebar={
+        <PartnerSidebar
+          brand={<BrandWordmark />}
+          account={
+            <AccountMenu
+              name={session.user.name}
+              email={session.user.email}
+              avatarUrl={me?.avatarUrl}
+              fallback="P"
+              avatarClassName="bg-amber-100 text-amber-700"
+              accountHref="/account"
+              locale={locale}
+              version={APP_VERSION}
+            />
+          }
+          labels={labels}
         />
       }
     >
