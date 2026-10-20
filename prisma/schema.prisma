@@ -2645,8 +2645,17 @@ model Webhook {
   events    Json          @default("[]")
   active    Boolean       @default(true)
   createdAt DateTime      @default(now())
+  // A subscription a connector made for itself through POST /api/v1/hooks
+  // (#2002): the key that owns it — the only key that may list or delete it —
+  // and where it came from (`admin` | `api`). Both null on every admin-created
+  // row; additive and nullable on purpose, never a re-key of Webhook. A
+  // revoked or expired owner key stops its deliveries (src/lib/webhooks.ts).
+  apiKeyId  String?
+  apiKey    ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  source    String?       @db.VarChar(20)
 
   @@index([orgId, active])
+  @@index([apiKeyId])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
@@ -2693,6 +2702,7 @@ model ApiKey {
   quotaLimit      Int?
   usage           ApiKeyUsage[]
   idempotencyKeys ApiIdempotencyKey[]
+  webhooks        Webhook[]
 
   @@index([orgId])
   @@index([createdById])

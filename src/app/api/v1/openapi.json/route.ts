@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
@@ -291,6 +291,28 @@ export async function GET(request: Request) {
             createdAt: when, updatedAt: when,
           },
         },
+        Hook: {
+          type: 'object',
+          description: 'A webhook subscription owned by the calling key.',
+          required: ['id', 'targetUrl', 'event', 'events', 'active', 'createdAt'],
+          properties: {
+            id: str, targetUrl: str, event: { type: ['string', 'null'] },
+            events: { type: 'array', items: { type: 'string', enum: [...WEBHOOK_EVENTS] } },
+            active: { type: 'boolean' }, createdAt: when,
+          },
+        },
+        Me: {
+          type: 'object',
+          description: 'What the presented key implies — and nothing else: no user, no candidate data.',
+          required: ['keyId', 'orgId', 'scopes', 'rateLimit'],
+          properties: {
+            keyId: str, orgId: str, orgName: nstr,
+            scopes: { type: 'array', items: str },
+            expiresAt: nwhen,
+            rateLimit: { type: 'object', properties: { limit: { type: 'integer' }, remaining: { type: 'integer' }, resetAt: when } },
+            quota: { type: ['object', 'null'], properties: { period: { type: 'string', enum: ['day', 'month'] }, limit: { type: 'integer' } } },
+          },
+        },
         InterviewRequest: {
           type: 'object',
           required: ['id', 'requisitionId', 'menteeId', 'companyId', 'status', 'updatedAt'],
@@ -307,7 +329,7 @@ export async function GET(request: Request) {
           content: problem,
         },
         Conflict: {
-          description: '`idempotency_key_reused` — the Idempotency-Key was used with a different request; `idempotency_in_progress` — a request with it is still running (Retry-After).',
+          description: '`limit_reached` — a per-key cap (subscriptions); `idempotency_key_reused` — the Idempotency-Key was used with a different request; `idempotency_in_progress` — a request with it is still running (Retry-After).',
           content: problem,
         },
         BadRequest: { description: '`validation_failed` — a parameter is malformed (see `fields`).', content: problem },
@@ -398,6 +420,85 @@ export async function GET(request: Request) {
           '`invalid_transition` — the relationship is not ACTIVE (`currentStage` in the body); `stage_conflict` — the stage changed meanwhile (`currentStage`).',
           [idParam],
         ),
+      },
+      '/me': {
+        get: {
+          summary: 'Who am I (connector auth test)',
+          description: 'Any live key may call this: it answers the key\u2019s organisation, scopes, expiry and limits — no user or candidate data. Use it to validate a credential instead of reading real data.',
+          security: [{ apiKey: [] }],
+          responses: {
+            '200': {
+              description: 'The key',
+              headers: rateLimitResponseHeaders,
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/Me' } } } } },
+            },
+            ...errorResponses,
+          },
+        },
+      },
+      '/hooks': {
+        get: {
+          summary: 'List this key\u2019s subscriptions',
+          description: 'Requires `hooks:write`. Only the subscriptions the calling key made — never another key\u2019s or an admin-created one. Secrets are never listed.',
+          security: [{ apiKey: ['hooks:write'] }],
+          responses: {
+            '200': {
+              description: 'The subscriptions',
+              headers: rateLimitResponseHeaders,
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { type: 'array', items: { $ref: '#/components/schemas/Hook' } } } } } },
+            },
+            ...errorResponses,
+          },
+        },
+        post: {
+          summary: 'Subscribe (REST hook)',
+          description:
+            'Requires `hooks:write`. The platform subscribes itself: send `{ targetUrl, event }` when the user turns the automation on, keep the returned `id`, and DELETE it when they turn it off. `targetUrl` must be a public https URL (private, loopback and metadata addresses are refused, 422 `unreachable_target`). The `secret` is returned once: every delivery is POSTed with `X-Event` and `X-Signature` (HMAC-SHA256 of the body with that secret). A key holds at most ' +
+            MAX_HOOKS_PER_KEY +
+            ' subscriptions (409 `limit_reached`). Deliveries stop when the key is revoked or expires.',
+          security: [{ apiKey: ['hooks:write'] }],
+          parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['targetUrl', 'event'],
+                  properties: { targetUrl: { type: 'string', format: 'uri' }, event: { type: 'string', enum: [...WEBHOOK_EVENTS] } },
+                },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Subscribed; `secret` is shown only now',
+              headers: rateLimitResponseHeaders,
+              content: {
+                'application/json': {
+                  schema: { type: 'object', required: ['data'], properties: { data: { allOf: [{ $ref: '#/components/schemas/Hook' }, { type: 'object', required: ['secret'], properties: { secret: str } }] } } },
+                },
+              },
+            },
+            '409': { $ref: '#/components/responses/Conflict' },
+            '422': { $ref: '#/components/responses/UnprocessableEntity' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/hooks/{id}': {
+        delete: {
+          summary: 'Unsubscribe',
+          description: 'Requires `hooks:write`. Deletes a subscription the calling key owns. Any other id — another key\u2019s, an admin-created one, another organisation\u2019s — is 404, exactly like a missing one.',
+          security: [{ apiKey: ['hooks:write'] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { $ref: '#/components/parameters/IdempotencyKey' }],
+          responses: {
+            '200': { description: 'Deleted', content: { 'application/json': { schema: { type: 'object', properties: { data: { type: 'object', properties: { id: str, deleted: { type: 'boolean' } } } } } } } },
+            '404': { $ref: '#/components/responses/NotFound' },
+            ...errorResponses,
+          },
+        },
       },
       '/relationships': listPath('relationships:read', 'Relationship', 'List relationships', 'Mentor ↔ mentee relationships with their pipeline stage.', [
         eqFilter('status', 'Only relationships in this status.', ['ACTIVE', 'COMPLETED']),
