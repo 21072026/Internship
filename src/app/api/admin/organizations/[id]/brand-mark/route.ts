@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
 import { orgPlanHasFeature, planIncludingFeature } from '@/lib/orgPlans';
 import { BRAND_MARK_MAX_BYTES, classifyMarkUpload, removeBrandMark, storeBrandMark } from '@/lib/brandAssets';
@@ -94,12 +94,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return refused(stored.reason);
   }
 
-  await logActivity({
+  await recordOrgWrite({
+    orgId: id,
     action: 'org.brand_mark_uploaded',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
-    targetType: 'organization',
-    targetId: id,
     detail: `${kind.kind} ${bytes.length} bytes → ${stored.version}`,
     request,
   });
@@ -116,12 +115,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (refusal) return refusal;
 
   await removeBrandMark(id);
-  await logActivity({
+  await recordOrgWrite({
+    orgId: id,
     action: 'org.brand_mark_removed',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
-    targetType: 'organization',
-    targetId: id,
     request,
   });
   return NextResponse.json({ ok: true });

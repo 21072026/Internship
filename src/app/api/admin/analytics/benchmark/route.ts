@@ -13,12 +13,10 @@ import { getLocale } from '@/i18n/server';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { worldOfOrg } from '@/lib/userWorld';
 import { benchmarkOrgKey, orgInWorldWhere } from '@/lib/analyticsScope';
+import { benchmarkFigures, MIN_OTHER_PROGRAMS, MIN_RELATIONS, type BenchmarkAgg } from '@/lib/benchmarkPool';
 
-// Minimum relations for a program (org) to enter the benchmark pool. This is a
-// k-anonymity floor: tiny programs are excluded so an aggregate can't be
-// reverse-engineered to an individual, and so noisy small samples don't skew
-// the average.
-const MIN_RELATIONS = 5;
+// The anonymity floors (MIN_RELATIONS, MIN_OTHER_PROGRAMS) and the arithmetic
+// live in src/lib/benchmarkPool.ts, pure and unit-tested.
 
 // GET — premium cross-program benchmark (Faz 2, #542). Compares the viewer's
 // organization's funnel conversion against an ANONYMIZED, aggregated average
@@ -134,8 +132,7 @@ export async function GET() {
     };
 
     // Fold into per-org totals: total, hired, dropped.
-    type Agg = { total: number; hired: number; dropped: number };
-    const byOrg = new Map<string, Agg>();
+    const byOrg = new Map<string, BenchmarkAgg>();
     for (const g of grouped) {
       // A NULL-org relation is the default org's (the backfill rule), so it is
       // counted as part of that programme, never as an extra anonymous one.
@@ -151,45 +148,21 @@ export async function GET() {
       byOrg.set(key, a);
     }
 
-    const conv = (a: Agg) => (a.total > 0 ? Math.round((a.hired / a.total) * 100) : 0);
-    const dropRate = (a: Agg) => (a.total > 0 ? Math.round((a.dropped / a.total) * 100) : 0);
-
-    // The viewer's own program.
-    const mine = byOrg.get(myOrgId) ?? null;
     // Only the viewer's own stage vocabulary is ever named in the payload.
     const myOutcome = outcomeFor(myOrgId);
-
-    // Benchmark pool: every program meeting the k-anonymity floor.
-    const pool = [...byOrg.values()].filter((a) => a.total >= MIN_RELATIONS);
-    const poolSize = pool.length;
-
-    const avg = (fn: (a: Agg) => number) =>
-      poolSize > 0 ? Math.round(pool.reduce((s, a) => s + fn(a), 0) / poolSize) : null;
-
-    const platformAvgConversion = avg(conv);
-    const platformAvgDropRate = avg(dropRate);
-
-    // The viewer's percentile within the pool (share of programs at or below your
-    // conversion), only when the pool is large enough to be non-identifying.
-    let percentile: number | null = null;
-    if (mine && poolSize >= 3) {
-      const myConv = conv(mine);
-      const atOrBelow = pool.filter((a) => conv(a) <= myConv).length;
-      percentile = Math.round((atOrBelow / poolSize) * 100);
-    }
+    const figures = benchmarkFigures(byOrg, myOrgId);
 
     return NextResponse.json({
       // Aggregate-only payload — no per-program identities or rows.
-      you: mine
-        ? { conversion: conv(mine), dropRate: dropRate(mine), total: mine.total, hired: mine.hired }
-        : null,
+      you: figures.you,
       platform: {
-        avgConversion: platformAvgConversion,
-        avgDropRate: platformAvgDropRate,
-        poolSize,
+        avgConversion: figures.avgConversion,
+        avgDropRate: figures.avgDropRate,
+        poolSize: figures.poolSize,
         minRelations: MIN_RELATIONS,
+        minPrograms: MIN_OTHER_PROGRAMS,
       },
-      percentile,
+      percentile: figures.percentile,
       // The VIEWER's own finished stage, so the card names what "conversion"
       // counted here (#1882). Never another program's.
       finishedLabel: myOutcome.finishedLabel,

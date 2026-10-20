@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The API explorer link is shown to the platform operator only (#1575).** Follow-up to the super-admin-only internal OpenAPI description: `NavLink` gains `superAdminOnly`, `visibleNavLinks(links, caps, { superAdmin })` drops such links unless the caller is a super admin of its world, and the admin sidebar, the command palette and the native app's menu (`GET /api/app/navigation`) all pass it — so a tenant admin no longer sees an \"API explorer\" entry that leads to a refusal. Unit-tested in `scripts/test/nav-capabilities.test.mjs` and `scripts/test/app-navigation.test.mjs`."
+}

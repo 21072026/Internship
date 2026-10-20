@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
@@ -421,6 +422,7 @@ export async function PATCH(request: Request) {
         targetId: id,
         detail: `to ${toVerticalKey(vertical)}: ${conflicts} e-mail address(es) already have an account in that product`,
         request,
+        orgId: id,
       });
       return NextResponse.json(
         {
@@ -454,6 +456,35 @@ export async function PATCH(request: Request) {
   const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced]);
   if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
+  }
+
+  // WHO may write the IdP trust anchor (#1575). The issuer, entry point and
+  // certificate decide whom the ACS signs in: ANY account of the org, of any
+  // role, from an assertion checked only against the stored certificate, with
+  // no password and no second factor. Writing them is therefore writing who an
+  // admin of this org is — and the org that holds the seeded super admin is a
+  // tenant too, so a tenant ADMIN who could paste their own certificate could
+  // sign in AS that super admin and reach every other tenant. Like the plan and
+  // the palette, it is the operator's call. Switching SSO on or off and
+  // enforcing it stay the tenant's own policy (they only open or close a trust
+  // the operator configured), and clearing the config is always allowed. A
+  // value echoed back unchanged is not a write (the SSO form always sends the
+  // provider, issuer and entry point with the switch).
+  const setsIdpTrust = ([
+    [ssoProvider, existing.ssoProvider],
+    [ssoIssuer, existing.ssoIssuer],
+    [ssoEntryPoint, existing.ssoEntryPoint],
+    [ssoCertificate, existing.ssoCertificate],
+  ] as const).some(([next, current]) => {
+    const value = orNull(next);
+    return value !== undefined && value !== null && value !== (current ?? null);
+  });
+  if (setsIdpTrust && !superAdmin) {
+    await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (sso trust)', id);
+    return NextResponse.json(
+      { code: 'sso_super_admin_only', error: 'Only a super admin may set an organization\'s identity provider' },
+      { status: 403 },
+    );
   }
 
   // Validate an explicitly-set (non-blank) brand color as a hex value.
@@ -617,7 +648,10 @@ export async function PATCH(request: Request) {
     );
   }
 
-  await logActivity({
+  // Field NAMES only — never a value: the SSO fields include the IdP
+  // certificate, and this row reaches the tenant's audit drain (#1575).
+  await recordOrgWrite({
+    orgId: organization.id,
     // SSO config lives behind this endpoint, so a change to it can redirect
     // authentication itself — warning rather than info when that is touched.
     action: 'org.updated',
@@ -627,8 +661,6 @@ export async function PATCH(request: Request) {
         : 'info',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
-    targetType: 'organization',
-    targetId: organization.id,
     detail: Object.keys(data).join(', '),
     request,
   });

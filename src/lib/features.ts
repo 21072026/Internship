@@ -191,5 +191,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     // only inside /portal (the mentorship shell), so it carries `mentorship`.
     { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
     { key: 'safeguarding', category: 'trust', icon: ShieldAlert, color: 'amber', capability: 'mentorship', title: C.safeguarding.t, desc: C.safeguarding.d },
+    { key: 'programJourney', category: 'collaboration', icon: CalendarDays, color: 'indigo', capability: 'mentorship', title: C.programJourney.t, desc: C.programJourney.d },
   ];
 }

@@ -6,8 +6,11 @@ import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
 
 // GET — read-only candidate detail for a COMPANY user (EPIC: company
-// candidate detail). Authorized only when a mentorship relation links this
-// candidate to the requester's company. Exposes the fields a company needs to
+// candidate detail). Authorized when a mentorship relation links this
+// candidate to the requester's company, or when the candidate has an
+// application to one of the company's requisitions (#1838 — the applicant
+// board's drawer: applying is what puts a person in front of the company).
+// Exposes the fields a company needs to
 // evaluate a candidate — no email/phone (those stay mentor/admin-only, as in
 // the existing company candidates list).
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -26,7 +29,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       mentor: { select: { fullName: true } },
     },
   });
-  if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const applied = relation
+    ? null
+    : await prisma.application.findFirst({ where: { menteeId: id, requisition: { companyId: session.user.companyId! } }, select: { id: true } });
+  if (!relation && !applied) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const candidate = await prisma.user.findUnique({
     where: { id },
@@ -116,7 +122,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   return NextResponse.json({
-    candidate: { ...candidate, pipelineStatus: relation.pipelineStatus, mentorName: relation.mentor.fullName },
+    candidate: { ...candidate, pipelineStatus: relation?.pipelineStatus ?? null, mentorName: relation?.mentor.fullName ?? null },
     verified,
   });
   });

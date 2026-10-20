@@ -35,3 +35,25 @@ for their own org with `GET /api/cron?job=program-journey` (`?at=<ISO>` pins the
 `runProgramJourney()` is a plain handler, so the durable scheduler (#1676/#1677) registers
 it in one line. Replica ≥2 runs with `CRON_ENABLED=0` today; the unique claim makes a
 double tick harmless regardless.
+
+## The builder (#1853)
+
+`/admin/programs/[id]/journey` — linked from every row of `/admin/cohorts` until #1628
+gives programmes their own index. Steps are listed in `order`, grouped under consecutive
+`milestone` labels (a label, not a row, so a journey stays one flat list), edited in
+EN/TR/DE, reordered with up/down, published one by one or all at once, archived (never
+deleted — the runs they produced stay readable).
+
+- **API** (`src/lib/programJourneyAdmin.ts` authorizes every verb: ADMIN of the
+  programme's own tenant, `mentorship` capability; another tenant's programme is 404):
+  `GET|POST|PATCH /api/admin/programs/[id]/journey` (`PATCH { order }` / `{ publish: 'all' }`),
+  `PATCH|DELETE …/journey/[stepId]` (`{ published }`, `{ archived }`, any field).
+- **Refused on write**, through the same `stepUnresolvable()` the sweep reads: a stage key
+  the org's pipeline lacks, `PROGRAM_START` until #1622, an unsafe content link, no title.
+- **Preview** — `GET …/journey/preview?relationId=` → `journeyStepStatus()` per step
+  (`due`, `would_skip`, `upcoming`, `missed`, `waiting`, `delivered`, …). It never writes a
+  `ProgramStepRun`; `e2e/program-journey-builder.spec.ts` counts the rows around it.
+- **Template** — `GET …/journey` returns `template: journeyTemplate(steps)`: no ids, no
+  dates, no tenant, so a clone (#1641/#1643) is a data copy.
+- **Unpublish** clears `publishedAt`: the sweep stops picking the step; runs already
+  recorded are untouched.
