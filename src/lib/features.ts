@@ -144,6 +144,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', capability: 'mentorship', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
     { key: 'trustCenter', category: 'trust', icon: ScrollText, color: 'sky', title: C.trustCenter.t, desc: C.trustCenter.d },
     { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', capability: 'mentorship', title: C.matchQuality.t, desc: C.matchQuality.d },
+    { key: 'matchingRules', category: 'tracking', icon: Target, color: 'indigo', capability: 'mentorship', title: C.matchingRules.t, desc: C.matchingRules.d },
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
     { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
