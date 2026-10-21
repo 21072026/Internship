@@ -1,5 +1,5 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInViaApi, signInAndSettle, gotoSettled } from './helpers/auth';
 
 // A standing 1:1 reaches both of its people (#2013, slice 2). Slice 1 put the
@@ -28,6 +28,8 @@ test('a standing 1:1 is announced, bannered, endable and reminded for both of it
   const mentor = await seedUser(mentorEmail, PW, 'MENTOR', 'Reach Mentor');
   const mentee = await seedUser(menteeEmail, PW, 'MENTEE', 'Reach Mentee');
   await seedUser(adminEmail, PW, 'ADMIN', 'Reach Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const relation = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
   const title = `Reach 1:1 ${Date.now().toString(36)}`;
 

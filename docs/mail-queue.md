@@ -478,6 +478,14 @@ The demo container runs with `MAIL_WORKER_ENABLED=0`
   CANCELLED mail rows are deleted after 7 days, FAILED and DEAD_LETTER after 30.
   A row still on its way is never touched.
 
+## Suppressed addresses (#1692)
+
+A queued mail can be hours old, so the drain re-checks the bounce/complaint
+suppression list (`docs/EMAIL_DELIVERABILITY.md` § 2e) right after the
+generated-address check and before the budget: a suppressed recipient's row is
+CANCELLED (`lastError: suppressed`), its envelope cleared, and the EmailLog row
+reads `SKIPPED` / `Suppressed: <REASON>` — for every lane, CRITICAL included.
+
 ## One door
 
 `npm run check:direct-sendmail` (in CI) fails when a transporter's own send call

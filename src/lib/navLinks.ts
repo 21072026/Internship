@@ -6,11 +6,13 @@ import {
   Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
+  Receipt,
   Send,
   Lightbulb,
   Sparkles,
   ArrowRightLeft,
   SlidersHorizontal,
+  Table2,
   type LucideIcon,
   ShieldAlert,
 } from 'lucide-react';
@@ -140,6 +142,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   // Segmentation attributes the reports slice by (#1920). Untagged: every vertical reports.
+  // The registry's reports, read, downloaded and sliced (#1920). Premium (ADVANCED_ANALYTICS) at its API.
+  { href: '/admin/reports', icon: Table2, key: 'reportsExplorer' },
   { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   // The whole deployment's API map — the operator's (#1575).
@@ -148,6 +152,10 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
+  // The tenant's own bill (#1739): plan, active-pair meter, history. The meter
+  // and the price list are the internship product's (src/lib/plans.ts); a
+  // MARKETING org has no plan gate and no checkout, hence `mentorship`.
+  { href: '/admin/billing', icon: Receipt, key: 'billing', capability: 'mentorship' },
   { href: '/admin/organizations', icon: Network, key: 'organizations' },
   { href: '/admin/settings', icon: Settings, key: 'settings' },
   { href: '/admin/invite', icon: Mail, key: 'invite' },

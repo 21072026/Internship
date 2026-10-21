@@ -46,11 +46,18 @@ export interface RenderedReport {
 
 export function renderReport(def: ReportDefinition, loaded: LoadedReport, R: Dict): RenderedReport {
   const bucketLabel = loaded.minCohort ? R.suppressedBucket.replace('{n}', String(loaded.minCohort)) : '';
+  // The groupBy variant of a sliced report (#1920): every row carries its
+  // segment's display name (already in the reader's language), shown first.
+  const grouped = !!loaded.segment && loaded.segment.value === null;
+  const columns = def.columns.map((c) => ({ key: c.key, label: pick(R, c.labelKey) ?? c.key, type: c.type }));
   return {
     title: pick(R, def.titleKey) ?? def.key,
     description: pick(R, def.descriptionKey) ?? '',
-    columns: def.columns.map((c) => ({ key: c.key, label: pick(R, c.labelKey) ?? c.key, type: c.type })),
-    body: loaded.rows.map((r) => def.columns.map((c) => cell(def, c.key, r[c.key], bucketLabel))),
+    columns: grouped ? [{ key: 'segment', label: loaded.segment!.label, type: 'string' }, ...columns] : columns,
+    body: loaded.rows.map((r) => [
+      ...(grouped ? [String(r.segment ?? '')] : []),
+      ...def.columns.map((c) => cell(def, c.key, r[c.key], bucketLabel)),
+    ]),
     bucketLabel,
     floorNote: loaded.minCohort ? R.floorNote.replace('{n}', String(loaded.minCohort)) : null,
   };
@@ -63,7 +70,8 @@ export function renderReport(def: ReportDefinition, loaded: LoadedReport, R: Dic
  */
 export function reportSheet(name: string, rendered: RenderedReport, loaded: LoadedReport): Sheet {
   const rows = [...rendered.body];
-  if (rendered.floorNote && loaded.suppressedGroups > 0) rows.push([], [rendered.floorNote]);
+  const suppressedSegments = loaded.segment ? loaded.segment.suppressedSegments : 0;
+  if (rendered.floorNote && (loaded.suppressedGroups > 0 || suppressedSegments > 0)) rows.push([], [rendered.floorNote]);
   return { name, columns: rendered.columns.map((c) => c.label), rows };
 }
 

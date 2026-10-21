@@ -54,6 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!question || (question.type !== 'TEXT' && question.type !== 'LONG_TEXT')) {
       return NextResponse.json({ error: 'not_text', code: 'not_text' }, { status: 400 });
     }
+    // Fewer than the floor answered this one question (#1877): no texts left the results either.
+    if (question.suppressed) return NextResponse.json({ error: 'below_floor', code: 'below_floor' }, { status: 409 });
     const texts = question.texts ?? [];
     if (texts.length === 0) return NextResponse.json({ summary: null, reason: 'no_answers' });
 

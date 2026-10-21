@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 // "Next action + follow-up date" on a record (#2563). The acceptance criteria:
@@ -25,6 +25,8 @@ test('a follow-up date reminds its owner once, then flags the record until it is
   const mentorEmail = uniqueEmail('fu-mentor');
   const menteeEmail = uniqueEmail('fu-mentee');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'FU Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'FU Mentor');
   const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Follow Up Mentee');
   // Two accounts under one search tag: the dated one (this record's) and one

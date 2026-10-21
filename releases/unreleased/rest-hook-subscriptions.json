@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**REST-hook subscriptions and the connector handshake (#2002):** `POST /api/v1/hooks` (`{ targetUrl, event }` → the secret once; SSRF guard → `422 unreachable_target`; `MAX_HOOKS_PER_KEY` = 25 → `409 limit_reached`), `GET /api/v1/hooks` (own subscriptions, no secrets) and `DELETE /api/v1/hooks/{id}` (ownership in the delete's `where`, every other id a 404) under the new scope `hooks:write`, plus `GET /api/v1/me` (key id, org, scopes, expiry, minute window, quota — no people), the one route `withApiKey(request, ANY_LIVE_KEY, …)` admits (`ANY_SCOPE_ROUTES` in `check:api-key-routes`). Additive `Webhook.apiKeyId` (cascade) + `source` + index; delivery now reads `liveSubscriptionsWhere()`, so a key-owned subscription stops when its key is revoked or expires. `/api/v1/hooks` joins the demo blocklist.",
-  "notes": {
-    "en": ["Automation platforms can now subscribe to events and unsubscribe again by themselves through the public API, and check a key without reading any data."],
-    "tr": ["Otomasyon platformları artık genel API üzerinden olaylara kendileri abone olup aboneliği kaldırabiliyor ve bir anahtarı hiçbir veri okumadan doğrulayabiliyor."],
-    "de": ["Automatisierungsplattformen können Ereignisse jetzt selbst über die öffentliche API abonnieren und wieder abbestellen und einen Schlüssel prüfen, ohne Daten zu lesen."]
-  }
-}

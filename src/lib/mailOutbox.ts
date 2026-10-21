@@ -8,6 +8,8 @@ import { prismaQueueStore } from '@/lib/jobs/queueStore';
 import type { JobPayloadMap } from '@/lib/jobs/types';
 import { replicaId } from '@/lib/jobs/lease';
 import { emailGroupAllowed, isEmailGroupId, isEssentialGroup } from '@/lib/emailGroups';
+import { suppressedAmong } from '@/lib/emailSuppression';
+import { normalizeSuppressedAddress, suppressedLogReason } from '@/lib/emailSuppressionRule';
 import {
   HIGHER_LANE_MIN_PRIORITY,
   budgetConfig,
@@ -330,6 +332,8 @@ export interface DrainSummary {
   unsubscribed: number;
   /** Rows addressed to a generated address (#2970), cancelled unsent. */
   unmailable: number;
+  /** Rows addressed to a bounce/complaint-suppressed address (#1692), cancelled unsent. */
+  suppressed: number;
   /** Primary-channel rows sent on the bulk relay this tick (#1690). */
   failedOver: number;
   reaped: number;
@@ -453,6 +457,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     expired: 0,
     unsubscribed: 0,
     unmailable: 0,
+    suppressed: 0,
     failedOver: 0,
     reaped: 0,
     capped: 0,
@@ -592,6 +597,20 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     await settleMailRef(payload.ref, 'SKIPPED', 'unmailable');
     logger.info('mail_outbox.unmailable', meta);
     summary.unmailable++;
+    return null;
+  }
+
+  // ── A suppressed address (#1692) ──────────────────────────────────────────
+  // Re-checked here because a queued mail can be hours old and the bounce that
+  // suppressed its address may have come in since. Every group, essential
+  // included — the rule and its reason are in emailSuppressionRule.ts.
+  const suppressed = (await suppressedAmong([envelope.to])).get(normalizeSuppressedAddress(envelope.to) ?? '');
+  if (suppressed) {
+    await settle(row, workerId, { status: 'CANCELLED', lastError: 'suppressed', payload: clearedPayload(payload) });
+    await deps.record(envelope, 'SKIPPED', suppressedLogReason(suppressed));
+    await settleMailRef(payload.ref, 'SKIPPED', 'suppressed');
+    logger.info('mail_outbox.suppressed', meta);
+    summary.suppressed++;
     return null;
   }
 
