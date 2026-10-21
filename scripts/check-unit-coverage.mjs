@@ -143,6 +143,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'skill taxonomy: a merge loop or a cyclic adjacency graph must terminate, origins stay at weight 1 (#1815)' },
   ],
   [
+    'src/lib/placementKind.ts',
+    { floor: 95, measured: 100.0, why: 'relation kind / attribution whitelists and the hire-stage rule: an off-path stage is never a hire (#1503)' },
+  ],
+  [
     'src/lib/mentorDirectory.ts',
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
   ],

@@ -13,6 +13,7 @@
 import { prisma } from './prisma';
 import { resolvePipelineStages } from './pipelineStages';
 import { isDropoffReasonCodeFor } from './dropoffReasons';
+import { isAttributionStage, isEmploymentAttribution } from './placementKind';
 import { verticalFor } from './verticalContext';
 
 // The no-regression rule for MACHINE writers (#2451): pure, so it is unit-tested
@@ -58,6 +59,47 @@ export async function validateDropoffReason(input: DropoffReasonInput): Promise<
     return { ok: false, error: 'reasonNote is required when reasonCode is OTHER' };
   }
   return { ok: true };
+}
+
+// ── Employment attribution (#1503) ──────────────────────────────────────────
+//
+// A move into the org's hire stage is where "whose outcome is this?" belongs
+// (THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED, src/lib/placementKind.ts). The
+// rule lives here, next to the drop-off reason, so every stage write path can
+// call the same function.
+//
+// NOT ENFORCED YET, on purpose: no screen sends an attribution today (the
+// board, the stage select, the candidate detail, the offer auto-advance), so a
+// 400 for a missing one would break every hire. Until the UI that asks for it
+// ships, a missing attribution on a hire stage is allowed and stays NULL (read
+// as THROUGH_US); a value that IS sent must be on the whitelist. The UI change
+// flips EMPLOYMENT_ATTRIBUTION_REQUIRED in the same PR.
+export const EMPLOYMENT_ATTRIBUTION_REQUIRED = false;
+
+export interface EmploymentAttributionInput {
+  orgId: string | null | undefined;
+  toStatus: string;
+  attribution?: string | null;
+}
+
+export type EmploymentAttributionValidation =
+  | { ok: true; /** Is the target a hire stage (so a sent attribution is stored)? */ hireStage: boolean }
+  | { ok: false; error: string };
+
+export async function validateEmploymentAttribution(
+  input: EmploymentAttributionInput,
+): Promise<EmploymentAttributionValidation> {
+  if (input.attribution != null && !isEmploymentAttribution(input.attribution)) {
+    return { ok: false, error: 'Unknown employmentAttribution' };
+  }
+  // A sale is not a hire: the MARKETING funnel's last stage carries no attribution.
+  const vertical = input.orgId ? await verticalFor(input.orgId) : null;
+  if (vertical === 'MARKETING') return { ok: true, hireStage: false };
+  const hireStage = isAttributionStage(await resolvePipelineStages(input.orgId), input.toStatus);
+  if (hireStage && EMPLOYMENT_ATTRIBUTION_REQUIRED && !input.attribution) {
+    return { ok: false, error: 'employmentAttribution is required when moving into a hire stage' };
+  }
+  return { ok: true, hireStage };
 }
 
 // ── The single gate every StatusChange write goes through (#934) ─────────────

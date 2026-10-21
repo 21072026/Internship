@@ -3236,6 +3236,21 @@ model MentorshipRelation {
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
   // them), so single-tenant behaviour is identical.
   pipelineStatus          String           @default("APPLICATION_100")
+  // WHY the relation exists (#1503): PLACEMENT (the person is in the hiring
+  // funnel — every placement count reads only these) or COACHING (mentoring
+  // with no placement goal; its stage means nothing to a funnel). Free String,
+  // not an enum, for the same reason as pipelineStatus (#747): changing an
+  // enum under `db push` is an ENUM→VARCHAR migration. Vocabulary and guard:
+  // src/lib/placementKind.ts.
+  kind                    String           @default("PLACEMENT") @db.VarChar(16)
+  // WHOSE outcome a hire is (#1503): THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED.
+  // NULL = not stated; never backfilled, and read as THROUGH_US for rows from
+  // before the column (the UNSPECIFIED pattern of #810).
+  employmentAttribution   String?          @db.VarChar(24)
+  // When the relation (re-)entered the placement funnel: the start for a
+  // PLACEMENT, the moment of a COACHING → PLACEMENT switch. NULL → readers fall
+  // back to startDate.
+  funnelEnteredAt         DateTime?
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
   stageDeadline           DateTime?
@@ -3382,6 +3397,7 @@ model MentorshipRelation {
   @@index([status])
   @@index([lifecycleState])
   @@index([pipelineStatus])
+  @@index([kind])
   @@index([previousRelationId])
   // The daily trial sweep asks for one org's relations in one stage whose trial
   // ends inside the next week; this is the column that narrows it.
