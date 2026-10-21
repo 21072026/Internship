@@ -210,7 +210,7 @@ function Vocabulary() {
           placeholder={m.search}
           aria-label={m.search}
           data-testid="skill-admin-search"
-          className="w-64 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+          className="w-full sm:w-64 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
         />
         <select
           value={status}
@@ -225,7 +225,9 @@ function Vocabulary() {
             </option>
           ))}
         </select>
-        <div className="ml-auto flex items-center gap-2">
+        {/* Full width at phone width: the fixed input + button were ~350px in a
+            328px box (e2e/mobile-layout-coverage.spec.ts); sm+ keeps the row. */}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
@@ -233,7 +235,7 @@ function Vocabulary() {
             placeholder={m.createPlaceholder}
             aria-label={m.createPlaceholder}
             data-testid="skill-admin-new"
-            className="w-56 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+            className="min-w-0 flex-1 sm:w-56 sm:flex-none rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
           />
           <button
             type="button"

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Settings and the skill vocabulary fit a phone again (e2e-full red on `main`):** the stage-SLA rows gained a third number input (#1722) that squeezed the stage name to 50px at 360px — below `sm` the name now takes its own line and the inputs wrap under it (`w-20`, right-aligned under their column headings, since \"Eskalieren nach\" did not fit `w-16`); the mail tabs gained a third tab (#1692) that pushed the super admin's mail card 35px past the screen — the tab strip now wraps; and `/admin/skills`' toolbar (#1817) used fixed-width fields — they are full-width below `sm`. `e2e/mobile-layout-coverage.spec.ts` now also audits `/admin/attributes`, `/admin/agreements`, `/admin/reports`, `/admin/billing` and `/admin/sla`, which were added to the sidebar without an entry.",
+  "notes": {
+    "en": ["Settings and the skill list no longer run off the edge of a phone screen."],
+    "tr": ["Ayarlar ve beceri listesi artık telefon ekranından taşmıyor."],
+    "de": ["Einstellungen und die Skill-Liste laufen auf dem Handy nicht mehr über den Bildschirmrand."]
+  }
+}
