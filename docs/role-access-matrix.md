@@ -331,6 +331,15 @@ Kurallar:
   saf hali `src/lib/authzRule.ts` (katalog `PERMISSIONS`, kademe tablosu
   `TIER_PERMISSIONS`, birim testli). Route'ların ona taşınması #1571.
 
+### İzin kapısının arkasındaki uçlar / Routes behind the permission guard
+
+| Uç | İzin | ORG_ADMIN | OBSERVER | PROGRAM_ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz |
+|---|---|---|---|---|---|---|
+| `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
+
+Org her zaman oturumdan gelir; süper-admin de burada yalnız kendi org'unu okur.
+Çalıştırılabilir hali: `e2e/admin-audit.spec.ts` (`@smoke`).
+
 ### İzin kuralı / The permission rule (`authzRule.ts`)
 
 **`requireCapability()` ile karıştırmayın**: o, `capabilityGate.ts`'teki **dikey**
