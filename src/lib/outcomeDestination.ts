@@ -18,7 +18,7 @@
 //     its knowledge rate and nothing else — three answers name three people.
 
 import { getDictionary } from '@/i18n/dictionaries';
-import { getSurveyTemplate, renderSurveyTemplate } from '@/lib/surveyTemplates';
+import { surveyInputFromTemplate } from '@/lib/surveyTemplateInput';
 import { SURVEY_MIN_RESPONSES } from '@/lib/surveyPrivacy';
 
 export const OUTCOME_TEMPLATE_KEY = 'outcome_destination';
@@ -43,28 +43,9 @@ export const PLACED: readonly Destination[] = ['EMPLOYED_HERE', 'EMPLOYED_ELSEWH
  * `EMPLOYED_ELSEWHERE` whatever language it was given in.
  */
 export function outcomeSurveyInput() {
-  const template = getSurveyTemplate(OUTCOME_TEMPLATE_KEY)!;
-  const byLocale = { en: renderSurveyTemplate(template, 'en'), tr: renderSurveyTemplate(template, 'tr'), de: renderSurveyTemplate(template, 'de') };
-  const tri = (pick: (r: typeof byLocale.en) => string) => ({ en: pick(byLocale.en), tr: pick(byLocale.tr), de: pick(byLocale.de) });
-  return {
-    key: OUTCOME_TEMPLATE_KEY,
-    templateKey: OUTCOME_TEMPLATE_KEY,
-    title: tri((r) => r.title),
-    intro: tri((r) => r.description),
-    audience: 'MENTEE' as const,
-    anonymity: 'IDENTIFIED' as const,
-    questions: template.questions.map((q, i) => ({
-      key: q.key,
-      // The template's vocabulary → the form engine's (src/lib/forms/schema.ts).
-      type: q.type === 'SINGLE_CHOICE' ? 'SELECT' : q.type,
-      labels: tri((r) => r.questions[i].label),
-      ...(q.optionValues
-        ? { options: q.optionValues.map((value, j) => ({ value, labels: tri((r) => r.questions[i].options![j]) })) }
-        : {}),
-      required: q.required,
-      sortOrder: i,
-    })),
-  };
+  // The generic instantiation (src/lib/surveyTemplateInput.ts), pinned to the
+  // audience and the mode this report's rules depend on.
+  return surveyInputFromTemplate(OUTCOME_TEMPLATE_KEY, { audience: 'MENTEE', anonymity: 'IDENTIFIED' })!;
 }
 
 /** The destination labels in one language, for a report. */

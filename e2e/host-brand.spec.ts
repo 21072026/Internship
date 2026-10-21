@@ -182,6 +182,17 @@ test('a host mapped to a branded organization wears its brand: manifest, head, a
   await expect(mark).toHaveAttribute('src', `${base}mark-128.png`);
 });
 
+test('every signed-out auth page on that host wears the mark: register, forgot, reset (#1663)', async ({ page }) => {
+  test.skip(!version, 'needs the brand set by the previous test');
+  await page.setExtraHTTPHeaders(asHost(HOST));
+  for (const path of ['/auth/register', '/auth/forgot', '/auth/reset?token=unknown']) {
+    await page.goto(path);
+    const mark = page.locator('img[data-brand-mark]').first();
+    await expect(mark, path).toBeVisible();
+    await expect(mark, path).toHaveAttribute('src', `/brand/${version}/mark-128.png`);
+  }
+});
+
 test('removing the mark falls back to the vertical\'s static icons and keeps the name and tint', async ({ request, playwright, baseURL }) => {
   test.skip(!version, 'needs the brand set by the previous test');
   const login = await signInViaApi(request, adminEmail, PASSWORD, { host: HOST });

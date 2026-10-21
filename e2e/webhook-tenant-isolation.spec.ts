@@ -86,3 +86,42 @@ test('a webhook created through the API is stamped with the creator’s org', as
     await prisma.organization.delete({ where: { id: a.org.id } }).catch(() => {});
   }
 });
+
+// #1555 — the integration health board read the Webhook, AuditDrain and SSO
+// rows of EVERY tenant: a tenant admin learned how many endpoints another
+// tenant had registered, whether its SIEM drain was failing, and when its IdP
+// certificate expires. The tenant-owned rows now count the caller's org only.
+test('the integration health board counts only the caller’s own tenant', { tag: '@smoke' }, async ({ page }) => {
+  const a = await orgWithAdmin('HA');
+  const b = await orgWithAdmin('HB');
+  await prisma.organization.update({
+    where: { id: b.org.id },
+    data: { ssoEnabled: true, ssoProvider: 'saml', ssoIssuer: 'https://idp.example/b', ssoEntryPoint: null },
+  });
+  const hookB = await prisma.webhook.create({ data: { url: 'https://b.example/health', secret: 's', events: ['interaction.logged'], orgId: b.org.id } });
+  const drainB = await prisma.auditDrain.create({
+    data: { orgId: b.org.id, url: 'https://b.example/drain', secret: 's', active: false, failures: 20, lastError: 'boom' },
+  });
+  try {
+    await signInAndSettle(page, a.email, 'WhPass123', '/admin');
+    const res = await page.request.get('/api/admin/integrations/health');
+    expect(res.status()).toBe(200);
+    const { connectors } = (await res.json()) as { connectors: { connector: string; state: string; detail: Record<string, unknown> }[] };
+    const row = (id: string) => connectors.find((c) => c.connector === id)!;
+
+    expect(row('webhooks').detail.total).toBe(0);
+    expect(row('webhooks').state).toBe('not_configured');
+    expect(row('audit_drain').detail.total).toBe(0);
+    expect(row('audit_drain').state).toBe('not_configured');
+    // B's half-configured SSO would read "failing" across tenants.
+    expect(row('sso').state).toBe('not_configured');
+    expect(row('sso').detail.enabledOrgs).toBe(0);
+  } finally {
+    await prisma.webhook.deleteMany({ where: { id: hookB.id } }).catch(() => {});
+    await prisma.auditDrain.deleteMany({ where: { id: drainB.id } }).catch(() => {});
+    for (const x of [a, b]) {
+      await cleanupByEmail(x.email);
+      await prisma.organization.delete({ where: { id: x.org.id } }).catch(() => {});
+    }
+  }
+});
