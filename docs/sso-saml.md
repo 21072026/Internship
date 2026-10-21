@@ -165,6 +165,13 @@ so only a super admin of the org's world sets it — #1575).
   (node-saml's `validateRedirect` treats a *missing* signature as valid, so
   that refusal is ours), on HTTP-POST node-saml requires an enveloped XML
   signature; both are checked against the org's stored IdP certificate. The
+  Redirect query is read by `parseSamlRedirectQuery()`
+  (`src/lib/samlRedirectQuery.ts`), never by `URLSearchParams`: node-saml signs
+  over the first raw token that *contains* a key name but parses the value it
+  is handed, so a repeated or percent-encoded `SAMLRequest` once let an
+  unsigned message ride along with a signed one. Each binding key may appear
+  once, spelled literally, and node-saml gets a query rebuilt from exactly the
+  tokens that were decoded. The
   NameID is resolved to a user **of that org only**; that user's
   `sessionsValidFrom` is stamped **and** every remembered device revoked
   (`endAllSessionsForSlo`, `src/lib/ssoLogout.ts` — always both, see
