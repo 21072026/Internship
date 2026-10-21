@@ -118,14 +118,17 @@ test.describe('survey results', () => {
     expect(nps.distribution.find((b: { value: string }) => b.value === '10').count).toBe(3);
     const track = r.questions.find((q: { key: string }) => q.key === 'track');
     expect(track.distribution.map((b: { label: string; count: number }) => [b.label, b.count])).toEqual([['Frontend', 7], ['Backend', 6]]);
-    // Alphabetical, never in arrival order.
-    expect(r.questions.find((q: { key: string }) => q.key === 'best').texts).toEqual(['Apple-pie pairing sessions', 'Zebra-striped code reviews']);
+    // Two people answered the optional free-text question: two people, however
+    // many answered the survey (#1877) — the count and nothing else.
+    const bestQ = r.questions.find((q: { key: string }) => q.key === 'best');
+    expect(bestQ).toEqual({ key: 'best', type: 'LONG_TEXT', label: 'What worked best?', answered: 2, suppressed: true });
 
     // Mentor A (6) shown; B (2) hidden, and C (5) hidden with it — 2 alone
     // would come back by subtraction. Neither is in the payload at all.
     expect(r.breakdowns.mentor.shown).toEqual([{ key: mentorIds[0], label: `SR Mentor A ${stamp}`, n: 6, nps: expect.objectContaining({ score: 50 }) }]);
     expect(r.breakdowns.mentor.hidden).toBe(true);
     const payload = JSON.stringify(r);
+    expect(payload).not.toContain('Zebra');
     for (const i of [1, 2]) {
       expect(payload).not.toContain(mentorIds[i]);
       expect(payload).not.toContain(`SR Mentor ${'ABC'[i]} ${stamp}`);
@@ -138,6 +141,7 @@ test.describe('survey results', () => {
     await expect(page.getByTestId(`survey-results-link-${survey.id}`)).toHaveAttribute('href', `/admin/surveys/${survey.id}/results`);
     await page.goto(`/admin/surveys/${survey.id}/results`);
     await expect(page.getByTestId('nps-score')).toHaveText('23');
+    await expect(page.getByTestId('question-suppressed-best')).toBeVisible();
     await expect(page.getByTestId('breakdown-mentor-hidden')).toBeVisible();
     await expect(page.getByTestId('breakdown-mentor-row')).toHaveCount(1);
   });
@@ -176,6 +180,8 @@ test.describe('survey results', () => {
     // answers it was built from — by position in the list on the page.
     const results = (await (await page.request.get(`/api/admin/surveys/${survey.id}/results`)).json()).results;
     const best = results.questions.find((q: { key: string }) => q.key === 'best');
+    // Alphabetical, never in arrival order.
+    expect(best.texts).toEqual(['Code reviews', 'Feedback on my CV', 'Mock interviews', 'Pairing sessions', 'The weekly check-ins']);
     const { prepared } = prepareOpenText(best.texts.map((text: string, i: number) => ({ id: `${survey.id}/best/${i}`, text })));
     const mock = best.texts.indexOf('Mock interviews');
     const cv = best.texts.indexOf('Feedback on my CV');

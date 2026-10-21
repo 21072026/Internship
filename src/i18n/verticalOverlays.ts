@@ -112,6 +112,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
         role_MENTEE: 'Leads',
         role_MENTOR: 'Sales reps',
+        audience_BOTH: 'Leads and sales reps',
+        createOnePerRole: 'This instrument asks sales reps a differently worded question, so it is one survey per role — create a second one for the other role.',
       },
       nav: {
         candidates: 'Leads',
@@ -1275,6 +1277,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
         role_MENTEE: 'Müşteri adayları',
         role_MENTOR: 'Satış temsilcileri',
+        audience_BOTH: 'Müşteri adayları ve satış temsilcileri',
+        createOnePerRole: 'Bu anket satış temsilcilerine soruyu farklı sözcüklerle soruyor, bu yüzden her rol için ayrı bir anket gerekir — diğer rol için ikincisini oluşturun.',
       },
       nav: {
         candidates: 'Müşteri Adayları',
@@ -2300,6 +2304,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
         role_MENTEE: 'Leads',
         role_MENTOR: 'Vertriebsmitarbeiter',
+        audience_BOTH: 'Leads und Vertriebsmitarbeiter',
+        createOnePerRole: 'Diese Vorlage fragt Vertriebsmitarbeiter mit anderem Wortlaut, daher ist es eine Umfrage pro Rolle — legen Sie für die andere Rolle eine zweite an.',
       },
       nav: {
         candidates: 'Leads',
