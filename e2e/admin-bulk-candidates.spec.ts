@@ -139,7 +139,8 @@ test('bulk owner assignment follows the transfer rule per row and reports what a
     expect(freshRows[0].id).toBe(freshRel.id);
     expect(freshRows[0].mentorId).toBe(newOwner.id);
     expect(freshRows[0].status).toBe('ACTIVE');
-    expect(freshRows[0].lifecycleState).toBeNull();
+    // Still live: the lifecycle column's default since #1768, never an end state.
+    expect(freshRows[0].lifecycleState).toBe('ACTIVE');
 
     // History → handed over: the old pairing closes as a reassignment and keeps
     // its interaction, the successor carries the stage and points back at it.
