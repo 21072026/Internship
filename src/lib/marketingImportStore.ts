@@ -64,6 +64,7 @@ import {
   makeMarketingValidator,
   parseHeaderAliases,
   manualAccountTable,
+  manualAccountsTable,
   previewWriter,
   type ManualAccountFields,
   type MarketingAccountRow,
@@ -785,6 +786,46 @@ async function runMarketingRows(core: MarketingRunCore) {
 
     return { report, stages, stageKeys };
   });
+}
+
+// ── A batch of accounts from a pull connector ───────────────────────────────
+
+/**
+ * Create MANY marketing accounts + leads + funnel records through the import's
+ * own writer, create-only — the batch twin of `createMarketingAccount` for a
+ * machine caller (the Klaviyo pull connector, src/lib/klaviyoSync.ts). One
+ * planning pass for the whole batch: the snapshot (the org's accounts, the
+ * named leads, their records) is loaded ONCE, not once per row, which is what
+ * makes a first import of thousands of profiles linear instead of quadratic.
+ *
+ * Same contract as the one-row path: a row the match key resolves to an
+ * existing account comes back UPDATE/UNCHANGED with that account's id and
+ * NOTHING written ("already exists"); a contact already on the funnel comes
+ * back SKIP (CONTACT_IN_FUNNEL); a refused row is ERROR. The `source` field of
+ * each row is the lead's Source (typed binding — the caller has already decided
+ * it through `leadSourceName()`). No activity line per row: the caller writes
+ * one aggregated line for its run. `dryRun` plans the same rows with the
+ * preview writer.
+ *
+ * Row N of the report is `rows[N - 1]`.
+ */
+export async function createMarketingAccountsBatch(input: {
+  owner: MarketingImportOwner;
+  rows: ManualAccountFields[];
+  createdBySource?: string | null;
+  dryRun?: boolean;
+}): Promise<ImportReport<MarketingPlanValue>> {
+  if (input.rows.length === 0) {
+    return { dryRun: input.dryRun === true, total: 0, counts: { CREATE: 0, UPDATE: 0, UNCHANGED: 0, SKIP: 0, ERROR: 0 }, rows: [], absent: [], startedAtChunk: 0 };
+  }
+  const { report } = await runMarketingRows({
+    owner: input.owner,
+    parse: () => manualAccountsTable(input.rows),
+    mode: input.dryRun ? 'preview' : 'createOnly',
+    leadSource: { kind: 'typed' },
+    createdBySource: input.createdBySource ?? null,
+  });
+  return report;
 }
 
 // ── One account, typed in by hand (#2562) ────────────────────────────────────

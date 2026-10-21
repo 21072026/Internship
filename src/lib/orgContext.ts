@@ -222,6 +222,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // operator CLI (prisma/register-integration-source.mjs) and the demo seed,
   // both sessionless, both passing it.
   'IntegrationSource',
+  // A tenant's pull connector to a third-party marketing platform (Klaviyo,
+  // docs/integrations/klaviyo.md) and the provider-profile ↔ account links it
+  // keeps. A sealed API key and one tenant's prospect list. Every writer is
+  // src/lib/klaviyoSync.ts: the admin routes run under the session's org, the
+  // scheduled sync has no session and passes `orgId` explicitly on every write.
+  'ExternalConnection',
+  'ExternalProfileLink',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was

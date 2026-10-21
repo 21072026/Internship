@@ -177,6 +177,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'safeguarding.flagged', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'public_contact.message', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name', 'email', 'preview'] },
   { key: 'signup.companyInquiry', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['companyName', 'contactName'] },
+  // New leads a pull connector imported in one run (docs/integrations/klaviyo.md):
+  // to the lead owner, in-app only, a count — never a name.
+  { key: 'integration.newLeads', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['count', 'provider'] },
 
   // Pipeline: where a candidate stands, and what came of it.
   { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
