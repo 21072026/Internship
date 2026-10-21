@@ -8027,6 +8027,33 @@ const en = {
         link: 'What is missing',
       },
     },
+    forecast: {
+      title: 'Placements by the horizon',
+      horizon: 'Horizon',
+      sentence: 'At your current conversion rate, about {expected} of the {population} records in the pipeline today reach “{stage}” by {date} (between {low} and {high}).',
+      insufficient: 'Not enough history to project from. Each stage needs at least {floor} journeys in the last year, and these have fewer: {stages}.',
+      noPopulation: 'Nobody is in the pipeline before “{stage}” today, so there is nothing to project.',
+      band: 'The range repeats the same arithmetic with each stage’s rate moved down and up by one standard error of its own history. It shows how sensitive the figure is, not how likely it is.',
+      method: 'Last year’s conversion carried forward, with the multiplication shown: plain arithmetic over your own records.',
+      showWorking: 'Show the arithmetic',
+      colStage: 'Stage',
+      colToday: 'Today',
+      colRate: 'Moved on',
+      colDwell: 'Median days',
+      colToFinish: 'Days to finish',
+      colExpected: 'Reach it',
+      rateCell: '{advanced} of {entered}',
+      notInHorizon: 'after the horizon',
+    },
+  },
+  // The capacity half of the forecast panel (#1897): only rendered where the
+  // vertical carries mentors — see LEAK_EXEMPT in scripts/check-i18n.ts.
+  forecastCapacity: {
+    bottleneck: '“{stage}” is where mentor capacity runs out. Mentors to add to carry everyone through to {date}: about {n}.',
+    noBottleneck: 'The capacity your mentors have stated covers everyone in the pipeline through {date}.',
+    capacityUnknown: 'No mentor has stated a capacity yet, so the capacity needed cannot be worked out.',
+    colLoad: 'Mentee-days needed',
+    capacityLine: '{required} mentee-days needed against {available} available ({seats} seats × {days} days).',
   },
   // The programme health scorecard (#1908), at the top of /admin/analytics.
   scorecard: {
@@ -16184,6 +16211,33 @@ const tr: Dict = {
         link: 'Eksik olan ne',
       },
     },
+    forecast: {
+      title: 'Ufka kadar yerleşmeler',
+      horizon: 'Ufuk',
+      sentence: 'Mevcut dönüşüm oranınızla, bugün hatta olan {population} kaydın yaklaşık {expected} tanesi {date} tarihine kadar “{stage}” aşamasına ulaşır ({low} ile {high} arası).',
+      insufficient: 'Projeksiyon için yeterli geçmiş yok. Her aşamada son bir yılda en az {floor} yolculuk gerekiyor; şunlarda daha az var: {stages}.',
+      noPopulation: 'Bugün “{stage}” aşamasından önce hatta kimse yok; projeksiyon yapılacak bir şey yok.',
+      band: 'Aralık, her aşamanın oranını kendi geçmişinin bir standart hatası kadar aşağı ve yukarı kaydırarak aynı hesabı tekrarlar. Rakamın ne kadar hassas olduğunu gösterir, ne kadar olası olduğunu değil.',
+      method: 'Geçen yılın dönüşümü ileri taşınıyor ve çarpım gösteriliyor: kendi kayıtlarınız üzerinde düz bir hesap.',
+      showWorking: 'Hesabı göster',
+      colStage: 'Aşama',
+      colToday: 'Bugün',
+      colRate: 'İlerleyen',
+      colDwell: 'Medyan gün',
+      colToFinish: 'Bitişe gün',
+      colExpected: 'Ulaşan',
+      rateCell: '{entered} kişiden {advanced}',
+      notInHorizon: 'ufuktan sonra',
+    },
+  },
+  // The capacity half of the forecast panel (#1897): only rendered where the
+  // vertical carries mentors — see LEAK_EXEMPT in scripts/check-i18n.ts.
+  forecastCapacity: {
+    bottleneck: 'Mentor kapasitesinin bittiği aşama “{stage}”. Herkesi {date} tarihine kadar taşımak için eklenecek mentor sayısı: yaklaşık {n}.',
+    noBottleneck: 'Mentorlarınızın belirttiği kapasite, hattaki herkesi {date} tarihine kadar karşılıyor.',
+    capacityUnknown: 'Henüz hiçbir mentor kapasite belirtmedi; bu yüzden gereken kapasite hesaplanamıyor.',
+    colLoad: 'Gereken mentee-gün',
+    capacityLine: '{available} mevcut mentee-güne karşı {required} gerekiyor ({seats} kontenjan × {days} gün).',
   },
   // Program sağlık karnesi (#1908), /admin/analytics'in en üstünde.
   scorecard: {
@@ -24335,6 +24389,33 @@ const de: Dict = {
         link: 'Was fehlt',
       },
     },
+    forecast: {
+      title: 'Vermittlungen bis zum Horizont',
+      horizon: 'Horizont',
+      sentence: 'Bei Ihrer aktuellen Konversionsrate erreichen etwa {expected} der {population} Datensätze, die heute in der Pipeline sind, bis zum {date} „{stage}“ (zwischen {low} und {high}).',
+      insufficient: 'Zu wenig Verlauf für eine Hochrechnung. Jede Stufe braucht mindestens {floor} Verläufe im letzten Jahr, diese haben weniger: {stages}.',
+      noPopulation: 'Heute ist niemand vor „{stage}“ in der Pipeline, es gibt also nichts hochzurechnen.',
+      band: 'Die Spanne wiederholt dieselbe Rechnung, wobei die Quote jeder Stufe um einen Standardfehler ihres eigenen Verlaufs nach unten und oben verschoben wird. Sie zeigt, wie empfindlich die Zahl ist, nicht wie wahrscheinlich.',
+      method: 'Die Konversion des letzten Jahres, fortgeschrieben, mit sichtbarer Multiplikation: einfache Rechnung über Ihre eigenen Daten.',
+      showWorking: 'Rechnung anzeigen',
+      colStage: 'Stufe',
+      colToday: 'Heute',
+      colRate: 'Weiter',
+      colDwell: 'Median Tage',
+      colToFinish: 'Tage bis Ziel',
+      colExpected: 'Erreichen es',
+      rateCell: '{advanced} von {entered}',
+      notInHorizon: 'nach dem Horizont',
+    },
+  },
+  // The capacity half of the forecast panel (#1897): only rendered where the
+  // vertical carries mentors — see LEAK_EXEMPT in scripts/check-i18n.ts.
+  forecastCapacity: {
+    bottleneck: 'Bei „{stage}“ reicht die Mentoring-Kapazität nicht mehr. Zusätzlich nötige Mentorinnen und Mentoren, um alle bis zum {date} zu begleiten: etwa {n}.',
+    noBottleneck: 'Die von Ihren Mentorinnen und Mentoren angegebene Kapazität reicht für alle in der Pipeline bis zum {date}.',
+    capacityUnknown: 'Noch niemand aus dem Mentoring hat eine Kapazität angegeben, daher lässt sich die benötigte Kapazität nicht berechnen.',
+    colLoad: 'Benötigte Mentee-Tage',
+    capacityLine: '{required} Mentee-Tage benötigt, {available} verfügbar ({seats} Plätze × {days} Tage).',
   },
   // Die Programm-Gesundheitskarte (#1908), ganz oben auf /admin/analytics.
   scorecard: {
