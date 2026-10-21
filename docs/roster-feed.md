@@ -166,9 +166,11 @@ remote credential.
 
 ## Not in this engine
 
-- **Deprovisioning.** `absent[]` is computed, reported and stored on the run. Deciding to
-  act on it — offboarding, archiving, closing a relation — is #1966, on purpose: a bug in
-  the diff should cost a wrong report, not a wrong offboarding.
+- **Deprovisioning** (#1966) is a separate phase after the import, with its own rules and
+  four safety valves: [`roster-feeds.md`](roster-feeds.md). The engine only hands it the
+  diff's `absent` people. It runs only after a run whose every row was read, and its
+  ceiling is checked before the first chunk is applied, so a valve that fires leaves
+  nothing written.
 - **The console and the scheduler** (#1967): the `/admin/roster-feeds` screen, the column
   mapper, the run log and running a feed on its `cronExpression`. The configuration API
   exists (#1964) and the engine is callable from a route handler and a scheduled job

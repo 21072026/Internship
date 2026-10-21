@@ -180,6 +180,7 @@ function QuestionCard({ q, s, floor, surveyId }: { q: QuestionResult; s: Dict; f
       <h2 className="font-semibold text-gray-900 dark:text-gray-100 break-words">{q.label}</h2>
       <p className="mb-3 text-sm text-gray-500">{fill(s.answered, { n: q.answered })}</p>
       {q.answered === 0 && <p className="text-sm text-gray-500">{s.noAnswers}</p>}
+      {q.suppressed && <p className="text-sm text-gray-500" data-testid={`question-suppressed-${q.key}`}>{fill(s.hiddenGroup, { floor })}</p>}
       {q.nps && <NpsBlock nps={q.nps} s={s} />}
       {q.trend && q.trend.length > 1 && (
         <div className="mt-4">

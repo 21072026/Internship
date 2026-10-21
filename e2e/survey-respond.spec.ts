@@ -35,7 +35,7 @@ test.describe('survey answering by token', () => {
     await prisma.$disconnect();
   });
 
-  test('a signed-out browser answers from the link, once; anonymous answers carry no identity', async ({ page }) => {
+  test('a signed-out browser answers from the link, once; anonymous answers carry no identity', { tag: '@smoke' }, async ({ page }) => {
     const survey = await openSurvey('ANONYMOUS');
     const invite = await createSurveyInvitation({ surveyId: survey.id, orgId, email: mentee, userId: menteeId, locale: 'en' });
     expect(invite).not.toBeNull();
