@@ -132,12 +132,12 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
   for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM \
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
-           INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
+           INBOUND_EMAIL_DOMAIN INBOUND_SECRET EMAIL_WEBHOOK_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
            CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY \
            MAIL_RATE_PER_MIN MAIL_BURST MAIL_URGENT_RESERVE MAIL_BULK_RATE_PER_MIN MAIL_BULK_BURST MAIL_BULK_URGENT_RESERVE \
            MAIL_METER_MODE MAIL_THROTTLE_LADDER_SEC MAIL_QUEUE_LANES MAIL_WORKER_ENABLED MAIL_INLINE_TIMEOUT_MS \
-           MAIL_DAILY_CAP MAIL_BULK_DAILY_CAP; do
+           MAIL_DAILY_CAP MAIL_BULK_DAILY_CAP JOBS_WORKER_ENABLED JOBS_CONCURRENCY; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -325,6 +325,7 @@ app_env_args() {
     -e SMTP_BULK_FROM="${SMTP_BULK_FROM:-}" \
     -e INBOUND_EMAIL_DOMAIN="${INBOUND_EMAIL_DOMAIN:-}" \
     -e INBOUND_SECRET="${INBOUND_SECRET:-}" \
+    -e EMAIL_WEBHOOK_SECRET="${EMAIL_WEBHOOK_SECRET:-}" \
     -e INBOUND_IMAP_HOST="${INBOUND_IMAP_HOST:-}" \
     -e INBOUND_IMAP_PORT="${INBOUND_IMAP_PORT:-}" \
     -e INBOUND_IMAP_USER="${INBOUND_IMAP_USER:-}" \
@@ -345,6 +346,8 @@ app_env_args() {
     -e MAIL_QUEUE_LANES="${MAIL_QUEUE_LANES:-}" \
     -e MAIL_WORKER_ENABLED="${MAIL_WORKER_ENABLED:-}" \
     -e MAIL_INLINE_TIMEOUT_MS="${MAIL_INLINE_TIMEOUT_MS:-}" \
+    -e JOBS_WORKER_ENABLED="${JOBS_WORKER_ENABLED:-}" \
+    -e JOBS_CONCURRENCY="${JOBS_CONCURRENCY:-}" \
     -e MAIL_DAILY_CAP="${MAIL_DAILY_CAP:-}" \
     -e MAIL_BULK_DAILY_CAP="${MAIL_BULK_DAILY_CAP:-}" \
     -e MT_ENFORCE_ISOLATION="${MT_ENFORCE_ISOLATION:-}" \
@@ -803,6 +806,11 @@ run_tool node prisma/check-marketing-orgs.mjs || true
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.
 run_tool node prisma/backfill-api-key-lifecycle.mjs || true
+# Admin tiers (#1567): every ADMIN without a recorded tier gets ORG_ADMIN —
+# exactly the power the role already carried. Only fills NULLs on ADMIN rows,
+# never touches a tier an operator set, never grants the platform tier (that
+# is User.isSuperAdmin). Converges to a no-op.
+run_tool node prisma/backfill-admin-level.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true
@@ -810,6 +818,11 @@ run_tool node prisma/backfill-cron-baseline.mjs || true
 # so the post-mentorship CV access window (#854) has an anchor instead of
 # revoking access outright. Only ever fills NULLs — idempotent.
 run_tool node prisma/backfill-relation-completed-at.mjs || true
+# Fill MentorshipRelation.lifecycleState from `status` (#1768) — the backfill
+# half of expand → backfill → contract: the column is nullable with a DB default
+# of 'ACTIVE', and the meter tells a paused pair from a live one by it. Only
+# matches rows that disagree with `status` — idempotent.
+run_tool node prisma/backfill-relation-lifecycle.mjs || true
 # Remove the Meeting rows the old recurring-meeting generator materialised. A
 # series is a rule now; those rows outlived their cancelled series and haunted
 # the calendar (#1110). Nothing writes them any more, so this converges to a
@@ -928,7 +941,8 @@ else
   # switched OFF: a second cron would send the same reminder twice, a second
   # IMAP poller would race the live one for the same inbox, and a mail drain
   # would deliver production's queued mail from an image that has not passed its
-  # check yet (#2944). These three flags are the documented kill switches
+  # check yet (#2944), and a job worker would run production's queued jobs
+  # from it the same way (#1673). These four flags are the documented kill switches
   # (src/instrumentation.ts). They come AFTER the shared env list on purpose —
   # docker takes the last `-e` for a given key, so these override whatever the
   # env file set.
@@ -940,6 +954,7 @@ else
     -e CRON_ENABLED=0 \
     -e INBOUND_IMAP_ENABLED=0 \
     -e MAIL_WORKER_ENABLED=0 \
+    -e JOBS_WORKER_ENABLED=0 \
     "$IMAGE" >/dev/null
 
   if ! check_health "http://127.0.0.1:$CANARY_PORT/api/health?db=1" "$CANARY" "${GIT_SHA:0:7}"; then

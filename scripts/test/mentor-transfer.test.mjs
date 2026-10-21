@@ -21,7 +21,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { RELATION_HISTORY_COUNTS, hasRelationHistory } from '../../src/lib/relationHistory.ts';
-import {
+import { register } from 'node:module';
+
+// relationLifecycle imports `./meteringRules` (the one billing allowlist, #1768);
+// the resolve hook lets that extensionless import find the .ts file.
+register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
+const {
   ADMIN_END_REASON_CODES,
   END_REASON_CODES,
   isAdminEndReasonCode,
@@ -31,7 +36,7 @@ import {
   RELATION_LIFECYCLE_STATES,
   REASON_NOTE_REQUIRED_FOR,
   endedByMentorChange,
-} from '../../src/lib/relationLifecycle.ts';
+} = await import('../../src/lib/relationLifecycle.ts');
 
 test('a pairing with nothing recorded under it has no history', () => {
   assert.equal(hasRelationHistory({}), false);

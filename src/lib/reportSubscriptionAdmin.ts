@@ -53,6 +53,8 @@ export async function subscriptionWriteProblem(orgId: string, input: Subscriptio
 export const SUBSCRIPTION_SELECT = {
   id: true,
   reportKey: true,
+  // The stored slice, if any (#1920): { segmentBy, segment? }.
+  params: true,
   cadence: true,
   dayOfWeek: true,
   dayOfMonth: true,

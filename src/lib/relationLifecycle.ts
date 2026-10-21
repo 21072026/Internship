@@ -13,10 +13,130 @@
 // (src/lib/dropoffReasons.ts): z.string() + a whitelist, never z.enum, so a new
 // key never needs a schema change (CLAUDE.md).
 
-/** Lifecycle end states a relation can carry. */
-export const RELATION_LIFECYCLE_STATES = ['ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'] as const;
+import { BILLABLE_RELATION_STATES, isBillableRelationState } from './meteringRules';
+
+//
+// THE STATE MACHINE (#1768). The column now carries every state a pairing can be
+// in, not only how it ended:
+//
+//   ACTIVE ⇄ PAUSED            live; PAUSED is an operational hold (parental
+//                              leave, exam season) — never a feature gate
+//   ACTIVE | PAUSED → terminal COMPLETED, or one of the ENDED_* states below
+//   terminal → ACTIVE          only as an explicit admin reopen
+//
+// `status` (ACTIVE | COMPLETED) is kept, untouched as an enum, and is now the
+// DERIVED liveness flag: statusForLifecycle() is the one place that derivation
+// is written down, and nothing that moves a relation between states may set
+// `status` any other way. Every existing `status: 'ACTIVE'` reader keeps
+// working because a paused pair is still `status = ACTIVE`.
+//
+// The column is a free String (with a DB default of 'ACTIVE'), not an enum, for
+// the same reason `pipelineStatus` is one (#747): an ENUM→VARCHAR change is a
+// migration we cannot review under `db push`, and a new state should never need
+// a schema change. Don't "tidy" it into an enum.
+//
+// It is still NULLABLE on purpose — expand → backfill → contract (#2298): rows
+// written before #1768 carry NULL until prisma/backfill-relation-lifecycle.mjs
+// fills them on deploy, and a required column would have been refused by
+// `db push` on a populated table. effectiveLifecycleState() reads NULL the way
+// the backfill would fill it, so no reader depends on the backfill having run.
+
+/** The live states: the pairing is open (`status = ACTIVE`). */
+export const LIVE_LIFECYCLE_STATES = ['ACTIVE', 'PAUSED'] as const;
+
+/** Every state a relation can carry. */
+export const RELATION_LIFECYCLE_STATES = [
+  ...LIVE_LIFECYCLE_STATES,
+  'COMPLETED',
+  'ENDED_REMATCHED',
+  'ENDED_REASSIGNED',
+  'ENDED_CHURNED',
+] as const;
 
 export type RelationLifecycleState = (typeof RELATION_LIFECYCLE_STATES)[number];
+export type LiveLifecycleState = (typeof LIVE_LIFECYCLE_STATES)[number];
+
+export const ACTIVE: RelationLifecycleState = 'ACTIVE';
+/** On hold: still `status = ACTIVE`, but out of every nudge, queue and the meter. */
+export const PAUSED: RelationLifecycleState = 'PAUSED';
+/** The pairing ran its course — the only terminal state that reads as a success. */
+export const COMPLETED: RelationLifecycleState = 'COMPLETED';
+
+export function isRelationLifecycleState(value: unknown): value is RelationLifecycleState {
+  return typeof value === 'string' && (RELATION_LIFECYCLE_STATES as readonly string[]).includes(value);
+}
+
+/** True for ACTIVE and PAUSED — the pairing is open. */
+export function isLive(state: string | null | undefined): boolean {
+  return !!state && (LIVE_LIFECYCLE_STATES as readonly string[]).includes(state);
+}
+
+/** True for COMPLETED and every ENDED_* state. */
+export function isTerminal(state: string | null | undefined): boolean {
+  return isRelationLifecycleState(state) && !isLive(state);
+}
+
+/**
+ * THE derivation rule: ACTIVE and PAUSED are `status = ACTIVE`, everything else
+ * is `status = COMPLETED`. The only place it is written down — a writer that
+ * moves a relation between states sets `status: statusForLifecycle(to)`.
+ */
+export function statusForLifecycle(state: RelationLifecycleState): 'ACTIVE' | 'COMPLETED' {
+  return isLive(state) ? 'ACTIVE' : 'COMPLETED';
+}
+
+/**
+ * Which moves are legal. ACTIVE ⇄ PAUSED; either live state may end in any
+ * terminal state; a terminal state only goes back to ACTIVE (an explicit admin
+ * reopen — who may do it is the endpoint's rule, not this table's). A terminal
+ * state never becomes another terminal state: how a pairing ended is history.
+ */
+export const LEGAL_TRANSITIONS: Readonly<Record<RelationLifecycleState, readonly RelationLifecycleState[]>> = {
+  ACTIVE: ['PAUSED', 'COMPLETED', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'],
+  PAUSED: ['ACTIVE', 'COMPLETED', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'],
+  COMPLETED: ['ACTIVE'],
+  ENDED_REMATCHED: ['ACTIVE'],
+  ENDED_REASSIGNED: ['ACTIVE'],
+  ENDED_CHURNED: ['ACTIVE'],
+};
+
+export function canTransition(from: string | null | undefined, to: string): boolean {
+  if (!isRelationLifecycleState(from) || !isRelationLifecycleState(to)) return false;
+  return LEGAL_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * The state a stored row is in. `status` stays authoritative for liveness, so a
+ * row that a not-yet-migrated writer flipped by `status` alone still reads
+ * truthfully:
+ *
+ *   · status ACTIVE    → PAUSED when the column says so, otherwise ACTIVE
+ *                        (a NULL or a stale terminal value cannot make an open
+ *                        pairing read as closed)
+ *   · status COMPLETED → the column's terminal state when it carries one,
+ *                        otherwise COMPLETED (NULL, or a stale ACTIVE/PAUSED
+ *                        from a writer that set only `status`)
+ *
+ * The same mapping prisma/backfill-relation-lifecycle.mjs writes, so a row
+ * reads the same before and after the backfill.
+ */
+export function effectiveLifecycleState(relation: {
+  status: string;
+  lifecycleState?: string | null;
+}): RelationLifecycleState {
+  const stored = relation.lifecycleState;
+  if (relation.status === 'ACTIVE') return stored === PAUSED ? PAUSED : ACTIVE;
+  return isTerminal(stored) ? (stored as RelationLifecycleState) : COMPLETED;
+}
+
+/**
+ * True when a pair in this state goes on the invoice. Delegates to the ONE
+ * billing allowlist (BILLABLE_RELATION_STATES in src/lib/meteringRules.ts, #1750)
+ * — exported here so lifecycle callers ask this module, never a second list.
+ */
+export function isBillable(state: string | null | undefined): boolean {
+  return isBillableRelationState(state);
+}
 
 /** The mentee asked for a different mentor and an admin approved it. */
 export const ENDED_REMATCHED: RelationLifecycleState = 'ENDED_REMATCHED';
@@ -106,4 +226,21 @@ export function isRematched(relation: { lifecycleState?: string | null }): boole
  */
 export function endedByMentorChange(relation: { lifecycleState?: string | null }): boolean {
   return relation.lifecycleState === ENDED_REMATCHED || relation.lifecycleState === ENDED_REASSIGNED;
+}
+
+/**
+ * The billable-pair STATE filter, as a Prisma-ready `where` fragment — the SQL
+ * twin of isBillable(effectiveLifecycleState(row)). `status: 'ACTIVE'` stays in
+ * it because `status` is authoritative for liveness: a row a legacy writer
+ * closed by `status` alone may still carry 'ACTIVE' in the column. Both the
+ * invoice (activeMatchedPairs) and the plan gate's capacity count
+ * (countActiveRelations) read it, so a paused pair is neither billed nor
+ * counted against a plan cap. Plain object, no Prisma import — this module
+ * stays client-safe.
+ */
+export function billableRelationWhere() {
+  return {
+    status: 'ACTIVE' as const,
+    lifecycleState: { in: [...BILLABLE_RELATION_STATES] as string[] },
+  };
 }
