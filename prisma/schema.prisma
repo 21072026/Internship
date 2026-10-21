@@ -6141,6 +6141,18 @@ model OrgEntitlement {
 //
 // Rules in src/lib/jobs/lease.ts; unit-tested in scripts/test/job-lease.test.mjs.
 // No `orgId`: this is operational state about processes, not tenant data.
+/// One row per QUEUE schedule (#1676, `src/lib/jobs/schedules.ts`): the last
+/// slot the scheduler enqueued. It is what lets a tick after an outage tell a
+/// missed slot from one already handled. System-level, no `orgId` — a schedule
+/// is the deployment's, not a tenant's. Advanced only by one conditional write
+/// (`src/lib/jobs/scheduleStateStore.ts`), so it never moves backwards.
+model ScheduleState {
+  /// The schedule key — `QueueSchedule.key`.
+  name             String    @id @db.VarChar(64)
+  lastEnqueuedSlot DateTime?
+  updatedAt        DateTime  @updatedAt
+}
+
 model JobLease {
   /// The lease name — 'scheduler', 'imap-bridge'. Primary key on purpose: the
   /// uniqueness of a lease is the invariant this table exists to enforce.
