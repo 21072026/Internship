@@ -188,3 +188,79 @@ function sortWeighted(weights: ReadonlyMap<string, number>): WeightedSkill[] {
     .map(([skillId, weight]) => ({ skillId, weight }))
     .sort((a, b) => b.weight - a.weight || (a.skillId < b.skillId ? -1 : a.skillId > b.skillId ? 1 : 0));
 }
+
+// ─── Adjacency-weighted overlap (#1821) ─────────────────────────────────────
+//
+// THE scorer for "how well do these skills cover those": mentor suggestions
+// (mentee's skills covered by a mentor's), requisition match alerts (a
+// requisition's required skills covered by a candidate's) and — by design —
+// the matching engine's scoreMatch() (#1781/#1787). One implementation; do not
+// write a second private one.
+
+/** An adjacency counts towards a requisition match only from this weight up. */
+export const REQUISITION_ADJACENT_MIN_WEIGHT = 0.5;
+/** Required skills a candidate must cover before an alert fires (fewer if the requisition asks for fewer). */
+export const REQUISITION_MATCH_MIN_SKILLS = 2;
+
+export interface SkillOverlap {
+  /** Direct matches count 1 each, adjacent ones their edge weight. */
+  score: number;
+  /** Target skills the holder has exactly. */
+  direct: string[];
+  /** Target skills covered only through a neighbour: the holder's skill, the target it stands in for, and the weight. */
+  adjacent: { skillId: string; via: string; weight: number }[];
+}
+
+/**
+ * How well `holderIds` cover `targetIds`. Every target is covered at most once:
+ * directly (weight 1) when the holder has it, else through the holder's best
+ * one-hop neighbour of it (the edge weight), if that is at least
+ * `minAdjacentWeight`. Edges follow `expandAdjacency`'s reading — ADJACENT both
+ * ways, BROADER/NARROWER from → to, starting at the target. Deterministic: the
+ * same rows give the same score and the same explanation.
+ */
+export function skillOverlap(
+  targetIds: readonly string[],
+  holderIds: readonly string[],
+  edges: readonly SkillEdgeRow[],
+  minAdjacentWeight = 0,
+): SkillOverlap {
+  const holder = new Set(holderIds);
+  const out: SkillOverlap = { score: 0, direct: [], adjacent: [] };
+  for (const target of new Set(targetIds)) {
+    if (holder.has(target)) {
+      out.direct.push(target);
+      out.score += 1;
+      continue;
+    }
+    let best: { skillId: string; weight: number } | null = null;
+    for (const { skillId, weight } of expandAdjacency([target], edges, 1)) {
+      if (skillId === target || !holder.has(skillId) || weight < minAdjacentWeight || weight <= 0) continue;
+      if (!best || weight > best.weight) best = { skillId, weight };
+    }
+    if (best) {
+      out.adjacent.push({ skillId: best.skillId, via: target, weight: best.weight });
+      out.score += best.weight;
+    }
+  }
+  out.score = Math.round(out.score * 1000) / 1000;
+  return out;
+}
+
+/**
+ * Does a candidate match a requisition? They must cover at least
+ * `REQUISITION_MATCH_MIN_SKILLS` of its required skills (or all of them, if it
+ * asks for fewer), each directly or through a neighbour of weight
+ * ≥ `REQUISITION_ADJACENT_MIN_WEIGHT`. Canonical ids, so "Go" never matches a
+ * title that merely contains the letters g-o.
+ */
+export function requisitionSkillMatch(
+  requiredIds: readonly string[],
+  candidateIds: readonly string[],
+  edges: readonly SkillEdgeRow[],
+): SkillOverlap & { isMatch: boolean } {
+  const overlap = skillOverlap(requiredIds, candidateIds, edges, REQUISITION_ADJACENT_MIN_WEIGHT);
+  const needed = Math.min(REQUISITION_MATCH_MIN_SKILLS, new Set(requiredIds).size);
+  const covered = overlap.direct.length + overlap.adjacent.length;
+  return { ...overlap, isMatch: needed > 0 && covered >= needed };
+}

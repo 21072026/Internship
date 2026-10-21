@@ -24,7 +24,7 @@ test('notice period: record, queue, end-day bell, withdraw', async ({ page }) =>
     data: templateStagePayload(defaultTemplateForVertical('MARKETING')!).stages.map((s) => ({ ...s, orgId: org.id })),
   });
   const emails = ['admin', 'rep', 'lead', 'lead2'].map((k) => uniqueEmail(`notice-${k}`));
-  await seedUser(emails[0], PW, 'ADMIN', 'Notice Admin');
+  await seedUser(emails[0], PW, 'ADMIN', 'Notice Admin', org.id);
   const rep = await seedUser(emails[1], PW, 'MENTOR', 'Notice Rep');
   const lead = await seedUser(emails[2], PW, 'MENTEE', `Leaving Customer ${stamp}`);
   const lead2 = await seedUser(emails[3], PW, 'MENTEE', `Trial Lead ${stamp}`);
@@ -69,9 +69,8 @@ test('notice period: record, queue, end-day bell, withdraw', async ({ page }) =>
       data: { contractEndsAt: new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())) },
     });
     await page.context().clearCookies();
-    await page.context().setExtraHTTPHeaders({});
-    // A PLATFORM admin (no org) is the operator who runs the named job — the
-    // same shape as e2e/trial-reminders-job.spec.ts.
+    // The org's own ADMIN on the org's own host runs its trial sweep: `orgId`
+    // is honoured only for the caller's org or a super admin's (#1575).
     await signInAndSettle(page, emails[0], PW, '/admin');
     const run = await page.request.get(`/api/cron?job=trial-reminders&orgId=${org.id}`);
     expect(run.ok()).toBeTruthy();

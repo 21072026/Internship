@@ -27,6 +27,8 @@ interface Suggestion {
   mentorId: string;
   fullName: string;
   sharedSkills: string[];
+  /** Neighbours that stood in for a mentee skill (#1821). */
+  adjacentSkills?: { skill: string; via: string; weight: number }[];
   reason: string | null;
 }
 
@@ -257,9 +259,15 @@ export function AssignMentorInline({
             <span className="font-medium">{a.suggested}: {suggestion.fullName}</span>
             {suggestion.reason
               ? ` — ${suggestion.reason}`
-              : suggestion.sharedSkills.length > 0
-                ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
-                : ''}
+              : (() => {
+                  // Exact skills first, then the related ones, each saying which
+                  // of the mentee's skills it stands in for (#1821).
+                  const related = (suggestion.adjacentSkills ?? []).map((r) =>
+                    a.relatedSkill.replace('{skill}', r.skill).replace('{via}', r.via),
+                  );
+                  const all = [...suggestion.sharedSkills, ...related];
+                  return all.length > 0 ? ` — ${a.sharedSkills}: ${all.join(', ')}` : '';
+                })()}
             {aiUsed && suggestion.reason && <AiBadge className="ml-1.5" />}
             {!aiUsed && !locked && <span className="text-gray-400"> ({a.ruleBased})</span>}
           </p>
