@@ -119,6 +119,8 @@ run node prisma/seed-demo.mjs
 log "Backfilling orgId on every tenant model"
 run node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above"
+# Canonical skills (#1819/#1820) for the freshly seeded demo people.
+run node prisma/backfill-skill-taxonomy.mjs --apply || true
 
 log "Health check http://127.0.0.1:${PORT}/api/health"
 for i in $(seq 1 15); do

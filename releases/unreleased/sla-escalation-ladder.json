@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage SLAs escalate (#1722):** the one-shot stage-deadline reminder is now a short, fixed ladder backed by a new `SlaBreach` row per passed deadline (`orgId`, registered in `TENANT_MODELS`). Level 1 tells the mentor once per deadline, exactly as before; level 2 tells the org's active administrators once the stage's new `StageSla.escalateAfterDays` have passed without a move, unless the breach was acknowledged or is snoozed (`POST /api/admin/sla/[id]/acknowledge`, `/snooze`, both audited). A stage move closes the breach on every write path (`emitStageChange`), and the daily sweep closes any whose deadline was cleared or moved, whose relation left ACTIVE, reached a terminal/off-path stage or entered the re-engagement pool. The first run after the deploy adopts deadlines already reminded about (`deadlineReminderSentAt`) at level 1 without re-sending. Bells go through `notifyEvent()` (`deadline.stagePassed`, new `deadline.slaEscalated` / `deadline.slaResolved`), mail through `sendEmail()` under `stage-deadline`, both behind the `deadlines` preference. Rule: `src/lib/slaLadderRule.ts`; only writer: `src/lib/slaBreach.ts`.",
+  "notes": {
+    "en": ["Stage service levels can now escalate: if a stage is still overdue a set number of days after its deadline, your organisation's administrators are told too — once."],
+    "tr": ["Aşama hizmet seviyeleri artık üst kademeye iletilebiliyor: bir aşama, son tarihinden belirlenen gün sayısı sonra hâlâ gecikmişse kurumunuzun yöneticilerine de bir kez haber verilir."],
+    "de": ["Phasen-Servicelevel können jetzt eskalieren: Ist eine Phase eine festgelegte Zahl von Tagen nach ihrer Frist noch überfällig, werden auch die Administratoren deiner Organisation informiert — einmal."]
+  }
+}

@@ -13,6 +13,8 @@ generalise "React" to "Frontend". The taxonomy is the vocabulary those strings r
 | Tables `Skill`, `SkillAlias`, `SkillEdge`, `UserSkill`, `RequisitionSkill` | `prisma/schema.prisma` (next to `Tag`) | #1815 |
 | Pure rules: caps, labels, new-skill keys, merge chain, adjacency walk | `src/lib/skillTaxonomyRule.ts` (unit test `scripts/test/skill-taxonomy.test.mjs`) | #1815 |
 | DB resolver: `resolveSkill` / `resolveMany` / `expandAdjacent` / `seedSkillTaxonomy` | `src/lib/skillsResolve.ts` (e2e `e2e/skill-taxonomy.spec.ts`) | #1815 |
+| Curation screen `/admin/skills` (vocabulary + review-queue tab) | `src/lib/skillCuration.ts`, `src/components/admin/SkillManager.tsx`, `/api/admin/skills/**` (e2e `e2e/skill-admin.spec.ts`) | #1817 |
+| Autocomplete (`GET /api/skills/suggest`) + dual-write on every skill write path | `src/components/ui/SkillsField.tsx`, `syncUserSkills` / `syncRequisitionSkills` in `src/lib/skillsResolve.ts` (e2e `e2e/skill-picker.spec.ts`, `@smoke`) | #1818 |
 | Backfill of the free text + unmapped-term queue | `prisma/backfill-skill-taxonomy.mjs`, `src/lib/skillQueue.ts`, `/api/admin/skills/unmapped` (e2e `e2e/skill-backfill.spec.ts`) | #1819 |
 
 ## Rules that carry weight
@@ -65,3 +67,67 @@ The queue: `GET /api/admin/skills/unmapped[?resolution=…]` (most frequent firs
 labelEn?, labelTr?, labelDe? }`. ADMIN only, org from the session, another org's term answers
 404. Each decision is one guarded `updateMany` out of `PENDING` (a second decision answers 409);
 promote and alias then link everybody whose free text carries the term (`linkFreeTextHolders`).
+
+## Autocomplete and dual-write (#1818)
+
+`SkillsField` — the one skills editor every form uses (#2314) — asks `GET /api/skills/suggest?q=`
+while typing and offers the org's ACTIVE skills as an ARIA 1.2 combobox. Picking commits the
+canonical **label**; the JSON list still holds strings. A term not in the vocabulary can still be
+committed with Enter.
+
+Whose vocabulary: signed in → the caller's org (any role; free core, never gated). Signed out → only
+`?mentorId=` (a link `/api/apply` would accept → that mentor's org) or
+`?context=mentor-application` (the default org, where `/api/mentor-applications` files it);
+anything else answers an empty list. Signed-out calls are rate-limited per IP.
+
+**Dual-write.** Every path that writes a skill list calls `syncUserSkills(userId, orgId, skills)`
+or `syncRequisitionSkills(...)` after its own write: the `UserSkill` / `RequisitionSkill` rows are
+made to equal what the JSON resolves to (missing created, stale removed); unresolved terms are
+created as PENDING `UnmappedSkillTerm` rows. The sync never throws — a failed mirror is repaired
+by the next deploy's backfill, which also covers the paths that do not sync yet (imports, roster
+feed, SSO sync, duplicate merges). Inside a transaction that wrote the requisition, sync **after**
+commit: the mirror's FK insert would wait on the transaction's own row lock.
+`ensureSkillTaxonomy(orgId)` seeds an org created after the last deploy on first use.
+
+## Curation (#1817)
+
+`/admin/skills` — ADMIN only, in the page and in every route handler; org from the session; another
+org's skill answers 404. The rules live in `src/lib/skillCuration.ts`:
+
+- **A spelling is unique per org across keys and aliases.** Adding an alias, creating a skill or
+  relabelling one to a spelling another skill owns answers `409 duplicate` — that is a merge, not a
+  rename. A relabel keeps the key (keys are forever) and adds the new English label's fold as an
+  alias so the label still resolves.
+- **Merge** (`POST /api/admin/skills/[id]/merge { targetId }`, previewed by the GET twin) is one
+  transaction, guarded on the loser's `mergedIntoId IS NULL`: `UserSkill` / `RequisitionSkill` rows
+  move (a row that would duplicate the target's is dropped), aliases move, edges are re-pointed (a
+  self-loop or an existing pair is dropped), and the loser stays as a RETIRED row with
+  `mergedIntoId` — its key and every alias keep resolving to the target.
+- **Retire** hides a skill from suggestions and resolution; nobody's row is removed, so reactivating
+  restores it. A merged skill cannot be reactivated.
+- **Edges** (`PUT …/edges`) replace a skill's neighbours: every edge leaving it plus every ADJACENT
+  edge arriving at it; weights are clamped to 0..1, at most 50, no self-edge.
+- `MAX_SKILLS_PER_ORG` is enforced on create; every mutation writes an activity row (`skill.*`).
+
+## Skill filters in SQL (#1820)
+
+`skillTermWhere(orgId, term)` (`src/lib/skillFilter.ts`) is the one "has skill X" filter for the
+mentor directory, the admin candidate list and the company talent pool. A term matches a person when
+a canonical skill they hold (`UserSkill` → `Skill`) carries it in a label or an alias, **or** their
+free-text `User.skills` contains it case-insensitively (an id pre-query — `LIKE` over the JSON's text
+in MySQL — so a prefix like "docke" and a term still in the review queue keep working). The result is
+a `where`, so each route counts and pages one SQL set; nothing loads the pool into Node. The
+directory's JavaScript branch remains only for `language` (still a JSON list) and `accepting`
+(derived), and keeps reporting `partial` when its scan cap is reached. Topic and demo environments
+run the taxonomy backfill after seeding so their people have `UserSkill` rows.
+
+## Adjacency-weighted matching (#1821)
+
+`skillOverlap(targetIds, holderIds, edges, minAdjacentWeight?)` (`src/lib/skillTaxonomyRule.ts`) is
+the one scorer for "how well do these skills cover those" — each target counts once, 1 when the holder
+has it, else the weight of the holder's best one-hop neighbour of it. Consumers: mentor suggestions
+(mentee's skills covered by a mentor's; `MATCH_RULESET_VERSION = 'rules-v2'`), and requisition match
+alerts through `requisitionSkillMatch()` (min(2, required) required skills covered, adjacency
+≥ 0.5). The matching engine (#1781/#1787) must import it, never re-implement it. Inputs come from
+`loadSkillEdges(orgId, ids)` (edges into retired/merged skills dropped) and labels from
+`skillLabels(orgId, ids, locale)`. The adjacency is data: deleting the `SkillEdge` removes the credit.

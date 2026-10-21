@@ -45,7 +45,16 @@ async function main() {
       // isSuperAdmin (#1535): the very first admin manages the instance itself —
       // creating tenants and configuring their SSO. Every later ADMIN is a
       // tenant admin and gets the flag only when an operator grants it.
-      data: { email, password: hashedPassword, fullName, role: 'ADMIN', skills: [], isSuperAdmin: true },
+      // adminLevel (#1567): the tenant tier; the platform tier is the flag.
+      data: {
+        email,
+        password: hashedPassword,
+        fullName,
+        role: 'ADMIN',
+        adminLevel: 'ORG_ADMIN',
+        skills: [],
+        isSuperAdmin: true,
+      },
     });
     console.log(`Created ADMIN user: ${email}`);
   }

@@ -19,6 +19,8 @@ export interface ConfirmDialogProps {
   cancelLabel: string;
   variant?: 'danger' | 'default';
   loading?: boolean;
+  /** The confirm button stays disabled while the dialog's own form is incomplete. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -31,6 +33,7 @@ export function ConfirmDialog({
   cancelLabel,
   variant = 'default',
   loading = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -82,7 +85,7 @@ export function ConfirmDialog({
             type="button"
             variant={variant === 'danger' ? 'danger' : 'primary'}
             loading={loading}
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             onClick={onConfirm}
             data-testid="confirm-dialog-confirm"
           >

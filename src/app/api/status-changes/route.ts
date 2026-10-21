@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
-import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, statusChangeData, validateDropoffReason, validateEmploymentAttribution } from '@/lib/stageChange';
 import { emitStageChange, stageChangeEvent } from '@/lib/stageChangeEffects';
 import { kickRelay, publishEventOp } from '@/lib/events/publish';
 import { stageTrialWindow } from '@/lib/trialWindow';
@@ -24,6 +24,8 @@ const schema = z.object({
   // negative/off-path stage in the relation's org pipeline.
   reasonCode: z.string().max(40).optional(),
   reasonNote: z.string().max(2000).optional(),
+  // Whose outcome a hire is (#1503); whitelisted by validateEmploymentAttribution().
+  employmentAttribution: z.string().max(24).optional(),
 });
 
 // POST — admin manually adds a stage-history entry to correct the audit trail.
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { relationId, fromStatus, toStatus, createdAt, reasonCode, reasonNote } = parsed.data;
+    const { relationId, fromStatus, toStatus, createdAt, reasonCode, reasonNote, employmentAttribution } = parsed.data;
     const relation = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
     // Another tenant's relation answers like a missing one, flag on or off (#2542).
     if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {
@@ -59,6 +61,14 @@ export async function POST(request: Request) {
     const reasonCheck = await validateDropoffReason({ orgId: relation.orgId, toStatus, reasonCode, reasonNote });
     if (!reasonCheck.ok) {
       return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
+    }
+    const attributionCheck = await validateEmploymentAttribution({
+      orgId: relation.orgId,
+      toStatus,
+      attribution: employmentAttribution,
+    });
+    if (!attributionCheck.ok) {
+      return NextResponse.json({ error: attributionCheck.error, code: 'invalid_attribution' }, { status: 400 });
     }
 
     // A backdated entry is a history correction and must not move the
@@ -97,7 +107,12 @@ export async function POST(request: Request) {
         ? [
             prisma.mentorshipRelation.update({
               where: { id: relationId },
-              data: { pipelineStatus: toStatus, ...trialWindow },
+              data: {
+                pipelineStatus: toStatus,
+                ...trialWindow,
+                // Stored only on a live move into the hire stage, where it belongs (#1503).
+                ...(attributionCheck.hireStage && employmentAttribution ? { employmentAttribution } : {}),
+              },
             }),
             // The event commits with the move (#1680).
             publishEventOp(

@@ -5,6 +5,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { outcomeForStage } from '@/lib/outcomeComms';
 import { emitOutcomeComms, notifyMenteeOfOutcome } from '@/lib/outcomeComms.server';
 import { stageDeadlineUpdate } from '@/lib/stageSla';
+import { resolveBreaches } from '@/lib/slaBreach';
 import { prisma } from '@/lib/prisma';
 import { verticalFor } from '@/lib/verticalContext';
 import { verticalHasCapability } from '@/lib/verticals';
@@ -103,6 +104,10 @@ export async function emitStageChange(opts: {
   // board and false in a bulk advance. Deliberately outside the caller's
   // transaction — `stageDeadline` is a derived convenience, and failing to
   // refresh it must never roll back the move itself.
+  // A move restarts the stage clock, so whatever breach the old stage had is
+  // over and its escalation ladder stops here (#1722) — on every write path,
+  // for the same reason the deadline is applied here. Never throws.
+  await resolveBreaches({ relationId: opts.relationId });
   if (!opts.deadlineSetByCaller) {
     try {
       const update = await stageDeadlineUpdate(opts.orgId, opts.to);

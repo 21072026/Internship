@@ -18,6 +18,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { JourneyView } from '@/components/JourneyView';
 import { AgendaPanel } from '@/components/AgendaPanel';
 import { SessionNotePanel } from '@/components/SessionNotePanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
@@ -39,6 +40,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
 import { apiErrorMessage } from '@/lib/apiErrorMessage';
+import { RelationHealthBadge, useRelationHealth } from '@/components/HealthBadge';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
@@ -263,6 +265,9 @@ export default function MenteeDetailPage() {
     }
   };
 
+  // The pair's health (#1904): the same score and reasons as the attention queue.
+  const health = useRelationHealth(relation?.status === 'ACTIVE' ? [relation.id] : []);
+
   if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
   if (loadError && !relation) return <LoadErrorCard onRetry={() => { setLoading(true); fetchRelation(); }} testId="mentee-load-error" />;
   if (!relation) return <div className="text-center py-12 text-gray-400">{t.mentor.relationNotFound}</div>;
@@ -296,6 +301,7 @@ export default function MenteeDetailPage() {
           <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
             <div className="flex items-center gap-2">
               <StatusBadge status={relation.status} />
+              <RelationHealthBadge health={health[relation.id]} testId="relation-health" />
               <StageClockChip
                 testId="stage-clock-detail"
                 daysInStage={daysInStage(relation)}
@@ -624,6 +630,10 @@ export default function MenteeDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* The programme journey (#1855) — forward-looking, onboarding as its
+              first milestone; the timeline right below is the record behind it. */}
+          <JourneyView relationId={id} />
 
           {/* The merged history (#1702) — the handover artefact when a mentor
               changes, right under the interaction log it summarizes. */}

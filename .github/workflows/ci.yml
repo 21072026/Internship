@@ -14,9 +14,14 @@ on:
   pull_request:
     branches: [main]
 
+# A new push to a PR supersedes its old head, so that run is cancelled. A push
+# to main is never superseded: each merge is its own commit, and its run is
+# the only place a breakage shows after auto-merge (this job is not a required
+# check). Cancelling there left most main commits without a verdict (9 of 11
+# on 2026-10-20), and #2999's red first surfaced two merges later (#3022).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
@@ -43,6 +48,11 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # check:i18n sees key PARITY, not copy that never became a key: the
+      # per-tenant pipeline-stage editor shipped English end to end on a
+      # trilingual product (#1613). Pinned per file and shrink-only.
+      - name: no new hardcoded user-facing strings (#1613)
+        run: npm run check:hardcoded-strings
       # Report registry (#1903): label keys in all three dictionaries, a loader
       # per definition, and a privacy floor that can actually suppress.
       - name: Report registry

@@ -3,13 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
-import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
+import { spEntityId, acsUrl, metadataUrl, sloUrl } from '@/lib/ssoSaml';
 import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { creatableVertical, orgInWorld, orgWorldWhere } from '@/lib/superAdminWorld';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -37,7 +38,8 @@ import { invalidateBrandCache } from '@/lib/hostBrand';
 // A super admin sees every tenant OF ITS OWN WORLD (docs/worlds.md § Super
 // admin) — an INTERNSHIP super admin never lists a MARKETING organization and
 // vice versa; a plain tenant ADMIN sees exactly their own organisation, and
-// nothing at all when they belong to none (#1535).
+// nothing at all when they belong to none (#1535). A tenant's OWN bill — plan,
+// active-pair meter, history — is GET /api/org/billing (#1739), not this list.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -132,6 +134,7 @@ export async function GET() {
           ssoProvider: o.ssoProvider,
           ssoIssuer: o.ssoIssuer,
           ssoEntryPoint: o.ssoEntryPoint,
+          ssoLogoutUrl: o.ssoLogoutUrl,
           // Never expose the raw certificate to the list view; just whether one is set.
           ssoCertificateSet: !!o.ssoCertificate,
           active: isSsoActive(o),
@@ -142,6 +145,7 @@ export async function GET() {
           spEntityId: spEntityId(o.slug),
           acsUrl: acsUrl(o.slug),
           metadataUrl: metadataUrl(o.slug),
+          sloUrl: sloUrl(o.slug),
           // Enforced SSO (#1950): the flag, plus the two numbers the admin
           // screen needs to name the consequence before anyone presses it.
           ssoEnforced: o.ssoEnforced,
@@ -274,6 +278,8 @@ const patchSchema = z.object({
   ssoIssuer: z.string().max(TEXT_LIMITS.orgSsoIssuer).optional(),
   ssoEntryPoint: z.string().max(2000).optional(),
   ssoCertificate: z.string().max(20000).optional(),
+  // The IdP's SingleLogoutService (#1952) — part of the IdP trust, like the three above.
+  ssoLogoutUrl: z.string().max(2000).optional(),
   // Enforced SSO (#1950). Separate from ssoEnabled on purpose: "our IdP works"
   // and "nothing but our IdP may work" are different promises, and only the
   // second one ends live sessions.
@@ -335,7 +341,7 @@ export async function PATCH(request: Request) {
   const {
     id, plan, vertical, brandName, brandLogoUrl, brandColor, supportEmail,
     brandTileColor, brandAccent, brandPalette,
-    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced,
+    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
   } = parsed.data;
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
@@ -421,6 +427,7 @@ export async function PATCH(request: Request) {
         targetId: id,
         detail: `to ${toVerticalKey(vertical)}: ${conflicts} e-mail address(es) already have an account in that product`,
         request,
+        orgId: id,
       });
       return NextResponse.json(
         {
@@ -450,8 +457,8 @@ export async function PATCH(request: Request) {
 
   const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
     ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined ||
-    ssoEnforced !== undefined;
-  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced]);
+    ssoLogoutUrl !== undefined || ssoEnforced !== undefined;
+  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced]);
   if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
   }
@@ -473,6 +480,9 @@ export async function PATCH(request: Request) {
     [ssoIssuer, existing.ssoIssuer],
     [ssoEntryPoint, existing.ssoEntryPoint],
     [ssoCertificate, existing.ssoCertificate],
+    // Where we send a signed-out person (#1952): a tenant who could point it
+    // anywhere could route every sign-out through a page of their choosing.
+    [ssoLogoutUrl, existing.ssoLogoutUrl],
   ] as const).some(([next, current]) => {
     const value = orNull(next);
     return value !== undefined && value !== null && value !== (current ?? null);
@@ -554,6 +564,7 @@ export async function PATCH(request: Request) {
     const si = orNull(ssoIssuer); if (si !== undefined) data.ssoIssuer = si;
     const sep = orNull(ssoEntryPoint); if (sep !== undefined) data.ssoEntryPoint = sep;
     const sc = orNull(ssoCertificate); if (sc !== undefined) data.ssoCertificate = sc;
+    const slo = orNull(ssoLogoutUrl); if (slo !== undefined) data.ssoLogoutUrl = slo;
 
     const effective = {
       ssoEnabled: (data.ssoEnabled as boolean | undefined) ?? existing.ssoEnabled,
@@ -561,6 +572,7 @@ export async function PATCH(request: Request) {
       ssoIssuer: (data.ssoIssuer as string | null | undefined) ?? existing.ssoIssuer,
       ssoEntryPoint: (data.ssoEntryPoint as string | null | undefined) ?? existing.ssoEntryPoint,
       ssoCertificate: (data.ssoCertificate as string | null | undefined) ?? existing.ssoCertificate,
+      ssoLogoutUrl: (data.ssoLogoutUrl as string | null | undefined) ?? existing.ssoLogoutUrl,
     };
     const err = validateSsoConfig(effective);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
@@ -646,7 +658,10 @@ export async function PATCH(request: Request) {
     );
   }
 
-  await logActivity({
+  // Field NAMES only — never a value: the SSO fields include the IdP
+  // certificate, and this row reaches the tenant's audit drain (#1575).
+  await recordOrgWrite({
+    orgId: organization.id,
     // SSO config lives behind this endpoint, so a change to it can redirect
     // authentication itself — warning rather than info when that is touched.
     action: 'org.updated',
@@ -656,8 +671,6 @@ export async function PATCH(request: Request) {
         : 'info',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
-    targetType: 'organization',
-    targetId: organization.id,
     detail: Object.keys(data).join(', '),
     request,
   });

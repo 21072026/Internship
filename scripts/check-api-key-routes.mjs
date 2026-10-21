@@ -86,6 +86,13 @@ for (const file of sourceFiles('src')) {
   }
 }
 
+// Routes that may take ANY live key, with the reason (#2002). Nothing that
+// reads or writes tenant data belongs here.
+const ANY_SCOPE_ROUTES = {
+  'src/app/api/v1/me/route.ts':
+    'The connector auth test: the key\'s own org, scopes, expiry and limits — no user or candidate data.',
+};
+
 const files = routeFiles(V1_DIR);
 const spec = readFileSync(SPEC, 'utf8');
 
@@ -98,6 +105,15 @@ for (const file of files) {
     problems.push(
       `${file}  queries the database without withApiKey() — the request would run with no ` +
         'organisation bound and read every tenant.',
+    );
+  }
+
+  // 3a. a scope-less door (`withApiKey(request, ANY_LIVE_KEY, …)`) answers any
+  // live key — only the connector handshake may be that open (#2002).
+  if (/\bwithApiKey\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*(ANY_LIVE_KEY|null)\b/.test(text) && !ANY_SCOPE_ROUTES[file.replace(/\\/g, '/')]) {
+    problems.push(
+      `${file}  opens the door to ANY live key (ANY_LIVE_KEY) without an entry in ANY_SCOPE_ROUTES — ` +
+        'a route that reads or writes data must ask for a scope.',
     );
   }
 
@@ -127,6 +143,12 @@ for (const file of files) {
         `${file}  is not described in ${SPEC} — add '${path}' with the scope it requires.`,
       );
     }
+  }
+}
+
+for (const listed of Object.keys(ANY_SCOPE_ROUTES)) {
+  if (!files.some((f) => f.replace(/\\/g, '/') === listed)) {
+    problems.push(`${listed}  is listed in ANY_SCOPE_ROUTES but does not exist — remove the entry.`);
   }
 }
 

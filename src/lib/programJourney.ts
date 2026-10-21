@@ -20,11 +20,11 @@
 //     two engines mailing one person on one day is the bug that would ship.
 //
 // Registered from /api/cron/start (initProgramJourneyCron) and runnable on its
-// own as GET /api/cron?job=program-journey. Replica ≥2 runs with
-// CRON_ENABLED=0 until #1676 leases the scheduler — and the unique claim makes
-// a double tick harmless anyway.
+// own as GET /api/cron?job=program-journey. The timer fires through
+// scheduleLeased() (#1676), so only the 'scheduler' lease holder runs it — and
+// the unique claim makes a double tick harmless anyway.
 
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -77,16 +77,28 @@ type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION
   statusChanges?: { toStatus: string; createdAt: Date }[];
 };
 
-/** The observable facts behind `skipIf`, for one relation — only the ones asked for are counted. */
-async function satisfactionFacts(relationId: string, conditions: readonly JourneySkipCondition[]): Promise<SatisfactionFacts> {
-  const facts: SatisfactionFacts = {};
+/**
+ * When each observable fact behind `skipIf` first happened for one relation,
+ * or null when it has not — only the ones asked for are looked up. The date is
+ * the evidence the participant view shows ("meeting booked on 3 March").
+ */
+export async function satisfactionEvidence(relationId: string, conditions: readonly JourneySkipCondition[]): Promise<Partial<Record<JourneySkipCondition, Date | null>>> {
+  const out: Partial<Record<JourneySkipCondition, Date | null>> = {};
   for (const cond of new Set(conditions)) {
-    if (cond === 'meeting_exists') facts.meeting_exists = (await prisma.meeting.count({ where: { relationId, status: { not: 'CANCELLED' } } })) > 0;
-    if (cond === 'goal_exists') facts.goal_exists = (await prisma.goal.count({ where: { relationId } })) > 0;
-    if (cond === 'message_exists') facts.message_exists = (await prisma.message.count({ where: { relationId } })) > 0;
-    if (cond === 'interaction_logged') facts.interaction_logged = (await prisma.interactionLog.count({ where: { relationId } })) > 0;
+    if (cond === 'meeting_exists') {
+      const m = await prisma.meeting.findFirst({ where: { relationId, status: { not: 'CANCELLED' } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
+      out[cond] = m?.createdAt ?? null;
+    }
+    if (cond === 'goal_exists') out[cond] = (await prisma.goal.findFirst({ where: { relationId }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }))?.createdAt ?? null;
+    if (cond === 'message_exists') out[cond] = (await prisma.message.findFirst({ where: { relationId }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }))?.createdAt ?? null;
+    if (cond === 'interaction_logged') out[cond] = (await prisma.interactionLog.findFirst({ where: { relationId }, orderBy: { date: 'asc' }, select: { date: true } }))?.date ?? null;
   }
-  return facts;
+  return out;
+}
+
+async function satisfactionFacts(relationId: string, conditions: readonly JourneySkipCondition[]): Promise<SatisfactionFacts> {
+  const evidence = await satisfactionEvidence(relationId, conditions);
+  return Object.fromEntries(Object.entries(evidence).map(([k, at]) => [k, at !== null])) as SatisfactionFacts;
 }
 
 /** Why a step is already satisfied for one relation, or null when it should be delivered. */
@@ -315,12 +327,12 @@ export async function previewJourney(programId: string, relationId: string, now 
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
-let task: cron.ScheduledTask | null = null;
+let task: ReturnType<typeof scheduleLeased> | null = null;
 
 /** Daily at 07:10 UTC — morning in DE/TR, before the pair's day starts. */
 export function initProgramJourneyCron() {
   if (task) return;
-  task = cron.schedule('10 7 * * *', async () => {
+  task = scheduleLeased('10 7 * * *', async () => {
     try {
       const r = await runProgramJourney();
       if (r.delivered || r.skipped) logger.warning('Program journey ran', { delivered: r.delivered, skipped: r.skipped, unresolved: r.unresolved.length });
