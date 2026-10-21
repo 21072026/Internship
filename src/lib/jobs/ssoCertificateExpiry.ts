@@ -104,7 +104,10 @@ export async function runSsoCertificateExpiry(
     for (const r of recipients) {
       try {
         await sendSsoCertificateExpiryEmail({
-          ...r,
+          to: r.to,
+          fullName: r.fullName,
+          locale: r.locale,
+          userId: r.userId,
           orgName: org.brandName || org.name,
           notAfter: info.notAfter,
           daysLeft,
