@@ -113,6 +113,17 @@ test('submit → apply moves the plan; only a super admin may apply', { tag: '@s
     const open = await prisma.planChangeRequest.findFirstOrThrow({ where: { orgId: tenant.id, status: 'NEW' } });
     expect((await o.patch(`/api/admin/plan-requests/${open.id}`, { data: { action: 'reject' } })).status()).toBe(400);
     expect((await o.patch(`/api/admin/plan-requests/${open.id}`, { data: { action: 'reject', note: 'Stay on annual' } })).status()).toBe(200);
+
+    // The tenant's billing screen shows the answer, and files the next request.
+    expect((await signInViaApi(page.request, emails.admin, PW, { headers: freshIp('plan-ui-admin') })).error).toBeNull();
+    await gotoSettled(page, '/admin/billing');
+    const form = page.getByTestId('plan-change-card');
+    await expect(form.getByTestId('plan-change-latest-REJECTED')).toContainText('Stay on annual');
+    await form.getByTestId('plan-change-plan').selectOption('program');
+    await form.getByTestId('plan-change-cycle').selectOption('MONTHLY');
+    await form.getByTestId('plan-change-submit').click();
+    await expect(form.getByTestId('plan-change-latest-NEW')).toBeVisible();
+    expect(await prisma.planChangeRequest.count({ where: { orgId: tenant.id, status: 'NEW' } })).toBe(1);
   } finally {
     for (const ctx of jars) await ctx.dispose();
     for (const email of Object.values(emails)) await cleanupByEmail(email);
