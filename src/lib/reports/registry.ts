@@ -19,6 +19,7 @@ import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows } from '@/lib/weeklyReportComplianceQuery';
 import { cohortComparison, mentorWorkload, sourceConversion, type AnalyticsScope } from '@/lib/analyticsReports';
+import { slaCompliance } from '@/lib/slaQueue';
 import { DEFAULT_MIN_COHORT, type ReportDefinition } from './definitions';
 import { applyMinCohort, type Row } from './privacyFloor';
 
@@ -75,6 +76,13 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
     const total = counts.reduce((n, c) => n + c._count._all, 0);
     const reached = counts.filter((c) => finished.includes(c.pipelineStatus)).reduce((n, c) => n + c._count._all, 0);
     const M = getDictionary(ctx.locale).reports.metric;
+    const sla = await slaCompliance(stageOrgId, tenant, 7);
+    const slaRows = sla.total > 0
+      ? [
+          { metric: M.slaMoves7, value: sla.total, share: null },
+          { metric: M.slaMet7, value: sla.met, share: sla.rate },
+        ]
+      : [];
     // Stage rows busiest first, named by the tenant's own labels in the
     // reader's language — never a key.
     const stageRows = counts
@@ -86,6 +94,10 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
       { metric: M.reached, value: reached, share: pct(reached, total) },
       { metric: M.new7, value: newRelations, share: null },
       { metric: M.interactions7, value: interactions, share: null },
+      // Stage-SLA compliance (#1723): numerator and denominator, the share on
+      // the "met" row — the same computation /admin/sla shows. Only when the
+      // org has service levels: a pair of zeros would read as a failure.
+      ...slaRows,
       ...stageRows,
     ];
   },

@@ -65,6 +65,7 @@ const ICONS: Record<string, string> = {
   agendaTemplates: 'list-circle',
   safeguarding: 'shield-checkmark',
   aiConsole: 'sparkles',
+  slaQueue: 'alarm',
   myMentees: 'people',
   organizations: 'business',
   outbox: 'paper-plane',
