@@ -2189,6 +2189,251 @@ export async function sendMeetingGuestInviteEmail({
   });
 }
 
+// A meeting moved or was called off (#1982). The human half of PATCH
+// /api/meetings/[id]: everyone it affects learns it in their own language and on
+// their own clock. Same split as the invite: a participant's mail reads their
+// saved zone and links to /account#timezone; the guest siblings below print the
+// organizer's clock and never link to a page a guest cannot reach.
+//
+// Same categories as the invite ('meeting-invite' / 'meeting-guest-invite'): a
+// change to an invitation is part of the invitation, so the person who silenced
+// meeting invites is not mailed about it — the in-app notice still reaches them
+// (src/lib/meetingChangeNotices.ts).
+export async function sendMeetingRescheduledEmail({
+  to,
+  fullName,
+  title,
+  previousAt,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+  timeZone,
+  organizerTimeZone,
+  organizerName,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  title: string;
+  previousAt: Date | null;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  // The recipient's own row token, when the RSVP is theirs to give again: a move
+  // resets the answer to PENDING, so the invitee is asked again.
+  rsvpToken?: string | null;
+  timeZone?: string | null;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  userId?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const fmt = (at: Date) => formatInTimeZone(at, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved));
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject: C.movedSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(C.movedBody)}</p>
+        ${previousAt ? `<p style="color:#6b7280;"><strong>${esc(C.was)}</strong> <s>${fmt(previousAt)}</s></p>` : ''}
+        <p><strong>${esc(C.now)}</strong> ${fmt(scheduledAt)}</p>
+        ${organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName, resolved)}
+        ${meetLink ? `<p><strong>${esc(M.link)}</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
+        ${rsvpToken ? `
+        <p style="margin-top: 20px;">${esc(C.rsvpAsk)}</p>
+        <a href="${base}/rsvp/${rsvpToken}?r=yes" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
+        <a href="${base}/rsvp/${rsvpToken}?r=no" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
+        ` : ''}
+        ${timeZoneNote(timeZone, resolved, base)}
+      </div>
+    `,
+  });
+}
+
+export async function sendMeetingCancelledEmail({
+  to,
+  fullName,
+  title,
+  scheduledAt,
+  reason,
+  timeZone,
+  organizerTimeZone,
+  organizerName,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  title: string;
+  scheduledAt: Date | null;
+  reason?: string | null;
+  timeZone?: string | null;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  userId?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject: C.cancelledSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(C.cancelledBody)}</p>
+        ${scheduledAt ? `<p><strong>${esc(C.plannedFor)}</strong> <s>${formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))}</s></p>` : ''}
+        ${scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName, resolved) : ''}
+        ${reason ? `<p><strong>${esc(C.reason)}</strong> ${esc(reason)}</p>` : ''}
+        ${scheduledAt ? timeZoneNote(timeZone, resolved, base) : ''}
+      </div>
+    `,
+  });
+}
+
+// The guest siblings — see sendMeetingGuestInviteEmail for why they are separate
+// functions and not a flag: no saved zone (the organizer's clock, named), no
+// /account link, and the mail says who changed it.
+function guestZoneLine(zone: string, organizerName: string | null | undefined, locale: Locale): string {
+  const T = getDictionary(locale).notifications.emailTimes;
+  return `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+    ${organizerName ? esc(T.guestZoneNoteOrganizer.replace('{zone}', zone)).replace('{name}', esc(organizerName)) : esc(T.guestZoneNote.replace('{zone}', zone))}
+  </p>`;
+}
+
+export async function sendMeetingGuestRescheduledEmail({
+  to,
+  name,
+  title,
+  previousAt,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+  organizerTimeZone,
+  organizerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  previousAt: Date | null;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  rsvpToken: string;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  // The organizer's language and org, as for the guest invite.
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const url = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const zone = resolveTimeZone(organizerTimeZone);
+  const fmt = (at: Date) => `${formatInTimeZone(at, zone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))} (${zoneLabel(at, zone)})`;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId: orgId ?? null,
+    // no-user-row: a guest is an address, not an account (see the guest invite).
+    category: 'meeting-guest-invite',
+    locale: resolved,
+    subject: C.movedSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(title))}
+        ${name ? `<p>${esc(M.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${organizerName ? esc(C.guestMovedBody).replace('{organizer}', esc(organizerName)) : esc(C.movedBody)}</p>
+        ${previousAt ? `<p style="color:#6b7280;"><strong>${esc(C.was)}</strong> <s>${esc(fmt(previousAt))}</s></p>` : ''}
+        <p><strong>${esc(C.now)}</strong> ${esc(fmt(scheduledAt))}</p>
+        ${meetLink ? `<p><strong>${esc(M.link)}</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+        <p style="margin-top: 20px;">${esc(C.rsvpAsk)}</p>
+        <a href="${url}/rsvp/${rsvpToken}?r=yes" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
+        <a href="${url}/rsvp/${rsvpToken}?r=no" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
+        ${guestZoneLine(zone, organizerName, resolved)}
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;">${esc(M.guestFooter)}</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendMeetingGuestCancelledEmail({
+  to,
+  name,
+  title,
+  scheduledAt,
+  reason,
+  organizerTimeZone,
+  organizerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  scheduledAt: Date | null;
+  reason?: string | null;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const zone = resolveTimeZone(organizerTimeZone);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId: orgId ?? null,
+    // no-user-row: a guest is an address, not an account (see the guest invite).
+    category: 'meeting-guest-invite',
+    locale: resolved,
+    subject: C.cancelledSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(title))}
+        ${name ? `<p>${esc(M.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${organizerName ? esc(C.guestCancelledBody).replace('{organizer}', esc(organizerName)) : esc(C.cancelledBody)}</p>
+        ${scheduledAt ? `<p><strong>${esc(C.plannedFor)}</strong> <s>${esc(`${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`)}</s></p>` : ''}
+        ${reason ? `<p><strong>${esc(C.reason)}</strong> ${esc(reason)}</p>` : ''}
+        ${scheduledAt ? guestZoneLine(zone, organizerName, resolved) : ''}
+      </div>
+    `,
+  });
+}
+
 // The bare address out of a From header, which may be "Name <addr>". The
 // ORGANIZER line takes a mailto: value, so the display name has to come off.
 function bareAddress(header: string): string {

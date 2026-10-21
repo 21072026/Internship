@@ -3639,17 +3639,25 @@ enum MeetingRequestStatus {
 // A mentee-initiated meeting request. The mentor accepts (creating a Meeting)
 // or declines. Distinct from Meeting, which is the confirmed event.
 model MeetingRequest {
-  id            String               @id @default(cuid())
-  relationId    String
-  requestedById String
-  topic         String
-  proposedAt    DateTime
-  status        MeetingRequestStatus @default(PENDING)
-  createdAt     DateTime             @default(now())
+  id                 String               @id @default(cuid())
+  relationId         String
+  requestedById      String
+  topic              String
+  proposedAt         DateTime
+  status             MeetingRequestStatus @default(PENDING)
+  createdAt          DateTime             @default(now())
+  // A counter-proposal (#1982): the invitee declined `counterOfMeeting` from the
+  // RSVP page and suggested `proposedAt` instead. It sits in the same list as
+  // every other request, but accepting it MOVES that meeting through
+  // PATCH /api/meetings/[id] rather than creating a second one. SetNull: a
+  // deleted meeting leaves an ordinary request behind, never a dangling id.
+  counterOfMeetingId String?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation         MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  counterOfMeeting Meeting?           @relation(fields: [counterOfMeetingId], references: [id], onDelete: SetNull)
 
   @@index([relationId])
+  @@index([counterOfMeetingId])
 }
 
 // A mentee's private personal note (only the author can see it).
@@ -4058,6 +4066,7 @@ model Meeting {
   agenda           SessionAgenda?
   sessionNotes     SessionNote[]
   interviewRequest InterviewRequest?
+  counterProposals MeetingRequest[]
   interviewPanel   InterviewPanel?
 
   @@index([relationId])

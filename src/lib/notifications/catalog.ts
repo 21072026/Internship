@@ -135,9 +135,16 @@ export const NOTIFICATION_EVENTS = [
   { key: 'meeting.startedGeneric', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'meeting.scheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'meeting.scheduledNoTime', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  // A meeting that moved or was called off (#1982) — the mail is sent inline by
+  // src/lib/meetingChangeNotices.ts, so the router is asked for in-app only.
+  { key: 'meeting.rescheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'from', 'to'] },
+  { key: 'meeting.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'meeting.cancelledReason', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when', 'reason'] },
   // An RSVP is the organizer's own bookkeeping: in-app only, no mail per answer.
   { key: 'rsvp.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'rsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  // A decline that suggested another time (#1982); the counter sits in the organiser's requests list.
+  { key: 'rsvp.counterProposed', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'guestRsvp.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['guest', 'title'] },
   { key: 'guestRsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['guest', 'title'] },
 
