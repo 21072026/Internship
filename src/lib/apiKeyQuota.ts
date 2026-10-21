@@ -33,10 +33,21 @@ interface Tally {
   n: number;
 }
 
-const tallies = new Map<string, Tally>();
-const stored = new Map<string, { count: number; fetchedAt: number }>();
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-let flushing: Promise<void> | null = null;
+// ONE tally per process, not per module instance. `next dev` compiles each
+// route into its own module graph, so module-level maps gave the /api/v1 door
+// and the admin key list two different tallies there: the list read 0 for a
+// request the door had just counted. A production build shares one instance,
+// which is why only the dev server showed it; pinned on globalThis (the
+// prisma.ts pattern) the two are the same everywhere.
+interface QuotaState {
+  tallies: Map<string, Tally>;
+  stored: Map<string, { count: number; fetchedAt: number }>;
+  flushTimer: ReturnType<typeof setTimeout> | null;
+  flushing: Promise<void> | null;
+}
+const globalForQuota = globalThis as unknown as { apiKeyQuota: QuotaState | undefined };
+const state: QuotaState = (globalForQuota.apiKeyQuota ??= { tallies: new Map(), stored: new Map(), flushTimer: null, flushing: null });
+const { tallies, stored } = state;
 
 const slot = (apiKeyId: string, periodStart: Date) => `${apiKeyId}|${periodStart.toISOString()}`;
 
@@ -54,14 +65,14 @@ async function storedCount(apiKeyId: string, periodStart: Date, now: number): Pr
 
 /** Write every tally as one increment per (key, period). Never throws; a failed write is put back. */
 export async function flushApiKeyUsage(): Promise<void> {
-  if (flushing) return flushing;
-  if (flushTimer) {
-    clearTimeout(flushTimer);
-    flushTimer = null;
+  if (state.flushing) return state.flushing;
+  if (state.flushTimer) {
+    clearTimeout(state.flushTimer);
+    state.flushTimer = null;
   }
   const batch = [...tallies.values()];
   tallies.clear();
-  flushing = (async () => {
+  state.flushing = (async () => {
     for (const t of batch) {
       try {
         // Under the key's own org: the timer inherits whichever request
@@ -87,19 +98,20 @@ export async function flushApiKeyUsage(): Promise<void> {
       }
     }
   })().finally(() => {
-    flushing = null;
-    if (tallies.size && !flushTimer) scheduleFlush();
+    state.flushing = null;
+    if (tallies.size && !state.flushTimer) scheduleFlush();
   });
-  return flushing;
+  return state.flushing;
 }
 
 function scheduleFlush() {
-  if (flushTimer) return;
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
+  if (state.flushTimer) return;
+  const timer = setTimeout(() => {
+    state.flushTimer = null;
     void flushApiKeyUsage();
   }, FLUSH_MS);
-  flushTimer.unref?.();
+  timer.unref?.();
+  state.flushTimer = timer;
 }
 
 export interface QuotaKey {

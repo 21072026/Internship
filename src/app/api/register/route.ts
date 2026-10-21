@@ -364,6 +364,8 @@ export async function POST(request: Request) {
                   ...pair,
                   orgId: user.orgId,
                   pipelineStatus,
+                  // Placement by default; it enters the funnel now (#1503).
+                  funnelEnteredAt: new Date(),
                   // Trial window if the start stage is TRIAL_ACTIVE (#2551).
                   ...(await stageTrialWindow({ orgId: user.orgId, toStage: pipelineStatus, enteredAt: new Date() })),
                 },

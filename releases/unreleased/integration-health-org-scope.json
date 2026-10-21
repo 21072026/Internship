@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** the admin integration health board (`GET /api/admin/integrations/health`) now counts only the caller's own tenant for the tenant-owned connectors — webhooks, audit drains, SSO configuration and members' Google Calendar connections. It used to aggregate every tenant's rows, so one tenant's admin could see how many webhooks another had registered, whether its audit drain was failing and when its IdP certificate expires. The SMTP and inbound-receiver rows stay deployment-wide (#1555)."
+}

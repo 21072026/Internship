@@ -111,6 +111,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/emailSuppressionRule.ts',
+    {
+      floor: 95,
+      measured: 98.44,
+      why: 'a suppression matches case- and whitespace-blind, one soft bounce never suppresses, the bounce webhook fails closed in production without its secret (#1692)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,
@@ -149,6 +157,10 @@ const FLOORS = new Map([
   [
     'src/lib/skillTaxonomyRule.ts',
     { floor: 95, measured: 100.0, why: 'skill taxonomy: a merge loop or a cyclic adjacency graph must terminate, origins stay at weight 1 (#1815)' },
+  ],
+  [
+    'src/lib/placementKind.ts',
+    { floor: 95, measured: 100.0, why: 'relation kind / attribution whitelists and the funnelEnteredAt transition (#1503)' },
   ],
   [
     'src/lib/mentorDirectory.ts',
