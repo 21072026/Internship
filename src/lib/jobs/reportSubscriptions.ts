@@ -21,7 +21,7 @@
 // /api/cron/start, never from initCronJobs, to keep the import graph one-way.
 
 import { scheduleLeased } from '@/lib/jobs/leasedCron';
-import type { ReportSubscription } from '@prisma/client';
+import { Prisma, type ReportSubscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { entitled } from '@/lib/entitlements';
@@ -221,6 +221,30 @@ export interface RunResult {
 export const LEGACY_SEED_KEY = 'reportSubscriptions.legacyWeeklySeeded';
 const LEGACY_REPORT = 'pipeline-summary';
 
+// The claim is count-then-create in ONE serializable transaction. It cannot be
+// a bare insert that collides: the row's unique key is (orgId, programId, key)
+// since #1619 and an org row has programId NULL, which MySQL treats as distinct
+// — two concurrent passes would both insert. Under SERIALIZABLE the count is a
+// locking read on the (orgId, key) index, so of two passes racing for one org
+// exactly one commits; the other fails with a write conflict / deadlock
+// (P2034) or a duplicate (P2002) and treats the org as claimed.
+async function claimLegacySeed(orgId: string, now: Date): Promise<boolean> {
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        if ((await tx.setting.count({ where: { orgId, programId: null, key: LEGACY_SEED_KEY } })) > 0) return false;
+        await tx.setting.create({ data: { orgId, key: LEGACY_SEED_KEY, value: now.toISOString() } });
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === 'P2034' || code === 'P2002') return false; // another pass won the claim
+    throw error;
+  }
+}
+
 export async function seedLegacyWeeklyReports(opts: { now?: Date; orgIds?: string[] } = {}): Promise<{ orgs: number; subscriptions: number }> {
   const now = opts.now ?? new Date();
   const admins = await prisma.user.findMany({
@@ -236,13 +260,7 @@ export async function seedLegacyWeeklyReports(opts: { now?: Date; orgIds?: strin
   const result = { orgs: 0, subscriptions: 0 };
   for (const [orgId, recipients] of byOrg) {
     if (!(await entitled(orgId, 'ADVANCED_ANALYTICS'))) continue;
-    if ((await prisma.setting.count({ where: { orgId, key: LEGACY_SEED_KEY } })) > 0) continue;
-    try {
-      await prisma.setting.create({ data: { orgId, key: LEGACY_SEED_KEY, value: now.toISOString() } });
-    } catch (error) {
-      if ((error as { code?: string }).code === 'P2002') continue; // another pass won the claim
-      throw error;
-    }
+    if (!(await claimLegacySeed(orgId, now))) continue;
     result.orgs++;
     const period = periodKey('WEEKLY', now);
     for (const admin of recipients) {

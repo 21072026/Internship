@@ -2895,6 +2895,7 @@ model ApiKey {
   usage           ApiKeyUsage[]
   idempotencyKeys ApiIdempotencyKey[]
   webhooks        Webhook[]
+  exports         ApiExport[]
 
   @@index([orgId])
   @@index([createdById])
@@ -2948,6 +2949,37 @@ model ApiIdempotencyKey {
   @@unique([apiKeyId, key])
   @@index([orgId])
   @@index([createdAt])
+}
+
+// An asynchronous snapshot of one /api/v1 resource (#3002): queued by
+// POST /api/v1/exports, written by the `api.export` job as gzipped NDJSON
+// (src/lib/api/v1Exports.ts), fetched only through a signed link that expires,
+// and deleted after `expiresAt`. Stored in the database like CvFile — there is
+// no object storage, and a file on one replica's disk is not on the other's.
+model ApiExport {
+  id         String    @id @default(cuid())
+  orgId      String
+  apiKeyId   String
+  apiKey     ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  resource   String    @db.VarChar(40)
+  // Interaction note bodies included — the key's `interactions:read_notes` at
+  // request time, re-checked when the file is fetched.
+  withNotes  Boolean   @default(false)
+  // PENDING | RUNNING | READY | FAILED
+  status     String    @default("PENDING") @db.VarChar(16)
+  rowCount   Int?
+  byteSize   Int?
+  // gzip(NDJSON); null until READY.
+  content    Bytes?
+  // A stable code (`too_many_rows`, `too_large`, `key_inactive`), never a message.
+  error      String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  expiresAt  DateTime
+
+  @@index([orgId])
+  @@index([apiKeyId, status])
+  @@index([expiresAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support

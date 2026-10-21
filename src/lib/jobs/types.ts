@@ -87,13 +87,17 @@ export interface JobPayloadMap {
     /// Optional: absent on a fresh row.
     releases?: number;
   };
+  /// One /api/v1 export (#3002, `src/lib/api/v1Exports.ts`): write the
+  /// `ApiExport` row's file. The row carries everything else (org, key,
+  /// resource), so a payload can never widen what the request was granted.
+  'api.export': { exportId: string };
 }
 
 export type JobName = keyof JobPayloadMap;
 
 export type JobPayload<N extends JobName = JobName> = JobPayloadMap[N];
 
-export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain', 'email.send'] as const;
+export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain', 'email.send', 'api.export'] as const;
 
 export function isJobName(value: unknown): value is JobName {
   return typeof value === 'string' && (JOB_NAMES as readonly string[]).includes(value);

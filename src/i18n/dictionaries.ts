@@ -4,6 +4,7 @@ import type { Locale } from './config';
 // (server components) or the useT() hook (client components).
 const en = {
   nav: {
+    jobs: 'Jobs',
     dashboard: 'Dashboard',
     companies: 'Companies',
     requisitions: 'Requisitions',
@@ -272,6 +273,13 @@ const en = {
     verifiedFinal: 'Final',
     verifiedTasks: '{done}/{total} tasks done',
     verifiedBy: 'by {name}',
+  },
+  portalJobs: {
+    title: 'Jobs', subtitle: 'Open roles at the companies in your programme.',
+    search: 'Search by role or company', city: 'City', workMode: 'Work mode', skill: 'Skill', apply: 'Search', reset: 'Reset',
+    count: '{n} open roles', empty: 'No open roles match right now.', emptyHint: 'Try fewer filters, or check back later — new roles appear here as companies open them.',
+    starts: 'Starts {date}', seatsLeft: '{n} open seats', seatLeftOne: '1 open seat', skills: 'Skills', about: 'About the company', back: 'All jobs', notFound: 'This role is not open any more.',
+    previous: 'Previous', next: 'Next', page: 'Page {page} of {total}', loadFailed: 'Jobs could not be loaded.',
   },
   companyAnalytics: {
     title: 'My Analytics',
@@ -8635,6 +8643,7 @@ type Dict = typeof en;
 
 const tr: Dict = {
   nav: {
+    jobs: 'İlanlar',
     dashboard: 'Panel',
     companies: 'Şirketler',
     requisitions: 'İş talepleri',
@@ -8888,6 +8897,13 @@ const tr: Dict = {
     verifiedFinal: 'Nihai',
     verifiedTasks: '{done}/{total} görev tamamlandı',
     verifiedBy: '{name} tarafından',
+  },
+  portalJobs: {
+    title: 'İlanlar', subtitle: 'Programındaki şirketlerin açık pozisyonları.',
+    search: 'Pozisyon veya şirket ara', city: 'Şehir', workMode: 'Çalışma şekli', skill: 'Yetkinlik', apply: 'Ara', reset: 'Sıfırla',
+    count: '{n} açık pozisyon', empty: 'Şu an eşleşen açık pozisyon yok.', emptyHint: 'Daha az filtre dene ya da sonra tekrar bak — şirketler yeni pozisyon açtıkça burada görünür.',
+    starts: 'Başlangıç {date}', seatsLeft: '{n} boş kontenjan', seatLeftOne: '1 boş kontenjan', skills: 'Yetkinlikler', about: 'Şirket hakkında', back: 'Tüm ilanlar', notFound: 'Bu pozisyon artık açık değil.',
+    previous: 'Önceki', next: 'Sonraki', page: 'Sayfa {page} / {total}', loadFailed: 'İlanlar yüklenemedi.',
   },
   companyAnalytics: {
     title: 'Analitiğim',
@@ -17042,6 +17058,7 @@ const tr: Dict = {
 
 const de: Dict = {
   nav: {
+    jobs: 'Stellen',
     dashboard: 'Dashboard',
     companies: 'Unternehmen',
     requisitions: 'Stellenanforderungen',
@@ -17295,6 +17312,13 @@ const de: Dict = {
     verifiedFinal: 'Abschluss',
     verifiedTasks: '{done}/{total} Aufgaben erledigt',
     verifiedBy: 'von {name}',
+  },
+  portalJobs: {
+    title: 'Stellen', subtitle: 'Offene Stellen der Unternehmen in deinem Programm.',
+    search: 'Nach Stelle oder Unternehmen suchen', city: 'Stadt', workMode: 'Arbeitsmodell', skill: 'Kompetenz', apply: 'Suchen', reset: 'Zurücksetzen',
+    count: '{n} offene Stellen', empty: 'Gerade passt keine offene Stelle.', emptyHint: 'Versuche weniger Filter oder schau später wieder vorbei – neue Stellen erscheinen hier, sobald Unternehmen sie öffnen.',
+    starts: 'Beginn {date}', seatsLeft: '{n} freie Plätze', seatLeftOne: '1 freier Platz', skills: 'Kompetenzen', about: 'Über das Unternehmen', back: 'Alle Stellen', notFound: 'Diese Stelle ist nicht mehr offen.',
+    previous: 'Zurück', next: 'Weiter', page: 'Seite {page} von {total}', loadFailed: 'Stellen konnten nicht geladen werden.',
   },
   companyAnalytics: {
     title: 'Meine Analysen',
