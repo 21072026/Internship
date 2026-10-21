@@ -292,6 +292,43 @@ no-store`, tek denetim satırı. **Yeni tablo yok.**
 
 Sabitleyen: `e2e/company-export.spec.ts` ve `e2e/fixtures/authz-matrix.ts`.
 
+## Admin kademeleri / Admin tiers (role × adminLevel × scope)
+
+`role` hâlâ **kim** olduğunu söyler (ADMIN | MENTOR | MENTEE | COMPANY | SOURCE)
+ve `Role` enum'u donuktur (aşağıda). Bir ADMIN'in **ne kadar** yetkili olduğu ayrı,
+eklemeli bir eksendir (#1567, story #1565):
+
+| Eksen | Nerede | Değerler | Kaynak |
+|---|---|---|---|
+| Rol | `User.role` | ADMIN · MENTOR · MENTEE · COMPANY · SOURCE | JWT + DB |
+| Platform | `User.isSuperAdmin` | true / false — **dünya başına** ([`docs/worlds.md`](worlds.md)) | her istekte DB ([`superAdmin.ts`](../src/lib/superAdmin.ts)) |
+| Admin kademesi | `User.adminLevel` (nullable) | `ORG_ADMIN` · `PROGRAM_ADMIN` · `OBSERVER` | DB |
+| Kapsam | `AdminScopeGrant` satırları (`orgId`, `cohortId?`, `companyId?`) | bir programa / firmaya devredilmiş yetki | DB, `TENANT_MODELS`'te |
+
+| Kademe | İçerik | Kapsam |
+|---|---|---|
+| `isSuperAdmin` (platform) | org'lar, SSO, planlar, platform anahtarları — yalnız kendi dünyasında | dünya |
+| `ORG_ADMIN` | bugünkü ADMIN: kendi tenant'ındaki her şey | org |
+| `PROGRAM_ADMIN` | org admin'inin işleri, ama yalnız grant'lerinin adlandırdığı programlar/firmalar | grant'ler — **grant yoksa hiçbir şey** |
+| `OBSERVER` | yalnız okuma (`*.read`) — yazma, taklit, silme yok | org (grant'ler okunmaz) |
+
+Kurallar:
+
+- `AdminLevel`'de **SUPER_ADMIN değeri yok**, bilerek. Platform operatörü zaten
+  `isSuperAdmin`'dir: her istekte veritabanından ve dünyasına kilitli okunur. Aynı
+  gücü ikinci bir kolonda tutmak ikinci bir doğruluk kaynağı olurdu (ve 12 saatlik
+  JWT'de bayat kalabilirdi). Enum'a değer **eklemek** eklemelidir; çıkarmak değil —
+  değer, ona ihtiyaç duyan iş gelene kadar bekler.
+- Kademe yalnız `role = 'ADMIN'` için anlamlıdır; başka bir rolde kolon ne derse
+  desin yetki vermez.
+- `PROGRAM_ADMIN`'in sıfır grant'i **ret** demektir, "her şey" değil — `NO_MATCH`
+  ile aynı fail-closed kural.
+- Deploy'daki `prisma/backfill-admin-level.mjs` kademesi boş her ADMIN'e
+  `ORG_ADMIN` yazar (rolün zaten taşıdığı güç); dolu bir kademeye dokunmaz, yani
+  daraltılmış bir admin'i asla geri genişletmez.
+- Bugün hiçbir route bu eksenden okumuyor; kararı veren katman `src/lib/authz.ts`
+  (#1569), route'ların ona taşınması #1571.
+
 ## Süper-admin yalnız uçlar / Super-admin-only endpoints
 
 `role === 'ADMIN'` bir **tenant** admin'idir; kiracıların kendisini yönetmek
