@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import bcrypt from 'bcryptjs';
+import { signInViaApi } from './helpers/auth';
+import { seedSkillTaxonomy } from '../src/lib/skillsResolve';
+import { defaultOrgId } from '../src/lib/defaultOrg';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -161,6 +164,73 @@ test('need-match alerts fire once for premium companies only, on consenting cand
     await cleanupByEmail(freeUserEmail);
     await cleanupByEmail(reqUserEmail);
     await cleanupByEmail(adminEmail);
+    for (const id of companyIds) await prisma.company.delete({ where: { id } }).catch(() => {});
+  }
+});
+
+// #1821: a requisition with required skills is matched on CANONICAL skills
+// (RequisitionSkill ↔ UserSkill), not by substring. A candidate holding
+// TypeScript is alerted for a TypeScript requisition; a candidate holding only
+// Go is NOT alerted for "Django Engineer" — whose title merely contains "go",
+// which is exactly what the old two-way substring match fell for.
+test('requisition alerts match canonical skills, not letters in the title', async ({ request }) => {
+  const stamp = `${Date.now()}`;
+  const pw = 'NeedAlertPass123';
+  const adminEmail = uniqueEmail('need-skill-admin');
+  const coUserEmail = uniqueEmail('need-skill-co');
+  const tsEmail = uniqueEmail('need-skill-ts');
+  const goEmail = uniqueEmail('need-skill-go');
+  const orgId = await defaultOrgId();
+  await seedSkillTaxonomy(orgId);
+  const skill = (key: string) => prisma.skill.findFirstOrThrow({ where: { orgId, key }, select: { id: true } });
+  const [ts, py, go] = await Promise.all([skill('typescript'), skill('python'), skill('go')]);
+
+  await seedUser(adminEmail, pw, 'ADMIN', 'Need Skill Admin');
+  const hash = await bcrypt.hash(pw, 10);
+  const tsCo = await prisma.company.create({
+    data: {
+      name: `TS Co ${stamp}`,
+      orgId,
+      entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+      requisitions: {
+        create: { orgId, title: `Frontend Role ${stamp}`, status: 'OPEN', openings: 1, filled: 0, requiredSkills: ['TypeScript'], skills: { create: [{ skillId: ts.id }] } },
+      },
+    },
+  });
+  const djangoCo = await prisma.company.create({
+    data: {
+      name: `Django Co ${stamp}`,
+      orgId,
+      entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+      requisitions: {
+        create: { orgId, title: 'Django Engineer', status: 'OPEN', openings: 1, filled: 0, requiredSkills: ['Python'], skills: { create: [{ skillId: py.id }] } },
+      },
+    },
+  });
+  await prisma.user.create({ data: { email: coUserEmail, password: hash, role: 'COMPANY', fullName: 'TS Co User', skills: [], companyId: tsCo.id } });
+  const consent = { create: { type: 'TALENT_POOL_VISIBILITY' as const, grantedAt: new Date() } };
+  const tsCand = await prisma.user.create({
+    data: { email: tsEmail, password: hash, role: 'MENTEE', fullName: 'TS Candidate', skills: ['TypeScript'], publicProfile: true, orgId, consents: consent, skillRows: { create: [{ skillId: ts.id }] } },
+  });
+  const goCand = await prisma.user.create({
+    data: { email: goEmail, password: hash, role: 'MENTEE', fullName: 'Go Candidate', skills: ['Go'], publicProfile: true, orgId, consents: consent, skillRows: { create: [{ skillId: go.id }] } },
+  });
+
+  try {
+    expect((await signInViaApi(request, adminEmail, pw)).ok).toBe(true);
+    expect((await request.get('/api/cron')).ok()).toBeTruthy();
+
+    await expect
+      .poll(async () => prisma.companyNeedAlert.count({ where: { companyId: tsCo.id, menteeId: tsCand.id } }), { timeout: 10_000 })
+      .toBe(1);
+    expect(await prisma.companyNeedAlert.count({ where: { companyId: djangoCo.id, menteeId: goCand.id } })).toBe(0);
+    expect(await prisma.companyNeedAlert.count({ where: { companyId: tsCo.id, menteeId: goCand.id } })).toBe(0);
+  } finally {
+    const companyIds = [tsCo.id, djangoCo.id];
+    await prisma.companyNeedAlert.deleteMany({ where: { companyId: { in: companyIds } } });
+    await prisma.requisition.deleteMany({ where: { companyId: { in: companyIds } } });
+    await prisma.companyEntitlement.deleteMany({ where: { companyId: { in: companyIds } } });
+    for (const email of [tsEmail, goEmail, coUserEmail, adminEmail]) await cleanupByEmail(email);
     for (const id of companyIds) await prisma.company.delete({ where: { id } }).catch(() => {});
   }
 });

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Participant journey view (#1855):** `GET /api/journey?relationId=` returns one forward-looking list for the pair — the six onboarding steps as its first milestone, then the programme's published steps grouped now / next / done by `participantGroup()` (drafts, archived, missed and unschedulable steps are admin concerns and stay off it). A step already satisfied is \"done\" with its evidence (`satisfactionEvidence()`: the date the meeting, goal, message or interaction first happened), never a nag. Authorized by relation membership (mentor, mentee, or an ADMIN of the tenant); another relation is 403, another tenant's 404; read-only (`previewJourney()`). `JourneyView` is mounted on `/portal/journey` and on `/mentor/mentees/[id]` above the relation timeline; one column with wrapping text, pinned at 360px by `e2e/participant-journey.spec.ts`. `e2e/journey.spec.ts` now navigates with `gotoSettled` (the page's streamed Suspense copy).",
+  "notes": {
+    "en": ["Mentors and mentees now see the programme journey on their pairing — what is due now, what comes next, and what is already done, with the same dates on both sides."],
+    "tr": ["Mentorlar ve mentee'ler artık eşleşmelerinde program akışını görüyor — şimdi ne var, sırada ne var ve ne tamamlandı; iki tarafta da aynı tarihlerle."],
+    "de": ["Mentor:innen und Mentees sehen jetzt den Programmablauf ihres Paares — was jetzt fällig ist, was als Nächstes kommt und was schon erledigt ist, auf beiden Seiten mit denselben Terminen."]
+  }
+}
