@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
-import { initAuditDrainCron } from '@/lib/auditDrain';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
-import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
+import { startScheduler } from '@/lib/jobs/schedulerRuntime';
 import { initRetentionCron } from '@/lib/retentionEntries';
 import { initUsageRollupCron } from '@/lib/jobs/usageRollup';
 import { initTrialRemindersCron } from '@/lib/jobs/trialReminders';
@@ -12,7 +11,6 @@ import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
 import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
 import { initEvaluationRemindersCron } from '@/lib/evaluationDue';
 import { initProgramJourneyCron } from '@/lib/programJourney';
-import { initRosterFeedsCron } from '@/lib/jobs/rosterFeeds';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -25,7 +23,8 @@ export const dynamic = 'force-dynamic';
 // works around).
 //
 // initCronJobs() is idempotent — it returns early once 'mentor-reminders' is
-// registered — so a retried call is harmless.
+// registered — and so is every other init here and startScheduler(), so a
+// retried call is harmless.
 //
 // Distinct from `GET /api/cron`, which runs every job once, right now, for an
 // authenticated ADMIN. This only starts the schedule.
@@ -42,10 +41,6 @@ export async function POST(request: Request) {
   // Registered here rather than inside initCronJobs so the dependency stays
   // one-way (newsletterDispatch imports emailService, never the reverse, #1469).
   initNewsletterCron();
-  // Same reason as above (#1674): the dead-letter alert imports emailService to
-  // send its mail, so registering it inside initCronJobs would close the import
-  // graph into a cycle.
-  initDeadLetterAlertCron();
   // The one retention schedule in the product (#1678). Registered here for the
   // same reason as the two above — it imports emailService for the EmailLog
   // window it took over — and because the mail service should not be the owner
@@ -75,13 +70,12 @@ export async function POST(request: Request) {
   // Program journey steps (#1852), daily 07:10 — in-app only, but registered
   // here with the other daily sweeps so #1676 finds every schedule in one place.
   initProgramJourneyCron();
-  // The audit stream (#2012), every five minutes. Not a mail job, but it sits
-  // here with the others so every schedule in the product is registered from
-  // one place until #1676 leases the scheduler.
-  initAuditDrainCron();
-  // The roster-feed waker (#1967), every five minutes: ONE timer for every
-  // feed, each run under its own claim. Here because its alerts go through
-  // emailService.
-  initRosterFeedsCron();
+  // The queue scheduler (#1676): every 30 s the 'scheduler' lease holder
+  // enqueues the due slots of the QUEUE schedules in src/lib/jobs/schedules.ts
+  // (the dead-letter alert, the audit stream, the JobRun prune), with missed-
+  // slot catch-up; the job worker runs them. Every node-cron timer above fires
+  // through scheduleLeased(), so its body too runs on the lease holder only —
+  // which is why a second replica no longer needs CRON_ENABLED=0.
+  startScheduler();
   return NextResponse.json({ ok: true, started: true });
 }

@@ -200,12 +200,11 @@ when a process dies.
 
 ### The waker
 
-There is **one** node-cron task, registered from `/api/cron/start`. Every five minutes it
+There is **one** queued job, `roster.sweep`, every five minutes (`src/lib/jobs/schedules.ts`,
+run by #1676's scheduler under the `'scheduler'` lease, handler in `src/jobs/index.ts`). It
 runs each enabled feed whose `cronExpression` is due (`isFeedDue`: the first scheduled minute
-after `lastRunAt`, or after creation, has passed). A waker that missed ticks during a deploy
-therefore runs a due feed once, not once per missed slot. There is no timer per feed. When
-the leader-elected scheduler (#1675/#1676) lands, `sweepDueRosterFeeds()` becomes its handler
-unchanged.
+after `lastRunAt`, or after creation, has passed). A late tick therefore runs a due feed once,
+not once per missed slot. There is no timer per feed.
 
 ### Failures pause a feed
 

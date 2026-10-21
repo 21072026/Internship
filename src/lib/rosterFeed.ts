@@ -461,9 +461,6 @@ export const ROSTER_FAILURE_PAUSE_THRESHOLD = 3;
  */
 export const ROSTER_CLAIM_MS = 35 * 60 * 1000;
 
-/** How often the one waker looks for due feeds. */
-export const ROSTER_WAKER_CRON = '*/5 * * * *';
-
 export interface ScheduledFeed {
   enabled: boolean;
   cronExpression: string | null;

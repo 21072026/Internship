@@ -18,9 +18,9 @@ import { ROSTER_CLAIM_MS, isFeedDue, shouldPauseFeed, ROSTER_FAILURE_PAUSE_THRES
 // The claim is cleared when the run ends and expires on its own when a process
 // dies mid-run, so a crash never wedges a feed.
 //
-// node-cron is only the carrier until the leader-elected scheduler (#1675/#1676)
-// lands: ONE waker every five minutes (src/lib/jobs/rosterFeeds.ts), not one
-// timer per feed. `sweepDueRosterFeeds()` is the handler either way.
+// THE SCHEDULE is ONE queued job, `roster.sweep`, every five minutes
+// (src/lib/jobs/schedules.ts, #1676's scheduler under the 'scheduler' lease;
+// handler in src/jobs/index.ts) — not one timer per feed.
 
 export interface RunFeedOptions {
   dryRun?: boolean;
