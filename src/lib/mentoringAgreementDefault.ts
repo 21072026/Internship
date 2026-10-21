@@ -13,7 +13,7 @@ export const DEFAULT_AGREEMENT_VERSION = '1';
 export const DEFAULT_AGREEMENT_AUTHORITATIVE = 'en' as const;
 
 export const DEFAULT_AGREEMENT_BODY: Record<'en' | 'tr' | 'de', string> = {
-  en: `> **Template — adapt this agreement to your programme before relying on it.**
+  en: `**Template — adapt this agreement to your programme before relying on it.**
 
 ## Mentoring agreement
 
@@ -28,7 +28,7 @@ export const DEFAULT_AGREEMENT_BODY: Record<'en' | 'tr' | 'de', string> = {
 **Ending it.** Either of us may end the mentorship at any time, ideally with a short conversation. The programme team can help with a different match.
 
 **Raising a concern.** If something does not feel right, either of us can contact the programme team at any time, without having to talk to the other person first.`,
-  tr: `> **Şablon — bu sözleşmeyi kullanmadan önce kendi programınıza uyarlayın.**
+  tr: `**Şablon — bu sözleşmeyi kullanmadan önce kendi programınıza uyarlayın.**
 
 ## Mentorluk sözleşmesi
 
@@ -43,7 +43,7 @@ export const DEFAULT_AGREEMENT_BODY: Record<'en' | 'tr' | 'de', string> = {
 **Sonlandırma.** İkimiz de mentorluğu istediğimiz zaman, tercihen kısa bir konuşmayla sonlandırabiliriz. Program ekibi farklı bir eşleşme için yardımcı olabilir.
 
 **Endişe bildirme.** Bir şey doğru gelmezse ikimiz de program ekibine her zaman, önce diğer kişiyle konuşmak zorunda kalmadan ulaşabiliriz.`,
-  de: `> **Vorlage — passe diese Vereinbarung an euer Programm an, bevor ihr euch darauf stützt.**
+  de: `**Vorlage — passe diese Vereinbarung an euer Programm an, bevor ihr euch darauf stützt.**
 
 ## Mentoring-Vereinbarung
 
