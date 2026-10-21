@@ -14,6 +14,15 @@
 // Ends with one summary line for the deploy log:
 //   backfills: 28 registered, 24 ran ok, 4 skipped (once), 0 failed
 //
+// Exit codes, which infra/deploy-prod.sh reads (#1540, #3043):
+//   0  every entry ran ok or was skipped
+//   1  a REQUIRED entry failed — the deploy stops here, before the container
+//      swap, so the running release keeps serving: a failed data migration
+//      never takes prod down, it only keeps the new release out
+//   3  only OPTIONAL entries failed — the deploy goes on, and announces each
+//      failed id as a ::warning (annotation + step summary), so it is no
+//      longer the silent `|| true` it replaced
+//
 // Run: node prisma/run-backfills.mjs   (infra/deploy-prod.sh, step 4)
 //      node prisma/run-backfills.mjs --list   (the plan, nothing runs)
 import { spawnSync } from 'node:child_process';
@@ -92,7 +101,10 @@ async function main() {
   }
 
   log(`backfills: ${BACKFILLS.length} registered, ${counts.ok} ran ok, ${counts.skipped} skipped (once), ${counts.failed} failed${blocking ? ` — ${blocking} is required, stopping the deploy` : ''}`);
-  return blocking ? 1 : 0;
+  // 0 = all ok · 1 = a required entry failed (the deploy stops) · 3 = only
+  // optional entries failed (the deploy goes on and announces them).
+  if (blocking) return 1;
+  return counts.failed > 0 ? 3 : 0;
 }
 
 main()

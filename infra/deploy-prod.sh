@@ -750,8 +750,31 @@ run_tool node prisma/backfill-json-columns.mjs --repair || true
 # it, skill-lists before skill-taxonomy — live in the registry and are pinned
 # by scripts/test/backfill-registry.test.mjs. A NEW backfill is an entry there,
 # never a new line here.
+# The policy (#1540, #3043): a REQUIRED entry that fails stops the deploy HERE,
+# before the swap — the running release keeps serving, so a failed data
+# migration never takes prod down, it only keeps the new release out. An
+# OPTIONAL entry that fails lets the deploy go on, but the runner exits 3 and
+# every failed id is raised as a ::warning (annotation + step summary) instead
+# of disappearing behind `|| true`.
 log "data migrations (prisma/backfills/registry.mjs)"
-run_tool node prisma/run-backfills.mjs
+BACKFILL_LOG="$(mktemp)"
+set +e
+run_tool node prisma/run-backfills.mjs 2>&1 | tee "$BACKFILL_LOG"
+BACKFILL_RC=${PIPESTATUS[0]}
+set -e
+case "$BACKFILL_RC" in
+  0) ;;
+  3)
+    FAILED_BACKFILLS="$(grep -oE '\[backfills\] WARNING: [0-9]{4}-[a-z0-9-]+ FAILED' "$BACKFILL_LOG" | awk '{print $3}' | paste -sd, -)"
+    warn "optional data migration(s) FAILED: ${FAILED_BACKFILLS:-see the [backfills] lines} — the deploy continued; fix and redeploy (#1540)"
+    ;;
+  *)
+    rm -f "$BACKFILL_LOG"
+    echo "ERROR: a required data migration failed (runner exit $BACKFILL_RC) — see the [backfills] lines above. The running release is untouched." >&2
+    exit "$BACKFILL_RC"
+    ;;
+esac
+rm -f "$BACKFILL_LOG"
 
 # ── Reports (read only; after the backfills so they read the converged state) ─
 # Detector, NOT a gate (#419): reports mentees holding more than one ACTIVE
