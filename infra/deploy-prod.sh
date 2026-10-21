@@ -803,6 +803,11 @@ run_tool node prisma/backfill-cron-baseline.mjs || true
 # so the post-mentorship CV access window (#854) has an anchor instead of
 # revoking access outright. Only ever fills NULLs — idempotent.
 run_tool node prisma/backfill-relation-completed-at.mjs || true
+# Fill MentorshipRelation.lifecycleState from `status` (#1768) — the backfill
+# half of expand → backfill → contract: the column is nullable with a DB default
+# of 'ACTIVE', and the meter tells a paused pair from a live one by it. Only
+# matches rows that disagree with `status` — idempotent.
+run_tool node prisma/backfill-relation-lifecycle.mjs || true
 # Remove the Meeting rows the old recurring-meeting generator materialised. A
 # series is a rule now; those rows outlived their cancelled series and haunted
 # the calendar (#1110). Nothing writes them any more, so this converges to a

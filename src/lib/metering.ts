@@ -17,12 +17,12 @@
 // is the only thing in the product that says no, and video is never gated at
 // all — see recordVideoUsage below.
 
-import { Prisma, type MentorshipStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { billableRelationWhere } from '@/lib/relationLifecycle';
 import {
   ACTIVITY_SIGNALS,
-  BILLABLE_RELATION_STATES,
   USAGE_METRICS,
   currentPeriod,
   periodRange,
@@ -63,10 +63,10 @@ export function activeMatchedPairsWhere(orgId: string, period: Period): Prisma.M
   const window = periodRange(period);
   return {
     orgId,
-    // The allowlist, straight from the rule. A state that is not in it — today
-    // COMPLETED, tomorrow PAUSED/BENCHED — is excluded without this line
-    // changing.
-    status: { in: [...BILLABLE_RELATION_STATES] as MentorshipStatus[] },
+    // The allowlist, straight from the rule, applied to the LIFECYCLE state
+    // (#1768). A state that is not in it — COMPLETED, PAUSED, a later BENCHED —
+    // is excluded without this line changing.
+    ...billableRelationWhere(),
     // "any logged activity in the calendar month". One OR over `some` filters,
     // so this is a single query and not seven round trips per tenant.
     OR: ACTIVITY_SIGNALS.map((signal) => ACTIVITY_FILTERS[signal.relation](window)),
@@ -107,7 +107,7 @@ export async function countAdminSeats(orgId: string): Promise<number> {
  */
 export async function countActiveRelations(orgId: string): Promise<number> {
   return prisma.mentorshipRelation.count({
-    where: { orgId, status: { in: [...BILLABLE_RELATION_STATES] as MentorshipStatus[] } },
+    where: { orgId, ...billableRelationWhere() },
   });
 }
 
