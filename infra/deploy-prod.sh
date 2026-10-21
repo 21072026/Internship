@@ -715,6 +715,9 @@ run_tool node prisma/push-setting-id-expand.mjs
 log "backfill Setting surrogate ids"
 run_tool node prisma/backfill-setting-id.mjs
 
+log "prisma db push (Setting programme-index expand phase, #1619)"
+run_tool node prisma/push-setting-program-expand.mjs
+
 # ALSO before the push, not only after (#1288): when a previous half-applied
 # push has left a Json column filled with '' (the MariaDB longtext fill, see
 # the note below), the NEXT push can die before the post-push repair ever

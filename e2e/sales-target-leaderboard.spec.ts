@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
+import { setSetting } from '../src/lib/settings';
 import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 import { outcomeStageKeysFrom } from '../src/lib/pipeline';
@@ -201,11 +202,7 @@ test('the rep sees "N of target" with a progressbar and their own org\'s board o
   // Write the same two rows the admin test above sets through the UI, so this
   // test stands on its own whichever subset runs (e.g. a --grep for its title).
   for (const [key, value] of [['salesMonthlyWonTarget', '4'], ['salesLeaderboardForReps', 'true']] as const) {
-    await prisma.setting.upsert({
-      where: { orgId_key: { orgId: ids.orgA, key } },
-      create: { orgId: ids.orgA, key, value },
-      update: { value },
-    });
+    await setSetting(key, value, ids.orgA);
   }
   await signInMarketing(page, E.rep1, '/sales');
   await expect(page.getByTestId('sales-target-headline')).toHaveText('2 of 4 deals won this month');
