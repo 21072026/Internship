@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requireServerSecret } from '@/lib/serverSecret';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
 import { agreementStatusOf, type AgreementStatus } from '@/lib/mentoringAgreementRule';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { orgWhere } from '@/lib/tenantFilter';
 import { DEFAULT_AGREEMENT_AUTHORITATIVE, DEFAULT_AGREEMENT_BODY, DEFAULT_AGREEMENT_VERSION } from '@/lib/mentoringAgreementDefault';
 
 /**
@@ -38,12 +40,24 @@ export class AgreementWriteError extends Error {
 }
 
 /**
+ * The organisation an agreement row belongs to. A legacy NULL org reads as the
+ * default org (src/lib/tenantFilter.ts), and agreement rows are never WRITTEN
+ * with a NULL orgId: the deploy's backfill-organization.mjs moves NULL-org rows
+ * into the default org, and a NULL-org v1 beside the default org's own v1 would
+ * collide on @@unique([orgId, key, version, locale]) and fail the deploy.
+ */
+async function agreementOrg(orgId: string | null): Promise<string> {
+  return orgId ?? (await defaultOrgId());
+}
+
+/**
  * Install the starter template as version 1 for an organisation that has no
  * agreement yet, so a fresh tenant is never staring at an empty editor. Safe to
  * call twice: the unique (org, key, version, locale) makes a racing second call
  * a no-op (skipDuplicates).
  */
-export async function ensureDefaultAgreement(orgId: string | null, key = DEFAULT_AGREEMENT_KEY): Promise<void> {
+export async function ensureDefaultAgreement(rawOrgId: string | null, key = DEFAULT_AGREEMENT_KEY): Promise<void> {
+  const orgId = await agreementOrg(rawOrgId);
   if ((await prisma.mentoringAgreement.count({ where: { orgId, key } })) > 0) return;
   try {
     await prisma.mentoringAgreement.createMany({
@@ -70,7 +84,8 @@ export async function ensureDefaultAgreement(orgId: string | null, key = DEFAULT
  * The agreement in force for an organisation, preferring the reader's locale
  * and falling back to the binding text rather than to nothing.
  */
-export async function getActiveAgreement(orgId: string | null, locale = 'en', now = new Date(), key = DEFAULT_AGREEMENT_KEY): Promise<ActiveAgreement | null> {
+export async function getActiveAgreement(rawOrgId: string | null, locale = 'en', now = new Date(), key = DEFAULT_AGREEMENT_KEY): Promise<ActiveAgreement | null> {
+  const orgId = await agreementOrg(rawOrgId);
   await ensureDefaultAgreement(orgId, key);
   const rows = await prisma.mentoringAgreement.findMany({
     where: { orgId, key, effectiveFrom: { lte: now } },
@@ -93,7 +108,8 @@ export async function getActiveAgreement(orgId: string | null, locale = 'en', no
 }
 
 /** The exact text of one version — what an acceptance points at, years later. */
-export async function agreementVersionText(orgId: string | null, version: string, locale = 'en', key = DEFAULT_AGREEMENT_KEY) {
+export async function agreementVersionText(rawOrgId: string | null, version: string, locale = 'en', key = DEFAULT_AGREEMENT_KEY) {
+  const orgId = await agreementOrg(rawOrgId);
   const rows = await prisma.mentoringAgreement.findMany({ where: { orgId, key, version } });
   return rows.find((r) => r.locale === locale) ?? rows.find((r) => r.isAuthoritative) ?? rows[0] ?? null;
 }
@@ -109,13 +125,14 @@ export function nextAgreementVersion(existing: readonly string[]): string {
  * There is deliberately no function here that changes an existing row.
  */
 export async function publishAgreementVersion(
-  orgId: string | null,
+  rawOrgId: string | null,
   input: { bodies: Partial<Record<AgreementLocale, string>>; authoritativeLocale: AgreementLocale; effectiveFrom?: Date; createdById?: string | null },
   key = DEFAULT_AGREEMENT_KEY,
 ): Promise<{ version: string }> {
   const bodies = Object.entries(input.bodies).filter(([, b]) => typeof b === 'string' && b.trim()) as [AgreementLocale, string][];
   if (bodies.length === 0) throw new AgreementWriteError('body_required', 400);
   if (!bodies.some(([l]) => l === input.authoritativeLocale)) throw new AgreementWriteError('authoritative_missing', 400);
+  const orgId = await agreementOrg(rawOrgId);
   await ensureDefaultAgreement(orgId, key);
   return prisma.$transaction(async (tx) => {
     const existing = await tx.mentoringAgreement.findMany({ where: { orgId, key }, select: { version: true }, distinct: ['version'] });
@@ -137,7 +154,8 @@ export async function publishAgreementVersion(
 }
 
 /** Every version of an organisation's agreement, newest first, with its locales. */
-export async function listAgreementVersions(orgId: string | null, key = DEFAULT_AGREEMENT_KEY) {
+export async function listAgreementVersions(rawOrgId: string | null, key = DEFAULT_AGREEMENT_KEY) {
+  const orgId = await agreementOrg(rawOrgId);
   await ensureDefaultAgreement(orgId, key);
   const rows = await prisma.mentoringAgreement.findMany({ where: { orgId, key }, orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }] });
   const byVersion = new Map<string, { version: string; effectiveFrom: Date; createdAt: Date; texts: { locale: string; isAuthoritative: boolean; body: string }[] }>();
@@ -146,7 +164,7 @@ export async function listAgreementVersions(orgId: string | null, key = DEFAULT_
     v.texts.push({ locale: r.locale, isAuthoritative: r.isAuthoritative, body: r.body });
     byVersion.set(r.version, v);
   }
-  const counts = await prisma.mentoringAgreementAcceptance.groupBy({ by: ['version'], where: { agreementKey: key, relation: { orgId } }, _count: { _all: true } });
+  const counts = await prisma.mentoringAgreementAcceptance.groupBy({ by: ['version'], where: { agreementKey: key, relation: await orgWhere(orgId) }, _count: { _all: true } });
   const accepted = new Map(counts.map((c) => [c.version, c._count._all]));
   return [...byVersion.values()].map((v) => ({ ...v, acceptances: accepted.get(v.version) ?? 0 }));
 }
@@ -225,10 +243,12 @@ export async function acceptAgreement(input: { relationId: string; userId: strin
  * side accepted the version in force. The fuller "who has not signed" screen is
  * #1792; this is its data.
  */
-export async function acceptanceReport(orgId: string | null, now = new Date()) {
+export async function acceptanceReport(rawOrgId: string | null, now = new Date()) {
+  const orgId = await agreementOrg(rawOrgId);
   const active = await getActiveAgreement(orgId, 'en', now);
+  // The default org's report includes its legacy NULL-org relations.
   const relations = await prisma.mentorshipRelation.findMany({
-    where: { orgId, status: 'ACTIVE' },
+    where: { AND: [await orgWhere(orgId), { status: 'ACTIVE' }] },
     select: { id: true, mentorId: true, menteeId: true, mentor: { select: { fullName: true } }, mentee: { select: { fullName: true } } },
     orderBy: { startDate: 'desc' },
   });
