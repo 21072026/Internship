@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The legacy weekly-report seed claims an org once again (#3078):** since #1619 widened `Setting`'s key to `(orgId, programId, key)`, an org-level claim row (programId NULL) no longer collides — MySQL treats NULLs as distinct — so two concurrent passes of `seedLegacyWeeklyReports()` both seeded every admin and the Monday report went out twice. The claim is now count-then-create in one `Serializable` transaction; the losing pass gets `P2034` and skips the org. Pinned by `e2e/legacy-weekly-seed-claim.spec.ts`."
+}
