@@ -46,6 +46,9 @@ const AUTH_USER_SELECT = {
   pendingApproval: true,
   companyId: true,
   orgId: true,
+  // The admin tier (#1567): carried on the session for the UI. Authorization
+  // reads it live (src/lib/authz.ts), never from the token.
+  adminLevel: true,
   // Break-glass exemption from the tenant's enforced SSO (#1950). A Boolean,
   // never a Json column — see the warning above.
   ssoExempt: true,
@@ -476,6 +479,7 @@ export const authOptions: NextAuthOptions = {
           emailVerified: user.emailVerified,
           companyId: user.companyId,
           orgId: user.orgId,
+          adminLevel: user.adminLevel,
         };
       },
     }),
@@ -530,6 +534,7 @@ export const authOptions: NextAuthOptions = {
           // companyId-scoped data) loads correctly while impersonating.
           companyId: user.companyId,
           orgId: user.orgId,
+          adminLevel: user.adminLevel,
           impersonatorId: isStart ? grant.adminId : undefined,
           impersonatorName: isStart ? admin?.fullName ?? 'Admin' : undefined,
         };
@@ -573,6 +578,7 @@ export const authOptions: NextAuthOptions = {
           emailVerified: user.emailVerified,
           companyId: user.companyId,
           orgId: user.orgId,
+          adminLevel: user.adminLevel,
         };
       },
     }),
@@ -634,6 +640,7 @@ export const authOptions: NextAuthOptions = {
           emailVerified: user.emailVerified,
           companyId: user.companyId,
           orgId: user.orgId,
+          adminLevel: user.adminLevel,
         };
       },
     }),
@@ -722,6 +729,7 @@ export const authOptions: NextAuthOptions = {
           emailVerified: user.emailVerified,
           companyId: user.companyId,
           orgId: user.orgId,
+          adminLevel: user.adminLevel,
         };
       },
     }),
@@ -735,6 +743,8 @@ export const authOptions: NextAuthOptions = {
         token.companyId = (user as unknown as { companyId?: string | null }).companyId ?? null;
         // Tenant the user belongs to (multi-tenancy, #543). Null until assigned.
         token.orgId = (user as unknown as { orgId?: string | null }).orgId ?? null;
+        // Admin tier (#1567) — presentation only; src/lib/authz.ts reads it live.
+        token.adminLevel = (user as unknown as { adminLevel?: string | null }).adminLevel ?? null;
         // Set when starting impersonation, absent on a normal/stop sign-in —
         // so this also clears it when returning to the original account.
         const u = user as unknown as { impersonatorId?: string; impersonatorName?: string };
@@ -769,6 +779,7 @@ export const authOptions: NextAuthOptions = {
           token.name = admin.fullName;
           token.companyId = admin.companyId;
           token.orgId = admin.orgId;
+          token.adminLevel = admin.adminLevel;
           token.emailVerified = admin.emailVerified;
         }
         token.impersonatorId = null;
@@ -790,6 +801,7 @@ export const authOptions: NextAuthOptions = {
           token.emailVerified = fresh.emailVerified;
           token.companyId = fresh.companyId;
           token.orgId = fresh.orgId;
+          token.adminLevel = fresh.adminLevel;
         }
       }
 
@@ -842,6 +854,7 @@ export const authOptions: NextAuthOptions = {
         session.user.impersonatorName = (token.impersonatorName as string) ?? null;
         session.user.companyId = (token.companyId as string) ?? null;
         session.user.orgId = (token.orgId as string) ?? null;
+        session.user.adminLevel = (token.adminLevel as string) ?? null;
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
       }
@@ -894,6 +907,8 @@ declare module 'next-auth' {
       impersonatorName?: string | null;
       companyId?: string | null;
       orgId?: string | null;
+      // User.adminLevel (#1567) for the UI; authorization reads it live.
+      adminLevel?: string | null;
     };
   }
 }
