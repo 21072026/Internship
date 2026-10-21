@@ -45,3 +45,9 @@
 - **A restarted worker loses local daemons.** MySQL was down after the worker restarted (`db push`
   exit 1, Playwright `webServer` timeout). Run `service mysql start` and wait for
   `mysqladmin ping` before anything else.
+- **A bot's "Merge origin/main" can revert main.** On #2986 a Copilot-agent merge commit had main
+  as a parent while its tree reverted ~100 unrelated files (/api/v1, check-i18n, workflows,
+  mobile …). Squashing it would have undone other streams' merged work. Before every push and
+  before enabling auto-merge, run `git fetch origin main && git diff --stat origin/main HEAD`
+  (two dots, against current main) and confirm it lists only the PR's own files. Do it again
+  after any commit you did not write.
