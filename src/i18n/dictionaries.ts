@@ -64,6 +64,7 @@ const en = {
     safeguarding: 'Safeguarding',
     reportSubscriptions: 'Scheduled reports',
     orgAttributes: 'Attributes',
+    reportsExplorer: 'Reports',
     support: 'Support',
     myProfile: 'My Profile',
     myInsights: 'My Activity',
@@ -1305,6 +1306,15 @@ const en = {
     suppressedBucket: 'Groups under {n} people (combined)',
     floorNote: 'Groups with fewer than {n} people are combined into one row so that no individual can be singled out. Totals still add up.',
     exportFootnote: 'In exported reports, groups of fewer than {n} people are combined into one row so that no individual can be singled out; totals still add up.',
+    // Slicing by an org attribute (#1920, src/lib/reports/segmentRule.ts).
+    segment: {
+      none: 'No value',
+      other: 'Other values',
+      below: 'Below reporting threshold (segments under {n} people, combined)',
+      suppressed: 'This segment has fewer than {n} people, so it is not shown on its own.',
+      ignored: 'The attribute this report was sliced by no longer exists or is not for slicing, so the report is shown unsliced.',
+      tenure: { lt1y: 'Under 1 year', '1to3y': '1–3 years', '3to5y': '3–5 years', gte5y: '5 years or more' },
+    },
   },
   // Scheduled report delivery (#1905): the mail and the one-click way out.
   // The nightly relationship-health digest (#1901): pairs that turned AT_RISK.
@@ -3946,6 +3956,21 @@ const en = {
     assignedGoalsHint: 'A goal you hand to someone shows up on their own to-do list, not here.',
     assignedGoalsCount: '{n} goal(s) assigned to team members',
   },
+  // The report registry, sliceable by org attributes (#1920), /admin/reports.
+  reportsExplorer: {
+    title: 'Reports',
+    subtitle: 'The named reports, read here or downloaded — and sliced by your own attributes. Small groups are always combined.',
+    report: 'Report',
+    sliceBy: 'Slice by',
+    noSlice: 'Not sliced',
+    notSliceable: 'This report cannot be sliced.',
+    segment: 'Segment',
+    allSegments: 'All segments side by side',
+    noAttributes: 'Define attributes under Attributes to slice reports by department, location, tenure and more.',
+    empty: 'Nothing to show yet.',
+    locked: 'Reports are part of advanced analytics, which your plan does not include.',
+    unavailable: 'This report is not available for your organization.',
+  },
   // Org-defined segmentation attributes (#1920), /admin/attributes.
   orgAttributesAdmin: {
     title: 'Attributes',
@@ -5815,6 +5840,7 @@ const en = {
     backHome: 'Back to home',
     categories: { tracking: 'Pipeline & intake', collaboration: 'Mentoring & collaboration', companies: 'For companies', insights: 'Insights & AI', trust: 'Privacy & security', platform: 'Platform' },
     items: {
+      reportSegments: { t: 'Reports sliced your way', d: 'Define your own attributes — department, level, location, a start date read as tenure — import them by CSV, and slice the pipeline, cohort, source, workload, placement and weekly-report reports by them, side by side or one segment at a time. Segments under five people are always combined into one named row, so no one can be singled out and the totals still add up.' },
       programJourney: { t: 'A programme journey, day by day', d: 'Lay out what happens when: a nudge on day 3, a first goal on day 7, reading for week 6 — counted from the pairing’s start or from the day a stage is reached, in three languages. Preview any pair’s dates before publishing; each step reaches the pair once, in the app, and one that is already done is skipped.' },
       pricing: { t: 'Published pricing', d: 'The price list is on the website, not in a quote: plan bands, admin seats, the overage rate and every add-on. One metering unit — the active matched pair — so mentors and mentees are structurally unbillable, and the page states what is never metered at any tier.' },
       profileProgress: { t: 'Profile completeness meter', d: 'Candidates see how much of their profile is filled in — weighted by the fields that matching, talent search and the people reviewing a profile actually use — and jump straight to each empty one. No points, no badges, no rankings.' },
@@ -8320,6 +8346,7 @@ const tr: Dict = {
     safeguarding: 'Koruma',
     reportSubscriptions: 'Zamanlanmış raporlar',
     orgAttributes: 'Öznitelikler',
+    reportsExplorer: 'Raporlar',
     support: 'Destek',
     myProfile: 'Profilim',
     myInsights: 'Etkinliğim',
@@ -9503,6 +9530,15 @@ const tr: Dict = {
     suppressedBucket: '{n} kişiden küçük gruplar (birleştirildi)',
     floorNote: '{n} kişiden az olan gruplar, hiç kimse tek başına ayırt edilemesin diye tek satırda birleştirilir. Toplamlar yine tutar.',
     exportFootnote: 'Dışa aktarılan raporlarda {n} kişiden küçük gruplar, kimse tek başına ayırt edilemesin diye tek satırda birleştirilir; toplamlar yine tutar.',
+    // Slicing by an org attribute (#1920, src/lib/reports/segmentRule.ts).
+    segment: {
+      none: 'Değer yok',
+      other: 'Diğer değerler',
+      below: 'Raporlama eşiğinin altında ({n} kişiden küçük segmentler, birleştirildi)',
+      suppressed: 'Bu segmentte {n} kişiden az kişi var, bu yüzden tek başına gösterilmiyor.',
+      ignored: 'Bu raporun kırıldığı öznitelik artık yok veya kırılım için değil; rapor kırılımsız gösteriliyor.',
+      tenure: { lt1y: '1 yıldan az', '1to3y': '1–3 yıl', '3to5y': '3–5 yıl', gte5y: '5 yıl ve üzeri' },
+    },
   },
   // Zamanlanmış rapor gönderimi (#1905): e-posta ve tek tıkla çıkış.
   // Gecelik ilişki sağlığı özeti (#1901): AT_RISK'e geçen eşleşmeler.
@@ -12058,6 +12094,21 @@ const tr: Dict = {
     assignedGoalsHint: 'Birine verdiğin hedef burada değil, o kişinin kendi yapılacaklar listesinde görünür.',
     assignedGoalsCount: 'Ekip üyelerine atanmış {n} hedef',
   },
+  // The report registry, sliceable by org attributes (#1920), /admin/reports.
+  reportsExplorer: {
+    title: 'Raporlar',
+    subtitle: 'Adlandırılmış raporlar; burada okunur veya indirilir — ve kendi özniteliklerinize göre kırılır. Küçük gruplar her zaman birleştirilir.',
+    report: 'Rapor',
+    sliceBy: 'Kırılım',
+    noSlice: 'Kırılımsız',
+    notSliceable: 'Bu rapor kırılamaz.',
+    segment: 'Segment',
+    allSegments: 'Tüm segmentler yan yana',
+    noAttributes: 'Raporları bölüm, konum, kıdem ve daha fazlasına göre kırmak için Öznitelikler altında öznitelik tanımlayın.',
+    empty: 'Henüz gösterilecek bir şey yok.',
+    locked: 'Raporlar, planınızın içermediği gelişmiş analitiğin parçasıdır.',
+    unavailable: 'Bu rapor kurumunuz için kullanılamıyor.',
+  },
   // Org-defined segmentation attributes (#1920), /admin/attributes.
   orgAttributesAdmin: {
     title: 'Öznitelikler',
@@ -13894,6 +13945,7 @@ const tr: Dict = {
     backHome: 'Ana sayfaya dön',
     categories: { tracking: 'Süreç & başvuru', collaboration: 'Mentorluk & iş birliği', companies: 'Şirketler için', insights: 'İçgörü & AI', trust: 'Gizlilik & güvenlik', platform: 'Platform' },
     items: {
+      reportSegments: { t: 'Raporları kendi kırılımınızla görün', d: 'Kendi özniteliklerinizi tanımlayın — bölüm, seviye, konum, kıdem olarak okunan bir başlangıç tarihi — CSV ile içe aktarın ve pipeline, dönem, kaynak, iş yükü, yerleştirme ve haftalık rapor raporlarını bunlara göre yan yana ya da tek tek kırın. Beş kişiden küçük segmentler her zaman tek bir adlandırılmış satırda birleştirilir; kimse tek başına ayırt edilemez ve toplamlar tutar.' },
       programJourney: { t: 'Gün gün program akışı', d: 'Ne zaman ne olacağını kurgula: 3. günde bir hatırlatma, 7. günde ilk hedef, 6. hafta için okuma — eşleşmenin başlangıcından ya da bir aşamaya girildiği günden sayılır, üç dilde. Yayınlamadan önce herhangi bir ikilinin tarihlerini önizle; her adım ikiliye uygulama içinde bir kez ulaşır, zaten yapılmış olan atlanır.' },
       multiTenancy: { t: 'Çok kiracılı organizasyonlar', d: 'Her organizasyonun verilerini, planını ve ayarlarını aynı CRM içinde ayrı tutun.' },
       whiteLabel: { t: 'Kurum bazlı marka ayarları', d: 'Her organizasyon için marka adı, logo, renkler ve destek iletişim bilgileri saklanır; kiracı markası ürün geneline uygulanır — rol yerleşimleri, üyeye giden her e-posta (kariyer bülteni dâhil) ve üretilen sertifikalar.' },
@@ -16360,6 +16412,7 @@ const de: Dict = {
     safeguarding: 'Safeguarding',
     reportSubscriptions: 'Geplante Berichte',
     orgAttributes: 'Attribute',
+    reportsExplorer: 'Berichte',
     support: 'Support',
     myProfile: 'Mein Profil',
     myInsights: 'Meine Aktivität',
@@ -17544,6 +17597,15 @@ const de: Dict = {
     suppressedBucket: 'Gruppen unter {n} Personen (zusammengefasst)',
     floorNote: 'Gruppen mit weniger als {n} Personen werden in einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist. Die Summen stimmen weiterhin.',
     exportFootnote: 'In exportierten Berichten werden Gruppen mit weniger als {n} Personen zu einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist; die Summen stimmen weiterhin.',
+    // Slicing by an org attribute (#1920, src/lib/reports/segmentRule.ts).
+    segment: {
+      none: 'Kein Wert',
+      other: 'Weitere Werte',
+      below: 'Unter der Berichtsschwelle (Segmente unter {n} Personen, zusammengefasst)',
+      suppressed: 'Dieses Segment hat weniger als {n} Personen und wird daher nicht einzeln gezeigt.',
+      ignored: 'Das Attribut, nach dem dieser Bericht aufgeschlüsselt war, gibt es nicht mehr oder es ist nicht zum Aufschlüsseln freigegeben — der Bericht wird ohne Aufschlüsselung gezeigt.',
+      tenure: { lt1y: 'Unter 1 Jahr', '1to3y': '1–3 Jahre', '3to5y': '3–5 Jahre', gte5y: '5 Jahre und mehr' },
+    },
   },
   // Geplanter Berichtsversand (#1905): die Mail und der Ein-Klick-Ausstieg.
   // Die nächtliche Beziehungs-Health-Übersicht (#1901): Paare, die AT_RISK wurden.
@@ -20100,6 +20162,21 @@ const de: Dict = {
     assignedGoalsHint: 'Ein Ziel, das du jemandem gibst, erscheint auf dessen Aufgabenliste — nicht hier.',
     assignedGoalsCount: '{n} Ziel(e) an Teammitglieder vergeben',
   },
+  // The report registry, sliceable by org attributes (#1920), /admin/reports.
+  reportsExplorer: {
+    title: 'Berichte',
+    subtitle: 'Die benannten Berichte, hier gelesen oder heruntergeladen — und nach Ihren eigenen Attributen aufgeschlüsselt. Kleine Gruppen werden immer zusammengefasst.',
+    report: 'Bericht',
+    sliceBy: 'Aufschlüsseln nach',
+    noSlice: 'Nicht aufgeschlüsselt',
+    notSliceable: 'Dieser Bericht lässt sich nicht aufschlüsseln.',
+    segment: 'Segment',
+    allSegments: 'Alle Segmente nebeneinander',
+    noAttributes: 'Legen Sie unter „Attribute“ Attribute an, um Berichte nach Abteilung, Standort, Betriebszugehörigkeit und mehr aufzuschlüsseln.',
+    empty: 'Noch nichts anzuzeigen.',
+    locked: 'Berichte gehören zur erweiterten Analyse, die Ihr Tarif nicht enthält.',
+    unavailable: 'Dieser Bericht ist für Ihre Organisation nicht verfügbar.',
+  },
   // Org-defined segmentation attributes (#1920), /admin/attributes.
   orgAttributesAdmin: {
     title: 'Attribute',
@@ -21936,6 +22013,7 @@ const de: Dict = {
     backHome: 'Zurück zur Startseite',
     categories: { tracking: 'Pipeline & Aufnahme', collaboration: 'Mentoring & Zusammenarbeit', companies: 'Für Unternehmen', insights: 'Einblicke & KI', trust: 'Datenschutz & Sicherheit', platform: 'Plattform' },
     items: {
+      reportSegments: { t: 'Berichte nach Ihren Kriterien', d: 'Legen Sie eigene Attribute an — Abteilung, Ebene, Standort, ein Eintrittsdatum als Betriebszugehörigkeit —, importieren Sie sie per CSV und schlüsseln Sie Pipeline-, Kohorten-, Quellen-, Auslastungs-, Vermittlungs- und Wochenberichte danach auf, nebeneinander oder einzeln. Segmente unter fünf Personen werden immer in einer benannten Zeile zusammengefasst — niemand wird erkennbar, und die Summen stimmen.' },
       programJourney: { t: 'Ein Programmablauf, Tag für Tag', d: 'Leg fest, was wann passiert: eine Erinnerung an Tag 3, ein erstes Ziel an Tag 7, Lesestoff für Woche 6 — gezählt ab dem Start des Paares oder ab dem Tag, an dem eine Phase erreicht ist, in drei Sprachen. Sieh dir vor dem Veröffentlichen die Termine jedes Paares an; jeder Schritt erreicht das Paar einmal in der App, und was schon erledigt ist, wird übersprungen.' },
       multiTenancy: { t: 'Mandantenfähige Organisationen', d: 'Daten, Tarif und Einstellungen jeder Organisation bleiben innerhalb eines CRM getrennt.' },
       whiteLabel: { t: 'Mandantenbezogene Marken-Einstellungen', d: 'Markenname, Logo, Farben und Supportkontakt werden je Organisation gespeichert; das Mandanten-Branding wird produktweit angewendet — die Rollen-Layouts, jede E-Mail an ein Mitglied inklusive Karriere-Newsletter und erzeugte Zertifikate.' },

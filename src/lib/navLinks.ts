@@ -11,6 +11,7 @@ import {
   Sparkles,
   ArrowRightLeft,
   SlidersHorizontal,
+  Table2,
   type LucideIcon,
   ShieldAlert,
 } from 'lucide-react';
@@ -140,6 +141,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   // Segmentation attributes the reports slice by (#1920). Untagged: every vertical reports.
+  // The registry's reports, read, downloaded and sliced (#1920). Premium (ADVANCED_ANALYTICS) at its API.
+  { href: '/admin/reports', icon: Table2, key: 'reportsExplorer' },
   { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   // The whole deployment's API map — the operator's (#1575).
