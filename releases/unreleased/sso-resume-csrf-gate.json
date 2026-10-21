@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**SSO and remember-me sign-in no longer race the session provider's CSRF cookie (#2858):** `/auth/sso/complete` and `/auth/resume` called `signIn()` from a mount-time effect. In a browser with no NextAuth cookies yet (a tab opened from the IdP's redirect, a remembered device whose session expired), that call's `/api/auth/providers` request and the root `SessionProvider`'s first `/api/auth/session` request each minted a CSRF cookie, the callback POST failed its CSRF check (`signin?csrf=true`) and the person landed on the sign-in page without a session — seen intermittently on the production build (e2e-full `sso-roundtrip.spec.ts:327`). Both pages now wait for `useSession()` to leave `loading` before redeeming, the gate `/auth/magic/complete` already had (#2850); the single-use `started` ref stays.",
-  "notes": {
-    "en": ["Signing in through your organisation's single sign-on, or being signed back in on a remembered device, no longer occasionally drops you on the sign-in page."],
-    "tr": ["Kurumunuzun tek oturum açma (SSO) sistemiyle girişte ya da hatırlanan bir cihazda yeniden oturum açılırken ara sıra giriş sayfasına düşme sorunu giderildi."],
-    "de": ["Die Anmeldung über das Single Sign-on Ihrer Organisation und die erneute Anmeldung auf einem gemerkten Gerät landen nicht mehr gelegentlich auf der Anmeldeseite."]
-  }
-}

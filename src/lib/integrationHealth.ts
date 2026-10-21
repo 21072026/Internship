@@ -12,9 +12,13 @@ import { sanitizeError } from '@/lib/sanitizeError';
 // same reasoning as emailHealth.ts, a separate marker is written by one code
 // path and read by another, and the two drift the first time a write is missed.
 //
-// Server-only (imports prisma). Deployment-wide, like the sibling admin routes:
-// the SSO row aggregates across Organization rows rather than one row per
-// tenant.
+// Server-only (imports prisma). Two kinds of row (#1555): the rows read from
+// what a TENANT owns — its webhooks, its audit drains, its own SSO
+// configuration, its members' calendar connections — are scoped to the asking
+// admin's org, because a tenant admin must not learn how many endpoints another
+// tenant registered, when it last added one, or when its IdP certificate
+// expires. The rows read from the deployment itself (the SMTP ledger, the two
+// receivers' env gates) stay deployment-wide: there is one of each.
 //
 // The array shape and the `state` vocabulary are a stable contract:
 // /admin/operations (#1607) counts states from GET
@@ -71,11 +75,14 @@ async function emailRow(): Promise<ConnectorHealth> {
   };
 }
 
-async function webhooksRow(): Promise<ConnectorHealth> {
+// A null org (a legacy session) matches only the legacy null-org rows, the
+// same rule the webhook dispatch and the admin webhook list apply — never
+// "every tenant's".
+async function webhooksRow(orgId: string | null): Promise<ConnectorHealth> {
   const [total, active, latest] = await Promise.all([
-    prisma.webhook.count(),
-    prisma.webhook.count({ where: { active: true } }),
-    prisma.webhook.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    prisma.webhook.count({ where: { orgId } }),
+    prisma.webhook.count({ where: { orgId, active: true } }),
+    prisma.webhook.findFirst({ where: { orgId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
   ]);
   // Subscription state only. There is no WebhookDelivery ledger yet (#1681 /
   // #1695 bring it), and inventing a second delivery record here would be
@@ -96,18 +103,20 @@ async function webhooksRow(): Promise<ConnectorHealth> {
   };
 }
 
-async function googleCalendarRow(): Promise<ConnectorHealth> {
+async function googleCalendarRow(orgId: string | null): Promise<ConnectorHealth> {
   const configured = isGoogleCalendarConfigured();
+  // A connection belongs to a person; the person to a tenant.
+  const mine = { user: { orgId } };
   const [connections, broken, lastSync, lastFail] = await Promise.all([
-    prisma.googleCalendarConnection.count(),
-    prisma.googleCalendarConnection.count({ where: { lastError: { not: null } } }),
+    prisma.googleCalendarConnection.count({ where: mine }),
+    prisma.googleCalendarConnection.count({ where: { ...mine, lastError: { not: null } } }),
     prisma.googleCalendarConnection.findFirst({
-      where: { lastSyncAt: { not: null } },
+      where: { ...mine, lastSyncAt: { not: null } },
       orderBy: { lastSyncAt: 'desc' },
       select: { lastSyncAt: true },
     }),
     prisma.googleCalendarConnection.findFirst({
-      where: { lastError: { not: null } },
+      where: { ...mine, lastError: { not: null } },
       orderBy: { updatedAt: 'desc' },
       // Never googleEmail — the operator figure is "how many are broken", not
       // whose account it is.
@@ -146,16 +155,17 @@ function certValidTo(pem: string): Date | null {
   }
 }
 
-async function ssoRow(): Promise<ConnectorHealth> {
-  const orgs = await prisma.organization.findMany({
-    where: { ssoEnabled: true },
+async function ssoRow(orgId: string | null): Promise<ConnectorHealth> {
+  // The asking tenant's own configuration only. No org → nothing to report.
+  const orgs = orgId ? await prisma.organization.findMany({
+    where: { id: orgId, ssoEnabled: true },
     select: {
       ssoProvider: true,
       ssoIssuer: true,
       ssoEntryPoint: true,
       ssoCertificate: true,
     },
-  });
+  }) : [];
   if (orgs.length === 0) {
     return {
       connector: 'sso',
@@ -168,8 +178,8 @@ async function ssoRow(): Promise<ConnectorHealth> {
   }
 
   const incomplete = orgs.filter((o) => !isSsoConfigComplete({ ...o, ssoEnabled: true })).length;
-  // Soonest expiry across tenants: the board reports the deadline that arrives
-  // first, and no issuer or tenant name goes into the payload.
+  // Soonest expiry: the board reports the deadline that arrives first, and no
+  // issuer goes into the payload.
   let soonest: Date | null = null;
   let unparseable = 0;
   for (const org of orgs) {
@@ -233,20 +243,22 @@ function inboundRow(connector: 'inbound_jaas' | 'inbound_email', secret: string 
 
 // The audit stream (#2012). Unlike webhooks this one HAS a delivery ledger —
 // the drain row itself carries lastOkAt / lastError / failures, written by the
-// same code path that delivers — so the row is derived from it, deployment-wide
-// like the others. A drain that paused itself after the failure ceiling
+// same code path that delivers — so the row is derived from it, for the asking
+// tenant's drains only. A drain that paused itself after the failure ceiling
 // (`active: false` with failures > 0) is the loudest state: nothing is being
 // shipped and nothing will be until a human resumes it. A deployment with no
 // drain at all is `not_configured`, not broken.
-async function auditDrainRow(): Promise<ConnectorHealth> {
+async function auditDrainRow(orgId: string | null): Promise<ConnectorHealth> {
+  // AuditDrain.orgId is required, so a null org matches nothing: not configured.
+  const mine = { orgId: orgId ?? '' };
   const [total, active, failing, pausedAuto, lastOk, lastFail] = await Promise.all([
-    prisma.auditDrain.count(),
-    prisma.auditDrain.count({ where: { active: true } }),
-    prisma.auditDrain.count({ where: { active: true, failures: { gt: 0 } } }),
-    prisma.auditDrain.count({ where: { active: false, failures: { gt: 0 } } }),
-    prisma.auditDrain.findFirst({ where: { lastOkAt: { not: null } }, orderBy: { lastOkAt: 'desc' }, select: { lastOkAt: true } }),
+    prisma.auditDrain.count({ where: mine }),
+    prisma.auditDrain.count({ where: { ...mine, active: true } }),
+    prisma.auditDrain.count({ where: { ...mine, active: true, failures: { gt: 0 } } }),
+    prisma.auditDrain.count({ where: { ...mine, active: false, failures: { gt: 0 } } }),
+    prisma.auditDrain.findFirst({ where: { ...mine, lastOkAt: { not: null } }, orderBy: { lastOkAt: 'desc' }, select: { lastOkAt: true } }),
     prisma.auditDrain.findFirst({
-      where: { lastError: { not: null } },
+      where: { ...mine, lastError: { not: null } },
       orderBy: { updatedAt: 'desc' },
       // Never the URL — the operator figure is "is it delivering", not where to.
       select: { updatedAt: true, lastError: true },
@@ -269,13 +281,13 @@ async function auditDrainRow(): Promise<ConnectorHealth> {
   };
 }
 
-export async function getIntegrationHealth(): Promise<ConnectorHealth[]> {
+export async function getIntegrationHealth(orgId: string | null): Promise<ConnectorHealth[]> {
   const [email, webhooks, google, sso, auditDrain] = await Promise.all([
     emailRow(),
-    webhooksRow(),
-    googleCalendarRow(),
-    ssoRow(),
-    auditDrainRow(),
+    webhooksRow(orgId),
+    googleCalendarRow(orgId),
+    ssoRow(orgId),
+    auditDrainRow(orgId),
   ]);
   return [
     email,

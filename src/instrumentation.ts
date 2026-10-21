@@ -20,6 +20,7 @@ export function register() {
   startMailBridge();
   startCron();
   startMailDrain();
+  startJobWorker();
 }
 
 const BOOT_DELAY_MS = 5000;
@@ -117,6 +118,57 @@ function startMailDrain() {
       running = false;
     }
   }, MAIL_DRAIN_TICK_MS);
+  timer.unref?.();
+}
+
+// Runs the job worker (#1673, src/lib/jobs/worker.ts): every 5 s, on EVERY
+// replica, POST /api/jobs/worker/tick. Same shape as the mail drain above and
+// for the same reasons — no lease (SKIP LOCKED shares the work), a secret
+// minted in-process where CRON_SECRET is absent, JOBS_WORKER_ENABLED=0 as the
+// kill switch (the deploy canary sets it).
+//
+// No `running` guard here, on purpose: a tick's request stays open until the
+// jobs it claimed have settled, and the route claims only into the capacity
+// the in-flight ones leave free, so a long job must not stop the next tick
+// from using the rest. `outstanding` only caps how many ticks a wedged server
+// can pile up. A job longer than the HTTP client's ~5 min header timeout makes
+// this fetch fail while the job carries on server-side — logged at most once a
+// minute, harmless.
+const JOB_WORKER_TICK_MS = 5000;
+const JOB_WORKER_MAX_OUTSTANDING = 8;
+
+function startJobWorker() {
+  const flag = (process.env.JOBS_WORKER_ENABLED || '').trim().toLowerCase();
+  if (['0', 'false', 'off', 'no'].includes(flag)) return;
+
+  if (!process.env.CRON_SECRET && !process.env.JOBS_WORKER_SECRET) {
+    process.env.JOBS_WORKER_SECRET = globalThis.crypto.randomUUID();
+  }
+  const secret = process.env.CRON_SECRET || process.env.JOBS_WORKER_SECRET || '';
+
+  let outstanding = 0;
+  let lastError = 0;
+  const timer = setInterval(async () => {
+    if (outstanding >= JOB_WORKER_MAX_OUTSTANDING) return;
+    outstanding++;
+    try {
+      const res = await fetch(localUrl('/api/jobs/worker/tick'), {
+        method: 'POST',
+        headers: { 'x-cron-secret': secret },
+      });
+      if (!res.ok && Date.now() - lastError > 60_000) {
+        lastError = Date.now();
+        console.error('[JobWorker] tick returned', res.status);
+      }
+    } catch (e) {
+      if (Date.now() - lastError > 60_000) {
+        lastError = Date.now();
+        console.error('[JobWorker] tick failed:', String(e));
+      }
+    } finally {
+      outstanding--;
+    }
+  }, JOB_WORKER_TICK_MS);
   timer.unref?.();
 }
 

@@ -110,6 +110,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // are reached only through a scoped parent and are deliberately not listed
   // (schema comment).
   'AgendaTemplate',
+  // Admin-defined forms (#1800). FormField is reached through its definition
+  // and carries no orgId — deliberately unregistered, like SurveyQuestion.
+  'FormDefinition',
+  'FormResponse',
   // Program journey steps (#1852). ProgramStepRun is reached through its step
   // and carries no orgId of its own — deliberately unregistered.
   'ProgramStep',
@@ -173,6 +177,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // request scope, where the middleware does not engage, so it still sees every
   // tenant.
   'UsageRollup',
+  // A tenant's request to change its plan (#1743): one org reading another's
+  // would leak its plan, pair count and reasons. REQUIRED orgId. The operator
+  // queue reads across the orgs of its world outside any tenant scope, with
+  // an explicit world filter (src/app/api/admin/plan-requests).
+  'PlanChangeRequest',
   // Daily product usage per account (#2446). Commercially sensitive in the same
   // way UsageRollup is — one tenant reading another's merchant volumes is a
   // leak, and writing them would corrupt the churn signal the vertical sells
@@ -259,6 +268,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // The backfill's review queue (#1819): one org's unresolved terms.
   'UnmappedSkillTerm',
   'StageSla',
+  // One passed stage deadline and how far its escalation ladder climbed (#1722).
+  'SlaBreach',
   'PipelineStage',
   // The per-tenant competency framework (#822) — the questions a tenant decided
   // to score people on. REQUIRED orgId, so every create passes one explicitly.
@@ -301,6 +312,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // receiver belongs to exactly one tenant.
   'AuditLog',
   'AuditDrain',
+  // Delegated admin scope (#1567): which programmes / companies a
+  // PROGRAM_ADMIN reaches. One tenant's delegation, never another's.
+  'AdminScopeGrant',
   // The public /for-companies enquiry (#1104). The form has no session and no
   // host→org resolution exists yet, so the submit stamps the default org
   // itself (the same one registration uses) rather than leaving NULL — a
@@ -494,6 +508,16 @@ export function runWithApiKeyOrg<T>(orgId: string, fn: () => T): T {
   if (!store) assertApiKeyRequestContext('runWithApiKeyOrg');
   else store.orgId = orgId;
   return runWithOrg(orgId, fn);
+}
+
+// A platform-level WRITE from inside an API-key request — the rate limiter's
+// breach row (#864), which belongs to no tenant (on a failed key there is not
+// even a key to name one). It runs outside the request's marker, where the
+// unbound-org guard below does not apply; in production that guard is not
+// installed, so the row is written exactly as before. Never wrap a read in it:
+// keeping an API-key read from crossing tenants is what the guard is for.
+export function outsideApiKeyRequest<T>(fn: () => T): T {
+  return apiKeyRequestStorage.exit(fn);
 }
 
 // Loud in development, logged in production: authenticating by API key outside
