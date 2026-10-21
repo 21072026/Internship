@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**An accepted offer moves the candidate's application to HIRED (#1854):** inside the acceptance's own transaction (the one that already flips the offer and takes the requisition's seat), the application for the offer's requisition and candidate reaches `HIRED` through the one stage writer, `moveApplicationStage()` — via the new `advanceApplicationOnAcceptedOffer()` in `src/lib/applicationStage.ts`. From `OFFER` that is one step; from `INTERVIEW` two true ones (`INTERVIEW → OFFER → HIRED`, the accepted offer was extended); from anywhere earlier, or a terminal stage, nothing is moved and nothing is invented. Each step is one `ApplicationEvent` with no actor (the system's move, #2527) and the note `offer accepted`; the `offer.accept` audit line names the application. The acceptance is never refused for it.",
-  "notes": {
-    "en": ["When a candidate accepts an offer, their application for that role is marked hired automatically."],
-    "tr": ["Bir aday teklifi kabul ettiğinde, o pozisyon için başvurusu otomatik olarak işe alındı olarak işaretlenir."],
-    "de": ["Nimmt eine Kandidatin oder ein Kandidat ein Angebot an, wird die Bewerbung für diese Stelle automatisch als eingestellt markiert."]
-  }
-}

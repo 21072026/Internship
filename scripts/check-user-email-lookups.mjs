@@ -128,6 +128,16 @@ export const EXEMPT = new Map([
         'design, never a row and never an action on them',
     },
   ],
+  [
+    'src/lib/emailSuppression.ts',
+    {
+      calls: 1,
+      reason:
+        'the bounce suppression list is deployment-wide (one sending domain, #1692): the admin scope may ' +
+        'show an address NO account holds in any world, so it asks which of a page of addresses any ' +
+        'account holds — the e-mail column only, never a row acted on',
+    },
+  ],
 ]);
 
 // ── Reading the source ───────────────────────────────────────────────────────

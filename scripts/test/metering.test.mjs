@@ -34,7 +34,7 @@ import {
 } from '../../src/lib/meteringRules.ts';
 
 const at = (iso) => new Date(iso);
-const pair = (status, ...activity) => ({ status, activityAt: activity.map(at) });
+const pair = (state, ...activity) => ({ state, activityAt: activity.map(at) });
 
 // ── The definition, clause by clause ────────────────────────────────────────
 
@@ -51,7 +51,7 @@ test('an ACTIVE pair with no activity in the month is NOT counted', () => {
 });
 
 test('an ACTIVE pair with no activity at all is NOT counted', () => {
-  assert.equal(isBillablePair({ status: 'ACTIVE', activityAt: [] }, '2026-03'), false);
+  assert.equal(isBillablePair({ state: 'ACTIVE', activityAt: [] }, '2026-03'), false);
 });
 
 test('a COMPLETED pair is excluded even with activity in the month', () => {

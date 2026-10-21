@@ -68,6 +68,15 @@ export const ROSTER_FEED_LIMITS = {
   secret: 16_384, // a PEM private key fits with room to spare
   chunkMin: 10,
   chunkMax: 1000,
+  maxGraceDays: 30,
+  maxMinRowCount: 1_000_000,
+} as const;
+
+/** The valves' defaults — the schema's DB-side defaults, in one place for the API. */
+export const ROSTER_DEPROVISION_DEFAULTS = {
+  maxDeactivatePercent: 10,
+  minRowCount: 1,
+  deprovisionGraceDays: 1,
 } as const;
 
 // ── Cron ─────────────────────────────────────────────────────────────────────
@@ -237,6 +246,11 @@ export interface RosterFeedInput {
   authoritative: boolean;
   chunkSize: number | null;
   cronExpression: string | null;
+  /** Deprovisioning and its valves (#1966, docs/roster-feeds.md). */
+  deprovision: boolean;
+  maxDeactivatePercent: number;
+  minRowCount: number;
+  deprovisionGraceDays: number;
 }
 
 export type RosterFeedErrorCode =
@@ -387,6 +401,21 @@ export function validateFeedConfig(raw: unknown): RosterFeedValidation {
     else chunkSize = n;
   }
 
+  // ── Deprovisioning valves (#1966) ──
+  const int = (field: keyof typeof ROSTER_DEPROVISION_DEFAULTS, min: number, max: number): number => {
+    const raw = input[field];
+    if (raw === undefined || raw === null || raw === '') return ROSTER_DEPROVISION_DEFAULTS[field];
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < min || n > max) {
+      fail(field, 'invalid');
+      return ROSTER_DEPROVISION_DEFAULTS[field];
+    }
+    return n;
+  };
+  const maxDeactivatePercent = int('maxDeactivatePercent', 0, 100);
+  const minRowCount = int('minRowCount', 0, L.maxMinRowCount);
+  const deprovisionGraceDays = int('deprovisionGraceDays', 0, L.maxGraceDays);
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -407,6 +436,10 @@ export function validateFeedConfig(raw: unknown): RosterFeedValidation {
       authoritative: input.authoritative === true,
       chunkSize,
       cronExpression: cronExpression ? cronExpression.replace(/\s+/g, ' ') : null,
+      deprovision: input.deprovision === true,
+      maxDeactivatePercent,
+      minRowCount,
+      deprovisionGraceDays,
     },
   };
 }

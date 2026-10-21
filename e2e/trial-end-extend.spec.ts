@@ -34,14 +34,13 @@ const DAY = 24 * 60 * 60 * 1000;
 const PASSWORD = 'TrialEnd123!';
 const STAMP = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-const platformAdminEmail = uniqueEmail(`trialend-platform-${STAMP}`);
 const adminEmail = uniqueEmail(`trialend-admin-${STAMP}`);
 const ownerEmail = uniqueEmail(`trialend-owner-${STAMP}`);
 const otherOwnerEmail = uniqueEmail(`trialend-other-${STAMP}`);
 const leadEmail = uniqueEmail(`trialend-lead-${STAMP}`);
 const undatedLeadEmail = uniqueEmail(`trialend-undated-${STAMP}`);
 const foreignAdminEmail = uniqueEmail(`trialend-foreign-${STAMP}`);
-const emails = [platformAdminEmail, adminEmail, ownerEmail, otherOwnerEmail, leadEmail, undatedLeadEmail, foreignAdminEmail];
+const emails = [adminEmail, ownerEmail, otherOwnerEmail, leadEmail, undatedLeadEmail, foreignAdminEmail];
 
 let orgId = '';
 let relationId = '';
@@ -59,10 +58,10 @@ function utcDay(offset: number) {
 async function signedIn(browser: Browser, email: string, landing: string): Promise<Page> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  // Whose world is this account in? The platform admin and the foreign admin are
-  // INTERNSHIP-world (org-less / default org); everyone else lives in the
-  // MARKETING tenant and can only sign in on the marketing host (#2590).
-  if (email !== platformAdminEmail && email !== foreignAdminEmail) {
+  // Whose world is this account in? The foreign admin is INTERNSHIP-world (the
+  // default org); everyone else lives in the MARKETING tenant and can only sign
+  // in on the marketing host (#2590).
+  if (email !== foreignAdminEmail) {
     await context.setExtraHTTPHeaders(asHost(MARKETING_HOST));
   }
   if (landing === '/admin') {
@@ -95,8 +94,6 @@ test.beforeAll(async () => {
     data: templateStagePayload(preset).stages.map((s) => ({ ...s, orgId: org.id })),
   });
 
-  // The cron endpoint is the operator's trigger — a platform admin, no org.
-  await seedUser(platformAdminEmail, PASSWORD, 'ADMIN', 'Trial End Platform Admin');
   const admin = await seedUser(adminEmail, PASSWORD, 'ADMIN', 'Trial End Admin');
   const owner = await seedUser(ownerEmail, PASSWORD, 'MENTOR', 'Trial End Owner');
   const other = await seedUser(otherOwnerEmail, PASSWORD, 'MENTOR', 'Other Owner');
@@ -166,7 +163,8 @@ test.afterAll(async () => {
 test('extending a trial reopens it, keeps the claims, and the job sends only the mark still ahead', async ({ browser }) => {
   test.slow();
   const admin = await signedIn(browser, adminEmail, '/admin');
-  const operator = await signedIn(browser, platformAdminEmail, '/admin');
+  // The tenant's own admin runs its sweep: `orgId` is honoured only for the
+  // caller's org or a super admin's (#1575).
   const cron = `/api/cron?job=trial-reminders&orgId=${orgId}`;
 
   // A past day is not an extension.
@@ -199,7 +197,7 @@ test('extending a trial reopens it, keeps the claims, and the job sends only the
   expect(claimsAfterExtend.map((c) => c.threshold)).toEqual([0, 7]);
 
   // The job now sends the 3-day mark — the one the new window has ahead of it.
-  const first = await operator.request.get(cron);
+  const first = await admin.request.get(cron);
   expect(first.ok()).toBeTruthy();
   expect((await first.json()).trialReminders).toMatchObject({ considered: 1, sent: 1, failed: 0, expired: 0 });
   const claimsAfterRun = await prisma.trialReminder.findMany({ where: { relationId }, orderBy: { threshold: 'asc' } });
@@ -213,7 +211,7 @@ test('extending a trial reopens it, keeps the claims, and the job sends only the
   expect(byOwner.status()).toBe(200);
   expect(await byOwner.json()).toMatchObject({ changed: true, reopened: false });
 
-  const second = await operator.request.get(cron);
+  const second = await admin.request.get(cron);
   expect(second.ok()).toBeTruthy();
   expect((await second.json()).trialReminders).toMatchObject({ considered: 0, sent: 0 });
   expect(await prisma.trialReminder.count({ where: { relationId } })).toBe(3);

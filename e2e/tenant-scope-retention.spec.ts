@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail } from './helpers/db';
-import { gotoSettled } from './helpers/auth';
+import { gotoSettled, signInAndSettle } from './helpers/auth';
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
 import { seedTwoTenants, signInAsTenantActor, TENANT_PASSWORD, type TwoTenants } from './helpers/tenants';
 
 /**
@@ -116,9 +119,11 @@ test("the reminder job tells each org's admins their own org's count", async ({ 
     where: { userId: { in: [orgA.admin.id, orgB.admin.id] }, type: 'retention.adminSummary' },
   });
 
-  await signInAsTenantActor(page, orgA.admin);
-  // The job sweeps every tenant's due candidates, not only this spec's, so a
-  // database other specs have filled can take a while.
+  // The job sweeps every tenant's due candidates, so it is the operator's
+  // trigger: the instance's super admin runs it, not a tenant ADMIN (#1575).
+  // What each tenant's admins are TOLD is the assertion below. A database
+  // other specs have filled can take a while.
+  await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
   const res = await page.request.get('/api/cron?job=retention', { timeout: 90_000 });
   expect(res.status()).toBe(200);
 
