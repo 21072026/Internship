@@ -30,6 +30,7 @@ const ICONS: Record<string, string> = {
   myProfile: 'person-circle',
   profile: 'person-circle',
   projects: 'folder-open',
+  jobs: 'briefcase-outline',
   mentorDirectory: 'people',
   todos: 'checkbox',
   messages: 'chatbubbles',
