@@ -151,6 +151,11 @@ model Organization {
   ssoIssuer        String? // IdP entity ID / issuer
   ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
   ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  // The certificate-expiry warning already mailed (#1933, src/lib/ssoCertificateRule.ts):
+  // the SHA-256 fingerprint it was about and the mark (30 or 7 days). Keyed to the
+  // fingerprint so a rotated certificate starts afresh and a redeploy never re-sends.
+  ssoCertWarnFp    String?  @db.VarChar(100)
+  ssoCertWarnStage Int?
   // Enforced SSO (#1950): when true, NO password-derived path may mint a
   // session for this tenant's users — sign-in, remember-me silent re-auth,
   // password reset/SET_INITIAL, invitation registration and password change all
