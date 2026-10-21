@@ -326,8 +326,38 @@ Kurallar:
 - Deploy'daki `prisma/backfill-admin-level.mjs` kademesi boş her ADMIN'e
   `ORG_ADMIN` yazar (rolün zaten taşıdığı güç); dolu bir kademeye dokunmaz, yani
   daraltılmış bir admin'i asla geri genişletmez.
-- Bugün hiçbir route bu eksenden okumuyor; kararı veren katman `src/lib/authz.ts`
-  (#1569), route'ların ona taşınması #1571.
+- Kararı veren katman `src/lib/authz.ts` (#1569): `requirePermission(permission,
+  { subject, request })` route guard'ı, `can(actor, permission, subject)` ve kuralın
+  saf hali `src/lib/authzRule.ts` (katalog `PERMISSIONS`, kademe tablosu
+  `TIER_PERMISSIONS`, birim testli). Route'ların ona taşınması #1571.
+
+### İzin kuralı / The permission rule (`authzRule.ts`)
+
+**`requireCapability()` ile karıştırmayın**: o, `capabilityGate.ts`'teki **dikey**
+kapısıdır ("bu modül tenant'ın ürününde var mı?"). Bu katman **kişinin** yetkisini
+sorar ve adları bilerek farklıdır: `Permission`, `can()`, `requirePermission()`.
+
+Sırayla, ilk eşleşen kazanır:
+
+| # | Durum | Sonuç (`reason`) |
+|---|---|---|
+| 1 | Katalogda olmayan izin adı | ret `unknown_permission` |
+| 2 | `platform.*` | yalnız **kendi dünyasındaki** org için süper-admin (`isSuperAdminFor` kuralı), taklitte asla — `platform_only` / `impersonating` |
+| 3 | Kademe yok (ADMIN değil) | ret `no_tier` |
+| 4 | Taklit edilen oturum + okuma olmayan izin | ret `impersonating` |
+| 5 | `subject.orgId` ≠ aktörün org'u | ret `cross_tenant` — süper-admin dahil; platform gücü yalnız 2. satırdır |
+| 6 | İzin kademenin tablosunda yok | ret `not_in_tier` |
+| 7 | `PROGRAM_ADMIN`: grant yok / subject cohort-firma adlandırmıyor / grant kapsamıyor | ret `no_scope` / `unscoped_subject` / `outside_scope` |
+| 7b | `PROGRAM_ADMIN` + `listing: true` (tek bir subject yok) ve en az bir grant | izin — **route satırları grant'lere daraltmak zorunda** (`requirePermission` grant'leri döndürür) |
+| 8 | — | izin |
+
+- Etkin kademe `adminTierFor(role, adminLevel)`: ADMIN değilse yok; kolonu boş
+  ADMIN `ORG_ADMIN`'dir (rolün her zaman anlamı; daraltma açık bir eylemdir).
+- Aktör **canlı** satırdan kurulur (rol, kademe, org, aktiflik) — JWT'deki
+  `adminLevel` yalnız arayüz içindir; 09:00'da OBSERVER'a indirilen admin bir
+  sonraki istekte daralır.
+- Her ret, rota adıyla bir `authz.capability_denied` (warning) `ActivityLog`
+  satırı yazar; cevap `403 { code: 'permission_denied', permission }`.
 
 ## Süper-admin yalnız uçlar / Super-admin-only endpoints
 

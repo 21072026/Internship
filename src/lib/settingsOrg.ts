@@ -19,7 +19,8 @@
 import type { Session } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { getSetting, type SettingKey } from '@/lib/settings';
+import type { SettingKey } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 
 /** The org a signed-in caller's settings live in. Never `null`. */
 export async function settingsOrgOf(session: Session | null | undefined): Promise<string> {
@@ -41,7 +42,7 @@ export function settingByOrg(key: SettingKey): (orgId: string | null | undefined
     const org = await settingsOrgOfRow(orgId);
     let value = cache.get(org);
     if (!value) {
-      value = getSetting(key, org);
+      value = resolveSettingRaw(key, { orgId: org });
       cache.set(org, value);
     }
     return value;

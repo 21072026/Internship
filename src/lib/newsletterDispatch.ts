@@ -7,7 +7,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding, type OrgBranding } from '@/lib/orgBranding';
 import { brandAssetPath } from '@/lib/brandRule';
 import { mailAccentFor } from '@/lib/accent';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
 import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newsletterQuotaHold';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -773,7 +773,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // this job runs with no tenant bound, so an unqualified read is the global row.
   const orgId = await defaultOrgId();
 
-  const cadence = await getSetting('newsletterSchedule', orgId);
+  const cadence = await resolveSettingRaw('newsletterSchedule', { orgId });
   const days = CADENCE_DAYS[cadence];
   if (!days) return { queued: false, reason: 'disabled' };
 
@@ -790,7 +790,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
     return { queued: false, reason: 'too_soon' };
   }
 
-  const audience = (await getSetting('newsletterAudience', orgId)) as NewsletterAudience;
+  const audience = (await resolveSettingRaw('newsletterAudience', { orgId })) as NewsletterAudience;
   // Which library entries have been used before — so the cadence walks the
   // library instead of re-sending its first issue forever.
   const used = await prisma.newsletter.findMany({
@@ -808,7 +808,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // than sending nothing.
   if (!template) return { queued: false, reason: 'library_exhausted' };
 
-  const hour = Math.min(23, Math.max(0, parseInt(await getSetting('newsletterSendHour', orgId), 10) || 9));
+  const hour = Math.min(23, Math.max(0, parseInt(await resolveSettingRaw('newsletterSendHour', { orgId }), 10) || 9));
   const scheduledAt = new Date(now);
   scheduledAt.setHours(hour, 0, 0, 0);
   // Past that hour already (the job ran late, or the hour is set early): go

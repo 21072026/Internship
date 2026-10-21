@@ -10,6 +10,7 @@ import { registerJob } from '@/lib/jobs/registry';
 import { pruneJobRuns } from '@/lib/jobs/queue';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
+import { runApiExport } from '@/lib/api/v1Exports';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -48,4 +49,10 @@ export function registerAllJobs(): void {
   registerDigestJobs();
   registerHousekeepingJobs();
   registerPlatformJobs();
+
+  // A READY or FAILED export is left alone and the file is stored in one
+  // guarded update, so a repeated run rewrites at most an unfinished one.
+  registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {
+    timeoutMs: 10 * 60 * 1000,
+  });
 }

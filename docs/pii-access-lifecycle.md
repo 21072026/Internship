@@ -235,6 +235,23 @@ ve `InteractionLog.notes` zorunlu kolonlar. Boş gövde bu yüzeylerde zaten
 ulaşılabilir ve zaten render edilen bir durum (yalnızca ek içeren destek
 mesajı, mezar taşı yapılmış sohbet mesajı).
 
+### Kişi listesi beslemesinin çalıştırma kaydı
+
+Roster feed'in kaydı (#1964/#1966, [`roster-feed.md`](roster-feed.md)) serbest metin
+değil, ama kişiyi **anahtarıyla** anar. Her `RosterRowResult` satırı kişinin
+anahtarını (e-posta ya da İK sistemindeki personel numarası) ve `userId`'sini
+taşır. Bir çalıştırmanın `absentKeys` listesi de beslemenin anmadığı anahtarlardır.
+`RosterRowResult.userId`'nin yabancı anahtarı **yok**, yani hard delete'te cascade
+ile de gitmiyordu. Artık iki yol da `rosterLogOps()` ile kişinin satır sonuçlarını
+siler (id ile; hesaba bağlanamamış bir satırı da anahtarla), org'undaki her
+çalıştırmanın `absentKeys` listesinden anahtarını çıkarır. Çalıştırma satırının
+kendisi (sayılar, dosya özeti, durum) beslemenin kaydıdır ve kalır. Ayrıca
+`rosterRowResult` saklama kaydı 90 günden eski satır sonuçlarını siler ve aynı
+pencerede `absentKeys`'i boşaltır. `scripts/sanitize-db.mjs` önizlemede satır
+sonuçlarını siler, `absentKeys`'i boşaltır, beslemelerin mühürlü gizli bilgisini
+düşürür ve hepsini kapatır. Böylece bir önizleme, müşterinin İK sunucusundan
+kopyalanmış bir kimlik bilgisiyle veri çekemez.
+
 ### Ulaşılamayanlar — sessiz boşluk yok
 
 Kanıt testi: [`e2e/erasure-free-text.spec.ts`](../e2e/erasure-free-text.spec.ts)

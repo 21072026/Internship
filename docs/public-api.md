@@ -132,6 +132,42 @@ key-owned subscription stops receiving the moment its key is revoked or expires.
 `/api/v1/hooks` is on the demo blocklist for the same reason as
 `/api/admin/webhooks`.
 
+## Async exports (#3002, `src/lib/api/v1Exports.ts`)
+
+A full snapshot of one resource without walking the cursor:
+
+- **`POST /exports`** `{ resource }` → `202 { data: { id, status: 'PENDING' } }`
+  with `Location`. On the write floor (Idempotency-Key, 30/min). The door is
+  `ANY_LIVE_KEY` because the scope depends on the body. The handler calls
+  `requireApiScope()` with that resource's read scope (`EXPORT_RESOURCES`)
+  before it writes anything; a key without it gets the same 403 its list gives.
+  A key can have at most `MAX_OPEN_EXPORTS_PER_KEY` (3) exports queued or
+  running (`409 limit_reached`).
+- The **`api.export` job** writes the file on the worker, never in the request.
+  It reads every row of the key's org and builds them with the list route's own
+  `select`, tenant filter and serializer, so there is no field and no row the
+  list would not give. Note bodies follow the same rule: an interactions export
+  carries them only when the key held `interactions:read_notes`, and that is
+  recorded on the row as `withNotes`. The output is NDJSON, gzipped and stored
+  in `ApiExport.content`, in the database like `CvFile`, because a file on one
+  replica's disk is not on the other's. More than `EXPORT_ROW_CAP` (100 000)
+  rows or more than 32 MB compressed makes the export `FAILED` with a code.
+  The job is at-least-once: a READY or FAILED row is left alone, and the file is
+  stored in one guarded update.
+- **`GET /exports/{id}`**: only the key that made the export can read it; any
+  other id is 404. A READY export carries a `downloadUrl` that is newly signed
+  on each call. The signature is an HMAC over the id and an expiry 15 minutes
+  out (never later than the file's own `expiresAt`, 24 hours after it was
+  written).
+- **`GET /api/exports/{id}/download?expires=&sig=`** is outside `/api/v1`,
+  because every v1 route takes a key. It is listed in
+  `scripts/route-auth-baseline.json`. The link is checked again on every use
+  (`keyMayRead`): the making key must still be live, still hold the scopes, and
+  its org must still be entitled to the API. Revoking a key kills every link it
+  was given. A tampered, expired or orphaned link answers `403 invalid_link`.
+- Expired exports are deleted in the nightly 03:40 slot
+  (`purgeExpiredExports`); they stop being served at `expiresAt`.
+
 ## Deprecations
 
 | What | Since | Removed on |

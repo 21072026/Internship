@@ -4,11 +4,11 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
-import { nextOnPathStatus } from '@/lib/pipeline';
+import { nextOnPathStage, type ResolvedStage } from '@/lib/pipeline';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 import { withTenantScope } from '@/lib/orgContext';
 import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
-import { emitStageChange } from '@/lib/stageChangeEffects';
-import { stageTrialWindow } from '@/lib/trialWindow';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
@@ -286,16 +286,43 @@ export async function POST(request: Request) {
       select: { id: true, menteeId: true, pipelineStatus: true, orgId: true, trialStartedAt: true, trialEndsAt: true },
     });
 
+    // The RESOLVED stage order of each relation's own org (#1637), not the
+    // canonical constant: on a custom pipeline `nextOnPathStatus()` knew no key
+    // at all, so every row was skipped while the response still read as a
+    // success. Resolved once per org for the batch; the relation's orgId
+    // decides, as every other stage-write path does.
+    const stagesByOrg = new Map<string, Promise<ResolvedStage[]>>();
+    const stagesOf = (orgId: string | null) => {
+      const key = orgId ?? '';
+      let hit = stagesByOrg.get(key);
+      if (!hit) {
+        hit = resolvePipelineStages(orgId);
+        stagesByOrg.set(key, hit);
+      }
+      return hit;
+    };
+
     let advanced = 0;
+    // Why each relation that did not move stayed where it was — the screen says
+    // "3 advanced, 2 already at the final stage" rather than claiming them all.
+    const reasons: Record<string, number> = {};
+    const skip = (reason: string) => {
+      reasons[reason] = (reasons[reason] ?? 0) + 1;
+    };
+    const withRelation = new Set(relations.map((r) => r.menteeId));
+    for (const id of new Set(candidateIds)) if (!withRelation.has(id)) skip('no_active_relation');
+
     const notifiedMentees = new Set<string>();
     for (const rel of relations) {
-      // Advance along the happy path only, via nextOnPathStatus — never a raw
-      // indexOf+1 on the stage list (#740). Off-path/terminal states
-      // (EMPLOYED_700, INTERNSHIP_DROPPED_460, INTERNSHIP_FOUND_ELSEWHERE_800)
-      // yield null and are skipped, so "advance" never bumps an in-progress
-      // internship to "dropped" or an employed mentee to "found elsewhere".
-      const nextStatus = nextOnPathStatus(rel.pipelineStatus);
-      if (!nextStatus) continue;
+      // Advance along the happy path only — the next ON-PATH key of the
+      // tenant's order, never a raw indexOf+1 on the stage list (#740). An
+      // off-path or terminal current stage, or the last on-path one, stays put.
+      const next = nextOnPathStage(await stagesOf(rel.orgId), rel.pipelineStatus);
+      if ('skip' in next) {
+        skip(next.skip);
+        continue;
+      }
+      const nextStatus = next.to;
 
       // Defense in depth (#810): "advance" only ever targets the next ON_PATH
       // key, which by construction excludes off-path/negative stages — but a
@@ -304,61 +331,59 @@ export async function POST(request: Request) {
       // collected here (bulk advance has no reason UI), so this only ever
       // succeeds when the target genuinely isn't negative.
       const reasonCheck = await validateDropoffReason({ orgId: rel.orgId, toStatus: nextStatus });
-      if (!reasonCheck.ok) continue;
+      if (!reasonCheck.ok) {
+        skip('needs_reason');
+        continue;
+      }
 
-      // Through the shared gate (#934) for uniformity, not because this path
-      // can currently produce a no-op: `nextOnPathStatus` walks a hardcoded,
-      // duplicate-free list (src/lib/pipeline.ts) and returns the NEXT element,
-      // so `toStatus` can never equal `fromStatus` here, and a tenant's own
-      // stage key is not on that list at all — it yields null and is dropped
-      // one line above by `if (!nextStatus) continue`. The branch below is
-      // therefore unreachable today; it is here so this path cannot drift from
-      // the other two if the source of `nextStatus` ever changes.
+      // The shared no-op gate (#934): `nextOnPathStage` returns a DIFFERENT key
+      // by construction, so this cannot trip today; it is here so this path
+      // cannot drift from the others if the source of `nextStatus` changes.
       const auditRow = statusChangeData({
         relationId: rel.id,
         fromStatus: rel.pipelineStatus,
         toStatus: nextStatus,
         changedById: session.user.id,
       });
-      if (!auditRow) continue;
+      if (!auditRow) {
+        skip('final_stage');
+        continue;
+      }
 
+      // The shared stage write path (#2658): the columns from stageMoveData()
+      // (stage + the trial window, #2551), the history row in the same
+      // transaction, then recordStageMove() for the activity line and the
+      // effects — notification, webhook, SLA deadline and breach (#926/#817).
+      const data = await stageMoveData(rel, nextStatus);
       await prisma.$transaction([
-        prisma.mentorshipRelation.update({
-          where: { id: rel.id },
-          // Same trial-window stamp as every stage writer (#2551). The
-          // canonical on-path list has no TRIAL_ACTIVE, so this is `{}` today
-          // and costs no query; it is here so the path cannot drift.
-          data: {
-            pipelineStatus: nextStatus,
-            ...(await stageTrialWindow({ orgId: rel.orgId, toStage: nextStatus, enteredAt: new Date(), existing: rel })),
-          },
-        }),
+        prisma.mentorshipRelation.update({ where: { id: rel.id }, data }),
         prisma.statusChange.create({ data: auditRow }),
       ]);
-      // Same effects as every other stage-write path (#926/#886): one
-      // notification per PERSON even if a mentee has two active relations in
-      // the batch (no notification storm), webhook per relation regardless.
-      await emitStageChange({
-        relationId: rel.id,
-        menteeId: rel.menteeId,
-        orgId: rel.orgId,
-        from: rel.pipelineStatus,
-        to: nextStatus,
+      // One notification per PERSON even if a mentee has two active relations
+      // in the batch (no notification storm), webhook per relation regardless.
+      await recordStageMove({
+        relation: rel,
+        toStatus: nextStatus,
+        actor: { id: session.user.id, email: session.user.email },
+        historyWritten: true,
         skipNotify: notifiedMentees.has(rel.menteeId),
       });
       notifiedMentees.add(rel.menteeId);
       advanced++;
     }
 
+    const skipped = Object.values(reasons).reduce((n, c) => n + c, 0);
     await logActivity({
       action: 'candidates.bulk.advanceStage',
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
       targetType: 'user',
       targetId: candidateIds.join(','),
+      detail: `${advanced} advanced, ${skipped} skipped`,
     });
 
-    return NextResponse.json({ ok: true, updated: advanced });
+    // `updated` stays (= advanced) for the callers that read it.
+    return NextResponse.json({ ok: true, updated: advanced, advanced, skipped, reasons });
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

@@ -87,6 +87,13 @@ export interface JobPayloadMap {
     /// Optional: absent on a fresh row.
     releases?: number;
   };
+  /// One /api/v1 export (#3002, `src/lib/api/v1Exports.ts`): write the
+  /// `ApiExport` row's file. The row carries everything else (org, key,
+  /// resource), so a payload can never widen what the request was granted.
+  'api.export': { exportId: string };
+  /// The Klaviyo pull connector's tick (src/lib/klaviyoSync.ts): every enabled
+  /// connection whose turn it is. Each connection takes its own lease.
+  'klaviyo.sync': Record<string, never>;
   // ── The scheduled jobs (#1677, src/jobs/*). Each is enqueued by the
   // scheduler (src/lib/jobs/schedules.ts) with an empty payload — "every
   // tenant, now" — or by GET /api/cron?job=…&enqueue=1 with the narrowing an
@@ -137,6 +144,8 @@ export const JOB_NAMES: readonly JobName[] = [
   'jobs.deadLetterAlert',
   'audit.drain',
   'email.send',
+  'api.export',
+  'klaviyo.sync',
   'dormancy.sweep',
   'dormancy.checkIn',
   'reminders.mentorInteraction',

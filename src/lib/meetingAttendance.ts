@@ -18,7 +18,7 @@
 
 import type { AttendanceState } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { notifyIfAllowed } from '@/lib/notify';
 import { notificationLink } from '@/lib/notificationLink';
 import { loadAccessibleMeeting, meetingInCallerTenant, type MeetingUser } from '@/lib/meetingAccess';
@@ -183,7 +183,7 @@ export async function recordLateCancel(
   now = new Date(),
 ): Promise<number> {
   if (rows.length === 0) return 0;
-  const hours = parseInt(await getSetting('lateCancelHours', rows[0].relation?.orgId ?? null), 10);
+  const hours = parseInt(await resolveSettingRaw('lateCancelHours', { orgId: rows[0].relation?.orgId ?? null }), 10);
   const windowMs = (Number.isFinite(hours) && hours >= 0 ? hours : 24) * 60 * 60 * 1000;
   let written = 0;
   for (const row of rows) {
