@@ -95,6 +95,9 @@ export const E2E_HEALTH_TOKEN = 'e2e-health-token';
 // the shape production actually runs (secret required AND supplied) instead of
 // the lenient path.
 export const E2E_INBOUND_SECRET = 'e2e-inbound-secret';
+// Shared with e2e/email-suppression.spec.ts (#1692): the bounce webhook's shared
+// secret. Like INBOUND_SECRET, a production build refuses every call without it.
+export const E2E_EMAIL_WEBHOOK_SECRET = 'e2e-email-webhook-secret';
 // Shared with e2e/job-queue-health.spec.ts (#1674): the operator address the
 // dead-letter alert mails when the queue is not empty.
 export const E2E_ALERT_EMAIL_TO = 'ops-alert@e2e.local';
@@ -287,6 +290,7 @@ export default defineConfig({
           // still stops at a SKIPPED EmailLog row.
           ALERT_EMAIL_TO: E2E_ALERT_EMAIL_TO,
           INBOUND_SECRET: E2E_INBOUND_SECRET,
+          EMAIL_WEBHOOK_SECRET: E2E_EMAIL_WEBHOOK_SECRET,
           // Shared with e2e/error-boundary.spec.ts (#1602). Unlocks the two
           // test-only routes that throw on purpose so the route-level error
           // boundaries can be exercised; a NODE_ENV check would not work here

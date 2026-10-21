@@ -103,6 +103,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/emailSuppressionRule.ts',
+    {
+      floor: 95,
+      measured: 98.44,
+      why: 'a suppression matches case- and whitespace-blind, one soft bounce never suppresses, the bounce webhook fails closed in production without its secret (#1692)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,

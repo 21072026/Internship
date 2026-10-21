@@ -563,6 +563,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   `mail` block are for a super admin (or the default organization's ADMIN, scoped to its own
   rows), never a tenant admin. A topic environment sends to a Mailpit sink unless every recipient
   is on `MAIL_RECIPIENT_ALLOWLIST`, and a sink that is down never falls back to the relay.
+  **Bounce/complaint suppression** (#1692, `docs/EMAIL_DELIVERABILITY.md` § 2e) is the one
+  rule that silences essential mail too: `prepareEmail()` and the drain refuse an address in
+  `EmailSuppression` (written only by `src/lib/emailSuppression.ts`, fed by
+  `POST /api/webhooks/email/[provider]`), recorded `SKIPPED` / `Suppressed: <REASON>`. The table
+  is deliberately not tenant-scoped (one shared sending domain); its admin list uses the mail
+  queue's scope. Never add a "send anyway" path — a delist is the admin's audited action.
 - **One billing meter** (`docs/metering.md`, #1750): the billable unit is *"a relation in
   ACTIVE state with any logged activity in the calendar month; paused, benched and completed
   pairs are not counted"* — the sentence we publish, and the header comment of

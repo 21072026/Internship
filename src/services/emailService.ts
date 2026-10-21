@@ -2,6 +2,8 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
+import { suppressedAmong } from '@/lib/emailSuppression';
+import { suppressedLogReason } from '@/lib/emailSuppressionRule';
 import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -1014,6 +1016,23 @@ export async function prepareEmail({
   if (unmailable) {
     logger.info('Email not sent: generated address', { category, reason: unmailable });
     await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), `Unmailable address: ${unmailable}`);
+    return { status: 'SKIPPED' };
+  }
+
+  // ── A SUPPRESSED ADDRESS IS NOT MAILED (#1692) ────────────────────────────
+  // The mailbox said "this address does not exist" (a hard bounce, or soft
+  // ones that kept coming) or the person told their provider "this is spam"
+  // (a complaint) — src/lib/emailSuppressionRule.ts. Ahead of the opt-out gate
+  // and, unlike it, for EVERY group, essential mail included: a password reset
+  // to a dead mailbox reaches nobody and only adds a bounce to the sending
+  // domain every tenant shares. Recorded SKIPPED with the reason, nothing
+  // queued, nothing drafted; the caller learns SKIPPED, never a pretend SENT.
+  // The lookup fails open, like the preference read below.
+  const suppressed = await suppressedAmong(addressparser(to, { flatten: true }).map((a) => (typeof a.address === 'string' ? a.address : '')));
+  if (suppressed.size > 0) {
+    const reason = [...suppressed.values()][0];
+    logger.info('Email not sent: suppressed address', { category, reason });
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), suppressedLogReason(reason));
     return { status: 'SKIPPED' };
   }
 
