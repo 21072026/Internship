@@ -85,7 +85,11 @@ scheduler (#1676) lands, when this becomes a queue handler and the timer goes aw
 other twelve. `runUsageRollup()` is the handler either way.
 
 **A request path must never compute the pair count.** The definition is a scan across seven
-activity tables; a usage screen or an invoice reads `UsageRollup`.
+activity tables; a usage screen or an invoice reads `UsageRollup`. The tenant's own bill
+(`GET /api/org/billing` → `/admin/billing`, #1739) is that reader: it takes no `orgId`, reads
+the caller's `ACTIVE_MATCHED_PAIRS` / `ADMIN_SEATS` rows for twelve months, and shows a month
+the rollup has not written yet as *not counted* — never as a live count and never as 0. The
+arithmetic next to the prices is pure in `src/lib/billingSummary.ts`.
 
 ## Video is reported, never gated
 

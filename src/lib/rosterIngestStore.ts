@@ -33,6 +33,7 @@ import {
   fetchFeedFile,
   ingestRoster,
   previewWriter,
+  RosterTransportError,
   type RosterFeedConfig,
   type RosterIngestOptions,
   type RosterIngestResult,
@@ -44,6 +45,8 @@ import {
   type RosterStore,
   type RosterTargetRow,
 } from './rosterIngest';
+import { ROSTER_FEED_SECRET_PURPOSE } from './rosterFeed';
+import { open } from './secretBox';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -415,6 +418,25 @@ export function toFeedConfig(row: {
   };
 }
 
+/**
+ * The feed's secret, for the transport and nobody else (#1964): the sealed
+ * column first, the named environment variable second. A sealed value that no
+ * longer opens (NEXTAUTH_SECRET rotated, row copied between environments) fails
+ * the run loudly — fetching without the credential would read as an outage at
+ * best and, on a misconfigured server, as somebody else's file.
+ */
+export function resolveFeedSecret(row: { secretEnc: string | null; credentialEnvVar: string | null }): string | null {
+  if (row.secretEnc) {
+    const secret = open(row.secretEnc, ROSTER_FEED_SECRET_PURPOSE);
+    if (secret === null) {
+      throw new RosterTransportError('The stored feed secret cannot be decrypted; enter it again.');
+    }
+    return secret;
+  }
+  if (row.credentialEnvVar) return process.env[row.credentialEnvVar] || null;
+  return null;
+}
+
 const FEED_SELECT = {
   id: true,
   orgId: true,
@@ -427,6 +449,7 @@ const FEED_SELECT = {
   sftpPath: true,
   sftpHostKeyFingerprint: true,
   credentialEnvVar: true,
+  secretEnc: true,
   delimiter: true,
   keyField: true,
   columnMap: true,
@@ -460,7 +483,9 @@ export async function runRosterFeed(
       {
         store: prismaRosterStore(feed),
         loadTarget: loadRosterTarget,
-        fetchFile: (f) => fetchFeedFile(f),
+        // Resolved here, at fetch time, so the plaintext lives for one call and
+        // never sits on the config object the run log is built from.
+        fetchFile: (f) => fetchFeedFile({ ...f, secret: resolveFeedSecret(row) }),
       },
       options,
     ),
