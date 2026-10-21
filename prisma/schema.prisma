@@ -23,6 +23,22 @@ enum Role {
   SOURCE
 }
 
+// The admin tier of an ADMIN account (#1567). Additive on purpose: `Role` is
+// never widened or split (that is the drop-and-recreate `db push` cannot be
+// trusted with), so the tier is its own nullable column on User.
+//
+// There is deliberately no SUPER_ADMIN value. The platform operator is
+// `User.isSuperAdmin` — read from the database per request and scoped to its
+// world (src/lib/superAdmin.ts, docs/worlds.md); a second "super admin" stored
+// here would be a second source of truth that the JWT could carry stale for
+// 12h. Adding a value to this enum later is additive; removing one is not, so
+// the value waits until something needs it.
+enum AdminLevel {
+  ORG_ADMIN // everything inside one tenant (today's ADMIN)
+  PROGRAM_ADMIN // only the cohorts/companies named in its AdminScopeGrant rows
+  OBSERVER // read-only, across its own tenant (grants are not read)
+}
+
 enum MentorshipStatus {
   ACTIVE
   COMPLETED
@@ -241,6 +257,7 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   auditDrains             AuditDrain[]
+  adminScopeGrants        AdminScopeGrant[]
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
@@ -606,6 +623,13 @@ model User {
   // `src/lib/superAdmin.ts` reads it from the database per request so revoking
   // it takes effect on the next request, like `sessionsValidFrom`.
   isSuperAdmin            Boolean       @default(false)
+  // The admin tier inside a tenant (#1567, docs/role-access-matrix.md §
+  // Admin tiers). NULL means "no tier recorded"; `role` stays the source of
+  // truth for MENTOR/MENTEE/COMPANY/SOURCE and a non-ADMIN never holds a tier,
+  // whatever this column says. PROGRAM_ADMIN's reach is its AdminScopeGrant
+  // rows — none means none. The platform tier is NOT here: that is
+  // `isSuperAdmin` above, read live and per world (src/lib/superAdmin.ts).
+  adminLevel              AdminLevel?
   // Break-glass exemption from the tenant's enforced SSO (#1950). Only an
   // active ADMIN may hold one, only an admin may grant it, and every grant and
   // revocation is audited (`sso.exempt_granted` / `sso.exempt_revoked`). It is
@@ -782,6 +806,7 @@ model User {
   placements                        Placement[]                   @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
+  adminScopeGrants                  AdminScopeGrant[]
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
   safeguardingReviews               SafeguardingFlag[]            @relation("SafeguardingReviewer")
@@ -1772,6 +1797,7 @@ model Company {
   contacts           CompanyContact[]
   // The marketplaces, shop systems and carriers it works on (#2408).
   channels           CompanyChannel[]
+  adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -3129,9 +3155,10 @@ model Cohort {
   term      String?
   createdAt DateTime      @default(now())
 
-  relations    MentorshipRelation[]
-  programCosts ProgramCost[]
-  steps        ProgramStep[]
+  relations        MentorshipRelation[]
+  programCosts     ProgramCost[]
+  steps            ProgramStep[]
+  adminScopeGrants AdminScopeGrant[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -4762,6 +4789,40 @@ model EmailLog {
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
+// "This admin's authority extends to this programme / company" (#1567). One
+// row per delegated scope of a PROGRAM_ADMIN; the authorization
+// layer (src/lib/authz.ts) reads them per request. FAIL CLOSED: a
+// PROGRAM_ADMIN with no rows has no scope at all — never "everything" — the
+// same rule as NO_MATCH in src/lib/authzScope.ts. A row names a cohort, a
+// company, or both (narrowing to that company's mentees in that cohort).
+//
+// Tenant data: `orgId` + an entry in TENANT_MODELS (src/lib/orgContext.ts).
+// The unique key cannot stop two all-NULL-scope rows (MySQL treats NULLs as
+// distinct), which is harmless: such a row grants nothing, and the writer
+// refuses it.
+model AdminScopeGrant {
+  id          String   @id @default(cuid())
+  userId      String
+  orgId       String
+  cohortId    String?
+  companyId   String?
+  // The admin who granted it. A plain id, no relation, like AuditLog.actorId:
+  // erasing the granter must not erase the grant's history.
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  cohort  Cohort?      @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  company Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId, cohortId, companyId])
+  @@index([userId])
+  @@index([orgId])
+  @@index([cohortId])
+  @@index([companyId])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   // The tenant the audited action happened in (#2012). Nullable + backfilled:

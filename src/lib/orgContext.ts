@@ -298,6 +298,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // receiver belongs to exactly one tenant.
   'AuditLog',
   'AuditDrain',
+  // Delegated admin scope (#1567): which programmes / companies a
+  // PROGRAM_ADMIN reaches. One tenant's delegation, never another's.
+  'AdminScopeGrant',
   // The public /for-companies enquiry (#1104). The form has no session and no
   // host→org resolution exists yet, so the submit stamps the default org
   // itself (the same one registration uses) rather than leaving NULL — a

@@ -799,6 +799,11 @@ run_tool node prisma/check-marketing-orgs.mjs || true
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.
 run_tool node prisma/backfill-api-key-lifecycle.mjs || true
+# Admin tiers (#1567): every ADMIN without a recorded tier gets ORG_ADMIN —
+# exactly the power the role already carried. Only fills NULLs on ADMIN rows,
+# never touches a tier an operator set, never grants the platform tier (that
+# is User.isSuperAdmin). Converges to a no-op.
+run_tool node prisma/backfill-admin-level.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true
