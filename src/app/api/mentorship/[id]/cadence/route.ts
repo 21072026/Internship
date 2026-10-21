@@ -19,12 +19,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findFirst({
       where: withinTenant({ id }, await tenantWhere(session)),
-      select: { id: true, mentorId: true, expectedMeetingIntervalWeeks: true },
+      select: { id: true, mentorId: true, expectedMeetingIntervalWeeks: true, expectedEndDate: true },
     });
     if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (session.user.role !== 'ADMIN' && relation.mentorId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const now = new Date();
     const cadence = relationCadence(relation.expectedMeetingIntervalWeeks, await loadPairMeetings([relation.id], now), now);
-    return NextResponse.json({ cadence: { expectedIntervalWeeks: relation.expectedMeetingIntervalWeeks, ...cadence } });
+    // The agreed end rides along (#1784): the same two people set it, on the same panel.
+    return NextResponse.json({ cadence: { expectedIntervalWeeks: relation.expectedMeetingIntervalWeeks, expectedEndDate: relation.expectedEndDate, ...cadence } });
   });
 }

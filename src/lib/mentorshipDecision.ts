@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { parseSchedule, type ScheduleInput } from '@/lib/relationSchedule';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
@@ -49,9 +50,14 @@ export async function decideMentorshipRequest(opts: {
   // Mentor-facing route: the request must carry this preferredMentorId, or the
   // caller may not touch it (server-side authorization, not a UI filter).
   restrictToPreferredMentorId?: string;
+  // What the pair agreed (#1784), as the caller sent it; validated here so
+  // both front doors (admin queue, mentor accept) share one rule.
+  schedule?: ScheduleInput;
   request?: Request;
 }): Promise<DecisionResult> {
   const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request } = opts;
+  const schedule = parseSchedule(opts.schedule ?? {}, new Date());
+  if (!schedule.ok) return { status: 400, body: { error: 'Invalid schedule', code: schedule.code } };
 
   const req = await prisma.mentorshipRequest.findUnique({
     where: { id: requestId },
@@ -199,7 +205,7 @@ export async function decideMentorshipRequest(opts: {
           throw new AlreadyMentoredError(req.menteeId, active.id);
         }
         const created = await tx.mentorshipRelation.create({
-          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow },
+          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow, ...schedule.data },
         });
         // `status: 'PENDING'` in the where is the real serializer for THIS
         // request: the UPDATE takes the row lock MySQL grants anyway, so two

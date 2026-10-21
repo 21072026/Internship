@@ -15,6 +15,8 @@ interface Cadence {
   lastMetAt: string | null;
   daysSinceLastMet: number | null;
   onCadence: boolean | null;
+  /** The agreed end of the pairing (#1784); null = none agreed. */
+  expectedEndDate: string | null;
 }
 
 const INTERVALS = [1, 2, 3, 4, 6, 8];
@@ -44,6 +46,20 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expectedMeetingIntervalWeeks: value ? Number(value) : null }),
     }).catch(() => null);
+    setSaving(false);
+    await load();
+  };
+
+  const [endError, setEndError] = useState(false);
+  // A date input's value is the UTC calendar day; the column stores midnight UTC.
+  const setEndDate = async (value: string) => {
+    setSaving(true);
+    const res = await fetch(`/api/mentorship/${relationId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedEndDate: value || null }),
+    }).catch(() => null);
+    setEndError(!res?.ok);
     setSaving(false);
     await load();
   };
@@ -80,6 +96,23 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
           </select>
         </label>
       </div>
+      <label className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+        {c.endDate}
+        <input
+          type="date"
+          value={data.expectedEndDate ? data.expectedEndDate.slice(0, 10) : ''}
+          disabled={saving}
+          onChange={(e) => setEndDate(e.target.value)}
+          data-testid="relation-end-date"
+          className="min-h-[36px] rounded-lg border border-gray-300 px-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+        />
+        {!data.expectedEndDate && <span className="text-gray-400">{c.noEndDate}</span>}
+      </label>
+      {endError && (
+        <p className="mt-1 text-sm text-red-700 dark:text-red-400" role="alert" data-testid="relation-end-date-error">
+          {c.invalidEndDate}
+        </p>
+      )}
       <p className="mt-1 text-sm text-gray-500" data-testid="relation-cadence-last">
         {data.lastMetAt ? c.lastMet.replace('{date}', formatDate(data.lastMetAt, locale)).replace('{n}', String(data.daysSinceLastMet ?? 0)) : c.noMeetingYet}
       </p>

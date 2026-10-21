@@ -45,6 +45,10 @@ export async function GET() {
 const decideSchema = z.object({
   requestId: z.string().min(1),
   action: z.enum(['accept', 'reject']),
+  // What the pair agreed at the match (#1784) — rules in src/lib/relationSchedule.ts.
+  expectedEndDate: z.string().max(40).nullable().optional(),
+  durationMonths: z.number().int().nullable().optional(),
+  expectedMeetingIntervalWeeks: z.number().int().nullable().optional(),
 });
 
 // PUT — accept (relation with ME) or reject. No mentorId parameter exists on
@@ -65,6 +69,7 @@ export async function PUT(request: Request) {
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
       restrictToPreferredMentorId: session.user.id,
+      schedule: parsed.data,
       request,
     });
     return NextResponse.json(result.body, { status: result.status });

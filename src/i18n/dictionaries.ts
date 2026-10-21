@@ -1374,6 +1374,14 @@ const en = {
     noPromise: 'No rhythm agreed yet',
     lastMet: 'Last met {date} ({n} days ago).',
     noMeetingYet: 'No meeting held yet.',
+    endDate: 'Agreed end:',
+    noEndDate: 'No end agreed',
+    ends: 'Ends {date}',
+    meets: 'meets {rhythm}',
+    duration: 'Planned length',
+    durationNone: 'No set length',
+    months: '{n} months',
+    invalidEndDate: 'The end date must be after the start and at most five years out.',
   },
 
   meetingAttendance: {
@@ -9632,6 +9640,14 @@ const tr: Dict = {
     noPromise: 'Henüz sıklık belirlenmedi',
     lastMet: 'Son görüşme {date} ({n} gün önce).',
     noMeetingYet: 'Henüz görüşme yapılmadı.',
+    endDate: 'Anlaşılan bitiş:',
+    noEndDate: 'Bitiş tarihi belirlenmedi',
+    ends: '{date} tarihinde bitiyor',
+    meets: '{rhythm} görüşülüyor',
+    duration: 'Planlanan süre',
+    durationNone: 'Süre belirlenmedi',
+    months: '{n} ay',
+    invalidEndDate: 'Bitiş tarihi başlangıçtan sonra ve en fazla beş yıl ileride olmalı.',
   },
 
   meetingAttendance: {
@@ -17731,6 +17747,14 @@ const de: Dict = {
     noPromise: 'Noch kein Rhythmus vereinbart',
     lastMet: 'Zuletzt getroffen am {date} (vor {n} Tagen).',
     noMeetingYet: 'Noch kein Treffen.',
+    endDate: 'Vereinbartes Ende:',
+    noEndDate: 'Kein Ende vereinbart',
+    ends: 'Endet am {date}',
+    meets: 'trifft sich {rhythm}',
+    duration: 'Geplante Dauer',
+    durationNone: 'Keine feste Dauer',
+    months: '{n} Monate',
+    invalidEndDate: 'Das Enddatum muss nach dem Start und höchstens fünf Jahre entfernt liegen.',
   },
 
   meetingAttendance: {

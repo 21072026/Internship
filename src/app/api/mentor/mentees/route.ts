@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { parseSchedule } from '@/lib/relationSchedule';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -40,6 +41,10 @@ const schema = z.object({
   sourceId: z.string().optional().nullable(),
   // Set on resubmit after the duplicate warning (#841): "yes, create anyway".
   confirmDuplicate: z.boolean().optional(),
+  // What the pair agreed at the match (#1784) — rules in src/lib/relationSchedule.ts.
+  expectedEndDate: z.string().max(40).nullable().optional(),
+  durationMonths: z.number().int().nullable().optional(),
+  expectedMeetingIntervalWeeks: z.number().int().nullable().optional(),
 });
 
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
@@ -55,6 +60,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
       }
       const { fullName, email, ...rest } = parsed.data;
+      const schedule = parseSchedule(parsed.data, new Date());
+      if (!schedule.ok) return NextResponse.json({ error: 'Invalid schedule', code: schedule.code }, { status: 400 });
 
       // A real email means the mentee can be invited to set a password and log in.
       // No email → a deterministic placeholder for a tracking-only mentee (no login).
@@ -179,6 +186,7 @@ export async function POST(request: Request) {
               orgId,
               pipelineStatus,
               ...trialWindow,
+              ...schedule.data,
             },
           });
           return created;

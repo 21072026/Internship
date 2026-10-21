@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { parseSchedule } from '@/lib/relationSchedule';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -32,6 +33,10 @@ const createRelationSchema = z.object({
   companyId: z.string().optional(),
   projectId: z.string().optional(),
   startDate: z.string().optional(),
+  // What the pair agreed at the match (#1784) — rules in src/lib/relationSchedule.ts.
+  expectedEndDate: z.string().max(40).nullable().optional(),
+  durationMonths: z.number().int().nullable().optional(),
+  expectedMeetingIntervalWeeks: z.number().int().nullable().optional(),
 });
 
 export async function GET(request: Request) {
@@ -205,6 +210,10 @@ export async function POST(request: Request) {
     }
 
     const { mentorId, menteeId, companyId, projectId, startDate } = parsed.data;
+    const start = startDate ? new Date(startDate) : new Date();
+    // Validated before anything is written, like every other field here.
+    const schedule = parseSchedule(parsed.data, start);
+    if (!schedule.ok) return NextResponse.json({ error: 'Invalid schedule', code: schedule.code }, { status: 400 });
 
     // The company and project must be the admin's own tenant's (#2613, #2618):
     // unchecked, another tenant's id was attached and its name came back in
@@ -305,7 +314,8 @@ export async function POST(request: Request) {
             ...trialWindow,
             companyId: companyId || null,
             projectId: projectId || null,
-            startDate: startDate ? new Date(startDate) : new Date(),
+            startDate: start,
+            ...schedule.data,
           },
           include: {
             mentor: { select: { id: true, fullName: true, email: true } },

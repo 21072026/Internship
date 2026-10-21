@@ -110,6 +110,10 @@ const decideSchema = z.object({
   requestId: z.string().min(1),
   action: z.enum(['approve', 'reject']),
   mentorId: z.string().min(1).optional(),
+  // What the pair agreed (#1784) — rules in src/lib/relationSchedule.ts.
+  expectedEndDate: z.string().max(40).nullable().optional(),
+  durationMonths: z.number().int().nullable().optional(),
+  expectedMeetingIntervalWeeks: z.number().int().nullable().optional(),
 });
 
 // PUT — decide a request. Approving requires a mentorId and creates the
@@ -153,6 +157,7 @@ export async function PUT(request: Request) {
     mentorId,
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
+    schedule: parsed.data,
     request,
   });
   return NextResponse.json(result.body, { status: result.status });

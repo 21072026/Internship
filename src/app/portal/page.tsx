@@ -56,6 +56,9 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         status: true,
         startDate: true,
         completedAt: true,
+        // What the pair agreed at the match (#1784), shown read-only below.
+        expectedEndDate: true,
+        expectedMeetingIntervalWeeks: true,
         pipelineStatus: true,
         // The stage clock (#1724): the org's per-stage deadline when one is
         // configured, plus the newest recorded move so the shared helper can
@@ -234,6 +237,25 @@ export default async function PortalDashboard({
               </span>
             </div>
             {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
+            {/* The agreement, read-only, in the mentee's own locale (#1784). */}
+            {!isArchived && (relation.expectedEndDate || relation.expectedMeetingIntervalWeeks) && (
+              <p className="text-sm text-gray-600 dark:text-gray-300" data-testid="portal-relation-schedule">
+                {[
+                  relation.expectedEndDate ? t.relationCadence.ends.replace('{date}', formatDate(relation.expectedEndDate, locale)) : null,
+                  relation.expectedMeetingIntervalWeeks
+                    ? t.relationCadence.meets.replace(
+                        '{rhythm}',
+                        (relation.expectedMeetingIntervalWeeks === 1 ? t.relationCadence.everyWeek : t.relationCadence.everyWeeks).replace(
+                          '{n}',
+                          String(relation.expectedMeetingIntervalWeeks)
+                        )
+                      )
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}

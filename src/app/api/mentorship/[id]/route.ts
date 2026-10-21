@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { parseSchedule } from '@/lib/relationSchedule';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -41,6 +42,9 @@ const updateRelationSchema = z.object({
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
+  // The agreed end (#1784); null clears it. An edit, never an extension:
+  // durationExtendedCount moves only through the explicit extend action.
+  expectedEndDate: z.string().max(40).nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -193,7 +197,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, ...rest } = parsed.data;
+      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, expectedEndDate, ...rest } = parsed.data;
+
+      // The agreed end (#1784), checked against the pairing's own start.
+      const schedule = expectedEndDate !== undefined ? parseSchedule({ expectedEndDate }, relation.startDate) : null;
+      if (schedule && !schedule.ok) {
+        return NextResponse.json({ error: 'Invalid end date', code: schedule.code }, { status: 400 });
+      }
 
       // Parsed before anything is written, like the drop-off reason below.
       const parsedNextAt = nextActionAt !== undefined ? parseNextActionDate(nextActionAt) : null;
@@ -268,6 +278,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         // ended to everything that filters on the lifecycle (the meter first).
         data.lifecycleState = parsed.data.status;
         data.pausedAt = null;
+      }
+      if (schedule?.ok && schedule.data.expectedEndDate !== undefined) {
+        const moved = (schedule.data.expectedEndDate?.getTime() ?? null) !== (relation.expectedEndDate?.getTime() ?? null);
+        if (moved) {
+          data.expectedEndDate = schedule.data.expectedEndDate;
+          // A new end date re-arms its one "ending soon" nudge (#1786).
+          data.endingSoonNotifiedAt = null;
+        }
       }
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;

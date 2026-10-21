@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**A pairing can carry its agreed length and meeting rhythm from the match (#1784):** new `MentorshipRelation.expectedEndDate` (when it is meant to finish — distinct from `completedAt` and from the stage clock), `durationExtendedCount` (static DB default 0; moved only by the explicit extend action, #1786) and `endingSoonNotifiedAt` (the next task's idempotency stamp). The rhythm REUSES `expectedMeetingIntervalWeeks` (#2014) — no second cadence column. `src/lib/relationSchedule.ts` is the one rule (`parseSchedule`: explicit end date or a duration in months, at most five years; cadence 1–52 weeks; only sent keys come back). All three match-time paths accept it — direct assignment (`POST /api/mentorship`), the admin approval queue and the mentor's own accept (`decideMentorshipRequest`), and the mentor's hand-added mentee (`POST /api/mentor/mentees`). `PUT /api/mentorship/[id]` edits `expectedEndDate` under its existing authorization; an edit never counts as an extension and re-arms the ending-soon stamp. The admin assignment form offers 3/6/12 months and a weekly/fortnightly/monthly rhythm, the cadence panel edits the end date, and the mentee portal shows \"Ends … · meets every … weeks\" read-only.",
+  "notes": {
+    "en": ["When a pairing is made, its planned length and meeting rhythm can now be agreed — and the mentee sees both on their portal."],
+    "tr": ["Bir eşleşme yapılırken planlanan süre ve görüşme sıklığı artık belirlenebiliyor — mentee ikisini de kendi portalında görüyor."],
+    "de": ["Beim Zuordnen lassen sich jetzt geplante Dauer und Treffrhythmus vereinbaren — beides erscheint anschließend im Portal."]
+  }
+}

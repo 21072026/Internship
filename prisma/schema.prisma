@@ -3389,6 +3389,18 @@ model MentorshipRelation {
   // The promised meeting cadence, in weeks (#2014); null = no promise made,
   // so the pair is never "off cadence" (src/lib/meetingCadence.ts).
   expectedMeetingIntervalWeeks Int?
+  // When the pairing is MEANT to finish, as agreed at the match (#1784) —
+  // src/lib/relationSchedule.ts. `completedAt` is when it actually ended; the
+  // two are deliberately different columns, and neither is `stageDeadline`
+  // (the pipeline STAGE clock). Nullable: no end agreed is a valid pairing.
+  expectedEndDate              DateTime?
+  // How many times the end date was extended through the explicit extend
+  // action (#1786). A hand edit of `expectedEndDate` never counts. A static
+  // DB-side default, so db push adds it over a populated table (#2298).
+  durationExtendedCount        Int       @default(0)
+  // The idempotency stamp of the "ending soon" nudge (#1786), in the shape of
+  // `deadlineReminderSentAt`; cleared when the end date moves.
+  endingSoonNotifiedAt         DateTime?
 
   @@index([status])
   @@index([lifecycleState])
