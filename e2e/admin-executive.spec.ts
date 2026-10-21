@@ -98,6 +98,8 @@ test.describe('executive dashboard', () => {
       await page.goto('/admin/analytics/executive');
       await expect(page.getByTestId('executive-capability')).toBeVisible();
       await expect(page.getByTestId('executive-engagement-score')).not.toHaveText('');
+      // The forecast panel (#1897) loads on its own request; print it settled.
+      await expect(page.getByTestId('executive-forecast').locator('p').last()).toBeVisible();
       const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true, printBackground: true });
       const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page(?!s)/g) ?? []).length;
       expect(pages, `${locale} prints on ${pages} page(s)`).toBe(1);

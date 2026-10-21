@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'crypto';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
 test.afterAll(async () => {
@@ -302,6 +302,8 @@ test('the reminder cron reaches a guest, but not one who declined', async ({ pag
   const declinedEmail = uniqueEmail('declined').replace('@e2e.local', '@external.example');
 
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Reminder Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Reminder Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Reminder Mentee');
   const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });

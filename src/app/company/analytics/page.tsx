@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
+import { RecruitingReport } from '@/components/company/RecruitingReport';
 
 interface CompanyAnalytics {
   funnel: Record<string, number>;
@@ -46,6 +47,9 @@ export default function CompanyAnalyticsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{ca.title}</h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">{ca.subtitle}</p>
       </div>
+
+      {/* The recruiting report over the company's applications (#1911). */}
+      <RecruitingReport />
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300">

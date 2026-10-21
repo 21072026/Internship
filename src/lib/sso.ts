@@ -17,6 +17,8 @@ export interface SsoConfig {
   ssoIssuer: string | null;
   ssoEntryPoint: string | null;
   ssoCertificate: string | null;
+  // The IdP's SingleLogoutService (#1952). Optional: SSO works without SLO.
+  ssoLogoutUrl?: string | null;
 }
 
 // Every provider the config *vocabulary* knows about…
@@ -97,6 +99,10 @@ export function validateSsoConfig(c: Partial<SsoConfig>): string | null {
   const url = (c.ssoEntryPoint ?? '').trim();
   if (url && !/^https:\/\//i.test(url)) {
     return 'SSO entry point must be an https URL';
+  }
+  const slo = (c.ssoLogoutUrl ?? '').trim();
+  if (slo && !/^https:\/\//i.test(slo)) {
+    return 'SSO logout URL must be an https URL';
   }
   if (c.ssoEnabled && !isSsoConfigComplete(c)) {
     return 'Cannot enable SSO until the provider, issuer, entry point (and certificate for SAML) are all set';

@@ -232,7 +232,8 @@ marketing names redirect there, and their apex now serves **mail only**.
 
 - **Schema first**: change `prisma/schema.prisma`, run `prisma format && prisma validate &&
   prisma generate`. This project uses **`db push`**, there is **no `migrations/` folder** — do
-  not author SQL migrations.
+  not author SQL migrations. Expand/contract, rollback, a half-applied push and the
+  dangerous-change list: [`docs/migrations.md`](docs/migrations.md).
 - **"Additive" is not the same as "appliable"** (#2298): `db push` outright *refuses* — not
   warns, and `--accept-data-loss` does not cover it — a new **required** column whose default
   is client-side (`@default(cuid()/uuid()/nanoid())`) or absent, and any `@id`/`@@id` change,
@@ -542,11 +543,16 @@ marketing names redirect there, and their apex now serves **mail only**.
   Never add a second lease table or a second election mechanism. The job WORKER
   is the opposite case — it claims rows with `SKIP LOCKED`, so more workers are
   better, and it must never take a lease.
-  The **cron is not leased yet**: its schedules are registered once at boot, so
-  a lease taken there would never be renewed. Until #1676 makes each tick take
-  the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
-  `CRON_ENABLED=0` — an interim pin, not an election, and the reason two
-  replicas cannot double-send today.
+  The worker itself (#1673, [`docs/job-worker.md`](docs/job-worker.md)) runs a job only
+  through a handler registered in `src/jobs/index.ts`; every settle is one guarded
+  `updateMany` on the claim, retries back off with jitter, and `maxAttempts` ends in
+  `DEAD_LETTER`. Handlers are at-least-once — say in each one why a rerun is harmless.
+  The **cron is leased per tick** (#1676): every schedule is declared in
+  `src/lib/jobs/schedules.ts`; a `'queue'` one is enqueued by the 30 s scheduler tick
+  (`scheduleLeased`/`schedulerTick`, idempotencyKey `<key>:<slotISO>`, missed-slot
+  catch-up via `ScheduleState`), a `'node-cron'` one fires through `scheduleLeased()`
+  — either way only the `'scheduler'` lease holder does the work, so replica ≥2 no
+  longer runs with `CRON_ENABLED=0`. Never call `cron.schedule()` directly.
 - **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
   that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
   retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a
@@ -559,6 +565,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   `mail` block are for a super admin (or the default organization's ADMIN, scoped to its own
   rows), never a tenant admin. A topic environment sends to a Mailpit sink unless every recipient
   is on `MAIL_RECIPIENT_ALLOWLIST`, and a sink that is down never falls back to the relay.
+  **Bounce/complaint suppression** (#1692, `docs/EMAIL_DELIVERABILITY.md` § 2e) is the one
+  rule that silences essential mail too: `prepareEmail()` and the drain refuse an address in
+  `EmailSuppression` (written only by `src/lib/emailSuppression.ts`, fed by
+  `POST /api/webhooks/email/[provider]`), recorded `SKIPPED` / `Suppressed: <REASON>`. The table
+  is deliberately not tenant-scoped (one shared sending domain); its admin list uses the mail
+  queue's scope. Never add a "send anyway" path — a delist is the admin's audited action.
 - **One billing meter** (`docs/metering.md`, #1750): the billable unit is *"a relation in
   ACTIVE state with any logged activity in the calendar month; paused, benched and completed
   pairs are not counted"* — the sentence we publish, and the header comment of

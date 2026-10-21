@@ -328,7 +328,7 @@ export default function CandidatesPage() {
                 window.history.replaceState(null, '', `${url.pathname}${url.search}`);
               }}
               className="text-blue-500 hover:text-blue-800"
-              aria-label="clear filter"
+              aria-label={t.common.clearFilter}
             >
               ✕
             </button>

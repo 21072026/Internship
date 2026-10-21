@@ -163,6 +163,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         mentorCapacity?: number | null;
         role?: 'MENTOR' | 'MENTEE';
         sessionsValidFrom?: Date;
+        deactivatedBy?: string | null;
+        rosterAbsentSince?: null;
       } = {};
       let roleUnchanged = false;
       let previousRole: string | null = null;
@@ -189,7 +191,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // wait for an email that is never coming.
         if (body.isActive) {
           data.pendingApproval = false;
+          // A human switching an account back on clears who switched it off
+          // and restarts any roster-feed grace period from the next run
+          // (#1966, docs/roster-feeds.md).
+          data.deactivatedBy = null;
+          data.rosterAbsentSince = null;
         } else {
+          // Recorded so a roster feed can tell its own deactivation from a
+          // human's: a feed reactivates only what a feed switched off (#1966).
+          data.deactivatedBy = session.user.id;
           const target = await prisma.user.findUnique({
             where: { id },
             select: { emailVerified: true, ssoExempt: true, orgId: true },
