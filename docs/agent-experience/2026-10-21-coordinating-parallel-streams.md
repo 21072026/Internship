@@ -48,6 +48,8 @@
 - **A bot's "Merge origin/main" can revert main.** On #2986 a Copilot-agent merge commit had main
   as a parent while its tree reverted ~100 unrelated files (/api/v1, check-i18n, workflows,
   mobile …). Squashing it would have undone other streams' merged work. Before every push and
-  before enabling auto-merge, run `git fetch origin main && git diff --stat origin/main HEAD`
-  (two dots, against current main) and confirm it lists only the PR's own files. Do it again
-  after any commit you did not write.
+  before enabling auto-merge, run `git fetch origin main && git diff --stat origin/main...HEAD`
+  (THREE dots: merge-base to HEAD, which is what the squash brings) and confirm it lists only the
+  PR's own files. Do it again after any commit you did not write. Not two dots: against current
+  main, a branch that is merely behind lists every file main changed since, as if it reverted
+  them — the coordinator first broadcast the two-dot form and had to correct it.
