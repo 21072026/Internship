@@ -7,7 +7,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
-import { emitStageChange } from '@/lib/stageChangeEffects';
+import { emitStageChange, stageChangeEvent } from '@/lib/stageChangeEffects';
+import { kickRelay, publishEventOp } from '@/lib/events/publish';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { recordPairActivity } from '@/lib/metering';
 
@@ -98,6 +99,10 @@ export async function POST(request: Request) {
               where: { id: relationId },
               data: { pipelineStatus: toStatus, ...trialWindow },
             }),
+            // The event commits with the move (#1680).
+            publishEventOp(
+              stageChangeEvent({ relationId, orgId: relation.orgId, from: relation.pipelineStatus, to: toStatus, actorId: session.user.id }),
+            ),
           ]
         : []),
     ]);
@@ -110,7 +115,9 @@ export async function POST(request: Request) {
         from: relation.pipelineStatus,
         to: toStatus,
         reasonCode,
+        eventPublished: true,
       });
+      kickRelay();
     }
 
     // Metering signal (#1750) — volume, not the pair count. See the note in

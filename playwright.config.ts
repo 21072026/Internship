@@ -275,6 +275,11 @@ export default defineConfig({
           // synchronous route mail would otherwise wait on that external SMTP.
           SMTP_USER: '',
           SMTP_BULK_USER: '',
+          // The domain-event relay (#1680) runs IN THE SPEC instead: a server
+          // tick racing the spec would relay its rows first, against the
+          // server's (empty) subscriber registry. Events are still written;
+          // e2e/outbox-relay.spec.ts drives relayOnce() in-process.
+          EVENTS_RELAY_ENABLED: '0',
           // Exercises the gated shape of /api/health (#897). Unset, the endpoint
           // keeps its legacy fully-public response and health.spec.ts's
           // assertions about what an anonymous caller may see would be vacuous.
@@ -352,6 +357,8 @@ export default defineConfig({
           TRUSTED_PROXY_COUNT: '1',
           SMTP_USER: '',
           SMTP_BULK_USER: '',
+          // As on the default server: specs drive the relay in-process (#1680).
+          EVENTS_RELAY_ENABLED: '0',
         },
       },
       ] : []),

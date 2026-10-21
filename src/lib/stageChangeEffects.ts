@@ -8,6 +8,7 @@ import { stageDeadlineUpdate } from '@/lib/stageSla';
 import { prisma } from '@/lib/prisma';
 import { verticalFor } from '@/lib/verticalContext';
 import { verticalHasCapability } from '@/lib/verticals';
+import { publishAfterCommit, type PublishInput } from '@/lib/events/publish';
 
 // The observable side of a pipeline stage change (#926): the mentee's in-app
 // notification and the pipeline.stage_change webhook. Every write path that
@@ -36,8 +37,24 @@ export async function emitStageChange(opts: {
   // The caller already wrote `stageDeadline` itself (an admin typed a date in
   // the same request). A hand-set date always beats the org's default (#817).
   deadlineSetByCaller?: boolean;
+  // The caller wrote the `pipeline.stage_change` DomainEvent in the same
+  // transaction as the move (#1680) — `stageChangeEvent()` — so it must not be
+  // written again here. Callers that cannot yet share their transaction leave
+  // it unset and get the post-commit fallback below.
+  eventPublished?: boolean;
+  // Who moved it, for the event row. Null/absent = the system.
+  actorId?: string | null;
 }) {
   if (opts.from === opts.to) return;
+
+  // The event record (#1680). Durable from here on, but NOT atomic with the
+  // move when it lands here — the paths that still do are the burndown list in
+  // docs/domain-events.md. Never throws: the move already committed.
+  if (!opts.eventPublished) {
+    await publishAfterCommit(
+      stageChangeEvent({ relationId: opts.relationId, orgId: opts.orgId, from: opts.from, to: opts.to, actorId: opts.actorId }),
+    );
+  }
 
   // The notification stores stage KEYS; the renderer localizes built-in
   // stages at display time. Custom (per-org) stage keys have no dictionary
@@ -96,4 +113,24 @@ export async function emitStageChange(opts: {
   }
 
   await dispatchWebhook('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to }, opts.orgId);
+}
+
+/**
+ * The `pipeline.stage_change` event of one move, for `publishEvent(tx, …)` /
+ * `publishEventOp(…)` inside the move's own transaction (#1680). The payload
+ * is the published v1 webhook shape, exactly.
+ */
+export function stageChangeEvent(opts: {
+  relationId: string;
+  orgId: string | null;
+  from: string;
+  to: string;
+  actorId?: string | null;
+}): PublishInput {
+  return {
+    name: 'pipeline.stage_change',
+    payload: { relationId: opts.relationId, from: opts.from, to: opts.to },
+    orgId: opts.orgId,
+    actor: opts.actorId ? { id: opts.actorId, type: 'user' } : { id: null, type: 'system' },
+  };
 }

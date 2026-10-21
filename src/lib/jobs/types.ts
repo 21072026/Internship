@@ -87,13 +87,19 @@ export interface JobPayloadMap {
     /// Optional: absent on a fresh row.
     releases?: number;
   };
+  /// One committed domain event delivered to one subscriber (#1680/#1693).
+  /// Enqueued only by the outbox relay (src/lib/events/relay.ts), keyed
+  /// `${eventId}:${subscriber}` so a relay retry cannot deliver twice. The
+  /// handler is registered by the subscriber registry (#1693); ids only — the
+  /// handler reads the event row.
+  'events.deliver': { eventId: string; subscriber: string };
 }
 
 export type JobName = keyof JobPayloadMap;
 
 export type JobPayload<N extends JobName = JobName> = JobPayloadMap[N];
 
-export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain', 'email.send'] as const;
+export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain', 'email.send', 'events.deliver'] as const;
 
 export function isJobName(value: unknown): value is JobName {
   return typeof value === 'string' && (JOB_NAMES as readonly string[]).includes(value);

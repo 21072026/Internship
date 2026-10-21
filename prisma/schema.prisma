@@ -2656,6 +2656,12 @@ model Webhook {
 // readers (the relay, the retention sweep) have no session and must pass
 // `orgId` / run in an explicit context. Pruned by the `domainEvent` entry of
 // the retention registry (`domainEventRetentionDays`). docs/domain-events.md.
+enum OutboxStatus {
+  PENDING
+  RELAYED
+  FAILED
+}
+
 model DomainEvent {
   id            String        @id @default(cuid())
   orgId         String?
@@ -2671,7 +2677,15 @@ model DomainEvent {
   subjectId     String?
   correlationId String?
   createdAt     DateTime      @default(now())
+  // The transactional outbox (#1680): written PENDING in the producer's own
+  // transaction, turned into per-subscriber jobs by the relay
+  // (src/lib/events/relay.ts), which marks it RELAYED in that same
+  // transaction. FAILED = the relay gave up after OUTBOX_MAX_ATTEMPTS.
+  status        OutboxStatus  @default(PENDING)
+  relayedAt     DateTime?
+  attempts      Int           @default(0)
 
+  @@index([status, createdAt])
   @@index([orgId, createdAt])
   @@index([name, createdAt])
   @@index([subjectType, subjectId, createdAt])

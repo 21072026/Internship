@@ -20,6 +20,7 @@ export function register() {
   startMailBridge();
   startCron();
   startMailDrain();
+  startEventRelay();
 }
 
 const BOOT_DELAY_MS = 5000;
@@ -164,4 +165,46 @@ function startMailBridge() {
   timer.unref?.(); // never hold the process open on this timer alone
 
   console.log(`[MailBridge] started — polling every ${seconds}s`);
+}
+
+// The domain-event outbox relay (#1680, src/lib/events/relay.ts): committed
+// DomainEvent rows become per-subscriber jobs. Same shape as the mail drain —
+// every replica, SKIP LOCKED, no lease, the secret minted here where
+// CRON_SECRET is unset. A publish kicks a pass in-process too; this tick is the
+// guarantee for what a kick missed (a crash between commit and kick, another
+// replica's publish). EVENTS_RELAY_ENABLED=0 switches it off.
+const EVENT_RELAY_TICK_MS = 30_000;
+
+function startEventRelay() {
+  if (process.env.EVENTS_RELAY_ENABLED === '0') return;
+
+  if (!process.env.CRON_SECRET && !process.env.EVENTS_RELAY_SECRET) {
+    process.env.EVENTS_RELAY_SECRET = globalThis.crypto.randomUUID();
+  }
+  const secret = process.env.CRON_SECRET || process.env.EVENTS_RELAY_SECRET || '';
+
+  let running = false;
+  let lastError = 0;
+  const timer = setInterval(async () => {
+    if (running) return;
+    running = true;
+    try {
+      const res = await fetch(localUrl('/api/events/relay'), {
+        method: 'POST',
+        headers: { 'x-cron-secret': secret },
+      });
+      if (!res.ok && Date.now() - lastError > 60_000) {
+        lastError = Date.now();
+        console.error('[EventRelay] relay returned', res.status);
+      }
+    } catch (e) {
+      if (Date.now() - lastError > 60_000) {
+        lastError = Date.now();
+        console.error('[EventRelay] relay failed:', String(e));
+      }
+    } finally {
+      running = false;
+    }
+  }, EVENT_RELAY_TICK_MS);
+  timer.unref?.();
 }

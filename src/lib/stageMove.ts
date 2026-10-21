@@ -70,6 +70,12 @@ export async function recordStageMove(opts: {
    * effects follow. Everything else about the move is unchanged.
    */
   historyWritten?: boolean;
+  /**
+   * The caller published the `pipeline.stage_change` event inside the move's
+   * own transaction (`stageChangeEvent()`, #1680). Unset, the event is
+   * written after the fact (see emitStageChange).
+   */
+  eventPublished?: boolean;
 }): Promise<void> {
   const { relation, toStatus, actor } = opts;
   const auditRow = statusChangeData({
@@ -105,5 +111,7 @@ export async function recordStageMove(opts: {
     to: toStatus,
     reasonCode: opts.reasonCode,
     deadlineSetByCaller: opts.deadlineSetByCaller,
+    eventPublished: opts.eventPublished,
+    actorId: actor?.id ?? null,
   });
 }

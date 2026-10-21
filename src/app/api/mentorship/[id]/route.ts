@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
+import { stageChangeEvent } from '@/lib/stageChangeEffects';
+import { kickRelay, publishEvent } from '@/lib/events/publish';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
@@ -296,6 +298,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             const active = await findActiveMentorship(tx, relation.menteeId, { exceptRelationId: id });
             if (active) throw new AlreadyMentoredError(relation.menteeId, active.id);
           }
+          // The event commits with the move or not at all (#1680).
+          if (stageChanging) {
+            await publishEvent(
+              tx,
+              stageChangeEvent({ relationId: id, orgId: relation.orgId, from: relation.pipelineStatus, to: pipelineStatus!, actorId: session.user.id }),
+            );
+          }
           return tx.mentorshipRelation.update({
             where: { id },
             data,
@@ -326,7 +335,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           // The same request set a deadline by hand — don't overwrite it with
           // the stage's default (#817).
           deadlineSetByCaller: stageDeadline !== undefined,
+          eventPublished: true,
         });
+        kickRelay();
       }
 
       return NextResponse.json({ relation: updated });

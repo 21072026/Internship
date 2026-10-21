@@ -260,9 +260,10 @@ export const DOMAIN_EVENT_RETENTION_DAYS = 90;
  * Every tenant's rows in one pass, by the explicit `createdAt` filter alone: the
  * sweep runs with no session, so it must not depend on a bound org (with
  * MT_ENFORCE_ISOLATION on and a context bound it would see one tenant only).
- * Served by DomainEvent's @@index([createdAt]). When the outbox (#1680) adds
- * its relay columns, a row not yet relayed
- * must be excluded here — this is the one place to add that condition.
+ * Only rows the outbox relay has finished with (RELAYED, or parked FAILED):
+ * a PENDING row is an event nobody has been told about yet, and deleting it
+ * would lose it silently (#1680). Served by @@index([createdAt]); the status
+ * condition filters within that range.
  */
 export async function pruneDomainEvents(
   cutoff: Date,
@@ -274,13 +275,14 @@ export async function pruneDomainEvents(
     selectIds: async (take) =>
       (
         await prisma.domainEvent.findMany({
-          where: { createdAt: { lt: cutoff } },
+          where: { createdAt: { lt: cutoff }, status: { in: ['RELAYED', 'FAILED'] } },
           orderBy: { createdAt: 'asc' },
           select: { id: true },
           take,
         })
       ).map((r) => r.id),
-    handleBatch: async (ids) => (await prisma.domainEvent.deleteMany({ where: { id: { in: ids } } })).count,
+    handleBatch: async (ids) =>
+      (await prisma.domainEvent.deleteMany({ where: { id: { in: ids }, status: { in: ['RELAYED', 'FAILED'] } } })).count,
   });
   return { deleted: processed, capped };
 }

@@ -559,6 +559,19 @@ marketing names redirect there, and their apex now serves **mail only**.
   `mail` block are for a super admin (or the default organization's ADMIN, scoped to its own
   rows), never a tenant admin. A topic environment sends to a Mailpit sink unless every recipient
   is on `MAIL_RECIPIENT_ALLOWLIST`, and a sink that is down never falls back to the relay.
+- **One event vocabulary, one event table, written in the producer's transaction**
+  ([`docs/domain-events.md`](docs/domain-events.md), #1691/#1680): every event the product
+  raises is an entry in `src/lib/events/catalog.ts` (`name` + `version`, strict zod payload;
+  its public entries ARE `WEBHOOK_EVENTS`, a published list — add a version, never reshape)
+  and a `DomainEvent` row written by `publishEvent(tx, …)` / `publishEventOp()` /
+  `withEvents()` (`src/lib/events/publish.ts`) **inside the transaction of the change it
+  describes**; `publishAfterCommit()` is the non-atomic fallback and every caller of it is a
+  burndown entry in the doc. Never add a second event table (no `OutboxEvent`) or a second
+  catalogue; the notification catalogue is a different vocabulary on purpose. The relay
+  (`src/lib/events/relay.ts`) has the mail drain's shape — every replica, SKIP LOCKED, **no
+  lease** — binds `runWithOrg(null, …)` itself, and fans out `events.deliver` jobs keyed
+  `${eventId}:${subscriber}`. The e2e servers run with `EVENTS_RELAY_ENABLED=0`; specs call
+  `relayOnce()` themselves.
 - **One billing meter** (`docs/metering.md`, #1750): the billable unit is *"a relation in
   ACTIVE state with any logged activity in the calendar month; paused, benched and completed
   pairs are not counted"* — the sentence we publish, and the header comment of

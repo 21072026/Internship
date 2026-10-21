@@ -94,6 +94,10 @@
     "methods": ["POST"],
     "why": "Inbound-mail provider webhook. A provider holds no session: the credential is the INBOUND_SECRET header (timingSafeEqual, required outright in production since #870) plus the per-thread HMAC reply token, which must verify AND belong to a participant before anything is written."
   },
+  "src/app/api/events/relay/route.ts": {
+    "methods": ["POST"],
+    "why": "One pass of the domain-event outbox relay (#1680), fired every 30 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process EVENTS_RELAY_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only turns already-committed events into queue jobs and never takes input from the request."
+  },
   "src/app/api/invite/opened/route.ts": {
     "methods": ["POST"],
     "why": "Stamps openedAt when an invitee opens their registration link — by definition before they have an account. Idempotent, writes one timestamp, and ignores used or expired invitations."

@@ -32,6 +32,8 @@ async function seed(label: string, stamp: string): Promise<Seeded> {
     actorType: 'system',
     subjectType: 'MentorshipRelation',
     subjectId: `rel-${label}`,
+    // Relayed: the sweep never takes a row the outbox has not delivered (#1680).
+    status: 'RELAYED' as const,
   };
   const fresh = await prisma.domainEvent.create({ data: base });
   const old = await prisma.domainEvent.create({ data: { ...base, createdAt: new Date(Date.now() - 400 * DAY) } });
@@ -91,4 +93,17 @@ test('the domainEvent retention entry is registered and prunes every tenant up t
   expect(outcome.deleted).toBeGreaterThanOrEqual(2);
   const left = await prisma.domainEvent.findMany({ where: { id: { in: all } }, select: { id: true } });
   expect(left.map((r) => r.id).sort()).toEqual([a!.fresh, b!.fresh].sort());
+
+  // An old row still waiting for the relay survives any window.
+  const waiting = await prisma.domainEvent.create({
+    data: {
+      orgId: a!.orgId,
+      name: 'apikey.created',
+      payload: { apiKeyId: 'k' },
+      status: 'PENDING',
+      createdAt: new Date(Date.now() - 400 * DAY),
+    },
+  });
+  await pruneDomainEvents(new Date(Date.now() - 90 * DAY), { batchSize: 10, budget: 10_000 });
+  expect(await prisma.domainEvent.count({ where: { id: waiting.id } })).toBe(1);
 });

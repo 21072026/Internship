@@ -1,7 +1,7 @@
 # Domain events
 
 The event spine (story #1683). This page grows with each task; today it covers
-the vocabulary and the record (#1691).
+the vocabulary and the record (#1691) and the transactional outbox (#1680).
 
 ## One catalogue: `src/lib/events/catalog.ts`
 
@@ -49,10 +49,72 @@ Append-only, one row per raised event: `orgId`, `name` (≤ 96), `version`,
   outbox relay, the retention sweep) have no session — they filter by `orgId`
   themselves or bind an explicit context, or with `MT_ENFORCE_ISOLATION` on
   they see the wrong set of rows.
-- **The only event table.** The transactional outbox (#1680) adds its relay
-  columns (`status`, `relayedAt`, `attempts`) to this model; there is no
-  `OutboxEvent`.
+- **The only event table.** The transactional outbox (#1680) put its relay
+  columns (`status` PENDING/RELAYED/FAILED, `relayedAt`, `attempts`) on this
+  model; there is no `OutboxEvent`.
 - **Retention**: the `domainEvent` entry of the one retention registry
   (`src/lib/retentionEntries.ts`, #1678), window `domainEventRetentionDays`
-  (global setting, default 90 days). No schedule of its own. Once the outbox
-  lands, a row not yet relayed must be excluded in `pruneDomainEvents()`.
+  (global setting, default 90 days). No schedule of its own. Only RELAYED and
+  FAILED rows are pruned — a PENDING row is an event nobody heard yet.
+
+## Writing an event: `src/lib/events/publish.ts` (#1680)
+
+The outbox **is** the bus: the event row is written in the same transaction as
+the change it describes, so both commit or neither does.
+
+| Caller has | Use |
+|---|---|
+| an interactive `$transaction(async (tx) => …)` | `publishEvent(tx, input)` — the type refuses the root client (`EventTx` has no `$transaction`), and so does a runtime check |
+| an array `$transaction([...])` | `publishEventOp(input)` as one element |
+| no transaction | `withEvents(({ tx, publish }) => …)` |
+
+Every payload is validated against the catalogue and an invalid one **throws
+inside the transaction**, rolling the caller's write back. `orgId` is always
+passed explicitly. `correlationId` defaults to the request id in flight.
+`createdAt` is a per-process monotonic stamp, so two events of one transaction
+never tie. After a commit, `kickRelay()` (done by `withEvents` itself) runs a
+relay pass in-process; it is only latency.
+
+**Fallback, not atomic:** `publishAfterCommit(input)` writes the event after a
+write that already committed and never throws. It exists for producers that
+cannot share their transaction yet — each one is a burndown entry below.
+
+### `pipeline.stage_change`
+
+`stageChangeEvent()` (`src/lib/stageChangeEffects.ts`) builds the event. Atomic
+today, inside the move's own transaction: `PUT /api/mentorship/[id]`,
+`POST /api/admin/candidates/bulk` (advance), `POST /api/status-changes`. They
+pass `eventPublished: true` on to `recordStageMove()` / `emitStageChange()`.
+
+**Burndown — still `publishAfterCommit` from `emitStageChange()`:** the
+accepted-offer auto-advance (`src/lib/offerAutoAdvance.ts`), the interview-panel
+outcome, the account-event feed (`src/lib/accountEventIngest.ts`), the trial
+route (`/api/mentorship/[id]/trial`) and the marketing import. Moving one means
+writing `stageChangeEvent()` into its transaction and passing `eventPublished`.
+The webhook still leaves through `dispatchWebhook()` in `emitStageChange()`
+until the webhook subscriber (#1695) takes it over.
+
+## Relaying: `src/lib/events/relay.ts` (#1680)
+
+`relayOnce()` turns committed rows into `events.deliver` jobs — one per
+subscriber (`subscribersFor(name)`, `src/lib/events/subscribers.ts`; the
+subscribers themselves are #1693).
+
+- **Mail-drain shape:** ticked every 30 s on **every replica**
+  (`POST /api/events/relay`, from `src/instrumentation.ts`), rows claimed with
+  `FOR UPDATE SKIP LOCKED`, **no lease**. `EVENTS_RELAY_ENABLED=0` switches it
+  off (the deploy canary; the e2e servers, where specs drive `relayOnce()`).
+- **One row, one transaction:** claim → per-subject order check → insert the
+  jobs (keyed `${eventId}:${subscriber}`, duplicates skipped) → mark RELAYED,
+  guarded on PENDING. A relay retried after its jobs committed cannot deliver
+  twice.
+- **Per-subject order:** a row waits while an older PENDING row of the same
+  subject exists; delivery jobs carry `runAt = event.createdAt`, so the queue
+  hands them out in event order.
+- **Failures:** counted outside the rolled-back transaction; after
+  `OUTBOX_MAX_ATTEMPTS` (10) the row is parked `FAILED` and stops blocking its
+  subject.
+- **No session:** it binds `runWithOrg(null, …)` itself — a kick inherits the
+  publishing request's tenant, and with `MT_ENFORCE_ISOLATION` on that would
+  scope the relay to one org. `e2e/outbox-relay.spec.ts` proves it with the
+  flag on.

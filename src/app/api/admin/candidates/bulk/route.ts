@@ -7,7 +7,8 @@ import { logActivity } from '@/lib/activity';
 import { nextOnPathStatus } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
 import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
-import { emitStageChange } from '@/lib/stageChangeEffects';
+import { emitStageChange, stageChangeEvent } from '@/lib/stageChangeEffects';
+import { kickRelay, publishEventOp } from '@/lib/events/publish';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -334,6 +335,10 @@ export async function POST(request: Request) {
           },
         }),
         prisma.statusChange.create({ data: auditRow }),
+        // The event commits with the move (#1680).
+        publishEventOp(
+          stageChangeEvent({ relationId: rel.id, orgId: rel.orgId, from: rel.pipelineStatus, to: nextStatus, actorId: session.user.id }),
+        ),
       ]);
       // Same effects as every other stage-write path (#926/#886): one
       // notification per PERSON even if a mentee has two active relations in
@@ -345,10 +350,12 @@ export async function POST(request: Request) {
         from: rel.pipelineStatus,
         to: nextStatus,
         skipNotify: notifiedMentees.has(rel.menteeId),
+        eventPublished: true,
       });
       notifiedMentees.add(rel.menteeId);
       advanced++;
     }
+    if (advanced > 0) kickRelay();
 
     await logActivity({
       action: 'candidates.bulk.advanceStage',
