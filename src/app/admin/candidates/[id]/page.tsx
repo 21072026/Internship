@@ -40,6 +40,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { RelationCadencePanel } from '@/components/RelationCadencePanel';
+import { RelationHealthBadge, useRelationHealth } from '@/components/HealthBadge';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
@@ -338,6 +339,10 @@ export default function AdminMenteeDetailPage() {
     [load, toast, t]
   );
 
+  // The active pair's health (#1904), next to its stage.
+  const activeRelationId = user?.menteeRelations.find((r) => r.status === 'ACTIVE')?.id;
+  const health = useRelationHealth(activeRelationId ? [activeRelationId] : []);
+
   if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
   if (!user) return <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>;
 
@@ -357,6 +362,7 @@ export default function AdminMenteeDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
+            {activeRelationId && <RelationHealthBadge health={health[activeRelationId]} testId="relation-health" />}
             {/* Message / view-as shortcuts, right where the profile is read (#51). */}
             <UserQuickActions userId={user.id} role={user.role} />
             {/* Convert right where the person is looked at (#1252). */}
