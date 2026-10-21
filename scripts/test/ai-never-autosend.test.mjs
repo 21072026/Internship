@@ -53,6 +53,6 @@ test('the AI draft modules and their routes never send, notify or log a message'
 
 test('the outcome auto-send still sends the dictionary template, nothing generated', () => {
   const src = read('src/lib/outcomeComms.server.ts');
-  assert.match(src, /getSetting\('outcomeAutoSend'/);
+  assert.match(src, /resolveSetting\('outcomeAutoSend'/);
   assert.match(src, /emailTemplates/);
 });

@@ -1,9 +1,10 @@
-import cron from 'node-cron';
-import type { Prisma } from '@prisma/client';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
-import { getSetting, getSettings, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { resolveSettingRaw, resolveSettings } from '@/lib/settingsResolver';
 import {
   RETAINED_NOTIFICATION_TYPES,
   notificationRetentionCutoff,
@@ -449,7 +450,7 @@ async function pruneCompanyInquiries(ctx: RetentionContext) {
 async function notificationWindowFor(orgId: string | null): Promise<number> {
   const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
   try {
-    const parsed = Number.parseInt(await getSetting('notificationRetentionDays', orgId), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('notificationRetentionDays', { orgId }), 10);
     return Number.isFinite(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -568,7 +569,7 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
 /** One org's message window, falling back to keep-forever on any read error. */
 async function messageWindowFor(orgId: string): Promise<number> {
   try {
-    const parsed = Number.parseInt(await getSetting('messageRetentionDays', orgId), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('messageRetentionDays', { orgId }), 10);
     return Number.isFinite(parsed) ? parsed : 0;
   } catch {
     return 0;
@@ -766,7 +767,25 @@ async function pruneRosterRowResults(ctx: RetentionContext) {
       ).map((r) => r.id),
     handleBatch: async (ids) => (await prisma.rosterRowResult.deleteMany({ where: { id: { in: ids } } })).count,
   });
-  return { deleted: processed, capped };
+  // A run's `absentKeys` is per-person too (the keys the feed did not mention),
+  // so it gets the same window; the run's counts, hash and status stay. Masked,
+  // not deleted, so it is reported as such.
+  const masked = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: Math.max(0, ctx.budget - processed),
+    selectIds: async (take) =>
+      (
+        await prisma.rosterRun.findMany({
+          where: { startedAt: { lt: ctx.cutoff }, NOT: { absentKeys: { equals: Prisma.DbNull } } },
+          orderBy: { startedAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.rosterRun.updateMany({ where: { id: { in: ids } }, data: { absentKeys: Prisma.DbNull } })).count,
+  });
+  return { deleted: processed, masked: masked.processed, capped: capped || masked.capped };
 }
 
 /**
@@ -922,7 +941,7 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     // No setting: part of the roster feed's design (#1964, docs/roster-feed.md).
     defaultDays: 90,
     reason:
-      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail.',
+      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail — only its per-person `absentKeys` list is cleared on the same window.',
     run: pruneRosterRowResults,
   },
 ];
@@ -949,7 +968,7 @@ export async function runRetentionPrune(options: {
   maxPerRun?: number;
 } = {}): Promise<RetentionRunResult> {
   // One settings read for the whole run, not one per entry.
-  const settings = await getSettings().catch(() => null);
+  const settings = await resolveSettings().then((r) => r.raw).catch(() => null);
 
   const result = await runRetention({
     ...options,
@@ -983,7 +1002,7 @@ export async function runRetentionPrune(options: {
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Register THE retention schedule in this server process. Idempotent — a
@@ -1011,7 +1030,7 @@ const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 export function initRetentionCron() {
   if (tasks.has('retention-prune')) return;
 
-  const task = cron.schedule('20 3 * * *', async () => {
+  const task = scheduleLeased('20 3 * * *', async () => {
     try {
       await runRetentionPrune();
     } catch (e) {

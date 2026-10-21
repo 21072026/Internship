@@ -123,7 +123,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'pipeline_updates',
     essential: false,
     bulk: false,
-    categories: ['stage-update', 'offer', 'outcome'],
+    categories: ['stage-update', 'offer', 'outcome', 'document-review'],
     // 'mentorship' as well as 'stageUpdates': both offer mails (offerNotify.ts)
     // were gated on the coarse 'mentorship' key long before this taxonomy.
     legacy: ['stageUpdates', 'mentorship'],

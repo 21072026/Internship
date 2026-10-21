@@ -139,7 +139,6 @@ test('the known stage writers are recognised, and every one of them stamps', () 
     'src/app/api/mentor/mentees/route.ts',
     'src/app/api/register/route.ts',
     'src/app/api/status-changes/route.ts',
-    'src/app/api/admin/candidates/bulk/route.ts',
     'src/lib/mentorshipDecision.ts',
   ]) {
     const f = byFile.get(file);
@@ -156,6 +155,8 @@ test('the known stage writers are recognised, and every one of them stamps', () 
     ['src/lib/mentorTransfer.ts', /\.\.\.carriedOverFields\(relation\)/],
     ['src/app/api/mentorship/[id]/route.ts', /\bstageMoveData\(relation, pipelineStatus!\)/],
     ['src/lib/offerAutoAdvance.ts', /data: await stageMoveData\(relation, decision\.to\)/],
+    // Bulk advance goes through the shared stage write path since #1637.
+    ['src/app/api/admin/candidates/bulk/route.ts', /\bstageMoveData\(rel, nextStatus\)/],
   ]) {
     const source = stripComments(readFileSync(join(ROOT, file), 'utf8'));
     assert.match(source, stamper, `${file} no longer builds its funnel write through ${stamper}`);

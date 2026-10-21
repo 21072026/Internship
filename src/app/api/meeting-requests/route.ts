@@ -32,7 +32,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const requests = await prisma.meetingRequest.findMany({ where: { relationId }, orderBy: { createdAt: 'desc' } });
+    // A counter-proposal (#1982) carries the meeting it counters, so the panel
+    // can say "instead of <old time>" and accept it as a move.
+    const requests = await prisma.meetingRequest.findMany({
+      where: { relationId },
+      orderBy: { createdAt: 'desc' },
+      include: { counterOfMeeting: { select: { id: true, title: true, scheduledAt: true, status: true } } },
+    });
     return NextResponse.json({ requests });
   });
 }

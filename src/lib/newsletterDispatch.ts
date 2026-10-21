@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -8,7 +8,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding, type OrgBranding } from '@/lib/orgBranding';
 import { brandAssetPath } from '@/lib/brandRule';
 import { mailAccentFor } from '@/lib/accent';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
 import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newsletterQuotaHold';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -774,7 +774,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // this job runs with no tenant bound, so an unqualified read is the global row.
   const orgId = await defaultOrgId();
 
-  const cadence = await getSetting('newsletterSchedule', orgId);
+  const cadence = await resolveSettingRaw('newsletterSchedule', { orgId });
   const days = CADENCE_DAYS[cadence];
   if (!days) return { queued: false, reason: 'disabled' };
 
@@ -791,7 +791,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
     return { queued: false, reason: 'too_soon' };
   }
 
-  const audience = (await getSetting('newsletterAudience', orgId)) as NewsletterAudience;
+  const audience = (await resolveSettingRaw('newsletterAudience', { orgId })) as NewsletterAudience;
   // Which library entries have been used before — so the cadence walks the
   // library instead of re-sending its first issue forever.
   const used = await prisma.newsletter.findMany({
@@ -809,7 +809,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // than sending nothing.
   if (!template) return { queued: false, reason: 'library_exhausted' };
 
-  const hour = Math.min(23, Math.max(0, parseInt(await getSetting('newsletterSendHour', orgId), 10) || 9));
+  const hour = Math.min(23, Math.max(0, parseInt(await resolveSettingRaw('newsletterSendHour', { orgId }), 10) || 9));
   const scheduledAt = new Date(now);
   scheduledAt.setHours(hour, 0, 0, 0);
   // Past that hour already (the job ran late, or the hour is set early): go
@@ -848,7 +848,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   return { queued: true, newsletterId: created.id, templateKey: template.key, scheduledAt };
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Registers the two newsletter schedules in this server process. Idempotent —
@@ -860,7 +860,7 @@ export function initNewsletterCron() {
   // Every 15 minutes: sends whatever has come due. Not hourly, because an admin
   // who schedules an issue for 14:30 means 14:30, and not every minute because
   // the query is pointless 59 times out of 60.
-  const dispatch = cron.schedule('*/15 * * * *', async () => {
+  const dispatch = scheduleLeased('*/15 * * * *', async () => {
     try {
       const { dispatched } = await dispatchDueNewsletters();
       if (dispatched > 0) logger.info('Newsletter dispatch ran', { dispatched });
@@ -872,7 +872,7 @@ export function initNewsletterCron() {
 
   // Daily at 06:00: decides whether this cycle's issue should be queued. Early
   // enough that the default 09:00 send still leaves three hours of review.
-  const queue = cron.schedule('0 6 * * *', async () => {
+  const queue = scheduleLeased('0 6 * * *', async () => {
     try {
       const result = await queueScheduledNewsletter();
       if (result.queued) logger.info('Newsletter queued by schedule', { ...result });

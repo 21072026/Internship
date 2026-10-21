@@ -90,6 +90,8 @@ const VERIFY_EXEMPT = [
   '/api/register',
   '/api/impersonate/stop',
   '/api/rsvp',
+  // An external document reviewer's link (#1859): the token is the credential.
+  '/api/document-review/',
   '/api/apply',
   '/api/profile-view',
   '/api/inbound-email',

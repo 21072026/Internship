@@ -23,6 +23,8 @@ function isAllowlisted(pathname: string) {
     pathname === '/api/impersonate/stop' ||
     // Public meeting RSVP (the unguessable token is the credential).
     pathname === '/api/rsvp' ||
+    // An external document reviewer's link (#1859) — the same kind of token.
+    pathname.startsWith('/api/document-review/') ||
     // Public unsubscribe from a mail footer (the signed token IS the credential).
     // Needed for the browser-side POST: a signed-in-but-unverified user — exactly
     // the population most likely to want out of our mail — would otherwise get

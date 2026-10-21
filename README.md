@@ -120,7 +120,7 @@ See [`.env.example`](.env.example) for the full list.
 | `npm run db:dev:down` | Stop and remove the local dev MySQL container |
 | `npm run postinstall` | Regenerate the Prisma client (runs automatically after `npm install`) |
 
-| `npx prisma db push` | Sync schema to DB |
+| `npx prisma db push` | Sync schema to DB (local only — schema changes: [docs/migrations.md](docs/migrations.md)) |
 | `npx prisma db seed` | Seed first admin |
 
 ## Testing

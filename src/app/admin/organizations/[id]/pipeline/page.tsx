@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { PIPELINE_PHASES } from '@/lib/pipeline';
 
 // Admin editor for a tenant's pipeline stages (#747, Slice A.2). Relabel /
 // reorder / recolor / mark on-path/terminal over the canonical keys; reset to
@@ -17,6 +18,9 @@ interface Stage {
   isTerminal: boolean;
   isOffPath: boolean;
   color: string | null;
+  // Board phase (#1637): null = derive it (built-in phase for a canonical
+  // key, the "custom" group for any other).
+  phase?: string | null;
 }
 
 export default function PipelineStagesPage({ params }: { params: Promise<{ id: string }> }) {
@@ -143,6 +147,18 @@ export default function PipelineStagesPage({ params }: { params: Promise<{ id: s
                   aria-label={t.pipelineStages.colorFor.replace('{key}', s.key)}
                   className="h-8 w-10 rounded border border-gray-300"
                 />
+                <select
+                  value={s.phase ?? ''}
+                  onChange={(e) => update(i, { phase: e.target.value || null })}
+                  aria-label={t.pipelineStages.phaseFor.replace('{key}', s.key)}
+                  data-testid={`stage-phase-${s.key}`}
+                  className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                >
+                  <option value="">{t.pipelineStages.phaseAuto}</option>
+                  {PIPELINE_PHASES.map((p) => (
+                    <option key={p} value={p}>{t.adminBoard.groups[p]}</option>
+                  ))}
+                </select>
                 <label className="flex items-center gap-1 text-xs text-gray-600">
                   <input type="checkbox" checked={s.isOffPath} onChange={(e) => update(i, { isOffPath: e.target.checked })} />
                   {t.pipelineStages.offPath}
