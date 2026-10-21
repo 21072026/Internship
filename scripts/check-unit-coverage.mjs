@@ -103,6 +103,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/notifications/templateRender.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'an admin-written template cannot put a script, an on* handler, a javascript: link or a tracking pixel into a mail, and an unknown merge tag reads nothing (#1718)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,

@@ -190,6 +190,7 @@ model Organization {
   pipelineStages          PipelineStage[]
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
+  notificationTemplates   NotificationTemplate[]
   tags                    Tag[]
   skills                  Skill[]
   skillAliases            SkillAlias[]
@@ -484,6 +485,37 @@ model StageSla {
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, stageKey])
+  @@index([orgId])
+}
+
+// The words of one notification event, per locale, as an org (and later one
+// programme) wrote them (#1718). The code default is the dictionary's
+// `notifications.events.<key>` line; a row here overrides it for that org /
+// programme and that locale only. Resolution — programme row → org row → code
+// default in the SAME locale, never another language — is
+// src/lib/notifications/templates.ts; the renderer (merge-tag allowlist,
+// escape-by-default, strict tag/attribute allowlist on the body) is the pure
+// src/lib/notifications/templateRender.ts. Admin-authored, so UNTRUSTED.
+model NotificationTemplate {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // '' = the org-wide row; a programme id = that programme's override. Not
+  // nullable on purpose: MySQL treats NULLs as distinct in a unique index, so a
+  // nullable column would let two org-wide rows for one event and locale
+  // coexist. Programmes do not exist yet (#1618) — every row is '' until then.
+  programId   String       @default("") @db.VarChar(64)
+  // A key of NOTIFICATION_EVENTS (src/lib/notifications/catalog.ts).
+  eventKey    String       @db.VarChar(96)
+  // 'en' | 'tr' | 'de'
+  locale      String       @db.VarChar(8)
+  subject     String       @db.VarChar(255)
+  body        String       @db.Text
+  updatedById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([orgId, programId, eventKey, locale])
   @@index([orgId])
 }
 
