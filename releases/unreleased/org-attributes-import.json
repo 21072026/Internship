@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Attribute values by CSV import (#1920, part 2):** `POST /api/admin/attributes/import` and an import panel on `/admin/attributes` — one row per person matched on `email` within the admin's org, every other column an attribute by key or EN/TR/DE label. Runs on the one import engine (`runImport()` + the shared parser, `src/lib/attributeImportStore.ts`); the preview is the same call with a writer that does not write. Unknown addresses (and other orgs' people) are reported as SKIP `not_found`, invalid cells as ERROR naming the column, an unknown header refuses the file, an empty cell never clears a value; writes are upserts on `(userId, attributeId)`, one transaction per chunk, so a re-run is a no-op. The activity log gets counts only.",
-  "notes": {
-    "en": ["Attribute values can be imported from a CSV file, with a preview that shows unmatched and invalid rows before anything is written."],
-    "tr": ["Öznitelik değerleri bir CSV dosyasından içe aktarılabilir; önizleme, hiçbir şey yazılmadan önce eşleşmeyen ve hatalı satırları gösterir."],
-    "de": ["Attributwerte lassen sich aus einer CSV-Datei importieren — mit einer Vorschau, die nicht zugeordnete und fehlerhafte Zeilen zeigt, bevor etwas geschrieben wird."]
-  }
-}

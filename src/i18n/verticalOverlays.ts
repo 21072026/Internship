@@ -112,6 +112,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
         role_MENTEE: 'Leads',
         role_MENTOR: 'Sales reps',
+        audience_BOTH: 'Leads and sales reps',
+        createOnePerRole: 'This instrument asks sales reps a differently worded question, so it is one survey per role — create a second one for the other role.',
       },
       nav: {
         candidates: 'Leads',
@@ -144,8 +146,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         invitationEmail: {
           roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
         },
+        slaEscalationEmail: {
+          body: 'The stage deadline for {mentee} passed {days} days ago and the stage has not moved since. The rep, {mentor}, was reminded when it passed. Acknowledge it on the SLA queue if it is in hand.',
+        },
         events: {
           'interaction.logged': 'A new interaction note was added.',
+          'deadline.slaEscalated': '{menteeName} has been past the stage deadline for {days} days and the stage has not moved (rep: {mentorName}).',
           'company_interest.mentee': 'A company showed interest in your profile. Your contact person will get in touch with you.',
           'mentorship_request.mentorAssigned': 'You have been assigned a contact person: {mentorName}.',
           'mentorship_request.menteeAssigned': 'A new lead was assigned to you: {menteeName}.',
@@ -888,6 +894,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         onMentor: 'What a lead scores a rep on',
       },
       stageSla: {
+        escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the rep is reminded, as before.',
         subtitle: 'How long anyone may wait at a stage before the rep is warned. Leave a stage empty and it has no rule — an organisation that sets none keeps working exactly as before.',
       },
       // The public pages every footer links to (docs/worlds.md): the share
@@ -1271,6 +1278,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
         role_MENTEE: 'Müşteri adayları',
         role_MENTOR: 'Satış temsilcileri',
+        audience_BOTH: 'Müşteri adayları ve satış temsilcileri',
+        createOnePerRole: 'Bu anket satış temsilcilerine soruyu farklı sözcüklerle soruyor, bu yüzden her rol için ayrı bir anket gerekir — diğer rol için ikincisini oluşturun.',
       },
       nav: {
         candidates: 'Müşteri Adayları',
@@ -1297,8 +1306,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         invitationEmail: {
           roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
         },
+        slaEscalationEmail: {
+          body: '{mentee} için aşama son tarihi {days} gün önce geçti ve aşama o günden beri ilerlemedi. Temsilci {mentor}, süre dolduğunda hatırlatıldı. Konu ele alındıysa SLA kuyruğunda onaylayın.',
+        },
         events: {
           'interaction.logged': 'Yeni bir etkileşim kaydı eklendi.',
+          'deadline.slaEscalated': '{menteeName} {days} gündür aşama son tarihini geçmiş durumda ve aşama ilerlemedi (temsilci: {mentorName}).',
           'company_interest.mentee': 'Bir firma profilinle ilgilendi. Muhatabın seninle iletişime geçecek.',
           'mentorship_request.mentorAssigned': 'Sana bir muhatap atandı: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Sana yeni bir müşteri adayı atandı: {menteeName}.',
@@ -1917,6 +1930,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         onMentor: 'Müşteri adayının temsilciyi puanladığı kriterler',
       },
       stageSla: {
+        escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca temsilciye hatırlatılır.',
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
       },
       share: { title: '{product} ile paylaşıldı' },
@@ -2292,6 +2306,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
         role_MENTEE: 'Leads',
         role_MENTOR: 'Vertriebsmitarbeiter',
+        audience_BOTH: 'Leads und Vertriebsmitarbeiter',
+        createOnePerRole: 'Diese Vorlage fragt Vertriebsmitarbeiter mit anderem Wortlaut, daher ist es eine Umfrage pro Rolle — legen Sie für die andere Rolle eine zweite an.',
       },
       nav: {
         candidates: 'Leads',
@@ -2318,8 +2334,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         invitationEmail: {
           roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
         },
+        slaEscalationEmail: {
+          body: 'Die Phasenfrist für {mentee} ist vor {days} Tagen abgelaufen, und die Phase hat sich seitdem nicht bewegt. Die zuständige Vertriebsperson, {mentor}, wurde beim Ablauf erinnert. Bestätige sie in der SLA-Warteschlange, wenn sich jemand darum kümmert.',
+        },
         events: {
           'interaction.logged': 'Ein neuer Interaktionseintrag wurde hinzugefügt.',
+          'deadline.slaEscalated': 'Die Phasen-Frist für {menteeName} ist seit {days} Tagen überschritten, und die Phase hat sich nicht bewegt (Vertrieb: {mentorName}).',
           'company_interest.mentee': 'Ein Unternehmen hat Interesse an deinem Profil gezeigt. Deine Ansprechperson meldet sich bei dir.',
           'mentorship_request.mentorAssigned': 'Dir wurde eine Ansprechperson zugewiesen: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Dir wurde ein neuer Lead zugewiesen: {menteeName}.',
@@ -2934,6 +2954,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         onMentor: 'Wonach ein Lead einen Vertriebsmitarbeiter bewertet',
       },
       stageSla: {
+        escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur die Vertriebsperson erinnert.',
         subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',
       },
       share: { title: 'Mit {product} geteilt' },

@@ -31,6 +31,7 @@ import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getReportDefinition } from '@/lib/reports/definitions';
 import { loadReport, ReportUnavailable } from '@/lib/reports/registry';
+import { segmentFromParams } from '@/lib/reports/segmentRule';
 import { renderReport, reportSheet, toCsv } from '@/lib/reports/render';
 import { isCadence, isDue, periodKey, type Cadence } from '@/lib/reportSubscriptions';
 import { reportUnsubscribeUrl } from '@/lib/reportSubscriptionTokens';
@@ -118,7 +119,8 @@ export async function sendReportSubscription(
     const locale = isLocale(sub.locale) ? sub.locale : defaultLocale;
     let loaded;
     try {
-      loaded = await loadReport(def, { orgId, locale });
+      // A slice the subscription stored (#1920); a deleted attribute degrades to the unsliced report.
+      loaded = await loadReport(def, { orgId, locale, segment: segmentFromParams(sub.params) });
     } catch (error) {
       if (error instanceof ReportUnavailable) return await finish('SKIPPED', 'unavailable');
       throw error;

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_HEALTH_TOKEN } from '../playwright.config';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 
 // E-mail delivery failure visibility (#1190): health is DERIVED from the
 // EmailLog ledger (#1194) — last success, failures since, attempts in 24h —
@@ -18,6 +18,8 @@ test('derived email health: counters, PII scrubbing, health endpoints, stale ale
 
   const adminEmail = uniqueEmail('emailhealth-admin');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'EmailHealth Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
 
   // The channel's story: one success 7h ago, then three failures — the last
   // one echoing the recipient's address, as SMTP rejections do.

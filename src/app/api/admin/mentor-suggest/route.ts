@@ -15,6 +15,9 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { hashInput } from '@/lib/ai/artifacts';
+import { skillOverlap } from '@/lib/skillTaxonomyRule';
+import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
+import { getLocale } from '@/i18n/server';
 
 const schema = z.object({
   menteeId: z.string().min(1),
@@ -83,7 +86,14 @@ export async function POST(request: Request) {
   const tenant = await tenantWhere(session);
   const mentee = await prisma.user.findFirst({
     where: withinTenant({ id: parsed.data.menteeId }, tenant),
-    select: { id: true, role: true, skills: true, targetPosition: true, interests: true },
+    select: {
+      id: true,
+      role: true,
+      skills: true,
+      targetPosition: true,
+      interests: true,
+      skillRows: { select: { skillId: true } },
+    },
   });
   if (!mentee || mentee.role !== 'MENTEE') return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -125,43 +135,63 @@ export async function POST(request: Request) {
       skills: true,
       interests: true,
       mentorCapacity: true,
+      skillRows: { select: { skillId: true } },
       _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
     },
   });
 
-  // Rule-based ranking: skill overlap first, then the lighter load.
-  const menteeSkills = new Set(
+  // Rule-based ranking (#1821): adjacency-weighted overlap of canonical skills
+  // first — an exact skill counts 1, a neighbour ("Frontend" for a mentee who
+  // has React) its SkillEdge weight — then the lighter load. The adjacency is
+  // data: remove the edge and the neighbour stops counting. A mentee with no
+  // canonical skills yet (not backfilled) falls back to the old exact match on
+  // the free text, so nobody's suggestions go blank mid-migration.
+  const menteeSkillIds = mentee.skillRows.map((r) => r.skillId);
+  const edges = orgId ? await loadSkillEdges(orgId, menteeSkillIds) : [];
+  const menteeFreeText = new Set(
     (Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []).map((s) => s.toLowerCase())
   );
   const scored = mentors
     .map((m) => {
-      const skills = Array.isArray(m.skills) ? (m.skills as string[]) : [];
-      const overlap = skills.filter((s) => menteeSkills.has(s.toLowerCase()));
       const overCapacity = m.mentorCapacity != null && m._count.mentorRelations >= m.mentorCapacity;
-      return { mentor: m, overlap, overCapacity };
+      if (menteeSkillIds.length > 0) {
+        const overlap = skillOverlap(menteeSkillIds, m.skillRows.map((r) => r.skillId), edges);
+        return { mentor: m, overCapacity, score: overlap.score, overlap, legacy: [] as string[] };
+      }
+      const legacy = (Array.isArray(m.skills) ? (m.skills as string[]) : []).filter((s) => menteeFreeText.has(s.toLowerCase()));
+      return { mentor: m, overCapacity, score: legacy.length, overlap: null, legacy };
     })
     .filter((x) => !x.overCapacity)
-    .sort((a, b) => b.overlap.length - a.overlap.length || a.mentor._count.mentorRelations - b.mentor._count.mentorRelations)
+    .sort((a, b) => b.score - a.score || a.mentor._count.mentorRelations - b.mentor._count.mentorRelations)
     .slice(0, 5);
+
+  const labelIds = scored.flatMap((x) => (x.overlap ? [...x.overlap.direct, ...x.overlap.adjacent.flatMap((a) => [a.skillId, a.via])] : []));
+  const labels = orgId && labelIds.length ? await skillLabels(orgId, labelIds, await getLocale()) : new Map<string, string>();
+  const label = (id: string) => labels.get(id) ?? id;
 
   const base = scored.map((x) => ({
     mentorId: x.mentor.id,
     fullName: x.mentor.fullName,
     activeMentees: x.mentor._count.mentorRelations,
     capacity: x.mentor.mentorCapacity,
-    sharedSkills: x.overlap,
+    // Exact matches, and — separately, so the UI can say "related" — the
+    // neighbours that stood in for a mentee skill.
+    sharedSkills: x.overlap ? x.overlap.direct.map(label) : x.legacy,
+    adjacentSkills: x.overlap
+      ? x.overlap.adjacent.map((a) => ({ skill: label(a.skillId), via: label(a.via), weight: a.weight }))
+      : [],
     // The number the rule set actually ranked by, stored with the row so a
     // future ranking can be compared against this one.
-    score: x.overlap.length,
+    score: x.score,
     reason: null as string | null,
   }));
 
   if (base.length === 0) return NextResponse.json({ batchId, suggestions: [], aiUsed: false });
 
   // AI deepening — anonymous labels only; personal identifiers never leave.
-  const labels = 'ABCDE';
+  const anonLabels = 'ABCDE';
   const candidates: MatchCandidate[] = scored.map((x, i) => ({
-    label: labels[i],
+    label: anonLabels[i],
     skills: Array.isArray(x.mentor.skills) ? (x.mentor.skills as string[]) : [],
     interests: x.mentor.interests,
     activeMentees: x.mentor._count.mentorRelations,
