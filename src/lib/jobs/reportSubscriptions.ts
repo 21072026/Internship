@@ -20,7 +20,7 @@
 // lands; `runReportSubscriptions()` is the handler either way. Registered from
 // /api/cron/start, never from initCronJobs, to keep the import graph one-way.
 
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { ReportSubscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -31,6 +31,7 @@ import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getReportDefinition } from '@/lib/reports/definitions';
 import { loadReport, ReportUnavailable } from '@/lib/reports/registry';
+import { segmentFromParams } from '@/lib/reports/segmentRule';
 import { renderReport, reportSheet, toCsv } from '@/lib/reports/render';
 import { isCadence, isDue, periodKey, type Cadence } from '@/lib/reportSubscriptions';
 import { reportUnsubscribeUrl } from '@/lib/reportSubscriptionTokens';
@@ -118,7 +119,8 @@ export async function sendReportSubscription(
     const locale = isLocale(sub.locale) ? sub.locale : defaultLocale;
     let loaded;
     try {
-      loaded = await loadReport(def, { orgId, locale });
+      // A slice the subscription stored (#1920); a deleted attribute degrades to the unsliced report.
+      loaded = await loadReport(def, { orgId, locale, segment: segmentFromParams(sub.params) });
     } catch (error) {
       if (error instanceof ReportUnavailable) return await finish('SKIPPED', 'unavailable');
       throw error;
@@ -298,12 +300,12 @@ export async function runReportSubscriptions(opts: { now?: Date; orgIds?: string
   return result;
 }
 
-const tasks = new Map<string, cron.ScheduledTask>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /** Hourly at :25 — off the mail-heavy :00/:15 slots the other jobs use. */
 export function initReportSubscriptionsCron() {
   if (tasks.has('report-subscriptions')) return;
-  const task = cron.schedule('25 * * * *', async () => {
+  const task = scheduleLeased('25 * * * *', async () => {
     try {
       const r = await runReportSubscriptions();
       // A quiet hour is not worth a line; one that did anything is.

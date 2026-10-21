@@ -153,6 +153,54 @@ success URL is a database row and works on every host of the deployment alike.
 IdP-initiated flows) still works — the user just finishes on `<BASE>`, which is
 the old behaviour. Nothing to configure either way.
 
+## Single Logout (#1952)
+
+Both directions of SAML 2.0 Single Logout, for a tenant whose IdP advertises a
+SingleLogoutService (`Organization.ssoLogoutUrl`, https; part of the IdP trust,
+so only a super admin of the org's world sets it — #1575).
+
+- **IdP-initiated** — `GET|POST /api/auth/sso/<slug>/slo` (published in the SP
+  metadata in both bindings). The `LogoutRequest` is **verified before anything
+  happens**: on HTTP-Redirect the query must carry `Signature` + `SigAlg`
+  (node-saml's `validateRedirect` treats a *missing* signature as valid, so
+  that refusal is ours), on HTTP-POST node-saml requires an enveloped XML
+  signature; both are checked against the org's stored IdP certificate. The
+  NameID is resolved to a user **of that org only**; that user's
+  `sessionsValidFrom` is stamped **and** every remembered device revoked
+  (`endAllSessionsForSlo`, `src/lib/ssoLogout.ts` — always both, see
+  [remember-me](remember-me.md)), `auth.slo` is logged, and a signed
+  `LogoutResponse` goes back to the IdP's SLO endpoint. An unknown subject
+  changes nothing and gets the same Success answer. A refusal answers `400
+  slo_refused` and logs `auth.slo_refused` (warning). Rate-limited 30/min/IP.
+- **SP-initiated** — `signOutEverywhere()` calls `POST /api/auth/sso/logout`.
+  When the caller's org has SSO live and an SLO URL, and the caller is not a
+  break-glass `ssoExempt` admin, the server ends their sessions and devices
+  **locally first**, then answers with a signed `LogoutRequest` URL the browser
+  follows. An unreachable IdP therefore changes nothing about being signed out
+  here. Anyone else gets `{ redirect: null }` and the ordinary sign-out.
+- **All devices, not one session.** Our sessions are stateless JWTs; there is
+  no session row a SAML `SessionIndex` could select, so an SLO ends **every**
+  session of that person here (`sessionsValidFrom`). We send no SessionIndex.
+  A deliberate deviation, like `validateInResponseTo: never` above — it errs
+  towards signed out. A replayed, still-valid LogoutRequest can at most sign
+  the same person out again.
+- **Our signing key** (`src/lib/ssoSpKey.ts`) — the decision #1952 asked for:
+  one RSA-2048 key **per organization**, generated on first use (the first
+  metadata fetch or logout), its private half sealed with secretBox (purpose
+  `sso-sp-signing-key`, AES-256-GCM under NEXTAUTH_SECRET) in
+  `Organization.ssoSpKey`, its self-signed 10-year certificate in `ssoSpCert`
+  and in the metadata as a signing `KeyDescriptor`. Per org so no tenant's IdP
+  ever trusts a key another tenant's configuration makes us use; no new env
+  secret to provision. Only logout messages are signed (a separate node-saml
+  instance, `samlLogoutForOrg`); the AuthnRequest is unchanged and the metadata
+  still says `AuthnRequestsSigned="false"`. If NEXTAUTH_SECRET rotates, the key
+  is replaced on next use and the IdP must re-import our metadata (logged).
+- **With enforced SSO (#1950)** an SLO leaves the person no way back in except
+  the IdP — the intended behaviour, since every password door is closed.
+- **CI** — `e2e/sso-single-logout.spec.ts` drives both directions against the
+  stub IdP, including the unsigned, wrongly signed and foreign-subject refusals
+  and a remembered device that must not sign back in.
+
 ## OIDC — refused at the write boundary (#1537)
 
 `'oidc'` stays in the `SsoProvider` type: it is a real roadmap item (Wave 4) and

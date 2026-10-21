@@ -36,6 +36,9 @@ type RequestStore = {
   byModel: Map<string, number>;
   // The ceiling warning fires once per request, not once per query past it.
   warned: boolean;
+  // Per-request memo for readers that must not re-query inside one request
+  // (#1619: the settings resolver). Keyed by the reader; dies with the request.
+  memo: Map<string, unknown>;
 };
 
 const storage = new AsyncLocalStorage<RequestStore>();
@@ -65,7 +68,16 @@ export function currentRequestId(): string | undefined {
 export function withRequestContext<T>(requestId: string, fn: () => T): T {
   const existing = currentRequestId();
   if (existing) return fn();
-  return storage.run({ requestId, queries: 0, byModel: new Map(), warned: false }, fn);
+  return storage.run({ requestId, queries: 0, byModel: new Map(), warned: false, memo: new Map() }, fn);
+}
+
+/**
+ * The request's memo (#1619), or `undefined` outside a request context. A
+ * reader keeps its cache under its own key; nothing here ever outlives the
+ * request, so a value cached in one can never be served to another.
+ */
+export function requestMemo(): Map<string, unknown> | undefined {
+  return storage.getStore()?.memo;
 }
 
 /** Queries issued so far by the request in flight, or `undefined` outside one. */

@@ -4,6 +4,11 @@ import { Languages } from 'lucide-react';
 import { locales, type Locale, LOCALE_COOKIE } from '@/i18n/config';
 import { isPrefixablePath, localizePath, splitLocalePrefix } from '@/lib/localePath';
 
+// The control's own name, in the language it is currently showing. Kept here
+// rather than in the dictionaries because the switcher renders on pages that
+// sit outside the LocaleProvider (the public profile, #1386).
+const SWITCHER_LABEL: Record<Locale, string> = { en: 'Language', tr: 'Dil', de: 'Sprache' };
+
 export function LanguageSwitcher({ current }: { current: Locale }) {
   const set = (locale: Locale) => {
     if (locale === current) return;
@@ -22,7 +27,7 @@ export function LanguageSwitcher({ current }: { current: Locale }) {
   };
 
   return (
-    <div className="flex items-center gap-1 text-xs" aria-label="Language">
+    <div className="flex items-center gap-1 text-xs" aria-label={SWITCHER_LABEL[current]} data-testid="language-switcher">
       <Languages className="h-3.5 w-3.5 text-gray-400" />
       {locales.map((l) => (
         <button

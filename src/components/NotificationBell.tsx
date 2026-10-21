@@ -97,7 +97,7 @@ export function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={toggle}
-        aria-label="Notifications"
+        aria-label={t.notifications.title}
         className="relative min-h-11 min-w-11 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 rounded-full"
       >
         <Bell className="h-5 w-5" />
