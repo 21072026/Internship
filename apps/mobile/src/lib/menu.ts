@@ -48,6 +48,7 @@ const ICONS: Record<string, string> = {
   settings: 'settings',
   acquisition: 'mail',
   activity: 'pulse',
+  audit: 'finger-print',
   announcements: 'megaphone',
   apiExplorer: 'code-slash',
   applications: 'document-text',

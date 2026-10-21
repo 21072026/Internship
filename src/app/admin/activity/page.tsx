@@ -34,6 +34,19 @@ export default function AdminActivityPage() {
   const [action, setAction] = useState('');
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
+
+  // Deep links from the audit trail (#1583): `?action=impersonate.start` opens
+  // the activity log already filtered to the row's twin. Read after mount —
+  // the URL is not known during the server render.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const a = sp.get('action');
+    const user = sp.get('q');
+    if (a) setAction(a);
+    if (user) setQ(user);
+    setReady(true);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,8 +63,8 @@ export default function AdminActivityPage() {
   }, [level, action, q, page]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (ready) load();
+  }, [load, ready]);
 
   const pages = Math.max(1, Math.ceil(total / 50));
 
