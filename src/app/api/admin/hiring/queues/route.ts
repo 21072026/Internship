@@ -44,6 +44,13 @@ export async function GET(request: Request) {
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const orgId = resolveOrgId(session);
+    // The sidebar badge asks on every admin page. An admin with no organization
+    // (a platform admin) has no hiring desk, so there is nothing to act on —
+    // answered as zero rather than as a failed request on every navigation
+    // (e2e/analytics-gate-no-probe.spec.ts). The desk itself still refuses.
+    if (!orgId && new URL(request.url).searchParams.get('summary') === '1') {
+      return NextResponse.json({ actionable: 0 });
+    }
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
 
     return withTenantScope(session, async () => {
