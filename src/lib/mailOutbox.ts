@@ -15,6 +15,8 @@ import {
   bulkWorldOrder,
   classifySmtpError,
   dedupeKeyFor,
+  failoverAfter,
+  failoverDue,
   lanePriority,
   queueEtaMinutes,
   recipientHash,
@@ -328,6 +330,8 @@ export interface DrainSummary {
   unsubscribed: number;
   /** Rows addressed to a generated address (#2970), cancelled unsent. */
   unmailable: number;
+  /** Primary-channel rows sent on the bulk relay this tick (#1690). */
+  failedOver: number;
   reaped: number;
   /** BULK rows put back to the next UTC day by `MAIL_DAILY_CAP` (enforce mode). */
   capped: number;
@@ -351,6 +355,9 @@ export interface DrainDeps {
   /** A final failure, or a relay-wide one: the delivery-health alert's
    *  trigger (it decides itself whether the ledger warrants an alert). */
   finalFailure(envelope: Envelope): void;
+  /** Primary → bulk failover (#1690): the same mail on the bulk channel, its
+   *  From moved to the bulk identity — or null when no bulk relay exists. */
+  failover?(envelope: Envelope): Envelope | null;
 }
 
 export interface DrainOptions {
@@ -446,6 +453,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     expired: 0,
     unsubscribed: 0,
     unmailable: 0,
+    failedOver: 0,
     reaped: 0,
     capped: 0,
     authRejected: false,
@@ -490,7 +498,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
         let stop: Stop;
         const sentBefore = summary.sent;
         try {
-          stop = await drainRow(rows[i], { workerId, clock, deps, configFor, nameFor, summary });
+          stop = await drainRow(rows[i], { workerId, clock, deps, configFor, nameFor, summary, failoverAfter: failoverAfter(env) });
           // The alternation turns on a SEND, never on a claim: a bulk row the
           // budget refused and released must not flip the preferred world, or
           // under enforce mode the flip follows the 5 s tick instead of the
@@ -531,6 +539,8 @@ interface RowContext {
   clock: () => Date;
   deps: DrainDeps;
   configFor: (channel: MailChannel) => BudgetConfig;
+  /** `MAIL_FAILOVER_AFTER` for this tick (#1690). */
+  failoverAfter: number;
   nameFor: (channel: MailChannel) => string;
   summary: DrainSummary;
 }
@@ -548,7 +558,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   const now = clock();
   const log = { jobId: row.id };
   const payload = payloadOf(row);
-  const envelope = payload ? decodeEnvelope(open(payload.box!, SEAL_PURPOSE)) : null;
+  let envelope = payload ? decodeEnvelope(open(payload.box!, SEAL_PURPOSE)) : null;
   if (!payload || !envelope) {
     // A corrupt row, or one sealed under a server secret that has since been
     // rotated: nothing can ever send it. Dead, envelope gone.
@@ -583,6 +593,31 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     logger.info('mail_outbox.unmailable', meta);
     summary.unmailable++;
     return null;
+  }
+
+  // ── Primary → bulk failover (#1690) ───────────────────────────────────────
+  // A CRITICAL / TRANSACTIONAL mail the primary relay has failed or held back
+  // `MAIL_FAILOVER_AFTER` times goes out on the bulk relay, under the bulk
+  // From identity (the rule: `failoverDue()` in mailDeliveryRule.ts). Decided
+  // here, before the budget, so it is the bulk channel's budget, breaker and
+  // ledger row that apply. Never the other way round.
+  if (
+    deps.failover &&
+    failoverDue({
+      transport: envelope.transport,
+      lane: envelope.lane,
+      attempts: row.attempts,
+      releases: payload.releases ?? 0,
+      after: ctx.failoverAfter,
+      bulkAvailable: true,
+    })
+  ) {
+    const moved = deps.failover(envelope);
+    if (moved) {
+      logger.warning('mail_outbox.failover', { ...meta, from: envelope.transport, to: moved.transport, attempts: row.attempts, releases: payload.releases ?? 0 });
+      envelope = moved;
+      summary.failedOver++;
+    }
   }
 
   // ── The budget ────────────────────────────────────────────────────────────

@@ -303,6 +303,25 @@ When the pause runs out the breaker closes even though the rung is still raised:
 the next mail is the probe. Delivered (inline critical or by the drain), it
 walks the ladder one rung down; refused, it pauses again one rung higher.
 
+## Failover: primary → bulk (#1690)
+
+A queued CRITICAL or TRANSACTIONAL mail the primary relay has failed or held
+back `MAIL_FAILOVER_AFTER` times (failed attempts plus relay-wide releases —
+both only ever grow on the row, so a mail that failed over stays failed over)
+is sent on the bulk relay instead. Decided in the drain before the budget, so
+the bulk channel's budget, breaker and daily cap apply, and its EmailLog row
+reads `transport: bulk`. The From address moves to the bulk identity
+(`SMTP_BULK_FROM` — the bulk relay signs for its own domain, a primary From
+there would fail DMARC); the display name is kept. The rule is `failoverDue()`
+in `src/lib/mailDeliveryRule.ts`, the move `failoverEnvelope()` in
+`src/services/emailService.ts`.
+
+**One way only.** A bulk-channel mail never falls back to the primary relay —
+a digest must not borrow the reputation and quota the sign-in links depend on —
+and a BULK-lane mail riding the primary (no bulk relay configured) has nowhere
+to go. With no bulk relay (`SMTP_BULK_HOST` unset) nothing changes. The inline
+first attempt never fails over: a failure there goes to the queue, as before.
+
 ## Delivery health
 
 An outage no longer writes FAILED rows — the queue keeps the mail and writes
@@ -477,6 +496,7 @@ the EmailLog row.
 | `MAIL_METER_MODE` | `observe` | `enforce` makes the drain wait for a budget token; `off` disables the meter |
 | `MAIL_RATE_PER_MIN`, `MAIL_BURST`, `MAIL_URGENT_RESERVE` | 2, 2, 1 | the budget (see `.env.example`) |
 | `MAIL_BULK_*` | the primary values | the optional bulk channel's own budget |
+| `MAIL_FAILOVER_AFTER` | `3` | goes on the primary relay before a queued CRITICAL/TRANSACTIONAL mail is tried on the bulk relay; `0` turns failover off (#1690) |
 | `MAIL_THROTTLE_LADDER_SEC` | `60,120,300,900,1800` | the pause ladder |
 | `MAIL_DAILY_CAP`, `MAIL_BULK_DAILY_CAP` | unset (no cap) | mails per UTC day; BULK stops at 90 % |
 | `MAIL_SINK_HOST`, `MAIL_SINK_PORT` | unset, `1025` | send to this SMTP sink instead of the relay (topic environments, #2953) |
