@@ -2104,6 +2104,8 @@ export async function sendDocumentReviewInviteEmail({
     fromName: brand.name,
     orgId,
     subject: M.subject.replace('{requirement}', requirement),
+    // no-user-row: an external reviewer is an address the programme typed in
+    // (#1859) — an employer supervisor with no account, reached once per step.
     category: 'document-review',
     locale: resolved,
     html: `
