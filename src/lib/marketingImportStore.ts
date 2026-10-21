@@ -722,7 +722,7 @@ async function runMarketingRows(core: MarketingRunCore) {
     const stageKeys = stages.map((s) => s.key);
     const offPathStages = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
 
-    const externalIdAliases = parseHeaderAliases(await resolveSettingRaw('importExternalIdAliases', { orgId: orgId }));
+    const externalIdAliases = parseHeaderAliases(await resolveSettingRaw('importExternalIdAliases', { orgId }));
     const validate = makeMarketingValidator({ stageKeys, externalIdAliases });
     const trialLengthDays = await trialLengthDaysFor(orgId);
     const database = databaseWriter({

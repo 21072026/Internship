@@ -29,7 +29,7 @@ export async function campaignDefaultsFor(orgId: string): Promise<{
   letterSource: 'org' | 'builtin';
   balancingNote: string;
 }> {
-  const [vertical, stored] = await Promise.all([verticalFor(orgId), resolveSettingRaw('postLetterTemplate', { orgId: orgId })]);
+  const [vertical, stored] = await Promise.all([verticalFor(orgId), resolveSettingRaw('postLetterTemplate', { orgId })]);
   const { letterBody, source } = resolveLetterBody(stored, vertical);
   return { letterBody, letterSource: source, balancingNote: defaultBalancingNote(vertical) };
 }

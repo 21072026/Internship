@@ -25,7 +25,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const orgId = await settingsOrgOf(session);
-  return withTenantScope(session, async () => NextResponse.json({ settings: await resolveSettings({ orgId: orgId }).then((r) => r.raw) }));
+  return withTenantScope(session, async () => NextResponse.json({ settings: await resolveSettings({ orgId }).then((r) => r.raw) }));
 }
 
 const schema = z.object({
@@ -203,6 +203,6 @@ export async function PUT(request: Request) {
     // the read-modify-write inside setSetting into a duplicate row.
     for (const [key, value] of entries) await setSetting(key, value, isGlobalSettingKey(key) ? null : orgId);
     await logActivity({ action: 'settings.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
-    return NextResponse.json({ settings: await resolveSettings({ orgId: orgId }).then((r) => r.raw) });
+    return NextResponse.json({ settings: await resolveSettings({ orgId }).then((r) => r.raw) });
   });
 }

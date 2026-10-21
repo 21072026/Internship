@@ -21,8 +21,8 @@ import {
 
 async function read(orgId: string) {
   const [keywords, days] = await Promise.all([
-    resolveSettingRaw('safeguardingKeywords', { orgId: orgId }),
-    resolveSettingRaw('messageRetentionDays', { orgId: orgId }),
+    resolveSettingRaw('safeguardingKeywords', { orgId }),
+    resolveSettingRaw('messageRetentionDays', { orgId }),
   ]);
   const parsedDays = Number.parseInt(days, 10);
   return {

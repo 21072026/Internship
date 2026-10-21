@@ -73,7 +73,7 @@ async function approvalAppliesTo(orgId: string): Promise<boolean> {
 export async function outboundApprovalOn(orgId: string | null | undefined): Promise<boolean> {
   if (!orgId) return false;
   if (!(await approvalAppliesTo(orgId))) return false;
-  return parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId: orgId })) === 'lead_mail';
+  return parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId })) === 'lead_mail';
 }
 
 // ── The hook ─────────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ export async function holdIfRequired(prepared: PreparedEmail, opts: HoldOptions 
   }
   if (!orgId) return { held: false, code: 'no_org' };
   if (!(await approvalAppliesTo(orgId))) return { held: false, code: 'approval_off' };
-  const mode = parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId: orgId }));
+  const mode = parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId }));
   if (mode === 'off') return { held: false, code: 'approval_off' };
 
   const facts = await recipientFacts({ ...prepared, orgId: prepared.orgId ?? orgId });

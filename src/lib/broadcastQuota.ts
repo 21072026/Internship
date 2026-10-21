@@ -164,7 +164,7 @@ export async function resolveBroadcastBand(orgId: string): Promise<BroadcastBand
     // Read explicitly per layer: `getSetting(key, orgId)` alone would let a
     // tenant row REPLACE the global one, and this cap may only be tightened.
     resolveSettingRaw(BROADCAST_QUOTA_SETTING, { orgId: null }),
-    resolveSettingRaw(BROADCAST_QUOTA_SETTING, { orgId: orgId }),
+    resolveSettingRaw(BROADCAST_QUOTA_SETTING, { orgId }),
   ]);
 
   const planLimit = entitlements.limits.monthlyBroadcastRecipients;

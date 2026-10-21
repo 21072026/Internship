@@ -65,7 +65,7 @@ export async function scanMessageForSafeguarding(input: SafeguardingScanInput): 
     // account belongs to the default org (src/lib/settingsOrg.ts), never to
     // "everybody".
     const orgId = await settingsOrgOfRow(sender.orgId);
-    const keywords = parseWatchKeywords(await resolveSettingRaw('safeguardingKeywords', { orgId: orgId }));
+    const keywords = parseWatchKeywords(await resolveSettingRaw('safeguardingKeywords', { orgId }));
     const findings = scanMessageBody(input.body, {
       keywords,
       skipContactDetails: input.arrivedByEmail === true,

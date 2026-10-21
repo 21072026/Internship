@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         })
       ).map((u) => [u.id, u]),
     );
-    const keywords = parseWatchKeywords(await resolveSettingRaw('safeguardingKeywords', { orgId: orgId }));
+    const keywords = parseWatchKeywords(await resolveSettingRaw('safeguardingKeywords', { orgId }));
 
     const rows = flags.map((f) => {
       const m = f.message;

@@ -774,7 +774,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // this job runs with no tenant bound, so an unqualified read is the global row.
   const orgId = await defaultOrgId();
 
-  const cadence = await resolveSettingRaw('newsletterSchedule', { orgId: orgId });
+  const cadence = await resolveSettingRaw('newsletterSchedule', { orgId });
   const days = CADENCE_DAYS[cadence];
   if (!days) return { queued: false, reason: 'disabled' };
 
@@ -791,7 +791,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
     return { queued: false, reason: 'too_soon' };
   }
 
-  const audience = (await resolveSettingRaw('newsletterAudience', { orgId: orgId })) as NewsletterAudience;
+  const audience = (await resolveSettingRaw('newsletterAudience', { orgId })) as NewsletterAudience;
   // Which library entries have been used before — so the cadence walks the
   // library instead of re-sending its first issue forever.
   const used = await prisma.newsletter.findMany({
@@ -809,7 +809,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // than sending nothing.
   if (!template) return { queued: false, reason: 'library_exhausted' };
 
-  const hour = Math.min(23, Math.max(0, parseInt(await resolveSettingRaw('newsletterSendHour', { orgId: orgId }), 10) || 9));
+  const hour = Math.min(23, Math.max(0, parseInt(await resolveSettingRaw('newsletterSendHour', { orgId }), 10) || 9));
   const scheduledAt = new Date(now);
   scheduledAt.setHours(hour, 0, 0, 0);
   // Past that hour already (the job ran late, or the hour is set early): go

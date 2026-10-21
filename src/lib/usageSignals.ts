@@ -32,9 +32,9 @@ export async function usageSignalsFor(
   if (!any) return { reasons, note: { feedConnected: false, noHistory: 0, unowned: 0 } };
 
   const settings = usageSignalSettings({
-    thresholdPct: await resolveSettingRaw('usageDropThresholdPct', { orgId: orgId }),
-    baselineDays: await resolveSettingRaw('usageBaselineDays', { orgId: orgId }),
-    trialDays: await resolveSettingRaw('trialActivationDays', { orgId: orgId }),
+    thresholdPct: await resolveSettingRaw('usageDropThresholdPct', { orgId }),
+    baselineDays: await resolveSettingRaw('usageBaselineDays', { orgId }),
+    trialDays: await resolveSettingRaw('trialActivationDays', { orgId }),
   });
   const w = dropWindows(now, settings.baselineDays);
   const [recent, prior, first, owned] = await Promise.all([

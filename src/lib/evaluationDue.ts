@@ -73,9 +73,9 @@ async function createDueRows(orgId: string | null, now: Date, result: Evaluation
   const stages = await resolvePipelineStages(orgId);
   const schedule = resolveEvaluationSchedule(
     {
-      interimStage: await resolveSettingRaw('evaluationInterimStage', { orgId: orgId }),
-      interimDays: await resolveSettingRaw('evaluationInterimDays', { orgId: orgId }),
-      finalStage: await resolveSettingRaw('evaluationFinalStage', { orgId: orgId }),
+      interimStage: await resolveSettingRaw('evaluationInterimStage', { orgId }),
+      interimDays: await resolveSettingRaw('evaluationInterimDays', { orgId }),
+      finalStage: await resolveSettingRaw('evaluationFinalStage', { orgId }),
     },
     new Set(stages.map((s) => s.key)),
   );

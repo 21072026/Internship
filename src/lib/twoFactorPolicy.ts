@@ -17,5 +17,5 @@ export async function is2faRequiredFor(role: string, orgId: string): Promise<boo
 
 /** The org's effective policy, parsed (an unknown stored value reads as `off`). */
 export async function require2faModeOf(orgId: string): Promise<Require2faMode> {
-  return parseRequire2faMode(await resolveSettingRaw('require2fa', { orgId: orgId }));
+  return parseRequire2faMode(await resolveSettingRaw('require2fa', { orgId }));
 }

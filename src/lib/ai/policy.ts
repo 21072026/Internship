@@ -17,8 +17,8 @@ export type { AiPolicy } from '@/lib/ai/policyRule';
 /** The chain for one task of one org. */
 export async function resolveAiPolicy(orgId: string, taskId: AiTaskId): Promise<AiPolicy> {
   const [aiEnabled, orgQuota, task] = await Promise.all([
-    resolveSettingRaw('aiEnabled', { orgId: orgId }),
-    resolveSettingRaw('aiMonthlyQuota', { orgId: orgId }),
+    resolveSettingRaw('aiEnabled', { orgId }),
+    resolveSettingRaw('aiMonthlyQuota', { orgId }),
     prisma.aiFeatureSetting.findUnique({ where: { orgId_taskId: { orgId, taskId } }, select: { enabled: true, monthlyQuota: true } }),
   ]);
   return resolvePolicyChain({ aiEnabled, orgQuota, task });
@@ -26,7 +26,7 @@ export async function resolveAiPolicy(orgId: string, taskId: AiTaskId): Promise<
 
 /** The org-level allowance (tenant row → global row → default), for the console's budget card. */
 export async function orgAiQuota(orgId: string): Promise<number> {
-  return parseQuota(await resolveSettingRaw('aiMonthlyQuota', { orgId: orgId }));
+  return parseQuota(await resolveSettingRaw('aiMonthlyQuota', { orgId }));
 }
 
 export interface AiPolicyTaskView {
@@ -46,7 +46,7 @@ export interface AiPolicyView {
 /** Every registered task with its switch and override, for the console. */
 export async function loadAiPolicy(orgId: string): Promise<AiPolicyView> {
   const [aiEnabled, rows] = await Promise.all([
-    resolveSettingRaw('aiEnabled', { orgId: orgId }),
+    resolveSettingRaw('aiEnabled', { orgId }),
     prisma.aiFeatureSetting.findMany({ where: { orgId }, select: { taskId: true, enabled: true, monthlyQuota: true } }),
   ]);
   const byTask = new Map(rows.map((r) => [r.taskId, r]));

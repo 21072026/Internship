@@ -450,7 +450,7 @@ async function pruneCompanyInquiries(ctx: RetentionContext) {
 async function notificationWindowFor(orgId: string | null): Promise<number> {
   const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
   try {
-    const parsed = Number.parseInt(await resolveSettingRaw('notificationRetentionDays', { orgId: orgId }), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('notificationRetentionDays', { orgId }), 10);
     return Number.isFinite(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -569,7 +569,7 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
 /** One org's message window, falling back to keep-forever on any read error. */
 async function messageWindowFor(orgId: string): Promise<number> {
   try {
-    const parsed = Number.parseInt(await resolveSettingRaw('messageRetentionDays', { orgId: orgId }), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('messageRetentionDays', { orgId }), 10);
     return Number.isFinite(parsed) ? parsed : 0;
   } catch {
     return 0;

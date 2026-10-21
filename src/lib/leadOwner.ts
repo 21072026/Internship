@@ -48,7 +48,7 @@ export async function findLeadOwner(orgId: string, userId: string): Promise<Mark
 
 /** The org's default lead owner, or null when none is set or the one set is no longer valid. */
 export async function resolveDefaultLeadOwner(orgId: string): Promise<MarketingImportOwner | null> {
-  const id = (await resolveSettingRaw('defaultLeadOwnerId', { orgId: orgId })).trim();
+  const id = (await resolveSettingRaw('defaultLeadOwnerId', { orgId })).trim();
   if (!id) return null;
   return findLeadOwner(orgId, id);
 }

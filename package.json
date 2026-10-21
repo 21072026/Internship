@@ -79,6 +79,7 @@
     "check:e2e-rate-limits": "node scripts/check-e2e-rate-limits.mjs",
     "check:openapi": "node scripts/check-openapi.mjs",
     "check:direct-sendmail": "node scripts/check-direct-sendmail.mjs",
+    "check:settings-accessor": "node scripts/check-settings-accessor.mjs",
     "gen:openapi": "node scripts/openapi-generate.cjs",
     "gen:pwa-images": "node --experimental-strip-types scripts/generate-pwa-images.ts",
     "db:check-json": "node prisma/backfill-json-columns.mjs",

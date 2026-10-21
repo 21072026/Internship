@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       const orgId = await settingsOrgOf(session);
       const { action } = parsed.data;
       if (action === 'rotate') {
-        await setSetting('crmBccVersion', nextCrmBccVersion(await resolveSettingRaw('crmBccVersion', { orgId: orgId })), orgId);
+        await setSetting('crmBccVersion', nextCrmBccVersion(await resolveSettingRaw('crmBccVersion', { orgId })), orgId);
       } else {
         await setSetting('crmBccEnabled', action === 'enable' ? 'true' : action === 'disable' ? 'false' : '', orgId);
       }
