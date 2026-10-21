@@ -48,6 +48,7 @@ const ICONS: Record<string, string> = {
   settings: 'settings',
   acquisition: 'mail',
   activity: 'pulse',
+  agreements: 'document-lock',
   announcements: 'megaphone',
   apiExplorer: 'code-slash',
   applications: 'document-text',

@@ -124,6 +124,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Invite a lead',
         menteeActivity: 'Lead Activity',
         mentorApplications: 'Sales Rep Applications',
+        agreements: 'Engagement agreement',
       },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -1282,6 +1283,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Müşteri adayı davet et',
         menteeActivity: 'Müşteri Adayı Etkinliği',
         mentorApplications: 'Satış Temsilcisi Başvuruları',
+        agreements: 'Çalışma sözleşmesi',
       },
       invite: {
         subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
@@ -2302,6 +2304,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Lead einladen',
         menteeActivity: 'Lead-Aktivität',
         mentorApplications: 'Bewerbungen als Vertriebsmitarbeiter',
+        agreements: 'Zusammenarbeitsvereinbarung',
       },
       invite: {
         subtitle: 'Vertriebsmitarbeiter und Leads einladen',

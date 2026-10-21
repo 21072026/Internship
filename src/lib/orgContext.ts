@@ -110,6 +110,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // are reached only through a scoped parent and are deliberately not listed
   // (schema comment).
   'AgendaTemplate',
+  // The mentoring agreement text (#1790). Its acceptances are reached through
+  // the relation, like StatusChange — deliberately unregistered.
+  'MentoringAgreement',
   // Program journey steps (#1852). ProgramStepRun is reached through its step
   // and carries no orgId of its own — deliberately unregistered.
   'ProgramStep',
