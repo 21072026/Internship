@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import {
   contextAround,
   detectContactDetails,
@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         })
       ).map((u) => [u.id, u]),
     );
-    const keywords = parseWatchKeywords(await getSetting('safeguardingKeywords', orgId));
+    const keywords = parseWatchKeywords(await resolveSettingRaw('safeguardingKeywords', { orgId }));
 
     const rows = flags.map((f) => {
       const m = f.message;

@@ -232,7 +232,8 @@ marketing names redirect there, and their apex now serves **mail only**.
 
 - **Schema first**: change `prisma/schema.prisma`, run `prisma format && prisma validate &&
   prisma generate`. This project uses **`db push`**, there is **no `migrations/` folder** — do
-  not author SQL migrations.
+  not author SQL migrations. Expand/contract, rollback, a half-applied push and the
+  dangerous-change list: [`docs/migrations.md`](docs/migrations.md).
 - **"Additive" is not the same as "appliable"** (#2298): `db push` outright *refuses* — not
   warns, and `--accept-data-loss` does not cover it — a new **required** column whose default
   is client-side (`@default(cuid()/uuid()/nanoid())`) or absent, and any `@id`/`@@id` change,
@@ -452,6 +453,15 @@ marketing names redirect there, and their apex now serves **mail only**.
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Admin permissions are one rule and one guard** (`docs/role-access-matrix.md` § Admin tiers,
+  #1567/#1569): `User.adminLevel` (`ORG_ADMIN` · `PROGRAM_ADMIN` · `OBSERVER`, an empty column on an
+  ADMIN = `ORG_ADMIN`) + `AdminScopeGrant` rows; the catalogue, the tier table and every allow/deny
+  are pure in `src/lib/authzRule.ts`, and a route asks through `requirePermission(permission,
+  { subject, request })` in `src/lib/authz.ts` (server-only; reads the actor LIVE, writes an
+  `authz.capability_denied` row per refusal). Do not confuse it with `requireCapability()`
+  (`capabilityGate.ts`, the per-vertical product gate). `platform.*` is held only by the per-world
+  super admin (`isSuperAdmin`) — there is no SUPER_ADMIN tier — and no tenant permission crosses an
+  org, the super admin's included. A PROGRAM_ADMIN with no grant gets nothing.
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to

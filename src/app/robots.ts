@@ -51,6 +51,7 @@ const PROTECTED_PATHS = [
   '/source',
   '/offline',
   '/rsvp',
+  '/document-review',
   '/m',
   '/u',
 ];

@@ -91,6 +91,14 @@ for (const file of sourceFiles('src')) {
 const ANY_SCOPE_ROUTES = {
   'src/app/api/v1/me/route.ts':
     'The connector auth test: the key\'s own org, scopes, expiry and limits — no user or candidate data.',
+  // #3002: an export's scope is the scope of the resource named in the body
+  // (or stored on the row), so the door cannot name it up front. Both handlers
+  // call requireApiScope() with EXPORT_RESOURCES[resource].scope before they
+  // write or read anything.
+  'src/app/api/v1/exports/route.ts':
+    'Queues an export of the resource in the body; that resource\'s read scope is required in the handler (requireApiScope).',
+  'src/app/api/v1/exports/[id]/route.ts':
+    'The status of an export this key made; the exported resource\'s read scope is required in the handler (requireApiScope).',
 };
 
 const files = routeFiles(V1_DIR);

@@ -13,7 +13,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { notify } from '@/lib/notify';
@@ -65,7 +65,7 @@ export async function scanMessageForSafeguarding(input: SafeguardingScanInput): 
     // account belongs to the default org (src/lib/settingsOrg.ts), never to
     // "everybody".
     const orgId = await settingsOrgOfRow(sender.orgId);
-    const keywords = parseWatchKeywords(await getSetting('safeguardingKeywords', orgId));
+    const keywords = parseWatchKeywords(await resolveSettingRaw('safeguardingKeywords', { orgId }));
     const findings = scanMessageBody(input.body, {
       keywords,
       skipContactDetails: input.arrivedByEmail === true,

@@ -1,5 +1,6 @@
 'use client';
 
+import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
@@ -47,6 +48,8 @@ export default function CompanyOverviewPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.company.title}</h1>
         <p className="text-gray-500 mt-1">{t.company.subtitle}</p>
       </div>
+      {/* Documents waiting on this company's review step (#1859); silent when none. */}
+      <DocumentReviewQueue hideWhenEmpty />
 
       {!loading && relations.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4">

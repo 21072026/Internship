@@ -8,7 +8,7 @@ import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { criteriaByTemplate, resolveCriteria } from '@/lib/evaluationTemplates';
 import { canSeeOtherScorecards, divergence, isPanelComplete, panelAverage } from '@/lib/interviewPanel';
 import { blindLabel, isBlindFor } from '@/lib/blindReview';
-import { getSetting } from '@/lib/settings';
+import { resolveSetting } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -75,7 +75,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // just from the screen. A name that reaches the browser has already done
     // its anchoring work, whatever the UI chooses to paint.
     const blind = isBlindFor({
-      enabled: (await getSetting('blindReview', await settingsOrgOf(session))) === 'true',
+      enabled: await resolveSetting('blindReview', { orgId: await settingsOrgOf(session) }),
       viewerIsMember: isMember,
       viewerSubmitted: !!own?.submittedAt,
     });
@@ -254,7 +254,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // candidate would undo the blinding before they open the panel (#819).
       // Without this, a late addition is the "ghost member" the validity filter
       // above exists to prevent.
-      const blindEnabled = (await getSetting('blindReview', await settingsOrgOf(session))) === 'true';
+      const blindEnabled = await resolveSetting('blindReview', { orgId: await settingsOrgOf(session) });
       const subjectName = blindEnabled
         ? null
         : (await prisma.user.findUnique({ where: { id: panel.subjectId }, select: { fullName: true } }))?.fullName ?? '';
