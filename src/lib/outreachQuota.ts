@@ -8,14 +8,14 @@
 // epic's (#1727); this is the per-company lever.
 
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { quotaLimit, quotaPeriod } from '@/lib/outreachRule';
 
 export async function outreachQuota(orgId: string, companyId: string, now = new Date()): Promise<{ limit: number; used: number }> {
   const { start, end } = quotaPeriod(now);
   const [company, setting, used] = await Promise.all([
     prisma.company.findUnique({ where: { id: companyId }, select: { quota: true } }),
-    getSetting('outreachMonthlyQuota', orgId),
+    resolveSettingRaw('outreachMonthlyQuota', { orgId }),
     prisma.candidateOutreach.count({ where: { orgId, companyId, status: { in: ['APPROVED', 'REVOKED'] }, decidedAt: { gte: start, lt: end } } }),
   ]);
   return { limit: quotaLimit(company?.quota ?? null, setting), used };
