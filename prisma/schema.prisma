@@ -5097,6 +5097,10 @@ model Requisition {
   openings            Int
   filled              Int       @default(0)
   requiredSkills      Json      @default("[]")
+  // Up to 8 questions a candidate answers when applying (#1832):
+  // [{ id, type: TEXT|BOOLEAN|SELECT, label: { en, tr, de }, options?, required }],
+  // validated by src/lib/screeningQuestions.ts on write and on every answer.
+  screeningQuestions  Json      @default("[]")
   city                String?
   workMode            String?
   startDate           DateTime?

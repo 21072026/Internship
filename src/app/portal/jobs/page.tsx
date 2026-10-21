@@ -52,6 +52,7 @@ export default function PortalJobsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{J.title}</h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">{J.subtitle}</p>
+        <Link href="/portal/applications" className="mt-2 inline-block text-sm font-medium text-blue-700 hover:underline dark:text-blue-300" data-testid="portal-jobs-my-applications">{J.viewApplications}</Link>
       </div>
 
       <form onSubmit={submit} className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
