@@ -827,6 +827,11 @@ model UserGuidanceState {
 model PageView {
   id          String   @id @default(cuid())
   userId      String
+  // The viewer's tenant (#1556). Nullable so the column applies to the
+  // populated table; the beacon stamps the session's org, and
+  // prisma/backfill-telemetry-org.mjs attributes legacy rows by viewer before
+  // backfill-organization.mjs. Registered in TENANT_MODELS.
+  orgId       String?
   // App-relative path only (query string stripped), capped in the API.
   path        String
   // Seconds spent on this page before navigating away (0 for the entry hit,
@@ -843,6 +848,7 @@ model PageView {
   /// batch — on the table that grows fastest in the product, which is exactly
   /// the table the sweep exists for. This is the only schema change #1678 needs.
   @@index([createdAt])
+  @@index([orgId, createdAt])
 }
 
 // Reusable, auditable per-user consent (GDPR). A consent is "active" when
@@ -4745,6 +4751,13 @@ enum EmailStatus {
 // that account erasure would have to chase.
 model EmailLog {
   id        String      @id @default(cuid())
+  // The RECIPIENT's tenant (#1556), written explicitly by every writer (the
+  // caller's orgId, else the recipient account's) — never the sender's request
+  // scope. NULL when nobody knows (an address with no account). Legacy rows
+  // are attributed by prisma/backfill-telemetry-org.mjs only where the address
+  // names one org (#2605: one mailbox can be in two worlds). Registered in
+  // TENANT_MODELS.
+  orgId     String?
   to        String      @db.VarChar(320)
   subject   String      @db.VarChar(512)
   // Coarse bucket ("verification", "message", "invitation", …) so the admin
@@ -4770,6 +4783,7 @@ model EmailLog {
   // Without it MySQL filesorts the status set or walks createdAt past every
   // row of the other statuses — the documented ep:health landmine.
   @@index([status, createdAt])
+  @@index([orgId, createdAt])
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).

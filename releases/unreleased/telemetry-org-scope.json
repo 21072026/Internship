@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Tenant isolation:** `PageView` and `EmailLog` carry a nullable `orgId` and are registered in `TENANT_MODELS` (#1556). The page-view beacon stamps the viewer's org. Every `EmailLog` writer (`recordEmail()`, `recordOptOuts()`, the mail-queue cancel) stamps the **recipient's** org explicitly, null included: the caller's `orgId`, else the recipient account's, never the sender's request scope. Account erasure deletes ledger rows by address outside the tenant scope, and when the address still lives on in the other world it now removes the erased account's own org's rows. `prisma/backfill-telemetry-org.mjs` (deploy and topic deploy, before `backfill-organization.mjs`) attributes legacy page views by viewer, and legacy mail rows only where the address names exactly one org. `ActivityLog`, the admin activity route and the other routes the issue listed were already scoped."
+}
