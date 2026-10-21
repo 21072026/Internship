@@ -12,7 +12,7 @@
 // logged. Losing the record must not lose the backfill.
 //
 // Ends with one summary line for the deploy log:
-//   backfills: 28 registered, 24 ran ok, 4 skipped (once), 0 failed
+//   backfills: 29 registered, 25 ran ok, 4 skipped (once), 0 failed
 //
 // Exit codes, which infra/deploy-prod.sh reads (#1540, #3043):
 //   0  every entry ran ok or was skipped

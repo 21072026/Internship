@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 
 test.afterAll(async () => {
@@ -30,22 +30,58 @@ test('analytics returns a 6-month trend series', async ({ page }) => {
 });
 
 /**
- * #1425 — every bar in the Trends chart rendered at 0px.
+ * #1425 / #1890 — every bar in the Trends chart rendered at 0px.
  *
- * The data was right; a percentage height sat inside a column with no height of
- * its own, so it computed to `auto` — 0px for an empty div. The month labels
- * kept rendering because text has intrinsic height, which is exactly why this
- * read as a data problem rather than a layout one.
- *
- * The assertion is the layout invariant itself: a bar's rendered pixels must
- * equal its own inline percentage of the row it sits in. That is precisely what
- * was broken (the percentage never became pixels), and unlike comparing against
- * a separately-fetched API response it cannot drift — the page requests its own
- * date range, so a bare /api/admin/analytics call returns a different number of
- * months and the indices do not line up. I tried that first and it produced a
- * confident, wrong failure.
+ * The old track sized its bars with CSS percentages, which compute to `auto`
+ * (0px) unless an ancestor has a definite height; it collapsed once and was held
+ * up by a pinned pixel row. The chart is SVG now (src/components/charts), its
+ * rects sized by a scale over the measured container — so the invariant is the
+ * scale itself: every bar's pixels are its value's share of the plot, and the
+ * largest value fills the plot. Checked on first load, after a viewport resize,
+ * and after a client-side navigation back into the page — the three ways a
+ * layout can be measured wrong.
  */
-test('every trend bar turns its percentage into real pixels', async ({ page }) => {
+async function readBars(page: Page) {
+  const chart = page.getByTestId('analytics-trend-chart');
+  await expect(chart).toBeVisible({ timeout: 15_000 });
+  // The chart library is a dynamic import: wait for its marks, not the box.
+  await expect(chart.locator('[data-testid^="trend-bar-new-"]').first()).toBeAttached({ timeout: 15_000 });
+  return chart.evaluate((box) => {
+    const svg = box.querySelector('svg')!;
+    return {
+      svgWidth: svg.getBoundingClientRect().width,
+      boxWidth: box.getBoundingClientRect().width,
+      bars: Array.from(box.querySelectorAll<SVGRectElement>('[data-testid^="trend-bar-"]')).map((el) => ({
+        id: el.dataset.testid ?? '?',
+        value: Number(el.dataset.value),
+        px: el.getBoundingClientRect().height,
+        width: el.getBoundingClientRect().width,
+      })),
+    };
+  });
+}
+
+function expectBarsTrue(read: Awaited<ReturnType<typeof readBars>>, when: string) {
+  const { bars } = read;
+  expect(bars.length, `${when}: the chart rendered no bars at all`).toBeGreaterThan(0);
+  expect(read.svgWidth, `${when}: the chart is wider than its box`).toBeLessThanOrEqual(read.boxWidth + 1);
+  const max = Math.max(...bars.map((b) => b.value));
+  // With a fresh relation and interaction seeded, some bar is non-zero…
+  expect(max, `${when}: no bar had a value — the data never reached the chart`).toBeGreaterThan(0);
+  const tallest = Math.max(...bars.map((b) => b.px));
+  // …and it fills the plot (176px box minus the label and value margins).
+  expect(tallest, `${when}: no bar had any height — the chart is empty`).toBeGreaterThan(100);
+  for (const bar of bars) {
+    expect(bar.width, `${when}: ${bar.id} has no width`).toBeGreaterThan(0);
+    const expected = (bar.value / max) * tallest;
+    expect(
+      Math.abs(bar.px - expected),
+      `${when}: ${bar.id} = ${bar.value} of ${max} should be ~${expected.toFixed(1)}px, rendered ${bar.px}px`
+    ).toBeLessThan(2);
+  }
+}
+
+test('every trend bar is its value in real pixels — on load, after a resize, after client-side navigation', async ({ page }) => {
   const email = uniqueEmail('at-render-admin');
   const mentorEmail = uniqueEmail('at-render-mentor');
   const menteeEmail = uniqueEmail('at-render-mentee');
@@ -70,43 +106,20 @@ test('every trend bar turns its percentage into real pixels', async ({ page }) =
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     await page.goto('/admin/analytics');
-    const chart = page.getByTestId('analytics-trend-chart');
-    await expect(chart).toBeVisible({ timeout: 15_000 });
+    expectBarsTrue(await readBars(page), 'first load');
 
-    const bars = await chart.evaluate((track) =>
-      Array.from(track.children).flatMap((column) => {
-        const row = column.firstElementChild as HTMLElement;
-        const rowHeight = row.getBoundingClientRect().height;
-        return Array.from(row.children).map((b) => {
-          const el = b as HTMLElement;
-          return {
-            id: el.dataset.testid ?? '?',
-            pct: parseFloat(el.style.height) || 0,
-            px: el.getBoundingClientRect().height,
-            rowHeight,
-          };
-        });
-      })
-    );
+    const before = (await readBars(page)).svgWidth;
+    await page.setViewportSize({ width: 700, height: 900 });
+    await expect.poll(async () => (await readBars(page)).svgWidth, { timeout: 5_000 }).not.toBe(before);
+    expectBarsTrue(await readBars(page), 'after a resize');
 
-    expect(bars.length, 'the chart rendered no bars at all').toBeGreaterThan(0);
-    // The row itself must have a real height — if it collapses, every bar below
-    // is trivially 0 and the percentage assertion would pass vacuously.
-    expect(bars[0].rowHeight).toBeGreaterThan(50);
-
-    for (const bar of bars) {
-      const expected = (bar.pct / 100) * bar.rowHeight;
-      expect(
-        Math.abs(bar.px - expected),
-        `${bar.id}: style height ${bar.pct}% of a ${bar.rowHeight}px row should be ~${expected.toFixed(1)}px, rendered ${bar.px}px`
-      ).toBeLessThan(2);
-    }
-
-    // …and the data must actually reach the chart: with a fresh relation and
-    // interaction seeded, at least one bar is non-zero and the tallest fills
-    // most of the row. Without this a chart of twelve 0% bars would pass.
-    const tallest = Math.max(...bars.map((b) => b.px));
-    expect(tallest, 'no bar had any height — the chart is empty').toBeGreaterThan(bars[0].rowHeight * 0.5);
+    await page.setViewportSize({ width: 1280, height: 800 }); // the sidebar link is desktop-only
+    // Leave and come back through the app's own link, so the page mounts in a
+    // client-side transition rather than a fresh document.
+    await page.goto('/admin');
+    await page.locator('a[href="/admin/analytics"]').first().click();
+    await page.waitForURL(/\/admin\/analytics$/);
+    expectBarsTrue(await readBars(page), 'after client-side navigation');
   } finally {
     await prisma.interactionLog.deleteMany({ where: { relationId: relation.id } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });

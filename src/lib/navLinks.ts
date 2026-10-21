@@ -6,6 +6,7 @@ import {
   Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
+  Receipt,
   Send,
   Lightbulb,
   Sparkles,
@@ -148,6 +149,10 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
+  // The tenant's own bill (#1739): plan, active-pair meter, history. The meter
+  // and the price list are the internship product's (src/lib/plans.ts); a
+  // MARKETING org has no plan gate and no checkout, hence `mentorship`.
+  { href: '/admin/billing', icon: Receipt, key: 'billing', capability: 'mentorship' },
   { href: '/admin/organizations', icon: Network, key: 'organizations' },
   { href: '/admin/settings', icon: Settings, key: 'settings' },
   { href: '/admin/invite', icon: Mail, key: 'invite' },

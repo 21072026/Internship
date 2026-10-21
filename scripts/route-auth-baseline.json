@@ -98,6 +98,10 @@
     "methods": ["POST"],
     "why": "Stamps openedAt when an invitee opens their registration link — by definition before they have an account. Idempotent, writes one timestamp, and ignores used or expired invitations."
   },
+  "src/app/api/jobs/worker/tick/route.ts": {
+    "methods": ["POST"],
+    "why": "One tick of the job worker (#1673), fired every 5 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process JOBS_WORKER_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only runs jobs already queued, through registered handlers, and never takes input from the request."
+  },
   "src/app/api/mail/drain/route.ts": {
     "methods": ["POST"],
     "why": "One tick of the outbound mail queue drain (#2944), fired every 5 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process MAIL_DRAIN_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only delivers mail that is already queued and never takes input from the request."

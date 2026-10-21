@@ -50,6 +50,7 @@ export function prismaQueueStore(): QueueStore {
           maxAttempts: data.maxAttempts,
           idempotencyKey: data.idempotencyKey,
           orgId: data.orgId,
+          trigger: data.trigger,
         },
       });
       return toRecord(row);
@@ -196,6 +197,41 @@ export function prismaQueueStore(): QueueStore {
     deleteRunsStartedBefore: async (cutoff) => {
       const { count } = await prisma.jobRun.deleteMany({ where: { startedAt: { lt: cutoff } } });
       return count;
+    },
+
+    settleJob: async ({ id, workerId, data }) => {
+      // Guarded on the claim itself (status + holder), like mailOutbox's
+      // settle(): a reaped-and-reclaimed row belongs to its new owner.
+      const { count } = await prisma.job.updateMany({
+        where: { id, status: 'RUNNING', lockedBy: workerId.slice(0, 64) },
+        data: {
+          status: data.status,
+          attempts: data.attempts,
+          lastError: data.lastError,
+          ...(data.runAt ? { runAt: data.runAt } : {}),
+          lockedAt: null,
+          lockedBy: null,
+        },
+      });
+      return count === 1;
+    },
+
+    heartbeat: async ({ ids, workerId, now }) => {
+      if (ids.length === 0) return 0;
+      const { count } = await prisma.job.updateMany({
+        where: { id: { in: [...ids] }, status: 'RUNNING', lockedBy: workerId.slice(0, 64) },
+        data: { lockedAt: now },
+      });
+      return count;
+    },
+
+    openJobNames: async () => {
+      const rows = await prisma.job.findMany({
+        where: { status: { in: ['PENDING', 'RUNNING'] } },
+        distinct: ['name'],
+        select: { name: true },
+      });
+      return rows.map((r) => r.name);
     },
   };
 }
