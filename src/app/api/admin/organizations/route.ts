@@ -54,7 +54,8 @@ function ssoCertificateSummary(pem: string | null, now: Date) {
 // A super admin sees every tenant OF ITS OWN WORLD (docs/worlds.md § Super
 // admin) — an INTERNSHIP super admin never lists a MARKETING organization and
 // vice versa; a plain tenant ADMIN sees exactly their own organisation, and
-// nothing at all when they belong to none (#1535).
+// nothing at all when they belong to none (#1535). A tenant's OWN bill — plan,
+// active-pair meter, history — is GET /api/org/billing (#1739), not this list.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

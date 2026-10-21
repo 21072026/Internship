@@ -47,6 +47,8 @@ import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary, type Dictionary } from '@/i18n/dictionaries';
 import { emailDictionary, emailDictionaryMemo } from '@/i18n/emailDictionary';
+import { requisitionSkillMatch } from '@/lib/skillTaxonomyRule';
+import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
 import { isNextActionReminderDue, nextActionDueBefore } from '@/lib/nextActionRule';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
@@ -5279,10 +5281,12 @@ ${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
   return { checked: people.length, reminded };
 }
 
-// Does a consenting candidate match any of a company's open positions? A match
-// is a loose, case-insensitive overlap between a need's position and the
+// Does a consenting candidate match any of a company's CompanyNeed positions? A
+// match is a loose, case-insensitive overlap between a need's position and the
 // candidate's target position or one of their skills — deliberately generous
-// (the alert is a "worth a look" nudge, not a hard filter).
+// (the alert is a "worth a look" nudge, not a hard filter). Since #1821 this is
+// the CompanyNeed path only: a CompanyNeed has no skills to compare, while a
+// Requisition is matched on its canonical required skills (below).
 function candidateMatchesNeeds(
   positions: string[],
   cand: { targetPosition?: string | null; skills: unknown }
@@ -5294,6 +5298,19 @@ function candidateMatchesNeeds(
     if (target && (target.includes(pos) || pos.includes(target))) return true;
     return skills.some((sk) => sk && (pos.includes(sk) || sk.includes(pos)));
   });
+}
+
+// A requisition that lists no required skills falls back to its title, but only
+// against the candidate's target position: comparing a title with skill strings
+// in both directions is exactly what let "Go" match every "...go..." title.
+function titleMatchesTarget(title: string, targetPosition: string | null | undefined): boolean {
+  const pos = title.toLowerCase().trim();
+  const target = (targetPosition || '').toLowerCase().trim();
+  return !!pos && !!target && (target.includes(pos) || pos.includes(target));
+}
+
+function escapeMailText(value: string): string {
+  return value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 }
 
 // Only an OPEN requisition is hiring: DRAFT is unpublished, and ON_HOLD /
@@ -5342,11 +5359,19 @@ export async function checkCompanyNeedMatches() {
         // dropped: the API accepts status OPEN with filled === openings, and
         // Prisma cannot compare two columns in a `where`, so it is filtered
         // below in JS.
-        select: { title: true, openings: true, filled: true },
+        select: { title: true, openings: true, filled: true, skills: { select: { skillId: true } } },
       },
       users: {
         where: { role: 'COMPANY', isActive: true },
-        select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+        select: {
+          id: true,
+          orgId: true,
+          email: true,
+          fullName: true,
+          preferredLanguage: true,
+          emailNotifications: true,
+          notificationPrefs: true,
+        },
       },
     },
   });
@@ -5362,7 +5387,14 @@ export async function checkCompanyNeedMatches() {
       publicProfile: true,
       consents: { some: { type: 'TALENT_POOL_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
     },
-    select: { id: true, orgId: true, fullName: true, targetPosition: true, skills: true },
+    select: {
+      id: true,
+      orgId: true,
+      fullName: true,
+      targetPosition: true,
+      skills: true,
+      skillRows: { select: { skillId: true } },
+    },
   });
   if (pool.length === 0) return { companies: companies.length, alerts: 0 };
   // A company is matched against ITS OWN tenant's pool only: this cron binds no
@@ -5378,6 +5410,7 @@ export async function checkCompanyNeedMatches() {
   // inserted row is a candidate this company will never be alerted about again).
   const origins = createOriginBook();
   await origins.prefetch(companies.flatMap((company) => company.users.map((u) => u.orgId)));
+  const dictionaryOf = emailDictionaryMemo();
   let alerts = 0;
   // Recipients who opted out of match alerts, each on record (#2054).
   let skipped = 0;
@@ -5387,26 +5420,41 @@ export async function checkCompanyNeedMatches() {
     // without the module (a MARKETING sales book) gets no alert at all —
     // skipped before any dedupe row is written, not re-branded.
     if (!(await capabilitiesOf(company.orgId)).includes('placements')) continue;
-    // Requisition.title is the analogue of CompanyNeed.position, and the only
-    // field taken from it. `requiredSkills` is deliberately NOT folded in:
-    // candidateMatchesNeeds matches substrings in BOTH directions, so a short
-    // skill like "Go" or "R" would match almost every targetPosition and turn a
-    // premium alert into noise. Widening the match is a separate decision from
-    // fixing the missing source.
-    const positions = [
-      ...company.needs.map((n) => n.position),
-      ...company.requisitions.filter((r) => r.filled < r.openings).map((r) => r.title),
-    ]
-      .map((p) => (p ?? '').toLowerCase().trim())
-      .filter(Boolean);
+    // Two kinds of open position (#1821):
+    //   - a Requisition with required skills is matched on its CANONICAL skills
+    //     (`RequisitionSkill`, #1815) against the candidate's `UserSkill` rows —
+    //     `requisitionSkillMatch`, adjacency-aware. This used to be impossible:
+    //     the free-text skills could only be substring-matched in both
+    //     directions, so "Go" or "R" matched almost every title and the
+    //     required skills were left out on purpose. Canonical ids remove that
+    //     objection: "Go" is one skill, not two letters.
+    //   - a Requisition without skills falls back to its title, against the
+    //     candidate's target position only; a CompanyNeed (no skills at all,
+    //     not retired here — #1359) keeps the old generous heuristic.
+    const openReqs = company.requisitions.filter((r) => r.filled < r.openings);
+    const skillReqs = openReqs.filter((r) => r.skills.length > 0).map((r) => r.skills.map((x) => x.skillId));
+    const titleReqs = openReqs.filter((r) => r.skills.length === 0).map((r) => r.title);
+    const needTerms = [...new Set(company.needs.map((n) => (n.position ?? '').toLowerCase().trim()).filter(Boolean))];
     // Still reachable after the OR filter above: a company can match on having
     // open requisitions and then have every one of them fully staffed.
-    if (positions.length === 0) continue;
-    const terms = [...new Set(positions)];
+    if (skillReqs.length === 0 && titleReqs.length === 0 && needTerms.length === 0) continue;
+    const skillOrg = company.orgId ?? defaultId;
+    const edges = skillReqs.length ? await loadSkillEdges(skillOrg, skillReqs.flat()) : [];
 
     for (const cand of pool) {
       if (!sameTenant(cand.orgId, company.orgId, defaultId)) continue;
-      if (!candidateMatchesNeeds(terms, cand)) continue;
+      const candSkills = cand.skillRows.map((r) => r.skillId);
+      // The best skill match explains the alert; a title/need match has no skills to show.
+      let best: ReturnType<typeof requisitionSkillMatch> | null = null;
+      for (const required of skillReqs) {
+        const m = requisitionSkillMatch(required, candSkills, edges);
+        if (m.isMatch && (!best || m.score > best.score)) best = m;
+      }
+      const matched =
+        !!best ||
+        titleReqs.some((title) => titleMatchesTarget(title, cand.targetPosition)) ||
+        (needTerms.length > 0 && candidateMatchesNeeds(needTerms, cand));
+      if (!matched) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
       // this company was already alerted about this candidate — skip silently.
@@ -5430,18 +5478,39 @@ export async function checkCompanyNeedMatches() {
           skipped++;
         } else {
           const base = await origins.urlFor(u.orgId);
+          // In the recipient's language (#1821), naming the skills that matched
+          // so the company sees WHY — exact ones, then "related" ones with the
+          // required skill they stand in for.
+          const locale = resolveLocale(u.preferredLanguage);
+          const M = (await dictionaryOf(locale, u.orgId)).notifications.needMatchEmail;
+          let skillsLine = '';
+          if (best) {
+            const ids = [...best.direct, ...best.adjacent.flatMap((x) => [x.skillId, x.via])];
+            const names = await skillLabels(skillOrg, ids, locale);
+            const name = (id: string) => escapeMailText(names.get(id) ?? id);
+            const parts = [
+              ...best.direct.map(name),
+              ...best.adjacent.map((x) => M.related.replace('{skill}', name(x.skillId)).replace('{via}', name(x.via))),
+            ];
+            skillsLine = `<p>${M.skills.replace('{skills}', parts.join(', '))}</p>`;
+          }
+          const body = M.body
+            .replace('{candidate}', `<strong>${cand.fullName}</strong>`)
+            .replace('{company}', company.name)
+            .replace('{position}', cand.targetPosition ? ` (${cand.targetPosition})` : '');
           await brandOf(u.orgId).then((brand) => sendEmail({
             category: 'company-need-alert',
             userId: u.id,
             // One host per mail (#2495): the footer follows the same org as `base`.
             orgId: u.orgId,
             to: u.email,
-            subject: 'A candidate matches your open position',
+            subject: M.subject,
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              ${worldHeading(brand, 'New matching candidate', '<h2 style="color:#2563eb;">New matching candidate</h2>')}
-              <p>Hi ${u.fullName},</p>
-              <p><strong>${cand.fullName}</strong> matches one of ${company.name}'s open positions${cand.targetPosition ? ` (${cand.targetPosition})` : ''}.</p>
-              <p><a href="${base}${link}">View profile</a></p>
+              ${worldHeading(brand, M.heading, `<h2 style="color:#2563eb;">${M.heading}</h2>`)}
+              <p>${M.greeting.replace('{name}', u.fullName)}</p>
+              <p>${body}</p>
+              ${skillsLine}
+              <p><a href="${base}${link}">${M.cta}</a></p>
             </div>`,
           })).catch((error) => {
             console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });

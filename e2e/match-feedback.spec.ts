@@ -67,7 +67,7 @@ test('dismissing a mentor suggestion records the reason and reveals the next-bes
       expect(rows[0].action).toBe('SHOWN');
       // The score the rule set ranked by (shared-skill count) is stored too.
       expect(rows[0].score).toBe(2);
-      expect(rows[0].ruleSetVersion).toBe('rules-v1');
+      expect(rows[0].ruleSetVersion).toBe('rules-v2');
       expect(rows[1].mentorId).toBe(next.id);
       expect(rows[1].rank).toBe(2);
       // One batch id for the whole call, echoed to the client.

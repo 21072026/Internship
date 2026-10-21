@@ -34,19 +34,21 @@ export const ACTIVE_MATCHED_PAIR_DEFINITION =
   'paused, benched and completed pairs are not counted';
 
 /**
- * The relation states we charge for. An ALLOWLIST, not a denylist: the day
- * `MentorshipStatus` grows PAUSED/BENCHED, those states are excluded from the
- * invoice without a single query changing. Adding one to this array is the one
- * edit that makes a new state billable.
+ * The relation states we charge for — LIFECYCLE states
+ * (`MentorshipRelation.lifecycleState`, src/lib/relationLifecycle.ts, #1768),
+ * not the derived `status` flag, which reads ACTIVE for a paused pair too. An
+ * ALLOWLIST, not a denylist: PAUSED (and a later BENCHED) is off the invoice
+ * because it is not in this array, and no query names it. Adding a state here
+ * is the one edit that makes it billable.
  *
- * Typed as plain strings rather than Prisma's `MentorshipStatus` so this file
- * stays dependency-free; lib/metering.ts is where it meets the generated enum.
+ * Plain strings so this file stays dependency-free; lib/metering.ts is where
+ * it meets the columns.
  */
 export const BILLABLE_RELATION_STATES = ['ACTIVE'] as const;
 export type BillableRelationState = (typeof BILLABLE_RELATION_STATES)[number];
 
-export function isBillableRelationState(status: string | null | undefined): boolean {
-  return !!status && (BILLABLE_RELATION_STATES as readonly string[]).includes(status);
+export function isBillableRelationState(state: string | null | undefined): boolean {
+  return !!state && (BILLABLE_RELATION_STATES as readonly string[]).includes(state);
 }
 
 /**
@@ -178,14 +180,18 @@ export const COMPUTED_METRICS = (Object.keys(USAGE_METRICS) as UsageMetric[]).fi
 // pinned down by a unit test without a database.
 
 export interface PairActivityRow {
-  /** MentorshipRelation.status */
-  status: string;
+  /**
+   * The relation's LIFECYCLE state as effectiveLifecycleState() reads it
+   * (src/lib/relationLifecycle.ts, #1768) — not the derived `status` flag,
+   * which says ACTIVE for a paused pair too.
+   */
+  state: string;
   /** Timestamps of every activity signal on this relation, any signal, any month. */
   activityAt: Date[];
 }
 
 export function isBillablePair(row: PairActivityRow, period: Period): boolean {
-  if (!isBillableRelationState(row.status)) return false;
+  if (!isBillableRelationState(row.state)) return false;
   const { gte, lt } = periodRange(period);
   return row.activityAt.some((at) => at >= gte && at < lt);
 }
