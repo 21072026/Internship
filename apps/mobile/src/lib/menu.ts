@@ -24,6 +24,7 @@ const ICONS: Record<string, string> = {
   duplicates: 'git-merge',
   mentors: 'person-add',
   mentorships: 'people-circle',
+  matching: 'git-compare',
   health: 'pulse',
   mentorApplications: 'school',
   companyInquiries: 'mail-unread',

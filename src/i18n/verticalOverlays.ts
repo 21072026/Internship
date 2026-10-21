@@ -797,6 +797,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           aiPackage: {
             d: 'CV feedback and interview prep for leads, interaction-log summaries for sales reps, AI-assisted assignment, and themes across evaluation comments and weekly-report blockers for admins — each theme linked to the rows behind it. All consent- and quota-gated.',
           },
+          matchingRules: {
+            d: 'Decide what makes a good sales rep assignment — skills, language, field, city, time zone, capacity — and how much each counts, mark the non-negotiables, and never assign a person to their own manager or a past contact person. A dry run shows who would be assigned to whom before you commit, and names the rule that is too tight. Every score explains itself rule by rule.',
+          },
           matchQuality: {
             d: 'Every sales rep suggestion the platform makes is recorded with the position it was shown at, and a one-click dismissal asks why — wrong field, no capacity, language, already assigned. The analytics page then answers the question every team owner eventually asks: how often is the suggestion actually taken, and does the top-ranked rep really get picked? The suggestion stays a suggestion — a person always decides.',
           },
@@ -1832,6 +1835,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           aiPackage: {
             d: 'Müşteri adaylarına CV geri bildirimi ve mülakat hazırlığı, satış temsilcilerine etkileşim özeti, AI destekli atama ve yöneticilere değerlendirme yorumlarıyla haftalık rapor engellerindeki temalar — her tema arkasındaki satırlara bağlı. Hepsi rıza ve kota kapılı.',
           },
+          matchingRules: {
+            d: 'İyi bir satış temsilcisi atamasını neyin belirlediğine — beceri, dil, alan, şehir, saat dilimi, kapasite — ve her birinin ne kadar önemli olduğuna karar ver; pazarlıksız kuralları işaretle, kimse kendi yöneticisine ya da eski muhatabına atanmasın. Deneme çalıştırması bağlamadan önce kimin kime atanacağını gösterir ve fazla sıkı kuralı adıyla söyler. Her skor kendini kural kural açıklar.',
+          },
           matchQuality: {
             d: 'Platformun yaptığı her satış temsilcisi önerisi, listede kaçıncı sırada gösterildiğiyle birlikte kaydediliyor; tek tıkla kapatma ise nedenini soruyor — yanlış alan, kapasite yok, dil, zaten atanmış. Analiz sayfası da her ekip sorumlusunun bir gün sorduğu soruyu yanıtlıyor: öneriler gerçekte ne sıklıkla kabul ediliyor ve ilk sıradaki temsilci cidden seçiliyor mu? Öneri yine sadece öneri kalıyor — kararı her zaman bir insan veriyor.',
           },
@@ -2847,6 +2853,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           },
           aiPackage: {
             d: 'Lebenslauf-Feedback und Interviewvorbereitung für Leads, Interaktionszusammenfassungen für Vertriebsmitarbeiter, KI-gestützte Zuordnung und Themen aus Bewertungskommentaren und Wochenbericht-Hindernissen für Admins — jedes Thema mit den Zeilen dahinter verknüpft. Alles einwilligungs- und kontingentgesteuert.',
+          },
+          matchingRules: {
+            d: 'Lege fest, was eine gute Zuordnung zu Vertriebsmitarbeitern ausmacht — Skills, Sprache, Fachgebiet, Stadt, Zeitzone, Kapazität — und wie stark es zählt, markiere die nicht verhandelbaren Regeln, und niemand wird der eigenen Führungskraft oder einer früheren Ansprechperson zugeordnet. Ein Probelauf zeigt, wer wem zugeordnet würde, bevor du dich festlegst, und nennt die Regel, die zu streng ist. Jeder Score erklärt sich Regel für Regel.',
           },
           matchQuality: {
             d: 'Jeder Vorschlag eines Vertriebsmitarbeiters durch die Plattform wird mit der Position erfasst, auf der er gezeigt wurde, und ein Verwerfen per Klick fragt nach dem Grund — falsches Fachgebiet, keine Kapazität, Sprache, bereits zugeordnet. Die Analyseseite beantwortet damit die Frage, die jede Teamleitung irgendwann stellt: Wie oft wird der Vorschlag tatsächlich übernommen, und wird der erstplatzierte Vertriebsmitarbeiter wirklich gewählt? Ein Vorschlag bleibt ein Vorschlag — entschieden wird immer von einem Menschen.',
