@@ -114,21 +114,3 @@ export async function getCompanyFeatures(companyId: string): Promise<Record<Prem
   for (const f of PREMIUM_FEATURES) out[f.key] = sources[f.key].enabled;
   return out;
 }
-
-// Enable/disable one feature for a company (idempotent).
-//
-// DEPRECATED as a way to SELL a feature (#1733): a company's access comes from
-// its org's plan (Subscription) or an org grant (OrgEntitlement) — the coming
-// /admin/billing screen. A row written here is a per-company override that
-// hasFeature() honours for grandfathering; keep using it only for that.
-export async function setCompanyFeature(companyId: string, feature: PremiumFeature, enabled: boolean): Promise<void> {
-  if (enabled) {
-    await prisma.companyEntitlement.upsert({
-      where: { companyId_feature: { companyId, feature } },
-      create: { companyId, feature },
-      update: {},
-    });
-  } else {
-    await prisma.companyEntitlement.deleteMany({ where: { companyId, feature } });
-  }
-}
