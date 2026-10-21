@@ -57,19 +57,46 @@ resolution) is gated behind the multi-tenancy rollout and is described at the en
 - Custom domains do not require `MT_ENFORCE_ISOLATION`; they are an ingress/branding
   concern. Data isolation remains governed by the #543 rollout.
 
-## The app change it depends on (Host → org resolution)
+## Host → org resolution in the app (#1661)
 
-To fully activate custom domains, the app must resolve the tenant from the
-request Host on **public** routes too (not just the session `orgId`):
+The plumbing is in place; the claim/verify screens are #1662.
 
-1. Add a `customDomain` (unique, nullable) field to `Organization`, managed in
-   Admin → Organizations.
-2. Extend org resolution: given a request, if the Host matches an org's
-   `customDomain` (or `<slug>.interncrm.com`), treat that org as the tenant — feeding
-   `getOrgBranding`, the SSO entry, and (when enforced) `runWithOrg`.
-3. Fall back to the current single-tenant/default behavior when no domain
-   matches, so `interncrm.com` is unchanged.
+- **The column is `Organization.publicHost`** — the one explicit host mapping
+  the schema already had (#2569) — plus `publicHostToken` (the value the
+  customer puts in a DNS TXT record) and `publicHostVerifiedAt`. There is no
+  second `customDomain` column: one host, one tenant, one `@unique`.
+- **`resolveOrgFromHost(host)`** (`src/lib/hostOrg.ts`, rule in
+  `src/lib/hostOrgRule.ts`) answers `{ id, slug, plan }` or `null`:
+  1. a `publicHost` equal to the host **and verified** (`publicHostVerifiedAt`
+     set) — an unverified claim resolves to nobody;
+  2. `<slug>.<APP_ROOT_DOMAIN>` — exactly one label under the root, only while
+     `APP_ROOT_DOMAIN` is set (`.env.example`);
+  3. otherwise `null`, so the product's own hosts are unchanged.
+  Answers are cached for 60 s per process; `invalidateHostOrgCache()` is called
+  by every write that changes a mapping.
+- **What a resolved host may decide:** branding, SSO discovery, pre-login copy.
+  **Never data scope** — a signed-in request's org is its session's
+  (`resolveOrgId`, which reads no header). `e2e/host-org.spec.ts` pins that a
+  forged `X-Forwarded-Host` naming another tenant's verified domain changes
+  nothing an admin reads.
+- **Redirects and SSO hand-offs.** A verified tenant domain is a served host:
+  `verifiedTenantHosts()` is passed as `extraHosts` to `resolveRedirectTarget`
+  (NextAuth's `redirect` callback), `requestOrigin` (the SSO login route) and
+  `servedOrigin` (the ACS's RelayState), still by **exact** match. A
+  `<slug>.<APP_ROOT_DOMAIN>` host is **not** added — that would be a suffix
+  rule (`src/lib/servedHosts.ts`, "One served-host allowlist" in CLAUDE.md).
+- **E-mail links do not follow a tenant domain yet.** `appOriginForOrg()` still
+  serves a `publicHost` only when it is in the env-derived `servedHosts()` — a
+  verified DNS record proves ownership, not that our proxy answers on that host
+  with a certificate. Pointing mail at the tenant domain is part of the
+  onboarding checklist (#1662), not of this plumbing.
+- **SAML identifiers** (`spEntityId`, `acsUrl`, `metadataUrl`, `sloUrl` in
+  `src/lib/ssoSaml.ts`) take an explicit base origin, defaulting to
+  `NEXTAUTH_URL`'s, so a tenant on its own domain can register that domain's
+  identifiers without breaking any existing IdP registration.
 
-This is intentionally a **later slice** (it only matters once multiple tenants
-are live on their own domains); the runbook above is the ops half that is ready
-now on the existing wildcard + Plesk reverse-proxy infrastructure.
+**Server work, not done in the app:** subdomain tenancy needs a wildcard DNS
+record (`*.<APP_ROOT_DOMAIN>`) and a wildcard certificate on the Caddy ingress
+(DNS-01), and each customer domain needs its own site block with automatic TLS.
+Those are operator steps on the host (`infra/README.md`), and step 3/4 above
+still describe the retired Plesk host.
