@@ -2119,6 +2119,49 @@ export async function sendMeetingInviteEmail({
 //     organizer's clock and the mail says whose clock that is;
 //   - the mail has to say who invited them and to what, since an unexpected
 //     invitation from an unknown system otherwise reads as spam.
+// The account-less reviewer's link (#1859): the programme named this address
+// as the reviewer of one step of a document's review chain. The link is the
+// credential and works once — deciding the step clears it.
+export async function sendDocumentReviewInviteEmail({
+  to,
+  token,
+  documentTitle,
+  requirement,
+  ownerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  token: string;
+  documentTitle: string;
+  requirement: string;
+  ownerName: string;
+  locale?: string | null;
+  orgId: string;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const M = (await emailDictionary(resolved, orgId)).notifications.documentReviewEmail;
+  const link = `${brand.appUrl}/document-review/${token}`;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId,
+    subject: M.subject.replace('{requirement}', requirement),
+    // no-user-row: an external reviewer is an address the programme typed in
+    // (#1859) — an employer supervisor with no account, reached once per step.
+    category: 'document-review',
+    locale: resolved,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(M.body.replace('{owner}', ownerName).replace('{title}', documentTitle).replace('{requirement}', requirement))}</p>
+        <a href="${link}" style="display:inline-block;background:${esc(brand.accent)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.cta)}</a>
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">${esc(M.footer)}</p>
+      </div>`,
+  });
+}
+
 export async function sendMeetingGuestInviteEmail({
   to,
   name,

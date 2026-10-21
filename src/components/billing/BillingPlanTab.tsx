@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
 import { CreditCard, Gauge, History, HeartHandshake } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -11,8 +10,8 @@ import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useLocale, useT } from '@/i18n/client';
 import { formatCount, formatEur, formatEurCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
-import type { BillingSummary } from '@/lib/billingSummary';
 import { PlanChangeRequestCard } from '@/components/billing/PlanChangeRequestCard';
+import { useOrgBilling } from '@/components/billing/OrgBillingContext';
 
 // The first tab of /admin/billing (#1739): plan card, this month's active-pair
 // meter against the band, the over-band state and twelve months of history.
@@ -27,19 +26,7 @@ export function BillingPlanTab() {
   const t = useT();
   const b = t.billing;
   const locale = useLocale();
-  const [data, setData] = useState<BillingSummary | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  const load = useCallback(() => {
-    setFailed(false);
-    fetch('/api/org/billing')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: BillingSummary) => setData(d))
-      .catch(() => setFailed(true));
-  }, []);
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data, failed, reload: load } = useOrgBilling();
 
   if (failed) return <LoadErrorCard onRetry={load} testId="billing-load-error" />;
   if (!data) return <SkeletonRows rows={4} />;

@@ -71,6 +71,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'MentorshipRelation',
   'MentorApplication',
   'DocumentRequirement',
+  // A document's review chain (#1859); the sweep and the token route bind no context and pass orgId.
+  'DocumentReview',
   'WeeklyReport',
   // Org-defined segmentation attributes and their values (#1920).
   'OrgAttribute',

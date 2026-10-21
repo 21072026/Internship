@@ -173,6 +173,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     filename: SERVER_SET,
     contentType: SERVER_SET,
     title: { limit: 'documentTitle', files: ['src/app/api/documents/route.ts'] },
+    reviewStatus: SERVER_SET,
   },
   User: {
     deactivatedBy: {

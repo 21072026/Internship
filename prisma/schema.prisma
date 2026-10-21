@@ -223,6 +223,7 @@ model Organization {
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
+  documentReviews         DocumentReview[]
   weeklyReports           WeeklyReport[]
   // Scheduled report delivery (#1905).
   reportSubscriptions     ReportSubscription[]
@@ -1742,6 +1743,15 @@ model DocumentRequirement {
   mandatory      Boolean  @default(true)
   order          Int      @default(0)
   active         Boolean  @default(true)
+  // The review chain (#1859). NONE (the default) keeps today's rule — a file
+  // attached is a requirement met. SINGLE / CHAIN leave it unmet until the
+  // ordered steps in reviewerRoles ([{ step, role, label? }], role one of
+  // MENTOR | ADMIN | COMPANY | EXTERNAL) approve the document; the rules are
+  // src/lib/documentReview.ts. validityDays stamps Document.validUntil on
+  // approval; the nightly sweep then expires it.
+  approvalMode   String   @default("NONE")
+  validityDays   Int?
+  reviewerRoles  Json     @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1791,15 +1801,49 @@ model Document {
   version       Int          @default(1)
   isTemplate    Boolean      @default(false)
   requirementId String?
+  // PENDING | APPROVED | REJECTED | EXPIRED (#1859). Written APPROVED at upload
+  // unless the requirement has a review chain; rows older than the column are
+  // set APPROVED by scripts/backfill-document-reviews.mjs on deploy.
+  reviewStatus  String       @default("PENDING")
+  validFrom     DateTime?
+  validUntil    DateTime?
   createdAt     DateTime     @default(now())
 
   owner       User?                @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   requirement DocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  reviews     DocumentReview[]
 
   @@index([ownerId])
   @@index([requirementId])
   @@index([ownerId, requirementId, version])
   @@index([isTemplate])
+  @@index([reviewStatus, validUntil])
+}
+
+/// One step of a document's review chain (#1859): created for every step when
+/// a document is attached to a requirement with approvalMode SINGLE / CHAIN,
+/// decided in step order by a signed-in reviewer of `reviewerRole` — or, for an
+/// EXTERNAL step, by whoever holds `reviewToken` (no account; the MeetingGuest
+/// precedent). The token is cleared when the step is decided, so it works once.
+model DocumentReview {
+  id            String    @id @default(cuid())
+  orgId         String
+  documentId    String
+  step          Int
+  reviewerRole  String
+  reviewerId    String?
+  reviewerEmail String?
+  reviewToken   String?   @unique
+  decision      String?
+  note          String?   @db.Text
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  document Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, step])
+  @@index([orgId, decision])
 }
 
 model Company {

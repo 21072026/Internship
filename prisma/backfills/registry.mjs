@@ -117,4 +117,10 @@ export const BACKFILLS = [
   // Map free-text skills onto the taxonomy (#1819); skipDuplicates makes a
   // re-run a no-op.
   { id: '0030-skill-taxonomy', script: 'prisma/backfill-skill-taxonomy.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
+  // Document review chain (#1859): documents older than Document.reviewStatus
+  // read PENDING; the ones that never entered a chain (no DocumentReview row)
+  // become APPROVED. Only updates PENDING rows without a review step, so a
+  // second run reports updated=0 — and NONE-mode requirements ignore PENDING,
+  // so nothing turns red before it runs.
+  { id: '0031-document-reviews', script: 'prisma/backfill-document-reviews.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
 ];
