@@ -619,6 +619,15 @@ model User {
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin
   // deactivated you" — both are isActive=false. Cleared on activation.
   pendingApproval         Boolean       @default(false)
+  // Roster-feed deprovisioning (#1966, docs/roster-feeds.md). `rosterAbsentSince`
+  // is when a feed first stopped mentioning this person — stamped by the first
+  // successful run they are absent from, cleared the moment they reappear, and
+  // what the grace period counts from. `deactivatedBy` says WHO switched the
+  // account off: "roster:<feedId>" for a feed, a user id for a human. A feed
+  // reactivates only what a feed deactivated; null (every deactivation before
+  // this column) reads as a human's decision and is never undone by a file.
+  rosterAbsentSince       DateTime?
+  deactivatedBy           String?       @db.VarChar(64)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
   publicProfile           Boolean       @default(false)
   // For COMPANY-role users: which company they observe (read-only).
@@ -6036,6 +6045,8 @@ enum RosterRunStatus {
   SUCCEEDED
   FAILED
   NOOP
+  /// A safety valve stopped the run before anything was written (#1966).
+  ABORTED_SAFETY
 }
 
 /// Mirrors `RowStatus` in src/lib/importPreview.ts, token for token. One
@@ -6047,6 +6058,12 @@ enum RosterRowStatus {
   UNCHANGED
   SKIP
   ERROR
+  /// The deprovisioning phase (#1966), which runs after the import and outside
+  /// `runImport` — so these two have no counterpart in importPreview.ts.
+  /// Their rows carry a negative `rowNumber`: they describe a person the file
+  /// did NOT contain, so there is no file row to point at.
+  DEACTIVATE
+  REACTIVATE
 }
 
 /// One configured feed for one tenant.
@@ -6097,6 +6114,19 @@ model RosterFeed {
 
   chunkSize Int?
 
+  /// Deprovisioning (#1966, docs/roster-feeds.md). Off by default: a feed
+  /// deactivates nobody until a tenant asks it to. The three valves below are
+  /// read only when it is on; every one has a DB-side default (#2298).
+  deprovision          Boolean @default(false)
+  /// Abort, write nothing and alert when the people the feed would offboard
+  /// exceed this share of the org's active people the feed covers.
+  maxDeactivatePercent Int     @default(10)
+  /// Abort, write nothing and alert when the file has fewer data rows.
+  minRowCount          Int     @default(1)
+  /// A person is deactivated only on a successful run at least this many UTC
+  /// days after the run that first found them absent.
+  deprovisionGraceDays Int     @default(1)
+
   /// When the feed runs: a five-field cron expression evaluated in UTC
   /// (`src/lib/rosterFeed.ts`). Null = run by hand only.
   cronExpression String?   @db.VarChar(120)
@@ -6135,19 +6165,25 @@ model RosterRun {
   /// re-attempted next run instead of being skipped for ever.
   nextChunkIndex Int @default(0)
 
-  rowCount       Int     @default(0)
-  createdCount   Int     @default(0)
-  updatedCount   Int     @default(0)
-  unchangedCount Int     @default(0)
-  skippedCount   Int     @default(0)
-  errorCount     Int     @default(0)
+  rowCount         Int     @default(0)
+  createdCount     Int     @default(0)
+  updatedCount     Int     @default(0)
+  unchangedCount   Int     @default(0)
+  skippedCount     Int     @default(0)
+  errorCount       Int     @default(0)
+  /// Deprovisioning outcome (#1966).
+  deactivatedCount Int     @default(0)
+  reactivatedCount Int     @default(0)
+  /// Why a safety valve stopped the run (`row_floor` / `deactivation_ceiling`),
+  /// with the numbers, for the alert and the console.
+  safetyReason     String? @db.Text
   /// Keys the roster holds that the feed did not mention. Reported only —
   /// acting on them is #1966.
-  absentKeys     Json?
+  absentKeys       Json?
   /// Host and path of the file, for the run log. Never a query string: it can
   /// carry a token.
-  source         String? @db.Text
-  error          String? @db.Text
+  source           String? @db.Text
+  error            String? @db.Text
 
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
