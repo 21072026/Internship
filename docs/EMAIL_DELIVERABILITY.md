@@ -658,8 +658,9 @@ digest (:20), and the weekly mentor digest + analytics report (Mondays 08:00 /
 It is started at boot by `src/instrumentation.ts`, which POSTs
 `/api/cron/start` — the same edge-runtime workaround as the mail bridge, and
 deferred onto a timer because `register()` resolves before the server accepts
-connections. `GET /api/cron` still runs every job once for an authenticated
-ADMIN.
+connections. `GET /api/cron` still runs every job once — for a **super admin**:
+the batch and the platform-wide named jobs sweep every tenant, so a tenant ADMIN
+gets a 403 there and may run only the jobs scoped to their own org (#1575).
 
 > ⚠️ **`CRON_SECRET` belongs in production only.** These jobs email real people,
 > and the preview DB is shared with every topic env holding the same addresses —

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import bcrypt from 'bcryptjs';
 import { signInViaApi } from './helpers/auth';
 import { seedSkillTaxonomy } from '../src/lib/skillsResolve';
@@ -32,6 +32,8 @@ test('need-match alerts fire once for premium companies only, on consenting cand
     prisma.notification.count({ where: { userId, type: 'need_match.newCandidate', link: `/p/${menteeId}` } });
 
   await seedUser(adminEmail, pw, 'ADMIN', 'Need Admin');
+  // It drives the /api/cron batch, a platform-wide run: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const hash = await bcrypt.hash(pw, 10);
 
   const premiumCo = await prisma.company.create({

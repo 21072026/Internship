@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'crypto';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -11,6 +11,8 @@ test('admin cron run sends meeting reminders and stamps reminderSentAt', async (
   const mentorEmail = uniqueEmail('cronmentor');
   const menteeEmail = uniqueEmail('cronmentee');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Cron Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Cron Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Cron Mentee');
   // Two participants, two clocks — each reminder must be rendered in the
