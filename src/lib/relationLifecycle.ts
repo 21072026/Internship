@@ -369,3 +369,77 @@ export function lifecycleNotificationType(from: RelationLifecycleState, to: Life
   if (to === ACTIVE) return from === PAUSED ? 'relation.lifecycle_resumed' : 'relation.lifecycle_reopened';
   return 'relation.lifecycle_ended';
 }
+
+// ── What a pause means for the sweeps (#1772) ───────────────────────────────
+
+/**
+ * "An active pair" for every nudge, queue and reminder: live AND not paused,
+ * as a Prisma-ready `where` fragment. ONE definition — the interaction
+ * reminder, the stage-deadline and next-action reminders, the weekly-report
+ * chase, the dormant sweep and check-in, the missing-document chase and the
+ * mentor attention queue all read it, so a paused pair leaves all of them at
+ * once. Spread it into a `where` (`{ mentorId, ...activeRelationWhere() }`);
+ * never hand-write `{ status: 'ACTIVE', lifecycleState: 'ACTIVE' }`.
+ *
+ * NOT a feature gate: messaging, meetings, goals, weekly reports, the portal
+ * and the board keep reading `status: 'ACTIVE'`, which a paused pair still is.
+ * Exact because prisma/backfill-relation-lifecycle.mjs leaves no live row with
+ * a NULL or terminal lifecycleState.
+ */
+export function activeRelationWhere() {
+  return { status: 'ACTIVE' as const, lifecycleState: ACTIVE as string };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The stage-clock and dormancy columns a move writes beside the state, so a
+ * pause freezes the clock instead of letting it run out while nobody is
+ * expected to act:
+ *
+ *   · pause  — the remaining whole days to `stageDeadline` are kept (negative
+ *              when it was already overdue) and the deadline cleared, so no
+ *              overdue reminder can fire for a paused pair. Its reminder stamp
+ *              is left as it is.
+ *   · resume — the deadline is re-derived as now + the same remaining days
+ *              (unless a stage move during the pause already set a new one),
+ *              and a window that still has days left re-arms its one reminder.
+ *              The dormancy episode is cleared: a pause is not silence, and
+ *              docs/dormant-first-contacts.md's rule is that any sign of life
+ *              resets the stamp and both counters.
+ *   · end    — the kept days are dropped; a closed pairing has no clock.
+ */
+export function stageClockPatch(
+  from: RelationLifecycleState,
+  to: RelationLifecycleState,
+  row: { stageDeadline: Date | null; stageDeadlineRemainingDays: number | null },
+  now: Date,
+): {
+  stageDeadline?: Date | null;
+  stageDeadlineRemainingDays?: number | null;
+  deadlineReminderSentAt?: null;
+  dormantSince?: null;
+  dormantNudgeCount?: number;
+  dormantNudgeSentAt?: null;
+} {
+  if (to === PAUSED) {
+    if (!row.stageDeadline) return { stageDeadlineRemainingDays: null };
+    return {
+      stageDeadlineRemainingDays: Math.ceil((row.stageDeadline.getTime() - now.getTime()) / DAY_MS),
+      stageDeadline: null,
+    };
+  }
+  if (to === ACTIVE && from === PAUSED) {
+    const kept = row.stageDeadlineRemainingDays;
+    const restore = kept !== null && row.stageDeadline === null;
+    return {
+      ...(restore ? { stageDeadline: new Date(now.getTime() + kept * DAY_MS) } : {}),
+      ...(restore && kept > 0 ? { deadlineReminderSentAt: null } : {}),
+      stageDeadlineRemainingDays: null,
+      dormantSince: null,
+      dormantNudgeCount: 0,
+      dormantNudgeSentAt: null,
+    };
+  }
+  return { stageDeadlineRemainingDays: null };
+}

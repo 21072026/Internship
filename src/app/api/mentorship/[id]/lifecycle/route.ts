@@ -15,6 +15,7 @@ import {
   effectiveLifecycleState,
   isTerminal,
   lifecycleNotificationType,
+  stageClockPatch,
   statusForLifecycle,
 } from '@/lib/relationLifecycle';
 
@@ -57,6 +58,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           orgId: true,
           status: true,
           lifecycleState: true,
+          stageDeadline: true,
+          stageDeadlineRemainingDays: true,
           mentorId: true,
           menteeId: true,
           mentor: { select: { fullName: true } },
@@ -110,6 +113,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               lifecycleState: to,
               status: statusForLifecycle(to),
               pausedAt: to === PAUSED ? now : null,
+              // The stage clock freezes with the pair and the dormancy episode
+              // ends on resume (#1772) — one rule, stageClockPatch().
+              ...stageClockPatch(from, to, relation, now),
               // completedAt anchors the post-mentorship document window (#854):
               // stamped on every end, cleared on a reopen, untouched by pause/resume.
               ...(ending ? { completedAt: now, endReasonCode: reasonCode } : {}),

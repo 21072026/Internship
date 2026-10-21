@@ -112,6 +112,17 @@ olduğunu doğrula → daralt.
 hakkında — aynı kişiye giden iki farklı içerik, mükerrer değil. Onları birleştirmek bir
 son tarihi düşürmek olurdu.
 
+## Duraklatılmış çift (#1772)
+
+Duraklatılmış (`lifecycleState = PAUSED`) bir çift ne tarama tarafından damgalanır ne de
+temizlenir: `sweepDormantFirstContacts` ve `sendDormantCheckIns` yalnızca
+`activeRelationWhere()` (`src/lib/relationLifecycle.ts`) ile eşleşen — canlı **ve**
+duraklatılmamış — ilişkileri okur. Duraklatma bir sessizlik değildir; program kendisi
+beklemededir. **Devam ettirme** bir yaşam belirtisi sayılır: geçiş (`stageClockPatch`)
+`dormantSince`, `dormantNudgeCount` ve `dormantNudgeSentAt` alanlarını sıfırlar, böylece
+eski bir dönem duraklatmanın öbür tarafına taşınmaz. İki sınır aynen geçerli: üçüncü mail
+yok, otomatik aşama değişikliği/kapatma yok.
+
 ## Elle çalıştırma
 
 ```
