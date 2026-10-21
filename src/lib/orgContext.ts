@@ -493,6 +493,16 @@ export function runWithApiKeyOrg<T>(orgId: string, fn: () => T): T {
   return runWithOrg(orgId, fn);
 }
 
+// A platform-level WRITE from inside an API-key request — the rate limiter's
+// breach row (#864), which belongs to no tenant (on a failed key there is not
+// even a key to name one). It runs outside the request's marker, where the
+// unbound-org guard below does not apply; in production that guard is not
+// installed, so the row is written exactly as before. Never wrap a read in it:
+// keeping an API-key read from crossing tenants is what the guard is for.
+export function outsideApiKeyRequest<T>(fn: () => T): T {
+  return apiKeyRequestStorage.exit(fn);
+}
+
 // Loud in development, logged in production: authenticating by API key outside
 // `withApiKey()` means whatever the handler reads next is unscoped.
 export function assertApiKeyRequestContext(caller: string): void {
