@@ -126,6 +126,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Invite a lead',
         menteeActivity: 'Lead Activity',
         mentorApplications: 'Sales Rep Applications',
+        agreements: 'Engagement agreement',
       },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -892,6 +893,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         onMentee: 'What a rep scores a lead on',
         onMentor: 'What a lead scores a rep on',
       },
+      slaQueue: {
+        colOwner: 'Rep',
+        levelMentor: 'Rep told',
+        complianceDefinition: 'Of the stage moves made in the period out of a stage that has a service level, the share made before that service level elapsed — measured from when the lead entered the stage, in calendar days, against the service levels configured today. Leads in the re-engagement pool and stages whose clock is stopped are not counted.',
+      },
       stageSla: {
         escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the rep is reminded, as before.',
         subtitle: 'How long anyone may wait at a stage before the rep is warned. Leave a stage empty and it has no rule — an organisation that sets none keeps working exactly as before.',
@@ -1291,6 +1297,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Müşteri adayı davet et',
         menteeActivity: 'Müşteri Adayı Etkinliği',
         mentorApplications: 'Satış Temsilcisi Başvuruları',
+        agreements: 'Çalışma sözleşmesi',
       },
       invite: {
         subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
@@ -1927,6 +1934,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         onMentee: 'Temsilcinin müşteri adayını puanladığı kriterler',
         onMentor: 'Müşteri adayının temsilciyi puanladığı kriterler',
       },
+      slaQueue: {
+        colOwner: 'Temsilci',
+        levelMentor: 'Temsilciye bildirildi',
+        complianceDefinition: 'Dönem içinde, hizmet seviyesi tanımlı bir aşamadan yapılan geçişlerin, o süre dolmadan yapılanlarının oranı — müşteri adayının aşamaya girdiği andan itibaren, takvim günüyle ve bugün tanımlı hizmet seviyelerine göre ölçülür. Yeniden etkileşim havuzundaki müşteri adayları ve saati durmuş aşamalar sayılmaz.',
+      },
       stageSla: {
         escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca temsilciye hatırlatılır.',
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
@@ -2318,6 +2330,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Lead einladen',
         menteeActivity: 'Lead-Aktivität',
         mentorApplications: 'Bewerbungen als Vertriebsmitarbeiter',
+        agreements: 'Zusammenarbeitsvereinbarung',
       },
       invite: {
         subtitle: 'Vertriebsmitarbeiter und Leads einladen',
@@ -2949,6 +2962,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Wonach ein Deal bewertet wird. Rührst du nichts an, bleiben die eingebauten Kriterien in Kraft; definierst du eigene, ersetzen sie diese überall, wo Bewertungen geschrieben und gelesen werden.',
         onMentee: 'Wonach ein Vertriebsmitarbeiter einen Lead bewertet',
         onMentor: 'Wonach ein Lead einen Vertriebsmitarbeiter bewertet',
+      },
+      slaQueue: {
+        colOwner: 'Vertrieb',
+        levelMentor: 'Vertrieb informiert',
+        complianceDefinition: 'Von den Phasenwechseln im Zeitraum aus einer Phase mit Servicelevel der Anteil, der vor Ablauf dieses Servicelevels stattfand — gemessen ab dem Eintritt des Leads in die Phase, in Kalendertagen, gegen die heute eingestellten Servicelevel. Leads im Wiederansprache-Pool und Phasen mit angehaltener Uhr zählen nicht.',
       },
       stageSla: {
         escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur die Vertriebsperson erinnert.',

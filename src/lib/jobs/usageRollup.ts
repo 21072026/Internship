@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import {
@@ -112,7 +112,7 @@ export async function runUsageRollup(opts: { now?: Date; orgIds?: string[] } = {
   return { orgs: orgs.length, periods: [...periods], rows, failed };
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Register the nightly usage rollup in this server process. Idempotent — a
@@ -136,7 +136,7 @@ const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 export function initUsageRollupCron() {
   if (tasks.has('usage-rollup')) return;
 
-  const task = cron.schedule('40 2 * * *', async () => {
+  const task = scheduleLeased('40 2 * * *', async () => {
     try {
       const result = await runUsageRollup();
       // A rollup that wrote nothing, or skipped a tenant, is worth a line; a
