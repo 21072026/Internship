@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**MARKETING: setup checklist guides and document search in sales wording:** the \"Getting started\" checklist's help texts (`checklist.guides.*`) and the rep capacity step, plus the document-requirements candidate search, still explained the product in mentor/mentee/internship terms to a MARKETING tenant. All 16 guides get a MARKETING overlay in EN/TR/DE (lead / sales rep / account / deal); the leak ratchet drops by 16 per locale (en 398 · tr 401 · de 396).",
-  "notes": {
-    "en": ["The setup checklist's help texts now speak in leads, sales reps and deals instead of mentoring terms."],
-    "tr": ["Kurulum kontrol listesindeki yardım metinleri artık mentorluk terimleri yerine müşteri adayı, satış temsilcisi ve fırsat diliyle konuşuyor."],
-    "de": ["Die Hilfetexte der Einrichtungs-Checkliste sprechen jetzt von Leads, Vertriebsmitarbeitern und Deals statt von Mentoring."]
-  }
-}

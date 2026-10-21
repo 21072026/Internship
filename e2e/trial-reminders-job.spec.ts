@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail } from './helpers/db';
+import { asHost, MARKETING_HOST } from './helpers/auth';
 // Static imports, not `await import()`: Playwright resolves the `@/…` alias when
 // it transforms the spec's import graph, Node at runtime does not.
 import {
@@ -82,9 +83,10 @@ test('the trial-reminders job warns once, expires what has run out, and does not
   });
   orgId = org.id;
 
-  // The admin is a PLATFORM admin (no org): the cron endpoint is the operator's
-  // trigger, not a tenant screen, and the sweep resolves its tenants itself.
-  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Trial Job Admin');
+  // The admin is the tenant's OWN admin: `orgId` narrows the sweep only to the
+  // caller's org (or one a super admin of its world reaches, #1575), so the
+  // least-privileged account that may run this tenant's sweep is its own ADMIN.
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Trial Job Admin', org.id);
   const owner = await seedUser(ownerEmail, 'TrialPass123!', 'MENTOR', 'Trial Job Owner');
   const lead = await seedUser(leadEmail, 'TrialPass123!', 'MENTEE', 'Trial Job Lead');
   const staleLead = await seedUser(staleLeadEmail, 'TrialPass123!', 'MENTEE', 'Stale Trial Lead');
@@ -161,9 +163,9 @@ test('the trial-reminders job warns once, expires what has run out, and does not
     },
   });
 
-  // The admin is org-less (a platform admin), i.e. an INTERNSHIP-world account:
-  // it signs in on the default host even though the tenant it triggers is a
-  // MARKETING one (#2590) — a forged marketing host here would be refused.
+  // A MARKETING tenant's admin signs in on the marketing host (#2590): the URL
+  // a person signs in on decides which world's account they get.
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await page.goto('/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', adminEmail);
   await page.fill('input[type="password"]', 'AdminPass123');

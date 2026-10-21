@@ -485,6 +485,94 @@ sentence that ends up in a screenshot.
   PR. An unmapped category fails **open** (it sends, ungated, with no footer) —
   the fail-safe direction, but it means the gap is silent.
 
+## 2e. Bounces and complaints → the suppression list (#1692)
+
+`EmailLog.SENT` means "the relay took it", never "it arrived". This is the loop
+that closes the gap: the provider tells us when a mailbox bounced a message or
+the person reported it as spam, the address is **suppressed**, and nothing is
+sent to it again until an admin deliberately delists it.
+
+### The pieces
+
+| Piece | Where |
+|-------|-------|
+| Rules (pure, unit-tested) | `src/lib/emailSuppressionRule.ts`, `scripts/test/email-suppression.test.mjs` |
+| The only writer / reader | `src/lib/emailSuppression.ts` |
+| Provider webhook | `POST /api/webhooks/email/[provider]` (`brevo`, `generic`) |
+| Enforcement | `prepareEmail()` in `src/services/emailService.ts`, and again in the queue's drain (`src/lib/mailOutbox.ts`) |
+| Admin list + delist | Admin → Settings → Email deliverability → **Suppressions** tab (`/api/admin/email-suppressions`) |
+| Tables | `EmailSuppression` (one row per address), `EmailDeliveryEvent` (one row per provider event) |
+
+### The policy
+
+- A **hard bounce** (Brevo `hard_bounce`, `invalid_email`) suppresses at once.
+- A **complaint** (Brevo `spam`) suppresses at once **and** turns off
+  `emailNotifications` on every account the address holds, in every world —
+  "I marked you as spam" is an unsubscribe with feeling. Delisting does not turn
+  it back on; that is the person's own switch.
+- A **soft bounce** (a full mailbox) suppresses only after
+  `SOFT_BOUNCE_THRESHOLD` (3) inside `SOFT_BOUNCE_WINDOW_DAYS` (7). One full
+  mailbox is temporary; suppressing on it would lose a real recipient.
+- Brevo `blocked` and every non-address event (delivered, opened, …) are
+  acknowledged and ignored.
+- An address is stored and matched **trimmed and lower-cased** — a suppression
+  that misses on case is not a suppression.
+- A stored reason only moves up (complaint > hard bounce > repeated soft); a new
+  bounce after a delist re-arms the same row.
+
+### Why it silences essential mail too
+
+Every other "do not mail" rule stops at the essential groups (`account_security`,
+the DOI `consent` mail): no preference, quiet hour or unsubscribe can silence a
+password reset. A suppression is the one exception, on purpose. It is not a
+choice about *which* mail somebody wants; it is the mailbox saying the address
+does not exist, or the person telling their provider we are spam. A reset sent to
+a dead mailbox reaches nobody and only adds a bounce to the sending domain every
+tenant shares. So the send is recorded `SKIPPED` with `Suppressed: <REASON>`,
+nothing is queued or drafted, and `sendEmail()` answers `SKIPPED` — every route
+that reports `emailSent` therefore says `false` (#1431), never a pretend success.
+The suppression check sits *before* the opt-out gate, the outbound-approval hook
+and the queue. A lookup that fails sends (fail open), like the preference read.
+
+### Not tenant-scoped — the one knowing exception
+
+`EmailSuppression` has no `orgId`: sender reputation belongs to the sending
+domain, and the domain is shared. The admin screen applies the mail queue's scope
+instead (`queueScopeFor()`): a super admin sees the addresses held by an account
+of their world (and, in the default world, addresses no account holds); the
+default organization's ADMIN sees its own users' addresses; any other admin gets
+403, and a row outside the caller's scope is 404. A delist needs a reason
+(3–500 chars), a complaint additionally `confirm: true`; the actor, time and
+reason are on the row and on an `email.suppression_released` ActivityLog line.
+
+### Pointing the provider at the webhook
+
+1. Set `EMAIL_WEBHOOK_SECRET` (a long random string) in the server env. Without
+   it the endpoint answers **401 to everything in production** (fail closed —
+   the #870 rule); dev and CI accept unauthenticated calls only when it is unset.
+2. Brevo → *Transactional → Settings → Webhooks → Add a webhook*:
+   - URL: `https://<app host>/api/webhooks/email/brevo`
+   - Events: *Hard bounce*, *Soft bounce*, *Spam*, *Invalid email* (others are
+     harmless but ignored).
+   - Authentication: *Token* (sent as `Authorization: Bearer <secret>`) or
+     *Basic* with the secret as the password. `X-Webhook-Secret: <secret>` works
+     for any other provider.
+3. Any other relay: template its webhook to the generic shape at
+   `/api/webhooks/email/generic` — `{ "id", "email", "type": "bounce" | "complaint",
+   "hard"?: boolean, "detail"?: string }`, one object, a list, or `{ "events": [...] }`
+   (≤ 100 per request).
+
+The webhook is rate-limited (600/min per IP), idempotent on the provider's event
+id (Brevo sends none, so a sha256 of event + address + message id + time stands
+in), answers 500 on a database error so the provider retries, and makes no
+outbound call. Events are kept 30 days (retention key `emailDeliveryEvent`) —
+long enough for retries and the soft-bounce window; the suppression row itself
+is the record.
+
+Not done here: an `email.bounced` / `email.complained` domain event. The outbox
+(#1680) does not exist yet; when it does, `ingestDeliveryEvents()` is where to
+emit it.
+
 ## 3. Inbound replies → Messages
 
 The full round trip is in place:
@@ -570,8 +658,9 @@ digest (:20), and the weekly mentor digest + analytics report (Mondays 08:00 /
 It is started at boot by `src/instrumentation.ts`, which POSTs
 `/api/cron/start` — the same edge-runtime workaround as the mail bridge, and
 deferred onto a timer because `register()` resolves before the server accepts
-connections. `GET /api/cron` still runs every job once for an authenticated
-ADMIN.
+connections. `GET /api/cron` still runs every job once — for a **super admin**:
+the batch and the platform-wide named jobs sweep every tenant, so a tenant ADMIN
+gets a 403 there and may run only the jobs scoped to their own org (#1575).
 
 > ⚠️ **`CRON_SECRET` belongs in production only.** These jobs email real people,
 > and the preview DB is shared with every topic env holding the same addresses —
@@ -593,6 +682,7 @@ handled and suppress the reminders permanently.
 | `UNSUBSCRIBE_MAILTO` | Optional `mailto:` in `List-Unsubscribe`. Advertised only when set — nothing drains that mailbox by default (§2d) |
 | `INBOUND_EMAIL_DOMAIN` | Domain in the generated `reply+…@` address |
 | `INBOUND_SECRET` | Shared secret the inbound webhook checks (`x-inbound-secret`) |
+| `EMAIL_WEBHOOK_SECRET` | Shared secret the bounce/complaint webhook checks (§2e); required in production |
 | `INBOUND_IMAP_HOST` / `INBOUND_IMAP_PORT` / `INBOUND_IMAP_USER` / `INBOUND_IMAP_PASS` | Reply mailbox the bridge drains (production only) |
 | `INBOUND_IMAP_MAILBOX` / `INBOUND_IMAP_POLL_SECONDS` | Folder (default `INBOX`) and poll interval (default 60s, min 30) |
 | `INBOUND_IMAP_ENABLED` | Set to `0` to stop the bridge while keeping the credentials |

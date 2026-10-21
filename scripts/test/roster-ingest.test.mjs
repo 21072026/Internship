@@ -238,6 +238,7 @@ function createWorld(initialUsers = []) {
           bytes: Buffer.byteLength(text),
           source: 'https://hr.example.com/roster.csv',
         }),
+        ...(world.deprovisionPort ? { deprovision: world.deprovisionPort } : {}),
       },
       options,
     );
@@ -777,4 +778,115 @@ test('an SFTP feed with no pinned host key refuses to connect', async () => {
       ),
     /not wired yet/,
   );
+});
+
+// ── Deprovisioning valves in the engine (#1966) ─────────────────────────────
+// The rules are pinned in e2e/roster-deprovision.unit.spec.ts; these pin WHERE
+// the engine applies them: a valve that fires must leave zero writes, and the
+// deprovisioning phase must never act on a run it cannot trust.
+
+function deprovisionPort(world, settings = {}) {
+  const calls = { apply: [], load: [] };
+  const port = {
+    settings: {
+      feedId: 'feed-1',
+      deprovision: true,
+      maxDeactivatePercent: 10,
+      minRowCount: 1,
+      deprovisionGraceDays: 1,
+      ...settings,
+    },
+    async load({ absentIds, presentIds }) {
+      calls.load.push({ absentIds, presentIds });
+      const asCandidate = (id) => ({
+        id,
+        role: 'MENTEE',
+        isActive: true,
+        ssoExempt: false,
+        rosterAbsentSince: null,
+        deactivatedBy: null,
+      });
+      return {
+        absent: absentIds.map(asCandidate),
+        present: presentIds.map(asCandidate),
+        coveredActiveCount: world.users.length,
+        activeAdminCount: 1,
+      };
+    },
+    async apply(input) {
+      calls.apply.push(input);
+      return { deactivated: input.plan.deactivate.length, reactivated: input.plan.reactivate.length };
+    },
+  };
+  world.deprovisionPort = port;
+  return calls;
+}
+
+const person = (i) => ({
+  id: `p${i}`,
+  orgId: ORG_A,
+  email: `p${i}@example.com`,
+  externalId: null,
+  fullName: `Person ${i}`,
+});
+
+test('the row floor aborts before anything is written', async () => {
+  const world = createWorld([person(1)]);
+  const calls = deprovisionPort(world, { minRowCount: 3 });
+  const result = await world.run(feedFor(), 'email,name\nnew@example.com,New\n');
+  assert.equal(result.outcome, 'ABORTED_SAFETY');
+  assert.equal(result.safety.reason, 'row_floor');
+  assert.equal(world.log.length, 0, 'not even the new person is created');
+  assert.equal(world.runs[0].status, 'ABORTED_SAFETY');
+  assert.equal(calls.apply.length, 0);
+});
+
+test('the deactivation ceiling aborts before anything is written', async () => {
+  // 10 people on the roster, the file names one of them plus a newcomer: nine
+  // would be on their way out, far over 10%.
+  const world = createWorld(Array.from({ length: 10 }, (_, i) => person(i)));
+  const calls = deprovisionPort(world);
+  const result = await world.run(feedFor(), 'email,name\np0@example.com,Person 0\nnew@example.com,New\n');
+  assert.equal(result.outcome, 'ABORTED_SAFETY');
+  assert.equal(result.safety.reason, 'deactivation_ceiling');
+  assert.equal(result.safety.planned, 9);
+  assert.equal(world.log.length, 0, 'the newcomer is not created either');
+  assert.equal(calls.apply.length, 0);
+
+  // Approved (#1967): the same file applies, and the plan reaches the port.
+  const approved = await world.run(feedFor(), 'email,name\np0@example.com,Person 0\nnew@example.com,New\n', {
+    approved: true,
+  });
+  assert.equal(approved.outcome, 'APPLIED');
+  assert.equal(calls.apply.length, 1);
+  assert.equal(calls.apply[0].plan.markAbsent.length, 9);
+});
+
+test('a run with a row error never deprovisions', async () => {
+  const world = createWorld([person(1), person(2)]);
+  const calls = deprovisionPort(world, { maxDeactivatePercent: 100 });
+  const result = await world.run(feedFor(), 'email,name\np1@example.com,Person 1\nnot-an-email,Broken\n');
+  assert.equal(result.run.status, 'FAILED');
+  assert.equal(calls.apply.length, 0, 'the unreadable row may be the person who looks absent');
+});
+
+test('a dry run plans the deprovisioning but never applies it', async () => {
+  const world = createWorld([person(1), person(2)]);
+  const calls = deprovisionPort(world, { maxDeactivatePercent: 100 });
+  const result = await world.run(feedFor(), 'email,name\np1@example.com,Person 1\n', { dryRun: true });
+  assert.equal(result.outcome, 'APPLIED');
+  assert.deepEqual(result.deprovision.plan.markAbsent, ['p2']);
+  assert.equal(calls.apply.length, 0);
+});
+
+test('an unchanged file still advances the grace period', async () => {
+  const world = createWorld([person(1), person(2)]);
+  const calls = deprovisionPort(world, { maxDeactivatePercent: 100 });
+  const file = 'email,name\np1@example.com,Person 1\n';
+  await world.run(feedFor(), file);
+  assert.equal(calls.apply.length, 1);
+  const second = await world.run(feedFor(), file);
+  assert.equal(second.outcome, 'NOOP_UNCHANGED_FILE');
+  assert.equal(calls.apply.length, 2, 'the same export two nights running is the usual case');
+  assert.deepEqual(calls.apply[1].plan.markAbsent, ['p2']);
 });
