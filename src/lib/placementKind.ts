@@ -37,21 +37,3 @@ export function funnelEnteredAtForKindChange(
   return to === 'PLACEMENT' ? now : null;
 }
 
-/** The default pipeline's hire stages; a tenant's own last on-path stage counts too. */
-export const ATTRIBUTION_STAGE_KEYS = ['HIRED_660', 'EMPLOYED_700'] as const;
-
-/**
- * Is a move into `toStatus` the moment a hire happens — where the attribution
- * belongs? The default hire keys, or the org's LAST on-path stage (its own
- * pipeline, #747 — never a hardcoded list beyond the defaults).
- */
-export function isAttributionStage(
-  stages: readonly { key: string; order: number; isOffPath: boolean }[],
-  toStatus: string,
-): boolean {
-  if ((ATTRIBUTION_STAGE_KEYS as readonly string[]).includes(toStatus)) return true;
-  const onPath = stages.filter((s) => !s.isOffPath);
-  if (onPath.length === 0) return false;
-  const last = onPath.reduce((a, b) => (b.order > a.order ? b : a));
-  return last.key === toStatus;
-}

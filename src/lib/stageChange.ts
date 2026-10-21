@@ -13,7 +13,8 @@
 import { prisma } from './prisma';
 import { resolvePipelineStages } from './pipelineStages';
 import { isDropoffReasonCodeFor } from './dropoffReasons';
-import { isAttributionStage, isEmploymentAttribution } from './placementKind';
+import { isEmploymentAttribution } from './placementKind';
+import { outcomeStageKeysFrom } from './pipeline';
 import { verticalFor } from './verticalContext';
 
 // The no-regression rule for MACHINE writers (#2451): pure, so it is unit-tested
@@ -95,7 +96,9 @@ export async function validateEmploymentAttribution(
   // A sale is not a hire: the MARKETING funnel's last stage carries no attribution.
   const vertical = input.orgId ? await verticalFor(input.orgId) : null;
   if (vertical === 'MARKETING') return { ok: true, hireStage: false };
-  const hireStage = isAttributionStage(await resolvePipelineStages(input.orgId), input.toStatus);
+  // The hire stages are the org's own "reached the outcome" tail — the same
+  // `outcomeStageKeysFrom()` the analytics count by (#1882), never a key list.
+  const hireStage = outcomeStageKeysFrom(await resolvePipelineStages(input.orgId)).finished.includes(input.toStatus);
   if (hireStage && EMPLOYMENT_ATTRIBUTION_REQUIRED && !input.attribution) {
     return { ok: false, error: 'employmentAttribution is required when moving into a hire stage' };
   }

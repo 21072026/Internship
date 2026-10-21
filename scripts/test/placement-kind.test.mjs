@@ -8,7 +8,6 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_RELATION_KIND,
   funnelEnteredAtForKindChange,
-  isAttributionStage,
   isEmploymentAttribution,
   isRelationKind,
 } from '../../src/lib/placementKind.ts';
@@ -26,27 +25,4 @@ test('a kind change stamps or clears funnelEnteredAt, a no-op leaves it', () => 
   assert.equal(funnelEnteredAtForKindChange('COACHING', 'PLACEMENT', now), now);
   assert.equal(funnelEnteredAtForKindChange('PLACEMENT', 'COACHING', now), null);
   assert.equal(funnelEnteredAtForKindChange('PLACEMENT', 'PLACEMENT', now), undefined);
-});
-
-test('the hire stage: default keys, or the org\'s last on-path stage — never an off-path one', () => {
-  const defaults = [
-    { key: 'APPLICATION_100', order: 0, isOffPath: false },
-    { key: 'HIRED_660', order: 9, isOffPath: false },
-    { key: 'EMPLOYED_700', order: 10, isOffPath: false },
-    { key: 'INTERNSHIP_FOUND_ELSEWHERE_800', order: 11, isOffPath: true },
-  ];
-  assert.ok(isAttributionStage(defaults, 'HIRED_660'));
-  assert.ok(isAttributionStage(defaults, 'EMPLOYED_700'));
-  assert.ok(!isAttributionStage(defaults, 'APPLICATION_100'));
-  assert.ok(!isAttributionStage(defaults, 'INTERNSHIP_FOUND_ELSEWHERE_800'));
-
-  const custom = [
-    { key: 'STAGE_A', order: 0, isOffPath: false },
-    { key: 'STAGE_F', order: 5, isOffPath: false },
-    { key: 'LOST', order: 6, isOffPath: true },
-  ];
-  assert.ok(isAttributionStage(custom, 'STAGE_F'));
-  assert.ok(!isAttributionStage(custom, 'STAGE_A'));
-  assert.ok(!isAttributionStage(custom, 'LOST'));
-  assert.ok(!isAttributionStage([], 'STAGE_A'));
 });
