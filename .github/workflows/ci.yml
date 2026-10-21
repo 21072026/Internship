@@ -48,6 +48,11 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # check:i18n sees key PARITY, not copy that never became a key: the
+      # per-tenant pipeline-stage editor shipped English end to end on a
+      # trilingual product (#1613). Pinned per file and shrink-only.
+      - name: no new hardcoded user-facing strings (#1613)
+        run: npm run check:hardcoded-strings
       # Report registry (#1903): label keys in all three dictionaries, a loader
       # per definition, and a privacy floor that can actually suppress.
       - name: Report registry

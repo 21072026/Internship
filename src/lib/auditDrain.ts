@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -29,7 +28,7 @@ import {
 //
 // ONE TICK, PLATFORM-WIDE. `runAuditDrains()` walks every due drain of every
 // tenant and ships its next batches. It runs outside any request scope — the
-// cron below, or the admin's `/api/cron?job=audit-drain` — so it binds
+// queued `audit.drain` job, or the admin's `/api/cron?job=audit-drain` — so it binds
 // `runWithOrg(null, …)` explicitly and scopes every AuditLog read by the
 // drain's OWN orgId in the `where`. That filter is the whole isolation story:
 // a drain never sees a row of another tenant because the query never asks for
@@ -44,10 +43,9 @@ import {
 // row — only the age-based sweep (#1585, on #1678's schedule) may, and this
 // module adds no retention of its own.
 //
-// THE SCHEDULE. node-cron every five minutes, registered from /api/cron/start
-// like the dead-letter alert, until #1673's worker takes `'audit.drain'`
-// (src/lib/jobs/types.ts) as a queue handler; `runAuditDrains()` is the
-// handler either way. Backoff and the pause after repeated failures live on
+// THE SCHEDULE. Every five minutes as the queued job `'audit.drain'` (#1676,
+// src/lib/jobs/schedules.ts), run by the job worker; `runAuditDrains()` is the
+// handler. Backoff and the pause after repeated failures live on
 // the drain row itself (afterAttempt), so a receiver outage is retried on its
 // own clock rather than hammered every tick.
 
@@ -279,26 +277,8 @@ export async function deliverTestBatch(
 }
 
 // ── Schedule ────────────────────────────────────────────────────────────────
-
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
-
-/**
- * Registers the five-minute tick in this server process. Idempotent — a
- * retried call from `/api/cron/start` is harmless. One tick per environment
- * today because replica ≥ 2 runs with CRON_ENABLED=0 (CLAUDE.md § Single-owner
- * background work); a second runner would be harmless anyway, since the
- * cursor only ever moves forward and the receiver dedupes on the row id.
- */
-export function initAuditDrainCron() {
-  if (tasks.has('audit-drain')) return;
-  const task = cron.schedule('*/5 * * * *', async () => {
-    try {
-      const tick = await runAuditDrains();
-      // Quiet when nothing shipped and nothing failed — most ticks.
-      if (tick.batches > 0 || tick.failed > 0) logger.info('audit drain tick', { ...tick });
-    } catch (e) {
-      logger.error('audit drain cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('audit-drain', task);
-}
+//
+// Scheduled by the queue (#1676): `audit.drain` in src/lib/jobs/schedules.ts,
+// every five minutes under the 'scheduler' lease, run by its handler in
+// src/jobs/index.ts. A doubled tick is harmless: the cursor only moves forward
+// and the receiver dedupes on the row id.

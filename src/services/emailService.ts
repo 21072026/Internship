@@ -2,9 +2,9 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { suppressedAmong } from '@/lib/emailSuppression';
 import { suppressedLogReason } from '@/lib/emailSuppressionRule';
-import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -300,9 +300,15 @@ export function mailMeterIdleForTests(): Promise<void> {
   return meterObserver.idle();
 }
 
+/** Does a bulk relay exist? The load-time answer, or — once the test seam has
+ *  re-pointed this process (`requestFromEnv`) — the current environment's. */
+function bulkChannelExists(): boolean {
+  return requestFromEnv ? Boolean(process.env.SMTP_BULK_HOST && process.env.SMTP_BULK_USER) : !!bulkTransporter;
+}
+
 function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter {
   // `transportFor()` only ever answers 'bulk' when the bulk channel exists.
-  const ch: MailTransport = channel === 'bulk' && bulkTransporter ? 'bulk' : 'primary';
+  const ch: MailTransport = channel === 'bulk' && bulkChannelExists() ? 'bulk' : 'primary';
   if (mode === 'request' && !requestFromEnv) return ch === 'bulk' ? bulkTransporter! : transporter;
   const key = `${ch}:${mode}`;
   let t = modeTransports.get(key);
@@ -1634,7 +1640,27 @@ export function mailDrainDeps(): DrainDeps {
     record: (e, status, error) => recordEmailOutcome(e, status, error),
     observe: (e) => observeMeterSpend(e as unknown as PreparedEmail),
     finalFailure: (e) => noteFinalMailFailure(e.category),
+    failover: (e) => failoverEnvelope(e),
   };
+}
+
+/**
+ * A primary-channel mail moved onto the bulk relay (#1690): the same message
+ * under the bulk From identity — the bulk relay signs for its own domain
+ * (`SMTP_BULK_FROM`), so a primary From on it would fail DMARC alignment. The
+ * display name (the tenant's brand) is kept. Null when no bulk relay is
+ * configured (one channel: nothing to fail over to) or the mail is not a
+ * primary one.
+ */
+export function failoverEnvelope<E extends { transport: MailTransport; message: { from?: unknown } }>(e: E): E | null {
+  if (!bulkChannelExists() || e.transport !== 'primary') return null;
+  const bulk = fromIdentity(null, 'bulk');
+  const from = e.message.from;
+  let name: string | null = null;
+  if (from && typeof from === 'object' && typeof (from as { name?: unknown }).name === 'string') name = (from as { name: string }).name;
+  else if (typeof from === 'string' && from) name = addressparser(from, { flatten: true })[0]?.name || null;
+  const nextFrom = !bulk.address ? from : name ? { name, address: bulk.address } : bulk.address;
+  return { ...e, transport: 'bulk', message: { ...e.message, from: nextFrom } };
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -5964,13 +5990,13 @@ export async function pruneEmailLog(
   return { deleted: processed, cutoff, capped };
 }
 
-const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const scheduledTasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 export function initCronJobs() {
   if (scheduledTasks.has('mentor-reminders')) return;
 
   // Run every day at 9:00 AM
-  const task = cron.schedule('0 9 * * *', async () => {
+  const task = scheduleLeased('0 9 * * *', async () => {
     console.log('[Cron] Running mentor interaction reminder check...');
     try {
       // Before the reminders, not after: the sweep is what decides who counts as
@@ -6004,7 +6030,7 @@ export function initCronJobs() {
   // (MEETING_REMINDER_WINDOW_MINUTES); an hourly tick would fire anywhere from
   // 0 to 60 minutes ahead, so a quarter-hourly tick is what actually delivers
   // "about an hour before" (45-60 min). reminderSentAt keeps it single-shot.
-  const meetingTask = cron.schedule('*/15 * * * *', async () => {
+  const meetingTask = scheduleLeased('*/15 * * * *', async () => {
     try {
       const r = await sendMeetingReminders();
       if (r.reminded) {
@@ -6035,7 +6061,7 @@ export function initCronJobs() {
   scheduledTasks.set('meeting-reminders', meetingTask);
 
   // Weekly mentor digest — Mondays 8:00.
-  const digestTask = cron.schedule('0 8 * * 1', async () => {
+  const digestTask = scheduleLeased('0 8 * * 1', async () => {
     try {
       const r = await sendWeeklyMentorDigests();
       console.log(`[Cron] Weekly digests sent: ${r.sent}`);
@@ -6048,7 +6074,7 @@ export function initCronJobs() {
 
   // Hourly e-mail delivery health check (#1190) — alerts when sends keep
   // failing or the last success goes stale while attempts continue.
-  const emailHealthTask = cron.schedule('5 * * * *', async () => {
+  const emailHealthTask = scheduleLeased('5 * * * *', async () => {
     try {
       await runEmailHealthCheck();
     } catch (e) {
@@ -6064,7 +6090,7 @@ export function initCronJobs() {
   scheduledTasks.set('email-health', emailHealthTask);
 
   // Missing mandatory documents — Mondays 08:30, offset from the other weekly jobs.
-  const documentTask = cron.schedule('30 8 * * 1', async () => {
+  const documentTask = scheduleLeased('30 8 * * 1', async () => {
     try {
       const result = await sendWeeklyMissingDocumentReminders();
       console.log(`[Cron] Missing document reminders: ${result.notified}`);
@@ -6076,7 +6102,7 @@ export function initCronJobs() {
 
   // AI artefact retention (#2044) — daily at 03:20: nothing generated about a
   // person outlives the org's retentionMonths.
-  const artifactRetention = cron.schedule('20 3 * * *', async () => {
+  const artifactRetention = scheduleLeased('20 3 * * *', async () => {
     try {
       const r = await sweepAiArtifacts();
       if (r.deleted) console.log(`[Cron] AI artefacts past retention removed: ${r.deleted}`);
@@ -6087,7 +6113,7 @@ export function initCronJobs() {
   scheduledTasks.set('ai-artifact-retention', artifactRetention);
 
   // Daily mentee-activity digest — every day at 7:30.
-  const activityTask = cron.schedule('30 7 * * *', async () => {
+  const activityTask = scheduleLeased('30 7 * * *', async () => {
     try {
       const r = await sendDailyActivityDigests();
       console.log(`[Cron] Daily activity digests sent: ${r.sent}`);
@@ -6097,7 +6123,7 @@ export function initCronJobs() {
   });
   scheduledTasks.set('activity-digest', activityTask);
 
-  const weeklyReportTask = cron.schedule('0 15 * * 5', async () => {
+  const weeklyReportTask = scheduleLeased('0 15 * * 5', async () => {
     try {
       const result = await sendWeeklyReportReminders();
       console.log(`[Cron] Weekly report reminders: ${result.reminded}`);
@@ -6108,7 +6134,7 @@ export function initCronJobs() {
   scheduledTasks.set('weekly-report-reminders', weeklyReportTask);
 
   // Unread-message digest — hourly at :20 (offset from the other hourly jobs).
-  const unreadDigestTask = cron.schedule('20 * * * *', async () => {
+  const unreadDigestTask = scheduleLeased('20 * * * *', async () => {
     try {
       const r = await sendUnreadMessageDigests();
       if (r.sent) console.log(`[Cron] Unread message digests sent: ${r.sent}`);
@@ -6122,7 +6148,7 @@ export function initCronJobs() {
   // device rows and the spent one-minute refresh grants have no further use;
   // revoked devices are kept a month longer so a replayed cookie is still
   // recognisable (see purgeExpiredTrustedDevices).
-  const trustedDeviceTask = cron.schedule('40 3 * * *', async () => {
+  const trustedDeviceTask = scheduleLeased('40 3 * * *', async () => {
     try {
       const r = await purgeExpiredTrustedDevices();
       if (r.devices || r.grants) {
