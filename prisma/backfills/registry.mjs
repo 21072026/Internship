@@ -64,7 +64,7 @@ export const BACKFILLS = [
   { id: '0010-ai-usage-task', script: 'prisma/backfill-ai-usage-task.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // PageView by viewer, EmailLog by the one org holding the address (#1556).
   // Numbered after the list's end, placed before 0011 on purpose.
-  { id: '0031-telemetry-org', script: 'prisma/backfill-telemetry-org.mjs', once: false, optional: true, why: 'Tenant attribution: non-blocking like its siblings 0006–0010.' },
+  { id: '0032-telemetry-org', script: 'prisma/backfill-telemetry-org.mjs', once: false, optional: true, why: 'Tenant attribution: non-blocking like its siblings 0006–0010.' },
   // Tenant backfill (#1557): exits non-zero when a nullable orgId column still
   // holds NULLs after its retry passes. An incomplete run is the one thing that
   // must block MT_ENFORCE_ISOLATION, so its failure is announced loudly.
