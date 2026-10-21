@@ -153,9 +153,15 @@ export function certificateInfo(cert: string | null | undefined): CertificateInf
   if (!cert || !cert.trim()) return null;
   try {
     const x = new X509Certificate(toPem(cert));
+    const notBefore = new Date(x.validFrom);
+    const notAfter = new Date(x.validTo);
+    // Node parses a certificate whose validity is not a real time and reports
+    // it as 'Bad time value': an Invalid Date would compare false against
+    // everything (passing the expiry check) and throw in toISOString().
+    if (!Number.isFinite(notBefore.getTime()) || !Number.isFinite(notAfter.getTime())) return null;
     return {
-      notBefore: new Date(x.validFrom),
-      notAfter: new Date(x.validTo),
+      notBefore,
+      notAfter,
       fingerprintSha256: x.fingerprint256,
       subject: x.subject.replace(/\n/g, ', '),
     };

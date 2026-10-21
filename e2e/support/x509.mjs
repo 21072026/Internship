@@ -98,7 +98,9 @@ export function selfSignedCertificate(publicKey, privateKey, commonName, serial 
     derInt(serial),
     algorithm,
     derName(commonName), // issuer == subject (self-signed)
-    derSeq(derUtcTime(notBefore), derUtcTime(notAfter)),
+    // `rawNotAfter` writes a literal UTCTime string, so a spec can mint the
+    // malformed time some real certificates carry (#1933).
+    derSeq(derUtcTime(notBefore), validity.rawNotAfter ? der(0x17, Buffer.from(validity.rawNotAfter, 'ascii')) : derUtcTime(notAfter)),
     derName(commonName),
     publicKey.export({ type: 'spki', format: 'der' })
   );

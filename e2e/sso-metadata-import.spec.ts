@@ -1,7 +1,8 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, signInViaApi } from './helpers/auth';
-import { testCertificate, idpMetadataXml } from './support/x509.mjs';
+import { testCertificate, idpMetadataXml, selfSignedCertificate } from './support/x509.mjs';
+import crypto from 'node:crypto';
 import { E2E_IDP_MOCK_PORT } from '../playwright.config';
 
 // Self-service SSO onboarding (#1933): IdP metadata import (preview only, the
@@ -144,6 +145,22 @@ test('the certificate is checked at save time: unparseable and expired are refus
   const row = listed.organizations.find((o: { id: string }) => o.id === org.id);
   expect(row.sso.certificate).toMatchObject({ invalid: false, status: 'expiring', daysLeft: 20 });
   expect(JSON.stringify(row.sso)).not.toContain('BEGIN CERTIFICATE');
+
+  // A malformed validity time (node reports 'Bad time value') is refused on
+  // save, and one already stored never breaks the list.
+  const keys = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const badTime = selfSignedCertificate(keys.publicKey, keys.privateKey, 'bad-time', undefined, {
+    notBefore: new Date('2026-01-01T00:00:00Z'),
+    rawNotAfter: '991399999999Z',
+  });
+  const malformed = await page.request.patch('/api/admin/organizations', { data: { ...base, ssoCertificate: badTime } });
+  expect(malformed.status()).toBe(400);
+  expect((await malformed.json()).error).toMatch(/could not be parsed/i);
+  await prisma.organization.update({ where: { id: org.id }, data: { ssoCertificate: badTime } });
+  const listedBad = await page.request.get('/api/admin/organizations');
+  expect(listedBad.status()).toBe(200);
+  const badRow = (await listedBad.json()).organizations.find((o: { id: string }) => o.id === org.id);
+  expect(badRow.sso.certificate).toEqual({ invalid: true });
 
   // A tenant whose certificate has since lapsed can still switch SSO off.
   await prisma.organization.update({ where: { id: org.id }, data: { ssoCertificate: testCertificate(-1, 'lapsed-idp') } });

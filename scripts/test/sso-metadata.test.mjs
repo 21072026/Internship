@@ -12,7 +12,8 @@ import {
   MAX_METADATA_BYTES,
 } from '../../src/lib/ssoMetadata.ts';
 import { certificateStatus, dueWarningStage, daysUntil } from '../../src/lib/ssoCertificateRule.ts';
-import { testCertificate, idpMetadataXml } from '../../e2e/support/x509.mjs';
+import { testCertificate, idpMetadataXml, selfSignedCertificate } from '../../e2e/support/x509.mjs';
+import crypto from 'node:crypto';
 
 const CERT = testCertificate(365);
 const bare = (pem) => pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
@@ -144,4 +145,15 @@ test('warnings: two mails per certificate, the closest mark wins, a new cert res
   assert.equal(due(5), 7, 'first seen at 5 days: the 7-day mail only');
   assert.equal(due(-1), null, 'an expired certificate gets no "will expire" mail');
   assert.equal(due(20, { fingerprint: 'BB', stage: 7 }), 30, 'a rotated certificate starts afresh');
+});
+
+test('a certificate with a malformed validity time is unparseable, not "valid forever"', () => {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const pem = selfSignedCertificate(publicKey, privateKey, 'bad-time', undefined, {
+    notBefore: new Date('2026-01-01T00:00:00Z'),
+    rawNotAfter: '991399999999Z', // month 13: node reports 'Bad time value'
+  });
+  assert.equal(new crypto.X509Certificate(pem).validTo, 'Bad time value', 'node still parses the certificate');
+  assert.equal(certificateInfo(pem), null);
+  assert.equal(preferredCertificate([pem, CERT]), CERT);
 });
