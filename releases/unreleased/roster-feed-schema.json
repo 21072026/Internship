@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Roster feeds can be configured (#1964):** `/api/admin/roster-feeds` (+ `/[id]`) lets an ADMIN create, edit and delete a roster feed, tenant-scoped (another org's feed answers 404). The feed's secret (SFTP password/key or HTTPS bearer token) is stored only as `seal(…, 'roster-feed-secret')` in the new `RosterFeed.secretEnc` column and is never returned (`secretSet: boolean`) or logged; the run resolves it at fetch time (`resolveFeedSecret()`), ahead of the existing `credentialEnvVar`. `src/lib/rosterFeed.ts` holds the configuration rules — `validateFeedConfig()` (cron, transport fields incl. the pinned SFTP host key, a column map that maps `email`), `resolveColumns()` and a small UTC cron parser (`cronMatches` / `nextCronRun`) — plus the new nullable `cronExpression` / `lastRunAt` columns. Row-level `RosterRowResult` detail is pruned after 90 days by the one retention job; run summaries stay. On the demo write blocklist."
+}

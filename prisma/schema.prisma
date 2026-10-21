@@ -6078,6 +6078,12 @@ model RosterFeed {
   /// The NAME of the environment variable holding the SFTP secret — never the
   /// secret. A credential in a database row is a credential in every backup.
   credentialEnvVar       String? @db.VarChar(120)
+  /// The feed's secret (SFTP password / private key, or the HTTPS bearer
+  /// token), sealed with `seal(…, 'roster-feed-secret')` (#1964). Written only
+  /// by /api/admin/roster-feeds, which answers `secretSet: boolean` and never
+  /// the value. Takes precedence over `credentialEnvVar`, which stays for an
+  /// operator who would rather keep the secret out of the database altogether.
+  secretEnc              String? @db.Text
 
   /// Force a delimiter instead of sniffing it (';' for a German Excel export).
   delimiter String? @db.VarChar(4)
@@ -6095,6 +6101,11 @@ model RosterFeed {
   authoritative Boolean @default(false)
 
   chunkSize Int?
+
+  /// When the feed runs: a five-field cron expression evaluated in UTC
+  /// (`src/lib/rosterFeed.ts`). Null = run by hand only.
+  cronExpression String?   @db.VarChar(120)
+  lastRunAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6183,6 +6194,9 @@ model RosterRowResult {
   @@unique([runId, rowNumber])
   @@index([runId, status])
   @@index([orgId, createdAt])
+  /// The retention sweep (#1964): row detail older than 90 days goes, across
+  /// every tenant at once — see `rosterRowResult` in src/lib/retentionEntries.ts.
+  @@index([createdAt])
 }
 
 // ── Scheduled report delivery (#1905) ────────────────────────────────────────
