@@ -3,7 +3,8 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
-import { getSetting, getSettings, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { resolveSettingRaw, resolveSettings } from '@/lib/settingsResolver';
 import {
   RETAINED_NOTIFICATION_TYPES,
   notificationRetentionCutoff,
@@ -449,7 +450,7 @@ async function pruneCompanyInquiries(ctx: RetentionContext) {
 async function notificationWindowFor(orgId: string | null): Promise<number> {
   const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
   try {
-    const parsed = Number.parseInt(await getSetting('notificationRetentionDays', orgId), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('notificationRetentionDays', { orgId: orgId }), 10);
     return Number.isFinite(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -568,7 +569,7 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
 /** One org's message window, falling back to keep-forever on any read error. */
 async function messageWindowFor(orgId: string): Promise<number> {
   try {
-    const parsed = Number.parseInt(await getSetting('messageRetentionDays', orgId), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('messageRetentionDays', { orgId: orgId }), 10);
     return Number.isFinite(parsed) ? parsed : 0;
   } catch {
     return 0;
@@ -949,7 +950,7 @@ export async function runRetentionPrune(options: {
   maxPerRun?: number;
 } = {}): Promise<RetentionRunResult> {
   // One settings read for the whole run, not one per entry.
-  const settings = await getSettings().catch(() => null);
+  const settings = await resolveSettings().then((r) => r.raw).catch(() => null);
 
   const result = await runRetention({
     ...options,

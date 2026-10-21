@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { getSetting, setSetting } from '@/lib/settings';
+import { setSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { logActivity } from '@/lib/activity';
 import {
   MESSAGE_RETENTION_FLOOR_DAYS,
@@ -20,8 +21,8 @@ import {
 
 async function read(orgId: string) {
   const [keywords, days] = await Promise.all([
-    getSetting('safeguardingKeywords', orgId),
-    getSetting('messageRetentionDays', orgId),
+    resolveSettingRaw('safeguardingKeywords', { orgId: orgId }),
+    resolveSettingRaw('messageRetentionDays', { orgId: orgId }),
   ]);
   const parsedDays = Number.parseInt(days, 10);
   return {

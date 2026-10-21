@@ -7,7 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import {
   ACCEPTANCE_WINDOW_DAYS,
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
     return withTenantScope(session, async () => {
       const now = new Date();
-      const stall = stallDays(await getSetting('hiringStallDays', await settingsOrgOf(session)));
+      const stall = stallDays(await resolveSettingRaw('hiringStallDays', { orgId: await settingsOrgOf(session) }));
       const stallCutoff = daysAgo(now, stall);
 
       const pendingWhere: Prisma.InterviewRequestWhereInput = { orgId, status: 'PENDING' };

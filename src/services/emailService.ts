@@ -23,7 +23,8 @@ import { notificationLink, type NotificationRole } from '@/lib/notificationLink'
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
-import { settingByOrg } from '@/lib/settingsOrg';
+import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
+import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -3514,13 +3515,22 @@ export async function sendProjectJoinRequestEmail({
 }
 
 export async function checkMentorInteractionReminders() {
-  // `reminderDays` is each relation's OWN org's (#2628): this job sweeps every
-  // tenant with none bound, and an unqualified read is the global row — not the
-  // number any tenant admin set on their settings form.
-  const reminderDaysOf = settingByOrg('reminderDays');
-  const staleCutoffFor = async (orgId: string | null) => {
+  return withSettingsCache(checkMentorInteractionRemindersInner);
+}
+
+async function checkMentorInteractionRemindersInner() {
+  // `reminderDays` is each relation's OWN org's (#2628) and, inside it, its own
+  // programme's (#1621): this job sweeps every tenant with none bound, and an
+  // unqualified read is the global row — not the number any tenant admin set.
+  // Resolved per relation, inside the loop; the bound settings cache makes that
+  // one query per distinct (org, programme), not one per relation.
+  const staleCutoffFor = async (orgId: string | null, programId: string | null) => {
+    const days = parseInt(
+      await resolveSettingRaw('reminderDays', { orgId: await settingsOrgOfRow(orgId), programId }),
+      10,
+    ) || 14;
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - (parseInt(await reminderDaysOf(orgId), 10) || 14));
+    cutoff.setDate(cutoff.getDate() - days);
     return cutoff;
   };
 
@@ -3567,7 +3577,7 @@ export async function checkMentorInteractionReminders() {
   for (const relation of activeRelations) {
     if (dormant.has(relation.id)) continue;
     const lastContact = lastContacts.get(relation.id);
-    const stale = !lastContact || lastContact.at < (await staleCutoffFor(relation.orgId));
+    const stale = !lastContact || lastContact.at < (await staleCutoffFor(relation.orgId, relation.cohortId));
     if (stale) {
       remindersToSend.push(relation);
       // In-app notification once per staleness episode (#573): only when we
