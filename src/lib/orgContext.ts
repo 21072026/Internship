@@ -110,6 +110,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // are reached only through a scoped parent and are deliberately not listed
   // (schema comment).
   'AgendaTemplate',
+  // Admin-defined forms (#1800). FormField is reached through its definition
+  // and carries no orgId — deliberately unregistered, like SurveyQuestion.
+  'FormDefinition',
+  'FormResponse',
   // Program journey steps (#1852). ProgramStepRun is reached through its step
   // and carries no orgId of its own — deliberately unregistered.
   'ProgramStep',
