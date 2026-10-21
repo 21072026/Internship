@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**A lifecycle badge wherever a pairing is listed (#1774):** the shared `RelationLifecycleBadge` (`src/components/ui/`) renders the state from `effectiveLifecycleState()` — live green, paused amber, completed blue, every other end grey — on `/admin/mentorship` (replacing the two inline re-match/transfer badges), the admin candidate detail, the mentor's mentee list and detail and the mentee portal card, wherever the coarse status cannot say it. The end reason shows on hover on admin screens only (`withReason`; #1801's rule keeps it from the people it is about). `/admin/mentorship` filters gain PAUSED and ENDED, resolved server-side by `lifecycleListWhere()`; saved views restore them. MARKETING overlays for the two reason labels keep the leak ratchet at 0.",
+  "notes": {
+    "en": ["Paused and early-ended pairings now carry a clear badge in every list, and the pairings list can filter by them."],
+    "tr": ["Duraklatılmış ve erken biten eşleşmeler artık her listede açık bir rozetle görünüyor; eşleşme listesi bunlara göre filtrelenebiliyor."],
+    "de": ["Pausierte und vorzeitig beendete Zusammenarbeiten tragen jetzt in jeder Liste ein klares Abzeichen, und die Liste lässt sich danach filtern."]
+  }
+}

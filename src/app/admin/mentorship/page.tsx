@@ -19,6 +19,7 @@ import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
@@ -38,6 +39,11 @@ interface Company {
   name: string;
 }
 
+// The list filter (#1774): ACTIVE / COMPLETED are the coarse status, PAUSED /
+// ENDED the lifecycle filters GET /api/mentorship resolves (lifecycleListWhere).
+const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ENDED'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
 interface MentorshipRelation {
   id: string;
   status: string;
@@ -47,6 +53,7 @@ interface MentorshipRelation {
   // finished and a row that renders both as "Completed" is the falsehood these
   // workflows exist to remove.
   lifecycleState?: string | null;
+  endReasonCode?: string | null;
   mentor: { id: string; fullName: string; email: string };
   mentee: { id: string; fullName: string; email: string };
   company: { id: string; name: string } | null;
@@ -92,7 +99,7 @@ export default function MentorshipPage() {
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
   // Confirmation held for a picked mentor whose server-reported
@@ -600,15 +607,24 @@ export default function MentorshipPage() {
 
       {/* Search + status filter */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {(['ALL', 'ACTIVE', 'COMPLETED'] as const).map((sf) => (
+        {STATUS_FILTERS.map((sf) => (
           <button
             key={sf}
+            data-testid={`mentorship-filter-${sf}`}
             onClick={() => setStatusFilter(sf)}
             className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === sf ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            {sf === 'ALL' ? t.usersAdmin.all : sf === 'ACTIVE' ? t.mentorships.active : t.mentorships.completed}
+            {sf === 'ALL'
+              ? t.usersAdmin.all
+              : sf === 'ACTIVE'
+                ? t.mentorships.active
+                : sf === 'COMPLETED'
+                  ? t.mentorships.completed
+                  : sf === 'PAUSED'
+                    ? t.relationLifecycle.states.PAUSED
+                    : t.relationLifecycle.filterEnded}
           </button>
         ))}
         <input
@@ -627,7 +643,7 @@ export default function MentorshipPage() {
           current={{ search, statusFilter }}
           onApply={(f) => {
             setSearch(f.search || '');
-            setStatusFilter((f.statusFilter as 'ALL' | 'ACTIVE' | 'COMPLETED') || 'ALL');
+            setStatusFilter((f.statusFilter as StatusFilter) || 'ALL');
           }}
         />
       </div>
@@ -655,21 +671,12 @@ export default function MentorshipPage() {
                       <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
                     </span>
                     <StatusBadge status={rel.status} />
-                    {/* A pairing the mentee left did not finish. Rendering both
-                        as plain "Completed" is the record #1801/#2289 exist to
-                        stop being written. */}
-                    {(effectiveLifecycleState(rel) === 'PAUSED' || effectiveLifecycleState(rel) === 'ENDED_EARLY') && (
-                      <Badge variant="warning" data-testid="lifecycle-state-badge">
-                        {t.relationLifecycle.states[effectiveLifecycleState(rel)]}
-                      </Badge>
-                    )}
-                    {(rel.lifecycleState === 'ENDED_REASSIGNED' ||
-                      rel.lifecycleState === 'ENDED_REMATCHED') && (
-                      <Badge variant="warning" data-testid="lifecycle-badge">
-                        {rel.lifecycleState === 'ENDED_REASSIGNED'
-                          ? t.changeMentor.badgeReassigned
-                          : t.rematchRequest.badge}
-                      </Badge>
+                    {/* Whatever the coarse status cannot say — paused, ended
+                        early, re-matched, reassigned (#1774). A pairing that did
+                        not finish is never rendered as a plain "Completed":
+                        that is the record #1801/#2289/#1770 stop being written. */}
+                    {!['ACTIVE', 'COMPLETED'].includes(effectiveLifecycleState(rel)) && (
+                      <RelationLifecycleBadge relation={rel} withReason />
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">

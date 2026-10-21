@@ -203,7 +203,7 @@ export function RelationLifecycleControls({
               {title}
             </h2>
             <p className="text-sm text-gray-500 mb-4">
-              {L.context.replace('{mentee}', menteeName).replace('{mentor}', mentorName)}
+              {L.context.replace('{person}', menteeName).replace('{owner}', mentorName)}
             </p>
             <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">{hint}</p>
             {error && (

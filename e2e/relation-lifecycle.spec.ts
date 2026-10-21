@@ -113,7 +113,7 @@ test('admin pauses and resumes on /admin/mentorship; the mentor ends with a reas
     const dialog = page.getByTestId('lifecycle-dialog');
     await dialog.getByTestId('lifecycle-submit').click();
     await expect(dialog).toBeHidden();
-    await expect(row.getByTestId('lifecycle-state-badge')).toBeVisible();
+    await expect(row.getByTestId('relation-lifecycle-badge')).toBeVisible();
     await expect(row.getByTestId('lifecycle-resume')).toBeVisible();
 
     // A paused pair keeps its portal (free core: pause is never a feature gate).
@@ -123,7 +123,7 @@ test('admin pauses and resumes on /admin/mentorship; the mentor ends with a reas
 
     await row.getByTestId('lifecycle-resume').click();
     await expect(row.getByTestId('lifecycle-pause')).toBeVisible();
-    await expect(row.getByTestId('lifecycle-state-badge')).toHaveCount(0);
+    await expect(row.getByTestId('relation-lifecycle-badge')).toHaveCount(0);
 
     // The mentor ends their own pairing — the dialog cannot submit without a reason.
     await page.context().clearCookies();

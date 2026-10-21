@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isLifecycleListFilter, lifecycleListWhere } from '@/lib/relationLifecycle';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -84,9 +85,14 @@ export async function GET(request: Request) {
       session.user.role === 'COMPANY'
         ? { orgId: companyOrgId, companyId: session.user.companyId }
         : undefined,
-      // Unvalidated on purpose, exactly as before: an unknown value is a Prisma
-      // error, not a silently wider list.
-      status ? { status: status as Prisma.MentorshipRelationWhereInput['status'] } : undefined,
+      // PAUSED / ENDED are lifecycle filters (#1774); anything else is passed
+      // through unvalidated on purpose, exactly as before: an unknown value is
+      // a Prisma error, not a silently wider list.
+      status
+        ? isLifecycleListFilter(status)
+          ? lifecycleListWhere(status)
+          : { status: status as Prisma.MentorshipRelationWhereInput['status'] }
+        : undefined,
       search
         ? {
             OR: [

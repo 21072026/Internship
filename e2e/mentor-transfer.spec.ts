@@ -171,7 +171,7 @@ test('a pairing with history is handed over: closed ENDED_REASSIGNED, successor 
     // this test's business.
     await page.goto('/admin/mentorship');
     await expect(
-      page.getByTestId(`mentorship-row-${relation.id}`).getByTestId('lifecycle-badge')
+      page.getByTestId(`mentorship-row-${relation.id}`).getByTestId('relation-lifecycle-badge')
     ).toBeVisible({ timeout: 15_000 });
   } finally {
     await prisma.interactionLog.deleteMany({ where: { relation: { menteeId: mentee.id } } });

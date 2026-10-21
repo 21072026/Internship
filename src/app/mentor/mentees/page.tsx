@@ -4,6 +4,8 @@ import { useT } from "@/i18n/client";
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { Button } from '@/components/ui/Button';
 import { Users, MessageSquare, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -27,6 +29,7 @@ import {
 } from '@/lib/menteeFilter';
 
 interface MentorshipRelation {
+  lifecycleState?: string | null;
   id: string;
   status: string;
   startDate: string;
@@ -303,6 +306,8 @@ export default function MenteesPage() {
                 </div>
                 <div className="flex flex-shrink-0 flex-col items-end gap-1">
                   <StatusBadge status={rel.status} />
+                  {/* Paused / ended early reads at a glance (#1774). */}
+                  {!['ACTIVE', 'COMPLETED'].includes(effectiveLifecycleState(rel)) && <RelationLifecycleBadge relation={rel} />}
                   <StageClockChip
                     testId={`stage-clock-${rel.id}`}
                     daysInStage={rel.daysInStage}

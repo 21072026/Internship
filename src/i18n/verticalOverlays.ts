@@ -59,6 +59,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // Lifecycle end reasons (#1770/#1774) in the rep's words.
+      relationLifecycle: { reasons: { mentor_unavailable: 'Sales rep no longer available', mentee_unavailable: 'Lead no longer available' } },
       // Document requirements: the role picker names the seats, not the enum.
       documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
@@ -1221,6 +1223,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      relationLifecycle: { reasons: { mentor_unavailable: 'Satış temsilcisi artık müsait değil', mentee_unavailable: 'Müşteri adayı artık müsait değil' } },
       documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
@@ -2242,6 +2245,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      relationLifecycle: { reasons: { mentor_unavailable: 'Vertriebsmitarbeiter nicht mehr verfügbar', mentee_unavailable: 'Lead nicht mehr verfügbar' } },
       documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die

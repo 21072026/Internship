@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { Select } from '@/components/ui/Select';
@@ -54,6 +56,7 @@ interface Relation {
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
+  endReasonCode?: string | null;
   stageDeadline?: string | null;
   // The owner's follow-up (#2563), independent of the stage deadline above.
   nextActionAt?: string | null;
@@ -357,6 +360,8 @@ export default function AdminMenteeDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
+            {/* Paused / ended early / re-matched, with the reason on hover (#1774). */}
+            {rel && !['ACTIVE', 'COMPLETED'].includes(effectiveLifecycleState(rel)) && <RelationLifecycleBadge relation={rel} withReason />}
             {/* Message / view-as shortcuts, right where the profile is read (#51). */}
             <UserQuickActions userId={user.id} role={user.role} />
             {/* Convert right where the person is looked at (#1252). */}

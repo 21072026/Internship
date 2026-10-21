@@ -14,6 +14,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { User, Building2, ExternalLink, MessageCircle, FolderKanban, ArrowRight, Route } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
@@ -54,6 +56,7 @@ async function getMenteeData(menteeId: string, locale: Locale) {
       select: {
         id: true,
         status: true,
+        lifecycleState: true,
         startDate: true,
         completedAt: true,
         pipelineStatus: true,
@@ -220,7 +223,11 @@ export default async function PortalDashboard({
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <StatusBadge status={relation.status} />
+              <span className="flex items-center gap-2">
+                <StatusBadge status={relation.status} />
+                {/* A paused or early-ended pairing says so (#1774) — never the reason (#1801). */}
+                {!['ACTIVE', 'COMPLETED'].includes(effectiveLifecycleState(relation)) && <RelationLifecycleBadge relation={relation} />}
+              </span>
               {/* "Completed" is the moment it ended, so it reads as a distance;
                   "Since" is the mentorship's start date and stays a date. */}
               <span className="text-xs text-gray-400">

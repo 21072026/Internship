@@ -443,3 +443,27 @@ export function stageClockPatch(
   }
   return { stageDeadlineRemainingDays: null };
 }
+
+// ── The list filter (#1774) ──────────────────────────────────────────────────
+
+/**
+ * The extra values `GET /api/mentorship?status=` takes beside the two
+ * `MentorshipStatus` values it always passed straight through: PAUSED (live,
+ * on hold) and ENDED (closed without completing). ACTIVE and COMPLETED keep
+ * their old, coarse meaning — every existing caller relies on it.
+ */
+export const LIFECYCLE_LIST_FILTERS = ['PAUSED', 'ENDED'] as const;
+export type LifecycleListFilter = (typeof LIFECYCLE_LIST_FILTERS)[number];
+
+export function isLifecycleListFilter(value: unknown): value is LifecycleListFilter {
+  return typeof value === 'string' && (LIFECYCLE_LIST_FILTERS as readonly string[]).includes(value);
+}
+
+/** The `where` fragment for a lifecycle list filter. Plain object — client-safe. */
+export function lifecycleListWhere(filter: LifecycleListFilter) {
+  if (filter === PAUSED) return { status: 'ACTIVE' as const, lifecycleState: PAUSED as string };
+  return {
+    status: 'COMPLETED' as const,
+    lifecycleState: { in: RELATION_LIFECYCLE_STATES.filter((s) => isTerminal(s) && s !== COMPLETED) as string[] },
+  };
+}

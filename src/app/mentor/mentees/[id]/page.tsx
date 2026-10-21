@@ -29,6 +29,7 @@ import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
@@ -299,6 +300,7 @@ export default function MenteeDetailPage() {
           <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
             <div className="flex items-center gap-2">
               <StatusBadge status={relation.status} />
+              {!['ACTIVE', 'COMPLETED'].includes(effectiveLifecycleState(relation)) && <RelationLifecycleBadge relation={relation} />}
               <StageClockChip
                 testId="stage-clock-detail"
                 daysInStage={daysInStage(relation)}

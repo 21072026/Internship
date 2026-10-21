@@ -699,6 +699,7 @@ const en = {
   // mentee's own first-person reasons live in `rematchRequest.reasons`, and the
   // two lists are not interchangeable even where the codes overlap.
   relationLifecycle: {
+    filterEnded: 'Ended early',
     actions: 'Pairing state',
     pause: 'Pause',
     resume: 'Resume',
@@ -710,7 +711,7 @@ const en = {
     endHint: 'Pick why it ended. "Finished" and "Programme ended" record a completion; every other reason records an early end — never a success.',
     reopenTitle: 'Reopen this pairing',
     reopenHint: 'Reopening makes the pairing live again. It is refused if the person already has another active pairing.',
-    context: '{mentee} → {mentor}',
+    context: '{person} → {owner}',
     reason: 'Reason',
     selectReason: 'Select a reason',
     note: 'Note',
@@ -8967,6 +8968,7 @@ const tr: Dict = {
   // birinci tekil gerekçeleri `rematchRequest.reasons` içinde yaşar ve kodlar
   // örtüşse bile iki liste birbirinin yerine kullanılmaz.
   relationLifecycle: {
+    filterEnded: 'Erken biten',
     actions: 'Eşleşme durumu',
     pause: 'Duraklat',
     resume: 'Devam ettir',
@@ -8978,7 +8980,7 @@ const tr: Dict = {
     endHint: 'Neden bittiğini seç. "Başarıyla tamamlandı" ve "Program sona erdi" tamamlanma kaydeder; diğer her sebep erken bitiş kaydeder — asla başarı değil.',
     reopenTitle: 'Bu eşleşmeyi yeniden aç',
     reopenHint: 'Yeniden açmak eşleşmeyi tekrar canlı yapar. Kişinin zaten başka bir aktif eşleşmesi varsa reddedilir.',
-    context: '{mentee} → {mentor}',
+    context: '{person} → {owner}',
     reason: 'Sebep',
     selectReason: 'Bir sebep seç',
     note: 'Not',
@@ -17059,6 +17061,7 @@ const de: Dict = {
   // ADMINISTRATION — die Ich-Begründungen der Mentees stehen in
   // `rematchRequest.reasons`; die beiden Listen sind nicht austauschbar.
   relationLifecycle: {
+    filterEnded: 'Vorzeitig beendet',
     actions: 'Status der Zusammenarbeit',
     pause: 'Pausieren',
     resume: 'Fortsetzen',
@@ -17070,7 +17073,7 @@ const de: Dict = {
     endHint: 'Wähle, warum sie endete. „Erfolgreich abgeschlossen“ und „Programm beendet“ erfassen einen Abschluss; jeder andere Grund ein vorzeitiges Ende — nie einen Erfolg.',
     reopenTitle: 'Diese Zusammenarbeit wieder öffnen',
     reopenHint: 'Wieder öffnen macht die Zusammenarbeit erneut aktiv. Es wird abgelehnt, wenn die Person bereits eine andere aktive Zusammenarbeit hat.',
-    context: '{mentee} → {mentor}',
+    context: '{person} → {owner}',
     reason: 'Grund',
     selectReason: 'Grund auswählen',
     note: 'Notiz',
