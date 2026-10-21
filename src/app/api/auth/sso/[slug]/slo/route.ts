@@ -8,6 +8,7 @@ import { samlLogoutForOrg } from '@/lib/ssoSaml';
 import { ensureSpSigningKey } from '@/lib/ssoSpKey';
 import { endAllSessionsForSlo } from '@/lib/ssoLogout';
 import { requestOrigin } from '@/lib/servedHosts';
+import { parseSamlRedirectQuery } from '@/lib/samlRedirectQuery';
 
 // GET|POST /api/auth/sso/[slug]/slo — our SAML SingleLogoutService (#1952),
 // published in the SP metadata. Two kinds of message arrive here:
@@ -26,7 +27,12 @@ import { requestOrigin } from '@/lib/servedHosts';
 //   – HTTP-Redirect: the query MUST carry `Signature` + `SigAlg`, verified
 //     against the org's stored IdP certificate. node-saml's validateRedirect
 //     treats an ABSENT signature as valid — the refusal of an unsigned
-//     redirect is ours, here, before node-saml is asked anything;
+//     redirect is ours, here, before node-saml is asked anything. And the
+//     message it verifies must be the message it processes: node-saml takes
+//     the decoded values and the raw query separately and never checks they
+//     agree, so both come from parseSamlRedirectQuery() (src/lib/
+//     samlRedirectQuery.ts), which refuses a repeated or percent-encoded
+//     binding key and rebuilds the query from the very tokens it decoded;
 //   – HTTP-POST: node-saml requires an enveloped XML signature on the
 //     LogoutRequest and verifies it against the same certificate.
 // The subject is resolved by NameID → e-mail WITHIN THIS ORG ONLY: a
@@ -40,7 +46,14 @@ const SLO_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 type Message = { SAMLRequest?: string; SAMLResponse?: string; RelayState?: string; Signature?: string; SigAlg?: string };
 
-async function handle(request: Request, slug: string, binding: 'redirect' | 'post', msg: Message, rawQuery: string) {
+async function handle(
+  request: Request,
+  slug: string,
+  binding: 'redirect' | 'post',
+  msg: Message,
+  signedQuery: string,
+  malformed: string | null = null,
+) {
   const origin = requestOrigin((n) => request.headers.get(n));
   const signedOut = () => NextResponse.redirect(`${origin}/auth/signin`, 303);
 
@@ -62,18 +75,6 @@ async function handle(request: Request, slug: string, binding: 'redirect' | 'pos
   });
   if (!org || !isSsoActive(org)) return NextResponse.json({ code: 'sso_unavailable' }, { status: 404 });
 
-  const { privateKeyPem } = await ensureSpSigningKey(org);
-  const saml = samlLogoutForOrg(slug, org, privateKeyPem);
-
-  // The IdP's answer to our LogoutRequest. We were already signed out locally;
-  // a response that does not verify changes nothing either way.
-  if (!msg.SAMLRequest) {
-    if (msg.SAMLResponse && binding === 'redirect' && msg.Signature) {
-      await saml.validateRedirectAsync(msg as Record<string, string>, rawQuery).catch(() => null);
-    }
-    return signedOut();
-  }
-
   const refuse = async (reason: string) => {
     await logActivity({
       action: 'auth.slo_refused',
@@ -87,11 +88,27 @@ async function handle(request: Request, slug: string, binding: 'redirect' | 'pos
     return NextResponse.json({ code: 'slo_refused', error: 'The logout request could not be verified' }, { status: 400 });
   };
 
+  // A query parseSamlRedirectQuery() refused (a repeated or encoded binding
+  // key) is never handed to node-saml, whatever it carries.
+  if (malformed) return refuse(malformed);
+
+  const { privateKeyPem } = await ensureSpSigningKey(org);
+  const saml = samlLogoutForOrg(slug, org, privateKeyPem);
+
+  // The IdP's answer to our LogoutRequest. We were already signed out locally;
+  // a response that does not verify changes nothing either way.
+  if (!msg.SAMLRequest) {
+    if (msg.SAMLResponse && binding === 'redirect' && msg.Signature) {
+      await saml.validateRedirectAsync(msg as Record<string, string>, signedQuery).catch(() => null);
+    }
+    return signedOut();
+  }
+
   let profile: Profile | null;
   try {
     if (binding === 'redirect') {
       if (!msg.Signature || !msg.SigAlg) return refuse('unsigned');
-      ({ profile } = await saml.validateRedirectAsync(msg as Record<string, string>, rawQuery));
+      ({ profile } = await saml.validateRedirectAsync(msg as Record<string, string>, signedQuery));
     } else {
       ({ profile } = await saml.validatePostRequestAsync({ SAMLRequest: msg.SAMLRequest }));
     }
@@ -127,9 +144,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const limited = enforceRateLimit(request, 'sso-slo', SLO_LIMIT);
   if (limited) return limited;
   const { slug } = await params;
-  const url = new URL(request.url);
-  const msg = Object.fromEntries(url.searchParams.entries()) as Message;
-  return handle(request, slug, 'redirect', msg, url.search.replace(/^\?/, ''));
+  // Never URLSearchParams here: it decodes keys and keeps the last of a
+  // repeated one, which is how a second, unsigned message rode along with a
+  // signed one.
+  const parsed = parseSamlRedirectQuery(new URL(request.url).search);
+  if (!parsed.ok) return handle(request, slug, 'redirect', {}, '', parsed.reason);
+  return handle(request, slug, 'redirect', parsed.msg, parsed.signedQuery);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {

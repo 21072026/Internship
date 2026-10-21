@@ -142,6 +142,38 @@ test('IdP-initiated: only a verified LogoutRequest for this org ends sessions an
   expect(await prisma.activityLog.count({ where: { action: 'auth.slo', targetId: member.id } })).toBe(1);
 });
 
+test('IdP-initiated: a second, unsigned LogoutRequest riding along with a signed one is refused', { tag: '@smoke' }, async ({ request }) => {
+  // The signature must cover the message that is acted on. A genuine request
+  // signed for someone else (here: for an address nobody has) is the donor;
+  // the rider names the victim and carries no signature of its own.
+  const org = await seedSloOrg('slo-rider');
+  const victim = await seedMember(org.id, 'slo-victim');
+  const slo = `/api/auth/sso/${org.slug}/slo`;
+  const destination = `http://localhost/api/auth/sso/${org.slug}/slo`;
+  const donor = await mintLogoutRequest({ destination, email: uniqueEmail('slo-donor') });
+  const rider = await mintLogoutRequest({ destination, email: victim.email, mode: 'unsigned' });
+  expect(rider.query).toMatch(/^SAMLRequest=/);
+
+  const attempts = {
+    // The same key twice: the signed copy first, the unsigned one last.
+    repeated: `${donor.query}&${rider.query}`,
+    // The rider's key percent-encoded, so it decodes to SAMLRequest while the
+    // raw token no longer looks like one.
+    encoded: `${donor.query}&${rider.query!.replace(/^SAMLRequest=/, 'SAMLReq%75est=')}`,
+  };
+  for (const [name, query] of Object.entries(attempts)) {
+    const res = await request.get(`${slo}?${query}`, { maxRedirects: 0 });
+    expect(res.status(), name).toBe(400);
+    expect((await res.json()).code, name).toBe('slo_refused');
+  }
+  expect((await prisma.user.findUniqueOrThrow({ where: { id: victim.id } })).sessionsValidFrom).toBeNull();
+  expect(await prisma.activityLog.count({ where: { action: 'auth.slo', targetId: victim.id } })).toBe(0);
+  expect(await prisma.activityLog.count({ where: { action: 'auth.slo_refused', targetId: org.id } })).toBe(2);
+
+  // The donor alone is still a genuine request, and still answers as one.
+  expect((await request.get(`${slo}?${donor.query}`, { maxRedirects: 0 })).status()).toBe(303);
+});
+
 test('IdP-initiated over the POST binding is verified the same way; an enforced org leaves only the IdP', async ({ request }) => {
   const org = await seedSloOrg('slo-post');
   // Enforced SSO (#1950): after the SLO, no password door reopens the session.
