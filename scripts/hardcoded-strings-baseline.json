@@ -1,0 +1,13 @@
+{
+  "_comment": "Hardcoded user-facing strings per file (#1613), pinned by scripts/check-hardcoded-strings.mjs. Counts may only go DOWN: fix a file, lower (or delete) its number in the same diff. A new string goes through src/i18n/dictionaries.ts instead.",
+  "files": {
+    "src/app/admin/analytics/report/page.tsx": 1,
+    "src/app/admin/cohorts/page.tsx": 1,
+    "src/app/admin/mentors/page.tsx": 1,
+    "src/app/admin/organizations/page.tsx": 2,
+    "src/app/apply/[mentorId]/page.tsx": 1,
+    "src/app/company/candidates/[id]/page.tsx": 1,
+    "src/app/page.tsx": 1,
+    "src/app/print/post-campaign/[id]/page.tsx": 1
+  }
+}
