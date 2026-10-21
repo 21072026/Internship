@@ -203,7 +203,10 @@ export async function loadCompanyDetail({
     // information only, shown as the provider sent it on its last sync.
     const externalProfiles = (
       await prisma.externalProfileLink.findMany({
-        where: withinTenant({ companyId: company.id, erasedAt: null }, tenant),
+        // The link's orgId is required, so it is pinned to the account's own org
+        // rather than through withinTenant(), whose legacy `orgId: null` branch
+        // Prisma refuses on a required column.
+        where: { companyId: company.id, erasedAt: null, ...(company.orgId ? { orgId: company.orgId } : {}) },
         select: { provider: true, sourceName: true, consent: true, attributes: true, profileUpdatedAt: true },
         orderBy: { createdAt: 'asc' },
         take: 5,
