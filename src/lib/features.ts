@@ -195,6 +195,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
     { key: 'safeguarding', category: 'trust', icon: ShieldAlert, color: 'amber', capability: 'mentorship', title: C.safeguarding.t, desc: C.safeguarding.d },
     { key: 'programJourney', category: 'collaboration', icon: CalendarDays, color: 'indigo', capability: 'mentorship', title: C.programJourney.t, desc: C.programJourney.d },
+    // #1840 — a company asks to message a shortlisted candidate; the mentor decides.
+    { key: 'candidateOutreach', category: 'companies', icon: Send, color: 'blue', capability: 'placements', title: C.candidateOutreach.t, desc: C.candidateOutreach.d },
     // #1920 — every registry report sliced by the org's own attributes, small segments combined.
     { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
   ];

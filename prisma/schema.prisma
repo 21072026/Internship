@@ -810,6 +810,8 @@ model User {
   mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
   companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
+  // Company → candidate message requests (#1840); removed with the person.
+  candidateOutreach                 CandidateOutreach[]            @relation("CandidateOutreachMentee")
   companyNeedAlerts                 CompanyNeedAlert[]             @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]            @relation("MentorshipRequests")
   decidedRequests                   MentorshipRequest[]            @relation("DecidedMentorshipRequests")
@@ -1897,6 +1899,7 @@ model Company {
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
   users              User[]                  @relation("CompanyUsers")
+  candidateOutreach  CandidateOutreach[]
   projects           Project[]               @relation("CompanyProjects")
   interests          CompanyInterest[]
   entitlements       CompanyEntitlement[]
@@ -2777,6 +2780,39 @@ model CompanyInterest {
   @@index([companyId, menteeId])
   @@index([menteeId])
   @@index([requisitionId])
+}
+
+// A company's request to message a shortlisted candidate (#1840) — mentor-gated,
+// quota'd, revocable by the candidate. The first message is STORED here and
+// delivered only on approval (into the DIRECT conversation between the
+// requesting company user and the candidate). One row per company × candidate:
+// a repeat request reuses it. The rules (transitions, cooldown, quota period)
+// are pure in src/lib/outreachRule.ts; docs/candidate-outreach.md is the prose.
+// Status is VARCHAR + a whitelist in code, never a Prisma enum (#747).
+model CandidateOutreach {
+  id             String    @id @default(cuid())
+  orgId          String
+  companyId      String
+  menteeId       String
+  applicationId  String?
+  /// PENDING | APPROVED | DECLINED | REVOKED
+  status         String    @default("PENDING") @db.VarChar(16)
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?
+  /// When the candidate revoked it — a new request is refused for 90 days after.
+  revokedAt      DateTime?
+  conversationId String?
+  firstMessage   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CandidateOutreachMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
+  @@index([orgId, status])
+  @@index([menteeId])
 }
 
 // Outgoing webhook subscription (admin-managed). Events are sent as signed

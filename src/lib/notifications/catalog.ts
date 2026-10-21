@@ -182,6 +182,13 @@ export const NOTIFICATION_EVENTS = [
   { key: 'company_interest.shortlisted', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
   { key: 'company_interest.passed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
   { key: 'company_interest.generic', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['mentee'] },
+  // Company → candidate message requests (#1840): in-app only — a mentor's
+  // queue, the candidate's new channel, and the company's answer (never why).
+  { key: 'outreach.requested', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['company', 'name'] },
+  { key: 'outreach.approvedCandidate', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['company'] },
+  { key: 'outreach.approvedCompany', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'outreach.declinedCompany', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'outreach.revokedCompany', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 
   // The mentorship relationship itself.
   { key: 'mentorship_request.new', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from'] },

@@ -330,6 +330,10 @@ export const SETTING_DEFAULTS = {
   usageDropThresholdPct: '40',
   usageBaselineDays: '60',
   trialActivationDays: '7',
+  // Company → candidate message requests (#1840, src/lib/outreachQuota.ts):
+  // APPROVED requests per company per calendar month (UTC). A company's own
+  // `Company.quota`, when set, overrides it. Checked when a request is made.
+  outreachMonthlyQuota: '20',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
@@ -423,6 +427,7 @@ export const SETTING_SCHEMA = {
   usageDropThresholdPct: { type: 'number', scopes: O },
   usageBaselineDays: { type: 'number', scopes: O },
   trialActivationDays: { type: 'number', scopes: O },
+  outreachMonthlyQuota: { type: 'number', scopes: O },
 } as const satisfies { readonly [K in SettingKey]: SettingSpec };
 
 type SpecValue<S> = S extends { type: 'number'; nullable: true }

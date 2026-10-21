@@ -75,6 +75,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Org-defined segmentation attributes and their values (#1920).
   'OrgAttribute',
   'UserAttributeValue',
+  // Company → candidate message requests (#1840).
+  'CandidateOutreach',
   // Scheduled report delivery (#1905).
   'ReportSubscription',
   'ReportSubscriptionSend',

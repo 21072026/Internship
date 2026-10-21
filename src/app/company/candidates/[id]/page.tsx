@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
+import { CompanyOutreachRequest } from '@/components/CompanyOutreachRequest';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
@@ -234,6 +235,9 @@ export default function CompanyCandidateDetailPage() {
           ))}
         </div>
       </Card>
+
+      {/* Ask to message the candidate (#1840) — mentor-gated, server-checked. */}
+      <CompanyOutreachRequest menteeId={id} />
 
       {verified && (
         <Card className="mt-4" data-testid="verified-card">
