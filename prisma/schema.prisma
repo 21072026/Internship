@@ -2775,16 +2775,29 @@ model ApiIdempotencyKey {
 // index constrains the per-tenant rows only; uniqueness of the global layer is
 // held by settings.ts being the single writer (read-modify-write, never a blind
 // insert).
+// Three scopes (#1553 org, #1619 programme): a row with neither id is the
+// GLOBAL layer, one with an orgId is that tenant's override, and one with an
+// orgId AND a programId is one programme's override inside that tenant. The
+// chain and its only writer live in src/lib/settings.ts; the typed reader is
+// src/lib/settingsResolver.ts. MySQL treats NULLs as distinct in a unique
+// index, so the widened key below binds programme rows only — the org and
+// global layers stay single because setSetting() reads before it writes.
 model Setting {
   id        String   @id @default(cuid())
   orgId     String?
+  // The programme container — the Cohort row, which #1622 renames to Program
+  // behind @@map("Cohort"), so this FK survives the rename untouched.
+  programId String?
   key       String
   value     String   @db.Text
   updatedAt DateTime @updatedAt
 
-  org Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org     Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  program Cohort?       @relation(fields: [programId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, key])
+  @@unique([orgId, programId, key])
+  @@index([orgId, key])
+  @@index([programId])
 }
 
 enum ProjectStatus {
@@ -3132,6 +3145,7 @@ model Cohort {
   relations    MentorshipRelation[]
   programCosts ProgramCost[]
   steps        ProgramStep[]
+  settings     Setting[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
