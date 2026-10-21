@@ -85,3 +85,64 @@ export function latestAnswersByKey<T extends { fieldKey: string; updatedAt: Date
   }
   return out;
 }
+
+// ── The builder (#1802) ──────────────────────────────────────────────────────
+
+export const FORM_LOCALES = ['en', 'tr', 'de'] as const;
+
+type Localized = { en?: string; tr?: string; de?: string } | null | undefined;
+const filled = (t: Localized, l: (typeof FORM_LOCALES)[number]) => !!t && typeof t[l] === 'string' && t[l]!.trim().length > 0;
+
+/**
+ * The locales a field still lacks before it may be published: its label and,
+ * for a choice field, every option's label, in all three languages. A
+ * participant must never meet a question — or an answer — in a language the
+ * programme did not write. Archived fields are not asked, so they do not count.
+ */
+export function missingLocales(field: { labels: unknown; options?: unknown; archivedAt?: unknown }): (typeof FORM_LOCALES)[number][] {
+  if (field.archivedAt) return [];
+  const labels = field.labels as Localized;
+  const options = Array.isArray(field.options) ? (field.options as { labels?: Localized }[]) : [];
+  return FORM_LOCALES.filter((l) => !filled(labels, l) || options.some((o) => !filled(o.labels, l)));
+}
+
+// Words that make a question a likely proxy for a protected characteristic
+// (AGG § 1 / GDPR art. 9 territory): age, ethnicity, religion, disability,
+// gender, marital status, nationality — in the three languages admins write in.
+// A WARNING, never a block: some programmes ask these on purpose (a
+// scholarship for a group), but they must not become a hard matching rule.
+const PROTECTED_PROXY_WORDS = [
+  'age', 'birth', 'born', 'ethnic', 'race', 'religio', 'faith', 'disab', 'gender', 'sex', 'marital', 'married', 'nationality', 'citizenship',
+  'yaş', 'doğum', 'etnik', 'ırk', 'din', 'inanç', 'engel', 'cinsiyet', 'medeni', 'evli', 'uyruk', 'vatandaş',
+  'alter', 'geburt', 'ethni', 'herkunft', 'religion', 'glaube', 'behinder', 'geschlecht', 'familienstand', 'verheiratet', 'staatsangeh', 'nationalität',
+];
+
+/** Whether a field's key or any of its labels reads like a protected-characteristic proxy. */
+export function looksLikeProtectedProxy(field: { key: string; labels?: unknown }): boolean {
+  const labels = (field.labels ?? {}) as Record<string, unknown>;
+  const text = [field.key.replace(/_/g, ' '), ...Object.values(labels).filter((v): v is string => typeof v === 'string')].join(' ').toLocaleLowerCase('tr');
+  const words = text.split(/[^\p{L}]+/u).filter(Boolean);
+  return PROTECTED_PROXY_WORDS.some((w) => words.some((word) => (w.length <= 3 ? word === w : word.startsWith(w))));
+}
+
+export interface FormVersionDiff {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+/** What a draft changes against the published version, by field key. */
+export function diffFormVersions(
+  published: readonly { key: string; type: string; labels: unknown; helpText?: unknown; options?: unknown; required: boolean; matchable: boolean; archivedAt?: unknown }[],
+  draft: readonly { key: string; type: string; labels: unknown; helpText?: unknown; options?: unknown; required: boolean; matchable: boolean; archivedAt?: unknown }[],
+): FormVersionDiff {
+  const live = (fs: typeof published) => new Map(fs.filter((f) => !f.archivedAt).map((f) => [f.key, f]));
+  const a = live(published);
+  const b = live(draft);
+  const sig = (f: (typeof published)[number]) => JSON.stringify([f.type, f.labels, f.helpText ?? null, f.options ?? null, f.required, f.matchable]);
+  return {
+    added: [...b.keys()].filter((k) => !a.has(k)),
+    removed: [...a.keys()].filter((k) => !b.has(k)),
+    changed: [...b.keys()].filter((k) => a.has(k) && sig(a.get(k)!) !== sig(b.get(k)!)),
+  };
+}

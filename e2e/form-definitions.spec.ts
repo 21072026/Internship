@@ -38,8 +38,8 @@ test.describe('form definitions', () => {
 
   test('versions, locks, matchable and answers across versions', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
-    const track = { key: 'track', type: 'SELECT', labels: { en: 'Track' }, required: true, matchable: true, options: [{ value: 'web', labels: { en: 'Web' } }, { value: 'data', labels: { en: 'Data' } }] };
-    const bio = { key: 'about', type: 'LONG_TEXT', labels: { en: 'About you' } };
+    const track = { key: 'track', type: 'SELECT', labels: { en: 'Track', tr: 'Alan', de: 'Bereich' }, required: true, matchable: true, options: [{ value: 'web', labels: { en: 'Web', tr: 'Web', de: 'Web' } }, { value: 'data', labels: { en: 'Data', tr: 'Veri', de: 'Daten' } }] };
+    const bio = { key: 'about', type: 'LONG_TEXT', labels: { en: 'About you', tr: 'Hakkında', de: 'Über dich' } };
     const base = { key: `mentee_reg_${stamp}`, audience: 'MENTEE', surface: 'REGISTRATION', title: { en: 'Registration' } };
 
     // Free text can never feed matching — refused at the write, not in a UI.
@@ -52,7 +52,7 @@ test.describe('form definitions', () => {
     const v1 = (await created.json()).form;
     expect(v1.version).toBe(1);
     // A draft is edited in place.
-    const draftEdit = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { ...bio, labels: { en: 'Tell us about you' } }] } });
+    const draftEdit = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { ...bio, labels: { en: 'Tell us about you', tr: 'Kendinden bahset', de: 'Erzähl von dir' } }] } });
     expect(draftEdit.status()).toBe(200);
     expect((await page.request.post(`/api/admin/forms/${v1.id}/publish`)).status()).toBe(200);
     expect((await page.request.post(`/api/admin/forms/${v1.id}/publish`)).status()).toBe(409);
@@ -71,7 +71,7 @@ test.describe('form definitions', () => {
     expect([rekeyed.status(), (await rekeyed.json()).code]).toEqual([409, 'field_key_locked']);
 
     // Editing the published version creates version 2 — `about` dropped (carried archived).
-    const v2res = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { key: 'city', type: 'TEXT', labels: { en: 'City' } }] } });
+    const v2res = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { key: 'city', type: 'TEXT', labels: { en: 'City', tr: 'Şehir', de: 'Stadt' } }] } });
     expect(v2res.status()).toBe(201);
     const v2 = (await v2res.json()).form;
     expect(v2.version).toBe(2);

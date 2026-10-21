@@ -33,3 +33,18 @@ test('a published version is edited as N+1; one live version; answers resolve ac
   expect(latest.get('track')?.v).toBe('new');
   expect(latest.get('city')?.v).toBe('x');
 });
+
+test('publishing needs every locale; a protected-characteristic proxy is flagged; a version diff names keys', async () => {
+  const { missingLocales, looksLikeProtectedProxy, diffFormVersions } = await import('@/lib/forms/definitionRule');
+  expect(missingLocales({ labels: { en: 'Track', tr: 'Alan', de: 'Bereich' } })).toEqual([]);
+  expect(missingLocales({ labels: { en: 'Track', tr: ' ' } })).toEqual(['tr', 'de']);
+  expect(missingLocales({ labels: { en: 'a', tr: 'b', de: 'c' }, options: [{ labels: { en: 'x', tr: 'y' } }] })).toEqual(['de']);
+  expect(missingLocales({ labels: {}, archivedAt: new Date() })).toEqual([]);
+  expect(looksLikeProtectedProxy({ key: 'birth_year', labels: {} })).toBe(true);
+  expect(looksLikeProtectedProxy({ key: 'q1', labels: { tr: 'Cinsiyetiniz' } })).toBe(true);
+  expect(looksLikeProtectedProxy({ key: 'q2', labels: { de: 'Ihre Staatsangehörigkeit' } })).toBe(true);
+  expect(looksLikeProtectedProxy({ key: 'q3', labels: { en: 'Your age' } })).toBe(true);
+  expect(looksLikeProtectedProxy({ key: 'manager_page', labels: { en: 'Preferred track' } })).toBe(false);
+  const f = (key: string, extra: object = {}) => ({ key, type: 'TEXT', labels: { en: key }, required: false, matchable: false, ...extra });
+  expect(diffFormVersions([f('a'), f('b'), f('c')], [f('a'), f('b', { required: true }), f('d')])).toEqual({ added: ['d'], removed: ['c'], changed: ['b'] });
+});
