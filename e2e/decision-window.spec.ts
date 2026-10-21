@@ -23,7 +23,7 @@ test('a closing decision window is in the queue and rings once', async ({ page }
     data: templateStagePayload(defaultTemplateForVertical('MARKETING')!).stages.map((s) => ({ ...s, orgId: org.id })),
   });
   const emails = ['admin', 'rep', 'lead1', 'lead2'].map((k) => uniqueEmail(`window-${k}`));
-  await seedUser(emails[0], PW, 'ADMIN', 'Window Admin');
+  await seedUser(emails[0], PW, 'ADMIN', 'Window Admin', org.id);
   const rep = await seedUser(emails[1], PW, 'MENTOR', 'Window Rep');
   const closing = await seedUser(emails[2], PW, 'MENTEE', `Closing Window ${stamp}`);
   const fresh = await seedUser(emails[3], PW, 'MENTEE', `Fresh Window ${stamp}`);
@@ -46,7 +46,8 @@ test('a closing decision window is in the queue and rings once', async ({ page }
     await expect(queue.locator('a', { hasText: `Fresh Window ${stamp}` })).not.toContainText('Decision window closes');
 
     await page.context().clearCookies();
-    await page.context().setExtraHTTPHeaders({});
+    // The org's own ADMIN on the org's own host runs its trial sweep: `orgId`
+    // is honoured only for the caller's org or a super admin's (#1575).
     await signInAndSettle(page, emails[0], PW, '/admin');
     const first = await page.request.get(`/api/cron?job=trial-reminders&orgId=${org.id}`);
     expect((await first.json()).trialReminders).toMatchObject({ decisionWindows: 1 });
@@ -73,7 +74,7 @@ test("the organization's own window length decides when it is closing", async ({
   // A ten-day window: a trial that ended four days ago has six days left.
   await prisma.setting.create({ data: { orgId: org.id, key: 'decisionWindowDays', value: '10' } });
   const emails = ['admin', 'rep', 'lead'].map((k) => uniqueEmail(`short-window-${k}`));
-  await seedUser(emails[0], PW, 'ADMIN', 'Short Window Admin');
+  await seedUser(emails[0], PW, 'ADMIN', 'Short Window Admin', org.id);
   const rep = await seedUser(emails[1], PW, 'MENTOR', 'Short Window Rep');
   const lead = await seedUser(emails[2], PW, 'MENTEE', `Short Window Lead ${stamp}`);
   await prisma.user.updateMany({ where: { id: { in: [rep.id, lead.id] } }, data: { orgId: org.id } });
@@ -93,7 +94,8 @@ test("the organization's own window length decides when it is closing", async ({
     ).toContainText('Decision window closes', { timeout: 20_000 });
 
     await page.context().clearCookies();
-    await page.context().setExtraHTTPHeaders({});
+    // The org's own ADMIN on the org's own host runs its trial sweep: `orgId`
+    // is honoured only for the caller's org or a super admin's (#1575).
     await signInAndSettle(page, emails[0], PW, '/admin');
     const run = await page.request.get(`/api/cron?job=trial-reminders&orgId=${org.id}`);
     expect((await run.json()).trialReminders).toMatchObject({ decisionWindows: 1 });

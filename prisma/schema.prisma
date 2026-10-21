@@ -23,6 +23,22 @@ enum Role {
   SOURCE
 }
 
+// The admin tier of an ADMIN account (#1567). Additive on purpose: `Role` is
+// never widened or split (that is the drop-and-recreate `db push` cannot be
+// trusted with), so the tier is its own nullable column on User.
+//
+// There is deliberately no SUPER_ADMIN value. The platform operator is
+// `User.isSuperAdmin` — read from the database per request and scoped to its
+// world (src/lib/superAdmin.ts, docs/worlds.md); a second "super admin" stored
+// here would be a second source of truth that the JWT could carry stale for
+// 12h. Adding a value to this enum later is additive; removing one is not, so
+// the value waits until something needs it.
+enum AdminLevel {
+  ORG_ADMIN // everything inside one tenant (today's ADMIN)
+  PROGRAM_ADMIN // only the cohorts/companies named in its AdminScopeGrant rows
+  OBSERVER // read-only, across its own tenant (grants are not read)
+}
+
 enum MentorshipStatus {
   ACTIVE
   COMPLETED
@@ -150,6 +166,14 @@ model Organization {
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
   ssoSyncRole      Boolean  @default(false)
+  // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
+  // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
+  // and OUR per-org SP signing key — generated on first use, the private half
+  // sealed with secretBox (purpose 'sso-sp-signing-key'), the self-signed
+  // public certificate published in the SP metadata.
+  ssoLogoutUrl     String?  @db.Text
+  ssoSpKey         String?  @db.Text
+  ssoSpCert        String?  @db.Text
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
@@ -190,6 +214,7 @@ model Organization {
   pipelineStages          PipelineStage[]
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
+  slaBreaches             SlaBreach[]
   tags                    Tag[]
   skills                  Skill[]
   skillAliases            SkillAlias[]
@@ -206,6 +231,8 @@ model Organization {
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
   mentoringAgreements     MentoringAgreement[]
+  formDefinitions         FormDefinition[]
+  formResponses           FormResponse[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
   // Org-defined segmentation attributes (#1920).
@@ -224,6 +251,8 @@ model Organization {
   messageTemplates        MessageTemplate[]
   apiKeys                 ApiKey[]
   matchFeedback           MatchFeedback[]
+  matchRuleSets           MatchRuleSet[]
+  matchRules              MatchRule[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -231,6 +260,7 @@ model Organization {
   subscription            Subscription?
   orgEntitlements         OrgEntitlement[]
   usageRollups            UsageRollup[]
+  planChangeRequests      PlanChangeRequest[]
   companyUsage            CompanyUsage[]
   contactPermissions      ContactPermission[]
   integrationEvents       IntegrationEvent[]
@@ -242,6 +272,7 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   auditDrains             AuditDrain[]
+  adminScopeGrants        AdminScopeGrant[]
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
@@ -465,27 +496,67 @@ model UnmappedSkillTerm {
 }
 
 model StageSla {
-  id        String   @id @default(cuid())
-  orgId     String
+  id                String   @id @default(cuid())
+  orgId             String
   // The stage this applies to. A plain key, not a relation: it must work for
   // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
-  stageKey  String
+  stageKey          String
   /// Calendar days somebody may wait at this stage before the mentor is warned.
   /// NULL = no service level here (the row then exists only for `wipLimit`).
-  days      Int?
+  days              Int?
   /// Board work-in-progress limit for this stage (#1439): the column's count
   /// turns amber above this many cards. NULL = inherit the org-wide
   /// `boardWipLimit` setting; a stored 0 means "never warn about this stage",
   /// which is a different statement and is why it is stored rather than
   /// normalised away. The rule lives in src/lib/boardWip.ts.
-  wipLimit  Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  wipLimit          Int?
+  /// Escalation ladder (#1722): once a breach of this stage's `days` has stood
+  /// this many further calendar days without the stage moving, the org's
+  /// administrators are told too. NULL = the ladder stops at the mentor, which
+  /// is exactly what every org had before. Meaningless without `days`.
+  escalateAfterDays Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, stageKey])
   @@index([orgId])
+}
+
+// One stage deadline that passed (#1722) — the state the escalation ladder
+// climbs and the breach queue (#1723) lists. Opened by the daily sweep the
+// first time it sees a relation past `stageDeadline`, keyed by the exact
+// deadline it breached, so a hand-moved deadline opens a fresh breach rather
+// than inheriting the old one's level. Closed (`resolvedAt`) by a stage move,
+// a cleared or future deadline, or the relation leaving ACTIVE — never by a
+// delete, because the compliance rate is computed from these rows.
+// The rules are pure in src/lib/slaLadderRule.ts; src/lib/slaBreach.ts is
+// the only writer.
+model SlaBreach {
+  id               String    @id @default(cuid())
+  orgId            String?
+  relationId       String
+  stageKey         String    @db.VarChar(64)
+  /// The `stageDeadline` this breach is about.
+  dueAt            DateTime
+  /// 1 = the mentor was told, 2 = the org's administrators were told.
+  level            Int       @default(1)
+  lastEscalatedAt  DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  /// No escalation before this instant. The reason goes to the ActivityLog.
+  snoozedUntil     DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org      Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, dueAt])
+  @@index([orgId, resolvedAt])
+  @@index([relationId, resolvedAt])
 }
 
 model PipelineStage {
@@ -607,6 +678,13 @@ model User {
   // `src/lib/superAdmin.ts` reads it from the database per request so revoking
   // it takes effect on the next request, like `sessionsValidFrom`.
   isSuperAdmin            Boolean       @default(false)
+  // The admin tier inside a tenant (#1567, docs/role-access-matrix.md §
+  // Admin tiers). NULL means "no tier recorded"; `role` stays the source of
+  // truth for MENTOR/MENTEE/COMPANY/SOURCE and a non-ADMIN never holds a tier,
+  // whatever this column says. PROGRAM_ADMIN's reach is its AdminScopeGrant
+  // rows — none means none. The platform tier is NOT here: that is
+  // `isSuperAdmin` above, read live and per world (src/lib/superAdmin.ts).
+  adminLevel              AdminLevel?
   // Break-glass exemption from the tenant's enforced SSO (#1950). Only an
   // active ADMIN may hold one, only an admin may grant it, and every grant and
   // revocation is audited (`sso.exempt_granted` / `sso.exempt_revoked`). It is
@@ -620,6 +698,15 @@ model User {
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin
   // deactivated you" — both are isActive=false. Cleared on activation.
   pendingApproval         Boolean       @default(false)
+  // Roster-feed deprovisioning (#1966, docs/roster-feeds.md). `rosterAbsentSince`
+  // is when a feed first stopped mentioning this person — stamped by the first
+  // successful run they are absent from, cleared the moment they reappear, and
+  // what the grace period counts from. `deactivatedBy` says WHO switched the
+  // account off: "roster:<feedId>" for a feed, a user id for a human. A feed
+  // reactivates only what a feed deactivated; null (every deactivation before
+  // this column) reads as a human's decision and is never undone by a file.
+  rosterAbsentSince       DateTime?
+  deactivatedBy           String?       @db.VarChar(64)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
   publicProfile           Boolean       @default(false)
   // For COMPANY-role users: which company they observe (read-only).
@@ -763,6 +850,7 @@ model User {
   attendanceRecords                 MeetingAttendance[]            @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]            @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]               @relation("SurveyRespondent")
+  formResponses                     FormResponse[]
   meetingFeedback                   MeetingFeedback[]              @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                  @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]             @relation("InterviewRequestMentee")
@@ -779,11 +867,17 @@ model User {
   suggestedAsMentee                 MatchFeedback[]                @relation("MatchFeedbackMentee")
   suggestedAsMentor                 MatchFeedback[]                @relation("MatchFeedbackMentor")
   matchFeedbackActions              MatchFeedback[]                @relation("MatchFeedbackActor")
+  /// Direct reporting line (#1781) — what the "never the direct manager"
+  /// matching rule reads. Nullable and populated by hand or import for now.
+  managerId                         String?
+  manager                           User?                          @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports                     User[]                         @relation("UserManager")
   guidanceStates                    UserGuidanceState[]
   createdProgramCosts               ProgramCost[]                  @relation("ProgramCostCreatedBy")
   placements                        Placement[]                    @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
+  adminScopeGrants                  AdminScopeGrant[]
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]              @relation("PracticeSessions")
   safeguardingReviews               SafeguardingFlag[]             @relation("SafeguardingReviewer")
@@ -1825,6 +1919,7 @@ model Company {
   contacts           CompanyContact[]
   // The marketplaces, shop systems and carriers it works on (#2408).
   channels           CompanyChannel[]
+  adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -3182,9 +3277,10 @@ model Cohort {
   term      String?
   createdAt DateTime      @default(now())
 
-  relations    MentorshipRelation[]
-  programCosts ProgramCost[]
-  steps        ProgramStep[]
+  relations        MentorshipRelation[]
+  programCosts     ProgramCost[]
+  steps            ProgramStep[]
+  adminScopeGrants AdminScopeGrant[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -3289,6 +3385,21 @@ model MentorshipRelation {
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
   // them), so single-tenant behaviour is identical.
   pipelineStatus          String           @default("APPLICATION_100")
+  // WHY the relation exists (#1503): PLACEMENT (the person is in the hiring
+  // funnel — every placement count reads only these) or COACHING (mentoring
+  // with no placement goal; its stage means nothing to a funnel). Free String,
+  // not an enum, for the same reason as pipelineStatus (#747): changing an
+  // enum under `db push` is an ENUM→VARCHAR migration. Vocabulary and guard:
+  // src/lib/placementKind.ts.
+  kind                    String           @default("PLACEMENT") @db.VarChar(16)
+  // WHOSE outcome a hire is (#1503): THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED.
+  // NULL = not stated; never backfilled, and read as THROUGH_US for rows from
+  // before the column (the UNSPECIFIED pattern of #810).
+  employmentAttribution   String?          @db.VarChar(24)
+  // When the relation (re-)entered the placement funnel: the start for a
+  // PLACEMENT, the moment of a COACHING → PLACEMENT switch. NULL → readers fall
+  // back to startDate.
+  funnelEnteredAt         DateTime?
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
   stageDeadline           DateTime?
@@ -3356,15 +3467,26 @@ model MentorshipRelation {
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.
   nextActionRemindedAt    DateTime?
-  // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
-  // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
-  // different mentor and an admin approved it. Nullable and additive: an
-  // untouched row keeps meaning exactly what it meant before. `status` still
-  // carries "is this pairing live", so every existing ACTIVE/COMPLETED check is
-  // unchanged; this column is what keeps a re-match from being counted (or
-  // certified) as a successful completion. Keys live in
-  // src/lib/relationLifecycle.ts.
-  lifecycleState          String?
+  // The state the pairing is in (#1768): ACTIVE | PAUSED | COMPLETED |
+  // ENDED_REMATCHED | ENDED_REASSIGNED | ENDED_CHURNED — keys, transitions and
+  // the one derivation of `status` live in src/lib/relationLifecycle.ts. It
+  // started (#1801) as "how did it END"; it now says every state, and `status`
+  // is the derived liveness flag (statusForLifecycle) that the many existing
+  // ACTIVE/COMPLETED readers keep reading unchanged — a PAUSED pair is still
+  // status ACTIVE.
+  //
+  // A free String, NOT an enum — same reasoning as `pipelineStatus` (#747): an
+  // ENUM→VARCHAR change is a migration we cannot review under `db push`, and a
+  // new state must never need one. Don't tidy it into an enum.
+  //
+  // Nullable with a DB default: expand → backfill → contract (#2298). New rows
+  // get 'ACTIVE'; rows written before #1768 hold NULL until
+  // prisma/backfill-relation-lifecycle.mjs fills them on deploy. Making it
+  // required is a later, separate contract step.
+  lifecycleState          String?          @default("ACTIVE")
+  // When the pairing was paused (#1768); cleared on resume. Never on a live,
+  // unpaused row.
+  pausedAt                DateTime?
   // Why the pairing ended, as picked by the person who ended it (#2289): a code
   // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
   // never backfilled — a relation closed before this column existed, or closed
@@ -3397,6 +3519,7 @@ model MentorshipRelation {
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
   agreementAcceptances  MentoringAgreementAcceptance[]
+  slaBreaches           SlaBreach[]
   meetings              Meeting[]
   // Who attended its meetings (#2014), kept even when a meeting is deleted.
   attendance            MeetingAttendance[]
@@ -3436,6 +3559,7 @@ model MentorshipRelation {
   @@index([status])
   @@index([lifecycleState])
   @@index([pipelineStatus])
+  @@index([kind])
   @@index([previousRelationId])
   // The daily trial sweep asks for one org's relations in one stage whose trial
   // ends inside the next week; this is the column that narrows it.
@@ -4777,6 +4901,72 @@ enum EmailStatus {
   HELD
 }
 
+// ── Bounce / complaint suppression (#1692) ──────────────────────────────────
+// What a mailbox told us through the provider's webhook. SENT above is "the
+// relay took it", never "it arrived"; these two tables are the loop that closes
+// that gap: an address that hard-bounced or complained is SUPPRESSED, and
+// sendEmail() (and the queue's drain) refuses it until a human delists it.
+//
+// DELIBERATELY NOT TENANT-SCOPED — the one place the multi-tenancy rule
+// (docs/tenant-isolation.md) is knowingly not applied. Sender reputation is a
+// property of the sending domain, and every tenant shares it: a complaint rate
+// built up by one tenant's mail is charged to all of them. So there is no
+// orgId here and no TENANT_MODELS entry; the admin screen applies its own
+// scope (src/lib/emailSuppression.ts § suppressionScopeWhere).
+// Rules: src/lib/emailSuppressionRule.ts. Doc: docs/EMAIL_DELIVERABILITY.md.
+enum SuppressionReason {
+  HARD_BOUNCE
+  SOFT_BOUNCE_REPEATED
+  COMPLAINT
+  MANUAL
+  UNSUBSCRIBE_ALL
+}
+
+model EmailSuppression {
+  id            String            @id @default(cuid())
+  // Trimmed and lower-cased on write AND on match (normalizeSuppressedAddress):
+  // a suppression that misses on case is not a suppression.
+  email         String            @unique @db.VarChar(320)
+  reason        SuppressionReason
+  // The provider's own words (an SMTP diagnostic, a feedback-loop type) —
+  // shown to the admin, never to the recipient.
+  detail        String?           @db.Text
+  // The provider key the event came in through ('brevo', 'generic'), or
+  // 'admin' for a manual entry.
+  source        String?           @db.VarChar(32)
+  suppressedAt  DateTime          @default(now())
+  // A delist keeps the row (and its history) and stamps these; a new bounce
+  // after a delist re-suppresses the same row.
+  releasedAt    DateTime?
+  releasedById  String?
+  releaseReason String?           @db.Text
+
+  @@index([reason])
+  @@index([releasedAt, suppressedAt])
+}
+
+// One provider event, as received. Exists for two reasons only: idempotency
+// (providers retry; the unique key makes a replay a no-op) and the soft-bounce
+// window (N soft bounces inside it suppress). Pruned by the retention registry
+// (key 'emailDeliveryEvent').
+model EmailDeliveryEvent {
+  id         String   @id @default(cuid())
+  provider   String   @db.VarChar(32)
+  // The provider's event id, or a sha256 of the fields that identify the
+  // event when the provider sends none (emailBounce.ts § normaliser).
+  eventId    String   @db.VarChar(191)
+  email      String   @db.VarChar(320)
+  // 'bounce' | 'complaint'
+  type       String   @db.VarChar(16)
+  hard       Boolean  @default(false)
+  detail     String?  @db.Text
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([email, type, receivedAt])
+  @@index([receivedAt])
+}
+
 // Delivery log for outgoing mail (#1194).
 //
 // Without this there is no record anywhere that a mail was (or wasn't) sent:
@@ -4816,6 +5006,40 @@ model EmailLog {
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
+// "This admin's authority extends to this programme / company" (#1567). One
+// row per delegated scope of a PROGRAM_ADMIN; the authorization
+// layer (src/lib/authz.ts) reads them per request. FAIL CLOSED: a
+// PROGRAM_ADMIN with no rows has no scope at all — never "everything" — the
+// same rule as NO_MATCH in src/lib/authzScope.ts. A row names a cohort, a
+// company, or both (narrowing to that company's mentees in that cohort).
+//
+// Tenant data: `orgId` + an entry in TENANT_MODELS (src/lib/orgContext.ts).
+// The unique key cannot stop two all-NULL-scope rows (MySQL treats NULLs as
+// distinct), which is harmless: such a row grants nothing, and the writer
+// refuses it.
+model AdminScopeGrant {
+  id          String   @id @default(cuid())
+  userId      String
+  orgId       String
+  cohortId    String?
+  companyId   String?
+  // The admin who granted it. A plain id, no relation, like AuditLog.actorId:
+  // erasing the granter must not erase the grant's history.
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  cohort  Cohort?      @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  company Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId, cohortId, companyId])
+  @@index([userId])
+  @@index([orgId])
+  @@index([cohortId])
+  @@index([companyId])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   // The tenant the audited action happened in (#2012). Nullable + backfilled:
@@ -5430,6 +5654,63 @@ model MatchFeedback {
   @@index([actorId])
 }
 
+/// How a matching rule takes part in a score (#1781). WEIGHTED adds
+/// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
+/// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
+/// rule named — never a silent drop.
+enum MatchRuleKind {
+  WEIGHTED
+  HARD_REQUIRE
+  HARD_EXCLUDE
+}
+
+/// An organisation's mentor-matching rule set (#1781). The pure scorer lives
+/// in src/lib/matching/score.ts; an org with no set here scores with the
+/// built-in DEFAULT_RULE_SET, which reproduces the pre-#1781 ranking exactly.
+model MatchRuleSet {
+  id          String    @id @default(cuid())
+  orgId       String?
+  name        String
+  description String?   @db.Text
+  /// The set resolveRuleSet() picks for the org. At most one per org is
+  /// intended; the resolver takes the newest default if two ever exist.
+  isDefault   Boolean   @default(false)
+  version     Int       @default(1)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  org   Organization? @relation(fields: [orgId], references: [id])
+  rules MatchRule[]
+
+  @@index([orgId, isDefault, archivedAt])
+}
+
+/// One rule of a MatchRuleSet (#1781). `dimension` is a key from the client-
+/// safe registry in src/lib/matching/dimensions.ts; an unknown key is scored
+/// as a non-match rather than ignored. Carries its own orgId (same as its set)
+/// so it is tenant-scoped on its own and listed in TENANT_MODELS.
+model MatchRule {
+  id        String        @id @default(cuid())
+  orgId     String?
+  ruleSetId String
+  dimension String
+  kind      MatchRuleKind @default(WEIGHTED)
+  /// 0-100. Only WEIGHTED rules use it.
+  weight    Int           @default(0)
+  /// Per-dimension settings, e.g. `{ "maxHours": 3 }` for timezone.
+  config    Json          @default("{}")
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  org     Organization? @relation(fields: [orgId], references: [id])
+  ruleSet MatchRuleSet  @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+
+  @@index([ruleSetId, sortOrder])
+  @@index([orgId])
+}
+
 // ── Background job queue ─────────────────────────────────────────────────────
 //
 // The durable substrate for the queue engine (#1669). Only the `Job` half is
@@ -5488,6 +5769,13 @@ model Job {
   /// the dead-letter alert) run outside any request scope and therefore see the
   /// whole queue, which is what an operator alert has to do.
   orgId String?
+
+  /// Provenance of the ENQUEUE (#1673), one of 'schedule' | 'manual' | 'boot'
+  /// (JobTrigger in src/lib/jobs/types.ts). The worker copies it onto every
+  /// `JobRun` it writes for this job, so an admin's re-run of a scheduled job
+  /// reads as 'manual' on the ledger. A database-side default, so existing rows
+  /// (the mail queue's) read 'schedule' and `db push` can add it to a full table.
+  trigger String @default("schedule") @db.VarChar(16)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5915,6 +6203,62 @@ model MailBudget {
   updatedAt DateTime @updatedAt @db.DateTime(3)
 }
 
+// A tenant admin's request to move to another plan (#1743): the recorded,
+// audited step between "I want to upgrade" and a checkout, which a self-serve
+// checkout never removes. An operator (a super admin of the org's world,
+// src/lib/superAdmin.ts) applies or rejects it from /admin/plan-requests.
+//
+// Strings, not enums, for the same reason as Subscription: `db push
+// --accept-data-loss` resolves a MySQL ENUM change as DROP + CREATE. The
+// vocabularies and every rule over them live in src/lib/planChangeRule.ts.
+model PlanChangeRequest {
+  id    String @id @default(cuid())
+  orgId String
+
+  // Who asked. Deliberately NOT a foreign key (same as OrgEntitlement's
+  // grantedById): the record of a commercial request outlives the account.
+  requestedById String
+
+  // A PROGRAM-audience key from src/lib/plans.ts, and MONTHLY | YEARLY.
+  requestedPlan String @db.VarChar(32)
+  billingCycle  String @db.VarChar(16)
+
+  // Snapshots at request time, so the operator decides on what the tenant saw:
+  // the plan it was on, and this month's active pairs as the nightly rollup
+  // last counted them (null = not counted yet; never a live scan).
+  currentPlan String @db.VarChar(32)
+  activePairs Int?
+
+  // Free text — also where "we are over the band" goes.
+  reason         String? @db.Text
+  // The tenant claims the education/non-profit discount; the operator decides.
+  educationClaim Boolean @default(false)
+
+  // NEW | APPLIED | REJECTED (PLAN_CHANGE_STATUSES).
+  status String  @default("NEW") @db.VarChar(16)
+  // The requester's UI language, so a reply can be written in it.
+  locale String? @db.VarChar(8)
+
+  // ONE open request per org: equal to orgId while NEW, NULL once handled. A
+  // second submit therefore updates the open row instead of piling up — the
+  // unique index, not a read-then-write, is what holds that under a race (the
+  // same shape as MentorshipRelation.activeMenteeKey).
+  openKey String? @unique
+
+  handledById String?
+  handledAt   DateTime?
+  // The operator's note, shown to the requester on a rejection.
+  note        String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([status, createdAt])
+}
+
 // ── Usage ledger ─────────────────────────────────────────────────────────────
 // One row per (org, metric, period): what a tenant used in a calendar month
 // (#1750). The billing history, and the only table an invoice or a usage screen
@@ -6079,6 +6423,8 @@ enum RosterRunStatus {
   SUCCEEDED
   FAILED
   NOOP
+  /// A safety valve stopped the run before anything was written (#1966).
+  ABORTED_SAFETY
 }
 
 /// Mirrors `RowStatus` in src/lib/importPreview.ts, token for token. One
@@ -6090,6 +6436,12 @@ enum RosterRowStatus {
   UNCHANGED
   SKIP
   ERROR
+  /// The deprovisioning phase (#1966), which runs after the import and outside
+  /// `runImport` — so these two have no counterpart in importPreview.ts.
+  /// Their rows carry a negative `rowNumber`: they describe a person the file
+  /// did NOT contain, so there is no file row to point at.
+  DEACTIVATE
+  REACTIVATE
 }
 
 /// One configured feed for one tenant.
@@ -6116,6 +6468,12 @@ model RosterFeed {
   /// The NAME of the environment variable holding the SFTP secret — never the
   /// secret. A credential in a database row is a credential in every backup.
   credentialEnvVar       String? @db.VarChar(120)
+  /// The feed's secret (SFTP password / private key, or the HTTPS bearer
+  /// token), sealed with `seal(…, 'roster-feed-secret')` (#1964). Written only
+  /// by /api/admin/roster-feeds, which answers `secretSet: boolean` and never
+  /// the value. Takes precedence over `credentialEnvVar`, which stays for an
+  /// operator who would rather keep the secret out of the database altogether.
+  secretEnc              String? @db.Text
 
   /// Force a delimiter instead of sniffing it (';' for a German Excel export).
   delimiter String? @db.VarChar(4)
@@ -6133,6 +6491,24 @@ model RosterFeed {
   authoritative Boolean @default(false)
 
   chunkSize Int?
+
+  /// Deprovisioning (#1966, docs/roster-feeds.md). Off by default: a feed
+  /// deactivates nobody until a tenant asks it to. The three valves below are
+  /// read only when it is on; every one has a DB-side default (#2298).
+  deprovision          Boolean @default(false)
+  /// Abort, write nothing and alert when the people the feed would offboard
+  /// exceed this share of the org's active people the feed covers.
+  maxDeactivatePercent Int     @default(10)
+  /// Abort, write nothing and alert when the file has fewer data rows.
+  minRowCount          Int     @default(1)
+  /// A person is deactivated only on a successful run at least this many UTC
+  /// days after the run that first found them absent.
+  deprovisionGraceDays Int     @default(1)
+
+  /// When the feed runs: a five-field cron expression evaluated in UTC
+  /// (`src/lib/rosterFeed.ts`). Null = run by hand only.
+  cronExpression String?   @db.VarChar(120)
+  lastRunAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6167,19 +6543,25 @@ model RosterRun {
   /// re-attempted next run instead of being skipped for ever.
   nextChunkIndex Int @default(0)
 
-  rowCount       Int     @default(0)
-  createdCount   Int     @default(0)
-  updatedCount   Int     @default(0)
-  unchangedCount Int     @default(0)
-  skippedCount   Int     @default(0)
-  errorCount     Int     @default(0)
+  rowCount         Int     @default(0)
+  createdCount     Int     @default(0)
+  updatedCount     Int     @default(0)
+  unchangedCount   Int     @default(0)
+  skippedCount     Int     @default(0)
+  errorCount       Int     @default(0)
+  /// Deprovisioning outcome (#1966).
+  deactivatedCount Int     @default(0)
+  reactivatedCount Int     @default(0)
+  /// Why a safety valve stopped the run (`row_floor` / `deactivation_ceiling`),
+  /// with the numbers, for the alert and the console.
+  safetyReason     String? @db.Text
   /// Keys the roster holds that the feed did not mention. Reported only —
   /// acting on them is #1966.
-  absentKeys     Json?
+  absentKeys       Json?
   /// Host and path of the file, for the run log. Never a query string: it can
   /// carry a token.
-  source         String? @db.Text
-  error          String? @db.Text
+  source           String? @db.Text
+  error            String? @db.Text
 
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
@@ -6221,6 +6603,9 @@ model RosterRowResult {
   @@unique([runId, rowNumber])
   @@index([runId, status])
   @@index([orgId, createdAt])
+  /// The retention sweep (#1964): row detail older than 90 days goes, across
+  /// every tenant at once — see `rosterRowResult` in src/lib/retentionEntries.ts.
+  @@index([createdAt])
 }
 
 // ── Scheduled report delivery (#1905) ────────────────────────────────────────
@@ -6318,6 +6703,98 @@ model RelationHealthSnapshot {
 
   @@unique([relationId, takenOn])
   @@index([orgId, takenOn])
+}
+
+// ── Admin-defined forms (#1800, story #1798) ─────────────────────────────────
+//
+// Questions an admin adds to registration, onboarding, the profile or a
+// mentorship request, and the answers people give. The field-type union and
+// the ONE validator are src/lib/forms/schema.ts (client-safe, shared with the
+// survey engine); the write boundary is src/lib/forms/definitions.ts. Two
+// rules carry the design:
+//   • ANSWERS ARE KEYED BY fieldKey, not by a field id. A published definition
+//     is never edited in place — an edit is version N+1 — so a field id changes
+//     with every version while its key does not; an answer given to v1 still
+//     resolves under v2.
+//   • A KEY'S TYPE IS FIXED across the versions of a form once published (409),
+//     and a free-text field can never be `matchable` (refused at the write).
+// The vocabularies (audience, surface, field type) are Strings validated by
+// whitelists, the house rule for enum-like columns.
+
+model FormDefinition {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // The form's stable name within the org, e.g. "mentee_registration".
+  key         String        @db.VarChar(80)
+  // MENTEE | MENTOR | BOTH
+  audience    String        @db.VarChar(16)
+  // REGISTRATION | ONBOARDING | PROFILE | MENTORSHIP_REQUEST
+  surface     String        @db.VarChar(32)
+  version     Int           @default(1)
+  // { en?, tr?, de? } — the builder's name for it. Nullable: Json columns
+  // carry no default under MariaDB (prisma/backfill-json-columns.mjs).
+  title       Json?
+  publishedAt DateTime?
+  // Set on a version superseded by a newer published one, or retired.
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  fields    FormField[]
+  responses FormResponse[]
+
+  @@unique([orgId, key, version])
+  @@index([orgId, surface])
+}
+
+// Deliberately NOT in TENANT_MODELS: a field is only ever reached through its
+// FormDefinition, which is scoped — the SurveyQuestion reasoning. It carries
+// no orgId, so every nested write stays a plain nested create.
+model FormField {
+  id           String         @id @default(cuid())
+  definitionId String
+  definition   FormDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  // The answer join key: stable across versions, its type fixed once published.
+  key          String         @db.VarChar(80)
+  // A FormFieldType (src/lib/forms/schema.ts).
+  type         String         @db.VarChar(20)
+  // { en?, tr?, de? }. Every writer sets it (no Json default under MariaDB).
+  labels       Json
+  helpText     Json?
+  // [{ value, labels: { en?, tr?, de? } }] for SELECT / MULTI_SELECT; null otherwise.
+  options      Json?
+  required     Boolean        @default(false)
+  // May feed matching (#1803). Only a bounded type — canBeMatchable().
+  matchable    Boolean        @default(false)
+  sortOrder    Int            @default(0)
+  // Removed from the form: no longer asked, its answers still read.
+  archivedAt   DateTime?
+
+  @@unique([definitionId, key])
+  @@index([definitionId, sortOrder])
+}
+
+// One person's answer to one field of one version. Carries orgId itself —
+// the matching engine loads a cohort's answers for one field without a join
+// (@@index([orgId, fieldKey])).
+model FormResponse {
+  id           String         @id @default(cuid())
+  orgId        String?
+  org          Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  definitionId String
+  definition   FormDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  fieldKey     String         @db.VarChar(80)
+  // Every writer sets it (no Json default under MariaDB).
+  value        Json
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([userId, definitionId, fieldKey])
+  @@index([orgId, fieldKey])
+  @@index([definitionId])
 }
 
 // ── Surveys (#1879, epic #1877) ──────────────────────────────────────────────

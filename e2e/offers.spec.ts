@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import bcrypt from 'bcryptjs';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 import { OFFER_COMPENSATION_FIELDS } from '../src/lib/offers';
 
@@ -16,6 +16,8 @@ async function seedScenario(prefix: string) {
   const mentorEmail = uniqueEmail(`${prefix}mentor`);
   const menteeEmail = uniqueEmail(`${prefix}mentee`);
   const admin = await seedUser(adminEmail, pw, 'ADMIN', 'Offer Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Offer Mentor');
   const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Offer Mentee');
   const org = await prisma.organization.create({ data: { name: `Offer Org ${Date.now()}`, slug: `offer-${Date.now()}-${Math.round(Math.random() * 10000)}` } });

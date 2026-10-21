@@ -120,3 +120,14 @@ a `where`, so each route counts and pages one SQL set; nothing loads the pool in
 directory's JavaScript branch remains only for `language` (still a JSON list) and `accepting`
 (derived), and keeps reporting `partial` when its scan cap is reached. Topic and demo environments
 run the taxonomy backfill after seeding so their people have `UserSkill` rows.
+
+## Adjacency-weighted matching (#1821)
+
+`skillOverlap(targetIds, holderIds, edges, minAdjacentWeight?)` (`src/lib/skillTaxonomyRule.ts`) is
+the one scorer for "how well do these skills cover those" — each target counts once, 1 when the holder
+has it, else the weight of the holder's best one-hop neighbour of it. Consumers: mentor suggestions
+(mentee's skills covered by a mentor's; `MATCH_RULESET_VERSION = 'rules-v2'`), and requisition match
+alerts through `requisitionSkillMatch()` (min(2, required) required skills covered, adjacency
+≥ 0.5). The matching engine (#1781/#1787) must import it, never re-implement it. Inputs come from
+`loadSkillEdges(orgId, ids)` (edges into retired/merged skills dropped) and labels from
+`skillLabels(orgId, ids, locale)`. The adjacency is data: deleting the `SkillEdge` removes the credit.

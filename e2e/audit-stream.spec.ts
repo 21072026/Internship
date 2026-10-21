@@ -3,6 +3,19 @@ import { createHmac } from 'node:crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 import { E2E_AUDIT_SINK_PORT } from '../playwright.config';
+import { operatorRequest } from './helpers/operator';
+
+// The drain tick is platform-wide — it walks every tenant's drains — so the
+// operator fires it, never a tenant admin (#1575). One context for the file.
+let operator: APIRequestContext | null = null;
+async function drainTick() {
+  operator ??= await operatorRequest(test.info().project.use.baseURL);
+  return operator.get('/api/cron?job=audit-drain');
+}
+test.afterAll(async () => {
+  await operator?.dispose();
+});
+
 
 // The audit stream (#2012): a tenant's AuditLog rows, signed and POSTed to a
 // receiver, read forward from a cursor that moves only on 2xx. Against the
@@ -90,7 +103,7 @@ test('configure → deliver → outage → replay without loss or duplication �
 
     // 2. Three audit rows for the tenant, one tick, one signed batch.
     const first = await auditRows(a.org.id, a.admin.id, 3, 'FIRST');
-    const tick1 = await page.request.get('/api/cron?job=audit-drain');
+    const tick1 = await drainTick();
     expect(tick1.ok()).toBeTruthy();
     const batches1 = await sinkBatches(page.request);
     const mine1 = batches1.filter((b) => b.path === '/ingest-a');
@@ -115,7 +128,7 @@ test('configure → deliver → outage → replay without loss or duplication �
     await sinkReset(page.request);
     await sinkOutage(page.request, true);
     const second = await auditRows(a.org.id, a.admin.id, 2, 'SECOND');
-    const tick2 = await (await page.request.get('/api/cron?job=audit-drain')).json();
+    const tick2 = await (await drainTick()).json();
     expect(tick2.auditDrain.failed).toBeGreaterThanOrEqual(1);
     const down = await prisma.auditDrain.findUnique({ where: { id: drain.id } });
     expect(down?.cursorId).toBe(first[2]);
@@ -127,13 +140,13 @@ test('configure → deliver → outage → replay without loss or duplication �
 
     // 4. Still in backoff: a tick does nothing even once the sink is back.
     await sinkOutage(page.request, false);
-    await page.request.get('/api/cron?job=audit-drain');
+    await drainTick();
     expect(await sinkBatches(page.request)).toHaveLength(0);
 
     // 5. The backoff elapses (the clock is moved in the row, as a minute later
     //    would): exactly the two unsent rows arrive — a replay, not a repeat.
     await prisma.auditDrain.update({ where: { id: drain.id }, data: { nextAttemptAt: new Date(Date.now() - 1000) } });
-    await page.request.get('/api/cron?job=audit-drain');
+    await drainTick();
     const mine2 = (await sinkBatches(page.request)).filter((b) => b.path === '/ingest-a');
     expect(mine2.length).toBe(1);
     expect(lines(mine2[0]).map((l) => l.id)).toEqual(second);
@@ -186,7 +199,7 @@ test('a receiver gets only its own tenant’s rows, and a tenant admin reaches o
     const rowsB = await auditRows(b.org.id, b.admin.id, 2, 'TB');
 
     await signInAndSettle(page, a.email, PASS, '/admin');
-    const tick = await page.request.get('/api/cron?job=audit-drain');
+    const tick = await drainTick();
     expect(tick.ok()).toBeTruthy();
     const batches = await sinkBatches(page.request);
     const toA = batches.filter((x) => x.path === '/tenant-a').flatMap(lines).map((l) => l.id);
