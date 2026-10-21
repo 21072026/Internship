@@ -10,6 +10,7 @@ import { pruneJobRuns } from '@/lib/jobs/queue';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
 import { runApiImport } from '@/lib/api/v1Imports';
+import { runApiExport } from '@/lib/api/v1Exports';
 
 let registered = false;
 
@@ -42,4 +43,9 @@ export function registerAllJobs(): void {
     async (payload, { job, attempt, signal }) => ({ ...(await runApiImport(payload.importId, { signal, attempt, maxAttempts: job.maxAttempts })) }),
     { timeoutMs: 10 * 60 * 1000 },
   );
+  // A READY or FAILED export is left alone and the file is stored in one
+  // guarded update, so a repeated run rewrites at most an unfinished one.
+  registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {
+    timeoutMs: 10 * 60 * 1000,
+  });
 }

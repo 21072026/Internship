@@ -1,4 +1,4 @@
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { parseRequire2faMode, roleCoveredBy, type Require2faMode } from '@/lib/twoFactorPolicyRule';
 
 export type { Require2faMode };
@@ -17,5 +17,5 @@ export async function is2faRequiredFor(role: string, orgId: string): Promise<boo
 
 /** The org's effective policy, parsed (an unknown stored value reads as `off`). */
 export async function require2faModeOf(orgId: string): Promise<Require2faMode> {
-  return parseRequire2faMode(await getSetting('require2fa', orgId));
+  return parseRequire2faMode(await resolveSettingRaw('require2fa', { orgId }));
 }

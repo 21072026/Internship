@@ -90,6 +90,10 @@
     "methods": ["POST"],
     "why": "One-click actions from a notification email — mark as read, the five reactions (#1204). The signed token is the credential, the same trust model as the Reply-To tokens; POST rather than GET so a mail client prefetching links cannot act for the reader."
   },
+  "src/app/api/exports/[id]/download/route.ts": {
+    "methods": ["GET"],
+    "why": "The file of a READY /api/v1 export (#3002), for whoever holds a link GET /api/v1/exports/{id} minted. An HMAC over the export id and the link's 15-minute expiry (timingSafeEqual) stands in for the key, and the link is re-judged on every use: the key that made the export must still be live, hold the resource's scope and its org be entitled to the API (keyMayRead), so revoking the key kills its links. Tampered or expired: 403 invalid_link. Rate-limited to 60/min per IP."
+  },
   "src/app/api/inbound-email/poll/route.ts": {
     "methods": ["POST"],
     "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."

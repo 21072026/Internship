@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
-import { getSettings } from '@/lib/settings';
+import { resolveSettings } from '@/lib/settingsResolver';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { lookupBreachedPassword } from '@/lib/breachedPassword';
 import {
@@ -42,7 +42,7 @@ export interface ResolvedPasswordPolicy {
 
 /** The policy an org's new passwords are judged by: its own rows → global → default. */
 export async function resolvePasswordPolicy(orgId: string | null | undefined): Promise<ResolvedPasswordPolicy> {
-  const settings = await getSettings(await settingsOrgOfRow(orgId));
+  const settings = await resolveSettings({ orgId: await settingsOrgOfRow(orgId) }).then((r) => r.raw);
   const policy = parsePasswordPolicy(settings);
   return { policy, rules: passwordRules(policy), breachCheck: settings.breachedPasswordCheck === 'true' };
 }

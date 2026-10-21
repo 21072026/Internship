@@ -5,6 +5,7 @@ import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
 import { REQUISITION_STATUSES } from '@/lib/requisitions';
 import { IMPORT_ROW_CAP, MAX_OPEN_IMPORTS_PER_KEY } from '@/lib/api/v1Imports';
+import { EXPORT_RESOURCES, EXPORT_RESOURCE_NAMES, EXPORT_ROW_CAP, MAX_OPEN_EXPORTS_PER_KEY } from '@/lib/api/v1Exports';
 
 // The day the pre-#1988 `candidates` alias key is removed from GET /candidates.
 const CANDIDATES_ALIAS_SUNSET = '2027-01-31';
@@ -302,6 +303,25 @@ export async function GET(request: Request) {
             active: { type: 'boolean' }, createdAt: when,
           },
         },
+        Export: {
+          type: 'object',
+          description: 'An asynchronous export of one resource (#3002). `downloadUrl` is present only when `status` is READY, is signed, and works until `downloadExpiresAt`; ask again for a fresh one.',
+          required: ['id', 'resource', 'status', 'includesNotes', 'createdAt', 'expiresAt'],
+          properties: {
+            id: str,
+            resource: { type: 'string', enum: [...EXPORT_RESOURCE_NAMES] },
+            status: { type: 'string', enum: ['PENDING', 'RUNNING', 'READY', 'FAILED'] },
+            includesNotes: { type: 'boolean', description: 'Interaction note bodies are in the file (the key held `interactions:read_notes`).' },
+            rowCount: { type: ['integer', 'null'] },
+            byteSize: { type: ['integer', 'null'], description: 'Size of the gzipped file.' },
+            error: { type: ['string', 'null'], enum: ['too_many_rows', 'too_large', 'key_inactive', null] },
+            createdAt: when,
+            finishedAt: nwhen,
+            expiresAt: { ...when, description: 'The export, file and status, is gone after this instant.' },
+            downloadUrl: { type: 'string', format: 'uri' },
+            downloadExpiresAt: when,
+          },
+        },
         Import: {
           type: 'object',
           description: 'A queued bulk import (#3015). `counts` and `rows` appear once `status` is DONE.',
@@ -528,6 +548,57 @@ export async function GET(request: Request) {
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { $ref: '#/components/parameters/IdempotencyKey' }],
           responses: {
             '200': { description: 'Deleted', content: { 'application/json': { schema: { type: 'object', properties: { data: { type: 'object', properties: { id: str, deleted: { type: 'boolean' } } } } } } } },
+            '404': { $ref: '#/components/responses/NotFound' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/exports': {
+        post: {
+          summary: 'Export a whole resource (asynchronous)',
+          description:
+            'Requires the read scope of the exported resource (' +
+            Object.entries(EXPORT_RESOURCES).map(([name, r]) => `\`${name}\` → \`${r.scope}\``).join(', ') +
+            '). Answers 202 at once; the file — every row of the key\u2019s organisation, one JSON object per line in the same shape as the list, gzipped — is written in the background. Poll `GET /exports/{id}` until `status` is READY, then fetch `downloadUrl` (no Authorization header needed: the link is signed and expires in 15 minutes; a tampered or expired link answers 403 `invalid_link`, as does a link whose key was revoked). Interaction note bodies are included only when the key also holds `interactions:read_notes`. More than ' +
+            EXPORT_ROW_CAP +
+            ' rows ends the export as FAILED (`too_many_rows`): page the list instead. A key may have at most ' +
+            MAX_OPEN_EXPORTS_PER_KEY +
+            ' exports queued or running (409 `limit_reached`). The file is deleted 24 hours after it was written.',
+          security: [{ apiKey: [] }],
+          parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { type: 'object', additionalProperties: false, required: ['resource'], properties: { resource: { type: 'string', enum: [...EXPORT_RESOURCE_NAMES] } } },
+              },
+            },
+          },
+          responses: {
+            '202': {
+              description: 'Queued',
+              headers: { ...rateLimitResponseHeaders, Location: { schema: str, description: 'The status resource.' } },
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/Export' } } } } },
+            },
+            '409': { $ref: '#/components/responses/Conflict' },
+            '422': { $ref: '#/components/responses/UnprocessableEntity' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/exports/{id}': {
+        get: {
+          summary: 'Get an export',
+          description:
+            'Requires the read scope of the exported resource. Only an export the calling key made; any other id — another key\u2019s, another organisation\u2019s, an expired one — is 404, exactly like a missing one. A READY export carries a freshly signed `downloadUrl`.',
+          security: [{ apiKey: [] }],
+          parameters: [idParam],
+          responses: {
+            '200': {
+              description: 'The export',
+              headers: rateLimitResponseHeaders,
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/Export' } } } } },
+            },
             '404': { $ref: '#/components/responses/NotFound' },
             ...errorResponses,
           },

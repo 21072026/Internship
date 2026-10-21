@@ -52,6 +52,28 @@ test('a sign-out callbackUrl on a host we do not serve falls back to baseUrl —
   }
 });
 
+test('a tenant\'s own domain is a served host only once its ownership is verified (#1661)', async ({ request }) => {
+  const stamp = `${Date.now()}`;
+  // Two hosts, never one host twice: the verified-host answer is cached per host.
+  const verified = `v-${stamp}.tenant.example.test`;
+  const unverified = `u-${stamp}.tenant.example.test`;
+  const orgs = await Promise.all([
+    prisma.organization.create({ data: { name: `HC V ${stamp}`, slug: `hc-v-${stamp}`, publicHost: verified, publicHostToken: 'tok', publicHostVerifiedAt: new Date() } }),
+    prisma.organization.create({ data: { name: `HC U ${stamp}`, slug: `hc-u-${stamp}`, publicHost: unverified, publicHostToken: 'tok' } }),
+  ]);
+  try {
+    const base = await signOutUrl(request, '/');
+    expect(await signOutUrl(request, `https://${verified}/auth/signin`, { 'x-forwarded-host': verified, 'x-forwarded-proto': 'https' })).toBe(`https://${verified}/auth/signin`);
+    const refused = await signOutUrl(request, `https://${unverified}/auth/signin`, { 'x-forwarded-host': unverified, 'x-forwarded-proto': 'https' });
+    expect(new URL(refused).origin).toBe(new URL(base).origin);
+    // Still exact: a suffix of a verified host is nobody.
+    const suffixed = await signOutUrl(request, `https://${verified}.evil.example/`);
+    expect(suffixed).not.toContain('evil.example');
+  } finally {
+    await prisma.organization.deleteMany({ where: { id: { in: orgs.map((o) => o.id) } } });
+  }
+});
+
 test('a relative sign-out callbackUrl still resolves against baseUrl — NextAuth default parity', async ({ request }) => {
   const url = await signOutUrl(request, '/auth/signin');
   const base = await signOutUrl(request, '/');

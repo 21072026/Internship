@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**SAML Single Logout: the HTTP-Redirect signature now covers the message that is acted on (#1952 follow-up):** `GET /api/auth/sso/[slug]/slo` read its message with `URLSearchParams` (decoded keys, last value of a repeated key) while node-saml 5 verified the signature over the first raw token that merely contains the key name, so a second, unsigned `LogoutRequest` sent next to a genuinely signed one could end any org member's sessions. The query is now read once by `parseSamlRedirectQuery()` (`src/lib/samlRedirectQuery.ts`, pure, unit-tested): a repeated or percent-encoded binding key, or a request and a response together, is refused as `slo_refused` (logged `auth.slo_refused`), and node-saml is handed a query rebuilt from exactly the decoded tokens. New @smoke cases in `e2e/sso-single-logout.spec.ts` and `e2e/saml-redirect-query.unit.spec.ts`."
+}

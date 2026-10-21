@@ -186,6 +186,8 @@ test('requisition alerts match canonical skills, not letters in the title', asyn
   const [ts, py, go] = await Promise.all([skill('typescript'), skill('python'), skill('go')]);
 
   await seedUser(adminEmail, pw, 'ADMIN', 'Need Skill Admin');
+  // It drives the /api/cron batch, a platform-wide run: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const hash = await bcrypt.hash(pw, 10);
   const tsCo = await prisma.company.create({
     data: {

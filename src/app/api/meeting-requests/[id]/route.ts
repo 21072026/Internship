@@ -86,6 +86,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true, status: 'DECLINED' });
   }
 
+  // A counter-proposal (#1982) is accepted by MOVING the meeting it counters —
+  // through PATCH /api/meetings/[id], the one write path into a booked
+  // meeting's time, which the panel calls first. This only records the answer,
+  // and only once the meeting really sits at the proposed time: an accept
+  // without the move would tell the requester "yes" about a meeting that never
+  // moved, and creating a second meeting here is exactly what a counter is not.
+  if (req.counterOfMeetingId) {
+    const countered = await prisma.meeting.findUnique({
+      where: { id: req.counterOfMeetingId },
+      select: { scheduledAt: true, status: true, meetLink: true },
+    });
+    if (!countered || countered.status !== 'SCHEDULED' || countered.scheduledAt?.getTime() !== req.proposedAt.getTime()) {
+      return NextResponse.json({ error: 'Move the meeting to the proposed time first', code: 'move_first' }, { status: 409 });
+    }
+    await prisma.meetingRequest.update({ where: { id }, data: { status: 'ACCEPTED' } });
+    await notify(req.requestedById, 'meeting_request.accepted', { topic: req.topic }, requesterLink);
+    await emailDecision(req.requestedById, {
+      topic: req.topic,
+      accepted: true,
+      scheduledAt: countered.scheduledAt,
+      meetLink: countered.meetLink,
+      link: requesterLink,
+    });
+    return NextResponse.json({ ok: true, status: 'ACCEPTED', meetingId: req.counterOfMeetingId });
+  }
+
   // Accept → create the confirmed meeting with an auto video link. A request
   // lives in one relation's thread (either side may file it), so the confirmed
   // meeting is structurally a 1:1 call: one mentor, one mentee. The room is

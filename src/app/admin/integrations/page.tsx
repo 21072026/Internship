@@ -12,6 +12,8 @@ import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
 import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
+import { KlaviyoCard } from '@/components/admin/KlaviyoCard';
+import { useVertical } from '@/lib/verticalClient';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key {
@@ -79,6 +81,8 @@ const CONNECTOR_LABEL: Record<string, string> = {
 export default function IntegrationsPage() {
   const t = useT();
   const locale = useLocale();
+  // The Klaviyo connector feeds the marketing funnel (docs/integrations/klaviyo.md).
+  const isMarketing = useVertical() === 'MARKETING';
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [keys, setKeys] = useState<Key[]>([]);
@@ -258,6 +262,12 @@ export default function IntegrationsPage() {
           ))}
         </div>
       </Card>
+
+      {isMarketing && (
+        <div className="mb-6">
+          <KlaviyoCard />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

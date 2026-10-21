@@ -70,6 +70,12 @@ export async function recordStageMove(opts: {
    * effects follow. Everything else about the move is unchanged.
    */
   historyWritten?: boolean;
+  /**
+   * Suppress the mentee notification (the webhook still fires): bulk advance
+   * guarantees one notification per PERSON when a mentee has two active
+   * relations in the batch (#886).
+   */
+  skipNotify?: boolean;
 }): Promise<void> {
   const { relation, toStatus, actor } = opts;
   const auditRow = statusChangeData({
@@ -105,5 +111,6 @@ export async function recordStageMove(opts: {
     to: toStatus,
     reasonCode: opts.reasonCode,
     deadlineSetByCaller: opts.deadlineSetByCaller,
+    skipNotify: opts.skipNotify,
   });
 }
