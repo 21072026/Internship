@@ -11,6 +11,7 @@ import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
 import { EmailOptOutProof } from '@/components/admin/EmailOptOutProof';
 import { MailQueuePanel } from '@/components/admin/MailQueuePanel';
+import { EmailSuppressionPanel } from '@/components/admin/EmailSuppressionPanel';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
@@ -189,11 +190,15 @@ export default function AdminSettingsPage() {
   // The mail queue tab (#2953): offered only to the queue's operators — a
   // super admin, or the ADMIN of the deployment's default organization. Any
   // other admin gets a 403 from the probe and sees no tab at all.
-  const [mailTab, setMailTab] = useState<'delivery' | 'queue'>('delivery');
+  const [mailTab, setMailTab] = useState<'delivery' | 'queue' | 'suppressions'>('delivery');
   const [queueAllowed, setQueueAllowed] = useState(false);
+  const [queueScopeOrg, setQueueScopeOrg] = useState(false);
   useEffect(() => {
     fetch('/api/admin/mail-queue?probe=1')
-      .then((r) => setQueueAllowed(r.ok))
+      .then(async (r) => {
+        setQueueAllowed(r.ok);
+        if (r.ok) setQueueScopeOrg((await r.json().catch(() => null))?.scope === 'org');
+      })
       .catch(() => {});
   }, []);
 
@@ -715,7 +720,7 @@ export default function AdminSettingsPage() {
         <CardHeader><CardTitle>{t.settings.emailHealth}</CardTitle></CardHeader>
         {queueAllowed && (
           <div role="tablist" aria-label={t.settings.emailHealth} className="mb-4 inline-flex gap-1 rounded-lg border border-gray-200 dark:border-gray-800 p-1">
-            {(['delivery', 'queue'] as const).map((tab) => (
+            {(['delivery', 'queue', 'suppressions'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -731,7 +736,7 @@ export default function AdminSettingsPage() {
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
-                {tab === 'delivery' ? t.settings.mailTabDelivery : t.settings.mailTabQueue}
+                {tab === 'delivery' ? t.settings.mailTabDelivery : tab === 'queue' ? t.settings.mailTabQueue : t.settings.mailTabSuppressions}
               </button>
             ))}
           </div>
@@ -739,6 +744,11 @@ export default function AdminSettingsPage() {
         {queueAllowed && mailTab === 'queue' && (
           <div role="tabpanel" id="mail-tabpanel-queue" aria-labelledby="mail-tab-queue" className="max-w-4xl">
             <MailQueuePanel />
+          </div>
+        )}
+        {queueAllowed && mailTab === 'suppressions' && (
+          <div role="tabpanel" id="mail-tabpanel-suppressions" aria-labelledby="mail-tab-suppressions" className="max-w-4xl">
+            <EmailSuppressionPanel scopeOrg={queueScopeOrg} />
           </div>
         )}
         <div

@@ -78,40 +78,43 @@ export const BACKFILLS = [
   { id: '0013-applications', script: 'scripts/backfill-applications.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // API key lifecycle (#1545) + tenant anchor (#1466). AFTER 0011.
   { id: '0014-api-key-lifecycle', script: 'prisma/backfill-api-key-lifecycle.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  // Admin tiers (#1567): every ADMIN without a tier gets ORG_ADMIN — the power
+  // the role already carried. Fills NULLs only, never the platform tier.
+  { id: '0015-admin-level', script: 'prisma/backfill-admin-level.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Baseline the scheduled-job backlog so the first cron tick doesn't email out
   // history. One-shot (it also self-skips on Setting 'cronBaselineAt').
-  { id: '0015-cron-baseline', script: 'prisma/backfill-cron-baseline.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0016-cron-baseline', script: 'prisma/backfill-cron-baseline.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
   // completedAt for relations COMPLETED before the column existed (#854).
-  { id: '0016-relation-completed-at', script: 'prisma/backfill-relation-completed-at.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0017-relation-completed-at', script: 'prisma/backfill-relation-completed-at.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // MentorshipRelation.lifecycleState from `status` (#1768) — the backfill half
   // of expand → backfill → contract; only touches rows that disagree.
-  { id: '0017-relation-lifecycle', script: 'prisma/backfill-relation-lifecycle.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0018-relation-lifecycle', script: 'prisma/backfill-relation-lifecycle.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Remove the Meeting rows the old recurring generator materialised (#1110).
-  { id: '0018-series-meetings', script: 'prisma/backfill-series-meetings.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0019-series-meetings', script: 'prisma/backfill-series-meetings.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Grandfather pre-paywall SAML SSO tenants onto ENTERPRISE (#1742).
-  { id: '0019-sso-plan', script: 'prisma/backfill-sso-plan.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0020-sso-plan', script: 'prisma/backfill-sso-plan.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Pre-#1806 review notes out of rejectReason into adminNote.
-  { id: '0020-mentor-application-admin-note', script: 'prisma/backfill-mentor-application-admin-note.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0021-mentor-application-admin-note', script: 'prisma/backfill-mentor-application-admin-note.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // WeeklyReportReminder.recipientId (#2287); also prints the duplicate count
   // the @@unique contract step is gated on.
-  { id: '0021-weekly-report-reminder-recipient', script: 'prisma/backfill-weekly-report-reminder-recipient.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0022-weekly-report-reminder-recipient', script: 'prisma/backfill-weekly-report-reminder-recipient.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Relations stranded on APPLICATION_100 in a tenant whose stages lack it
   // (#1634). Dry-run by default; `--apply` is the deploy's deliberate choice.
-  { id: '0022-relation-start-stage', script: 'prisma/backfill-relation-start-stage.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0023-relation-start-stage', script: 'prisma/backfill-relation-start-stage.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
   // A Subscription row per Organization matching its old plan (#1731).
-  { id: '0023-org-subscription', script: 'prisma/backfill-org-subscription.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0024-org-subscription', script: 'prisma/backfill-org-subscription.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // premiumAnalytics setting → ADVANCED_ANALYTICS grants (#1740); deletes the
   // dead setting rows so a re-run grants nothing.
-  { id: '0024-premium-analytics-entitlement', script: 'prisma/backfill-premium-analytics-entitlement.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0025-premium-analytics-entitlement', script: 'prisma/backfill-premium-analytics-entitlement.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Grandfathers (#1740, #1738, #1744): every org that exists when a gate goes
   // live keeps the feature, ONCE — orgs created later must not inherit it.
   // They also carry their own marker note; `once` makes the ledger say so.
-  { id: '0025-report-export-grandfather', script: 'prisma/backfill-report-export-grandfather.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
-  { id: '0026-ai-package-grandfather', script: 'prisma/backfill-ai-package-grandfather.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
-  { id: '0027-integrations-api-grandfather', script: 'prisma/backfill-integrations-api-grandfather.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
-  // Re-split skill lists stored as one blob (#2314). BEFORE 0029.
-  { id: '0028-skill-lists', script: 'prisma/backfill-skill-lists.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0026-report-export-grandfather', script: 'prisma/backfill-report-export-grandfather.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0027-ai-package-grandfather', script: 'prisma/backfill-ai-package-grandfather.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0028-integrations-api-grandfather', script: 'prisma/backfill-integrations-api-grandfather.mjs', once: true, optional: true, why: ALWAYS_OPTIONAL },
+  // Re-split skill lists stored as one blob (#2314). BEFORE 0030.
+  { id: '0029-skill-lists', script: 'prisma/backfill-skill-lists.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
   // Map free-text skills onto the taxonomy (#1819); skipDuplicates makes a
   // re-run a no-op.
-  { id: '0029-skill-taxonomy', script: 'prisma/backfill-skill-taxonomy.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
+  { id: '0030-skill-taxonomy', script: 'prisma/backfill-skill-taxonomy.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
 ];

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
 /**
@@ -72,6 +72,8 @@ test('ending a meeting writes its interaction log, and the mentor sees it marked
 test('a meeting nobody ended is logged by the sweep once the grace period has passed', async ({ page }) => {
   const adminEmail = uniqueEmail('autolog-admin');
   await seedUser(adminEmail, password, 'ADMIN', 'Auto Log Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const { mentorEmail, menteeEmail, relation } = await seedPair('autolog-sweep');
   // Past the two-hour grace window, so it counts as held…
   const held = await seedMeeting(relation.id, minutesFromNow(-180), 'Career planning talk');
