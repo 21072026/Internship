@@ -154,6 +154,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
+  // The mentoring agreement both sides accept at kickoff (#1790).
+  { href: '/admin/agreements', icon: FileSignature, key: 'agreements', capability: 'mentorship' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
   // The tenant's own bill (#1739): plan, active-pair meter, history. The meter
   // and the price list are the internship product's (src/lib/plans.ts); a
