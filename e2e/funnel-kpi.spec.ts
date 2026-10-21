@@ -256,6 +256,12 @@ test('cohorts group by entry month, and a retention window that has not closed r
     await page.goto('/admin/analytics');
     await expect(page.getByTestId('cohort-kpi-card')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId(`cohort-conversion-${month}`)).toContainText('%');
+    // …and the same month is a point on the conversion line (#1890), carrying
+    // the rate the table prints.
+    const point = page.getByTestId('conversion-trend-chart').locator(`circle[data-label="${month.slice(2)}"]`);
+    await expect(point).toHaveCount(1);
+    const printed = (await page.getByTestId(`cohort-conversion-${month}`).innerText()).replace('%', '').trim();
+    await expect(point).toHaveAttribute('data-value', printed);
     await expect(page.getByTestId(`retention-${month}-1`)).toHaveText('—');
   } finally {
     await cleanupByEmail(menteeEmail);

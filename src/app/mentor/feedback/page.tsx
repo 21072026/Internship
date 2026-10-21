@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, MessageSquareText, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { BarChart } from '@/components/charts';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { MENTOR_CRITERIA, mentorFeedbackAverage, type MentorCriterion } from '@/lib/evaluation';
@@ -129,15 +130,18 @@ export default function MentorFeedbackPage() {
                   {feedback.trend}
                 </CardTitle>
               </CardHeader>
-              <div className="flex h-32 items-end gap-3" data-testid="mentor-feedback-trend">
-                {trend.map((month) => (
-                  <div key={month.key} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{month.average!.toFixed(1)}</span>
-                    <div className="w-full max-w-12 rounded-t bg-blue-400" style={{ height: `${(month.average! / 5) * 80}%` }} />
-                    <span className="text-xs text-gray-400">{month.label}</span>
-                  </div>
-                ))}
-              </div>
+              <BarChart
+                testId="mentor-feedback-trend"
+                ariaLabel={feedback.trend}
+                height={128}
+                yMax={5}
+                showValues
+                formatValue={(v) => v.toFixed(1)}
+                categories={trend.map((month) => month.label)}
+                series={[
+                  { key: 'average', label: feedback.overallAverage, color: 'var(--chart-1)', values: trend.map((month) => month.average!), testIdPrefix: 'mentor-feedback-bar-' },
+                ]}
+              />
             </Card>
           )}
 

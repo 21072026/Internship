@@ -137,7 +137,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY \
            MAIL_RATE_PER_MIN MAIL_BURST MAIL_URGENT_RESERVE MAIL_BULK_RATE_PER_MIN MAIL_BULK_BURST MAIL_BULK_URGENT_RESERVE \
            MAIL_METER_MODE MAIL_THROTTLE_LADDER_SEC MAIL_QUEUE_LANES MAIL_WORKER_ENABLED MAIL_INLINE_TIMEOUT_MS \
-           MAIL_DAILY_CAP MAIL_BULK_DAILY_CAP; do
+           MAIL_DAILY_CAP MAIL_BULK_DAILY_CAP JOBS_WORKER_ENABLED JOBS_CONCURRENCY; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -345,6 +345,8 @@ app_env_args() {
     -e MAIL_QUEUE_LANES="${MAIL_QUEUE_LANES:-}" \
     -e MAIL_WORKER_ENABLED="${MAIL_WORKER_ENABLED:-}" \
     -e MAIL_INLINE_TIMEOUT_MS="${MAIL_INLINE_TIMEOUT_MS:-}" \
+    -e JOBS_WORKER_ENABLED="${JOBS_WORKER_ENABLED:-}" \
+    -e JOBS_CONCURRENCY="${JOBS_CONCURRENCY:-}" \
     -e MAIL_DAILY_CAP="${MAIL_DAILY_CAP:-}" \
     -e MAIL_BULK_DAILY_CAP="${MAIL_BULK_DAILY_CAP:-}" \
     -e MT_ENFORCE_ISOLATION="${MT_ENFORCE_ISOLATION:-}" \
@@ -809,6 +811,11 @@ run_tool node prisma/backfill-cron-baseline.mjs || true
 # so the post-mentorship CV access window (#854) has an anchor instead of
 # revoking access outright. Only ever fills NULLs — idempotent.
 run_tool node prisma/backfill-relation-completed-at.mjs || true
+# Fill MentorshipRelation.lifecycleState from `status` (#1768) — the backfill
+# half of expand → backfill → contract: the column is nullable with a DB default
+# of 'ACTIVE', and the meter tells a paused pair from a live one by it. Only
+# matches rows that disagree with `status` — idempotent.
+run_tool node prisma/backfill-relation-lifecycle.mjs || true
 # Remove the Meeting rows the old recurring-meeting generator materialised. A
 # series is a rule now; those rows outlived their cancelled series and haunted
 # the calendar (#1110). Nothing writes them any more, so this converges to a
@@ -927,7 +934,8 @@ else
   # switched OFF: a second cron would send the same reminder twice, a second
   # IMAP poller would race the live one for the same inbox, and a mail drain
   # would deliver production's queued mail from an image that has not passed its
-  # check yet (#2944). These three flags are the documented kill switches
+  # check yet (#2944), and a job worker would run production's queued jobs
+  # from it the same way (#1673). These four flags are the documented kill switches
   # (src/instrumentation.ts). They come AFTER the shared env list on purpose —
   # docker takes the last `-e` for a given key, so these override whatever the
   # env file set.
@@ -939,6 +947,7 @@ else
     -e CRON_ENABLED=0 \
     -e INBOUND_IMAP_ENABLED=0 \
     -e MAIL_WORKER_ENABLED=0 \
+    -e JOBS_WORKER_ENABLED=0 \
     "$IMAGE" >/dev/null
 
   if ! check_health "http://127.0.0.1:$CANARY_PORT/api/health?db=1" "$CANARY" "${GIT_SHA:0:7}"; then
