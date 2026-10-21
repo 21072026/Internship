@@ -315,6 +315,49 @@ export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', 
   return Buffer.from(response, 'utf8').toString('base64');
 }
 
+// --- SAML Single Logout (#1952) -------------------------------------------
+
+let lastSlo = null;
+const SIG_ALG = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+
+export function buildLogoutRequest({ destination, email, relayState = '', mode = 'ok' }) {
+  const now = new Date();
+  const xml =
+    `<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ` +
+    `ID="${uid()}" Version="2.0" IssueInstant="${iso(now)}" Destination="${xmlEscape(destination)}" ` +
+    `NotOnOrAfter="${iso(new Date(now.getTime() + 5 * 60_000))}">` +
+    `<saml:Issuer>${xmlEscape(SAML_ISSUER)}</saml:Issuer>` +
+    `<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">${xmlEscape(email)}</saml:NameID>` +
+    `</samlp:LogoutRequest>`;
+
+  if (mode === 'post' || mode === 'post-unsigned') {
+    if (mode === 'post-unsigned') return { SAMLRequest: Buffer.from(xml, 'utf8').toString('base64') };
+    const sig = new SignedXml({
+      privateKey: signing.privateKey,
+      signatureAlgorithm: SIG_ALG,
+      canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
+    });
+    sig.addReference({
+      xpath: "//*[local-name(.)='LogoutRequest']",
+      transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/2001/10/xml-exc-c14n#'],
+      digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    });
+    sig.getKeyInfoContent = () => `<X509Data><X509Certificate>${bareCert(signing.certificate)}</X509Certificate></X509Data>`;
+    sig.computeSignature(xml, { location: { reference: "//*[local-name(.)='Issuer']", action: 'after' } });
+    return { SAMLRequest: Buffer.from(sig.getSignedXml(), 'utf8').toString('base64') };
+  }
+
+  // HTTP-Redirect binding: the signature covers the encoded query, in this order.
+  const enc = encodeURIComponent;
+  let signed = `SAMLRequest=${enc(zlib.deflateRawSync(Buffer.from(xml, 'utf8')).toString('base64'))}`;
+  if (relayState) signed += `&RelayState=${enc(relayState)}`;
+  if (mode === 'unsigned') return { query: signed };
+  signed += `&SigAlg=${enc(SIG_ALG)}`;
+  const key = mode === 'wrong-key' ? rogue.privateKey : signing.privateKey;
+  const signature = crypto.sign('sha256', Buffer.from(signed, 'utf8'), key).toString('base64');
+  return { query: `${signed}&Signature=${enc(signature)}` };
+}
+
 // --- OIDC (#1929 is not shipped yet; the endpoints are ready for it) --------
 
 const OIDC_KID = 'e2e-stub-idp-1';
@@ -476,6 +519,42 @@ const server = createServer(async (req, res) => {
         groups: Array.isArray(body.groups) ? body.groups.filter((g) => typeof g === 'string') : [],
       }),
     });
+  }
+
+  // --- SAML Single Logout (#1952) -----------------------------------------
+  // The IdP's SingleLogoutService: what the app's signed LogoutRequest (SP-
+  // initiated) and LogoutResponse (the answer to an IdP-initiated logout) land
+  // on. The stub only records what arrived, for the spec to read back.
+  if (url.pathname === '/saml/slo') {
+    const message = q.get('SAMLRequest') || q.get('SAMLResponse');
+    let xml = '';
+    try {
+      xml = message ? zlib.inflateRawSync(Buffer.from(message, 'base64')).toString('utf8') : '';
+    } catch {
+      xml = '';
+    }
+    lastSlo = {
+      kind: q.get('SAMLRequest') ? 'request' : q.get('SAMLResponse') ? 'response' : 'none',
+      xml,
+      signed: !!q.get('Signature') && !!q.get('SigAlg'),
+      rawQuery: url.search.replace(/^\?/, ''),
+    };
+    return html(res, 200, '<!doctype html><title>Stub IdP</title><p data-testid="stub-idp-signed-out">Signed out at the stub IdP.</p>');
+  }
+  if (url.pathname === '/saml/slo/last') return json(res, 200, lastSlo);
+
+  // Mint an IdP-initiated LogoutRequest for the spec to deliver to the app's
+  // SLO endpoint. `mode`: ok (signed, Redirect binding), unsigned, wrong-key,
+  // post (enveloped XML signature, POST binding), post-unsigned.
+  if (url.pathname === '/saml/logout-request' && req.method === 'POST') {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      return json(res, 400, { error: 'body must be JSON' });
+    }
+    if (!body.destination || !body.email) return json(res, 400, { error: 'destination and email are required' });
+    return json(res, 200, buildLogoutRequest(body));
   }
 
   // --- OIDC ---------------------------------------------------------------

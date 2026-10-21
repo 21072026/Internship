@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**/api/v1 writes (#1996):** `POST /api/v1/candidates` (409 `duplicate_candidate` with `matches` for an e-mail in use or a `findPossibleDuplicates` look-alike unless `allowPossibleDuplicate`), `GET`/`PATCH /api/v1/candidates/{id}` (`.strict()` — `role`, `orgId`, `email`, credentials are a 422 `unrecognized_keys`; fields merged through `planFieldUpdates`), `PATCH /api/v1/relationships/{id}/stage` (through `stageMoveData()` + a guarded `updateMany` + `recordStageMove()`, so history, notification, webhook and SLA match the board; 422 `unknown_stage`, 409 `invalid_transition` / `stage_conflict` with `currentStage`) and `POST /api/v1/interactions`. Interaction logging is now ONE write path, `createInteraction()` in `src/lib/interactionWrite.ts`, shared by `POST /api/interactions`. All on the #1994 write floor (scope, Idempotency-Key, 422 contract, activity row). The queued bulk import moves to #3015.",
-  "notes": {
-    "en": ["Other systems can now create and update candidates, move a relationship's stage and log interactions through the public API — with the same notifications and history as in the app."],
-    "tr": ["Diğer sistemler artık genel API üzerinden aday oluşturup güncelleyebiliyor, bir ilişkinin aşamasını ilerletebiliyor ve etkileşim kaydedebiliyor — uygulamadakiyle aynı bildirim ve geçmişle."],
-    "de": ["Andere Systeme können jetzt über die öffentliche API Kandidaten anlegen und ändern, die Phase einer Beziehung verschieben und Interaktionen erfassen — mit denselben Benachrichtigungen und demselben Verlauf wie in der App."]
-  }
-}

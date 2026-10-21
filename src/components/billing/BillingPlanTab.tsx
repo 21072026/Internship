@@ -12,6 +12,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { formatCount, formatEur, formatEurCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import type { BillingSummary } from '@/lib/billingSummary';
+import { PlanChangeRequestCard } from '@/components/billing/PlanChangeRequestCard';
 
 // The first tab of /admin/billing (#1739): plan card, this month's active-pair
 // meter against the band, the over-band state and twelve months of history.
@@ -90,10 +91,10 @@ export function BillingPlanTab() {
         {!data.plan.published && <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{b.plan.unpublished}</p>}
         {!data.statusCarriesPlan && <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{b.plan.statusNotEntitling}</p>}
         <div className="mt-4">
-          {/* TODO(#1743): submit to POST /api/org/plan-change once it exists; until then the published plans. */}
-          <Link href="/pricing" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" data-testid="billing-change-plan">
+          {/* The request form below files it (POST /api/org/plan-change, #1743). */}
+          <a href="#plan-change" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" data-testid="billing-change-plan">
             {b.changePlan}
-          </Link>
+          </a>
         </div>
       </Card>
 
@@ -155,14 +156,17 @@ export function BillingPlanTab() {
             </p>
             <p className="mt-1 text-gray-600 dark:text-gray-300">
               {b.overBand.moveUp}{' '}
-              {/* TODO(#1743): the plan-change request flow. */}
-              <Link href="/pricing" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+              <a href="#plan-change" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
                 {b.changePlan}
-              </Link>
+              </a>
             </p>
           </div>
         )}
       </Card>
+
+      <div id="plan-change" className="scroll-mt-4">
+        <PlanChangeRequestCard currentPlan={data.plan.key} />
+      </div>
 
       <div className="flex items-start gap-2 rounded-lg border border-gray-200 p-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-200" data-testid="billing-free-core">
         <HeartHandshake className="mt-0.5 h-4 w-4 shrink-0 text-green-600" aria-hidden />
