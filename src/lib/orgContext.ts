@@ -356,6 +356,15 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // the default org's; the platform-level readers (retention health) run
   // outside any scope and still see them.
   'ActivityLog',
+  // Telemetry (#1556). A page view is the viewer's (the beacon stamps the
+  // session's org); a mail-ledger row is the RECIPIENT's — every EmailLog writer
+  // in src/services/emailService.ts and src/lib/mailQueueAdmin.ts passes it
+  // explicitly, null included, so a request scope never stamps the sender's org
+  // on another tenant's mail. The deployment-wide readers (the relay health,
+  // the operator queue, the super-admin mail view) run outside any scope; the
+  // erasure, which runs inside one, deletes by address with runUnscoped.
+  'PageView',
+  'EmailLog',
   // The goal-template pool (cross-world isolation). The shared half
   // (`projectId: null`) used to be one global pool offered to every tenant.
   // Every create stamps `orgId` explicitly — the admin pool from the session,

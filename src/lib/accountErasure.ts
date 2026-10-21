@@ -72,11 +72,18 @@ async function forgetEmailLog(userId: string): Promise<void> {
   const addressStillHeld =
     (await runUnscoped(() => prisma.user.count({ where: { email: user.email, id: { not: userId } } }))) > 0;
   if (addressStillHeld) {
+    // The other world's account keeps the mailbox, so only the rows stamped
+    // with THIS account's org go (#1556). Rows from before EmailLog carried an
+    // org (NULL) cannot be told apart and stay, as they always did.
+    if (user.orgId) await runUnscoped(() => prisma.emailLog.deleteMany({ where: { to: user.email, orgId: user.orgId } }));
     await prisma.newsletterSend.deleteMany({ where: { userId } });
     await forgetQueuedMail(user.email, { onlyUserId: userId });
     return;
   }
-  await prisma.emailLog.deleteMany({ where: { to: user.email } });
+  // Unscoped (#1556): EmailLog is a tenant model, and an erasure that runs in
+  // the admin's scope must still reach every row for the address — the NULL
+  // ones written before the column existed included.
+  await runUnscoped(() => prisma.emailLog.deleteMany({ where: { to: user.email } }));
   await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
   await forgetQueuedMail(user.email);
 }

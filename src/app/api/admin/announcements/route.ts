@@ -279,7 +279,7 @@ async function handlePost(request: Request) {
   if (email) {
     const toMail = new Set(mailRecipients.map((u) => u.id));
     skipped = await recordOptOuts(
-      users.filter((u) => u.email && !toMail.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)' })),
+      users.filter((u) => u.email && !toMail.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)', orgId: u.orgId })),
     );
 
     // A bounded fan-out (#2951) — see src/lib/announcementMail.ts. The

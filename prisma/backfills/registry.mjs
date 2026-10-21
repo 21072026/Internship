@@ -8,7 +8,10 @@
 // one runner (prisma/run-backfills.mjs) and a ledger (model BackfillRun).
 //
 // Each entry:
-//   id        NNNN-kebab-slug — the ledger key; never renumber or reuse one
+//   id        NNNN-kebab-slug — the ledger key; never renumber or reuse one.
+//             The ARRAY order is the run order: an entry added later that must
+//             run before an existing one takes the next free number and its
+//             place in the list (0031 sits before 0011).
 //   script    the file the runner executes with `node`, relative to the repo
 //             root. It must exist IN THE IMAGE: prisma/ is copied whole, a
 //             scripts/ file needs its own COPY line in the Dockerfile
@@ -24,7 +27,7 @@
 //   failNote  printed in addition when an optional entry fails
 //
 // THE ORDER IS LOAD-BEARING (CLAUDE.md, and the test pins these):
-//   - activity/audit/task-template/AI-usage org attribution BEFORE
+//   - activity/audit/task-template/AI-usage/telemetry org attribution BEFORE
 //     backfill-organization, which fills every remaining NULL orgId with the
 //     default org and would otherwise hand one tenant's rows to another;
 //   - backfill-api-key-lifecycle AFTER backfill-organization (it needs the
@@ -59,6 +62,9 @@ export const BACKFILLS = [
   { id: '0008-task-template-org', script: 'prisma/backfill-task-template-org.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   { id: '0009-ai-usage-org', script: 'prisma/backfill-ai-usage-org.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   { id: '0010-ai-usage-task', script: 'prisma/backfill-ai-usage-task.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  // PageView by viewer, EmailLog by the one org holding the address (#1556).
+  // Numbered after the list's end, placed before 0011 on purpose.
+  { id: '0031-telemetry-org', script: 'prisma/backfill-telemetry-org.mjs', once: false, optional: true, why: 'Tenant attribution: non-blocking like its siblings 0006–0010.' },
   // Tenant backfill (#1557): exits non-zero when a nullable orgId column still
   // holds NULLs after its retry passes. An incomplete run is the one thing that
   // must block MT_ENFORCE_ISOLATION, so its failure is announced loudly.

@@ -34,6 +34,7 @@ import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
+import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
@@ -477,10 +478,17 @@ async function recordEmail(
   status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED' | 'HELD',
   transport: MailTransport,
   error?: string,
+  // Whose mail this is (#1556): the RECIPIENT's tenant — the caller's `orgId`,
+  // else the org of the recipient's account (`userId`). Written explicitly,
+  // null included, so the tenant middleware never stamps the SENDER's request
+  // scope on someone else's mail. Unknown (an address with no account, a
+  // hand-built mail) stays NULL and reads as the default org's.
+  owner?: { orgId?: string | null; userId?: string | null },
 ) {
   try {
     await prisma.emailLog.create({
       data: {
+        orgId: await emailLogOrg(owner),
         to: to.slice(0, 320),
         subject: subject.slice(0, 512),
         category: category?.slice(0, 64) ?? null,
@@ -492,6 +500,15 @@ async function recordEmail(
   } catch (e) {
     logger.error('Failed to write EmailLog', { to, category, status, error: String(e) });
   }
+}
+
+async function emailLogOrg(owner?: { orgId?: string | null; userId?: string | null }): Promise<string | null> {
+  if (owner?.orgId) return owner.orgId;
+  if (!owner?.userId) return null;
+  // Unscoped on purpose: the recipient's row may sit in another tenant than
+  // the request that is sending (a super admin's invitation, a cron).
+  const u = await runUnscoped(() => prisma.user.findUnique({ where: { id: owner.userId! }, select: { orgId: true } })).catch(() => null);
+  return u?.orgId ?? null;
 }
 
 /**
@@ -511,10 +528,15 @@ async function recordEmail(
  *
  * A recipient with no address leaves no row: there is nothing to look it up by.
  */
-export async function recordOptOuts(rows: { to: string | null | undefined; category: string; subject: string }[]): Promise<number> {
+export async function recordOptOuts(
+  rows: { to: string | null | undefined; category: string; subject: string; orgId?: string | null }[],
+): Promise<number> {
   const data = rows
-    .filter((r): r is { to: string; category: string; subject: string } => typeof r.to === 'string' && r.to !== '')
+    .filter((r): r is { to: string; category: string; subject: string; orgId?: string | null } => typeof r.to === 'string' && r.to !== '')
     .map((r) => ({
+      // The recipient's tenant when the job holds it (#1556); explicit null
+      // otherwise, never the request scope's.
+      orgId: r.orgId ?? null,
       to: r.to.slice(0, 320),
       subject: r.subject.slice(0, 512),
       category: r.category.slice(0, 64),
@@ -534,8 +556,8 @@ export async function recordOptOuts(rows: { to: string | null | undefined; categ
 }
 
 /** One recipient's opt-out row — see recordOptOuts. */
-export async function recordOptOut(to: string | null | undefined, category: string, subject: string): Promise<void> {
-  await recordOptOuts([{ to, category, subject }]);
+export async function recordOptOut(to: string | null | undefined, category: string, subject: string, orgId?: string | null): Promise<void> {
+  await recordOptOuts([{ to, category, subject, orgId }]);
 }
 
 // ── E-mail delivery health alerts (#1190) ───────────────────────────────────
@@ -1022,7 +1044,7 @@ export async function prepareEmail({
   const unmailable = unmailableRecipient(to);
   if (unmailable) {
     logger.info('Email not sent: generated address', { category, reason: unmailable });
-    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), `Unmailable address: ${unmailable}`);
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), `Unmailable address: ${unmailable}`, { orgId, userId });
     return { status: 'SKIPPED' };
   }
 
@@ -1102,7 +1124,7 @@ export async function prepareEmail({
     // preference lookup that breaks must not silently swallow the mail.
     if (u && !emailGroupAllowed(u, groupId!)) {
       logger.info('Email not sent: unsubscribed', { to, category, group: groupId });
-      await recordEmail(to, subject, category, 'SKIPPED', transport, `Unsubscribed: ${groupId}`);
+      await recordEmail(to, subject, category, 'SKIPPED', transport, `Unsubscribed: ${groupId}`, { orgId: orgId ?? storedOrg?.orgId, userId });
       // 'SKIPPED', never a bare return: #1431 made this function report what
       // actually happened, because four routes had been reading "did not throw"
       // as "was delivered". A suppressed send is the newest way for a mail not
@@ -1120,13 +1142,13 @@ export async function prepareEmail({
   // still shows what would have gone out — which is the part worth demoing.
   if (IS_DEMO_MODE) {
     logger.info('Email not sent: demo mode', { to, subject, category });
-    await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled', { orgId: orgId ?? storedOrg?.orgId, userId });
     return { status: 'SKIPPED' };
   }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
-    await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)', { orgId: orgId ?? storedOrg?.orgId, userId });
     return { status: 'SKIPPED' };
   }
 
@@ -1176,7 +1198,7 @@ export async function prepareEmail({
     } catch (e) {
       const message = `Recipient origin unresolved: ${e instanceof Error ? e.message : String(e)}`;
       logger.error('Email not sent: recipient origin unresolved', { to, category, error: message });
-      await recordEmail(to, subject, category, 'FAILED', transport, message);
+      await recordEmail(to, subject, category, 'FAILED', transport, message, { orgId: orgId ?? storedOrg?.orgId, userId });
       throw e;
     }
   }
@@ -1252,13 +1274,13 @@ export async function deliverPrepared(
     const cls = classifySmtpError(e);
     noteAuthFailure(cls.reason, e);
     logger.error('Email send failed', { category, transport, kind: cls.kind, reason: cls.reason, rcpt: recipientHash(to).slice(0, 16) });
-    await recordEmail(to, subject, category, 'FAILED', transport, message);
+    await recordEmail(to, subject, category, 'FAILED', transport, message, prepared);
     void maybeAlertEmailFailures(category).catch(() => {});
     observeSafely(() => observer.outcome(prepared, e));
     throw e;
   }
 
-  await recordEmail(to, subject, category, 'SENT', transport);
+  await recordEmail(to, subject, category, 'SENT', transport, undefined, prepared);
   observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
 }
@@ -1318,13 +1340,13 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   } catch (e) {
     const p = result.prepared;
     logger.error('outbound_hold.check_failed', { category: p.category, error: e instanceof Error ? e.message : String(e) });
-    await recordEmail(p.to, p.subject, p.category, 'FAILED', p.transport, 'Outbound approval check failed');
+    await recordEmailOutcome(p, 'FAILED', 'Outbound approval check failed');
     throw e;
   }
   if (hold.held) {
     if (hold.created) {
       const p = result.prepared;
-      await recordEmail(p.to, p.subject, p.category, 'HELD', p.transport, `Held for approval (${hold.code})`);
+      await recordEmailOutcome(p, 'HELD', `Held for approval (${hold.code})`);
     }
     return 'HELD';
   }
@@ -1391,7 +1413,7 @@ async function dispatchPrepared(
   if (prepared.lane === 'CRITICAL' && canQueue(prepared) && relay?.open) {
     if (await tryEnqueue(prepared, { ...queue, reason: 'breaker', priority: 100 })) {
       logger.warning('mail_outbox.breaker_open', { lane: prepared.lane, category: prepared.category, transport: prepared.transport });
-      await recordEmail(prepared.to, prepared.subject, prepared.category, 'DEFERRED', prepared.transport, 'Relay paused — queued without an attempt');
+      await recordEmailOutcome(prepared, 'DEFERRED', 'Relay paused — queued without an attempt');
       return 'QUEUED';
     }
   }
@@ -1410,7 +1432,7 @@ async function dispatchPrepared(
   } catch (e) {
     return onInlineFailure(prepared, e, queue, seams);
   }
-  await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
+  await recordEmailOutcome(prepared, 'SENT');
   observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
 }
@@ -1498,7 +1520,7 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
         reason: cls.reason,
         rcpt: recipientHash(to).slice(0, 16),
       });
-      await recordEmail(to, subject, category, 'DEFERRED', transport, message);
+      await recordEmail(to, subject, category, 'DEFERRED', transport, message, prepared);
       // A relay-wide failure is the outage signal: nothing goes FAILED while
       // the queue keeps it, so the health check reads the deferrals too.
       if (cls.relayWide) void maybeAlertEmailFailures(category).catch(() => {});
@@ -1514,7 +1536,7 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
     reason: cls.reason,
     rcpt: recipientHash(to).slice(0, 16),
   });
-  await recordEmail(to, subject, category, 'FAILED', transport, message);
+  await recordEmail(to, subject, category, 'FAILED', transport, message, prepared);
   void maybeAlertEmailFailures(category).catch(() => {});
   throw e;
 }
@@ -1546,7 +1568,7 @@ async function sendCriticalCapped(
 
   const finish = async (outcome: { error: unknown } | null): Promise<'SENT' | 'QUEUED'> => {
     if (outcome) return onInlineFailure(prepared, outcome.error, queue, seams);
-    await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
+    await recordEmailOutcome(prepared, 'SENT');
     observeSafely(() => observer.outcome(prepared, null));
     return 'SENT';
   };
@@ -1564,14 +1586,7 @@ async function sendCriticalCapped(
   if (!job) return finish(await inflight);
 
   logger.warning('mail_outbox.inline_timeout', { lane: prepared.lane, category: prepared.category, capMs });
-  await recordEmail(
-    prepared.to,
-    prepared.subject,
-    prepared.category,
-    'DEFERRED',
-    prepared.transport,
-    `Inline send exceeded ${capMs} ms — queued`,
-  );
+  await recordEmailOutcome(prepared, 'DEFERRED', `Inline send exceeded ${capMs} ms — queued`);
   void inflight
     .then(async (outcome) => {
       observeSafely(() => observer.outcome(prepared, outcome ? outcome.error : null));
@@ -1580,12 +1595,12 @@ async function sendCriticalCapped(
         if (classifySmtpError(outcome.error).retryable) return;
         if (await cancelQueuedMail(job, 'permanent_inline')) {
           const message = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
-          await recordEmail(prepared.to, prepared.subject, prepared.category, 'FAILED', prepared.transport, message);
+          await recordEmailOutcome(prepared, 'FAILED', message);
           void maybeAlertEmailFailures(prepared.category).catch(() => {});
         }
         return;
       }
-      await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
+      await recordEmailOutcome(prepared, 'SENT');
       if (!(await cancelQueuedMail(job))) {
         // The drain took the copy before the slow send finished: at-least-once.
         logger.warning('mail_outbox.inline_late_duplicate', { jobId: job.id, category: prepared.category });
@@ -1610,11 +1625,11 @@ export async function transmit(
 /** The drain's ledger row for a queued mail (#2944): the same EmailLog row an
  *  inline send writes. */
 export async function recordEmailOutcome(
-  prepared: Pick<PreparedEmail, 'to' | 'subject' | 'category' | 'transport'>,
-  status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED',
+  prepared: Pick<PreparedEmail, 'to' | 'subject' | 'category' | 'transport' | 'orgId' | 'userId'>,
+  status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED' | 'HELD',
   error?: string,
 ): Promise<void> {
-  await recordEmail(prepared.to, prepared.subject, prepared.category, status, prepared.transport, error);
+  await recordEmail(prepared.to, prepared.subject, prepared.category, status, prepared.transport, error, prepared);
 }
 
 /** Observe mode for a queued mail: the meter sees the send the drain makes. */

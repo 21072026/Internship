@@ -99,7 +99,7 @@ export async function sendReportSubscription(
       // People who already opted out of the analytics report stay opted out.
       if (!emailGroupAllowedForCategory(user, 'analytics-report')) {
         // On the delivery log AND in EmailLog, like every honoured opt-out (#2054).
-        await recordOptOut(user.email, 'analytics-report', `Scheduled report ${sub.reportKey} (not sent: opted out)`);
+        await recordOptOut(user.email, 'analytics-report', `Scheduled report ${sub.reportKey} (not sent: opted out)`, orgId);
         return await finish('SKIPPED', 'opted_out');
       }
       to = user.email;

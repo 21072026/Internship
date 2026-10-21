@@ -430,6 +430,9 @@ async function recordCancelled(payload: Record<string, unknown>): Promise<void> 
   if (!envelope) return;
   await prisma.emailLog.create({
     data: {
+      // The recipient's tenant, sealed in the envelope (#1556) — never the
+      // operator's request scope.
+      orgId: envelope.orgId ?? null,
       to: envelope.to.slice(0, 320),
       subject: envelope.subject.slice(0, 512),
       category: envelope.category?.slice(0, 64) ?? null,
