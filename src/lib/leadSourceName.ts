@@ -15,8 +15,16 @@
 //                            sign-up in the source system (an account event's
 //                            `acquisition_source`, one of ACQUISITION_SOURCES
 //                            below).
+//   • `vendor`             — the marketing platform a PULL connector read the
+//                            lead from, and how that platform says the person
+//                            arrived (Klaviyo: the subscription method and the
+//                            form/list it names, docs/integrations/klaviyo.md).
 //
-// ── THE PRIORITY: affiliate reference > utm_source > acquisition_source > unknown
+// ── THE PRIORITY: affiliate reference > utm_source > vendor > acquisition_source > unknown
+//
+//   A vendor detail sits below a UTM for the same reason the self-reported
+//   channel does: the UTM is the campaign the browser measured, the vendor only
+//   knows which of ITS forms or lists the address entered through.
 //
 //   An affiliate code is a contract — somebody is paid per converted lead — so
 //   it wins over everything, including a campaign the same visitor also
@@ -41,6 +49,13 @@
 //                                    per-ad detail and would make a Source per
 //                                    keyword.
 //   channel:<acquisition_source>     one of the six values, verbatim.
+//   <vendor>:<detail>                the connector's own namespace, lower-cased
+//                                    vendor, detail as the vendor names it
+//                                    (`klaviyo:klaviyo_form/Newsletter footer`);
+//                                    `<vendor>` alone when the vendor says
+//                                    nothing about how the person arrived — we
+//                                    still KNOW the vendor, so it is a source,
+//                                    not `unknown`.
 //
 //   A `/` inside a value becomes `-` (the separator stays unambiguous), control
 //   characters are removed, whitespace runs collapse. Every segment is capped so
@@ -73,6 +88,7 @@ export type AcquisitionSource = (typeof ACQUISITION_SOURCES)[number];
 export const SOURCE_NAME_MAX = 120;
 const AFFILIATE_CODE_MAX = 100;
 const UTM_SEGMENT_MAX = 36;
+const VENDOR_NAME_MAX = 20;
 
 export interface LeadSourceInput {
   reference?: string | null;
@@ -80,10 +96,12 @@ export interface LeadSourceInput {
   utmMedium?: string | null;
   utmCampaign?: string | null;
   acquisitionSource?: string | null;
+  /** A pull connector's platform and its own description of the entry point. */
+  vendor?: { name: string; detail?: string | null } | null;
 }
 
 export type LeadSourceResult =
-  | { kind: 'affiliate' | 'utm' | 'channel'; name: string }
+  | { kind: 'affiliate' | 'utm' | 'vendor' | 'channel'; name: string }
   | { kind: 'unknown' };
 
 // eslint-disable-next-line no-control-regex
@@ -105,6 +123,19 @@ export function leadSourceName(input: LeadSourceInput): LeadSourceResult {
     const medium = clean(input.utmMedium, UTM_SEGMENT_MAX)?.toLowerCase() ?? '-';
     const campaign = clean(input.utmCampaign, UTM_SEGMENT_MAX)?.toLowerCase() ?? '-';
     return { kind: 'utm', name: `utm:${source}/${medium}/${campaign}` };
+  }
+
+  const vendor = clean(input.vendor?.name, VENDOR_NAME_MAX)?.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (vendor) {
+    // `/` is kept inside the detail (method/form): the vendor prefix and its
+    // colon are what keep the namespace unambiguous, not the slash.
+    const detail = (input.vendor?.detail ?? '')
+      .split('/')
+      .map((part) => clean(part, SOURCE_NAME_MAX))
+      .filter((part): part is string => Boolean(part))
+      .join('/');
+    const name = detail ? `${vendor}:${detail}` : vendor;
+    return { kind: 'vendor', name: name.slice(0, SOURCE_NAME_MAX).trim() };
   }
 
   const channel = clean(input.acquisitionSource, 40)?.toLowerCase();

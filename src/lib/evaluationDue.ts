@@ -26,7 +26,7 @@ import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { EvaluationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -73,9 +73,9 @@ async function createDueRows(orgId: string | null, now: Date, result: Evaluation
   const stages = await resolvePipelineStages(orgId);
   const schedule = resolveEvaluationSchedule(
     {
-      interimStage: await getSetting('evaluationInterimStage', orgId),
-      interimDays: await getSetting('evaluationInterimDays', orgId),
-      finalStage: await getSetting('evaluationFinalStage', orgId),
+      interimStage: await resolveSettingRaw('evaluationInterimStage', { orgId }),
+      interimDays: await resolveSettingRaw('evaluationInterimDays', { orgId }),
+      finalStage: await resolveSettingRaw('evaluationFinalStage', { orgId }),
     },
     new Set(stages.map((s) => s.key)),
   );

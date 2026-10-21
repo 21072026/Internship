@@ -16,16 +16,17 @@ const root = new URL('../../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const indexOf = (slugEnd) => BACKFILLS.findIndex((b) => b.script.endsWith(slugEnd));
 
-test('ids are unique, numbered and in order', () => {
+// The number is the ledger key's prefix, not the run order (the ARRAY is): an
+// entry added later that must run before an existing one takes the next free
+// number and its place in the list — renumbering would re-run a `once` entry.
+test('ids are unique and numbered, no number reused', () => {
   const ids = BACKFILLS.map((b) => b.id);
   assert.equal(new Set(ids).size, ids.length);
-  let previous = 0;
-  for (const id of ids) {
+  const numbers = ids.map((id) => {
     assert.match(id, /^\d{4}-[a-z0-9-]+$/, id);
-    const n = Number(id.slice(0, 4));
-    assert.ok(n > previous, `${id} must come after ${previous}`);
-    previous = n;
-  }
+    return Number(id.slice(0, 4));
+  });
+  assert.equal(new Set(numbers).size, numbers.length, 'a number is never reused');
 });
 
 test('every entry names a script that exists, with its flags as data', () => {
@@ -53,7 +54,7 @@ test('every registered script is in the runtime image, with the files it imports
 test('the ordering constraints hold', () => {
   const org = indexOf('backfill-organization.mjs');
   assert.ok(org > 0);
-  for (const first of ['backfill-activity-log-org.mjs', 'backfill-audit-log-org.mjs', 'backfill-task-template-org.mjs', 'backfill-ai-usage-org.mjs']) {
+  for (const first of ['backfill-activity-log-org.mjs', 'backfill-audit-log-org.mjs', 'backfill-task-template-org.mjs', 'backfill-ai-usage-org.mjs', 'backfill-telemetry-org.mjs']) {
     assert.ok(indexOf(first) >= 0 && indexOf(first) < org, `${first} must run before backfill-organization`);
   }
   assert.ok(indexOf('backfill-api-key-lifecycle.mjs') > org, 'api-key-lifecycle needs the default org');
