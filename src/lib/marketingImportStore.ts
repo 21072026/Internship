@@ -41,7 +41,7 @@ import { startStageKey } from './pipeline';
 import { statusChangeData } from './stageChange';
 import { historicMoveAt } from './accountEventRule';
 import { trialLengthDaysFor } from './trialWindow';
-import { getSetting } from './settings';
+import { resolveSettingRaw } from './settingsResolver';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
 import { normalizeEmailKey } from './duplicateDetection';
 import { findUsersByEmail, worldOfOrg } from './userWorld';
@@ -723,7 +723,7 @@ async function runMarketingRows(core: MarketingRunCore) {
     const stageKeys = stages.map((s) => s.key);
     const offPathStages = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
 
-    const externalIdAliases = parseHeaderAliases(await getSetting('importExternalIdAliases', orgId));
+    const externalIdAliases = parseHeaderAliases(await resolveSettingRaw('importExternalIdAliases', { orgId }));
     const validate = makeMarketingValidator({ stageKeys, externalIdAliases });
     const trialLengthDays = await trialLengthDaysFor(orgId);
     const database = databaseWriter({

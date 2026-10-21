@@ -10,7 +10,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
 import { menteesWithOpenTodo } from '@/lib/openWork';
@@ -42,12 +42,20 @@ export interface AssessedRelation {
   lastContactAt: Date | null;
 }
 
-/** `reminderDays` per org, read once per pass — it is a setting, never a constant. */
+/**
+ * `reminderDays` per org AND programme (#1621), read once per pass — it is a
+ * setting, never a constant, and a programme may run its own cadence.
+ */
 export function reminderDaysReader() {
   const cache = new Map<string, Promise<number>>();
-  return (orgId: string | null) => {
-    const key = orgId ?? '';
-    if (!cache.has(key)) cache.set(key, getSetting('reminderDays', orgId ?? undefined).then((v) => parseInt(v, 10) || 14));
+  return (orgId: string | null, programId: string | null = null) => {
+    const key = `${orgId ?? ''}\u0000${programId ?? ''}`;
+    if (!cache.has(key)) {
+      cache.set(
+        key,
+        resolveSettingRaw('reminderDays', { orgId: orgId ?? undefined, programId }).then((v) => parseInt(v, 10) || 14),
+      );
+    }
     return cache.get(key)!;
   };
 }
@@ -56,7 +64,7 @@ export function reminderDaysReader() {
 export async function assessRelations(
   rows: HealthRelationRow[],
   now: Date,
-  reminderDaysFor: (orgId: string | null) => Promise<number>,
+  reminderDaysFor: (orgId: string | null, programId: string | null) => Promise<number>,
 ): Promise<AssessedRelation[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
@@ -73,7 +81,7 @@ export async function assessRelations(
     const lastContactAt = lastContacts.get(r.id)?.at ?? null;
     const assessment = scoreRelation({
       now: now.getTime(),
-      reminderDays: await reminderDaysFor(r.orgId),
+      reminderDays: await reminderDaysFor(r.orgId, r.cohortId),
       status: r.status,
       lifecycleState: r.lifecycleState,
       dormant: dormant.has(r.id),
