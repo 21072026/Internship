@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere } from '@/lib/tenantFilter';
 import { snoozeBreach } from '@/lib/slaBreach';
 import { validSnooze } from '@/lib/slaLadderRule';
 
@@ -30,11 +30,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Validation failed', code: 'invalid_snooze' }, { status: 400 });
   }
   return await withTenantScope(session, async () => {
-    const orgId = resolveOrgId(session);
-    if (!orgId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const result = await snoozeBreach(
       id,
-      orgId,
+      await tenantWhere(session),
       { id: session.user.id, email: session.user.email },
       until,
       parsed.data.reason,
