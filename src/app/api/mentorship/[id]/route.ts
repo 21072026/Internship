@@ -263,6 +263,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       // CV/document access window (#854).
       if (parsed.data.status && parsed.data.status !== relation.status) {
         data.completedAt = parsed.data.status === 'COMPLETED' ? new Date() : null;
+        // ACTIVE and COMPLETED are lifecycle states too (#1768): keep the column
+        // agreeing with `status`, or a reopened pairing would still read as
+        // ended to everything that filters on the lifecycle (the meter first).
+        data.lifecycleState = parsed.data.status;
+        data.pausedAt = null;
       }
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
