@@ -115,6 +115,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   migration: '/admin/migrate (#2073) — gatePage closes it, and POST /api/admin/migrate refuses (requireCapability), for an org without the `mentorship` capability.',
   adminInsights: '/admin/insights (#2046) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
+  billing: '/admin/billing (#1739) — gatePage closes it, and GET /api/org/billing refuses (requireCapability), for an org without `mentorship`: the active-pair meter and the price list are the internship product\'s (src/lib/plans.ts); MARKETING has its own (src/lib/marketingPlans.ts).',
   adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   forecastCapacity: 'The capacity half of the forecast panel (#1897) — /api/admin/analytics/forecast returns `capacity: null` for an org without the `mentorship` capability, and the executive page renders these strings only when it is present.',
   evaluationDue: 'Sent only by src/lib/evaluationDue.ts, whose sweep skips every org without the `evaluations` capability — a MARKETING tenant is never reminded of an evaluation (#1891).',
