@@ -3303,15 +3303,26 @@ model MentorshipRelation {
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.
   nextActionRemindedAt    DateTime?
-  // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
-  // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
-  // different mentor and an admin approved it. Nullable and additive: an
-  // untouched row keeps meaning exactly what it meant before. `status` still
-  // carries "is this pairing live", so every existing ACTIVE/COMPLETED check is
-  // unchanged; this column is what keeps a re-match from being counted (or
-  // certified) as a successful completion. Keys live in
-  // src/lib/relationLifecycle.ts.
-  lifecycleState          String?
+  // The state the pairing is in (#1768): ACTIVE | PAUSED | COMPLETED |
+  // ENDED_REMATCHED | ENDED_REASSIGNED | ENDED_CHURNED — keys, transitions and
+  // the one derivation of `status` live in src/lib/relationLifecycle.ts. It
+  // started (#1801) as "how did it END"; it now says every state, and `status`
+  // is the derived liveness flag (statusForLifecycle) that the many existing
+  // ACTIVE/COMPLETED readers keep reading unchanged — a PAUSED pair is still
+  // status ACTIVE.
+  //
+  // A free String, NOT an enum — same reasoning as `pipelineStatus` (#747): an
+  // ENUM→VARCHAR change is a migration we cannot review under `db push`, and a
+  // new state must never need one. Don't tidy it into an enum.
+  //
+  // Nullable with a DB default: expand → backfill → contract (#2298). New rows
+  // get 'ACTIVE'; rows written before #1768 hold NULL until
+  // prisma/backfill-relation-lifecycle.mjs fills them on deploy. Making it
+  // required is a later, separate contract step.
+  lifecycleState          String?          @default("ACTIVE")
+  // When the pairing was paused (#1768); cleared on resume. Never on a live,
+  // unpaused row.
+  pausedAt                DateTime?
   // Why the pairing ended, as picked by the person who ended it (#2289): a code
   // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
   // never backfilled — a relation closed before this column existed, or closed
