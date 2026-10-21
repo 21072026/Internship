@@ -39,7 +39,11 @@ export function isMatchFeedbackOutcome(value: string): value is MatchFeedbackOut
 //
 //   rules-v1 — skill overlap desc, then active-mentee count asc, capacity-full
 //              mentors excluded; optionally re-ranked by the AI gate.
-export const MATCH_RULESET_VERSION = 'rules-v1';
+//   rules-v2 — (#1821) adjacency-weighted overlap of canonical skills
+//              (skillOverlap: exact 1, neighbour = SkillEdge weight) desc, free
+//              text exact match only for a mentee with no canonical skills;
+//              then load, capacity and the AI re-rank as in v1.
+export const MATCH_RULESET_VERSION = 'rules-v2';
 
 // Free-text note cap. Long enough for a sentence of context, short enough that
 // the column stays a note rather than a second CRM.
