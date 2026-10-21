@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security: the internal API description is for the platform operator only (#1575).** `GET /api/admin/openapi` — the document behind `/admin/api-explorer`, which maps every route of the whole deployment, its guard class (including the routes the analyser could not prove tenant-scoped) and its source file — was readable by any tenant ADMIN. It now answers `403 { code: 'super_admin_only' }` (with an `authz.scope_denied` warning) unless the caller is a super admin of their world, and the explorer page shows a short explanation instead of Swagger UI for a tenant admin (EN/TR/DE). The public `/api/v1/openapi.json` is unchanged. `e2e/api-explorer.spec.ts`: the `@smoke` gate test now also refuses a tenant admin; the feature tests run as a super admin."
-}

@@ -172,6 +172,8 @@ test('import fills the card, Save stores it and the badge shows the expiry', asy
   const saved = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
   expect(saved.ssoIssuer).toBe('https://idp.meta.example/entity');
   expect(saved.ssoProvider).toBe('saml');
+  // The IdP's SingleLogoutService rides along (#1952).
+  expect(saved.ssoLogoutUrl).toBe('https://idp.meta.example/slo');
   expect(saved.ssoCertificate).toContain('BEGIN CERTIFICATE');
 
   // The card's own badge, from the stored certificate.

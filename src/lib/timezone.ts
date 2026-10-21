@@ -99,7 +99,7 @@ export function hasTimeZoneDesignator(value: string): boolean {
 // What is `timeZone` offset from UTC at this instant, in ms? Positive east of
 // Greenwich. Derived from Intl so the IANA database (and its DST rules) is the
 // single source of truth — no offset tables of our own to keep current.
-function offsetAt(date: Date, timeZone: string): number {
+export function offsetAt(date: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hour12: false,

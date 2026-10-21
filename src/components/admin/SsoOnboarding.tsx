@@ -55,10 +55,10 @@ export interface ImportedIdp {
   ssoIssuer: string;
   ssoEntryPoint: string;
   ssoCertificate: string | null;
+  sloUrl: string | null;
 }
 
 interface Preview extends ImportedIdp {
-  sloUrl: string | null;
   certificates: {
     chosen: boolean;
     fingerprintSha256: string | null;
