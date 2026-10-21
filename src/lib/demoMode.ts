@@ -61,8 +61,13 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/admin\/users\/[^\/]+\/reset-password$/, 'rotates a shared password'],
   // 2. reach outside the demo
   [/^\/api\/admin\/webhooks/, 'would POST from the production host to any URL'],
+  // The key-owned twin (#2002). Unreachable today — the demo mints no API key
+  // (/api/admin/api-keys above) — and listed anyway, because the reason is the
+  // same and a demo key must never become the way round it.
+  [/^\/api\/v1\/hooks/, 'would POST from the production host to any URL'],
   [/^\/api\/admin\/audit-drains/, 'would stream the audit trail from the production host to any URL'],
   [/^\/api\/admin\/api-keys/, 'mints a real API credential'],
+  [/^\/api\/admin\/roster-feeds/, 'stores a real remote credential and fetches from the production host'],
   [/^\/api\/admin\/email-test$/, 'sends mail to an arbitrary address'],
   [/^\/api\/admin\/import$/, 'bulk-imports data from an uploaded file'],
   // 3. arbitrary file storage

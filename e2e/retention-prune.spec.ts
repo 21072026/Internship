@@ -196,6 +196,24 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
       data: { companyId: usageAccount.id, date: recent(), transactions: 12 },
     });
 
+    // RosterRowResult (#1964): row-level detail of a roster-feed run goes after
+    // 90 days; the RosterRun summary it hangs off stays.
+    const rosterOrg = await prisma.organization.create({
+      data: { name: `${marker} roster org`, slug: `ret-roster-${Date.now()}` },
+    });
+    const rosterFeed = await prisma.rosterFeed.create({
+      data: { orgId: rosterOrg.id, name: 'retention feed', columnMap: { email: 'Mail' } },
+    });
+    const rosterRun = await prisma.rosterRun.create({
+      data: { orgId: rosterOrg.id, feedId: rosterFeed.id, fileHash: 'a'.repeat(64), status: 'SUCCEEDED', startedAt: ancient() },
+    });
+    const oldRosterRow = await prisma.rosterRowResult.create({
+      data: { orgId: rosterOrg.id, runId: rosterRun.id, rowNumber: 1, key: `old-${marker}@e2e.local`, status: 'CREATE', createdAt: ancient() },
+    });
+    const newRosterRow = await prisma.rosterRowResult.create({
+      data: { orgId: rosterOrg.id, runId: rosterRun.id, rowNumber: 2, key: `new-${marker}@e2e.local`, status: 'UPDATE', createdAt: recent() },
+    });
+
     const result = await runRetentionPrune();
 
     // No entry may fail: a failure here is a broken query, not a clean table.
@@ -205,6 +223,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'activityLog',
         'companyInquiry',
         'companyUsage',
+        'emailDeliveryEvent',
         'emailLog',
         'job',
         'mailOutbox',
@@ -214,6 +233,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'outboundDraft',
         'pageView',
         'pushSubscription',
+        'rosterRowResult',
         'trialReminder',
       ].sort()
     );
@@ -227,6 +247,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         | 'emailLog'
         | 'notification'
         | 'trialReminder'
+        | 'rosterRowResult'
+        | 'rosterRun'
         | 'companyUsage',
       id: string
     ) =>
@@ -242,6 +264,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('notification', oldReadNotif.id)).toBe(true);
     expect(await gone('trialReminder', oldClaim.id)).toBe(true);
     expect(await gone('companyUsage', oldUsage.id)).toBe(true);
+    expect(await gone('rosterRowResult', oldRosterRow.id)).toBe(true);
 
     // Kept: inside the window.
     expect(await gone('activityLog', newActivity.id)).toBe(false);
@@ -251,6 +274,9 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('notification', newReadNotif.id)).toBe(false);
     expect(await gone('trialReminder', newClaim.id)).toBe(false);
     expect(await gone('companyUsage', newUsage.id)).toBe(false);
+    expect(await gone('rosterRowResult', newRosterRow.id)).toBe(false);
+    // The run summary is never pruned, however old.
+    expect(await gone('rosterRun', rosterRun.id)).toBe(false);
 
     // Kept although out of window, each for its own stated reason.
     expect(await gone('job', deadLettered.id)).toBe(false); // the operator still needs these
@@ -295,6 +321,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     }).catch(() => {});
     // The usage rows cascade with their account.
     await prisma.company.deleteMany({ where: { name: { startsWith: marker } } });
+    // Feed, run and row results cascade with the org.
+    await prisma.organization.deleteMany({ where: { name: { startsWith: marker } } });
     await cleanupByEmail(quietEmail);
     await cleanupByEmail(activeEmail);
   }

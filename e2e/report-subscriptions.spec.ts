@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 import { makeReportUnsubscribeToken } from '../src/lib/reportSubscriptionTokens';
+import { LEGACY_SEED_KEY } from '@/lib/jobs/reportSubscriptions';
 
 // Scheduled report delivery (#1905): subscribe → test-send → the scheduled run
 // (once per period, however often it fires) → unsubscribe from the mail with no
@@ -22,6 +23,11 @@ test.describe('report subscriptions', () => {
 
   test.beforeAll(async () => {
     orgId = (await prisma.organization.create({ data: { name: `RS Org ${stamp}`, slug: `rs-${stamp}` } })).id;
+    // The one-time weekly-report migration (#1905) has nothing to do here: left
+    // unclaimed, the first pass after the org gains the tier gives this admin a
+    // seeded `pipeline-summary` subscription (Mondays 08:00) — a second row in
+    // every count below, and a due one on the day it runs (#2975).
+    await prisma.setting.create({ data: { orgId, key: LEGACY_SEED_KEY, value: 'e2e' } });
     await seedUser(admin, PW, 'ADMIN', `RS Admin ${stamp}`, orgId);
     const m = await seedUser(mentor, PW, 'MENTOR', `RS Mentor ${stamp}`, orgId);
     const e = await seedUser(mentee, PW, 'MENTEE', `RS Mentee ${stamp}`, orgId);
@@ -32,6 +38,7 @@ test.describe('report subscriptions', () => {
     await prisma.emailLog.deleteMany({ where: { to: { in: [admin, dean] } } });
     await prisma.reportSubscription.deleteMany({ where: { orgId } });
     await prisma.orgEntitlement.deleteMany({ where: { orgId } });
+    await prisma.setting.deleteMany({ where: { orgId } });
     await prisma.mentorshipRelation.deleteMany({ where: { orgId } });
     for (const email of [admin, mentor, mentee]) await cleanupByEmail(email);
     await prisma.organization.deleteMany({ where: { id: orgId } });
@@ -40,7 +47,10 @@ test.describe('report subscriptions', () => {
 
   test('subscribe, test-send, one send per period, unsubscribe without an account', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
-    const now = new Date();
+    // The scheduled passes run at a fixed Monday afternoon (`at=`), the hour
+    // the legacy weekly report is due too, so the counts below hold on any day
+    // the suite happens to run — #2975 failed on Mondays only.
+    const now = new Date('2026-10-19T16:10:00Z');
     const weekday = ((now.getUTCDay() + 6) % 7) + 1;
     const body = { reportKey: 'pipeline-funnel', cadence: 'WEEKLY', dayOfWeek: weekday, hour: 0, locale: 'de', format: 'EMAIL_SUMMARY', recipientEmail: dean, recipientName: 'Dekanin Test' };
 
@@ -68,9 +78,9 @@ test.describe('report subscriptions', () => {
     expect(testLog?.subject).toMatch(/^\[Test\] Pipeline-Trichter — /);
     expect(testLog?.subject).not.toMatch(/_\d{3}\b/); // no raw stage key anywhere
 
-    // The scheduled run: due today, sent once; a second firing in the same
+    // The scheduled run: due that Monday, sent once; a second firing in the same
     // period sends nothing.
-    const run = async () => (await (await page.request.get('/api/cron?job=report-subscriptions')).json()).reportSubscriptions;
+    const run = async () => (await (await page.request.get(`/api/cron?job=report-subscriptions&at=${now.toISOString()}`)).json()).reportSubscriptions;
     expect(await run()).toMatchObject({ due: 1, sent: 1, duplicate: 0 });
     expect(await run()).toMatchObject({ due: 1, sent: 0, duplicate: 1 });
     expect(await prisma.emailLog.count({ where: { to: dean, category: 'analytics-report' } })).toBe(1);
@@ -102,6 +112,10 @@ test.describe('report subscriptions', () => {
 
   test('a user recipient from another tenant is refused; a mentor cannot manage subscriptions', async ({ page }) => {
     const outsider = await prisma.user.findFirst({ where: { NOT: { orgId } }, select: { id: true } });
+    // Entitled here too: a retry runs this test in a fresh worker, whose org
+    // never saw the test above switch the tier on — the gate answered 403
+    // before the recipient check could (#2975).
+    await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
     await signInAndSettle(page, admin, PW, '/admin');
     if (outsider) {
       const res = await page.request.post('/api/admin/report-subscriptions', {

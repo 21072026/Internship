@@ -27,6 +27,7 @@ import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { sendInvitationEmail } from '@/services/emailService';
 import type { MailLane } from '@/lib/mailDeliveryRule';
@@ -179,7 +180,7 @@ export async function logInvitationCreated(
   input: CreateInvitationInput,
   invitationId: string,
 ): Promise<void> {
-  await logActivity({
+  const entry = {
     action: 'invite.created',
     actorId: input.actor.id,
     actorEmail: input.actor.email ?? null,
@@ -187,7 +188,15 @@ export async function logInvitationCreated(
     targetId: invitationId,
     detail: `${input.email ?? input.label ?? 'link'} · ${input.role}`,
     request: input.request,
-  });
+  };
+  // Stamped with the INVITING org, not the actor's (#1575): a super admin
+  // inviting another tenant's first admin must not file that address under
+  // its own home org. The AuditLog copy names the role and the channel only.
+  if (input.orgId) {
+    await recordOrgWrite({ ...entry, orgId: input.orgId, auditDetail: `${input.role} · ${input.email ? 'email' : 'link'}` });
+  } else {
+    await logActivity(entry);
+  }
 }
 
 /**

@@ -19,6 +19,7 @@ import { SourceConversion } from '@/components/admin/SourceConversion';
 import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
 import { DealValueCard } from '@/components/admin/DealValueCard';
+import { BarChart, LineChart } from '@/components/charts';
 import { useT } from '@/i18n/client';
 import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
@@ -154,12 +155,6 @@ interface FunnelKpi {
   trialConversion?: TrialConversionData | null;
   journeys: number;
 }
-
-// Height of the bar area inside the `h-44` (176px) trends track: the track
-// minus the month label line and its gap. Pinned rather than flex-derived
-// because the bars size themselves with percentage heights, and a percentage
-// only resolves against a definite height (#1425).
-const BAR_AREA_PX = 150;
 
 export default function AdminAnalyticsPage() {
   const t = useT();
@@ -545,6 +540,22 @@ export default function AdminAnalyticsPage() {
                   {t.analytics.cohortKpi.empty}
                 </p>
               ) : (
+                <>
+                {/* Conversion over the selected window as a line (#1890). A
+                    month with no rate to state is a gap in the line, not a
+                    drop to zero — the table below still prints it as "—". */}
+                <LineChart
+                  testId="conversion-trend-chart"
+                  className="mb-4"
+                  ariaLabel={t.analytics.cohortKpi.conversion}
+                  height={140}
+                  yMax={100}
+                  formatValue={(v) => `${v}%`}
+                  categories={kpi.cohortConversion.months.map((m) => m.month.slice(2))}
+                  series={[
+                    { key: 'rate', label: t.analytics.cohortKpi.rate, color: 'var(--chart-1)', values: kpi.cohortConversion.months.map((m) => m.rate), testIdPrefix: 'conversion-point-' },
+                  ]}
+                />
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" data-testid="cohort-conversion-table">
                     <thead className="text-xs text-gray-500 border-b border-gray-200 dark:border-gray-700">
@@ -572,6 +583,7 @@ export default function AdminAnalyticsPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
 
@@ -703,54 +715,25 @@ export default function AdminAnalyticsPage() {
         </Card>
       )}
 
-      {data.trends && data.trends.months.length > 0 && (() => {
-        const max = Math.max(1, ...data.trends.newRelations, ...data.trends.interactions);
-        return (
-          <Card className="mt-6">
-            <CardHeader><CardTitle>{t.analytics.trends}</CardTitle></CardHeader>
-            {/* A percentage height needs an ancestor with a DEFINITE height,
-                or it computes to `auto` — 0px for an empty div. The column had
-                no height of its own, so all twelve bars collapsed while the
-                month labels (text, so intrinsic height) kept rendering. That is
-                why this read as a data problem rather than a layout one (#1425).
-
-                `h-full` on the column is necessary but not sufficient: a height
-                that comes from `flex-1` is a used value, not a definite one, so
-                percentages inside it still resolve to auto. I measured that —
-                the first attempt kept `flex-1` on the bar row and the bars were
-                still 0px. Hence the explicit row height below; `BAR_AREA_PX` is
-                the `h-44` track (176px) minus the label line and its gap.
-                (The working chart in src/app/mentor/feedback/page.tsx gets away
-                with percentages because its bars are direct children of the
-                definite-height column, with no flex-sized row in between.) */}
-            <div className="flex items-end gap-3 h-44 px-2" data-testid="analytics-trend-chart">
-              {data.trends.months.map((m, i) => (
-                <div key={m} className="flex h-full flex-1 flex-col items-center justify-end gap-1 min-w-0">
-                  <div className="flex w-full items-end justify-center gap-1" style={{ height: BAR_AREA_PX }}>
-                    <div
-                      className="w-3 sm:w-4 bg-blue-500 rounded-t"
-                      style={{ height: `${(data.trends!.newRelations[i] / max) * 100}%` }}
-                      data-testid={`trend-bar-new-${i}`}
-                      title={`${t.analytics.trendNewRelations}: ${data.trends!.newRelations[i]}`}
-                    />
-                    <div
-                      className="w-3 sm:w-4 bg-emerald-400 rounded-t"
-                      style={{ height: `${(data.trends!.interactions[i] / max) * 100}%` }}
-                      data-testid={`trend-bar-interactions-${i}`}
-                      title={`${t.analytics.trendInteractions}: ${data.trends!.interactions[i]}`}
-                    />
-                  </div>
-                  <span className="text-[10px] text-gray-400">{m.slice(5)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-4 mt-4 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500 inline-block" />{t.analytics.trendNewRelations}</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-400 inline-block" />{t.analytics.trendInteractions}</span>
-            </div>
-          </Card>
-        );
-      })()}
+      {data.trends && data.trends.months.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader><CardTitle>{t.analytics.trends}</CardTitle></CardHeader>
+          {/* SVG bars sized from a measured width (#1890). The hand-rolled
+              track this replaces sized its bars with CSS percentages, which
+              only resolve against a DEFINITE parent height — it collapsed to
+              0px once (#1425) and needed a pinned pixel row to stay up. */}
+          <BarChart
+            testId="analytics-trend-chart"
+            ariaLabel={t.analytics.trends}
+            height={176}
+            categories={data.trends.months.map((m) => m.slice(5))}
+            series={[
+              { key: 'new', label: t.analytics.trendNewRelations, color: 'var(--chart-1)', values: data.trends.newRelations, testIdPrefix: 'trend-bar-new-' },
+              { key: 'interactions', label: t.analytics.trendInteractions, color: 'var(--chart-2)', values: data.trends.interactions, testIdPrefix: 'trend-bar-interactions-' },
+            ]}
+          />
+        </Card>
+      )}
 
       {aging && (
         <div className={`grid grid-cols-1 gap-6 mt-6${showMentorship && aging.candidateLists !== false ? ' lg:grid-cols-2' : ''}`}>

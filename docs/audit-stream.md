@@ -114,7 +114,7 @@ The subset every SIEM maps, with the whole original record kept under `interncrm
 ## Delivery schedule, backoff, pause
 
 A tick runs **every five minutes** in the app process (`initAuditDrainCron`, registered from
-`/api/cron/start` like the other crons; an admin can force one with
+`/api/cron/start` like the other crons; a super admin can force one with
 `GET /api/cron?job=audit-drain`, which answers with the tick's counters). Each tick walks every
 active drain whose backoff has elapsed and ships its next batches.
 
@@ -145,10 +145,13 @@ is `where: { orgId: drain.orgId, … }` — the whole isolation story: a drain n
 tenant's row because the query never asks for one. Two consequences to know:
 
 - **Every writer of `AuditLog` passes `orgId` explicitly** (the impersonation routes, the admin
-  user actions, the merge, the offer/interview/meeting routes, the offer-expiry sweep). The
+  user actions, the merge, the offer/interview/meeting routes, the offer-expiry sweep, and every
+  write to an organization's own configuration through `recordOrgWrite()` in
+  `src/lib/orgAudit.ts`, #1575). The
   Prisma middleware stamps it only under `MT_ENFORCE_ISOLATION`, which is still off, so a
   writer that forgets produces a row **no** drain receives — a silent gap, not a leak. A new
-  `prisma.auditLog.create` must pass `orgId`.
+  `prisma.auditLog.create` must pass `orgId`. For an organization write that is the **target**
+  org, not the actor's: a super admin changing tenant B is an event in B's stream.
 - **Legacy rows** are attributed on deploy by `prisma/backfill-audit-log-org.mjs` (the actor's
   org, then the target user's) **before** `backfill-organization.mjs` hands what is left —
   system rows — to the default org. The order matters: the generic pass would otherwise give a

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInViaApi, signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
@@ -25,6 +25,8 @@ async function seedPair(prefix: string) {
   const mentor = await seedUser(mentorEmail, PASSWORD, 'MENTOR', 'Log Mentor');
   const mentee = await seedUser(menteeEmail, PASSWORD, 'MENTEE', 'Log Mentee');
   const admin = await seedUser(adminEmail, PASSWORD, 'ADMIN', 'Log Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE' } });
   const meeting = (scheduledAt: Date, title: string) =>
     prisma.meeting.create({

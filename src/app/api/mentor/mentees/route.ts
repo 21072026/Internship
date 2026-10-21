@@ -179,6 +179,8 @@ export async function POST(request: Request) {
               orgId,
               pipelineStatus,
               ...trialWindow,
+              // A mentor's own mentee is a placement relation from day one (#1503).
+              funnelEnteredAt: new Date(),
             },
           });
           return created;
