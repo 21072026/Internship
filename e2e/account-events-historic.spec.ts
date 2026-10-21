@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { createHash, randomBytes } from 'crypto';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // Historic mode of the account-event feed (docs/integrations/account-events.md
@@ -153,7 +153,10 @@ test('a years-old trial lands at TRIAL_EXPIRED, dated in the past, and nobody is
   // The daily sweep, run right after, has nothing to send, expire or ring.
   const adminEmail = uniqueEmail('replay-admin');
   emails.push(adminEmail);
-  await seedUser(adminEmail, PW, 'ADMIN', 'Replay Platform Admin');
+  // The tenant's own admin, on its own (marketing) host, runs its sweep:
+  // `orgId` is honoured only for the caller's org or a super admin's (#1575).
+  await seedUser(adminEmail, PW, 'ADMIN', 'Replay Tenant Admin', orgId);
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, adminEmail, PW, '/admin');
   const sweep = await page.request.get(`/api/cron?job=trial-reminders&orgId=${orgId}`);
   expect(sweep.status()).toBe(200);

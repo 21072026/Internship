@@ -58,8 +58,36 @@ Segmentation multiplies small groups: "conversion per cohort" is safe at the
 cohort level and identifying at "per cohort, for the Munich office". So when a
 report is sliced, the floor is applied **after** the segment split — to every
 segment the reader would see — never only to the unsliced total, where it would
-protect nobody. Segments under the floor go into the same named
-"below reporting threshold" bucket; they are never silently omitted.
+protect nobody. Segments under the floor go into ONE named "below reporting
+threshold" bucket — together with the people who have no value, when that group is
+small too — and are never silently omitted. The bucket is shown even when it is itself
+under the floor, like the registry's own bucket: its members cannot be told apart. A
+single segment requested on its own (`&segment=`) that is under the floor is answered
+`suppressed: true` with a note, not with an empty table. Inside every shown segment the
+report's own floor runs again on its groups.
+
+## Slicing a report (`segmentBy`)
+
+`GET /api/admin/reports/[key]?segmentBy=<attribute key>` — the **groupBy** variant: one
+block of rows per segment, with a leading `segment` column (JSON, CSV and XLSX alike).
+Add `&segment=<value>` (for a `DATE` attribute: a tenure bucket, `lt1y` … `gte5y`) for
+one segment only. `/admin/reports` is the screen; a report subscription can store the
+same slice (`segmentBy`, `segment` in its `params`) and the scheduled send honours it.
+
+- **One mechanism, in the registry.** A definition that names a `segmentSubject`
+  (`mentee` or `mentor`, `src/lib/reports/definitions.ts`) is sliceable; `loadReport()`
+  turns each segment into a filter on that person — a relation subquery
+  (`attributeValues: { some: … }`), never an id list — and runs the report's own loader
+  under it. Today: pipeline funnel and summary, cohort comparison, source conversion,
+  mentor workload, placement outcomes and weekly-report compliance.
+- **Query count.** Planning is 3 queries (the attribute, one grouped value count over
+  the report's subject people, one "no value" count); then the loader's own queries once
+  per shown segment. At most 12 segments are shown, plus "other values", "no value" and
+  the below-threshold bucket, so the count is bounded whatever the org's size.
+- **Every person is in exactly one segment** (`planSegments()`, unit-tested in
+  `scripts/test/report-segments.test.mjs`), so the segments add up to the unsliced total.
+- **Degrades, never fails.** An unknown or non-segmentable `segmentBy` returns the
+  unsliced report with `segmentIgnored`.
 
 ## Deliberately deferred
 
