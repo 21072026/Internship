@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { serializeBlackoutDates } from '@/lib/notificationScheduleRule';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
@@ -31,6 +32,10 @@ const schema = z.object({
   reminderDays: z.string().regex(/^\d{1,3}$/).optional(),
   supportEmail: z.string().email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
+  // Notification blackout days (#1714): stored normalised — valid, unique,
+  // sorted YYYY-MM-DD, at most a year's worth (src/lib/notificationScheduleRule.ts).
+  notificationBlackoutDates: z.string().max(8000).transform(serializeBlackoutDates).optional(),
+  notificationBlackoutWeekends: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
   // The vocabulary is src/lib/twoFactorPolicyRule.ts (#1644): `all` holds
   // every role — MENTEE, COMPANY and SOURCE included — at the setup gate.

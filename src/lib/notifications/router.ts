@@ -48,6 +48,9 @@ import { logger } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 import { notify as notifyInApp, type NotificationParams } from '@/lib/notify';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
+import { channelPrefAllowed, nextOpenInstant, parseBlackoutDates, quietHoursOf } from '@/lib/notificationScheduleRule';
+import { getSetting } from '@/lib/settings';
+import { resolveTimeZone } from '@/lib/timezone';
 import { emailGroupAllowed, isEssentialGroup } from '@/lib/emailGroups';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo } from '@/lib/shellCapabilities';
@@ -72,6 +75,8 @@ export * from '@/lib/notifications/catalog';
 /** Why a delivery was not attempted. Mirrors `NotificationDelivery.skipReason`. */
 export type SkipReason =
   | 'category_off'
+  // The per-category channel matrix (#1714) turned this channel off.
+  | 'channel_off'
   | 'group_off'
   | 'email_off'
   | 'no_address'
@@ -93,6 +98,8 @@ export interface NotifyRecipient {
   emailNotifications?: boolean | null;
   notificationPrefs?: unknown;
   orgId?: string | null;
+  /** The recipient's IANA zone — their quiet hours are read on it (#1714). */
+  timezone?: string | null;
 }
 
 export interface NotifyOptions {
@@ -252,6 +259,35 @@ interface DeliveryContext {
 }
 
 /**
+ * When an interrupting delivery may go out (#1714): the next instant outside
+ * the recipient's quiet hours (read on their own clock) and the org's blackout
+ * dates. Null = now. Essential (`account_security`) mail never waits. A read
+ * that fails sends now — the rules may hold a notification back, never lose it.
+ */
+async function openInstantFor(ctx: DeliveryContext): Promise<Date | null> {
+  if (isEssentialGroup(ctx.def.emailGroup)) return null;
+  try {
+    const quiet = quietHoursOf(ctx.recipient.notificationPrefs);
+    const [datesRaw, weekendsRaw] = ctx.orgId
+      ? await Promise.all([getSetting('notificationBlackoutDates', ctx.orgId), getSetting('notificationBlackoutWeekends', ctx.orgId)])
+      : ['', 'false'];
+    const blackoutDates = parseBlackoutDates(datesRaw);
+    const weekends = weekendsRaw === 'true';
+    if (!quiet && blackoutDates.length === 0 && !weekends) return null;
+    let tz = ctx.recipient.timezone;
+    if (tz === undefined) {
+      tz = (await prisma.user.findUnique({ where: { id: ctx.recipient.id }, select: { timezone: true } }))?.timezone ?? null;
+    }
+    const now = new Date();
+    const at = nextOpenInstant(now, { quiet, blackoutDates, weekends, tz: resolveTimeZone(tz) });
+    return at.getTime() > now.getTime() ? at : null;
+  } catch (e) {
+    logger.error('Notification schedule rules unreadable; sending now', { eventKey: ctx.def.key, error: String(e) });
+    return null;
+  }
+}
+
+/**
  * The e-mail channel. It does NOT send: it enqueues, so a slow or dead SMTP
  * server can never sit inside the request that triggered the notification, and
  * a transient failure is retried by the worker instead of being lost.
@@ -276,9 +312,13 @@ interface DeliveryContext {
  */
 async function enqueueEmail(ctx: DeliveryContext): Promise<{ ok: boolean; error?: string }> {
   try {
+    const runAt = await openInstantFor(ctx);
     await prisma.job.create({
       data: {
         name: 'notification.email',
+        // Quiet hours and blackout dates (#1714) RESCHEDULE, never drop: the job
+        // is created once, now, and becomes due at the next open instant.
+        ...(runAt ? { runAt } : {}),
         payload: {
           eventKey: ctx.def.key,
           userId: ctx.recipient.id,
@@ -314,6 +354,7 @@ const RECIPIENT_SELECT = {
   emailNotifications: true,
   notificationPrefs: true,
   orgId: true,
+  timezone: true,
 } as const;
 
 function needsHydration(r: NotifyRecipient): boolean {
@@ -362,9 +403,8 @@ function channelAllowed(
   if (isEssentialGroup(def.emailGroup)) return channel === 'email' && !user.email ? 'no_address' : null;
 
   if (channel === 'inApp') {
-    return notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)
-      ? null
-      : 'category_off';
+    if (!notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)) return 'category_off';
+    return channelPrefAllowed(user.notificationPrefs, def.category, channel) ? null : 'channel_off';
   }
 
   if (channel === 'email') {
@@ -377,6 +417,9 @@ function channelAllowed(
     if (!notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)) {
       return 'category_off';
     }
+    // The channel matrix (#1714) sits UNDER the category switch: it can turn a
+    // channel off for a category that is on, never a category back on.
+    if (!channelPrefAllowed(user.notificationPrefs, def.category, channel)) return 'channel_off';
     if (!emailGroupAllowed(user, def.emailGroup)) return 'group_off';
     return null;
   }

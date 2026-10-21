@@ -196,6 +196,13 @@ export const SETTING_DEFAULTS = {
   // parsed by `parseWatchKeywords` (src/lib/safeguarding.ts). Empty by default —
   // contact-detail detection works without it. Edited on /admin/safeguarding.
   safeguardingKeywords: '',
+  // Blackout dates for interrupting notifications (#1714,
+  // src/lib/notificationScheduleRule.ts): comma-separated 'YYYY-MM-DD' days on
+  // the recipient's clock on which the router holds an e-mail notification to
+  // the next open day — a public holiday, a closure. Never essential mail.
+  notificationBlackoutDates: '',
+  // Hold the same notifications over Saturday and Sunday too.
+  notificationBlackoutWeekends: 'false',
   // Board work-in-progress limit (#1439): a pipeline column holding more than
   // this many candidates gets an amber count, so a bottleneck stands out.
   // Advisory only — it never blocks a move.
@@ -402,6 +409,8 @@ export const SETTING_SCHEMA = {
   notificationRetentionDays: { type: 'number', scopes: O },
   messageRetentionDays: { type: 'number', scopes: O },
   safeguardingKeywords: { type: 'string', scopes: O },
+  notificationBlackoutDates: { type: 'string', scopes: O },
+  notificationBlackoutWeekends: { type: 'boolean', scopes: O },
   boardWipLimit: { type: 'number', scopes: P },
   orphanApplicantGraceDays: { type: 'number', scopes: G },
   broadcastMonthlyRecipients: { type: 'number', nullable: true, scopes: O },

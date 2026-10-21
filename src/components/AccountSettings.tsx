@@ -88,6 +88,13 @@ export function AccountSettings() {
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  // The channel matrix and quiet hours (#1714): stored in the same JSON as the
+  // switches, but kept apart here so `notifPrefs` stays booleans only — the
+  // switch saves PUT it whole, and the server carries these two over itself.
+  const [channelMatrix, setChannelMatrix] = useState<Record<string, Record<string, boolean>>>({});
+  const [quietStart, setQuietStart] = useState('');
+  const [quietEnd, setQuietEnd] = useState('');
+  const [savingSchedule, setSavingSchedule] = useState(false);
   // Per-group e-mail preferences (#1444). These are NOT a second copy of
   // `notifPrefs`: they are the resolved *answers* for the twelve e-mail groups,
   // derived from the same JSON blob but flattened through the back-compat rules
@@ -218,7 +225,15 @@ export function AccountSettings() {
         }
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
-        setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
+        {
+          const raw = user.notificationPrefs && typeof user.notificationPrefs === 'object' ? (user.notificationPrefs as Record<string, unknown>) : {};
+          setNotifPrefs(Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>);
+          const ch = raw.channels;
+          setChannelMatrix(ch && typeof ch === 'object' && !Array.isArray(ch) ? (ch as Record<string, Record<string, boolean>>) : {});
+          const qh = raw.quietHours as { start?: unknown; end?: unknown } | undefined;
+          setQuietStart(typeof qh?.start === 'string' ? qh.start : '');
+          setQuietEnd(typeof qh?.end === 'string' ? qh.end : '');
+        }
         // resolveEmailGroupPrefs deliberately ignores emailNotifications: the
         // master switch is its own visible control, and folding it in here would
         // render every group as "off" for someone who killed e-mail entirely —
@@ -503,6 +518,47 @@ export function AccountSettings() {
       flash('Failed', true);
     } finally {
       setSavingTz(false);
+    }
+  };
+
+  // One cell of the category × channel matrix (#1714). Sends the whole matrix,
+  // which replaces the stored one; the switches and the quiet window are kept.
+  const toggleChannel = async (cat: string, channel: string, next: boolean) => {
+    const previous = channelMatrix;
+    const updated = { ...channelMatrix, [cat]: { ...(channelMatrix[cat] ?? {}), [channel]: next } };
+    setChannelMatrix(updated);
+    setSavingSchedule(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationChannels: updated }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setChannelMatrix(previous);
+      flash(t.unsubscribe.saveFailed, true);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const saveQuietHours = async (clear: boolean) => {
+    setSavingSchedule(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quietHours: clear ? null : { start: quietStart, end: quietEnd } }),
+      });
+      if (!res.ok) throw new Error();
+      if (clear) {
+        setQuietStart('');
+        setQuietEnd('');
+      }
+      flash(t.account.quietHoursSaved);
+    } catch {
+      flash(t.unsubscribe.saveFailed, true);
+    } finally {
+      setSavingSchedule(false);
     }
   };
 
@@ -1399,6 +1455,72 @@ export function AccountSettings() {
                 {(t.account.notifCategories as Record<string, string>)[cat]}
               </label>
             ))}
+          </div>
+        </div>
+
+        {/* The category × channel matrix (#1714). A table, never <label>s with
+            the category names: e2e/notif-prefs.spec.ts finds the switches above
+            by `label` + substring text, and a second labelled copy of each name
+            would break it. Each checkbox names itself through aria-label. */}
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5" data-testid="channel-matrix">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.account.channelMatrixHeading}</h4>
+          <p className="text-xs text-gray-600 dark:text-gray-400">{t.account.channelMatrixHint}</p>
+          <div className="overflow-x-auto" tabIndex={0}>
+            <table className="text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
+                  <th className="py-1 pr-4 font-medium">{t.account.channelMatrixCategory}</th>
+                  <th className="py-1 px-2 font-medium">{t.account.channelInApp}</th>
+                  <th className="py-1 px-2 font-medium">{t.account.channelEmail}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {NOTIFICATION_CATEGORIES.map((cat) => {
+                  const name = (t.account.notifCategories as Record<string, string>)[cat];
+                  const off = notifPrefs[cat] === false;
+                  return (
+                    <tr key={cat} className="border-t border-gray-100 dark:border-gray-800">
+                      <th scope="row" className="py-1 pr-4 font-normal text-gray-600 dark:text-gray-400">{name}</th>
+                      {(['inApp', 'email'] as const).map((ch) => (
+                        <td key={ch} className="py-1 px-2 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`${name} — ${ch === 'inApp' ? t.account.channelInApp : t.account.channelEmail}`}
+                            checked={!off && channelMatrix[cat]?.[ch] !== false}
+                            disabled={off || savingSchedule || !prefsLoaded}
+                            onChange={(e) => toggleChannel(cat, ch, e.target.checked)}
+                            data-testid={`channel-${cat}-${ch}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5" data-testid="quiet-hours">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.account.quietHoursHeading}</h4>
+          <p className="text-xs text-gray-600 dark:text-gray-400">{t.account.quietHoursHint}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="quiet-start" className="block text-xs text-gray-600 dark:text-gray-400">{t.account.quietHoursStart}</label>
+              <input id="quiet-start" type="time" value={quietStart} onChange={(e) => setQuietStart(e.target.value)} data-testid="quiet-hours-start" className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm" />
+            </div>
+            <div>
+              <label htmlFor="quiet-end" className="block text-xs text-gray-600 dark:text-gray-400">{t.account.quietHoursEnd}</label>
+              <input id="quiet-end" type="time" value={quietEnd} onChange={(e) => setQuietEnd(e.target.value)} data-testid="quiet-hours-end" className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm" />
+            </div>
+            <Button type="button" size="sm" disabled={savingSchedule || !prefsLoaded || !quietStart || !quietEnd || quietStart === quietEnd} onClick={() => saveQuietHours(false)} data-testid="quiet-hours-save">
+              {t.account.quietHoursSave}
+            </Button>
+            {(quietStart || quietEnd) && (
+              <Button type="button" size="sm" variant="outline" disabled={savingSchedule || !prefsLoaded} onClick={() => saveQuietHours(true)} data-testid="quiet-hours-clear">
+                {t.account.quietHoursClear}
+              </Button>
+            )}
           </div>
         </div>
 

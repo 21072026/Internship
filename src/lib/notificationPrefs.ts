@@ -1,3 +1,5 @@
+import { channelPrefAllowed, resolveChannels as resolveChannelList } from '@/lib/notificationScheduleRule';
+
 // Notification categories a user can individually opt out of. A category
 // switch applies to every channel that carries the category — e-mail AND
 // in-app rows (#886, via notifyIfAllowed) — while emailNotifications below
@@ -31,4 +33,21 @@ export function notificationCategoryAllowed(user: Pick<PrefUser, 'notificationPr
 export function emailAllowed(user: PrefUser, category: NotificationCategory): boolean {
   if (user.emailNotifications === false) return false;
   return notificationCategoryAllowed(user, category);
+}
+
+// The per-category channel axis (#1714). The matrix lives in the same JSON
+// under `channels` and is SPARSE: absent = the catalogue's defaultChannels.
+// The category switch above outranks it — a category that is off is off on
+// every channel. Enforced in the router; the rule is notificationScheduleRule.ts.
+export function channelAllowed(user: Pick<PrefUser, 'notificationPrefs'>, category: NotificationCategory, channel: string): boolean {
+  return notificationCategoryAllowed(user, category) && channelPrefAllowed(user.notificationPrefs, category, channel);
+}
+
+/** The channels this category reaches this person on, from the catalogue entry's defaults. */
+export function resolveChannels(
+  user: Pick<PrefUser, 'notificationPrefs'>,
+  entry: { category: NotificationCategory; defaultChannels: readonly string[] },
+): string[] {
+  if (!notificationCategoryAllowed(user, entry.category)) return [];
+  return resolveChannelList(user.notificationPrefs, entry.category, entry.defaultChannels);
 }

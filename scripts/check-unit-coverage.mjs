@@ -111,6 +111,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/notificationScheduleRule.ts',
+    {
+      floor: 95,
+      measured: 99.47,
+      why: 'an absent channel entry keeps today\'s behaviour, a quiet window or blackout day reschedules a notification once and never forever (#1714)',
+    },
+  ],
+  [
     'src/lib/brandRule.ts',
     {
       floor: 95,

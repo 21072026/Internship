@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Per-category channel matrix, quiet hours and blackout days (#1714):** `User.notificationPrefs` gains a sparse `channels` matrix (category × channel, only `false` turns a channel off, an absent entry is the catalogue default) and a `quietHours` window; the router enforces the matrix (`channel_off` skip reason, under the category switch, never for `account_security`) and creates an interrupting e-mail job with `runAt` at the next open instant — outside the recipient's quiet hours on their own clock and the org's new `notificationBlackoutDates` / `notificationBlackoutWeekends` settings — so a held notification is rescheduled once, never dropped; the in-app bell is never delayed. `PUT /api/profile` takes `notificationChannels` and `quietHours` and carries both over on a switch save. Rule: `src/lib/notificationScheduleRule.ts`; doc: `docs/notification-schedule.md`.",
+  "notes": {
+    "en": ["Choose per kind of notification whether it reaches you in the app, by e-mail or both, and set quiet hours when no notification e-mail arrives. Admins can mark holidays on which notification e-mails wait for the next working day."],
+    "tr": ["Her bildirim türünün sana uygulamada mı, e-postayla mı yoksa ikisiyle de mi ulaşacağını seç ve bildirim e-postası gelmeyecek sessiz saatler belirle. Yöneticiler, bildirim e-postalarının bir sonraki iş gününü beklediği tatil günlerini işaretleyebilir."],
+    "de": ["Lege pro Benachrichtigungsart fest, ob sie dich in der App, per E-Mail oder auf beiden Wegen erreicht, und richte Ruhezeiten ein, in denen keine Benachrichtigungs-E-Mail kommt. Admins können Feiertage festlegen, an denen Benachrichtigungs-E-Mails bis zum nächsten Werktag warten."]
+  }
+}

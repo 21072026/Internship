@@ -1,9 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { gotoSettled } from './helpers/auth';
+import { notifyEvent } from '@/lib/notifications/router';
+import { setSetting } from '@/lib/settings';
+import { prisma as appPrisma } from '@/lib/prisma';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
+  await appPrisma.$disconnect();
 });
 
 test('a user can opt out of individual email categories', async ({ page }) => {
@@ -243,6 +247,133 @@ test('unticking a legacy category moves the e-mail group switch it maps to, with
         return me.user.notificationPrefs?.mentorship;
       })
       .toBe(false);
+  } finally {
+    await cleanupByEmail(email);
+  }
+});
+
+// ── The channel matrix, quiet hours and blackout days (#1714) ──────────────
+//
+// API-level on purpose: the matrix is enforced in the ROUTER, so the proof is a
+// real `notifyEvent()` call and the ledger / job rows it leaves — not the state
+// of a checkbox. In-process, like e2e/notification-templates.spec.ts.
+
+async function signIn(page: import('@playwright/test').Page, email: string, landing: string) {
+  await gotoSettled(page, '/auth/signin');
+  await page.fill('input[type="email"], input[name="email"]', email);
+  await page.fill('input[type="password"]', 'UserPass123');
+  await page.click('button[type="submit"]');
+  await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+}
+
+test('deadlines e-mail off + in-app on is stored and enforced in the router; switches survive', async ({ page }) => {
+  const email = uniqueEmail('np-matrix');
+  const user = await seedUser(email, 'UserPass123', 'MENTOR', 'NP Matrix');
+  try {
+    await signIn(page, email, '/mentor');
+    expect((await page.request.put('/api/profile', { data: { notificationPrefs: { messages: false } } })).ok()).toBeTruthy();
+    const put = await page.request.put('/api/profile', { data: { notificationChannels: { deadlines: { email: false, inApp: true }, bogus: { email: false } } } });
+    expect(put.ok()).toBeTruthy();
+    let me = (await (await page.request.get('/api/profile')).json()).user;
+    expect(me.notificationPrefs.channels).toEqual({ deadlines: { email: false, inApp: true } });
+    // The legacy switch set before is still there…
+    expect(me.notificationPrefs.messages).toBe(false);
+    // …and a switch save that carries the whole stored blob keeps the matrix.
+    expect((await page.request.put('/api/profile', { data: { notificationPrefs: { ...me.notificationPrefs, digest: false } } })).ok()).toBeTruthy();
+    me = (await (await page.request.get('/api/profile')).json()).user;
+    expect(me.notificationPrefs).toMatchObject({ messages: false, digest: false, channels: { deadlines: { email: false, inApp: true } } });
+
+    const key = `np-matrix-${Date.now()}`;
+    const r = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Ada' }, { dedupeKey: key });
+    expect(r).toMatchObject({ sent: 1, queued: 0, skipped: 1 });
+    const rows = await prisma.notificationDelivery.findMany({ where: { userId: user.id, eventKey: 'deadline.stagePassed' }, select: { channel: true, status: true, skipReason: true } });
+    expect(rows).toEqual(expect.arrayContaining([
+      { channel: 'email', status: 'SKIPPED', skipReason: 'channel_off' },
+      expect.objectContaining({ channel: 'inApp', status: 'SENT' }),
+    ]));
+
+    // Turning the CATEGORY off silences every channel, the matrix's yes included.
+    expect((await page.request.put('/api/profile', { data: { notificationPrefs: { deadlines: false } } })).ok()).toBeTruthy();
+    const off = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Ada' }, { dedupeKey: `${key}-off` });
+    expect(off).toMatchObject({ sent: 0, queued: 0, skipped: 2 });
+  } finally {
+    await prisma.job.deleteMany({ where: { name: 'notification.email', payload: { path: '$.userId', equals: user.id } } }).catch(() => {});
+    await prisma.notificationDelivery.deleteMany({ where: { userId: user.id } });
+    await cleanupByEmail(email);
+  }
+});
+
+test('an account with no channels key is unchanged; quiet hours and blackout days reschedule, security mail never waits', async ({ page }) => {
+  const email = uniqueEmail('np-quiet');
+  const user = await seedUser(email, 'UserPass123', 'MENTOR', 'NP Quiet');
+  const org = await prisma.organization.create({ data: { name: `NP Org ${Date.now()}`, slug: `np-org-${Date.now()}` } });
+  await prisma.user.update({ where: { id: user.id }, data: { orgId: org.id, timezone: 'UTC' } });
+  const jobsFor = () =>
+    prisma.job.findMany({ where: { name: 'notification.email', payload: { path: '$.userId', equals: user.id } }, select: { runAt: true, payload: true } });
+  try {
+    // No `channels`, no window: both channels, the mail due now.
+    const plain = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Ada' }, { dedupeKey: `np-plain-${user.id}` });
+    expect(plain).toMatchObject({ sent: 1, queued: 1 });
+    expect((await jobsFor())[0].runAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    await prisma.job.deleteMany({ where: { name: 'notification.email', payload: { path: '$.userId', equals: user.id } } });
+
+    // A window covering every hour but the next one: the mail waits for its end, once.
+    await signIn(page, email, '/mentor');
+    const now = new Date();
+    const hh = (h: number) => String(((h % 24) + 24) % 24).padStart(2, '0');
+    const start = `${hh(now.getUTCHours())}:00`;
+    const end = `${hh(now.getUTCHours() + 23)}:00`;
+    expect((await page.request.put('/api/profile', { data: { quietHours: { start, end } } })).ok()).toBeTruthy();
+    const quiet = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Ada' }, { dedupeKey: `np-quiet-${user.id}` });
+    expect(quiet).toMatchObject({ sent: 1, queued: 1 });
+    const again = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Ada' }, { dedupeKey: `np-quiet-${user.id}` });
+    expect(again).toMatchObject({ deduped: 2 });
+    const [job] = await jobsFor();
+    const expected = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours() + 23));
+    expect(job.runAt.toISOString()).toBe(expected.toISOString());
+    expect(await jobsFor()).toHaveLength(1);
+
+    // Essential mail ignores the window.
+    await notifyEvent(user.id, 'security.adminSignedOutAll', {}, { dedupeKey: `np-sec-${user.id}` });
+    const sec = (await jobsFor()).find((j) => (j.payload as { eventKey?: string }).eventKey === 'security.adminSignedOutAll');
+    expect(sec!.runAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+
+    // Org blackout: today closed → tomorrow 00:00 UTC (window cleared first).
+    expect((await page.request.put('/api/profile', { data: { quietHours: null } })).ok()).toBeTruthy();
+    expect((await (await page.request.get('/api/profile')).json()).user.notificationPrefs.quietHours).toBeUndefined();
+    const today = now.toISOString().slice(0, 10);
+    await setSetting('notificationBlackoutDates', today, org.id);
+    await prisma.job.deleteMany({ where: { name: 'notification.email', payload: { path: '$.userId', equals: user.id } } });
+    await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Ada' }, { dedupeKey: `np-blackout-${user.id}` });
+    const [blackout] = await jobsFor();
+    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    expect(blackout.runAt.toISOString()).toBe(tomorrow.toISOString());
+  } finally {
+    await prisma.job.deleteMany({ where: { name: 'notification.email', payload: { path: '$.userId', equals: user.id } } }).catch(() => {});
+    await prisma.notificationDelivery.deleteMany({ where: { userId: user.id } });
+    await prisma.setting.deleteMany({ where: { orgId: org.id } });
+    await cleanupByEmail(email);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test('the matrix and quiet hours are set from the account page', async ({ page }) => {
+  const email = uniqueEmail('np-ui');
+  await seedUser(email, 'UserPass123', 'MENTEE', 'NP UI');
+  try {
+    await signIn(page, email, '/portal');
+    await gotoSettled(page, '/account');
+    const cell = page.getByTestId('channel-deadlines-email');
+    await expect(cell).toBeChecked();
+    await cell.uncheck();
+    await expect.poll(async () => (await (await page.request.get('/api/profile')).json()).user.notificationPrefs?.channels?.deadlines?.email).toBe(false);
+    await page.getByTestId('quiet-hours-start').fill('21:00');
+    await page.getByTestId('quiet-hours-end').fill('08:00');
+    await page.getByTestId('quiet-hours-save').click();
+    await expect.poll(async () => (await (await page.request.get('/api/profile')).json()).user.notificationPrefs?.quietHours).toEqual({ start: '21:00', end: '08:00' });
+    await page.reload();
+    await expect(page.getByTestId('channel-deadlines-email')).not.toBeChecked();
+    await expect(page.getByTestId('quiet-hours-start')).toHaveValue('21:00');
   } finally {
     await cleanupByEmail(email);
   }

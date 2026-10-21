@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -13,6 +14,9 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT } from '@/lib/brandRule';
 import { checkPastedMeetingLink } from '@/lib/meetingRoom';
+import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
+import { NOTIFICATION_CHANNELS } from '@/lib/notifications/catalog';
+import { parseQuietHours, sanitizeChannelMatrix } from '@/lib/notificationScheduleRule';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -85,7 +89,20 @@ const updateProfileSchema = z.object({
   // null clears the preference (falls back to a capacity-derived guess).
   acceptingMentees: z.boolean().nullable().optional(),
   emailNotifications: z.boolean().optional(),
-  notificationPrefs: z.record(z.string(), z.boolean()).optional(),
+  // Booleans only are KEPT (boolPrefs below); a non-boolean value is ignored rather
+  // than refused, so a client holding the whole stored blob — `channels` and
+  // `quietHours` included (#1714) — can still save a switch.
+  notificationPrefs: z.record(z.string(), z.unknown()).optional(),
+  // The per-category channel matrix and quiet hours (#1714). Stored INSIDE the
+  // notificationPrefs JSON (keys `channels` / `quietHours`) but sent as their own
+  // fields, so the boolean switches above keep their exact shape; a PUT of
+  // `notificationPrefs` preserves both, and each replaces only itself.
+  notificationChannels: z.record(z.string(), z.record(z.string(), z.boolean())).optional(),
+  quietHours: z
+    .object({ start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/) })
+    .refine((q) => q.start !== q.end, { message: 'start and end must differ' })
+    .nullable()
+    .optional(),
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
@@ -174,6 +191,27 @@ const PROFILE_SELECT = {
 // silently lost to P2000 (#1268), so the row records the changed *keys*, never
 // the blob, and shrinks itself to fit.
 const NOTIFICATION_DETAIL_MAX = 180;
+
+/**
+ * The stored notificationPrefs blob after one PUT (#1714): the boolean switches
+ * from `switches` when given (else the stored ones), the channel matrix and the
+ * quiet window from the request when given (null clears the window), else the
+ * stored ones. The matrix is sanitised to known categories × channels.
+ */
+function mergeNotificationPrefs(
+  stored: unknown,
+  next: { switches?: Record<string, unknown>; channels?: unknown; quietHours?: { start: string; end: string } | null },
+): Record<string, unknown> {
+  const base = stored && typeof stored === 'object' && !Array.isArray(stored) ? (stored as Record<string, unknown>) : {};
+  const out: Record<string, unknown> = boolPrefs(next.switches ?? base);
+  const channels = next.channels !== undefined
+    ? sanitizeChannelMatrix(next.channels, NOTIFICATION_CATEGORIES, NOTIFICATION_CHANNELS)
+    : base.channels;
+  if (channels && typeof channels === 'object' && Object.keys(channels).length) out.channels = channels;
+  const quiet = next.quietHours === null ? null : next.quietHours !== undefined ? parseQuietHours(next.quietHours) : parseQuietHours(base.quietHours);
+  if (quiet) out.quietHours = quiet;
+  return out;
+}
 
 function boolPrefs(value: unknown): Record<string, boolean> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -312,7 +350,7 @@ export async function PUT(request: Request) {
         );
       }
 
-      const { cvUrl, birthDate, ...rest } = parsed.data;
+      const { cvUrl, birthDate, notificationChannels, quietHours, notificationPrefs, ...rest } = parsed.data;
 
       // Skills: split whatever arrived (a client that still comma-joins, an
       // API caller, an old cached bundle), then refuse what only the person
@@ -347,7 +385,10 @@ export async function PUT(request: Request) {
       // Read the switches back only when this write touches them; every other
       // profile save keeps its single query.
       const touchesNotifications =
-        parsed.data.notificationPrefs !== undefined || parsed.data.emailNotifications !== undefined;
+        notificationPrefs !== undefined ||
+        parsed.data.emailNotifications !== undefined ||
+        notificationChannels !== undefined ||
+        quietHours !== undefined;
       const before = touchesNotifications
         ? await prisma.user.findUnique({
             where: { id: session.user.id },
@@ -355,10 +396,23 @@ export async function PUT(request: Request) {
           })
         : null;
 
+      // One JSON column, three writers (#1714): the boolean switches (a PUT
+      // replaces them), the channel matrix and the quiet window. Whatever this
+      // request does not name is carried over from the stored blob.
+      const prefsWrite =
+        notificationPrefs !== undefined || notificationChannels !== undefined || quietHours !== undefined
+          ? (mergeNotificationPrefs(before?.notificationPrefs, {
+              switches: notificationPrefs,
+              channels: notificationChannels,
+              quietHours,
+            }) as Prisma.InputJsonValue)
+          : undefined;
+
       const user = await prisma.user.update({
         where: { id: session.user.id },
         data: {
           ...rest,
+          ...(prefsWrite !== undefined ? { notificationPrefs: prefsWrite } : {}),
           ...(cvUrl !== undefined ? { cvUrl: cvUrl || null } : {}),
           ...(birthDate !== undefined
             ? { birthDate: birthDate ? new Date(birthDate) : null }

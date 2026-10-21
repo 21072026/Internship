@@ -46,6 +46,9 @@ export default function AdminSettingsPage() {
   const [notificationRetentionDays, setNotificationRetentionDays] = useState('180');
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
+  // Notification blackout days (#1714): one date per line in the box, stored normalised.
+  const [blackoutDates, setBlackoutDates] = useState('');
+  const [blackoutWeekends, setBlackoutWeekends] = useState(false);
   const [require2fa, setRequire2fa] = useState('off');
   // The policy as last loaded/saved, the coverage rows the card reported, and
   // whether a stricter switch is waiting for the admin's confirmation (#1644).
@@ -258,6 +261,8 @@ export default function AdminSettingsPage() {
     setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
     setSupportEmail(settings.supportEmail ?? '');
     setWeeklyDigest(settings.weeklyDigest !== 'false');
+    setBlackoutDates((settings.notificationBlackoutDates ?? '').split(',').filter(Boolean).join('\n'));
+    setBlackoutWeekends(settings.notificationBlackoutWeekends === 'true');
     setRequire2fa(settings.require2fa ?? 'off');
     setLoadedRequire2fa(settings.require2fa ?? 'off');
     setSelfRegistration(settings.selfRegistration ?? 'auto');
@@ -374,7 +379,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates, notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
@@ -447,6 +452,23 @@ export default function AdminSettingsPage() {
               <input type="checkbox" checked={weeklyDigest} onChange={(e) => setWeeklyDigest(e.target.checked)} />
               {t.settings.weeklyDigest}
             </label>
+            <div data-testid="notification-blackout">
+              <label htmlFor="notification-blackout-dates" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.blackoutDates}</label>
+              <textarea
+                id="notification-blackout-dates"
+                rows={3}
+                value={blackoutDates}
+                onChange={(e) => setBlackoutDates(e.target.value)}
+                placeholder="2026-12-25"
+                data-testid="notification-blackout-dates"
+                className="block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.settings.blackoutDatesHint}</p>
+              <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={blackoutWeekends} onChange={(e) => setBlackoutWeekends(e.target.checked)} data-testid="notification-blackout-weekends" />
+                {t.settings.blackoutWeekends}
+              </label>
+            </div>
             <div>
               <label htmlFor="self-registration" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.selfRegistration}</label>
               <select

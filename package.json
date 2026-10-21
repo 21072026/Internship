@@ -60,6 +60,7 @@
     "test:service-worker": "node --test scripts/test/service-worker-cache.test.mjs",
     "test:recovery-codes": "node --test --experimental-strip-types scripts/test/recovery-code-format.test.mjs",
     "test:email-suppression": "node --test --experimental-strip-types scripts/test/email-suppression.test.mjs",
+    "test:notification-schedule": "node --test --experimental-strip-types scripts/test/notification-schedule.test.mjs",
     "test:sign-in-device": "node --test --experimental-strip-types scripts/test/sign-in-device.test.mjs",
     "test:two-factor-policy": "node --test --experimental-strip-types scripts/test/two-factor-policy.test.mjs",
     "test:funnel-cohorts": "node --test --experimental-strip-types scripts/test/funnel-cohorts.test.mjs",
