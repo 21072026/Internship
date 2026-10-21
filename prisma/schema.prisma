@@ -224,6 +224,8 @@ model Organization {
   messageTemplates        MessageTemplate[]
   apiKeys                 ApiKey[]
   matchFeedback           MatchFeedback[]
+  matchRuleSets           MatchRuleSet[]
+  matchRules              MatchRule[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -818,6 +820,11 @@ model User {
   suggestedAsMentee                 MatchFeedback[]               @relation("MatchFeedbackMentee")
   suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
   matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
+  /// Direct reporting line (#1781) — what the "never the direct manager"
+  /// matching rule reads. Nullable and populated by hand or import for now.
+  managerId                         String?
+  manager                           User?                         @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports                     User[]                        @relation("UserManager")
   guidanceStates                    UserGuidanceState[]
   createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
   placements                        Placement[]                   @relation("PlacementMentee")
@@ -5427,6 +5434,63 @@ model MatchFeedback {
   @@index([menteeId])
   @@index([mentorId])
   @@index([actorId])
+}
+
+/// How a matching rule takes part in a score (#1781). WEIGHTED adds
+/// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
+/// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
+/// rule named — never a silent drop.
+enum MatchRuleKind {
+  WEIGHTED
+  HARD_REQUIRE
+  HARD_EXCLUDE
+}
+
+/// An organisation's mentor-matching rule set (#1781). The pure scorer lives
+/// in src/lib/matching/score.ts; an org with no set here scores with the
+/// built-in DEFAULT_RULE_SET, which reproduces the pre-#1781 ranking exactly.
+model MatchRuleSet {
+  id          String    @id @default(cuid())
+  orgId       String?
+  name        String
+  description String?   @db.Text
+  /// The set resolveRuleSet() picks for the org. At most one per org is
+  /// intended; the resolver takes the newest default if two ever exist.
+  isDefault   Boolean   @default(false)
+  version     Int       @default(1)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  org   Organization? @relation(fields: [orgId], references: [id])
+  rules MatchRule[]
+
+  @@index([orgId, isDefault, archivedAt])
+}
+
+/// One rule of a MatchRuleSet (#1781). `dimension` is a key from the client-
+/// safe registry in src/lib/matching/dimensions.ts; an unknown key is scored
+/// as a non-match rather than ignored. Carries its own orgId (same as its set)
+/// so it is tenant-scoped on its own and listed in TENANT_MODELS.
+model MatchRule {
+  id        String        @id @default(cuid())
+  orgId     String?
+  ruleSetId String
+  dimension String
+  kind      MatchRuleKind @default(WEIGHTED)
+  /// 0-100. Only WEIGHTED rules use it.
+  weight    Int           @default(0)
+  /// Per-dimension settings, e.g. `{ "maxHours": 3 }` for timezone.
+  config    Json          @default("{}")
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  org     Organization? @relation(fields: [orgId], references: [id])
+  ruleSet MatchRuleSet  @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+
+  @@index([ruleSetId, sortOrder])
+  @@index([orgId])
 }
 
 // ── Background job queue ─────────────────────────────────────────────────────

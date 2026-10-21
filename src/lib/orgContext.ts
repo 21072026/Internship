@@ -131,6 +131,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // sender's org at write time.
   'SafeguardingFlag',
   'MatchFeedback',
+  // Matching rule sets and their rules (#1781) — one org's weights.
+  'MatchRuleSet',
+  'MatchRule',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
   // readers — /api/health's counters and the daily dead-letter alert — run

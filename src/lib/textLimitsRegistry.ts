@@ -179,6 +179,8 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     orgId: ID,
     companyId: ID,
     sourceId: ID,
+    // The reporting line (#1781) — only ever a matched user id.
+    managerId: ID,
     referredById: ID,
     externalId: ID,
     password: SERVER_SET,
