@@ -74,6 +74,7 @@ const ICONS: Record<string, string> = {
   outbox: 'paper-plane',
   reEngagement: 'refresh',
   reportSubscriptions: 'mail-unread',
+  reportsExplorer: 'stats-chart',
   retention: 'shield-checkmark',
   skills: 'sparkles',
   sources: 'radio',

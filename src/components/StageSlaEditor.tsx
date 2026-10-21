@@ -23,6 +23,9 @@ interface StageRow {
   // Board WIP limit for this stage (#1439): null = inherit the org-wide
   // number, 0 = never warn about this stage.
   wipLimit: number | null;
+  // The ladder's second rung (#1722): days after the breach before the org's
+  // administrators are told. null = only the mentor is reminded.
+  escalateAfterDays: number | null;
 }
 
 export function StageSlaEditor() {
@@ -56,7 +59,7 @@ export function StageSlaEditor() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit })),
+          slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit, escalateAfterDays: r.escalateAfterDays })),
         }),
       });
       const body = await res.json();
@@ -91,6 +94,7 @@ export function StageSlaEditor() {
       <div className="flex items-center gap-3 text-xs text-gray-500 mb-1 px-1">
         <span className="flex-1" />
         <span className="w-16 sm:w-24">{t.stageSla.days}</span>
+        <span className="w-16 sm:w-24">{t.stageSla.escalateAfter}</span>
         <span className="w-16 sm:w-24">{t.stageSla.wipLimit}</span>
       </div>
       <div className="space-y-2" data-testid="stage-sla-rows">
@@ -114,6 +118,23 @@ export function StageSlaEditor() {
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, days } : row)));
               }}
               className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+            />
+            <input
+              type="number"
+              min={0}
+              max={365}
+              value={r.escalateAfterDays ?? ''}
+              placeholder={t.stageSla.noRule}
+              /* Escalation hangs off the service level: no days, no breach. */
+              disabled={r.days == null || r.days <= 0}
+              aria-label={`${r.label} — ${t.stageSla.escalateAfter}`}
+              data-testid={`escalate-${r.key}`}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                const escalateAfterDays = v === '' ? null : Number(v);
+                setRows((p) => p.map((row, j) => (j === i ? { ...row, escalateAfterDays } : row)));
+              }}
+              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm disabled:opacity-50"
             />
             <input
               type="number"
@@ -146,6 +167,7 @@ export function StageSlaEditor() {
         </Button>
       </div>
       <p className="mt-3 text-xs text-gray-500">{t.stageSla.calendarDays}</p>
+      <p className="mt-1 text-xs text-gray-500">{t.stageSla.escalateHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.wipLimitHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.appliesOnMove}</p>
     </Card>
