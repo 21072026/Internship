@@ -28,6 +28,13 @@ export interface AnalyticsScope {
   stageOrgId: string | null;
   tenant: TenantWhere;
   locale: Locale;
+  /**
+   * A segment of the report registry (#1920): a filter on the report's
+   * SUBJECT person — the mentee of a relation, the lead of a source, the
+   * mentor of a workload row. Absent on every screen, so their numbers do
+   * not change; src/lib/reports/segments.ts builds it.
+   */
+  person?: Prisma.UserWhereInput;
 }
 
 export interface CohortComparisonRow {
@@ -56,7 +63,7 @@ export async function cohortComparison(scope: AnalyticsScope): Promise<{ rows: C
       name: true,
       term: true,
       relations: {
-        where: withinTenant({}, tenant),
+        where: withinTenant(scope.person ? { mentee: { is: scope.person } } : {}, tenant),
         select: {
           pipelineStatus: true,
           startDate: true,
@@ -117,7 +124,7 @@ export async function sourceConversion(scope: AnalyticsScope) {
       id: true,
       name: true,
       users: {
-        where: withinTenant(attributedLeadWhere(), tenant),
+        where: withinTenant(scope.person ? { AND: [attributedLeadWhere(), scope.person] } : attributedLeadWhere(), tenant),
         select: { menteeRelations: { select: { pipelineStatus: true } } },
       },
     },
@@ -149,7 +156,7 @@ export async function sourceConversion(scope: AnalyticsScope) {
     ? { OR: [{ sourceId: null }, { source: { is: outsideTenant } }] }
     : { sourceId: null };
   const unsourced = await prisma.user.count({
-    where: withinTenant({ AND: [attributedLeadWhere(), noSourceHere] }, tenant),
+    where: withinTenant({ AND: [attributedLeadWhere(), noSourceHere, ...(scope.person ? [scope.person] : [])] }, tenant),
   });
   return { rows, unsourced, outcome };
 }
@@ -166,7 +173,7 @@ export async function mentorWorkload(scope: AnalyticsScope, outcome?: OutcomeSta
   const { tenant } = scope;
   const [mentors, resolved] = await Promise.all([
     prisma.user.findMany({
-      where: withinTenant({ role: 'MENTOR' as const }, tenant),
+      where: withinTenant(scope.person ? { AND: [{ role: 'MENTOR' as const }, scope.person] } : { role: 'MENTOR' as const }, tenant),
       select: {
         id: true,
         fullName: true,

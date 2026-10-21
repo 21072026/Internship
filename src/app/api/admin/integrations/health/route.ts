@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getIntegrationHealth } from '@/lib/integrationHealth';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // GET — per-connector integration health for an admin (#2008). The admin
 // integrations board renders this, and /admin/operations (#1607) counts the
@@ -10,6 +11,9 @@ import { getIntegrationHealth } from '@/lib/integrationHealth';
 // `state` rather than prose. Every error string is already scrubbed of
 // addresses, tokens and certificate bodies by lib/sanitizeError.
 //
+// Tenant-owned rows are read for the caller's own org (#1555), taken from the
+// session — never from the request.
+//
 // The ADMIN check lives here in the handler — the board is a client component,
 // so a check up there would gate the rendering and not the data.
 export async function GET() {
@@ -17,5 +21,5 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  return NextResponse.json({ connectors: await getIntegrationHealth() });
+  return NextResponse.json({ connectors: await getIntegrationHealth(resolveOrgId(session)) });
 }

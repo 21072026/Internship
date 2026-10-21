@@ -2,6 +2,7 @@
 import { useT, useLocale } from "@/i18n/client";
 import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
 import Link from "next/link";
+import { RelationHealthBadge, useRelationHealth } from "@/components/HealthBadge";
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
@@ -113,6 +114,9 @@ export default function MentorshipPage() {
   // The mentor named by an `already_mentored` refusal, so the assign dialog can
   // offer the change instead of only reporting the wall (#2289).
   const [assignBlocked, setAssignBlocked] = useState<{ relationId: string; mentorName: string | null } | null>(null);
+
+  // Health of the active pairs on this page (#1904) — one batched read.
+  const health = useRelationHealth(relations.filter((r) => r.status === 'ACTIVE').map((r) => r.id));
 
   const fetchRelations = useCallback(async () => {
     setLoading(true);
@@ -662,6 +666,7 @@ export default function MentorshipPage() {
                       <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
                     </span>
                     <StatusBadge status={rel.status} />
+                    <RelationHealthBadge health={health[rel.id]} testId={`relation-health-${rel.id}`} />
                     {/* A pairing the mentee left did not finish. Rendering both
                         as plain "Completed" is the record #1801/#2289 exist to
                         stop being written. */}

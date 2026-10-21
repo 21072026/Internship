@@ -176,10 +176,16 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     title: { limit: 'documentTitle', files: ['src/app/api/documents/route.ts'] },
   },
   User: {
+    deactivatedBy: {
+      exempt:
+        'written by the server only (#1966): "roster:<feedId>" (a cuid) by the roster-feed deprovisioning, or the acting admin\'s user id by /api/users/[id]. No request body supplies the value.',
+    },
     id: ID,
     orgId: ID,
     companyId: ID,
     sourceId: ID,
+    // The reporting line (#1781) — only ever a matched user id.
+    managerId: ID,
     referredById: ID,
     externalId: ID,
     password: SERVER_SET,
@@ -278,6 +284,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     ssoIssuer: { limit: 'orgSsoIssuer', files: ORG_WRITERS },
     brandLogoUrl: { exempt: '@db.Text, capped at 2000 by the route' },
     ssoEntryPoint: { exempt: '@db.Text, capped at 2000 by the route' },
+    ssoLogoutUrl: { exempt: '@db.Text, capped at 2000 by the route (#1952)' },
+    ssoSpKey: SERVER_SET,
+    ssoSpCert: SERVER_SET,
     ssoCertificate: { exempt: '@db.Text, capped at 20000 by the route' },
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },

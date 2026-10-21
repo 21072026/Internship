@@ -28,6 +28,12 @@ export interface ReportColumn {
   type: ColumnType;
 }
 
+/**
+ * Whose org-defined attributes slice this report (#1920): the mentee of each
+ * relation / the attributed lead, or the mentor. Absent = not segmentable.
+ */
+export type SegmentSubject = 'mentee' | 'mentor';
+
 export interface ReportDefinition {
   key: string;
   titleKey: string;
@@ -48,6 +54,8 @@ export interface ReportDefinition {
   labelColumn?: string;
   /** A report that only exists for a vertical with this module. */
   capability?: VerticalCapability;
+  /** Sliceable by an org attribute of this person (`?segmentBy=`); see segmentRule.ts. */
+  segmentSubject?: SegmentSubject;
 }
 
 /** The privacy floor when a definition does not raise it. */
@@ -56,6 +64,7 @@ export const DEFAULT_MIN_COHORT = 5;
 export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   {
     key: 'pipeline-funnel',
+    segmentSubject: 'mentee',
     titleKey: 'pipelineFunnel.title',
     descriptionKey: 'pipelineFunnel.description',
     aggregate: false,
@@ -69,6 +78,7 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   // Row-level, like the funnel — it names no person and no small group.
   {
     key: 'pipeline-summary',
+    segmentSubject: 'mentee',
     titleKey: 'pipelineSummary.title',
     descriptionKey: 'pipelineSummary.description',
     aggregate: false,
@@ -80,6 +90,7 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   },
   {
     key: 'cohort-comparison',
+    segmentSubject: 'mentee',
     titleKey: 'cohortComparison.title',
     descriptionKey: 'cohortComparison.description',
     aggregate: true,
@@ -98,6 +109,7 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   },
   {
     key: 'source-conversion',
+    segmentSubject: 'mentee',
     titleKey: 'sourceConversion.title',
     descriptionKey: 'sourceConversion.description',
     aggregate: true,
@@ -113,6 +125,7 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   },
   {
     key: 'mentor-workload',
+    segmentSubject: 'mentor',
     titleKey: 'mentorWorkload.title',
     descriptionKey: 'mentorWorkload.description',
     aggregate: false,
@@ -125,6 +138,7 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   },
   {
     key: 'placement-outcomes',
+    segmentSubject: 'mentee',
     titleKey: 'placementOutcomes.title',
     descriptionKey: 'placementOutcomes.description',
     aggregate: true,
@@ -139,6 +153,7 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   },
   {
     key: 'weekly-report-compliance',
+    segmentSubject: 'mentee',
     titleKey: 'weeklyReportCompliance.title',
     descriptionKey: 'weeklyReportCompliance.description',
     aggregate: false,
