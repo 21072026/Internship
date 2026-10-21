@@ -7,7 +7,9 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
 import { resolveStageEscalations, resolveStageSlas, resolveStageWipLimits } from '@/lib/stageSla';
-import { getSetting } from '@/lib/settings';
+import { getSetting, setSetting } from '@/lib/settings';
+import { isValidTimeZone } from '@/lib/timezone';
+import { parseWorkingDays } from '@/lib/businessDays';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
@@ -43,6 +45,16 @@ const schema = z.object({
       })
     )
     .max(60),
+  // How the days are counted (#1638). Optional: a programme template posts
+  // service levels only and must not reset the org's day rule on its way.
+  dayRule: z
+    .object({
+      mode: z.string().max(16),
+      workingDays: z.array(z.number().int().min(1).max(7)).max(7),
+      holidayCalendarId: z.string().max(40).nullable(),
+      timeZone: z.string().max(64).nullable(),
+    })
+    .optional(),
 });
 
 export async function GET() {
@@ -63,9 +75,28 @@ export async function GET() {
     // board: this is already the one request that answers "what applies to each
     // column", and two sources for one number is how the hardcoded 8 survived.
     const defaultWipLimit = resolveOrgWipLimit(await getSetting('boardWipLimit', await settingsOrgOf(session)));
+    // How the days are counted (#1638), and the calendars an admin can pick.
+    const settingsOrg = await settingsOrgOf(session);
+    const dayRule = {
+      mode: await getSetting('slaDayMode', settingsOrg),
+      workingDays: [...parseWorkingDays(await getSetting('slaWorkingDays', settingsOrg))],
+      holidayCalendarId: (await getSetting('slaHolidayCalendarId', settingsOrg)) || null,
+      timeZone: (await getSetting('slaTimeZone', settingsOrg)) || null,
+    };
+    const calendars = orgId
+      ? (
+          await prisma.holidayCalendar.findMany({
+            where: { orgId },
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, _count: { select: { holidays: true } } },
+          })
+        ).map((c) => ({ id: c.id, name: c.name, count: c._count.holidays }))
+      : [];
     // Every stage is listed, configured or not, so the form shows the whole
     // pipeline rather than only the rules that already exist.
     return NextResponse.json({
+      dayRule,
+      calendars,
       defaultWipLimit,
       stages: stages.map((s) => ({
         key: s.key,
@@ -92,6 +123,22 @@ export async function PUT(request: Request) {
     const parsed = schema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    }
+
+    // The day rule (#1638), validated before anything is written: a mode off
+    // the whitelist, an empty working week, an unknown zone or another
+    // tenant's calendar is refused rather than half-applied.
+    const rule = parsed.data.dayRule;
+    if (rule) {
+      const bad = (msg: string) =>
+        NextResponse.json({ error: 'Validation failed', details: { formErrors: [msg] } }, { status: 400 });
+      if (rule.mode !== 'calendar' && rule.mode !== 'business') return bad('Unknown day mode');
+      if (rule.workingDays.length === 0) return bad('Pick at least one working day');
+      if (rule.timeZone && !isValidTimeZone(rule.timeZone)) return bad('Unknown time zone');
+      if (rule.holidayCalendarId) {
+        const own = await prisma.holidayCalendar.count({ where: { id: rule.holidayCalendarId, orgId } });
+        if (!own) return bad('Unknown holiday calendar');
+      }
     }
 
     const known = new Set((await resolvePipelineStages(orgId)).map((s) => s.key));
@@ -143,6 +190,14 @@ export async function PUT(request: Request) {
       ),
     ]);
 
+    if (rule) {
+      const settingsOrg = await settingsOrgOf(session);
+      await setSetting('slaDayMode', rule.mode, settingsOrg);
+      await setSetting('slaWorkingDays', [...new Set(rule.workingDays)].sort().join(','), settingsOrg);
+      await setSetting('slaHolidayCalendarId', rule.holidayCalendarId ?? '', settingsOrg);
+      await setSetting('slaTimeZone', rule.timeZone ?? '', settingsOrg);
+    }
+
     const withSla = keep.filter((s) => s.days != null).length;
     const withWip = keep.filter((s) => s.wipLimit != null).length;
     const withEscalation = keep.filter((s) => s.escalateAfterDays != null).length;
@@ -153,7 +208,7 @@ export async function PUT(request: Request) {
       actorEmail: session.user.email ?? null,
       targetType: 'organization',
       targetId: orgId,
-      detail: `${withSla} service levels, ${withEscalation} escalations, ${withWip} WIP limits, ${drop.length} cleared`,
+      detail: `${withSla} service levels${rule ? ` (${rule.mode} days)` : ''}, ${withEscalation} escalations, ${withWip} WIP limits, ${drop.length} cleared`,
       request,
     });
 

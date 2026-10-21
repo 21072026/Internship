@@ -209,6 +209,15 @@ export const SETTING_DEFAULTS = {
   // very different healthy depths), and '0' here to switch WIP warnings off
   // entirely rather than pick a number nobody will act on.
   boardWipLimit: '8',
+  // Business-day stage SLAs (#1638). 'calendar' is what every stage SLA has
+  // always counted in, and stays the default so no existing deadline moves.
+  // 'business' counts only `slaWorkingDays` (ISO weekdays, 1 = Monday) that are
+  // not in the `slaHolidayCalendarId` calendar, read in `slaTimeZone` ('' = the
+  // deployment's APP_TIMEZONE). The arithmetic: src/lib/businessDays.ts.
+  slaDayMode: 'calendar',
+  slaWorkingDays: '1,2,3,4,5',
+  slaHolidayCalendarId: '',
+  slaTimeZone: '',
   // Grace period, in days, before the retention sweep ANONYMIZES an orphan
   // applicant account — a /apply account whose mentor declined and which shows
   // no other sign of life (#1780). The rule itself, and why 90 days, live in
@@ -403,6 +412,10 @@ export const SETTING_SCHEMA = {
   messageRetentionDays: { type: 'number', scopes: O },
   safeguardingKeywords: { type: 'string', scopes: O },
   boardWipLimit: { type: 'number', scopes: P },
+  slaDayMode: { type: 'enum', values: ['calendar', 'business'], scopes: O },
+  slaWorkingDays: { type: 'string', scopes: O },
+  slaHolidayCalendarId: { type: 'string', scopes: O },
+  slaTimeZone: { type: 'string', scopes: O },
   orphanApplicantGraceDays: { type: 'number', scopes: G },
   broadcastMonthlyRecipients: { type: 'number', nullable: true, scopes: O },
   trialLengthDays: { type: 'number', scopes: O },

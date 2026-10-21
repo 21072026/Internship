@@ -7,11 +7,15 @@
 // by hand for each relation. This module is the missing half: an org states the
 // rule once, and every stage move applies it.
 //
-// CALENDAR DAYS, not business days — see the note on the StageSla model. The
-// decision is recorded in the schema, in the admin hint and in the PR rather
-// than left implicit.
+// CALENDAR DAYS by default; BUSINESS DAYS when the org opts in (#1638) with
+// the `slaDayMode` setting — working days, a holiday calendar and a time zone,
+// all per org. The default stays calendar days so no existing deadline moves;
+// the arithmetic for the business mode is pure in src/lib/businessDays.ts.
 
 import { prisma } from './prisma';
+import { getSetting } from './settings';
+import { resolveTimeZone } from './timezone';
+import { addBusinessDays, parseWorkingDays, type BusinessDayOptions } from './businessDays';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -100,7 +104,43 @@ export async function stageDeadlineUpdate(
   if (slas.size === 0) return null;
   const days = slas.get(stageKey);
   return {
-    stageDeadline: days != null ? new Date(now.getTime() + days * DAY) : null,
+    stageDeadline: days != null ? slaDeadline(now, days, await resolveSlaDayRule(orgId)) : null,
     deadlineReminderSentAt: null,
   };
+}
+
+/** How an org counts its SLA days (#1638): calendar days, or business days with these options. */
+export type SlaDayRule = { mode: 'calendar' } | ({ mode: 'business' } & BusinessDayOptions);
+
+/**
+ * The org's day rule, from its settings. Calendar unless it opted in. The
+ * holiday calendar is read only when it belongs to the same org — a stored id
+ * of another tenant's calendar contributes nothing.
+ */
+export async function resolveSlaDayRule(orgId: string | null | undefined): Promise<SlaDayRule> {
+  if (!orgId) return { mode: 'calendar' };
+  if ((await getSetting('slaDayMode', orgId)) !== 'business') return { mode: 'calendar' };
+  const [workingDays, calendarId, zone] = await Promise.all([
+    getSetting('slaWorkingDays', orgId),
+    getSetting('slaHolidayCalendarId', orgId),
+    getSetting('slaTimeZone', orgId),
+  ]);
+  const holidays = calendarId
+    ? await prisma.holiday.findMany({
+        where: { calendar: { id: calendarId, orgId } },
+        select: { date: true },
+      })
+    : [];
+  return {
+    mode: 'business',
+    workingDays: parseWorkingDays(workingDays),
+    holidays: new Set(holidays.map((h) => h.date.toISOString().slice(0, 10))),
+    timeZone: resolveTimeZone(zone),
+  };
+}
+
+/** `days` SLA days after `from` under the org's rule. Calendar mode is exactly what it always was. */
+export function slaDeadline(from: Date, days: number, rule: SlaDayRule): Date {
+  if (rule.mode === 'calendar') return new Date(from.getTime() + days * DAY);
+  return addBusinessDays(from, days, rule);
 }

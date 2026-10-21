@@ -11,8 +11,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Clock } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
+import { HolidayCalendarsEditor } from '@/components/HolidayCalendarsEditor';
 
 interface StageRow {
   key: string;
@@ -28,8 +29,23 @@ interface StageRow {
   escalateAfterDays: number | null;
 }
 
+// How the days are counted (#1638).
+interface DayRule {
+  mode: string;
+  workingDays: number[];
+  holidayCalendarId: string | null;
+  timeZone: string | null;
+}
+
+// ISO weekdays 1..7, labelled in the viewer's language (2026-10-19 is a Monday).
+const weekdayLabel = (iso: number, locale: string) =>
+  new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 9, 18 + iso)));
+
 export function StageSlaEditor() {
   const t = useT();
+  const locale = useLocale();
+  const [dayRule, setDayRule] = useState<DayRule>({ mode: 'calendar', workingDays: [1, 2, 3, 4, 5], holidayCalendarId: null, timeZone: null });
+  const [calendars, setCalendars] = useState<{ id: string; name: string }[]>([]);
   const [rows, setRows] = useState<StageRow[]>([]);
   // The org-wide fallback, so an empty WIP box can show what it inherits
   // instead of looking unconfigured. null = the org switched warnings off.
@@ -43,6 +59,8 @@ export function StageSlaEditor() {
     if (res.ok) {
       const body = await res.json();
       setRows(body.stages ?? []);
+      if (body.dayRule) setDayRule(body.dayRule);
+      setCalendars(body.calendars ?? []);
       setDefaultWip(body.defaultWipLimit ?? null);
     }
   }, []);
@@ -60,6 +78,7 @@ export function StageSlaEditor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit, escalateAfterDays: r.escalateAfterDays })),
+          dayRule,
         }),
       });
       const body = await res.json();
@@ -166,10 +185,76 @@ export function StageSlaEditor() {
           {t.common.save}
         </Button>
       </div>
+      {/* How the days are counted (#1638). Calendar days stay the default. */}
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 text-sm" data-testid="sla-day-rule">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-500">{t.stageSla.dayMode}</span>
+          <select
+            value={dayRule.mode}
+            onChange={(e) => setDayRule((r) => ({ ...r, mode: e.target.value }))}
+            data-testid="sla-day-mode"
+            className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1"
+          >
+            <option value="calendar">{t.stageSla.dayModeCalendar}</option>
+            <option value="business">{t.stageSla.dayModeBusiness}</option>
+          </select>
+        </label>
+        {dayRule.mode === 'business' && (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-gray-500">{t.stageSla.holidayCalendar}</span>
+              <select
+                value={dayRule.holidayCalendarId ?? ''}
+                onChange={(e) => setDayRule((r) => ({ ...r, holidayCalendarId: e.target.value || null }))}
+                data-testid="sla-holiday-calendar"
+                className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1"
+              >
+                <option value="">{t.stageSla.noCalendar}</option>
+                {calendars.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="flex flex-col gap-1">
+              <legend className="text-xs text-gray-500">{t.stageSla.workingDays}</legend>
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <label key={d} className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={dayRule.workingDays.includes(d)}
+                      data-testid={`sla-workday-${d}`}
+                      onChange={(e) =>
+                        setDayRule((r) => ({
+                          ...r,
+                          workingDays: e.target.checked ? [...r.workingDays, d].sort() : r.workingDays.filter((x) => x !== d),
+                        }))
+                      }
+                    />
+                    {weekdayLabel(d, locale)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-gray-500">{t.stageSla.timeZone}</span>
+              <input
+                value={dayRule.timeZone ?? ''}
+                placeholder={t.stageSla.timeZoneDefault}
+                maxLength={64}
+                onChange={(e) => setDayRule((r) => ({ ...r, timeZone: e.target.value.trim() || null }))}
+                data-testid="sla-time-zone"
+                className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1"
+              />
+            </label>
+          </>
+        )}
+      </div>
       <p className="mt-3 text-xs text-gray-500">{t.stageSla.calendarDays}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.escalateHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.wipLimitHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.appliesOnMove}</p>
+      <HolidayCalendarsEditor onChange={load} />
     </Card>
   );
 }

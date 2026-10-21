@@ -98,6 +98,7 @@ import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
 import { resolveStageEscalations } from '@/lib/stageSla';
+import { getSetting } from '@/lib/settings';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
@@ -3823,6 +3824,12 @@ export async function checkStageDeadlineReminders() {
             const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
             const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+            // Say how the date was counted (#1638), so a mentor questioning a
+            // deadline that skipped a weekend can see why.
+            const counted =
+              rel.orgId && (await getSetting('slaDayMode', rel.orgId)) === 'business'
+                ? `<p>${emailText.businessDays}</p>`
+                : '';
             await brandOf(rel.orgId).then((brand) => sendEmail({
               category: 'stage-deadline',
               userId: rel.mentorId,
@@ -3831,7 +3838,7 @@ export async function checkStageDeadlineReminders() {
               locale: rel.mentor.preferredLanguage,
               to: rel.mentor.email,
               subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${counted}`,
             })).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });

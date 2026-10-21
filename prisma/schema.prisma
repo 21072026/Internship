@@ -214,6 +214,7 @@ model Organization {
   pipelineStages          PipelineStage[]
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
+  holidayCalendars        HolidayCalendar[]
   slaBreaches             SlaBreach[]
   tags                    Tag[]
   skills                  Skill[]
@@ -501,7 +502,8 @@ model StageSla {
   // The stage this applies to. A plain key, not a relation: it must work for
   // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
   stageKey          String
-  /// Calendar days somebody may wait at this stage before the mentor is warned.
+  /// Days somebody may wait at this stage before the mentor is warned — calendar
+  /// days, or business days when the org sets `slaDayMode` (#1638).
   /// NULL = no service level here (the row then exists only for `wipLimit`).
   days              Int?
   /// Board work-in-progress limit for this stage (#1439): the column's count
@@ -557,6 +559,37 @@ model SlaBreach {
   @@unique([relationId, dueAt])
   @@index([orgId, resolvedAt])
   @@index([relationId, resolvedAt])
+}
+
+// A tenant's list of non-working dates (#1638), read by business-day stage
+// SLAs. Typed or pasted by an admin — no third-party holiday feed. Which one
+// an org counts with is the `slaHolidayCalendarId` setting; the arithmetic is
+// pure in src/lib/businessDays.ts.
+model HolidayCalendar {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String   @db.VarChar(120)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  holidays Holiday[]
+
+  @@index([orgId])
+}
+
+// One date of a HolidayCalendar. No orgId of its own: it is reached only
+// through its calendar, which is tenant-scoped (the ApplicationEvent shape).
+model Holiday {
+  id         String   @id @default(cuid())
+  calendarId String
+  /// A local calendar date, read in the org's SLA time zone.
+  date       DateTime @db.Date
+  label      String   @default("") @db.VarChar(120)
+
+  calendar HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
 }
 
 model PipelineStage {

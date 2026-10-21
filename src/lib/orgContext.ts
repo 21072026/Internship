@@ -271,6 +271,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // The backfill's review queue (#1819): one org's unresolved terms.
   'UnmappedSkillTerm',
   'StageSla',
+  // A tenant's holiday dates for business-day SLAs (#1638). Its Holiday rows
+  // carry no orgId and are reached only through the calendar.
+  'HolidayCalendar',
   // One passed stage deadline and how far its escalation ladder climbed (#1722).
   'SlaBreach',
   'PipelineStage',

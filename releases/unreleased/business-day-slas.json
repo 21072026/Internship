@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Business-day stage SLAs with a holiday calendar (#1638):** an org can count its stage SLAs in business days — the new org-scoped settings `slaDayMode` (`calendar` default | `business`), `slaWorkingDays` (ISO weekdays), `slaHolidayCalendarId` and `slaTimeZone` (empty = `APP_TIMEZONE`), set from the stage SLA editor through `PUT /api/admin/stage-sla` (`dayRule`; another tenant's calendar, an empty week or an unknown zone are refused). New `HolidayCalendar` (`orgId`, `TENANT_MODELS`) + `Holiday` (`@@unique([calendarId, date])`, reached only through its calendar), managed at `/api/admin/holiday-calendars` from a pasted `YYYY-MM-DD, label` list (no third-party feed). `stageDeadlineUpdate()` applies `slaDeadline()`; calendar mode is byte-for-byte the old arithmetic, business mode is the pure, DST-safe `addBusinessDays()` in `src/lib/businessDays.ts` (same wall clock on the N-th counted local date; a holiday on a non-working day never counts twice). The deadline mail says when a date was counted in business days. Org scope only — the programme scope is a follow-up on the #1619 settings chain.",
+  "notes": {
+    "en": ["Stage service levels can be counted in business days, with your own working week and a holiday calendar — a 3-day rule started on Thursday is now due on Tuesday, not Sunday."],
+    "tr": ["Aşama hizmet seviyeleri artık kendi çalışma haftanız ve tatil takviminizle iş günü olarak sayılabilir — perşembe başlayan 3 günlük bir kural artık pazar değil salı günü dolar."],
+    "de": ["Phasen-Servicelevel lassen sich in Arbeitstagen zählen, mit eurer eigenen Arbeitswoche und einem Feiertagskalender — eine 3-Tage-Regel ab Donnerstag ist jetzt am Dienstag fällig, nicht am Sonntag."]
+  }
+}
