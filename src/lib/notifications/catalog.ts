@@ -120,6 +120,11 @@ export const NOTIFICATION_EVENTS = [
   // An expired trial's decision window closes in a week (#2843): one bell, in-app.
   { key: 'trial.decisionWindowClosing', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['company', 'date'] },
   { key: 'weekly_report_reminder.due', category: 'weeklyReports', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: [] },
+  // The document review chain (#1859): the owner hears the verdict and the expiry, the programme hears the expiry.
+  { key: 'document.approved', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['requirement'] },
+  { key: 'document.rejected', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['requirement', 'reason'] },
+  { key: 'document.expired', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['requirement'] },
+  { key: 'document.expired.admin', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['owner', 'requirement'] },
   { key: 'missing_document.self', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: ['requirement'] },
   { key: 'missing_document.mentor', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['mentee', 'requirement'] },
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { PREMIUM_FEATURES } from '@/lib/entitlementsCatalog';
@@ -8,8 +9,12 @@ import { useModalFocus } from '@/components/ui/useModalFocus';
 
 type Sources = Record<string, { enabled: boolean; fromPlan: boolean; override: boolean }>;
 
-// Admin modal to toggle a company's premium features (freemium Faz 0). Purely
-// enables/disables entitlements; the features themselves ship in later phases.
+// Where a company's premium features come from (freemium Faz 0, read-only
+// since #1734). A company's access is decided by its ORGANISATION — the plan,
+// or a grant on /admin/billing — and this modal only shows the source of each
+// feature: the plan/grant, a pre-plan per-company row kept for grandfathering
+// (hasFeature() still honours it), or nothing. It writes nothing; the per-
+// company toggle that used to sell a feature to one company is gone.
 export function CompanyEntitlements({
   companyId,
   companyName,
@@ -21,46 +26,17 @@ export function CompanyEntitlements({
 }) {
   const t = useT();
   const e = t.entitlements;
-  // The company's OWN override per feature (what the toggle writes), and the
-  // features its org already has from its plan or a grant (#1733) — those are
-  // on whatever this toggle says, so they show checked and read-only.
-  const [features, setFeatures] = useState<Record<string, boolean>>({});
-  const [fromPlan, setFromPlan] = useState<Record<string, boolean>>({});
-  const apply = useCallback((d: { sources?: Sources }) => {
-    const sources = d.sources ?? {};
-    setFeatures(Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, v.override])));
-    setFromPlan(Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, v.fromPlan])));
-  }, []);
+  const [sources, setSources] = useState<Sources>({});
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null);
   const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   useEffect(() => {
     fetch(`/api/admin/companies/${companyId}/entitlements`)
       .then((r) => r.json())
-      .then(apply)
+      .then((d: { sources?: Sources }) => setSources(d.sources ?? {}))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [companyId, apply]);
-
-  const toggle = async (feature: string, enabled: boolean) => {
-    setBusy(feature);
-    setFeatures((s) => ({ ...s, [feature]: enabled })); // optimistic
-    try {
-      const res = await fetch(`/api/admin/companies/${companyId}/entitlements`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feature, enabled }),
-      });
-      const d = await res.json();
-      if (res.ok) apply(d);
-      else setFeatures((s) => ({ ...s, [feature]: !enabled }));
-    } catch {
-      setFeatures((s) => ({ ...s, [feature]: !enabled }));
-    } finally {
-      setBusy(null);
-    }
-  };
+  }, [companyId]);
 
   const labels = e.features as Record<string, string>;
 
@@ -76,55 +52,46 @@ export function CompanyEntitlements({
         onClick={(ev) => ev.stopPropagation()}
       >
         <h2 id="company-entitlements-title" className="text-xl font-bold text-gray-900 dark:text-gray-100">{e.title}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-4">{e.subtitle.replace('{name}', companyName)}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{e.subtitle.replace('{name}', companyName)}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 mb-4" data-testid="entitlements-read-only">
+          {e.readOnly}{' '}
+          <Link href="/admin/billing" className="font-medium text-blue-600 hover:underline dark:text-blue-400" data-testid="entitlements-billing-link">
+            {e.manageLink}
+          </Link>
+        </p>
 
         {loading ? (
           <p className="text-center py-8 text-gray-400">{t.common.loading}</p>
         ) : (
-          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+          <ul className="divide-y divide-gray-100 dark:divide-gray-800">
             {PREMIUM_FEATURES.map((f) => {
-              // A tenant-scoped feature is decided by Organization.plan, and a
-              // CompanyEntitlement row for it grants nothing (#1742). Shown but
-              // read-only, with the reason: an operator who ticked it and told
-              // the customer to go configure branding used to get a 403 from
-              // the other screen and no explanation anywhere.
+              // A tenant-scoped feature (white-label, SSO, API) is the org's
+              // alone; a company row for it never granted anything (#1742).
               const orgScoped = f.scope === 'org';
-              const planned = !orgScoped && !!fromPlan[f.key];
+              const src = sources[f.key];
+              const status = orgScoped ? e.orgScoped : src?.fromPlan ? e.fromPlan : src?.override ? e.legacyOverride : e.off;
+              const on = !orgScoped && !!src?.enabled;
               return (
-                <label
-                  key={f.key}
-                  className={`flex items-start justify-between gap-4 py-3 ${orgScoped ? 'cursor-default' : 'cursor-pointer'}`}
-                >
+                <li key={f.key} className="flex items-start justify-between gap-4 py-3" data-testid={`entitlement-row-${f.key}`}>
                   <div className="min-w-0">
-                    <p className={`text-sm font-medium ${orgScoped ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                    <p className={`text-sm font-medium ${on ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
                       {labels[f.key] ?? f.key}
                       <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                         {(e.phase as string).replace('{n}', String(f.phase))}
                       </span>
                     </p>
-                    {orgScoped && (
-                      <p data-testid={`entitlement-org-scoped-${f.key}`} className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                        {e.orgScoped}
-                      </p>
-                    )}
-                    {planned && (
-                      <p data-testid={`entitlement-from-plan-${f.key}`} className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                        {e.fromPlan}
-                      </p>
-                    )}
+                    <p
+                      data-testid={orgScoped ? `entitlement-org-scoped-${f.key}` : src?.fromPlan ? `entitlement-from-plan-${f.key}` : `entitlement-status-${f.key}`}
+                      className="mt-0.5 text-xs text-gray-500 dark:text-gray-400"
+                    >
+                      {status}
+                    </p>
                   </div>
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 flex-shrink-0"
-                    checked={planned || !!features[f.key]}
-                    disabled={orgScoped || planned || busy === f.key}
-                    data-testid={`entitlement-toggle-${f.key}`}
-                    onChange={(ev) => toggle(f.key, ev.target.checked)}
-                  />
-                </label>
+                  <span aria-hidden className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${on ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
 
         <div className="mt-4 flex justify-end">

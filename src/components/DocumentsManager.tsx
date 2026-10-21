@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DOCUMENT_TYPES } from '@/lib/documentAccess';
 import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Doc {
   id: string;
@@ -21,6 +22,10 @@ interface Doc {
   version: number;
   createdAt: string;
   requirementId: string | null;
+  // The review chain (#1859): the owner sees where a document stands and why it was turned down.
+  reviewStatus?: string;
+  validUntil?: string | null;
+  reviews?: { note: string | null }[];
 }
 
 interface Requirement { id: string; key: string; labels: { en: string; tr: string; de: string } }
@@ -145,7 +150,18 @@ export function DocumentsManager({
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-800 truncate">{d.title}</p>
                 <p className="text-xs text-gray-600 dark:text-gray-400">{kb(d.size)} · v{d.version}</p>
+                {!templates && d.reviewStatus === 'REJECTED' && d.reviews?.[0]?.note && (
+                  <p className="text-xs text-red-700 dark:text-red-300" data-testid={`doc-rejected-${d.id}`}>{t.documentReview.rejectedBecause.replace('{reason}', d.reviews[0].note)}</p>
+                )}
+                {!templates && d.reviewStatus === 'APPROVED' && d.validUntil && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{t.documentReview.validUntil.replace('{date}', formatDate(d.validUntil, locale))}</p>
+                )}
               </div>
+              {!templates && d.requirementId && d.reviewStatus && d.reviewStatus !== 'APPROVED' && (
+                <Badge variant={d.reviewStatus === 'PENDING' ? 'warning' : 'danger'} data-testid={`doc-status-${d.id}`}>
+                  {t.documentReview.status[d.reviewStatus as keyof typeof t.documentReview.status] ?? d.reviewStatus}
+                </Badge>
+              )}
               {!templates && <Badge variant="info">{typeLabel(d.type)}</Badge>}
               <a href={`/api/documents/${d.id}`} target="_blank" rel="noopener noreferrer" aria-label={t.documents.download} className="text-gray-400 hover:text-blue-600"><Download className="h-4 w-4" /></a>
               {canDelete && (

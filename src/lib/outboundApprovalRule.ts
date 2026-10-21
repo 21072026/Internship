@@ -138,6 +138,8 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'interaction-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'weekly-report': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'document-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
+  // #1859: the account-less reviewer's link, sent when the programme names them.
+  'document-review': { exempt: false, trigger: 'request', why: 'a review request to a named external reviewer' },
   'meeting-feedback': { exempt: false, trigger: 'meeting', why: 'the automated "how was it?" ask' },
   'dormant-check-in': { exempt: false, trigger: 'check_in', why: 'the "are you still interested?" mail' },
   're-engagement': { exempt: false, trigger: 'win_back', why: 'a win-back / re-engagement mail' },

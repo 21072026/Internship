@@ -90,7 +90,8 @@ answering 200 only proves the app booted.
   a test. Restore into a scratch database (`internship_restore_test`) instead.
 - **Do not repair prod with an ad-hoc `prisma db push`** after data loss. The
   push is what lost the data; running it again writes the new shape over what
-  is left. Restore first, then deploy.
+  is left. Restore first, then deploy. What a rollback does and does not undo,
+  and how to fix a half-applied push forward: [`migrations.md`](migrations.md).
 - **Do not delete the failing deploy's backup** while triaging. It is the only
   copy of the pre-damage state.
 - **Do not copy a dump off the server** without a reason that survives being

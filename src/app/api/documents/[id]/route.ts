@@ -9,6 +9,21 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { userInCallerOrg } from '@/lib/ownerOrg';
+import { canDecideStep, nextStep } from '@/lib/documentReview';
+import { actorFacts } from '@/lib/documentReviewStore';
+
+// A reviewer must be able to read what they are asked to decide (#1859): the
+// one extra reader is whoever may decide the document's CURRENT review step —
+// in practice a company user on a COMPANY step, who has no other way in. It
+// lapses the moment the step is decided.
+async function isCurrentReviewer(user: { id: string; role: string; companyId?: string | null }, documentId: string, ownerId: string) {
+  const reviews = await prisma.documentReview.findMany({ where: { documentId }, select: { step: true, decision: true, reviewerRole: true } });
+  const current = nextStep(reviews);
+  if (!current) return false;
+  const status = await prisma.document.findUnique({ where: { id: documentId }, select: { reviewStatus: true } });
+  if (status?.reviewStatus !== 'PENDING') return false;
+  return canDecideStep({ stepRole: current.reviewerRole, actorRole: user.role, ...(await actorFacts(user, ownerId)) });
+}
 
 // Document carries no orgId (#2542). An owned document is its owner's org's; a
 // template (no owner) is its uploader's. A document of another org answers 404
@@ -34,7 +49,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (!doc.isTemplate) {
-    if (!doc.ownerId || !(await canAccessUserDocs(session.user, doc.ownerId))) {
+    if (!doc.ownerId || !((await canAccessUserDocs(session.user, doc.ownerId)) || (await isCurrentReviewer(session.user, doc.id, doc.ownerId)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
   }
