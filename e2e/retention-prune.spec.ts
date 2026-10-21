@@ -205,7 +205,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
       data: { orgId: rosterOrg.id, name: 'retention feed', columnMap: { email: 'Mail' } },
     });
     const rosterRun = await prisma.rosterRun.create({
-      data: { orgId: rosterOrg.id, feedId: rosterFeed.id, fileHash: 'a'.repeat(64), status: 'SUCCEEDED', startedAt: ancient() },
+      data: { orgId: rosterOrg.id, feedId: rosterFeed.id, fileHash: 'a'.repeat(64), status: 'SUCCEEDED', startedAt: ancient(), absentKeys: [`gone-${marker}@e2e.local`] },
     });
     const oldRosterRow = await prisma.rosterRowResult.create({
       data: { orgId: rosterOrg.id, runId: rosterRun.id, rowNumber: 1, key: `old-${marker}@e2e.local`, status: 'CREATE', createdAt: ancient() },
@@ -278,6 +278,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('rosterRowResult', newRosterRow.id)).toBe(false);
     // The run summary is never pruned, however old.
     expect(await gone('rosterRun', rosterRun.id)).toBe(false);
+    // …but its per-person absentKeys list is cleared on the same window (#2098).
+    expect((await prisma.rosterRun.findUniqueOrThrow({ where: { id: rosterRun.id } })).absentKeys).toBeNull();
 
     // Kept although out of window, each for its own stated reason.
     expect(await gone('job', deadLettered.id)).toBe(false); // the operator still needs these

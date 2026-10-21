@@ -46,7 +46,7 @@ where no rule has data has no score at all (`null`).
 
 - **Dormant first contacts** (`docs/dormant-first-contacts.md`) — an applicant
   who never replied is not a dying relationship.
-- **Relations that are not `ACTIVE`** (completed; paused once that exists).
+- **Relations that are not `ACTIVE`** (completed), and **paused** ones — a pause keeps `status: ACTIVE`, so the lifecycle state (`PAUSED`) is checked on its own.
 
 ## Score and flags are two different outputs
 

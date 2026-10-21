@@ -105,7 +105,7 @@ async function main() {
     if (!org) throw new Error(`No organization with id or slug "${orgRef}"`);
 
     if (process.argv.includes('--clear')) {
-      await prisma.organization.update({ where: { id: org.id }, data: { publicHost: null } });
+      await prisma.organization.update({ where: { id: org.id }, data: { publicHost: null, publicHostToken: null, publicHostVerifiedAt: null } });
       console.log(`Cleared the public host of ${org.slug} (was ${org.publicHost ?? 'none'}).`);
       return;
     }
@@ -116,7 +116,13 @@ async function main() {
     if (holder && holder.id !== org.id) {
       throw new Error(`${host} already belongs to ${holder.slug} (${holder.id}); clear it there first`);
     }
-    await prisma.organization.update({ where: { id: org.id }, data: { publicHost: host } });
+    // A proof of ownership belongs to the host it was made for (#1661): a new
+    // host starts unverified, the same host keeps its stamp.
+    const moved = org.publicHost !== host;
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { publicHost: host, ...(moved ? { publicHostToken: null, publicHostVerifiedAt: null } : {}) },
+    });
     console.log(`${host} → ${org.slug} (${org.id}, ${org.vertical}).`);
   } finally {
     await prisma.$disconnect();

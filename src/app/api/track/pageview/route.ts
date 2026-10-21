@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasConsent } from '@/lib/consent';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // Cap dwell time per hit so a backgrounded tab / clock skew can't inflate the
 // "time on site" total (30 min is well beyond a single active page view).
@@ -45,7 +46,9 @@ export async function POST(request: Request) {
     try {
       await prisma.$transaction([
         prisma.pageView.create({
-          data: { userId: session.user.id, path: cleanPath(parsed.data.path), durationSec: duration },
+          // The viewer's own tenant (#1556), explicit: with isolation off the
+          // middleware stamps nothing.
+          data: { userId: session.user.id, orgId: resolveOrgId(session), path: cleanPath(parsed.data.path), durationSec: duration },
         }),
         prisma.user.update({ where: { id: session.user.id }, data: { lastSeenAt: new Date() } }),
       ]);

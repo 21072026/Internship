@@ -58,19 +58,20 @@ export default function AdminReportsPage() {
 
   const def = REPORT_DEFINITIONS.find((d) => d.key === reportKey)!;
   const attr = attributes.find((a) => a.key === segmentBy);
+  // The query string, built only from trusted parts: the attribute's key as
+  // the server listed it (never the raw <select> value) and the typed segment
+  // percent-encoded, so nothing a viewer types can change the URL's shape.
   const query = useMemo(() => {
-    const q = new URLSearchParams();
-    if (segmentBy && def.segmentSubject) {
-      q.set('segmentBy', segmentBy);
-      if (segment.trim()) q.set('segment', segment.trim());
-    }
-    return q;
-  }, [segmentBy, segment, def.segmentSubject]);
+    if (!attr || !def.segmentSubject) return '';
+    const value = segment.trim();
+    return `segmentBy=${encodeURIComponent(attr.key)}${value ? `&segment=${encodeURIComponent(value)}` : ''}`;
+  }, [attr, segment, def.segmentSubject]);
+  const base = `/api/admin/reports/${encodeURIComponent(def.key)}`;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const res = await fetch(`/api/admin/reports/${reportKey}?${query.toString()}`);
+    const res = await fetch(`${base}?${query}`);
     const body = await res.json().catch(() => ({}));
     if (res.ok) setReport(body);
     else {
@@ -78,14 +79,10 @@ export default function AdminReportsPage() {
       setError(body.code === 'feature_locked' ? L.locked : res.status === 404 ? L.unavailable : t.common.error);
     }
     setLoading(false);
-  }, [reportKey, query, L, t.common.error]);
+  }, [base, query, L, t.common.error]);
   useEffect(() => { load(); }, [load]);
 
-  const exportHref = (format: 'csv' | 'xlsx') => {
-    const q = new URLSearchParams(query);
-    q.set('format', format);
-    return `/api/admin/reports/${reportKey}?${q.toString()}`;
-  };
+  const exportHref = (format: 'csv' | 'xlsx') => `${base}?${query ? `${query}&` : ''}format=${format}`;
 
   const segmentValues =
     attr?.type === 'SELECT'

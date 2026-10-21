@@ -78,6 +78,10 @@ test('a brand-new pair with no data is neutral — missing signals drop out, the
 test('dormant first contacts and non-active relations are excluded, not flagged', () => {
   assert.deepEqual(scoreRelation({ ...base, dormant: true }), { excluded: true, why: 'dormant', version: HEALTH_RULES_VERSION });
   assert.deepEqual(scoreRelation({ ...base, status: 'COMPLETED' }), { excluded: true, why: 'not_active', version: HEALTH_RULES_VERSION });
+  // A pause keeps status ACTIVE (relationLifecycle.ts) — the lifecycle state excludes it (#1894).
+  assert.deepEqual(scoreRelation({ ...base, lifecycleState: 'PAUSED' }), { excluded: true, why: 'paused', version: HEALTH_RULES_VERSION });
+  assert.equal(scoreRelation({ ...base, lifecycleState: 'ACTIVE' }).excluded, false);
+  assert.equal(scoreRelation({ ...base, lifecycleState: null }).excluded, false);
 });
 
 test('contact decays in two steps across the reminder window', () => {

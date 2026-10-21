@@ -85,6 +85,21 @@ export function servedHosts(): Set<string> {
   return out;
 }
 
+// ── Verified tenant domains (#1661) ─────────────────────────────────────────
+//
+// A tenant may bring its own domain (`Organization.publicHost`), and once its
+// ownership is proven by DNS (`publicHostVerifiedAt`, #1662) this deployment
+// serves it too. That set lives in the DATABASE, and this file stays
+// import-free (the edge middleware and the unit test load it), so it is never
+// read here: callers that may honour a tenant domain fetch it with
+// `verifiedTenantHosts()` (src/lib/hostOrg.ts) and pass it as `extraHosts` to
+// requestOrigin / resolveRedirectTarget / servedOrigin. The rule does not
+// change — EXACT hostname match, no wildcard, no suffix — and an unverified
+// claim is never in the set. Every caller that passes nothing behaves exactly
+// as before. A `<slug>.<APP_ROOT_DOMAIN>` host is deliberately NOT added: that
+// would be a suffix rule.
+export const NO_EXTRA_HOSTS: ReadonlySet<string> = new Set();
+
 /** Is this Host / X-Forwarded-Host header value one of the hosts we serve? */
 export function isServedHost(hostHeader: string | null | undefined): boolean {
   const h = hostnameOf(hostHeader);
@@ -99,10 +114,13 @@ export function isServedHost(hostHeader: string | null | undefined): boolean {
  * received port is never trusted — only the configured origin's own port (the
  * dev server's :3000) is re-attached, and only for that host.
  */
-export function requestOrigin(get: (name: string) => string | null | undefined): string {
+export function requestOrigin(
+  get: (name: string) => string | null | undefined,
+  extraHosts: ReadonlySet<string> = NO_EXTRA_HOSTS,
+): string {
   const configured = configuredOrigin();
   const host = hostnameOf(get('x-forwarded-host') ?? get('host'));
-  if (!host || !servedHosts().has(host)) return configured;
+  if (!host || !(servedHosts().has(host) || extraHosts.has(host))) return configured;
   const cfg = new URL(configured);
   const forwardedProto = (get('x-forwarded-proto') ?? '').split(',')[0].trim().toLowerCase();
   const proto = cfg.protocol === 'https:' || forwardedProto === 'https' ? 'https' : 'http';
@@ -127,7 +145,7 @@ export function requestOrigin(get: (name: string) => string | null | undefined):
  *     any received port (prod hosts have none; a same-origin dev url is returned
  *     verbatim by the origin check above it).
  */
-export function resolveRedirectTarget(url: string, baseUrl: string): string {
+export function resolveRedirectTarget(url: string, baseUrl: string, extraHosts: ReadonlySet<string> = NO_EXTRA_HOSTS): string {
   if (url.startsWith('/')) return `${baseUrl}${url}`;
   let target: URL;
   let base: URL;
@@ -139,7 +157,8 @@ export function resolveRedirectTarget(url: string, baseUrl: string): string {
   }
   if (target.protocol !== 'https:' && target.protocol !== base.protocol) return baseUrl;
   if (target.origin === base.origin) return url;
-  if (!servedHosts().has(target.hostname.toLowerCase())) return baseUrl;
+  const targetHost = target.hostname.toLowerCase();
+  if (!servedHosts().has(targetHost) && !extraHosts.has(targetHost)) return baseUrl;
   return `${target.protocol}//${target.hostname}${target.pathname}${target.search}${target.hash}`;
 }
 
@@ -200,7 +219,7 @@ export function appLinkOrigin(publicHost: string | null | undefined): string {
 //
 // Returns null, never a fallback, so each caller decides what "no usable
 // origin" means — for both flows today: the configured origin, as before.
-export function servedOrigin(value: string | null | undefined): string | null {
+export function servedOrigin(value: string | null | undefined, extraHosts: ReadonlySet<string> = NO_EXTRA_HOSTS): string | null {
   if (!value || typeof value !== 'string') return null;
   let target: URL;
   let cfg: URL;
@@ -215,7 +234,7 @@ export function servedOrigin(value: string | null | undefined): string | null {
   // 'https://a.example' and 'https://a.example/' both parse to pathname '/'.
   if (target.pathname !== '/' || target.search || target.hash) return null;
   const host = target.hostname.toLowerCase();
-  if (!servedHosts().has(host)) return null;
+  if (!servedHosts().has(host) && !extraHosts.has(host)) return null;
   const sameHost = cfg.hostname.toLowerCase() === host;
   if (target.port && !(sameHost && target.port === cfg.port)) return null;
   const port = sameHost && cfg.port ? `:${cfg.port}` : '';

@@ -3,18 +3,23 @@
 import { useState, type ComponentType } from 'react';
 import { useT } from '@/i18n/client';
 import { BillingPlanTab } from '@/components/billing/BillingPlanTab';
+import { BillingFeaturesTab } from '@/components/billing/BillingFeaturesTab';
+import { OrgBillingProvider } from '@/components/billing/OrgBillingContext';
 
 // The tenant's own bill (#1739). A TABBED SHELL on purpose: the plan / meter /
-// history tab is the first, and sibling tasks add theirs here — #1734 the
-// included-features-and-overrides tab, #1763 the full usage tab. Adding a tab
-// is one entry in TABS plus one component that loads its own data; nothing
-// else in this file changes. Every number is the server's
+// history tab is the first, #1734 added the included-features tab, and #1763
+// adds the usage tab here. Adding a tab is one entry in TABS plus one
+// component; nothing else in this file changes. The bill itself
 // (GET /api/org/billing, which takes no orgId and answers only for the
-// caller's own organisation).
+// caller's own organisation) is fetched ONCE, by OrgBillingProvider, and every
+// tab reads it from there — a tab with data of its own fetches that itself.
 
-type TabKey = 'plan';
+type TabKey = 'plan' | 'features';
 
-const TABS: { key: TabKey; Component: ComponentType }[] = [{ key: 'plan', Component: BillingPlanTab }];
+const TABS: { key: TabKey; Component: ComponentType }[] = [
+  { key: 'plan', Component: BillingPlanTab },
+  { key: 'features', Component: BillingFeaturesTab },
+];
 
 export default function AdminBillingPage() {
   const t = useT();
@@ -46,9 +51,11 @@ export default function AdminBillingPage() {
         ))}
       </div>
 
-      <div role="tabpanel" data-testid={`billing-panel-${tab}`}>
-        <Active />
-      </div>
+      <OrgBillingProvider>
+        <div role="tabpanel" data-testid={`billing-panel-${tab}`}>
+          <Active />
+        </div>
+      </OrgBillingProvider>
     </div>
   );
 }
