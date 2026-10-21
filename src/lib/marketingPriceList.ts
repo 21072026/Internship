@@ -21,7 +21,7 @@
 // SERVER-ONLY (Prisma).
 
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { hostnameOf } from '@/lib/hostVertical';
 import { toVerticalKey } from '@/lib/verticals';
 import { logger } from '@/lib/logger';
@@ -57,7 +57,7 @@ export async function marketingPriceListForHost(hostHeader: string | null | unde
     const org = await prisma.organization.findUnique({ where: { publicHost: host }, select: { id: true, vertical: true } });
     if (org && toVerticalKey(org.vertical) === 'MARKETING') {
       orgId = org.id;
-      raw = await getSetting('marketingPriceList', org.id);
+      raw = await resolveSettingRaw('marketingPriceList', { orgId: org.id });
     }
   } catch (error) {
     const stale = lastGood.get(host);

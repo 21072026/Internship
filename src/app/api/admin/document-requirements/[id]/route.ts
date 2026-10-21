@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { reviewChainSchema, storedReviewerRoles } from '@/lib/documentReview';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -23,6 +24,8 @@ const patchSchema = z.object({
   appliesToStage: z.string().trim().min(1).max(60).nullable().optional(),
   appliesToRole: z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE']).nullable().optional(),
   mandatory: z.boolean().optional(), order: z.number().int().min(0).max(10000).optional(), active: z.boolean().optional(),
+  // The review chain (#1859).
+  ...reviewChainSchema,
 }).strict();
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +46,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const { orgId: _orgId, ...data } = parsed.data;
   try {
-    const requirement = await prisma.documentRequirement.update({ where: { id }, data });
+    const requirement = await prisma.documentRequirement.update({
+      where: { id },
+      data: { ...data, ...(data.reviewerRoles ? { reviewerRoles: storedReviewerRoles(data.reviewerRoles) } : {}) },
+    });
     await logActivity({ action: 'document_requirement.update', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'document_requirement', targetId: id, detail: requirement.key, request });
     return NextResponse.json({ requirement });
   } catch (error) {

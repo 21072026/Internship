@@ -16,7 +16,7 @@ import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { formatInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { resolveTemplateId } from '@/lib/evaluationTemplates';
-import { getSetting } from '@/lib/settings';
+import { resolveSetting } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import {
   intlLocaleFor,
@@ -203,7 +203,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       if (created.panelId) {
         // Under blind review the assignment must not name the candidate (#819).
-        const blindEnabled = (await getSetting('blindReview', await settingsOrgOf(session))) === 'true';
+        const blindEnabled = await resolveSetting('blindReview', { orgId: await settingsOrgOf(session) });
         for (const interviewer of interviewers) {
           await (blindEnabled
             ? notifyIfAllowed(interviewer.id, 'goalsEvaluations', 'interview.assignedBlind', undefined, `/interviews/${created.panelId}`)

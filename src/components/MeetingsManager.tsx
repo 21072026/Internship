@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, CalendarClock, XCircle } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
@@ -36,6 +37,9 @@ interface Meeting {
   meetLink?: string | null;
   rsvp: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   relation: { mentee: { id: string; fullName: string } };
+  // A called-off or held meeting is a record, not a plan: no controls (#1982).
+  status?: 'SCHEDULED' | 'CANCELLED';
+  endedAt?: string | null;
   // Present only on the row a bulk schedule attached its guests to (#1446) —
   // every other row of the batch has an empty list, which is correct: the
   // outsider was invited once, to the shared room.
@@ -87,6 +91,15 @@ export function MeetingsManager() {
   // A link refused as typed, or required by the tenant's policy (#2007).
   const [linkRefusal, setLinkRefusal] = useState<MeetingLinkRefusal | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Reschedule / cancel (#1982). The route decides who may (organiser, the
+  // relation's mentor, admin — PATCH /api/meetings/[id]); this screen is only
+  // ever rendered for a mentor or an admin, and a refusal reads as a failure.
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moveAt, setMoveAt] = useState('');
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [changing, setChanging] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,6 +121,49 @@ export function MeetingsManager() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const changeMeeting = async (id: string, body: Record<string, unknown>) => {
+    setChanging(true);
+    setChangeError(null);
+    try {
+      const res = await fetch(`/api/meetings/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      // A new time can collide (#1995) or break a booking rule (#2003): the
+      // same notices the scheduler above shows.
+      const payload = res.status === 409 ? await res.json().catch(() => null) : null;
+      setConflict(readConflict(payload));
+      setRefusal(readPolicy(payload));
+      if (!res.ok) {
+        if (!payload) setChangeError(t.meetings.changeFailed);
+        return false;
+      }
+      await load();
+      return true;
+    } finally {
+      setChanging(false);
+    }
+  };
+
+  const saveMove = async (id: string) => {
+    const [d = '', tm = ''] = moveAt.split('T');
+    if (!d || !tm) return;
+    // The wall clock read on the browser's clock, sent as an instant (#1061).
+    if (await changeMeeting(id, { scheduledAt: wallClockToInstantISO(d, tm), timeZone: browserTimeZone() ?? undefined })) {
+      setMovingId(null);
+      setMoveAt('');
+    }
+  };
+
+  const confirmCancel = async () => {
+    if (!cancelId) return;
+    if (await changeMeeting(cancelId, { status: 'CANCELLED', cancelReason: cancelReason.trim() || undefined })) {
+      setCancelId(null);
+      setCancelReason('');
+    }
+  };
 
   useEffect(() => {
     if (!interviewRelationId || !relations.some((relation) => relation.id === interviewRelationId)) return;
@@ -363,7 +419,7 @@ export function MeetingsManager() {
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {meetings.map((m) => (
-                <div key={m.id} id={`meeting-${m.id}`} className={`flex items-center justify-between gap-3 py-3${m.id === linkedMeetingId ? ' rounded-lg bg-blue-50 px-2 dark:bg-blue-950/40' : ''}`}>
+                <div key={m.id} id={`meeting-${m.id}`} className={`flex flex-wrap items-center justify-between gap-3 py-3${m.id === linkedMeetingId ? ' rounded-lg bg-blue-50 px-2 dark:bg-blue-950/40' : ''}`}>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 truncate">
@@ -395,13 +451,73 @@ export function MeetingsManager() {
                       </Button>
                     )}
                     {m.scheduledAt && <Badge variant={RSVP_VARIANT[m.rsvp]}>{t.meetings[m.rsvp.toLowerCase() as 'pending' | 'accepted' | 'declined']}</Badge>}
+                    {m.scheduledAt && m.status !== 'CANCELLED' && !m.endedAt && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`meeting-reschedule-${m.id}`}
+                          onClick={() => { setMovingId(movingId === m.id ? null : m.id); setMoveAt(''); }}
+                        >
+                          <CalendarClock className="h-3.5 w-3.5" /> {t.meetings.reschedule}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`meeting-cancel-${m.id}`}
+                          onClick={() => { setCancelId(m.id); setCancelReason(''); }}
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> {t.meetings.cancelMeeting}
+                        </Button>
+                      </>
+                    )}
                   </div>
+                  {movingId === m.id && (
+                    <div className="flex w-full flex-wrap items-end gap-2" data-testid={`meeting-move-form-${m.id}`}>
+                      <Input
+                        label={t.meetings.reschedule}
+                        type="datetime-local"
+                        value={moveAt}
+                        onChange={(e) => setMoveAt(e.target.value)}
+                        data-testid={`meeting-move-at-${m.id}`}
+                      />
+                      <Button size="sm" loading={changing} disabled={!moveAt} onClick={() => saveMove(m.id)} data-testid={`meeting-move-save-${m.id}`}>
+                        {t.meetings.rescheduleSave}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setMovingId(null)}>{t.meetings.rescheduleCancel}</Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </Card>
       </div>
+      {changeError && <p className="mt-3 text-sm text-red-600" role="alert">{changeError}</p>}
+      <ConfirmDialog
+        open={cancelId !== null}
+        message={
+          <>
+            <span className="block">{t.meetings.cancelConfirm}</span>
+            <label className="mt-3 block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="meeting-cancel-reason">{t.meetings.cancelReason}</label>
+            <textarea
+              id="meeting-cancel-reason"
+              value={cancelReason}
+              maxLength={1000}
+              onChange={(e) => setCancelReason(e.target.value)}
+              data-testid="meeting-cancel-reason"
+              className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm"
+              rows={3}
+            />
+          </>
+        }
+        cancelLabel={t.meetings.keepMeeting}
+        confirmLabel={t.meetings.cancelMeeting}
+        variant="danger"
+        loading={changing}
+        onConfirm={confirmCancel}
+        onCancel={() => setCancelId(null)}
+      />
     </div>
   );
 }

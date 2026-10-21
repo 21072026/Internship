@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { tenantWhere } from '@/lib/tenantFilter';
 import {
   ORPHAN_ANONYMIZE_PER_RUN,
@@ -43,7 +43,7 @@ export async function GET() {
     // `getSettings()` with no org bound. Resolving tenant → global here instead
     // would let this page count down from a window that never fires — the one
     // way the page and the job could still disagree once they share the rule.
-    const parsed = Number.parseInt(await getSetting(ORPHAN_GRACE_SETTING_KEY, null), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw(ORPHAN_GRACE_SETTING_KEY, { orgId: null }), 10);
     // Same fallback contract as the retention runner: an unusable setting must
     // widen nothing and shorten nothing.
     const graceDays =

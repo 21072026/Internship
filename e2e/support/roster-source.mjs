@@ -10,7 +10,7 @@
 //   GET  /__state                 health check for Playwright's webServer
 import { createServer } from 'node:http';
 
-const PORT = Number(process.env.ROSTER_SOURCE_PORT || 4603);
+const PORT = Number(process.env.ROSTER_SOURCE_PORT || 4604);
 const files = new Map();
 
 async function readBody(req) {

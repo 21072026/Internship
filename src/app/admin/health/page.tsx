@@ -38,7 +38,7 @@ interface Row {
 
 interface HealthResponse {
   counts: { HEALTHY: number; WATCH: number; AT_RISK: number; crossed7: number };
-  excluded: { dormant: number; notActive: number; quiet: number };
+  excluded: { dormant: number; paused?: number; notActive: number; quiet: number };
   total: number;
   page: number;
   pageSize: number;
@@ -333,6 +333,7 @@ export default function AdminHealthPage() {
       {data && (
         <div className="mt-3 space-y-0.5 text-xs text-gray-500" data-testid="health-footnote">
           {data.excluded.dormant > 0 && <p data-testid="health-foot-dormant">{h.footDormant.replace('{n}', String(data.excluded.dormant))}</p>}
+          {(data.excluded.paused ?? 0) > 0 && <p data-testid="health-foot-paused">{h.footPaused.replace('{n}', String(data.excluded.paused))}</p>}
           {data.excluded.notActive > 0 && <p data-testid="health-foot-not-active">{h.footNotActive.replace('{n}', String(data.excluded.notActive))}</p>}
           {data.excluded.quiet > 0 && <p data-testid="health-foot-quiet">{h.footQuiet.replace('{n}', String(data.excluded.quiet))}</p>}
         </div>

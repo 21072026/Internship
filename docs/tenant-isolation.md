@@ -481,6 +481,22 @@ The index re-key needed its own one-shot expand phase on a populated table,
 `Setting_orgId_key_key` index for the `orgId` foreign key, and Prisma's diff drops
 it before it creates the replacements.
 
+**Every reader goes through the accessor (#1621).** The call sites read
+`resolveSettingRaw(key, { orgId })` when their own rule module parses the string
+(a clamp, a list, a JSON document — the semantics of the old `getSetting(key,
+orgId)` exactly, plus the cache), or the typed `resolveSetting()` where the value
+is a plain boolean/enum (`blindReview`, `outcomeAutoSend`, `selfRegistration`,
+`autoAdvanceOnOfferAccept`). Where a programme is known it is passed:
+`reminderDays` in the mentor queue, the stale-contact reminder sweep and the
+relation-health reader (per relation's `cohortId`), and `outcomeAutoSend`. A
+sweep resolves **inside** its loop, per relation, under `withSettingsCache` —
+never once at the top, which would hand every tenant the first one's value.
+`npm run check:settings-accessor` (in CI) fails on a direct `prisma.setting`
+read outside the settings modules and on any new `getSetting`/`getSettings`
+import; the legacy readers still waiting (`src/lib/retention.ts`, which is
+client-reachable and cannot import the server-only resolver yet) are a pinned
+ratchet in that script.
+
 **The AI quota is the worked example of a per-tenant setting with a per-tenant
 meter** (#2681). `aiMonthlyQuota` resolves per org, so the `AiUsage` rows it is
 compared against carry an `orgId` too (registered model). `runAiGated()` takes

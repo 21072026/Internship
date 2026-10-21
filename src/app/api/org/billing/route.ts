@@ -5,9 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { requireCapability } from '@/lib/capabilityGate';
-import { getOrCreateSubscription } from '@/lib/subscription';
+import { getOrCreateSubscription, resolveOrgEntitlements } from '@/lib/subscription';
+import { superAdminWorld } from '@/lib/superAdmin';
 import { currentPeriod } from '@/lib/meteringRules';
-import { BILLING_METRICS, buildBillingSummary, trailingPeriods } from '@/lib/billingSummary';
+import { BILLING_METRICS, billingFeatureRows, buildBillingSummary, trailingPeriods } from '@/lib/billingSummary';
 
 // The caller's own bill (#1739): plan, this month's active pairs against the
 // band, and twelve months of history — for one tenant, the caller's.
@@ -39,12 +40,21 @@ export async function GET() {
   return withTenantScope(session, async () => {
     const period = currentPeriod();
     const periods = trailingPeriods(period);
-    const [subscription, rollups] = await Promise.all([
+    const now = new Date();
+    const [subscription, rollups, resolution, grants, world] = await Promise.all([
       getOrCreateSubscription(orgId),
       prisma.usageRollup.findMany({
         where: { orgId, metric: { in: [...BILLING_METRICS] }, period: { in: periods } },
         select: { metric: true, period: true, value: true, computedAt: true },
       }),
+      // What the plan includes and what was granted on top (#1734) — the same
+      // resolver entitled() asks, so the tab and every gate agree.
+      resolveOrgEntitlements(orgId, now),
+      prisma.orgEntitlement.findMany({
+        where: { orgId, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        select: { feature: true, expiresAt: true },
+      }),
+      superAdminWorld(session),
     ]);
 
     const summary = buildBillingSummary({
@@ -61,6 +71,12 @@ export async function GET() {
       rollups: rollups.map((r) => ({ ...r, computedAt: r.computedAt.toISOString() })),
     });
 
-    return NextResponse.json(summary);
+    return NextResponse.json({
+      ...summary,
+      features: billingFeatureRows(resolution, grants.map((g) => ({ feature: g.feature, expiresAt: g.expiresAt?.toISOString() ?? null }))),
+      // Whether the grant form is offered. Presentation only — the write
+      // endpoint (POST /api/admin/billing/entitlements) decides again.
+      canGrant: world !== null,
+    });
   });
 }

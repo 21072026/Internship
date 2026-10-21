@@ -4,6 +4,7 @@ import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
 import { useT } from '@/i18n/client';
 import { DocumentRequirementsAdmin } from '@/components/DocumentRequirementsAdmin';
+import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
 
 export default function AdminDocumentsPage() {
   const t = useT();
@@ -13,6 +14,8 @@ export default function AdminDocumentsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.documents.templates}</h1>
         <p className="text-gray-500 mt-1">{t.documents.templatesSubtitle}</p>
       </div>
+      {/* The review steps waiting on this admin (#1859). */}
+      <DocumentReviewQueue />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
         {/* Curated, multilingual templates with preview + PDF/TXT/MD export. */}
         <TemplatesLibrary />
