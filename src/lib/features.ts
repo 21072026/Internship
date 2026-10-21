@@ -155,6 +155,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     // #2563 — core CRM (a person-written follow-up date on any record), so untagged.
     { key: 'followUps', category: 'tracking', icon: CalendarClock, color: 'amber', title: C.followUps.t, desc: C.followUps.d },
+    // #1722/#1723 — stage service levels, their escalation and the breach queue.
+    // Every vertical has a pipeline, so untagged.
+    { key: 'stageSla', category: 'tracking', icon: CalendarClock, color: 'rose', title: C.stageSla.t, desc: C.stageSla.d },
     // #2580 — each owner's own workspace (a mentor's /mentor, a MARKETING
     // rep's /sales). True in every vertical, so untagged; the rep's wording is a
     // MARKETING overlay sentence, not a second card.

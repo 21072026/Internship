@@ -3,13 +3,22 @@ import { ambientOrgId, runUnscoped } from '@/lib/tenantAmbient';
 
 // ── Settings resolution (#1553) ──────────────────────────────────────────────
 //
-// `Setting` is keyed by (orgId, key). A row with `orgId = NULL` is the GLOBAL
-// layer; a row with an orgId is one tenant's override. Every read resolves in
-// exactly this order, and this file is the ONLY place that rule is written:
+// `Setting` is keyed by (orgId, programId, key). A row with neither id is the
+// GLOBAL layer; a row with an orgId is one tenant's override; a row with an
+// orgId AND a programId (#1619) is one programme's override inside that tenant.
+// Every read resolves in exactly this order, and this file is the ONLY place
+// that rule is written (`pickSetting()` below):
 //
-//   1. the row for the resolved org  (orgId = <tenant>)
-//   2. the global row                (orgId = NULL)
-//   3. SETTING_DEFAULTS              (the code default, below)
+//   1. the programme row  (orgId = <tenant>, programId = <programme>) — only for
+//                         a key whose SETTING_SCHEMA scopes include 'program'
+//   2. the org row        (orgId = <tenant>, programId = NULL)
+//   3. the global row     (orgId = NULL,     programId = NULL)
+//   4. SETTING_DEFAULTS   (the code default, below)
+//
+// The typed, cached reader over this chain is `resolveSetting()` in
+// src/lib/settingsResolver.ts (server-only); `getSetting()` / `getSettings()`
+// below are the string-valued org → global → default readers it grew out of,
+// kept for the callers #1621 has not moved yet.
 //
 // Which org a call resolves to: an explicit `orgId` argument wins; otherwise the
 // org bound to the current request by `withTenantScope()` (`currentOrgId()`) —
@@ -325,6 +334,150 @@ export const SETTING_DEFAULTS = {
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
 
+// ── The typed catalogue (#1619) ──────────────────────────────────────────────
+//
+// One entry per key: what type the stored string parses to, and which layers
+// may hold a row for it. The default stays the string in SETTING_DEFAULTS
+// above (where each key's reasoning lives); `parseSettingValue()` turns it into
+// the typed default the same way it turns a stored row into a value, so a key
+// cannot have a default that disagrees with its own type.
+//
+//   number   — an integer; anything else reads as the default. Domain clamps
+//              (a retention floor, a 1…365 range) stay in each key's own rule
+//              module — this layer only refuses what is not a number at all.
+//              `nullable: true` makes `''` read as `null` ("no override").
+//   boolean  — 'true' / 'false'; anything else reads as the default.
+//   enum     — one of `values`; anything else reads as the default.
+//   string   — verbatim.
+//   email    — a trimmed address, or '' (unset); a malformed one reads as ''.
+//
+// `scopes` lists the layers a row may live in. Every key has 'global'. A key
+// without 'org' is deployment-wide (GLOBAL_SETTING_KEYS is derived from it).
+// 'program' is opt-in, key by key: a programme override only exists for a
+// decision that genuinely differs between two programmes of one tenant — the
+// cadence and the rules of a programme's own pipeline — never for a security
+// policy, a quota or a retention window, which bind the whole tenant.
+export type SettingScope = 'global' | 'org' | 'program';
+
+export type SettingSpec =
+  | { type: 'number'; nullable?: boolean; scopes: readonly SettingScope[] }
+  | { type: 'boolean'; scopes: readonly SettingScope[] }
+  | { type: 'enum'; values: readonly string[]; scopes: readonly SettingScope[] }
+  | { type: 'string'; scopes: readonly SettingScope[] }
+  | { type: 'email'; scopes: readonly SettingScope[] };
+
+const G = ['global'] as const;
+const O = ['global', 'org'] as const;
+const P = ['global', 'org', 'program'] as const;
+
+export const SETTING_SCHEMA = {
+  reminderDays: { type: 'number', scopes: P },
+  supportEmail: { type: 'email', scopes: O },
+  weeklyDigest: { type: 'boolean', scopes: O },
+  retentionMonths: { type: 'number', scopes: O },
+  require2fa: { type: 'enum', values: ['off', 'admins', 'admins_mentors', 'all'], scopes: O },
+  passwordMinLength: { type: 'number', scopes: O },
+  passwordRequireUpper: { type: 'boolean', scopes: O },
+  passwordRequireLower: { type: 'boolean', scopes: O },
+  passwordRequireDigit: { type: 'boolean', scopes: O },
+  passwordRequireSymbol: { type: 'boolean', scopes: O },
+  breachedPasswordCheck: { type: 'boolean', scopes: O },
+  earlyAccessWindowDays: { type: 'number', scopes: O },
+  hiringStallDays: { type: 'number', scopes: P },
+  selfRegistration: { type: 'enum', values: ['auto', 'manual'], scopes: O },
+  aiMonthlyQuota: { type: 'number', scopes: O },
+  aiEnabled: { type: 'boolean', scopes: O },
+  outcomeAutoSend: { type: 'boolean', scopes: P },
+  blindReview: { type: 'boolean', scopes: P },
+  autoAdvanceOnOfferAccept: { type: 'boolean', scopes: P },
+  newsletterSchedule: { type: 'enum', values: ['off', 'weekly', 'biweekly', 'monthly'], scopes: O },
+  newsletterAudience: { type: 'enum', values: ['MENTEE', 'MENTOR', 'BOTH'], scopes: O },
+  newsletterSendHour: { type: 'number', scopes: O },
+  activityLogRetentionDays: { type: 'number', scopes: G },
+  pageViewRetentionDays: { type: 'number', scopes: G },
+  pushSubscriptionStaleDays: { type: 'number', scopes: G },
+  jobRetentionDays: { type: 'number', scopes: G },
+  companyInquiryRetentionDays: { type: 'number', scopes: O },
+  viewLogWindowMinutes: { type: 'number', scopes: G },
+  notificationRetentionDays: { type: 'number', scopes: O },
+  messageRetentionDays: { type: 'number', scopes: O },
+  safeguardingKeywords: { type: 'string', scopes: O },
+  boardWipLimit: { type: 'number', scopes: P },
+  orphanApplicantGraceDays: { type: 'number', scopes: G },
+  broadcastMonthlyRecipients: { type: 'number', nullable: true, scopes: O },
+  trialLengthDays: { type: 'number', scopes: O },
+  decisionWindowDays: { type: 'number', scopes: O },
+  marketingPriceList: { type: 'string', scopes: O },
+  postLetterTemplate: { type: 'string', scopes: O },
+  importExternalIdAliases: { type: 'string', scopes: O },
+  defaultLeadOwnerId: { type: 'string', scopes: O },
+  salesMonthlyWonTarget: { type: 'number', nullable: true, scopes: O },
+  salesLeaderboardForReps: { type: 'boolean', scopes: O },
+  outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
+  lateCancelHours: { type: 'number', scopes: P },
+  evaluationInterimStage: { type: 'string', scopes: P },
+  evaluationInterimDays: { type: 'number', scopes: P },
+  evaluationFinalStage: { type: 'string', scopes: P },
+  crmBccEnabled: { type: 'enum', values: ['', 'true', 'false'], scopes: O },
+  crmBccVersion: { type: 'number', scopes: O },
+  usageDropThresholdPct: { type: 'number', scopes: O },
+  usageBaselineDays: { type: 'number', scopes: O },
+  trialActivationDays: { type: 'number', scopes: O },
+} as const satisfies { readonly [K in SettingKey]: SettingSpec };
+
+type SpecValue<S> = S extends { type: 'number'; nullable: true }
+  ? number | null
+  : S extends { type: 'number' }
+    ? number
+    : S extends { type: 'boolean' }
+      ? boolean
+      : S extends { type: 'enum'; values: readonly (infer V)[] }
+        ? V
+        : string;
+
+/** The parsed type of a setting: `SettingValue<'reminderDays'>` is `number`. */
+export type SettingValue<K extends SettingKey> = SpecValue<(typeof SETTING_SCHEMA)[K]>;
+
+/** Where a resolved value came from — the admin screen shows "inherited" by it. */
+export type SettingSource = 'program' | 'org' | 'global' | 'default';
+
+const INTEGER = /^\s*-?\d+\s*$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseWith(spec: SettingSpec, raw: string): unknown {
+  switch (spec.type) {
+    case 'number':
+      if (spec.nullable && raw.trim() === '') return null;
+      return INTEGER.test(raw) ? Number.parseInt(raw, 10) : undefined;
+    case 'boolean':
+      return raw === 'true' ? true : raw === 'false' ? false : undefined;
+    case 'enum':
+      return spec.values.includes(raw) ? raw : undefined;
+    case 'email': {
+      const v = raw.trim();
+      return v === '' || EMAIL.test(v) ? v : undefined;
+    }
+    case 'string':
+      return raw;
+  }
+}
+
+/**
+ * Parse a stored string into the key's type. A value the type refuses reads as
+ * the key's typed default — a corrupted row never reaches a caller as `NaN`.
+ */
+export function parseSettingValue<K extends SettingKey>(key: K, raw: string): SettingValue<K> {
+  const spec: SettingSpec = SETTING_SCHEMA[key];
+  const parsed = parseWith(spec, raw);
+  if (parsed !== undefined) return parsed as SettingValue<K>;
+  // The unit spec pins that every default parses under its own type.
+  return parseWith(spec, SETTING_DEFAULTS[key]) as SettingValue<K>;
+}
+
+export function settingAllowsScope(key: SettingKey, scope: SettingScope): boolean {
+  return (SETTING_SCHEMA[key].scopes as readonly SettingScope[]).includes(scope);
+}
+
 // Keys that belong to the DEPLOYMENT, not to a tenant (#2628). Each is read by
 // something that runs with no tenant bound and crosses every org in one pass —
 // the retention prune (`runRetentionPrune`, the orphan-applicant sweep) — or
@@ -333,15 +486,12 @@ export type SettingKey = keyof typeof SETTING_DEFAULTS;
 // that fires, so none may exist: reads resolve these from the global layer
 // alone, whatever org they are asked about, and `setSetting` refuses a tenant
 // row for them. Writing them is a platform-operator (super admin) action — see
-// PUT /api/admin/settings.
-export const GLOBAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set<SettingKey>([
-  'activityLogRetentionDays',
-  'pageViewRetentionDays',
-  'pushSubscriptionStaleDays',
-  'jobRetentionDays',
-  'viewLogWindowMinutes',
-  'orphanApplicantGraceDays',
-]);
+// PUT /api/admin/settings. The list is the keys whose SETTING_SCHEMA scopes
+// stop at 'global' (today: the four telemetry retention windows,
+// `viewLogWindowMinutes` and `orphanApplicantGraceDays`).
+export const GLOBAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set<SettingKey>(
+  (Object.keys(SETTING_SCHEMA) as SettingKey[]).filter((k) => !settingAllowsScope(k, 'org')),
+);
 
 export function isGlobalSettingKey(key: string): boolean {
   return GLOBAL_SETTING_KEYS.has(key as SettingKey);
@@ -363,41 +513,86 @@ function unscopedSettings<T>(fn: () => Promise<T>): Promise<T> {
   return runUnscoped(fn);
 }
 
-type SettingRow = { orgId: string | null; key: string; value: string };
+export type SettingRow = { orgId: string | null; programId: string | null; key: string; value: string };
 
-// Both layers for `org` (tenant rows + global rows), in one query.
-function loadRows(org: string | null, key?: SettingKey): Promise<SettingRow[]> {
-  return unscopedSettings(() =>
-    prisma.setting.findMany({
-      where: {
-        ...(key ? { key } : {}),
-        OR: org ? [{ orgId: org }, { orgId: null }] : [{ orgId: null }],
-      },
-      select: { orgId: true, key: true, value: true },
-    }),
-  );
+/** The layers a read is asked about. `orgId: null` = no tenant (global only). */
+export type ResolvedScope = { orgId: string | null; programId: string | null };
+
+/**
+ * THE resolution rule — programme row → org row → global row → default — over
+ * rows already loaded. Pure, so the string readers below and the typed,
+ * cached `resolveSetting()` (src/lib/settingsResolver.ts) answer the same
+ * question the same way.
+ *
+ * A programme row counts only for a key whose scopes include 'program', and
+ * only under the org it was asked for; an org row only for a key that is not
+ * deployment-global. When a layer holds more than one row for the key (the
+ * MySQL NULL-distinct wrinkle, see `setSetting`), the first one wins — callers
+ * load newest first, so that is the row the writer last touched.
+ */
+export function pickSetting(
+  rows: readonly SettingRow[],
+  key: SettingKey,
+  scope: ResolvedScope,
+): { raw: string; source: SettingSource } {
+  const { orgId, programId } = scope;
+  if (orgId && programId && settingAllowsScope(key, 'program')) {
+    const row = rows.find((r) => r.key === key && r.orgId === orgId && r.programId === programId);
+    if (row) return { raw: row.value, source: 'program' };
+  }
+  if (orgId && settingAllowsScope(key, 'org')) {
+    const row = rows.find((r) => r.key === key && r.orgId === orgId && r.programId === null);
+    if (row) return { raw: row.value, source: 'org' };
+  }
+  const row = rows.find((r) => r.key === key && r.orgId === null && r.programId === null);
+  if (row) return { raw: row.value, source: 'global' };
+  return { raw: SETTING_DEFAULTS[key], source: 'default' };
+}
+
+/**
+ * The `where` that loads every row `pickSetting` may need for `scope` — one
+ * query whatever the number of keys. Newest first (see `pickSetting`).
+ */
+export function settingRowsQuery(scope: ResolvedScope, key?: SettingKey) {
+  const { orgId, programId } = scope;
+  const layers: { orgId: string | null; programId: string | null }[] = [{ orgId: null, programId: null }];
+  if (orgId) layers.push({ orgId, programId: null });
+  if (orgId && programId) layers.push({ orgId, programId });
+  return {
+    where: { ...(key ? { key } : {}), OR: layers },
+    select: { orgId: true, programId: true, key: true, value: true },
+    orderBy: [{ updatedAt: 'desc' as const }, { id: 'asc' as const }],
+  };
+}
+
+// Writes so far in this process. The per-request cache in settingsResolver.ts
+// drops what it holds when this moves, so a request that writes a setting and
+// then reads it back sees its own write. Process-wide on purpose: a write in a
+// concurrent request invalidates too, which costs one query and is never wrong.
+let writeGeneration = 0;
+export function settingsWriteGeneration(): number {
+  return writeGeneration;
+}
+
+function loadRows(scope: ResolvedScope, key?: SettingKey): Promise<SettingRow[]> {
+  return unscopedSettings(() => prisma.setting.findMany(settingRowsQuery(scope, key)));
 }
 
 // All settings for an org, with the global row and then the code default filled
-// in for every key the org has not overridden.
+// in for every key the org has not overridden. Programme rows are never read
+// here — that layer is reached through resolveSetting() with a programId.
 export async function getSettings(orgId?: string | null): Promise<Record<SettingKey, string>> {
-  const org = settingOrgId(orgId);
-  const rows = await loadRows(org);
-  const map: Record<string, string> = { ...SETTING_DEFAULTS };
-  // Global layer first, tenant overrides on top — order matters, not the order
-  // the rows happen to come back in.
-  for (const r of rows) if (r.orgId === null && r.key in SETTING_DEFAULTS) map[r.key] = r.value;
-  for (const r of rows) if (r.orgId !== null && r.key in SETTING_DEFAULTS && !isGlobalSettingKey(r.key)) map[r.key] = r.value;
-  return map as Record<SettingKey, string>;
+  const scope = { orgId: settingOrgId(orgId), programId: null };
+  const rows = await loadRows(scope);
+  const map = {} as Record<SettingKey, string>;
+  for (const key of Object.keys(SETTING_DEFAULTS) as SettingKey[]) map[key] = pickSetting(rows, key, scope).raw;
+  return map;
 }
 
 // Read a single setting: tenant row → global row → default.
 export async function getSetting(key: SettingKey, orgId?: string | null): Promise<string> {
-  const org = settingOrgId(orgId);
-  const rows = await loadRows(org, key);
-  const tenant = org && !isGlobalSettingKey(key) ? rows.find((r) => r.orgId === org) : undefined;
-  const global = rows.find((r) => r.orgId === null);
-  return tenant?.value ?? global?.value ?? SETTING_DEFAULTS[key];
+  const scope = { orgId: settingOrgId(orgId), programId: null };
+  return pickSetting(await loadRows(scope, key), key, scope).raw;
 }
 
 // Write one setting into a single layer — the org resolved exactly as reads
@@ -406,19 +601,46 @@ export async function getSetting(key: SettingKey, orgId?: string | null): Promis
 //
 // `orgId` is a SERVER-SIDE argument (seeds, jobs, tests). Never pass a value
 // that came from a request body: the authorization for this write is that the
-// org is derived from the session's bound context, not from input.
+// org is derived from the session's bound context, not from input. The same
+// holds for `programId` (#1619): a programme row is written only for a key
+// whose scopes include 'program', only under an explicit org, and only for a
+// programme (Cohort) that belongs to that org — checked here, not trusted.
 //
 // Deliberately a read-modify-write rather than `prisma.setting.upsert`: the
-// natural key contains a nullable column, so the compound unique cannot address
-// the global (orgId = NULL) row.
-export async function setSetting(key: SettingKey, value: string, orgId?: string | null): Promise<void> {
+// natural key contains nullable columns, so the compound unique cannot address
+// an org row (programId = NULL) or the global row (both NULL). For the same
+// reason the unique index does NOT stop two org rows for one key — MySQL treats
+// NULLs as distinct — so this find-then-write is what keeps each layer single,
+// and this function must stay the only writer of org and global rows.
+export async function setSetting(
+  key: SettingKey,
+  value: string,
+  orgId?: string | null,
+  opts: { programId?: string } = {},
+): Promise<void> {
   const org = settingOrgId(orgId);
+  const programId = opts.programId ?? null;
   if (org !== null && isGlobalSettingKey(key)) {
     throw new Error(`Setting "${key}" is deployment-global and has no per-tenant row (#2628)`);
   }
+  if (programId !== null) {
+    if (!settingAllowsScope(key, 'program')) {
+      throw new Error(`Setting "${key}" has no per-programme row (#1619)`);
+    }
+    if (org === null) throw new Error('A programme setting needs its org (#1619)');
+  }
   await unscopedSettings(async () => {
-    const existing = await prisma.setting.findFirst({ where: { orgId: org, key }, select: { id: true } });
+    if (programId !== null) {
+      const program = await prisma.cohort.findFirst({ where: { id: programId, orgId: org }, select: { id: true } });
+      if (!program) throw new Error('Programme not found in this org (#1619)');
+    }
+    const existing = await prisma.setting.findFirst({
+      where: { orgId: org, programId, key },
+      select: { id: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    });
     if (existing) await prisma.setting.update({ where: { id: existing.id }, data: { value } });
-    else await prisma.setting.create({ data: { orgId: org, key, value } });
+    else await prisma.setting.create({ data: { orgId: org, programId, key, value } });
   });
+  writeGeneration += 1;
 }
