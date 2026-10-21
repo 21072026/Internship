@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { submitSignInForm } from './helpers/auth';
 
 const password = 'DocumentReq123!';
@@ -190,6 +190,8 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
     seedUser(completedMentorEmail, password, 'MENTOR', 'Completed Mentor'), seedUser(adminEmail, password, 'ADMIN', 'Reminder Admin'),
     seedUser(emptyEmail, password, 'MENTEE', 'No Requirements Mentee'),
   ]);
+  // The weekly reminder is a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id, preferredLanguage: 'de', emailNotifications: true } });
   await prisma.user.update({ where: { id: mentor.id }, data: { orgId: org.id, preferredLanguage: 'tr', emailNotifications: true } });
   await prisma.user.update({ where: { id: optedOutMentor.id }, data: { orgId: org.id, emailNotifications: true, notificationPrefs: { documents: false } } });

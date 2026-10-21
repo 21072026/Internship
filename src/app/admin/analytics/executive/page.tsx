@@ -6,6 +6,7 @@ import { ArrowLeft, Info, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
+import { ForecastPanel } from '@/components/admin/ForecastPanel';
 import { useT } from '@/i18n/client';
 import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
 import { deltaOf, expressionOf, type Period, type ScorePoint } from '@/lib/executiveScores';
@@ -177,6 +178,7 @@ export default function ExecutiveDashboardPage() {
               </a>
             </section>
           </div>
+          <ForecastPanel />
           <p className="mt-4 text-xs text-gray-500" data-testid="executive-deterministic">{e.deterministic}</p>
         </>
       )}

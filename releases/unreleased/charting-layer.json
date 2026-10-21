@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**A charting layer (#1890):** `src/components/charts/` — `BarChart`, `LineChart`, `AreaChart`, `Donut` — thin SVG wrappers on visx 4, each loaded through `next/dynamic` so `@visx/*` stays out of a page's first-load bundle (decision record and rules in `docs/charts.md`). Colours come from new `--chart-*` CSS tokens in `globals.css`, redefined under `html.dark` and with series 1 on the accent ramp, so light, dark, a user's accent and an org's brand palette all work without a per-theme branch. The `/admin/analytics` trends chart and the `/mentor/feedback` average chart move onto it: `BAR_AREA_PX` and both hand-rolled `<div>` bar tracks are gone, and the bars are sized by a scale over a ResizeObserver-measured width rather than CSS percentages that needed a definite parent height (#1425). `/admin/analytics` also gains the first chart shape it could not draw before: conversion by entry month over the selected window as a line, where a month with no rate is a gap rather than a zero. Existing testids are kept; each mark now also carries `data-label`/`data-value`.",
+  "notes": {
+    "en": ["The analytics screen now draws real charts, including a new line that shows how conversion changes month by month over the period you pick."],
+    "tr": ["Analiz ekranı artık gerçek grafikler çiziyor. Yeni bir çizgi grafik, seçtiğiniz dönemde dönüşümün aydan aya nasıl değiştiğini gösteriyor."],
+    "de": ["Die Analyseansicht zeichnet jetzt echte Diagramme, darunter eine neue Linie, die zeigt, wie sich die Konversion im gewählten Zeitraum von Monat zu Monat entwickelt."]
+  }
+}
