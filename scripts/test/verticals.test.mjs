@@ -22,6 +22,7 @@ import {
   VERTICALS,
   VERTICAL_KEYS,
   DEFAULT_VERTICAL,
+  MARKETING_ONLY_CAPABILITIES,
   isVerticalKey,
   toVerticalKey,
   verticalDefinition,
@@ -42,7 +43,15 @@ test('INTERNSHIP carries every capability any vertical declares', () => {
   const all = new Set(VERTICALS.flatMap((v) => v.capabilities));
   const internship = new Set(verticalCapabilities('INTERNSHIP'));
   for (const cap of all) {
+    if (MARKETING_ONLY_CAPABILITIES.includes(cap)) continue; // deliberate, see verticals.ts
     assert.ok(internship.has(cap), `INTERNSHIP is missing "${cap}" — that switches a live feature off`);
+  }
+});
+
+test('a marketing-only capability is carried by MARKETING and not by INTERNSHIP', () => {
+  for (const cap of MARKETING_ONLY_CAPABILITIES) {
+    assert.ok(verticalCapabilities('MARKETING').includes(cap), `MARKETING must carry "${cap}"`);
+    assert.ok(!verticalCapabilities('INTERNSHIP').includes(cap), `INTERNSHIP must not carry "${cap}"`);
   }
 });
 

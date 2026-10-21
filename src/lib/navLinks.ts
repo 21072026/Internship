@@ -7,6 +7,7 @@ import {
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   Receipt,
+  Wallet,
   Send,
   Lightbulb,
   Sparkles,
@@ -64,6 +65,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin', icon: LayoutDashboard, key: 'dashboard', exact: true },
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
+  // The partner programme (docs/affiliate-module.md), marketing CRM only.
+  { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate' },
   // The hiring desk (#1874): the four queues waiting on the programme owner.
   { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },

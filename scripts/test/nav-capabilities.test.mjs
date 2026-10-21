@@ -16,7 +16,7 @@ import {
   PORTAL_NAV_LINKS,
   visibleNavLinks,
 } from '../../src/lib/navLinks.ts';
-import { verticalCapabilities } from '../../src/lib/verticals.ts';
+import { verticalCapabilities, MARKETING_ONLY_CAPABILITIES } from '../../src/lib/verticals.ts';
 
 const INTERNSHIP = verticalCapabilities('INTERNSHIP');
 const MARKETING = verticalCapabilities('MARKETING');
@@ -29,7 +29,8 @@ test('INTERNSHIP hides nothing — the filter is a no-op for today’s product',
   // as a super admin here, and pinned in their own test below.)
   for (const links of [ADMIN_NAV_LINKS, MENTOR_NAV_LINKS, PORTAL_NAV_LINKS]) {
     const out = visibleNavLinks(links, INTERNSHIP, { superAdmin: true });
-    const expected = links.filter((l) => !l.withoutCapability);
+    // A marketing-only link is hidden here on purpose (verticals.ts, MARKETING_ONLY_CAPABILITIES).
+    const expected = links.filter((l) => !l.withoutCapability && !MARKETING_ONLY_CAPABILITIES.includes(l.capability));
     assert.equal(out.length, expected.length);
     assert.deepEqual(out.map((l) => l.href), expected.map((l) => l.href));
   }

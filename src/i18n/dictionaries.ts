@@ -78,6 +78,7 @@ const en = {
     companyInquiries: 'Company enquiries',
     acquisition: 'Postal campaigns',
     myCompanies: 'My companies',
+    affiliates: 'Affiliates',
   },
   panel: {
     admin: 'Admin Panel',
@@ -499,6 +500,11 @@ const en = {
     sessionExpired: 'Your session has expired. Please sign in again.',
     forbidden: 'You are not allowed to do that.',
     alreadyGone: 'That record is no longer there — it may have been removed already.',
+  },
+  affiliateAdmin: {
+    title: 'Affiliate programme',
+    emptyTitle: 'No partners yet',
+    emptyBody: 'Partners, their referred customers and commissions will appear here. The programme is being set up.',
   },
   imageViewer: {
     title: 'Image viewer',
@@ -8698,6 +8704,7 @@ const tr: Dict = {
     companyInquiries: 'Firma talepleri',
     acquisition: 'Posta kampanyaları',
     myCompanies: 'Firmalarım',
+    affiliates: 'Affiliate',
   },
   panel: {
     admin: 'Yönetim Paneli',
@@ -9084,6 +9091,11 @@ const tr: Dict = {
     sessionExpired: 'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
     forbidden: 'Bunu yapma yetkiniz yok.',
     alreadyGone: 'Bu kayıt artık mevcut değil — daha önce kaldırılmış olabilir.',
+  },
+  affiliateAdmin: {
+    title: 'Affiliate programı',
+    emptyTitle: 'Henüz partner yok',
+    emptyBody: 'Partnerler, getirdikleri müşteriler ve komisyonları burada görünecek. Program hazırlanıyor.',
   },
   imageViewer: {
     title: 'Resim görüntüleyici',
@@ -17096,6 +17108,7 @@ const de: Dict = {
     companyInquiries: 'Unternehmensanfragen',
     acquisition: 'Briefkampagnen',
     myCompanies: 'Meine Unternehmen',
+    affiliates: 'Affiliates',
   },
   panel: {
     admin: 'Admin-Bereich',
@@ -17482,6 +17495,11 @@ const de: Dict = {
     sessionExpired: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
     forbidden: 'Dazu bist du nicht berechtigt.',
     alreadyGone: 'Dieser Eintrag existiert nicht mehr – er wurde vermutlich bereits entfernt.',
+  },
+  affiliateAdmin: {
+    title: 'Partnerprogramm',
+    emptyTitle: 'Noch keine Partner',
+    emptyBody: 'Partner, ihre geworbenen Kunden und Provisionen erscheinen hier. Das Programm wird eingerichtet.',
   },
   imageViewer: {
     title: 'Bildanzeige',

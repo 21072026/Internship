@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate module, step 1 (#3106):** generic design in `docs/affiliate-module.md` (per-organisation commission plan as data, nothing tenant-specific in the repo). New capability `affiliate`, carried by MARKETING only and listed in `MARKETING_ONLY_CAPABILITIES` (`src/lib/verticals.ts`) so the \"INTERNSHIP carries everything\" guards skip it on purpose; an admin sidebar entry `/admin/affiliates` (EN/TR/DE, mobile menu icon) and a gated placeholder page — 404 on the internship host."
+}
