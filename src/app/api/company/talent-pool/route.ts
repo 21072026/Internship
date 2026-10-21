@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   }
   // Admins can always view (support); companies need the premium entitlement.
   if (session.user.role === 'COMPANY' && !(await hasFeature(session.user.companyId, 'TALENT_POOL_SEARCH'))) {
-    return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
+    return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'TALENT_POOL_SEARCH' }, { status: 403 });
   }
 
   return await withTenantScope(session, async () => {

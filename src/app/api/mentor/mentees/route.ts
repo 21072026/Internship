@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { slugify } from '@/lib/transliterate';
-import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { checkActiveRelationLimit, notifyAdminsOfPlanLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -79,7 +79,10 @@ export async function POST(request: Request) {
       // unlimited default org.
       const gate = await checkActiveRelationLimit(orgId);
       if (!gate.allowed) {
-        return NextResponse.json(planLimitError(gate), { status: 403 });
+        // A mentor cannot buy a plan: the admins are told, and the refusal
+        // says so (UpgradePrompt renders "your admin has been notified").
+        const adminsNotified = await notifyAdminsOfPlanLimit(orgId, gate);
+        return NextResponse.json({ ...planLimitError(gate), adminsNotified }, { status: 403 });
       }
 
       // Duplicate pre-flight (#841): warn — never auto-merge, never block. The

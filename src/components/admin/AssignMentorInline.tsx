@@ -8,6 +8,8 @@ import { AiBadge } from '@/components/AiBadge';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 import { useT } from '@/i18n/client';
 import { mentorshipAssignmentError } from '@/lib/mentorshipAssignmentError';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateError } from '@/lib/upgradePrompt';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { MATCH_DISMISS_REASONS, type MatchDismissReason } from '@/lib/matchFeedback';
@@ -56,6 +58,8 @@ export function AssignMentorInline({
   const [choice, setChoice] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // A plan/feature gate's 403 renders the upgrade door, not a red line (#1745).
+  const [gate, setGate] = useState<GateError | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   // The whole ranked list, not just the winner (#2040). One is on screen at a
   // time, but dismissing #1 has to reveal #2 — otherwise ranks 2-5 are recorded
@@ -109,6 +113,7 @@ export function AssignMentorInline({
   const suggest = async (regenerate = false) => {
     setSuggesting(true);
     setErr('');
+    setGate(null);
     setExhausted(false);
     setDismissing(false);
     try {
@@ -164,6 +169,7 @@ export function AssignMentorInline({
   const doAssign = async (mentorId: string) => {
     setBusy(true);
     setErr('');
+    setGate(null);
     try {
       const res = await fetch('/api/mentorship', {
         method: 'POST',
@@ -183,7 +189,9 @@ export function AssignMentorInline({
       // on this route would otherwise render as "already has an active mentor",
       // which would be a lie. The plan gate's 403 gets its own sentence rather
       // than the generic error line (#2283 follow-up).
-      setErr(mentorshipAssignmentError(t, d, t.common.error));
+      const g = parseGateBody(d);
+      setGate(g);
+      setErr(g ? '' : mentorshipAssignmentError(t, d, t.common.error));
     } catch {
       setErr(t.common.error);
     } finally {
@@ -323,6 +331,7 @@ export function AssignMentorInline({
         </p>
       )}
       {err && <p className="text-xs text-red-600 mt-1.5">{err}</p>}
+      {gate && <UpgradePrompt gate={gate} className="mt-2" />}
       <ConfirmDialog
         open={pendingAssign !== null}
         message={pendingAssign?.status === 'at_capacity' ? a.confirmAtCapacity : a.confirmNotAccepting}

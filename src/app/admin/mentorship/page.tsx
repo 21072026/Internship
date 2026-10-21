@@ -1,6 +1,8 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
 import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateError } from '@/lib/upgradePrompt';
 import Link from "next/link";
 import { RelationHealthBadge, useRelationHealth } from "@/components/HealthBadge";
 
@@ -90,6 +92,8 @@ export default function MentorshipPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
+  // A plan/feature gate's 403 renders the upgrade door, not a red line (#1745).
+  const [gate, setGate] = useState<GateError | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
   const [page, setPage] = useState(1);
@@ -203,6 +207,7 @@ export default function MentorshipPage() {
     }
     setSubmitting(true);
     setFormError('');
+    setGate(null);
     setAssignBlocked(null);
     try {
       const res = await fetch('/api/mentorship', {
@@ -222,7 +227,9 @@ export default function MentorshipPage() {
         // shared resolver translates every code this route can answer,
         // including the plan gate's quota sentence (#2283 follow-up).
         const body = await res.json().catch(() => ({}));
-        setFormError(mentorshipAssignmentError(t, body, t.mentorships.assignFailed));
+        const g = parseGateBody(body);
+        setGate(g);
+        setFormError(g ? '' : mentorshipAssignmentError(t, body, t.mentorships.assignFailed));
         // A correct refusal the admin could not act on is how people learn to
         // fake a completion (#2289): the route names the current mentor and
         // their relation, so offer the change right here instead of leaving
@@ -406,6 +413,7 @@ export default function MentorshipPage() {
           onClick={() => {
             // A stale refusal from the last attempt must not greet the next one.
             setFormError('');
+            setGate(null);
             setAssignBlocked(null);
             setShowForm(true);
           }}
@@ -445,6 +453,7 @@ export default function MentorshipPage() {
             className="bg-white rounded-2xl p-6 w-full max-w-md"
           >
             <h2 id="mentorship-assign-title" className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
+            {gate && <UpgradePrompt gate={gate} className="mb-4" />}
             {formError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{formError}</div>
             )}

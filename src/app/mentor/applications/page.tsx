@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateError } from '@/lib/upgradePrompt';
+import { mentorshipAssignmentError } from '@/lib/mentorshipAssignmentError';
 
 // The mentor's application inbox (#1188): public /apply submissions wait here
 // as pending requests until the mentor accepts (relation starts) or declines
@@ -24,6 +27,7 @@ export default function MentorApplicationsPage() {
   const [requests, setRequests] = useState<PendingApplication[] | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [gate, setGate] = useState<GateError | null>(null);
 
   const load = useCallback(() => {
     fetch('/api/mentor/applications')
@@ -38,6 +42,7 @@ export default function MentorApplicationsPage() {
   const decide = async (id: string, action: 'accept' | 'reject') => {
     setDeciding(id);
     setFlash(null);
+    setGate(null);
     try {
       const res = await fetch('/api/mentor/applications', {
         method: 'PUT',
@@ -49,7 +54,11 @@ export default function MentorApplicationsPage() {
         setFlash(action === 'accept' ? t.mentorApplications.accepted : t.mentorApplications.rejected);
       } else {
         const d = await res.json().catch(() => ({}));
-        setFlash(d.error ?? t.common.error);
+        // The plan cap (#1745) renders the door; anything else the generic line,
+        // never the server's English text.
+        const g = parseGateBody(d);
+        setGate(g);
+        if (!g) setFlash(mentorshipAssignmentError(t, d, t.common.error));
       }
     } finally {
       setDeciding(null);
@@ -64,6 +73,7 @@ export default function MentorApplicationsPage() {
       </div>
 
       {flash && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">{flash}</div>}
+      {gate && <UpgradePrompt gate={gate} className="mb-4" />}
 
       <Card>
         <CardHeader>

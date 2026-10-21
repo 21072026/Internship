@@ -8,7 +8,7 @@ import {
   sendMenteeAssignedEmail,
   sendRematchMentorNoticeEmail,
 } from '@/services/emailService';
-import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
+import { checkActiveRelationLimitForMentee, notifyAdminsOfPlanLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { stageTrialWindow } from '@/lib/trialWindow';
@@ -151,7 +151,11 @@ export async function decideMentorshipRequest(opts: {
     // way. `gate.orgId` is still what the new relation is stamped with.
     const gate = await checkActiveRelationLimitForMentee(req.menteeId);
     if (!replaced && !gate.allowed) {
-      return { status: 403, body: planLimitError(gate) };
+      // A mentor accepting cannot lift the cap; its admins are told (#1745).
+      // An admin deciding gets the prompt with the upgrade request itself.
+      const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { role: true } });
+      const adminsNotified = actor?.role === 'ADMIN' ? false : await notifyAdminsOfPlanLimit(gate.orgId, gate);
+      return { status: 403, body: { ...planLimitError(gate), adminsNotified } };
     }
 
     // Capacity/availability warning (#942): advisory only, mirrors POST

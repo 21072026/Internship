@@ -59,6 +59,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      upgrade: { reassurance: 'Existing leads, sales reps and deals are unaffected — only adding more is paused.', limitReached: 'You are using {usage} of {limit} active deals your plan includes.' },
       // Document requirements: the role picker names the seats, not the enum.
       documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Sales rep' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
@@ -177,6 +178,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.rematchApproved': 'You have a new contact person — your previous one no longer looks after you.',
           'mentorship_request.rematchRejected': 'Your request for a different contact person was reviewed. Your current contact person stays with you for now.',
           'mentorship_request.rematchMentorNotice': 'Your deal with {menteeName} has ended — they are continuing with another rep.',
+          'plan_limit.reached': 'Your organisation reached its plan limit ({usage} of {limit} active deals). Someone could not be added — see Billing.',
           'application.received': '{name} signed up as your lead.',
           'mentor_application.new': '{name} applied to join as a sales rep.',
           'mentor_application.approved': 'Your sales rep application was approved — welcome aboard!',
@@ -1234,6 +1236,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      upgrade: { reassurance: 'Mevcut adaylar, satış temsilcileri ve fırsatlar etkilenmez — yalnızca yenilerini eklemek durur.', limitReached: 'Planınızın içerdiği {limit} aktif fırsatın {usage} tanesini kullanıyorsunuz.' },
       documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' }, reviewerRoles: { MENTOR: 'Satış temsilcisi' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
@@ -1342,6 +1345,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.rematchApproved': 'Yeni bir muhatabın var — önceki muhatabın artık seninle ilgilenmiyor.',
           'mentorship_request.rematchRejected': 'Farklı muhatap talebin incelendi. Mevcut muhatabın şimdilik seninle devam ediyor.',
           'mentorship_request.rematchMentorNotice': '{menteeName} ile fırsatın sona erdi — başka bir temsilciyle devam ediyor.',
+          'plan_limit.reached': 'Organizasyonunuz plan sınırına ulaştı ({limit} aktif fırsatın {usage} tanesi). Biri eklenemedi — Faturalandırma\'ya bakın.',
           'application.received': '{name} müşteri adayın olarak kaydoldu.',
           'mentor_application.new': '{name} satış temsilcisi olmak için başvurdu.',
           'mentor_application.approved': 'Satış temsilcisi başvurun onaylandı — aramıza hoş geldin!',
@@ -2268,6 +2272,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      upgrade: { reassurance: 'Bestehende Leads, Vertriebsmitarbeiter und Deals sind nicht betroffen — nur das Hinzufügen weiterer ist angehalten.', limitReached: 'Sie nutzen {usage} von {limit} aktiven Deals, die Ihr Plan enthält.' },
       documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Vertriebsmitarbeiter' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
@@ -2375,6 +2380,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.rematchApproved': 'Du hast eine neue Ansprechperson — deine bisherige betreut dich nicht mehr.',
           'mentorship_request.rematchRejected': 'Deine Anfrage nach einer anderen Ansprechperson wurde geprüft. Deine aktuelle Ansprechperson bleibt vorerst bei dir.',
           'mentorship_request.rematchMentorNotice': 'Dein Deal mit {menteeName} ist beendet — die Person wird von einem anderen Vertriebsmitarbeiter weiter betreut.',
+          'plan_limit.reached': 'Ihre Organisation hat ihr Plan-Limit erreicht ({usage} von {limit} aktiven Deals). Jemand konnte nicht hinzugefügt werden — siehe Abrechnung.',
           'application.received': '{name} hat sich als dein Lead angemeldet.',
           'mentor_application.new': '{name} hat sich als Vertriebsmitarbeiter beworben.',
           'mentor_application.approved': 'Deine Bewerbung als Vertriebsmitarbeiter wurde angenommen — willkommen an Bord!',

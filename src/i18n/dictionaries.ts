@@ -3536,6 +3536,7 @@ const en = {
       'weekly_report_review.changes': 'Changes were requested for your weekly report.',
       'mentor_application.new': '{name} applied to become a mentor.',
       'mentor_application.approved': 'Your mentor application was approved — welcome aboard!',
+      'plan_limit.reached': 'Your programme reached its plan limit ({usage} of {limit} active mentorships). Someone could not be added — see Billing.',
       'plan_change.requested': '{org} asked to move to the {plan} plan.',
       'plan_change.applied': 'Your organisation is now on the {plan} plan.',
       'plan_change.rejected': 'Your request to move to the {plan} plan was declined. See the note under Billing.',
@@ -3579,6 +3580,7 @@ const en = {
       announcement: 'Announcement',
       mentor_application: 'Mentor application',
       plan_change: 'Plan change',
+      plan_limit: 'Plan limit',
     },
     // #2558 — the two mails an assignment sends (POST /api/mentorship, a
     // hand-over, an approved request). Used to be hardcoded English in
@@ -4913,6 +4915,23 @@ const en = {
   },
   // The tenant's own bill, /admin/billing (#1739). ONE block for the page:
   // #1734 (entitlements tab) and #1763 (usage tab) extend it, never a second one.
+  // The one door on every paywall, UpgradePrompt (#1745). Built only from these
+  // keys — never from a 403's English `error`. Never shown to a mentee.
+  upgrade: {
+    limitReached: 'You are using {usage} of {limit} active mentorships your plan includes.',
+    featureLocked: '{feature} is not included in your plan.',
+    liftPlan: '{plan} includes it — from {price} per month, billed annually.',
+    liftPlanNoPrice: '{plan} includes it.',
+    liftAddon: 'It is available as an add-on for {price} per month.',
+    liftContact: 'Talk to us and we will find the right plan.',
+    reassurance: 'Existing mentees, mentors and mentorships are unaffected and stay free — only adding more is paused.',
+    request: 'Request an upgrade',
+    requested: 'Upgrade requested — you can follow it under Billing.',
+    requestFailed: 'The request could not be sent. Try again from Billing.',
+    adminNotified: 'Your programme admin has been notified.',
+    askAdmin: 'Ask your programme admin to enable it.',
+    seePricing: 'See pricing',
+  },
   billing: {
     title: 'Billing',
     subtitle: 'Your plan, this month\'s active pairs and the last twelve months — for your organisation only.',
@@ -12021,6 +12040,7 @@ const tr: Dict = {
       'weekly_report_review.changes': 'Haftalık raporun için değişiklik istendi.',
       'mentor_application.new': '{name} mentor olmak için başvurdu.',
       'mentor_application.approved': 'Mentorluk başvurun onaylandı — aramıza hoş geldin!',
+      'plan_limit.reached': 'Programınız plan sınırına ulaştı ({limit} aktif mentorluğun {usage} tanesi). Biri eklenemedi — Faturalandırma\'ya bakın.',
       'plan_change.requested': '{org}, {plan} planına geçmek istiyor.',
       'plan_change.applied': 'Organizasyonunuz artık {plan} planında.',
       'plan_change.rejected': '{plan} planına geçiş talebiniz reddedildi. Notu Faturalandırma altında görebilirsiniz.',
@@ -12064,6 +12084,7 @@ const tr: Dict = {
       announcement: 'Duyuru',
       mentor_application: 'Mentor başvurusu',
       plan_change: 'Plan değişikliği',
+      plan_limit: 'Plan sınırı',
     },
     menteeAssignedEmail: {
       subject: 'Yeni mentee atandı: {mentee}',
@@ -13373,6 +13394,21 @@ const tr: Dict = {
     reject: 'Reddet',
     applied: 'Plan uygulandı.',
     rejected: 'Talep reddedildi.',
+  },
+  upgrade: {
+    limitReached: 'Planınızın içerdiği {limit} aktif mentorluğun {usage} tanesini kullanıyorsunuz.',
+    featureLocked: '{feature} planınıza dahil değil.',
+    liftPlan: '{plan} bunu içeriyor — yıllık faturalandırmayla ayda {price} başlayan fiyatla.',
+    liftPlanNoPrice: '{plan} bunu içeriyor.',
+    liftAddon: 'Ayda {price} karşılığında ek paket olarak alınabilir.',
+    liftContact: 'Bizimle konuşun, doğru planı birlikte bulalım.',
+    reassurance: 'Mevcut menteeler, mentorlar ve mentorluklar etkilenmez ve ücretsiz kalır — yalnızca yenilerini eklemek durur.',
+    request: 'Yükseltme talep et',
+    requested: 'Yükseltme talep edildi — Faturalandırma altından takip edebilirsiniz.',
+    requestFailed: 'Talep gönderilemedi. Faturalandırma ekranından tekrar deneyin.',
+    adminNotified: 'Program yöneticinize haber verildi.',
+    askAdmin: 'Açılması için program yöneticinize başvurun.',
+    seePricing: 'Fiyatları gör',
   },
   billing: {
     title: 'Faturalandırma',
@@ -20413,6 +20449,7 @@ const de: Dict = {
       'weekly_report_review.changes': 'Für deinen Wochenbericht wurden Änderungen angefordert.',
       'mentor_application.new': '{name} hat sich als Mentor beworben.',
       'mentor_application.approved': 'Deine Mentor-Bewerbung wurde angenommen — willkommen an Bord!',
+      'plan_limit.reached': 'Ihr Programm hat sein Plan-Limit erreicht ({usage} von {limit} aktiven Mentorings). Jemand konnte nicht hinzugefügt werden — siehe Abrechnung.',
       'plan_change.requested': '{org} möchte in den Plan {plan} wechseln.',
       'plan_change.applied': 'Ihre Organisation ist jetzt im Plan {plan}.',
       'plan_change.rejected': 'Ihre Anfrage für den Plan {plan} wurde abgelehnt. Die Notiz finden Sie unter Abrechnung.',
@@ -20456,6 +20493,7 @@ const de: Dict = {
       announcement: 'Ankündigung',
       mentor_application: 'Mentor-Bewerbung',
       plan_change: 'Planwechsel',
+      plan_limit: 'Plan-Limit',
     },
     menteeAssignedEmail: {
       subject: 'Neuer Mentee zugewiesen: {mentee}',
@@ -21765,6 +21803,21 @@ const de: Dict = {
     reject: 'Ablehnen',
     applied: 'Plan angewendet.',
     rejected: 'Anfrage abgelehnt.',
+  },
+  upgrade: {
+    limitReached: 'Sie nutzen {usage} von {limit} aktiven Mentorings, die Ihr Plan enthält.',
+    featureLocked: '{feature} ist in Ihrem Plan nicht enthalten.',
+    liftPlan: '{plan} enthält es — ab {price} pro Monat bei jährlicher Abrechnung.',
+    liftPlanNoPrice: '{plan} enthält es.',
+    liftAddon: 'Es ist als Add-on für {price} pro Monat erhältlich.',
+    liftContact: 'Sprechen Sie mit uns, wir finden den passenden Plan.',
+    reassurance: 'Bestehende Mentees, Mentoren und Mentorings sind nicht betroffen und bleiben kostenlos — nur das Hinzufügen weiterer ist angehalten.',
+    request: 'Upgrade anfragen',
+    requested: 'Upgrade angefragt — Sie können es unter Abrechnung verfolgen.',
+    requestFailed: 'Die Anfrage konnte nicht gesendet werden. Versuchen Sie es unter Abrechnung erneut.',
+    adminNotified: 'Ihre Programmverwaltung wurde benachrichtigt.',
+    askAdmin: 'Bitten Sie Ihre Programmverwaltung, es freizuschalten.',
+    seePricing: 'Preise ansehen',
   },
   billing: {
     title: 'Abrechnung',

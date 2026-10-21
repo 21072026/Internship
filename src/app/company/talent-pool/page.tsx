@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useT } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 
 interface Candidate {
   id: string;
@@ -82,6 +83,9 @@ export default function TalentPoolPage() {
           <Sparkles className="h-12 w-12 text-blue-500 mx-auto mb-4" />
           <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">{tp.lockedTitle}</p>
           <p className="text-sm text-gray-500 max-w-sm mx-auto">{tp.lockedBody}</p>
+          {/* The door (#1745): the employer plan that includes search, at its
+              published price — the same component every paywall renders. */}
+          <UpgradePrompt gate={{ code: 'feature_locked', feature: 'TALENT_POOL_SEARCH' }} audience="EMPLOYER" className="mt-6 text-left" />
         </Card>
       </div>
     );

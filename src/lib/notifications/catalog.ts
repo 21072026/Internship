@@ -215,6 +215,8 @@ export const NOTIFICATION_EVENTS = [
   // Plan-change requests (#1743): to the operators of the org's world, and the
   // answer back to the requesting admin. In-app only — the operator queue and
   // the billing screen are where the request lives.
+  // A mentor or an applicant hit the plan cap (#1745) — told to the org's admins, who can lift it.
+  { key: 'plan_limit.reached', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['usage', 'limit'] },
   { key: 'plan_change.requested', category: 'announcements', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['org', 'plan'] },
   { key: 'plan_change.applied', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['plan'] },
   { key: 'plan_change.rejected', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['plan'] },

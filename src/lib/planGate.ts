@@ -21,6 +21,7 @@
 
 import { countActiveRelations, countOrgProjects } from '@/lib/metering';
 import { prisma } from '@/lib/prisma';
+import { notify } from '@/lib/notify';
 import { planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
 
 export interface PlanGateResult {
@@ -108,4 +109,38 @@ export function projectLimitError(gate: PlanGateResult) {
     usage: gate.usage,
     plan: gate.plan,
   };
+}
+
+// Tell an org's admins that someone who cannot buy anything hit the plan cap
+// (#1745) — a mentor adding a mentee, a mentor accepting a request, a mentee
+// applying. The person who hit the wall never sees a plan or a price; the
+// people who can lift it get one in-app notification linking to Billing.
+//
+// At most one per admin per 24h: a full programme turns away applicants all
+// day, and a bell with forty identical rows is a bell nobody reads. Never
+// throws — a failed notification must not turn a clean refusal into a 500.
+// Returns whether anybody was told, which is what the refusal reports back.
+const PLAN_LIMIT_NOTICE_TYPE = 'plan_limit.reached';
+const PLAN_LIMIT_NOTICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export async function notifyAdminsOfPlanLimit(orgId: string | null | undefined, gate: PlanGateResult): Promise<boolean> {
+  if (!orgId) return false;
+  try {
+    const admins = await prisma.user.findMany({ where: { orgId, role: 'ADMIN', isActive: true }, select: { id: true } });
+    if (admins.length === 0) return false;
+    const since = new Date(Date.now() - PLAN_LIMIT_NOTICE_WINDOW_MS);
+    const recent = await prisma.notification.findMany({
+      where: { userId: { in: admins.map((a) => a.id) }, type: PLAN_LIMIT_NOTICE_TYPE, createdAt: { gte: since } },
+      select: { userId: true },
+    });
+    const told = new Set(recent.map((r) => r.userId));
+    await Promise.all(
+      admins
+        .filter((a) => !told.has(a.id))
+        .map((a) => notify(a.id, PLAN_LIMIT_NOTICE_TYPE, { usage: gate.usage, limit: gate.limit ?? 0 }, '/admin/billing')),
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }

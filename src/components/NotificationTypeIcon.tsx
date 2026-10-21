@@ -39,6 +39,7 @@ const NOTIFICATION_TYPE_ICONS: Record<string, LucideIcon> = {
   announcement: Megaphone,
   mentor_application: GraduationCap,
   plan_change: Receipt,
+  plan_limit: Receipt,
   interaction: FileText,
   meeting: CalendarClock,
   goal: Target,

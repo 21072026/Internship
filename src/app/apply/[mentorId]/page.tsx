@@ -45,6 +45,13 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
         body: JSON.stringify({ mentorId, ...form, skills }),
       });
       const data = await res.json();
+      // A capacity refusal — the mentor is full, paused, or the programme is at
+      // its limit (#1745) — shows the translated "not taking applications"
+      // panel, never the server's English text and never anything commercial.
+      if (res.status === 409 && (data.code === 'mentor_full' || data.code === 'mentor_not_accepting')) {
+        setAccepting(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed');
       setDone(true);
     } catch (err) {

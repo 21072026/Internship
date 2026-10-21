@@ -9,7 +9,7 @@ import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { dispatchWebhook } from '@/lib/webhooks';
-import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { checkActiveRelationLimit, notifyAdminsOfPlanLimit } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
@@ -108,9 +108,19 @@ export async function POST(request: Request) {
   // the mentor's tenant. Checked here too (before an account is created) so an
   // over-limit org doesn't pile up applications nobody can accept; enforced
   // authoritatively again at accept time by the shared decision service.
+  //
+  // The person refused here is a prospective MENTEE (#1745): never a plan name,
+  // a price or an upgrade CTA. They get the same capacity answer as a full
+  // mentor's link (mentor_full, 409, already translated on the apply page),
+  // and the org's admins — who can lift the cap — get the notification.
+  // e2e/upgrade-prompt.spec.ts fails if a plan name or a price reaches this body.
   const gate = await checkActiveRelationLimit(mentor.orgId);
   if (!gate.allowed) {
-    return NextResponse.json(planLimitError(gate), { status: 403 });
+    await notifyAdminsOfPlanLimit(mentor.orgId, gate);
+    return NextResponse.json(
+      { error: 'This mentor is not taking new applications right now', code: 'mentor_full' },
+      { status: 409 }
+    );
   }
 
   const mentee = await prisma.user.create({

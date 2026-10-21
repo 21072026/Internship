@@ -11,6 +11,8 @@ import { ReferrerPicker } from '@/components/ReferrerPicker';
 import { encodeReferrer } from '@/lib/referrer';
 import { useT } from '@/i18n/client';
 import { copyToClipboard } from '@/lib/clipboard';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateError } from '@/lib/upgradePrompt';
 
 export default function NewMenteePage() {
   const t = useT();
@@ -26,6 +28,8 @@ export default function NewMenteePage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // The plan cap's 403 (#1745): the door, with "your admin has been notified".
+  const [gate, setGate] = useState<GateError | null>(null);
   const [setPasswordUrl, setSetPasswordUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // Possible-duplicate matches returned by the API's 409 pre-flight (#841).
@@ -38,6 +42,7 @@ export default function NewMenteePage() {
   const doSubmit = async (confirmDuplicate: boolean) => {
     setSaving(true);
     setError('');
+    setGate(null);
     try {
       const res = await fetch('/api/mentor/mentees', {
         method: 'POST',
@@ -49,6 +54,12 @@ export default function NewMenteePage() {
       // can review, edit the form, or explicitly create anyway.
       if (res.status === 409 && data.error === 'possible_duplicate') {
         setDuplicates(data.possibleDuplicates ?? []);
+        setSaving(false);
+        return;
+      }
+      const g = parseGateBody(data);
+      if (g) {
+        setGate(g);
         setSaving(false);
         return;
       }
@@ -131,6 +142,7 @@ export default function NewMenteePage() {
       <Card className="max-w-2xl">
         <CardHeader><CardTitle>{t.mentor.addMentee}</CardTitle></CardHeader>
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+        {gate && <UpgradePrompt gate={gate} className="mb-4" />}
         {duplicates.length > 0 && (
           <div data-testid="possible-duplicates" className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
             <p className="font-medium text-amber-800">{t.duplicates.possibleDuplicatesTitle}</p>
