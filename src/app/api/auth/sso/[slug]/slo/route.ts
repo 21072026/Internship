@@ -8,6 +8,7 @@ import { samlLogoutForOrg } from '@/lib/ssoSaml';
 import { ensureSpSigningKey } from '@/lib/ssoSpKey';
 import { endAllSessionsForSlo } from '@/lib/ssoLogout';
 import { requestOrigin } from '@/lib/servedHosts';
+import { parseRedirectBinding } from '@/lib/samlRedirectQuery';
 
 // GET|POST /api/auth/sso/[slug]/slo — our SAML SingleLogoutService (#1952),
 // published in the SP metadata. Two kinds of message arrive here:
@@ -40,7 +41,14 @@ const SLO_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 type Message = { SAMLRequest?: string; SAMLResponse?: string; RelayState?: string; Signature?: string; SigAlg?: string };
 
-async function handle(request: Request, slug: string, binding: 'redirect' | 'post', msg: Message, rawQuery: string) {
+async function handle(
+  request: Request,
+  slug: string,
+  binding: 'redirect' | 'post',
+  msg: Message,
+  rawQuery: string,
+  malformed?: string,
+) {
   const origin = requestOrigin((n) => request.headers.get(n));
   const signedOut = () => NextResponse.redirect(`${origin}/auth/signin`, 303);
 
@@ -65,15 +73,6 @@ async function handle(request: Request, slug: string, binding: 'redirect' | 'pos
   const { privateKeyPem } = await ensureSpSigningKey(org);
   const saml = samlLogoutForOrg(slug, org, privateKeyPem);
 
-  // The IdP's answer to our LogoutRequest. We were already signed out locally;
-  // a response that does not verify changes nothing either way.
-  if (!msg.SAMLRequest) {
-    if (msg.SAMLResponse && binding === 'redirect' && msg.Signature) {
-      await saml.validateRedirectAsync(msg as Record<string, string>, rawQuery).catch(() => null);
-    }
-    return signedOut();
-  }
-
   const refuse = async (reason: string) => {
     await logActivity({
       action: 'auth.slo_refused',
@@ -86,6 +85,18 @@ async function handle(request: Request, slug: string, binding: 'redirect' | 'pos
     });
     return NextResponse.json({ code: 'slo_refused', error: 'The logout request could not be verified' }, { status: 400 });
   };
+  // A redirect query with a repeated or unreadable binding parameter is never
+  // read at all (src/lib/samlRedirectQuery.ts says why).
+  if (malformed) return refuse(malformed);
+
+  // The IdP's answer to our LogoutRequest. We were already signed out locally;
+  // a response that does not verify changes nothing either way.
+  if (!msg.SAMLRequest) {
+    if (msg.SAMLResponse && binding === 'redirect' && msg.Signature) {
+      await saml.validateRedirectAsync(msg as Record<string, string>, rawQuery).catch(() => null);
+    }
+    return signedOut();
+  }
 
   let profile: Profile | null;
   try {
@@ -127,9 +138,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const limited = enforceRateLimit(request, 'sso-slo', SLO_LIMIT);
   if (limited) return limited;
   const { slug } = await params;
-  const url = new URL(request.url);
-  const msg = Object.fromEntries(url.searchParams.entries()) as Message;
-  return handle(request, slug, 'redirect', msg, url.search.replace(/^\?/, ''));
+  // Signed bytes and parsed message from the SAME tokens: never
+  // `url.searchParams`, which keeps the LAST of a repeated key while node-saml
+  // verifies the FIRST.
+  const parsed = parseRedirectBinding(new URL(request.url).search);
+  if (typeof parsed === 'string') return handle(request, slug, 'redirect', {}, '', parsed);
+  return handle(request, slug, 'redirect', parsed.message, parsed.canonicalQuery);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {

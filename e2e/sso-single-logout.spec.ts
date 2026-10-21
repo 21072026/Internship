@@ -116,6 +116,20 @@ test('IdP-initiated: only a verified LogoutRequest for this org ends sessions an
   expect(await liveDevices(member.id)).toBeGreaterThan(0);
   expect((await prisma.user.findUniqueOrThrow({ where: { id: member.id } })).sessionsValidFrom).toBeNull();
 
+  // Parameter smuggling: a genuinely signed request for one person, with a
+  // second SAMLRequest naming somebody else appended. The signature covers the
+  // first; the message must never be read from the second (#1952 follow-up).
+  const colleague = await seedMember(org.id, 'slo-colleague');
+  const own = await mintLogoutRequest({ destination, email: colleague.email });
+  const smuggled = await mintLogoutRequest({ destination, email: member.email, mode: 'unsigned' });
+  const injected = `${own.query}&${smuggled.query!.split('&')[0]}`;
+  const smuggle = await page.request.get(`${slo}?${injected}`, { maxRedirects: 0 });
+  expect(smuggle.status()).toBe(400);
+  expect((await smuggle.json()).code).toBe('slo_refused');
+  expect(await sessionEmail(page)).toBe(member.email);
+  expect((await prisma.user.findUniqueOrThrow({ where: { id: member.id } })).sessionsValidFrom).toBeNull();
+  expect((await prisma.user.findUniqueOrThrow({ where: { id: colleague.id } })).sessionsValidFrom).toBeNull();
+
   // A genuine request naming another tenant's user, sent through THIS tenant's
   // endpoint, touches nobody — and still answers like any other.
   const foreign = await mintLogoutRequest({ destination, email: outsider.email });

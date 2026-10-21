@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**SAML Single Logout: a repeated redirect parameter is refused (#1952 follow-up, security):** the SLO endpoint built the message it acts on from `url.searchParams` (last value of a repeated key) while node-saml verified the signature over the first matching token, so a genuine signed LogoutRequest with a second `SAMLRequest=` appended could sign out any other user of the org. `parseRedirectBinding()` (`src/lib/samlRedirectQuery.ts`) now refuses any repeated binding parameter (`slo_refused`, `auth.slo_refused` logged) and hands node-saml a canonical query rebuilt from the same raw tokens the message is decoded from. Regression covered in `e2e/sso-single-logout.spec.ts` and `scripts/test/saml-redirect-query.test.mjs`."
+}
