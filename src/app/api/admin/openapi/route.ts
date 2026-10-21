@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { APP_VERSION } from '@/lib/version';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
+import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 
 // The OpenAPI description of the ENTIRE internal API, for the admin API
 // explorer at /admin/api-explorer.
@@ -15,6 +16,11 @@ import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 // to spend weeks assembling by hand, and it must never be reachable without a
 // signed-in ADMIN session. The guard below is the same requireAdmin() shape as
 // src/app/api/admin/api-keys/route.ts, and returns the same 401 body.
+//
+// And why it is SUPER-ADMIN only (#1575). It is not tenant data: it is one map
+// of the whole deployment — every tenant's routes, the guard class of each, and
+// exactly which ones the analyser could not prove tenant-scoped — so a customer
+// org's ADMIN has no business reading it. A tenant admin gets 403.
 //
 // Why the document arrives through an env var. The Docker runner stage copies
 // only public/, .next/, node_modules/, package.json and prisma/ - neither src/
@@ -67,7 +73,12 @@ function loadSpec(): Spec | null {
 }
 
 export async function GET(request: Request) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isSuperAdmin(session))) {
+    await logCrossTenantDenial(session, 'GET /api/admin/openapi', null);
+    return NextResponse.json({ code: 'super_admin_only', error: 'The internal API description is for the platform operator only' }, { status: 403 });
+  }
 
   const spec = loadSpec();
   if (!spec) {

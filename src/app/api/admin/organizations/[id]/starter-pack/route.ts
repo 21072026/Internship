@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
-import { logActivity } from '@/lib/activity';
+import { recordOrgWrite } from '@/lib/orgAudit';
 import { getLocale } from '@/i18n/server';
 import { applyOrgStarterPack } from '@/lib/orgStarterPack';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
@@ -39,6 +39,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const summary = await applyOrgStarterPack(id, { locale: await getLocale(), sampleProgram: parsed.data.sampleProgram });
   const created = Object.values(summary).reduce((n, s) => n + (s?.created ?? 0), 0);
-  await logActivity({ action: 'organization.starter_pack', actorId: session.user.id, actorEmail: session.user.email ?? null, detail: `org ${id}: created ${created}` });
+  await recordOrgWrite({
+    orgId: id,
+    action: 'organization.starter_pack',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    detail: `created ${created}${parsed.data.sampleProgram ? ' (with sample programme)' : ''}`,
+    request: req,
+  });
   return NextResponse.json({ summary });
 }

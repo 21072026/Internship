@@ -14,15 +14,18 @@
 // run with no tenant context bound at all.
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { skillKey } from '@/lib/skills';
 import { SKILL_SEED, buildSkillIndex } from '@/lib/skillSeed';
 import {
   DEFAULT_EDGE_WEIGHT,
   DEFAULT_EXPANSION_DEPTH,
   MAX_EXPANSION_DEPTH,
+  MAX_SKILL_KEY_LENGTH,
   expandAdjacency,
   followMerges,
   skillKeyFromFolded,
+  skillLabel,
 } from '@/lib/skillTaxonomyRule';
 import type { SkillEdgeRow, WeightedSkill } from '@/lib/skillTaxonomyRule';
 
@@ -265,4 +268,205 @@ export async function seedSkillTaxonomy(
   const edges = await prisma.skillEdge.createMany({ data: edgeData, skipDuplicates: true });
 
   return { skills: skills.count, aliases: aliases.count, edges: edges.count };
+}
+
+// ─── Suggest + dual-write (#1818) ────────────────────────────────────────────
+
+/** Orgs this process has already seen with a vocabulary — skips the count query. */
+const seededOrgs = new Set<string>();
+
+/**
+ * Make sure an org has its starter vocabulary before anything reads or writes
+ * against it. An org created after the deploy's backfill would otherwise offer
+ * an empty picker until the next deploy. Cheap after the first call.
+ */
+export async function ensureSkillTaxonomy(orgId: string): Promise<void> {
+  if (seededOrgs.has(orgId)) return;
+  const count = await prisma.skill.count({ where: { orgId } });
+  if (count === 0) await seedSkillTaxonomy(orgId);
+  seededOrgs.add(orgId);
+}
+
+export interface SkillSuggestion {
+  id: string;
+  key: string;
+  label: string;
+}
+
+export const SUGGEST_DEFAULT_LIMIT = 8;
+export const SUGGEST_MAX_LIMIT = 20;
+
+/**
+ * Autocomplete over an org's ACTIVE vocabulary: a label (any of the three) or
+ * an alias that starts with what was typed, then labels that merely contain it.
+ * Labels compare case-insensitively through the column collation; aliases by
+ * the fold, so "ReactJS" and "yazilim" find their skills too.
+ */
+export async function suggestSkills(
+  orgId: string,
+  q: string,
+  locale: string,
+  limit: number = SUGGEST_DEFAULT_LIMIT,
+): Promise<SkillSuggestion[]> {
+  const typed = q.trim().slice(0, 60);
+  const folded = skillKey(typed);
+  if (!folded) return [];
+  const take = Math.max(1, Math.min(SUGGEST_MAX_LIMIT, Math.floor(limit) || SUGGEST_DEFAULT_LIMIT));
+  await ensureSkillTaxonomy(orgId);
+
+  const live = { orgId, status: 'ACTIVE', mergedIntoId: null };
+  const select = { id: true, key: true, labelEn: true, labelTr: true, labelDe: true } as const;
+  const [byLabel, byAlias, byContains] = await Promise.all([
+    prisma.skill.findMany({
+      where: {
+        ...live,
+        OR: [
+          { labelEn: { startsWith: typed } },
+          { labelTr: { startsWith: typed } },
+          { labelDe: { startsWith: typed } },
+          { key: { startsWith: folded } },
+        ],
+      },
+      select,
+      take: SUGGEST_MAX_LIMIT,
+    }),
+    prisma.skillAlias.findMany({
+      where: { orgId, key: { startsWith: folded }, skill: live },
+      select: { skill: { select } },
+      take: SUGGEST_MAX_LIMIT,
+    }),
+    prisma.skill.findMany({
+      where: {
+        ...live,
+        OR: [{ labelEn: { contains: typed } }, { labelTr: { contains: typed } }, { labelDe: { contains: typed } }],
+      },
+      select,
+      take: SUGGEST_MAX_LIMIT,
+    }),
+  ]);
+
+  const out: SkillSuggestion[] = [];
+  const seen = new Set<string>();
+  const push = (rows: { id: string; key: string; labelEn: string; labelTr: string; labelDe: string }[]) => {
+    const ranked = rows
+      .map((row) => ({ row, label: skillLabel(row, locale) }))
+      .sort((a, b) => a.label.length - b.label.length || a.label.localeCompare(b.label));
+    for (const { row, label } of ranked) {
+      if (seen.has(row.id) || out.length >= take) continue;
+      seen.add(row.id);
+      out.push({ id: row.id, key: row.key, label });
+    }
+  };
+  push(byLabel);
+  push(byAlias.map((a) => a.skill));
+  push(byContains);
+  return out;
+}
+
+/**
+ * Dual-write (#1818): mirror a person's free-text `User.skills` onto `UserSkill`.
+ * The JSON stays the source of truth until the contract PR, so the mirror is
+ * exactly "what that list resolves to": missing rows are created, rows whose
+ * skill left the list are removed. A term nothing resolves is parked in the
+ * curation queue (`UnmappedSkillTerm`, PENDING) — never dropped. The next
+ * deploy's backfill recomputes the queue's occurrence counts.
+ *
+ * Never throws: the person's save already happened, and a mirror that failed
+ * is repaired by the next backfill. Callers just `await` it.
+ */
+export async function syncUserSkills(userId: string, orgId: string | null, skills: readonly string[]): Promise<void> {
+  if (!orgId) return;
+  try {
+    const wanted = await resolveForSync(orgId, skills);
+    const current = await prisma.userSkill.findMany({ where: { userId }, select: { skillId: true } });
+    const have = new Set(current.map((r) => r.skillId));
+    const stale = [...have].filter((id) => !wanted.has(id));
+    if (stale.length > 0) await prisma.userSkill.deleteMany({ where: { userId, skillId: { in: stale } } });
+    const fresh = [...wanted].filter((id) => !have.has(id));
+    if (fresh.length > 0) {
+      await prisma.userSkill.createMany({
+        data: fresh.map((skillId) => ({ userId, skillId, source: 'SELF' })),
+        skipDuplicates: true,
+      });
+    }
+  } catch (err) {
+    logger.warning('skills.sync_user_failed', { userId, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** Same as `syncUserSkills`, for a requisition's `requiredSkills`. */
+export async function syncRequisitionSkills(requisitionId: string, orgId: string, skills: readonly string[]): Promise<void> {
+  try {
+    const wanted = await resolveForSync(orgId, skills);
+    const current = await prisma.requisitionSkill.findMany({ where: { requisitionId }, select: { skillId: true } });
+    const have = new Set(current.map((r) => r.skillId));
+    const stale = [...have].filter((id) => !wanted.has(id));
+    if (stale.length > 0) await prisma.requisitionSkill.deleteMany({ where: { requisitionId, skillId: { in: stale } } });
+    const fresh = [...wanted].filter((id) => !have.has(id));
+    if (fresh.length > 0) {
+      await prisma.requisitionSkill.createMany({
+        data: fresh.map((skillId) => ({ requisitionId, skillId, required: true })),
+        skipDuplicates: true,
+      });
+    }
+  } catch (err) {
+    logger.warning('skills.sync_requisition_failed', { requisitionId, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** Resolve a list for a mirror write; queue what does not resolve. */
+async function resolveForSync(orgId: string, skills: readonly string[]): Promise<Set<string>> {
+  await ensureSkillTaxonomy(orgId);
+  const resolved = await resolveMany(orgId, skills);
+  const wanted = new Set<string>();
+  const unmapped = new Map<string, string>();
+  for (const raw of skills) {
+    const hit = resolved.get(raw);
+    if (hit) wanted.add(hit.id);
+    else {
+      const key = skillKey(raw);
+      if (key && key.length <= MAX_SKILL_KEY_LENGTH && !unmapped.has(key)) unmapped.set(key, raw.trim().slice(0, 60));
+    }
+  }
+  if (unmapped.size > 0) {
+    await prisma.unmappedSkillTerm.createMany({
+      data: [...unmapped].map(([normalizedKey, term]) => ({ orgId, normalizedKey, term, occurrences: 1 })),
+      skipDuplicates: true,
+    });
+  }
+  return wanted;
+}
+
+// ─── Overlap inputs (#1821) ──────────────────────────────────────────────────
+
+/**
+ * The org's edges touching `skillIds` — exactly what `skillOverlap()` /
+ * `requisitionSkillMatch()` need for one-hop adjacency from those skills.
+ * Edges into a retired or merged skill are dropped: a match is never explained
+ * by a skill the org has withdrawn.
+ */
+export async function loadSkillEdges(orgId: string, skillIds: readonly string[]): Promise<SkillEdgeRow[]> {
+  const ids = [...new Set(skillIds)];
+  if (ids.length === 0) return [];
+  const live = { status: 'ACTIVE', mergedIntoId: null };
+  return prisma.skillEdge.findMany({
+    where: {
+      orgId,
+      OR: [{ fromSkillId: { in: ids } }, { toSkillId: { in: ids } }],
+      from: live,
+      to: live,
+    },
+    select: { fromSkillId: true, toSkillId: true, weight: true, kind: true },
+  });
+}
+
+/** Display labels for skill ids, in `locale` (EN fallback). */
+export async function skillLabels(orgId: string, skillIds: readonly string[], locale: string): Promise<Map<string, string>> {
+  const ids = [...new Set(skillIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.skill.findMany({
+    where: { orgId, id: { in: ids } },
+    select: { id: true, labelEn: true, labelTr: true, labelDe: true },
+  });
+  return new Map(rows.map((r) => [r.id, skillLabel(r, locale)]));
 }
