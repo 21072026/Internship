@@ -230,6 +230,7 @@ model Organization {
   // Nightly relationship-health snapshots (#1901).
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
+  mentoringAgreements     MentoringAgreement[]
   formDefinitions         FormDefinition[]
   formResponses           FormResponse[]
   surveyCampaigns         SurveyCampaign[]
@@ -780,12 +781,12 @@ model User {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  mentorRelations                   MentorshipRelation[]          @relation("MentorRelations")
-  menteeRelations                   MentorshipRelation[]          @relation("MenteeRelations")
-  statusChanges                     StatusChange[]                @relation("StatusChangedBy")
+  mentorRelations                   MentorshipRelation[]           @relation("MentorRelations")
+  menteeRelations                   MentorshipRelation[]           @relation("MenteeRelations")
+  statusChanges                     StatusChange[]                 @relation("StatusChangedBy")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
-  tags                              UserTag[]                     @relation("UserTags")
+  tags                              UserTag[]                      @relation("UserTags")
   // Canonical skills (#1815). `skills` above stays the free-text JSON until a
   // separate contract PR retires it; this is the joinable twin.
   skillRows                         UserSkill[]
@@ -795,90 +796,91 @@ model User {
   pushSubscriptions                 PushSubscription[]
   nativePushTokens                  NativePushToken[]
   conversationParticipants          ConversationParticipant[]
-  ownedProjects                     Project[]                     @relation("ProjectOwner")
-  projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
+  ownedProjects                     Project[]                      @relation("ProjectOwner")
+  projectMemberships                ProjectMember[]                @relation("ProjectMemberships")
   availabilitySlots                 AvailabilitySlot[]
-  availabilityExceptions            AvailabilityException[]       @relation("AvailabilityExceptions")
-  bookingPolicy                     MentorBookingPolicy?          @relation("MentorBookingPolicy")
-  company                           Company?                      @relation("CompanyUsers", fields: [companyId], references: [id])
-  source                            Source?                       @relation(fields: [sourceId], references: [id])
-  documents                         Document[]                    @relation("DocumentOwner")
+  availabilityExceptions            AvailabilityException[]        @relation("AvailabilityExceptions")
+  bookingPolicy                     MentorBookingPolicy?           @relation("MentorBookingPolicy")
+  company                           Company?                       @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                            Source?                        @relation(fields: [sourceId], references: [id])
+  documents                         Document[]                     @relation("DocumentOwner")
   personalNotes                     PersonalNote[]
   consents                          UserConsent[]
   contributorTermsAcceptances       ContributorTermsAcceptance[]
+  mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
-  companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
-  companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
-  mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
-  decidedRequests                   MentorshipRequest[]           @relation("DecidedMentorshipRequests")
-  preferredInRequests               MentorshipRequest[]           @relation("PreferredMentorRequests")
-  decidedMentorApplications         MentorApplication[]           @relation("DecidedMentorApplications")
-  handledCompanyInquiries           CompanyInquiry[]              @relation("HandledCompanyInquiries")
-  supportTickets                    SupportTicket[]               @relation("SupportRequester")
-  assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
-  supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
-  authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
-  sessionNotes                      SessionNote[]                 @relation("SessionNoteAuthor")
-  sessionNoteRevisions              SessionNoteRevision[]         @relation("SessionNoteRevisionAuthor")
+  companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
+  companyNeedAlerts                 CompanyNeedAlert[]             @relation("CompanyNeedAlertMentee")
+  mentorshipRequests                MentorshipRequest[]            @relation("MentorshipRequests")
+  decidedRequests                   MentorshipRequest[]            @relation("DecidedMentorshipRequests")
+  preferredInRequests               MentorshipRequest[]            @relation("PreferredMentorRequests")
+  decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
+  handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
+  supportTickets                    SupportTicket[]                @relation("SupportRequester")
+  assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
+  supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
+  authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
+  sessionNotes                      SessionNote[]                  @relation("SessionNoteAuthor")
+  sessionNoteRevisions              SessionNoteRevision[]          @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
-  referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
-  referredUsers                     User[]                        @relation("UserReferrals")
-  sentInvitations                   InvitationToken[]             @relation("InvitationInviter")
-  assignedProjectTasks              ProjectTask[]                 @relation("ProjectTaskAssignee")
-  authoredProjectTasks              ProjectTask[]                 @relation("ProjectTaskAuthor")
-  projectJoinRequests               ProjectJoinRequest[]          @relation("JoinRequester")
-  decidedJoinRequests               ProjectJoinRequest[]          @relation("JoinRequestDecider")
-  taskTemplates                     ProjectTaskTemplate[]         @relation("TaskTemplateAuthor")
-  agendaTemplates                   AgendaTemplate[]              @relation("AgendaTemplateAuthor")
-  mentorOnboardings                 MenteeOnboarding[]            @relation("OnboardingMentor")
-  menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
-  missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
-  missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
-  weeklyReportReminders             WeeklyReportReminder[]        @relation("WeeklyReportReminderRecipient")
-  createdOffers                     Offer[]                       @relation("OfferCreatedBy")
-  decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
-  reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
+  referredBy                        User?                          @relation("UserReferrals", fields: [referredById], references: [id])
+  referredUsers                     User[]                         @relation("UserReferrals")
+  sentInvitations                   InvitationToken[]              @relation("InvitationInviter")
+  assignedProjectTasks              ProjectTask[]                  @relation("ProjectTaskAssignee")
+  authoredProjectTasks              ProjectTask[]                  @relation("ProjectTaskAuthor")
+  projectJoinRequests               ProjectJoinRequest[]           @relation("JoinRequester")
+  decidedJoinRequests               ProjectJoinRequest[]           @relation("JoinRequestDecider")
+  taskTemplates                     ProjectTaskTemplate[]          @relation("TaskTemplateAuthor")
+  agendaTemplates                   AgendaTemplate[]               @relation("AgendaTemplateAuthor")
+  mentorOnboardings                 MenteeOnboarding[]             @relation("OnboardingMentor")
+  menteeOnboarding                  MenteeOnboarding[]             @relation("OnboardingMentee")
+  missingDocumentReminderSubjects   DocumentRequirementReminder[]  @relation("MissingDocumentReminderSubject")
+  missingDocumentReminderRecipients DocumentRequirementReminder[]  @relation("MissingDocumentReminderRecipient")
+  weeklyReportReminders             WeeklyReportReminder[]         @relation("WeeklyReportReminderRecipient")
+  createdOffers                     Offer[]                        @relation("OfferCreatedBy")
+  decidedOffers                     Offer[]                        @relation("OfferDecidedBy")
+  reviewedWeeklyReports             WeeklyReport[]                 @relation("WeeklyReportReviewer")
   // Report subscriptions this user receives (#1905); removed with the user.
-  reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
-  surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
-  savedViews                        SavedView[]                   @relation("SavedViewAuthor")
+  reportSubscriptions               ReportSubscription[]           @relation("ReportSubscriptionRecipient")
+  surveyInvitations                 SurveyInvitation[]             @relation("SurveyInvitee")
+  savedViews                        SavedView[]                    @relation("SavedViewAuthor")
   // Segmentation attribute values (#1920); removed with the user.
   attributeValues                   UserAttributeValue[]
-  aiArtifacts                       AiArtifact[]                  @relation("AiArtifactSubject")
-  attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
-  attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
-  surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
+  aiArtifacts                       AiArtifact[]                   @relation("AiArtifactSubject")
+  attendanceRecords                 MeetingAttendance[]            @relation("AttendanceSubject")
+  attendanceRecorded                MeetingAttendance[]            @relation("AttendanceRecorder")
+  surveyResponses                   SurveyResponse[]               @relation("SurveyRespondent")
   formResponses                     FormResponse[]
-  meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
-  ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
-  interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
-  applications                      Application[]                 @relation("ApplicationMentee")
-  applicationEvents                 ApplicationEvent[]            @relation("ApplicationEventActor")
-  decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
-  cancelledInterviewRequests        InterviewRequest[]            @relation("InterviewRequestCanceller")
+  meetingFeedback                   MeetingFeedback[]              @relation("MeetingFeedbackRater")
+  ownedRequisitions                 Requisition[]                  @relation("RequisitionOwner")
+  interviewRequests                 InterviewRequest[]             @relation("InterviewRequestMentee")
+  applications                      Application[]                  @relation("ApplicationMentee")
+  applicationEvents                 ApplicationEvent[]             @relation("ApplicationEventActor")
+  decidedInterviewRequests          InterviewRequest[]             @relation("InterviewRequestDecider")
+  cancelledInterviewRequests        InterviewRequest[]             @relation("InterviewRequestCanceller")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
   signInDevices                     SignInDevice[]
-  ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
-  authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
-  createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
-  suggestedAsMentee                 MatchFeedback[]               @relation("MatchFeedbackMentee")
-  suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
-  matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
+  ownedMessageTemplates             MessageTemplate[]              @relation("MessageTemplateOwner")
+  authoredMessageTemplates          MessageTemplate[]              @relation("MessageTemplateAuthor")
+  createdApiKeys                    ApiKey[]                       @relation("ApiKeyCreatedBy")
+  suggestedAsMentee                 MatchFeedback[]                @relation("MatchFeedbackMentee")
+  suggestedAsMentor                 MatchFeedback[]                @relation("MatchFeedbackMentor")
+  matchFeedbackActions              MatchFeedback[]                @relation("MatchFeedbackActor")
   /// Direct reporting line (#1781) — what the "never the direct manager"
   /// matching rule reads. Nullable and populated by hand or import for now.
   managerId                         String?
-  manager                           User?                         @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
-  directReports                     User[]                        @relation("UserManager")
+  manager                           User?                          @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports                     User[]                         @relation("UserManager")
   guidanceStates                    UserGuidanceState[]
-  createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
-  placements                        Placement[]                   @relation("PlacementMentee")
+  createdProgramCosts               ProgramCost[]                  @relation("ProgramCostCreatedBy")
+  placements                        Placement[]                    @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
   adminScopeGrants                  AdminScopeGrant[]
   // Text-only practice interviews (#2051).
-  practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
-  safeguardingReviews               SafeguardingFlag[]            @relation("SafeguardingReviewer")
+  practiceSessions                  PracticeSession[]              @relation("PracticeSessions")
+  safeguardingReviews               SafeguardingFlag[]             @relation("SafeguardingReviewer")
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -1036,6 +1038,57 @@ model ContributorTermsAcceptance {
   @@unique([userId, termsKey, version, projectId])
   @@index([userId])
   @@index([termsKey, version])
+}
+
+// The mentoring agreement (#1790, story #1788) — the ContributorTerms design,
+// per organisation: the text a pair accepts at kickoff is DATA, versioned, so
+// the exact wording someone accepted can be produced later. Changing the text
+// is a NEW version (new rows, one per locale), never an edit — the write
+// boundary (src/lib/mentoringAgreement.ts) has no update path at all and the
+// API refuses PATCH. Unlike contributor terms it belongs to the organisation
+// running the programme, hence orgId + TENANT_MODELS.
+model MentoringAgreement {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key             String        @default("default") @db.VarChar(64)
+  version         String        @db.VarChar(32)
+  locale          String        @db.VarChar(8)
+  // Exactly one locale per (org, key, version) binds; the others translate it.
+  isAuthoritative Boolean       @default(false)
+  body            String        @db.Text // markdown
+  effectiveFrom   DateTime
+  createdById     String?
+  createdAt       DateTime      @default(now())
+
+  @@unique([orgId, key, version, locale])
+  @@index([orgId, key, effectiveFrom])
+}
+
+// Who accepted which version for which pairing, and on which side. Written
+// once, never updated — a later version produces another row, so the history
+// is the record. Reached through its relation (tenant-scoped), like
+// StatusChange — deliberately not in TENANT_MODELS.
+model MentoringAgreementAcceptance {
+  id           String             @id @default(cuid())
+  relationId   String
+  relation     MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agreementKey String             @db.VarChar(64)
+  version      String             @db.VarChar(32)
+  // MENTOR | MENTEE — which side of the pairing signed.
+  role         String             @db.VarChar(16)
+  // The locale of the text that was shown when they accepted.
+  locale       String?            @db.VarChar(8)
+  acceptedAt   DateTime           @default(now())
+  // Hashed, never raw — the contributor-terms evidence rule.
+  ipHash       String?
+  uaHash       String?
+
+  @@unique([relationId, userId, version])
+  @@index([relationId])
+  @@index([userId])
 }
 
 // A referral source — the education/agency a mentee came from, or (#2421/#2570)
@@ -2870,16 +2923,29 @@ model ApiIdempotencyKey {
 // index constrains the per-tenant rows only; uniqueness of the global layer is
 // held by settings.ts being the single writer (read-modify-write, never a blind
 // insert).
+// Three scopes (#1553 org, #1619 programme): a row with neither id is the
+// GLOBAL layer, one with an orgId is that tenant's override, and one with an
+// orgId AND a programId is one programme's override inside that tenant. The
+// chain and its only writer live in src/lib/settings.ts; the typed reader is
+// src/lib/settingsResolver.ts. MySQL treats NULLs as distinct in a unique
+// index, so the widened key below binds programme rows only — the org and
+// global layers stay single because setSetting() reads before it writes.
 model Setting {
   id        String   @id @default(cuid())
   orgId     String?
+  // The programme container — the Cohort row, which #1622 renames to Program
+  // behind @@map("Cohort"), so this FK survives the rename untouched.
+  programId String?
   key       String
   value     String   @db.Text
   updatedAt DateTime @updatedAt
 
-  org Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org     Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  program Cohort?       @relation(fields: [programId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, key])
+  @@unique([orgId, programId, key])
+  @@index([orgId, key])
+  @@index([programId])
 }
 
 enum ProjectStatus {
@@ -3228,6 +3294,7 @@ model Cohort {
   programCosts     ProgramCost[]
   steps            ProgramStep[]
   adminScopeGrants AdminScopeGrant[]
+  settings         Setting[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -3458,13 +3525,14 @@ model MentorshipRelation {
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId      String?
 
-  mentor                User                     @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee                User                     @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company               Company?                 @relation(fields: [companyId], references: [id])
-  project               Project?                 @relation(fields: [projectId], references: [id])
-  cohort                Cohort?                  @relation(fields: [cohortId], references: [id])
+  mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company               Company?                       @relation(fields: [companyId], references: [id])
+  project               Project?                       @relation(fields: [projectId], references: [id])
+  cohort                Cohort?                        @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
+  agreementAcceptances  MentoringAgreementAcceptance[]
   slaBreaches           SlaBreach[]
   meetings              Meeting[]
   // Who attended its meetings (#2014), kept even when a meeting is deleted.
@@ -3488,11 +3556,11 @@ model MentorshipRelation {
   // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
   // here; see model RelationValue for why.
   value                 RelationValue?
-  rematchRequests       MentorshipRequest[]      @relation("RematchRequests")
-  previousRelation      MentorshipRelation?      @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
+  rematchRequests       MentorshipRequest[]            @relation("RematchRequests")
+  previousRelation      MentorshipRelation?            @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
   // but the FK cannot express that, so Prisma types it as a list.
-  nextRelations         MentorshipRelation[]     @relation("RelationChain")
+  nextRelations         MentorshipRelation[]           @relation("RelationChain")
   // Standing 1:1 rules on this pairing (#2013).
   meetingSeries         MeetingSeries[]
   // Nightly health snapshots (#1901); removed with the relation.
@@ -6114,6 +6182,29 @@ model JobLease {
   /// Cheap sweep of leases nobody renewed (an environment that shrank back to
   /// one replica, a renamed container).
   @@index([expiresAt])
+}
+
+// What the deploy's data migrations have done, one row per registered backfill
+// (#1540; prisma/backfills/registry.mjs, prisma/run-backfills.mjs). The id is
+// the registry entry's id. A `once` backfill with a recorded success is skipped
+// on later deploys; every other entry runs every deploy (they are idempotent)
+// and this row only records that it did and how it ended.
+//
+// INFRASTRUCTURE, NOT TENANT DATA: deliberately no `orgId` and deliberately NOT
+// in TENANT_MODELS (src/lib/orgContext.ts). A backfill runs across every
+// tenant at once; scoping its ledger to one would be meaningless. A later
+// isolation audit must not "fix" this.
+model BackfillRun {
+  id         String    @id @db.VarChar(96)
+  // ok | failed — of the latest run.
+  lastStatus String    @db.VarChar(16)
+  lastRunAt  DateTime
+  // The first successful run: what `once` reads.
+  firstOkAt  DateTime?
+  runs       Int       @default(0)
+  // The tail of the latest failure (exit code and the last output line).
+  lastError  String?   @db.Text
+  createdAt  DateTime  @default(now())
 }
 
 // ── Mail send budget ─────────────────────────────────────────────────────────
