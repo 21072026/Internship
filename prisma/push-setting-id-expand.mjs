@@ -20,28 +20,41 @@ import { PrismaClient } from '@prisma/client';
 // optional, and Prisma requires a model's unique criteria to consist only of
 // required fields ("Each model must have at least one unique criteria that has
 // only required fields") — `key` alone, still `@id`, satisfies that instead.
+//
+// The final block tracks the live model: #1619 added the nullable `programId`
+// (and its relation, which the expand block must carry too, or Cohort's
+// back-relation fails validation). The programme index re-key has its own
+// one-shot expand phase, prisma/push-setting-program-expand.mjs.
 const sourcePath = 'prisma/schema.prisma';
 const finalBlock =
   'model Setting {\n' +
   '  id        String   @id @default(cuid())\n' +
   '  orgId     String?\n' +
+  '  // The programme container — the Cohort row, which #1622 renames to Program\n' +
+  '  // behind @@map("Cohort"), so this FK survives the rename untouched.\n' +
+  '  programId String?\n' +
   '  key       String\n' +
   '  value     String   @db.Text\n' +
   '  updatedAt DateTime @updatedAt\n' +
   '\n' +
-  '  org Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)\n' +
+  '  org     Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)\n' +
+  '  program Cohort?       @relation(fields: [programId], references: [id], onDelete: Cascade)\n' +
   '\n' +
-  '  @@unique([orgId, key])\n' +
+  '  @@unique([orgId, programId, key])\n' +
+  '  @@index([orgId, key])\n' +
+  '  @@index([programId])\n' +
   '}\n';
 const expandBlock =
   'model Setting {\n' +
   '  id        String?\n' +
   '  orgId     String?\n' +
+  '  programId String?\n' +
   '  key       String   @id\n' +
   '  value     String   @db.Text\n' +
   '  updatedAt DateTime @updatedAt\n' +
   '\n' +
-  '  org Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)\n' +
+  '  org     Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)\n' +
+  '  program Cohort?       @relation(fields: [programId], references: [id], onDelete: Cascade)\n' +
   '}\n';
 const tempDirectory = await mkdtemp(join(tmpdir(), 'setting-id-expand-'));
 const expandPath = join(tempDirectory, 'schema.prisma');

@@ -298,6 +298,7 @@ if [ "${EXISTING_TABLES:-0}" -gt 0 ]; then
   _in_image "$IMAGE" node prisma/backfill-company-interest-scope.mjs || true
   _in_image "$IMAGE" node prisma/push-setting-id-expand.mjs || true
   _in_image "$IMAGE" node prisma/backfill-setting-id.mjs || true
+  _in_image "$IMAGE" node prisma/push-setting-program-expand.mjs || true
   _in_image "$IMAGE" node prisma/backfill-json-columns.mjs --repair || true
 fi
 
@@ -431,6 +432,7 @@ docker run -d \
   -e MAIL_BULK_URGENT_RESERVE="${MAIL_BULK_URGENT_RESERVE:-}" \
   -e MAIL_METER_MODE="${MAIL_METER_MODE:-}" \
   -e MAIL_THROTTLE_LADDER_SEC="${MAIL_THROTTLE_LADDER_SEC:-}" \
+  -e MAIL_FAILOVER_AFTER="${MAIL_FAILOVER_AFTER:-}" \
   -e MAIL_QUEUE_LANES="${MAIL_QUEUE_LANES:-}" \
   -e MAIL_WORKER_ENABLED="${MAIL_WORKER_ENABLED:-}" \
   -e JOBS_WORKER_ENABLED="${JOBS_WORKER_ENABLED:-}" \

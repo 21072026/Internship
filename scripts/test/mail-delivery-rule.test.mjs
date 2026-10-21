@@ -488,3 +488,29 @@ test('unmailable: real addresses, look-alikes and junk are left alone', () => {
   assert.equal(R.unmailableRecipient(null), null);
   assert.equal(R.unmailableRecipient(undefined), null);
 });
+
+// ── Failover (#1690) ─────────────────────────────────────────────────────────
+
+test('failover: primary → bulk after N goes, for mail that must reach a person, one way only', () => {
+  const base = { transport: 'primary', lane: 'CRITICAL', attempts: 0, releases: 0, after: 3, bulkAvailable: true };
+  assert.equal(R.failoverDue(base), false);
+  assert.equal(R.failoverDue({ ...base, attempts: 2 }), false);
+  assert.equal(R.failoverDue({ ...base, attempts: 3 }), true);
+  assert.equal(R.failoverDue({ ...base, attempts: 1, releases: 2 }), true);
+  assert.equal(R.failoverDue({ ...base, lane: 'TRANSACTIONAL', attempts: 5 }), true);
+  // Never the other way, never a blast, never without a bulk relay, never when off.
+  assert.equal(R.failoverDue({ ...base, transport: 'bulk', attempts: 9 }), false);
+  assert.equal(R.failoverDue({ ...base, lane: 'BULK', attempts: 9 }), false);
+  assert.equal(R.failoverDue({ ...base, bulkAvailable: false, attempts: 9 }), false);
+  assert.equal(R.failoverDue({ ...base, after: 0, attempts: 9 }), false);
+  assert.equal(R.failoverDue({ ...base, attempts: -4, releases: 2.9 }), false);
+});
+
+test('failover: MAIL_FAILOVER_AFTER', () => {
+  assert.equal(R.failoverAfter({}), R.DEFAULT_FAILOVER_AFTER);
+  assert.equal(R.failoverAfter({ MAIL_FAILOVER_AFTER: ' ' }), R.DEFAULT_FAILOVER_AFTER);
+  assert.equal(R.failoverAfter({ MAIL_FAILOVER_AFTER: '0' }), 0);
+  assert.equal(R.failoverAfter({ MAIL_FAILOVER_AFTER: '5' }), 5);
+  assert.equal(R.failoverAfter({ MAIL_FAILOVER_AFTER: '-1' }), R.DEFAULT_FAILOVER_AFTER);
+  assert.equal(R.failoverAfter({ MAIL_FAILOVER_AFTER: 'x' }), R.DEFAULT_FAILOVER_AFTER);
+});
