@@ -661,3 +661,39 @@ export function dedupeKeyFor(input: DedupeInput): string {
     }
   }
 }
+
+// ── Primary → bulk failover (#1690) ─────────────────────────────────────────
+//
+// A queued mail that must reach a person (the CRITICAL and TRANSACTIONAL
+// lanes) and keeps failing on the primary relay is tried on the bulk relay
+// instead, once the primary has had `MAIL_FAILOVER_AFTER` goes at it — failed
+// attempts plus relay-wide releases, both monotonic on the row, so a mail that
+// has failed over stays failed over. ONE WAY ONLY: a mail of the bulk channel
+// never borrows the primary relay's quota or reputation, and a BULK-lane mail
+// that rides the primary (no bulk relay configured) has nowhere to go.
+// The From identity moves with it (the bulk relay signs for its own domain,
+// `SMTP_BULK_FROM`), which is the caller's job — `failoverEnvelope()` in
+// emailService.ts.
+
+export const DEFAULT_FAILOVER_AFTER = 3;
+
+/** `MAIL_FAILOVER_AFTER`: goes on the primary before a failover; 0 turns it off. */
+export function failoverAfter(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.MAIL_FAILOVER_AFTER;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_FAILOVER_AFTER;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_FAILOVER_AFTER;
+}
+
+export function failoverDue(facts: {
+  transport: MailChannel;
+  lane: MailLane;
+  attempts: number;
+  releases: number;
+  after: number;
+  bulkAvailable: boolean;
+}): boolean {
+  if (facts.transport !== 'primary' || facts.lane === 'BULK' || !facts.bulkAvailable || facts.after <= 0) return false;
+  const goes = Math.max(0, Math.floor(facts.attempts)) + Math.max(0, Math.floor(facts.releases));
+  return goes >= facts.after;
+}

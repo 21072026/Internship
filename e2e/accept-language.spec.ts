@@ -44,7 +44,7 @@ test('a Turkish browser gets Turkish copy, and the switcher marks TR', async ({ 
     await expect(page.getByText('İhtiyacın olan her şey')).toBeVisible({ timeout: 20_000 });
     // No cookie was written: the language is re-read from the browser each time.
     expect((await context.cookies()).some((c) => c.name === 'locale')).toBe(false);
-    const active = page.locator('[aria-label="Language"] button.font-semibold').first();
+    const active = page.getByTestId('language-switcher').locator('button.font-semibold').first();
     await expect(active).toHaveText(/tr/i);
   } finally {
     await context.close();

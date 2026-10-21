@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { runWithOrg } from '@/lib/orgContext';
@@ -590,7 +590,7 @@ export async function runTrialReminders(
   return { considered: due.length, sent, skipped, failed, expired, contractEnds, decisionWindows, orgs: inScope.length };
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Register the daily trial sweep in this server process. Idempotent — a retried
@@ -615,7 +615,7 @@ const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 export function initTrialRemindersCron() {
   if (tasks.has('trial-reminders')) return;
 
-  const task = cron.schedule('20 5 * * *', async () => {
+  const task = scheduleLeased('20 5 * * *', async () => {
     try {
       const result = await runTrialReminders();
       // A tick that sent, skipped, failed or expired something is worth a line;
