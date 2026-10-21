@@ -275,6 +275,8 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Organization: {
     id: ID,
     stripeCustomerId: ID,
+    // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
+    publicHostToken: SERVER_SET,
     name: { exempt: 'capped at 120 by the create schema; tenants are created by a super-admin only' },
     slug: { exempt: 'slugified and sliced to 60 by the route before it is written' },
     vertical: ENUMERATED,

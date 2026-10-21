@@ -198,6 +198,15 @@ model Organization {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // Ownership of `publicHost` as a TENANT's own domain (#1661). The mapping
+  // above is an operator's word; a domain a tenant brings itself is proven with
+  // a DNS TXT record carrying `publicHostToken` (#1662), and only once
+  // `publicHostVerifiedAt` is set does the host resolve to this org
+  // (src/lib/hostOrg.ts) and pass the redirect allowlist (src/lib/servedHosts.ts).
+  // An unverified host resolves to nobody. Both nullable — additive (#2298).
+  publicHostToken      String?   @db.VarChar(64)
+  publicHostVerifiedAt DateTime?
+
   // Conferencing policy (#2007): which video room this tenant's meetings get.
   // On the Organization, NOT on Setting — Setting is keyed by a `String @id`,
   // and giving it an orgId re-keys the table (a drop-and-recreate under

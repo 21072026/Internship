@@ -15,6 +15,7 @@ import { IMPERSONATION_SESSION_MAX_MS } from '@/lib/impersonationHistory';
 import { AUTH_SSO_REQUIRED, authWrongWorld } from '@/lib/authErrors';
 import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 import { resolveRedirectTarget } from '@/lib/servedHosts';
+import { verifiedTenantHosts } from '@/lib/hostOrg';
 import { headers as requestHeaders } from 'next/headers';
 import { worldForHeaderBag, worldForHeaders, type World } from '@/lib/hostWorld';
 import { findUsersByEmail, findUsersInWorld, worldOfOrg } from '@/lib/userWorld';
@@ -868,8 +869,16 @@ export const authOptions: NextAuthOptions = {
     // same-origin url (safeRedirect.ts absoluteHere) and this keeps it iff its
     // host is one this deployment serves; everything else falls back to baseUrl,
     // exactly as NextAuth's default did. Byte-identical on the internship host.
-    redirect({ url, baseUrl }) {
-      return resolveRedirectTarget(url, baseUrl);
+    // A tenant's own DNS-verified domain (#1661) is a served host too; it lives
+    // in the database, so it is fetched here (cached) and passed in.
+    async redirect({ url, baseUrl }) {
+      let target: string | null = null;
+      try {
+        target = url.startsWith('/') ? null : new URL(url).hostname;
+      } catch {
+        // Not a URL: resolveRedirectTarget falls back to baseUrl for it.
+      }
+      return resolveRedirectTarget(url, baseUrl, await verifiedTenantHosts(target));
     },
   },
   events: {
