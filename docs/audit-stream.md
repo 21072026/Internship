@@ -115,7 +115,7 @@ The subset every SIEM maps, with the whole original record kept under `interncrm
 
 A tick runs **every five minutes** as the queued job `audit.drain` (#1676: enqueued by the
 scheduler from `src/lib/jobs/schedules.ts` under the `'scheduler'` lease, run by the job
-worker with retries and a `JobRun`; an admin can force one with
+worker with retries and a `JobRun`; a super admin can force one with
 `GET /api/cron?job=audit-drain`, which answers with the tick's counters). Each tick walks every
 active drain whose backoff has elapsed and ships its next batches.
 

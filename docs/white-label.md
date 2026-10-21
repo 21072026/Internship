@@ -183,6 +183,7 @@ Branding is resolved **and applied**. Two rules keep it honest:
 | Custom domain → tenant | host lookup, so the right tenant's branding and SSO config load | see [`custom-domain.md`](custom-domain.md) |
 | Manifest, favicon, apple-touch icon, iOS launch images, share card, JSON-LD logo (#2922) | `hostBrand()` → `src/app/manifest.ts`, `src/lib/brandMetadata.ts`, `src/lib/ogCard.tsx`, `PublicShell` | the organization mapped to the request's **host** |
 | Browser tint, default accent / palette, the mark in the chrome and on the sign-in tile (#2922) | `requestBrand()` → root layout, `/messages` viewport, `BrandProvider` → `BrandMark`/`BrandTile`, account accent picker | the signed-in user's `orgId`; signed out, the host's |
+| The invitation landing, `/auth/register?token=` (#1663) | `invitationBrand()` (`src/lib/invitationBrand.ts`) → a page-level `BrandProvider` over the request's | the **inviting** organization, for a live invitation of this host's world only; any other token (unknown, used, expired, revoked, other world) leaves the request's brand, answered alike |
 | Push notification icon (#2922) | `sendPushToUser()` (`src/lib/webPush.ts`) | the recipient's `orgId` |
 | Mail logo when no logo URL is set (#2922) | `emailBrand()`, the newsletter | the recipient's `orgId` (absolute, on its own host) |
 
@@ -197,7 +198,8 @@ of the feature:
   name — manifest, `application-name`, the iOS home-screen title — already
   follows a host-mapped brand.)
 - **Pre-login surfaces on an unmapped host.** Signed out, the only signal is the
-  host: a host no organization claims shows the vertical default.
+  host: a host no organization claims shows the vertical default — except the
+  invitation landing, whose token names the inviting organization (#1663).
 - **The newsletter archive** (`/newsletters`) renders the issue's *fields*
   natively rather than the mail HTML, so it carries no brand header at all; an
   archive URL has no recipient, and the reader whose session opens it is the

@@ -226,8 +226,11 @@ on the story, #2578. Nothing below has been run by the change that wrote it.
      org — it mails every trial reminder that is due and expires overdue trials
      to `TRIAL_EXPIRED`, exactly like the 05:20 UTC tick. Run it before real
      prospects are in the org, or right after the 05:20 run so nothing is due.
-     Copy the URL exactly: a mistyped `job=` value does not fail, it falls
-     through to the full cron mail batch. Signed in as an ADMIN of that org,
+     Copy the URL exactly: a mistyped `job=` value falls through to the full
+     cron mail batch, which is a super admin's (a tenant ADMIN gets a 403,
+     #1575). `orgId` is honoured only for the caller's own org or one a super
+     admin of the same world reaches. Signed in as an ADMIN of that org, on
+     the org's own host,
      the JSON's `trialReminders.orgs` must be `1` — which proves **only** the
      vertical gate (the org is counted in scope because its vertical is
      `MARKETING`), not that the trial stages exist; stage presence is proven

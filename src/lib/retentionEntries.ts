@@ -11,6 +11,8 @@ import {
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
 import { OUTBOUND_DRAFT_RETENTION_DAYS, pruneOutboundDrafts } from '@/lib/outboundDrafts';
+import { pruneDeliveryEvents } from '@/lib/emailSuppression';
+import { DELIVERY_EVENT_RETENTION_DAYS } from '@/lib/emailSuppressionRule';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { messageRetentionCutoff } from '@/lib/safeguarding';
 import { inquiryErasureData } from '@/lib/companyContactErasure';
@@ -896,6 +898,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A held mail that was decided — sent, scheduled, discarded or expired — keeps only its sealed one-line summary (subject, the recipient\'s name, a masked address) so the outbox can answer "what happened to that mail?" for a month; the mail itself is deleted the moment it is decided. Thirty days matches the dead-mail window of the mail queue next door. A draft still waiting is never touched: it expires on its own deadline first.',
     run: async (ctx) => pruneOutboundDrafts(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
+  },
+  {
+    key: 'emailDeliveryEvent',
+    // No setting: part of the suppression loop's design (#1692,
+    // docs/EMAIL_DELIVERABILITY.md § Bounces and complaints).
+    defaultDays: DELIVERY_EVENT_RETENTION_DAYS,
+    reason:
+      'A provider bounce/complaint event is kept for two questions only: "have we seen this event already?" (providers retry for hours, a day at most) and "how many soft bounces inside the seven-day window?". Thirty days answers both with room to spare. Each row holds an address, so it is not kept beyond that; the suppression it produced lives on in EmailSuppression, which is the record.',
+    run: async (ctx) => pruneDeliveryEvents(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
   },
   {
     key: 'trialReminder',

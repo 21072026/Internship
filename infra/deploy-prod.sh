@@ -132,7 +132,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
   for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM \
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
-           INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
+           INBOUND_EMAIL_DOMAIN INBOUND_SECRET EMAIL_WEBHOOK_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
            CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY \
            MAIL_RATE_PER_MIN MAIL_BURST MAIL_URGENT_RESERVE MAIL_BULK_RATE_PER_MIN MAIL_BULK_BURST MAIL_BULK_URGENT_RESERVE \
@@ -320,6 +320,7 @@ app_env_args() {
     -e SMTP_BULK_FROM="${SMTP_BULK_FROM:-}" \
     -e INBOUND_EMAIL_DOMAIN="${INBOUND_EMAIL_DOMAIN:-}" \
     -e INBOUND_SECRET="${INBOUND_SECRET:-}" \
+    -e EMAIL_WEBHOOK_SECRET="${EMAIL_WEBHOOK_SECRET:-}" \
     -e INBOUND_IMAP_HOST="${INBOUND_IMAP_HOST:-}" \
     -e INBOUND_IMAP_PORT="${INBOUND_IMAP_PORT:-}" \
     -e INBOUND_IMAP_USER="${INBOUND_IMAP_USER:-}" \
@@ -796,6 +797,11 @@ run_tool node prisma/check-marketing-orgs.mjs || true
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.
 run_tool node prisma/backfill-api-key-lifecycle.mjs || true
+# Admin tiers (#1567): every ADMIN without a recorded tier gets ORG_ADMIN —
+# exactly the power the role already carried. Only fills NULLs on ADMIN rows,
+# never touches a tier an operator set, never grants the platform tier (that
+# is User.isSuperAdmin). Converges to a no-op.
+run_tool node prisma/backfill-admin-level.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true
