@@ -12,6 +12,7 @@ import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
 import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
 import { initEvaluationRemindersCron } from '@/lib/evaluationDue';
 import { initProgramJourneyCron } from '@/lib/programJourney';
+import { initRosterFeedsCron } from '@/lib/jobs/rosterFeeds';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -78,5 +79,9 @@ export async function POST(request: Request) {
   // here with the others so every schedule in the product is registered from
   // one place until #1676 leases the scheduler.
   initAuditDrainCron();
+  // The roster-feed waker (#1967), every five minutes: ONE timer for every
+  // feed, each run under its own claim. Here because its alerts go through
+  // emailService.
+  initRosterFeedsCron();
   return NextResponse.json({ ok: true, started: true });
 }

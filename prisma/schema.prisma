@@ -6456,6 +6456,18 @@ model RosterFeed {
   cronExpression String?   @db.VarChar(120)
   lastRunAt      DateTime?
 
+  /// The run claim (#1967): a conditional UPDATE sets it to now + the claim
+  /// window, and only the process whose UPDATE matched may run the feed. It is
+  /// cleared when the run ends and simply expires if the process dies, so two
+  /// processes — the waker, a "Run now", a second replica — never run one feed
+  /// at the same time.
+  claimedUntil        DateTime?
+  /// Consecutive runs that ended FAILED or threw. Three pause the feed
+  /// (`enabled = false` + `pausedReason`), so a broken credential does not
+  /// retry against a customer's server for ever. A successful run resets it.
+  consecutiveFailures Int       @default(0)
+  pausedReason        String?   @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -6489,25 +6501,29 @@ model RosterRun {
   /// re-attempted next run instead of being skipped for ever.
   nextChunkIndex Int @default(0)
 
-  rowCount         Int     @default(0)
-  createdCount     Int     @default(0)
-  updatedCount     Int     @default(0)
-  unchangedCount   Int     @default(0)
-  skippedCount     Int     @default(0)
-  errorCount       Int     @default(0)
+  rowCount         Int       @default(0)
+  createdCount     Int       @default(0)
+  updatedCount     Int       @default(0)
+  unchangedCount   Int       @default(0)
+  skippedCount     Int       @default(0)
+  errorCount       Int       @default(0)
   /// Deprovisioning outcome (#1966).
-  deactivatedCount Int     @default(0)
-  reactivatedCount Int     @default(0)
+  deactivatedCount Int       @default(0)
+  reactivatedCount Int       @default(0)
   /// Why a safety valve stopped the run (`row_floor` / `deactivation_ceiling`),
   /// with the numbers, for the alert and the console.
-  safetyReason     String? @db.Text
+  safetyReason     String?   @db.Text
+  /// The admin who approved a run the ceiling stopped (#1967), and when an
+  /// admin dismissed the console banner for a failed or stopped run.
+  approvedById     String?
+  acknowledgedAt   DateTime?
   /// Keys the roster holds that the feed did not mention. Reported only —
   /// acting on them is #1966.
   absentKeys       Json?
   /// Host and path of the file, for the run log. Never a query string: it can
   /// carry a token.
-  source           String? @db.Text
-  error            String? @db.Text
+  source           String?   @db.Text
+  error            String?   @db.Text
 
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
