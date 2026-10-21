@@ -4,6 +4,7 @@ import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
 import { REQUISITION_STATUSES } from '@/lib/requisitions';
+import { IMPORT_ROW_CAP, MAX_OPEN_IMPORTS_PER_KEY } from '@/lib/api/v1Imports';
 
 // The day the pre-#1988 `candidates` alias key is removed from GET /candidates.
 const CANDIDATES_ALIAS_SUNSET = '2027-01-31';
@@ -301,6 +302,38 @@ export async function GET(request: Request) {
             active: { type: 'boolean' }, createdAt: when,
           },
         },
+        Import: {
+          type: 'object',
+          description: 'A queued bulk import (#3015). `counts` and `rows` appear once `status` is DONE.',
+          required: ['id', 'kind', 'dryRun', 'status', 'total', 'createdAt', 'expiresAt'],
+          properties: {
+            id: str,
+            kind: { type: 'string', enum: ['candidates'] },
+            dryRun: { type: 'boolean' },
+            status: { type: 'string', enum: ['PENDING', 'RUNNING', 'DONE', 'FAILED'] },
+            total: { type: 'integer' },
+            error: { type: ['string', 'null'], enum: ['key_inactive', 'run_failed', null] },
+            createdAt: when,
+            finishedAt: nwhen,
+            expiresAt: { ...when, description: 'The import and its report are gone after this instant (7 days).' },
+            counts: { type: 'object', additionalProperties: { type: 'integer' }, description: 'CREATE / SKIP / ERROR (UPDATE and UNCHANGED are always 0).' },
+            rows: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['row', 'key', 'status'],
+                properties: {
+                  row: { type: 'integer', description: '1-based position in the submitted array.' },
+                  key: { type: 'string', description: 'The row\u2019s e-mail, or `row <n>`.' },
+                  status: { type: 'string', enum: ['CREATE', 'SKIP', 'ERROR'] },
+                  reason: { type: 'string', description: 'SKIP: `duplicate_email`, `duplicate_in_batch` or `possible_duplicate`. ERROR: the field and why.' },
+                  id: { type: 'string', description: 'The created candidate (CREATE, not on a dry run).' },
+                  matches: { type: 'array', items: { type: 'object', properties: { id: str, signals: { type: 'array', items: str }, score: { type: 'number' } } } },
+                },
+              },
+            },
+          },
+        },
         Me: {
           type: 'object',
           description: 'What the presented key implies — and nothing else: no user, no candidate data.',
@@ -495,6 +528,62 @@ export async function GET(request: Request) {
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { $ref: '#/components/parameters/IdempotencyKey' }],
           responses: {
             '200': { description: 'Deleted', content: { 'application/json': { schema: { type: 'object', properties: { data: { type: 'object', properties: { id: str, deleted: { type: 'boolean' } } } } } } } },
+            '404': { $ref: '#/components/responses/NotFound' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/imports/candidates': {
+        post: {
+          summary: 'Import candidates in bulk (queued)',
+          description:
+            'Requires `candidates:write`. Up to ' +
+            IMPORT_ROW_CAP +
+            ' candidates, each in the body shape of `POST /candidates`. Answers 202 at once; the rows are created in the background and each one is judged on its own — a bad row is an ERROR in the report, not a 422 for the batch. An e-mail already in use is SKIP `duplicate_email` (with the match only when it is in the key\u2019s organisation), a repeat in the batch SKIP `duplicate_in_batch`, a look-alike SKIP `possible_duplicate` with the matches unless the row sets `allowPossibleDuplicate`. A row is created whole or not at all. `dryRun: true` reports what would happen and writes nothing. A key may have at most ' +
+            MAX_OPEN_IMPORTS_PER_KEY +
+            ' imports queued or running (409 `limit_reached`). Body limit 1 MB.',
+          security: [{ apiKey: ['candidates:write'] }],
+          parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['candidates'],
+                  properties: {
+                    candidates: { type: 'array', minItems: 1, maxItems: IMPORT_ROW_CAP, items: { type: 'object', description: 'The `POST /candidates` body.' } },
+                    dryRun: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '202': {
+              description: 'Queued',
+              headers: { ...rateLimitResponseHeaders, Location: { schema: str, description: 'The status resource.' } },
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/Import' } } } } },
+            },
+            '409': { $ref: '#/components/responses/Conflict' },
+            '422': { $ref: '#/components/responses/UnprocessableEntity' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/imports/{id}': {
+        get: {
+          summary: 'Get an import and its report',
+          description: 'Requires `candidates:write`. Only an import the calling key queued; any other id — another key\u2019s, another organisation\u2019s, an expired one — is 404, exactly like a missing one.',
+          security: [{ apiKey: ['candidates:write'] }],
+          parameters: [idParam],
+          responses: {
+            '200': {
+              description: 'The import',
+              headers: rateLimitResponseHeaders,
+              content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/Import' } } } } },
+            },
             '404': { $ref: '#/components/responses/NotFound' },
             ...errorResponses,
           },

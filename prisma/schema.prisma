@@ -2849,6 +2849,7 @@ model ApiKey {
   quotaPeriod     String?             @db.VarChar(10)
   quotaLimit      Int?
   usage           ApiKeyUsage[]
+  imports         ApiImport[]
   idempotencyKeys ApiIdempotencyKey[]
   webhooks        Webhook[]
 
@@ -2904,6 +2905,35 @@ model ApiIdempotencyKey {
   @@unique([apiKeyId, key])
   @@index([orgId])
   @@index([createdAt])
+}
+
+// A queued bulk candidate import from /api/v1 (#3015): POST
+// /api/v1/imports/candidates stores the rows and enqueues `api.import.candidates`;
+// the job runs them through the one import engine (runImport) and writes the
+// per-row report here. `input` holds the submitted rows only until the run
+// ends; the row itself is deleted after `expiresAt`.
+model ApiImport {
+  id         String    @id @default(cuid())
+  orgId      String
+  apiKeyId   String
+  apiKey     ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  kind       String    @db.VarChar(40)
+  dryRun     Boolean   @default(false)
+  // PENDING | RUNNING | DONE | FAILED
+  status     String    @default("PENDING") @db.VarChar(16)
+  total      Int
+  // The submitted rows (JSON); null once the run has ended.
+  input      String?   @db.LongText
+  // The per-row report (JSON); null until DONE.
+  report     String?   @db.LongText
+  error      String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  expiresAt  DateTime
+
+  @@index([orgId])
+  @@index([apiKeyId, status])
+  @@index([expiresAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support

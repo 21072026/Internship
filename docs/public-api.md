@@ -132,6 +132,40 @@ key-owned subscription stops receiving the moment its key is revoked or expires.
 `/api/v1/hooks` is on the demo blocklist for the same reason as
 `/api/admin/webhooks`.
 
+## Bulk candidate import (#3015, `src/lib/api/v1Imports.ts`)
+
+- **`POST /imports/candidates`** `{ candidates: [...≤500], dryRun? }` →
+  `202 { data: { id, status: 'PENDING' } }` with `Location`. Requires the scope
+  `candidates:write` and goes through the write floor (Idempotency-Key, 30/min).
+  The body limit is raised to 1 MB through `apiWrite(…, { maxBodyBytes })`, and
+  that is the only difference. A key can have at most
+  `MAX_OPEN_IMPORTS_PER_KEY` (2) imports queued or running
+  (`409 limit_reached`).
+- The **`api.import.candidates` job** runs the rows through THE import engine,
+  `runImport` (`src/lib/importPreview.ts`). `parse` hands it the submitted rows
+  as a one-column table, so there is no second parser. A dry run is the same
+  call with an `apply` that writes nothing. Each row is judged by the rules of
+  the single `POST /candidates`:
+  - `createCandidateSchema` and the skill limits apply; a failure is ERROR with
+    the field;
+  - an e-mail already used in this product's world is SKIP `duplicate_email`.
+    The match is named only when it is in the key's own org, and the lookup is
+    one batched query (`findUsersInWorldByEmails`);
+  - a repeat within the batch is SKIP `duplicate_in_batch`;
+  - a look-alike, ranked against a pool loaded once, is SKIP
+    `possible_duplicate` with the matches, unless the row sets
+    `allowPossibleDuplicate`.
+
+  The chunk size is 1, so a row is one `user.create`: created whole or not at
+  all. The key is checked again (live, `candidates:write`, entitled) before the
+  run. The submitted rows (`ApiImport.input`) are cleared when the run ends. On
+  a retry after a dead attempt, rows already created are found by e-mail and
+  skipped.
+- **`GET /imports/{id}`** is visible only to the key that queued the import (any
+  other id is 404). It returns the status and, once DONE, `counts` plus one
+  report line per row (`row`, `key`, `status`, `reason`, `id`, `matches`).
+  Imports are deleted 7 days after they were queued (nightly purge).
+
 ## Deprecations
 
 | What | Since | Removed on |

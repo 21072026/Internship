@@ -9,6 +9,7 @@ import { registerJob } from '@/lib/jobs/registry';
 import { pruneJobRuns } from '@/lib/jobs/queue';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
+import { runApiImport } from '@/lib/api/v1Imports';
 
 let registered = false;
 
@@ -33,4 +34,12 @@ export function registerAllJobs(): void {
   // The cursor moves only on a 2xx and receivers dedupe on the row id
   // (docs/audit-stream.md), so a repeated tick re-ships at most one batch.
   registerJob('audit.drain', async () => ({ ...(await runAuditDrains()) }));
+
+  // A DONE or FAILED import is left alone, and a row the dead attempt already
+  // created is found by its e-mail and skipped — nothing is created twice.
+  registerJob(
+    'api.import.candidates',
+    async (payload, { job, attempt, signal }) => ({ ...(await runApiImport(payload.importId, { signal, attempt, maxAttempts: job.maxAttempts })) }),
+    { timeoutMs: 10 * 60 * 1000 },
+  );
 }
