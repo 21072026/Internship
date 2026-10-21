@@ -185,7 +185,7 @@ export function AuditDrainsCard({ onLocked }: { onLocked?: () => void }) {
                     </Button>
                     <Button size="sm" variant="ghost" data-testid={`audit-drain-test-${d.id}`} onClick={() => sendTest(d.id)}>{t.integrations.auditStreamSendTest}</Button>
                     <Button size="sm" variant="ghost" onClick={() => rotate(d.id)}>{t.integrations.rotateSecret}</Button>
-                    <button onClick={() => remove(d.id)} aria-label="delete" data-testid={`audit-drain-delete-${d.id}`} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => remove(d.id)} aria-label={t.common.delete} data-testid={`audit-drain-delete-${d.id}`} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               </div>
