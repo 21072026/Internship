@@ -5446,6 +5446,13 @@ model Job {
   /// whole queue, which is what an operator alert has to do.
   orgId String?
 
+  /// Provenance of the ENQUEUE (#1673), one of 'schedule' | 'manual' | 'boot'
+  /// (JobTrigger in src/lib/jobs/types.ts). The worker copies it onto every
+  /// `JobRun` it writes for this job, so an admin's re-run of a scheduled job
+  /// reads as 'manual' on the ledger. A database-side default, so existing rows
+  /// (the mail queue's) read 'schedule' and `db push` can add it to a full table.
+  trigger String @default("schedule") @db.VarChar(16)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
