@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -942,7 +942,7 @@ export async function runRetentionPrune(options: {
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Register THE retention schedule in this server process. Idempotent — a
@@ -970,7 +970,7 @@ const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 export function initRetentionCron() {
   if (tasks.has('retention-prune')) return;
 
-  const task = cron.schedule('20 3 * * *', async () => {
+  const task = scheduleLeased('20 3 * * *', async () => {
     try {
       await runRetentionPrune();
     } catch (e) {

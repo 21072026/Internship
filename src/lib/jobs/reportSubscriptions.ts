@@ -20,7 +20,7 @@
 // lands; `runReportSubscriptions()` is the handler either way. Registered from
 // /api/cron/start, never from initCronJobs, to keep the import graph one-way.
 
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { ReportSubscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -298,12 +298,12 @@ export async function runReportSubscriptions(opts: { now?: Date; orgIds?: string
   return result;
 }
 
-const tasks = new Map<string, cron.ScheduledTask>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /** Hourly at :25 — off the mail-heavy :00/:15 slots the other jobs use. */
 export function initReportSubscriptionsCron() {
   if (tasks.has('report-subscriptions')) return;
-  const task = cron.schedule('25 * * * *', async () => {
+  const task = scheduleLeased('25 * * * *', async () => {
     try {
       const r = await runReportSubscriptions();
       // A quiet hour is not worth a line; one that did anything is.

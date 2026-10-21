@@ -234,26 +234,21 @@ replica_net_args() { # replica_net_args <port>
   fi
 }
 
-# The interim scheduler guard (#1701, removed by #1676).
+# Per-replica extra env — empty for every replica since #1676.
 #
-# The IMAP bridge is protected by a real lease: every replica polls and the ones
-# that do not hold `'imap-bridge'` quietly do nothing. The in-process CRON is
-# not, yet — its schedules are registered once at boot by
-# src/instrumentation.ts, so a lease taken at registration would be held by
-# whoever booted first and never renewed. Making each scheduled tick take the
-# `'scheduler'` lease needs the schedule registry, which is #1676's job.
-#
-# Until then the second replica runs with CRON_ENABLED=0 — the documented kill
-# switch, exactly as the canary already uses it, and NOT a second election
-# mechanism. The cost is honest and worth writing down: the scheduler is pinned
-# to replica 1, so while replica 1 is down (or mid-swap) reminders wait rather
-# than being sent by replica 2. Waiting is recoverable; sending every reminder
-# twice is not.
+# Replica ≥2 used to run with CRON_ENABLED=0 (#1701): the cron was registered
+# once at boot and not leased, so a second replica would have sent every
+# reminder twice. Every scheduled tick now takes the `'scheduler'` JobLease
+# (src/lib/jobs/leasedCron.ts, src/lib/jobs/schedulerRuntime.ts), so every
+# replica runs the cron and only the lease holder does the work — the scheduler
+# is no longer pinned to replica 1, and while replica 1 is down or mid-swap,
+# replica 2 takes the lease within one TTL (90 s). The hook stays so a future
+# per-replica switch has one place to live.
 replica_extra_env() { # replica_extra_env <index>
   if [ "$1" = 1 ]; then
     printf ''
   else
-    printf '%s\0' -e CRON_ENABLED=0
+    printf ''
   fi
 }
 
