@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { useT } from '@/i18n/client';
+import { APPROVAL_MODES, MAX_REVIEW_STEPS, REVIEWER_ROLES, type ReviewerRole } from '@/lib/documentReview';
 
 interface Organization { id: string; name: string }
 interface Stage { key: string; label: string }
@@ -14,7 +15,9 @@ interface Requirement {
   id: string; key: string; labels: { en: string; tr: string; de: string };
   appliesToStage: string | null; appliesToRole: string | null;
   mandatory: boolean; order: number; active: boolean;
+  approvalMode: string; validityDays: number | null; reviewerRoles: { step: number; role: ReviewerRole; label?: string }[] | null;
 }
+type StepDraft = { role: ReviewerRole; label: string };
 interface MissingRow {
   user: { id: string; fullName: string; email: string };
   stages: string[];
@@ -23,7 +26,11 @@ interface MissingRow {
 
 const ROLES = ['MENTEE', 'MENTOR', 'COMPANY', 'SOURCE', 'ADMIN'] as const;
 
-const emptyForm = { key: '', en: '', tr: '', de: '', stage: '', role: 'MENTEE', mandatory: true, order: '0', active: true };
+const emptyForm = {
+  key: '', en: '', tr: '', de: '', stage: '', role: 'MENTEE', mandatory: true, order: '0', active: true,
+  // The review chain (#1859): NONE keeps "a file attached is done".
+  approvalMode: 'NONE', validityDays: '', steps: [] as StepDraft[],
+};
 
 export function DocumentRequirementsAdmin() {
   const t = useT();
@@ -80,6 +87,9 @@ export function DocumentRequirementsAdmin() {
       orgId, key: form.key, labels: { en: form.en, tr: form.tr, de: form.de },
       appliesToStage: form.stage || null, appliesToRole: form.role || null,
       mandatory: form.mandatory, order: Number(form.order), active: form.active,
+      approvalMode: form.approvalMode,
+      validityDays: form.validityDays ? Number(form.validityDays) : null,
+      reviewerRoles: form.steps.map((step) => ({ role: step.role, ...(step.label.trim() ? { label: step.label.trim() } : {}) })),
     };
     const res = await fetch(editingId ? `/api/admin/document-requirements/${editingId}` : '/api/admin/document-requirements', {
       method: editingId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -91,7 +101,9 @@ export function DocumentRequirementsAdmin() {
 
   const edit = (requirement: Requirement) => {
     setEditingId(requirement.id);
-    setForm({ key: requirement.key, en: requirement.labels.en, tr: requirement.labels.tr, de: requirement.labels.de, stage: requirement.appliesToStage || '', role: requirement.appliesToRole || '', mandatory: requirement.mandatory, order: String(requirement.order), active: requirement.active });
+    setForm({ key: requirement.key, en: requirement.labels.en, tr: requirement.labels.tr, de: requirement.labels.de, stage: requirement.appliesToStage || '', role: requirement.appliesToRole || '', mandatory: requirement.mandatory, order: String(requirement.order), active: requirement.active,
+      approvalMode: requirement.approvalMode || 'NONE', validityDays: requirement.validityDays ? String(requirement.validityDays) : '',
+      steps: (requirement.reviewerRoles ?? []).map((step) => ({ role: step.role, label: step.label ?? '' })) });
   };
 
   const toggle = async (requirement: Requirement) => {
@@ -126,6 +138,27 @@ export function DocumentRequirementsAdmin() {
         <Input label={d.order} type="number" min={0} value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.mandatory} onChange={(e) => setForm({ ...form, mandatory: e.target.checked })} />{d.mandatory}</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />{d.active}</label>
+        <label className="text-sm text-gray-700 dark:text-gray-300">{d.approvalMode}<select value={form.approvalMode} onChange={(e) => setForm({ ...form, approvalMode: e.target.value })} className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2" data-testid="requirement-approval-mode">{APPROVAL_MODES.map((mode) => <option key={mode} value={mode}>{d.approvalModes[mode]}</option>)}</select></label>
+        <Input label={d.validityDays} hint={d.validityHint} type="number" min={1} value={form.validityDays} onChange={(e) => setForm({ ...form, validityDays: e.target.value })} data-testid="requirement-validity-days" />
+        {form.approvalMode !== 'NONE' && (
+          <fieldset className="md:col-span-3 space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3" data-testid="requirement-review-steps">
+            <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{d.reviewSteps}</legend>
+            <p className="text-xs text-gray-600 dark:text-gray-400">{form.approvalMode === 'SINGLE' ? d.singleHint : d.chainHint}</p>
+            {form.steps.map((step, index) => (
+              <div key={index} className="flex flex-wrap items-end gap-2">
+                <span className="pb-2 text-sm text-gray-700 dark:text-gray-300">{d.stepNumber.replace('{n}', String(index + 1))}</span>
+                <label className="text-sm text-gray-700 dark:text-gray-300">{d.reviewerRole}
+                  <select value={step.role} onChange={(e) => setForm({ ...form, steps: form.steps.map((s, i) => (i === index ? { ...s, role: e.target.value as ReviewerRole } : s)) })} className="mt-1 block rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2" data-testid={`requirement-step-role-${index}`}>
+                    {REVIEWER_ROLES.map((role) => <option key={role} value={role}>{d.reviewerRoles[role]}</option>)}
+                  </select>
+                </label>
+                <div className="w-56"><Input label={d.stepLabel} value={step.label} maxLength={80} onChange={(e) => setForm({ ...form, steps: form.steps.map((s, i) => (i === index ? { ...s, label: e.target.value } : s)) })} /></div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, steps: form.steps.filter((_, i) => i !== index) })}>{d.removeStep}</Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" disabled={form.steps.length >= MAX_REVIEW_STEPS} onClick={() => setForm({ ...form, steps: [...form.steps, { role: 'ADMIN', label: '' }] })} data-testid="requirement-add-step">{d.addStep}</Button>
+          </fieldset>
+        )}
         <div className="md:col-span-3 flex gap-2"><Button type="submit" loading={saving}>{editingId ? d.save : d.add}</Button>{editingId && <Button type="button" variant="outline" onClick={() => { setEditingId(''); setForm(emptyForm); }}>{t.common.cancel}</Button>}</div>
       </form>
       <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -133,6 +166,7 @@ export function DocumentRequirementsAdmin() {
         {requirements.map((requirement) => <div key={requirement.id} className="flex flex-wrap items-center gap-3 py-3">
           <span className="font-medium text-gray-900 dark:text-gray-100">{requirement.labels.en}</span><code className="text-xs text-gray-500">{requirement.key}</code>
           {requirement.appliesToStage && <Badge variant="info">{stageName(requirement.appliesToStage)}</Badge>}
+          {requirement.approvalMode && requirement.approvalMode !== 'NONE' && <Badge variant="purple">{d.approvalModes[requirement.approvalMode as keyof typeof d.approvalModes] ?? requirement.approvalMode}</Badge>}
           {requirement.mandatory && <Badge variant="warning">{d.mandatory}</Badge>}
           <span className="text-xs text-gray-500">#{requirement.order}</span>
           <div className="ml-auto flex gap-2"><Button size="sm" variant="outline" onClick={() => edit(requirement)}>{d.edit}</Button><Button size="sm" variant="outline" onClick={() => toggle(requirement)}>{requirement.active ? d.disable : d.enable}</Button></div>

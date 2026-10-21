@@ -7,6 +7,7 @@
 import type { Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
+import { isSatisfied } from '@/lib/documentReview';
 
 export interface RequirementLabels { en: string; tr: string; de: string }
 
@@ -18,6 +19,8 @@ export interface MissingRequirement {
   appliesToStage: string | null;
   appliesToRole: string | null;
   order: number;
+  /** NONE | SINGLE | CHAIN (#1859) — what "satisfied" means for this requirement. */
+  approvalMode: string;
 }
 
 interface RequirementRow {
@@ -29,6 +32,7 @@ interface RequirementRow {
   order: number;
   mandatory: boolean;
   active: boolean;
+  approvalMode: string;
 }
 
 export function parseRequirementLabels(value: unknown): RequirementLabels | null {
@@ -68,6 +72,7 @@ function localized(requirement: RequirementRow, locale: Locale): MissingRequirem
     appliesToStage: requirement.appliesToStage,
     appliesToRole: requirement.appliesToRole,
     order: requirement.order,
+    approvalMode: requirement.approvalMode,
   };
 }
 
@@ -80,7 +85,27 @@ const requirementSelect = {
   order: true,
   mandatory: true,
   active: true,
+  approvalMode: true,
 } as const;
+
+// What a document needs to be judged by isSatisfied() (#1859).
+const satisfactionSelect = { requirementId: true, reviewStatus: true, validUntil: true } as const;
+
+/** Requirement ids the documents satisfy, each judged against its own requirement's mode. */
+function satisfiedIds(
+  requirements: readonly { id: string; approvalMode: string }[],
+  documents: readonly { requirementId: string | null; reviewStatus: string; validUntil: Date | null }[],
+  now: Date,
+): Set<string> {
+  const byRequirement = new Map<string, typeof documents[number][]>();
+  for (const d of documents) {
+    if (!d.requirementId) continue;
+    const list = byRequirement.get(d.requirementId) ?? [];
+    list.push(d);
+    byRequirement.set(d.requirementId, list);
+  }
+  return new Set(requirements.filter((r) => isSatisfied(r, byRequirement.get(r.id) ?? [], now)).map((r) => r.id));
+}
 
 export async function applicableRequirementsForUser(
   userId: string,
@@ -113,12 +138,13 @@ export async function applicableRequirementsForUser(
 export async function missingRequirementsForUser(userId: string, locale: Locale): Promise<MissingRequirement[]> {
   const applicable = await applicableRequirementsForUser(userId, locale, { mandatoryOnly: true });
   if (applicable.length === 0) return [];
-  const completed = await prisma.document.findMany({
+  // Completion is derived, never stored: a requirement is met when one of the
+  // owner's documents satisfies its mode (#1859 — NONE keeps "a file exists").
+  const documents = await prisma.document.findMany({
     where: { ownerId: userId, isTemplate: false, requirementId: { in: applicable.map((requirement) => requirement.id) } },
-    select: { requirementId: true },
-    distinct: ['requirementId'],
+    select: satisfactionSelect,
   });
-  const completedIds = new Set(completed.map((document) => document.requirementId).filter(Boolean));
+  const completedIds = satisfiedIds(applicable, documents, new Date());
   return applicable.filter((requirement) => !completedIds.has(requirement.id));
 }
 
@@ -161,7 +187,7 @@ export async function bulkMissingRequirements(options: {
       select: {
         id: true, fullName: true, email: true, role: true,
         menteeRelations: { where: { status: 'ACTIVE' }, select: { pipelineStatus: true } },
-        documents: { where: { isTemplate: false, requirementId: { not: null } }, select: { requirementId: true } },
+        documents: { where: { isTemplate: false, requirementId: { not: null } }, select: satisfactionSelect },
       },
       orderBy: { fullName: 'asc' },
       skip: (options.page - 1) * options.pageSize,
@@ -170,10 +196,11 @@ export async function bulkMissingRequirements(options: {
     prisma.user.count({ where: userWhere }),
   ]);
 
+  const now = new Date();
   const rows = users.flatMap((user) => {
     const stages = [...new Set(user.menteeRelations.map((relation) => relation.pipelineStatus))];
     const stageSet = new Set(stages);
-    const completed = new Set(user.documents.map((document) => document.requirementId).filter(Boolean));
+    const completed = satisfiedIds(requirements, user.documents, now);
     const missing = requirements
       .filter((requirement) => applies(requirement, user.role, stageSet) && !completed.has(requirement.id))
       .map((requirement) => localized(requirement, options.locale));
