@@ -99,3 +99,28 @@ test('expandAdjacency ignores zero-weight edges and clamps odd weights', () => {
   assert.equal(byId.get('c'), 1);
   assert.equal(byId.get('d'), 0.5);
 });
+
+test('skillOverlap: direct at 1, adjacency at its weight, each target counted once', async () => {
+  const { skillOverlap } = await import('../../src/lib/skillTaxonomyRule.ts');
+  const edges = [edge('react', 'frontend', 0.6), edge('react', 'vue', 0.4), edge('vue', 'frontend', 0.7)];
+  const exact = skillOverlap(['react'], ['react', 'frontend'], edges);
+  assert.deepEqual(exact, { score: 1, direct: ['react'], adjacent: [] });
+  const near = skillOverlap(['react'], ['frontend', 'vue'], edges);
+  assert.equal(near.score, 0.6, 'best neighbour wins');
+  assert.deepEqual(near.adjacent, [{ skillId: 'frontend', via: 'react', weight: 0.6 }]);
+  assert.deepEqual(skillOverlap(['react'], ['frontend'], []).score, 0, 'no edge, no adjacency');
+  assert.deepEqual(skillOverlap(['react'], ['vue'], edges, 0.5).adjacent, [], 'below the floor');
+  assert.equal(skillOverlap(['react', 'react'], ['react'], edges).score, 1, 'targets de-duplicated');
+});
+
+test('requisitionSkillMatch: min(2, required) covered skills; letters in a title are irrelevant', async () => {
+  const { requisitionSkillMatch } = await import('../../src/lib/skillTaxonomyRule.ts');
+  assert.equal(requisitionSkillMatch(['typescript'], ['typescript'], []).isMatch, true);
+  assert.equal(requisitionSkillMatch(['typescript', 'react', 'node'], ['typescript'], []).isMatch, false);
+  assert.equal(requisitionSkillMatch(['typescript', 'react', 'node'], ['typescript', 'node'], []).isMatch, true);
+  const edges = [edge('react', 'vue', 0.5)];
+  assert.equal(requisitionSkillMatch(['typescript', 'react'], ['typescript', 'vue'], edges).isMatch, true);
+  assert.equal(requisitionSkillMatch(['typescript', 'react'], ['typescript', 'vue'], [edge('react', 'vue', 0.3)]).isMatch, false);
+  assert.equal(requisitionSkillMatch([], ['go'], []).isMatch, false, 'no required skills never matches on skills');
+  assert.equal(requisitionSkillMatch(['golang-dev-title-is-not-a-skill'], ['go'], []).isMatch, false);
+});
