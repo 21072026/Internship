@@ -101,6 +101,11 @@ export const NOTIFICATION_EVENTS = [
   // Mentor nudges and deadlines — cron-driven, batchable, task_reminders mail.
   { key: 'stale_mentee.noContact', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'mentee', params: ['menteeName'] },
   { key: 'deadline.stagePassed', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['menteeName'] },
+  // The escalation ladder's second rung (#1722): the org's administrators, once
+  // a breach has stood `escalateAfterDays` without the stage moving. And the
+  // all-clear they get when it does move — in-app only, it asks nothing of them.
+  { key: 'deadline.slaEscalated', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['menteeName', 'mentorName', 'days'] },
+  { key: 'deadline.slaResolved', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
   // The owner's own follow-up date (#2563) — same category, group and job as
   // the stage deadline; a person-written date, not the SLA.
   { key: 'deadline.nextActionDue', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['name'] },

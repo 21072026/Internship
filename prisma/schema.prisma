@@ -190,6 +190,7 @@ model Organization {
   pipelineStages          PipelineStage[]
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
+  slaBreaches             SlaBreach[]
   tags                    Tag[]
   skills                  Skill[]
   skillAliases            SkillAlias[]
@@ -464,27 +465,67 @@ model UnmappedSkillTerm {
 }
 
 model StageSla {
-  id        String   @id @default(cuid())
-  orgId     String
+  id                String   @id @default(cuid())
+  orgId             String
   // The stage this applies to. A plain key, not a relation: it must work for
   // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
-  stageKey  String
+  stageKey          String
   /// Calendar days somebody may wait at this stage before the mentor is warned.
   /// NULL = no service level here (the row then exists only for `wipLimit`).
-  days      Int?
+  days              Int?
   /// Board work-in-progress limit for this stage (#1439): the column's count
   /// turns amber above this many cards. NULL = inherit the org-wide
   /// `boardWipLimit` setting; a stored 0 means "never warn about this stage",
   /// which is a different statement and is why it is stored rather than
   /// normalised away. The rule lives in src/lib/boardWip.ts.
-  wipLimit  Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  wipLimit          Int?
+  /// Escalation ladder (#1722): once a breach of this stage's `days` has stood
+  /// this many further calendar days without the stage moving, the org's
+  /// administrators are told too. NULL = the ladder stops at the mentor, which
+  /// is exactly what every org had before. Meaningless without `days`.
+  escalateAfterDays Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, stageKey])
   @@index([orgId])
+}
+
+// One stage deadline that passed (#1722) — the state the escalation ladder
+// climbs and the breach queue (#1723) lists. Opened by the daily sweep the
+// first time it sees a relation past `stageDeadline`, keyed by the exact
+// deadline it breached, so a hand-moved deadline opens a fresh breach rather
+// than inheriting the old one's level. Closed (`resolvedAt`) by a stage move,
+// a cleared or future deadline, or the relation leaving ACTIVE — never by a
+// delete, because the compliance rate is computed from these rows.
+// The rules are pure in src/lib/slaLadderRule.ts; src/lib/slaBreach.ts is
+// the only writer.
+model SlaBreach {
+  id               String    @id @default(cuid())
+  orgId            String?
+  relationId       String
+  stageKey         String    @db.VarChar(64)
+  /// The `stageDeadline` this breach is about.
+  dueAt            DateTime
+  /// 1 = the mentor was told, 2 = the org's administrators were told.
+  level            Int       @default(1)
+  lastEscalatedAt  DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  /// No escalation before this instant. The reason goes to the ActivityLog.
+  snoozedUntil     DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org      Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, dueAt])
+  @@index([orgId, resolvedAt])
+  @@index([relationId, resolvedAt])
 }
 
 model PipelineStage {
@@ -3354,6 +3395,7 @@ model MentorshipRelation {
   cohort                Cohort?                  @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
+  slaBreaches           SlaBreach[]
   meetings              Meeting[]
   // Who attended its meetings (#2014), kept even when a meeting is deleted.
   attendance            MeetingAttendance[]

@@ -256,6 +256,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // The backfill's review queue (#1819): one org's unresolved terms.
   'UnmappedSkillTerm',
   'StageSla',
+  // One passed stage deadline and how far its escalation ladder climbed (#1722).
+  'SlaBreach',
   'PipelineStage',
   // The per-tenant competency framework (#822) — the questions a tenant decided
   // to score people on. REQUIRED orgId, so every create passes one explicitly.
