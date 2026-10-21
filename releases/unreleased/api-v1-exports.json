@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Async exports on `/api/v1` (#3002).** `POST /api/v1/exports { resource }` answers `202` and enqueues an `api.export` job (#1673 worker). The job writes every row of the key's org as gzipped NDJSON into the new `ApiExport` model (`orgId`, in `TENANT_MODELS`), reusing each list's `select`, tenant filter and serializer from `src/lib/api/v1Resources.ts`, so an interactions export carries note bodies only for a key holding `interactions:read_notes`. The export needs the resource's own read scope, which the handler checks because the door is `ANY_LIVE_KEY`. A key can have at most 3 exports in flight, and an export is capped at 100 000 rows and 32 MB. `GET /api/v1/exports/{id}` is visible only to the key that made the export (any other id is 404) and returns a `downloadUrl` that is HMAC-signed and expires after 15 minutes. `GET /api/exports/{id}/download` re-checks the making key's status, scopes and entitlement on every use, so revoking the key kills its links. A tampered or expired link answers `403 invalid_link`, a new v1 error type. Files are deleted 24 hours after they were written (nightly purge). The OpenAPI paths and the `Export` schema are documented in `docs/public-api.md`.",
+  "notes": {
+    "en": ["Integrations can now request a full export of a data set through the API and download it as a single file, through a link that expires on its own."],
+    "tr": ["Entegrasyonlar artık API üzerinden bir veri kümesinin tamamını dışa aktarmayı isteyip tek bir dosya olarak indirebiliyor; indirme bağlantısının süresi kendiliğinden doluyor."],
+    "de": ["Integrationen können jetzt über die API einen vollständigen Export eines Datenbestands anfordern und ihn als eine Datei herunterladen, über einen Link, der von selbst abläuft."]
+  }
+}

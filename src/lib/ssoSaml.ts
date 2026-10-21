@@ -17,24 +17,32 @@ function appBase(): string {
   ).replace(/\/$/, '');
 }
 
+const trimBase = (base: string) => base.replace(/\/+$/, '');
+
 // The SP identifiers a tenant registers in its IdP. Per-org so one IdP can host
 // several of our tenants without audience collisions.
-export function spEntityId(slug: string): string {
-  return `${appBase()}/sso/${slug}`;
+//
+// `base` (#1661): a tenant on its own verified domain registers ITS host's
+// identifiers, so each builder takes an explicit origin. It defaults to
+// NEXTAUTH_URL's, so every IdP registration that exists today stays valid; a
+// caller passes a base only from a verified host (src/lib/hostOrg.ts), never
+// from a raw Host header.
+export function spEntityId(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/sso/${slug}`;
 }
-export function acsUrl(slug: string): string {
-  return `${appBase()}/api/auth/sso/${slug}/acs`;
+export function acsUrl(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/api/auth/sso/${slug}/acs`;
 }
 // The document a customer's identity team imports in one click (#1931), instead
 // of hand-copying the two identifiers above out of our docs.
-export function metadataUrl(slug: string): string {
-  return `${appBase()}/api/auth/sso/${slug}/metadata`;
+export function metadataUrl(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/api/auth/sso/${slug}/metadata`;
 }
 
 // Our Single Logout endpoint (#1952): where the IdP sends a LogoutRequest, and
 // the LogoutResponse to one we started. Published in the metadata below.
-export function sloUrl(slug: string): string {
-  return `${appBase()}/api/auth/sso/${slug}/slo`;
+export function sloUrl(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/api/auth/sso/${slug}/slo`;
 }
 
 // The slug reaches spMetadataXml straight from the URL, so every interpolated

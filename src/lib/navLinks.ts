@@ -1,4 +1,5 @@
 import {
+  Scale,
   BookOpenCheck,
   Activity, AlarmClock, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
@@ -74,6 +75,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  // Matching rule sets and their dry run (#1783).
+  { href: '/admin/matching', icon: Scale, key: 'matching', capability: 'mentorship' },
   // The org-wide at-risk queue (#1902): every pair, worst first, one next action.
   { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },

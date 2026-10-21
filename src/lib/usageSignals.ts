@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { orgWhere } from '@/lib/tenantFilter';
 import { TRIAL_ACTIVE_STAGE_KEY } from '@/lib/programTemplates';
 import { dropWindows, trialInactive, usageDropVerdict, usageSignalSettings } from '@/lib/usageRule';
@@ -32,9 +32,9 @@ export async function usageSignalsFor(
   if (!any) return { reasons, note: { feedConnected: false, noHistory: 0, unowned: 0 } };
 
   const settings = usageSignalSettings({
-    thresholdPct: await getSetting('usageDropThresholdPct', orgId),
-    baselineDays: await getSetting('usageBaselineDays', orgId),
-    trialDays: await getSetting('trialActivationDays', orgId),
+    thresholdPct: await resolveSettingRaw('usageDropThresholdPct', { orgId }),
+    baselineDays: await resolveSettingRaw('usageBaselineDays', { orgId }),
+    trialDays: await resolveSettingRaw('trialActivationDays', { orgId }),
   });
   const w = dropWindows(now, settings.baselineDays);
   const [recent, prior, first, owned] = await Promise.all([

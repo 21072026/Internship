@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The admin sidebar no longer fails a request on every page for an admin with no organization:** `GET /api/admin/hiring/queues?summary=1`, which feeds the hiring badge, answered 403 `organization_required` to such an admin (red in `e2e/analytics-gate-no-probe.spec.ts`). Summary mode now answers `{ actionable: 0 }` there; the full hiring desk still refuses."
+}

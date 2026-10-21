@@ -55,7 +55,7 @@ export async function sidewaysScroll(page: Page) {
   });
 }
 
-export async function setLocale(page: Page, locale: 'tr' | 'de') {
+export async function setLocale(page: Page, locale: 'en' | 'tr' | 'de') {
   // Same trick as i18n-coverage.spec: the cookie wins over the user preference,
   // and it needs an origin to be set on, hence the navigation first.
   await page.goto('/auth/signin');
