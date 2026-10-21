@@ -19,7 +19,7 @@
 
 import { getDictionary } from '@/i18n/dictionaries';
 import { surveyInputFromTemplate } from '@/lib/surveyTemplateInput';
-import { SURVEY_MIN_RESPONSES } from '@/lib/surveyPrivacy';
+import { applyResponseFloor, SURVEY_MIN_RESPONSES } from '@/lib/surveyPrivacy';
 
 export const OUTCOME_TEMPLATE_KEY = 'outcome_destination';
 
@@ -141,9 +141,24 @@ export function summarizeOutcomes(people: EligibleParticipant[], answers: Map<st
   return {
     floor: f,
     overall: bucket(null, people, answers, f),
-    byCohort: groupBy(people, (p) => p.cohort).map(([label, ps]) => bucket(label, ps, answers, f)),
-    bySource: groupBy(people, (p) => p.source).map(([label, ps]) => bucket(label, ps, answers, f)),
+    byCohort: floorBreakdown(groupBy(people, (p) => p.cohort).map(([label, ps]) => bucket(label, ps, answers, f)), f),
+    bySource: floorBreakdown(groupBy(people, (p) => p.source).map(([label, ps]) => bucket(label, ps, answers, f)), f),
   };
+}
+
+/**
+ * The residual rule on a breakdown (#1906). Each bucket under the floor already
+ * hides its destinations, but next to the published overall the hidden ones
+ * TOGETHER come back by subtraction: overall − every shown cohort = the hidden
+ * cohort's destinations. applyResponseFloor (src/lib/surveyPrivacy.ts) hides
+ * the smallest shown buckets with them until the hidden ones add up to the
+ * floor — the same rule every other breakdown in the survey engine uses. A
+ * hidden bucket keeps its eligible/known/withheld counts and knowledge rate:
+ * those say how much we know, never where anybody went.
+ */
+function floorBreakdown(buckets: OutcomeBucket[], floor: number): OutcomeBucket[] {
+  const floored = applyResponseFloor(buckets.map((b, i) => ({ key: String(i), n: b.known })), floor);
+  return buckets.map((b, i) => (floored[i].suppressed ? { ...b, destinations: null, placedRate: null } : b));
 }
 
 /** Read one stored response into a DestinationAnswer, or null if it does not parse. */
