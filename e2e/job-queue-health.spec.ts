@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_HEALTH_TOKEN, E2E_ALERT_EMAIL_TO } from '../playwright.config';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 
 // Job-queue visibility (#1674): queue depth and dead-letter size on the gated
 // half of /api/health, and one daily alert mail that is SILENT while the
@@ -30,6 +30,8 @@ test('queue counters are gated and opt-in, and the dead-letter alert is silent w
 
   const adminEmail = uniqueEmail('jobs-health-admin');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Jobs Health Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
 
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
   const seededJobs: string[] = [];

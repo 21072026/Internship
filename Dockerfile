@@ -59,6 +59,13 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 # Prisma schema + engine needed for `prisma db push` and runtime queries
 COPY --from=builder /app/prisma ./prisma
+# The deploy's data migrations that live under scripts/ (#1540): the registry
+# (prisma/backfills/registry.mjs) runs them from THIS image, and before this
+# line they were not in it — `node scripts/backfill-requisitions.mjs` failed
+# with MODULE_NOT_FOUND on every deploy, hidden by `|| true` (#1385).
+# scripts/test/backfill-registry.test.mjs fails if a registered script is
+# missing here.
+COPY --from=builder /app/scripts/backfill-requisitions.mjs /app/scripts/requisition-backfill-lib.mjs /app/scripts/backfill-applications.mjs /app/scripts/applications-backfill-lib.mjs ./scripts/
 
 EXPOSE 3000
 CMD ["npm", "start"]

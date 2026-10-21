@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -11,6 +11,8 @@ import {
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
 import { OUTBOUND_DRAFT_RETENTION_DAYS, pruneOutboundDrafts } from '@/lib/outboundDrafts';
+import { pruneDeliveryEvents } from '@/lib/emailSuppression';
+import { DELIVERY_EVENT_RETENTION_DAYS } from '@/lib/emailSuppressionRule';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { messageRetentionCutoff } from '@/lib/safeguarding';
 import { inquiryErasureData } from '@/lib/companyContactErasure';
@@ -745,6 +747,28 @@ async function anonymizeOrphanApplicants(ctx: RetentionContext) {
   };
 }
 
+async function pruneRosterRowResults(ctx: RetentionContext) {
+  // Row-level detail only: the RosterRun summary it hangs off is kept, so
+  // "did the sync run that night and what did it change in total?" stays
+  // answerable after "which rows?" no longer is. Served by
+  // @@index([createdAt]) on RosterRowResult (the sweep spans every tenant).
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.rosterRowResult.findMany({
+          where: { createdAt: { lt: ctx.cutoff } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => (await prisma.rosterRowResult.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 /**
  * The built-in policy, in one place.
  *
@@ -876,6 +900,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     run: async (ctx) => pruneOutboundDrafts(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
   },
   {
+    key: 'emailDeliveryEvent',
+    // No setting: part of the suppression loop's design (#1692,
+    // docs/EMAIL_DELIVERABILITY.md § Bounces and complaints).
+    defaultDays: DELIVERY_EVENT_RETENTION_DAYS,
+    reason:
+      'A provider bounce/complaint event is kept for two questions only: "have we seen this event already?" (providers retry for hours, a day at most) and "how many soft bounces inside the seven-day window?". Thirty days answers both with room to spare. Each row holds an address, so it is not kept beyond that; the suppression it produced lives on in EmailSuppression, which is the record.',
+    run: async (ctx) => pruneDeliveryEvents(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
+  },
+  {
     key: 'trialReminder',
     // No setting: nothing an operator would ever want to tune, and a knob for
     // a table with no personal data in it is a knob nobody reads.
@@ -883,6 +916,14 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets a year rather than one of the short windows above (only companyUsage, a hygiene window for the same reason, is longer).',
     run: pruneTrialReminders,
+  },
+  {
+    key: 'rosterRowResult',
+    // No setting: part of the roster feed's design (#1964, docs/roster-feed.md).
+    defaultDays: 90,
+    reason:
+      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail.',
+    run: pruneRosterRowResults,
   },
 ];
 
@@ -942,7 +983,7 @@ export async function runRetentionPrune(options: {
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Register THE retention schedule in this server process. Idempotent — a
@@ -970,7 +1011,7 @@ const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 export function initRetentionCron() {
   if (tasks.has('retention-prune')) return;
 
-  const task = cron.schedule('20 3 * * *', async () => {
+  const task = scheduleLeased('20 3 * * *', async () => {
     try {
       await runRetentionPrune();
     } catch (e) {

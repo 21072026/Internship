@@ -43,7 +43,7 @@
 //   own backoff and the tick catches per connection.
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { seal, open } from '@/lib/secretBox';
@@ -72,7 +72,6 @@ import {
   KLAVIYO_REQUIRED_SCOPES,
   KLAVIYO_REVISION,
   KLAVIYO_SECRET_PURPOSE,
-  KLAVIYO_SYNC_CRON,
   afterPage,
   beginQuery,
   disambiguatedAccountName,
@@ -1145,7 +1144,9 @@ let cronStarted = false;
 export function initKlaviyoSyncCron(): void {
   if (cronStarted) return;
   cronStarted = true;
-  cron.schedule(KLAVIYO_SYNC_CRON, async () => {
+  // The expression is a literal on purpose: src/lib/jobs/schedules.ts names
+  // it and the registry test reads it from this call (KLAVIYO_SYNC_CRON).
+  scheduleLeased('*/15 * * * *', async () => {
     try {
       const tick = await runKlaviyoTick();
       if (tick.due > 0) logger.info('klaviyo sync tick', { ...tick });

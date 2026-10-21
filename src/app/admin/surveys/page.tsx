@@ -7,10 +7,12 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useLocale, useT } from '@/i18n/client';
 import { pickLocalized } from '@/lib/surveySchema';
+import { SurveyFromInstrument, type Instrument } from '@/components/admin/SurveyFromInstrument';
 
 // The programme's surveys (#1910): how many have answered each one, and the
-// way into its completion console (#1889) and its results. Creating and editing a survey is the builder's job
-// (#1877) — this screen only reads.
+// way into its completion console (#1889) and its results. A survey is created
+// here from a built-in instrument (#1877); a free-form question builder is not
+// part of this screen.
 
 interface SurveyRow {
   id: string;
@@ -27,14 +29,19 @@ export default function AdminSurveysPage() {
   const s = t.surveyResults;
   const locale = useLocale();
   const [rows, setRows] = useState<SurveyRow[] | null>(null);
+  const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     fetch('/api/admin/surveys')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((body) => setRows(body.surveys))
+      .then((body) => {
+        setRows(body.surveys);
+        setInstruments(body.instruments ?? []);
+      })
       .catch(() => setError(t.common.error));
-  }, [t.common.error]);
+  }, [t.common.error, reload]);
 
   return (
     <div>
@@ -44,6 +51,7 @@ export default function AdminSurveysPage() {
         </h1>
         <p className="text-gray-500 mt-1 max-w-3xl">{s.listSubtitle}</p>
       </div>
+      {instruments.length > 0 && <SurveyFromInstrument instruments={instruments} onCreated={() => setReload((n) => n + 1)} />}
       {error && <p className="text-red-600" role="alert">{error}</p>}
       {!rows && !error && <p className="text-gray-500">{t.common.loading}</p>}
       {rows && rows.length === 0 && <Card><p className="text-gray-500">{s.empty}</p></Card>}

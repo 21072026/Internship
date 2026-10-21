@@ -312,7 +312,7 @@ export default function IntegrationsPage() {
                       </Button>
                       <Button size="sm" variant="ghost" data-testid={`webhook-test-${h.id}`} onClick={() => sendTest(h.id)}>{t.integrations.sendTest}</Button>
                       <Button size="sm" variant="ghost" onClick={() => rotate(h.id)}>{t.integrations.rotateSecret}</Button>
-                      <button onClick={() => delHook(h.id)} aria-label="delete" className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => delHook(h.id)} aria-label={t.common.delete} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                   {editing === h.id && (

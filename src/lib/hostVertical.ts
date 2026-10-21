@@ -56,7 +56,8 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 //      another tenant's queue — a stranger's demo request, i.e. spam, under the
 //      same rate limit — and nothing is ever READ back out: the response names
 //      no org and carries no data.
-//   3. Refusing an invitation token (/api/register, /api/invite/opened) or an
+//   3. Refusing an invitation token (/api/register, /api/invite/opened, and
+//      the invitation landing's brand, src/lib/invitationBrand.ts) or an
 //      SSO org code (/api/auth/sso/[slug]/login) of the OTHER world on this
 //      host, answered like an unknown one (docs/worlds.md): a forged header can
 //      only refuse the forger's own request; the invitation row and the org are

@@ -226,8 +226,11 @@ on the story, #2578. Nothing below has been run by the change that wrote it.
      org — it mails every trial reminder that is due and expires overdue trials
      to `TRIAL_EXPIRED`, exactly like the 05:20 UTC tick. Run it before real
      prospects are in the org, or right after the 05:20 run so nothing is due.
-     Copy the URL exactly: a mistyped `job=` value does not fail, it falls
-     through to the full cron mail batch. Signed in as an ADMIN of that org,
+     Copy the URL exactly: a mistyped `job=` value falls through to the full
+     cron mail batch, which is a super admin's (a tenant ADMIN gets a 403,
+     #1575). `orgId` is honoured only for the caller's own org or one a super
+     admin of the same world reaches. Signed in as an ADMIN of that org, on
+     the org's own host,
      the JSON's `trialReminders.orgs` must be `1` — which proves **only** the
      vertical gate (the org is counted in scope because its vertical is
      `MARKETING`), not that the trial stages exist; stage presence is proven
@@ -365,17 +368,15 @@ SIGKILLed), so the work resumes on the other replica within one TTL — three
 poll intervals, i.e. about three minutes for the mail bridge. Late, never
 double.
 
-**The cron is not leased yet, and that is why replica ≥2 runs with
-`CRON_ENABLED=0`.** Schedules are registered once at boot
-(`src/instrumentation.ts` → `/api/cron/start`), so a lease taken at
-registration would be held by whoever booted first and never renewed. Making
-each tick take the `'scheduler'` lease needs the schedule registry, which is
-**#1676**. Until that lands the deploy passes the documented kill switch to
-every replica but the first — the same flag the canary already uses, not a
-second election mechanism. The trade is deliberate: the scheduler is *pinned*
-to replica 1, so while replica 1 is down or mid-swap, reminders wait instead of
-being sent by replica 2. Waiting is recoverable; sending every reminder twice
-is not.
+**The cron is leased per tick (#1676).** Every replica registers the cron
+timers and runs the 30 s queue scheduler; each tick and each timer first takes
+or renews the `'scheduler'` lease (`src/lib/jobs/leasedCron.ts`), and only the
+holder does the work. Replica ≥2 therefore no longer runs with
+`CRON_ENABLED=0`: while replica 1 is down or mid-swap, replica 2 takes the
+lease within one TTL (90 s) — a graceful SIGTERM releases it at once. The
+queue schedules (`src/lib/jobs/schedules.ts`) also catch up a missed slot; the
+node-cron ones still lose a slot that fires while no replica holds the lease,
+until #1677 moves them onto the queue.
 
 **Also set `RATE_LIMIT_REDIS_URL`** for a two-replica environment (see the
 section above) or every limit becomes twice as generous.
