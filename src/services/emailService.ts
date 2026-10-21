@@ -14,6 +14,7 @@ import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
 import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
+import { purgeExpiredExports } from '@/lib/api/v1Exports';
 import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
@@ -6141,6 +6142,10 @@ export function initCronJobs() {
       // a sweep that silently stopped running is visible as a missing line.
       const idem = await purgeExpiredIdempotencyKeys();
       console.log(`[Cron] API idempotency key purge: ${idem} keys`);
+      // And the /api/v1 exports (#3002) past their expiry: the file is
+      // already refused from that instant; this deletes it.
+      const exportsPurged = await purgeExpiredExports();
+      console.log(`[Cron] API export purge: ${exportsPurged} exports`);
     } catch (e) {
       console.error('[Cron] Trusted device purge error:', e);
     }
