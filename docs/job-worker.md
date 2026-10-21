@@ -65,3 +65,36 @@ SIGKILL still strands is reaped by the clock.
 2. `registerJob('<name>', handler, { timeoutMs?, backoff? })` in `src/jobs/`.
 3. Say in its comment why a second run is harmless.
 4. Who enqueues it on a schedule is the scheduler's registry (#1676).
+
+## The scheduler (#1676)
+
+Every schedule is declared in `src/lib/jobs/schedules.ts`: key, cron expression,
+why that cadence, and its **carrier**.
+
+- `'queue'` — every 30 s (`src/lib/jobs/schedulerRuntime.ts`, started from
+  `/api/cron/start`) the `'scheduler'` lease holder runs `schedulerTick()`
+  (`src/lib/jobs/scheduler.ts`): for each schedule, the latest slot after
+  `ScheduleState.lastEnqueuedSlot` is enqueued with `idempotencyKey =
+  <key>:<slotISO>` and `trigger: 'schedule'`, then the state advances in one
+  conditional write. `catchUp: 'latest'` enqueues only the newest missed slot;
+  `'none'` skips any slot more than 2 min old. A schedule seen for the first
+  time baselines instead of firing.
+- `'node-cron'` — still a timer in its own module, created with
+  `scheduleLeased()` (`src/lib/jobs/leasedCron.ts`): it fires on every replica and
+  the body runs only on the lease holder. No catch-up until #1677 moves it.
+
+Never call `cron.schedule()` directly — `e2e/job-scheduler.unit.spec.ts` fails on
+it, and on a registry entry whose expression differs from its source.
+
+Slots are computed in process local time (`src/lib/jobs/cronSlot.ts`), exactly
+like node-cron without a `timezone` option: UTC in the containers.
+
+The lease TTL is 90 s (three ticks). A SIGTERM stops this process from taking
+the lease again and releases it, so a rolling deploy hands over in seconds; a
+SIGKILLed holder loses it by expiry. `CRON_ENABLED=0` or a missing `CRON_SECRET`
+keeps `/api/cron/start` from being called at all, so nothing is scheduled —
+the preview/topic safety property is unchanged.
+
+To move a schedule onto the queue: register its handler in `src/jobs/`, change
+its entry to `queue({ … job, payload, catchUp })`, and delete its
+`scheduleLeased()` call in the same diff.

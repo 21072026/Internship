@@ -555,11 +555,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   through a handler registered in `src/jobs/index.ts`; every settle is one guarded
   `updateMany` on the claim, retries back off with jitter, and `maxAttempts` ends in
   `DEAD_LETTER`. Handlers are at-least-once — say in each one why a rerun is harmless.
-  The **cron is not leased yet**: its schedules are registered once at boot, so
-  a lease taken there would never be renewed. Until #1676 makes each tick take
-  the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
-  `CRON_ENABLED=0` — an interim pin, not an election, and the reason two
-  replicas cannot double-send today.
+  The **cron is leased per tick** (#1676): every schedule is declared in
+  `src/lib/jobs/schedules.ts`; a `'queue'` one is enqueued by the 30 s scheduler tick
+  (`scheduleLeased`/`schedulerTick`, idempotencyKey `<key>:<slotISO>`, missed-slot
+  catch-up via `ScheduleState`), a `'node-cron'` one fires through `scheduleLeased()`
+  — either way only the `'scheduler'` lease holder does the work, so replica ≥2 no
+  longer runs with `CRON_ENABLED=0`. Never call `cron.schedule()` directly.
 - **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
   that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
   retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a
