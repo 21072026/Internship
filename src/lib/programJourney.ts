@@ -20,11 +20,11 @@
 //     two engines mailing one person on one day is the bug that would ship.
 //
 // Registered from /api/cron/start (initProgramJourneyCron) and runnable on its
-// own as GET /api/cron?job=program-journey. Replica ≥2 runs with
-// CRON_ENABLED=0 until #1676 leases the scheduler — and the unique claim makes
-// a double tick harmless anyway.
+// own as GET /api/cron?job=program-journey. The timer fires through
+// scheduleLeased() (#1676), so only the 'scheduler' lease holder runs it — and
+// the unique claim makes a double tick harmless anyway.
 
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -327,12 +327,12 @@ export async function previewJourney(programId: string, relationId: string, now 
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
-let task: cron.ScheduledTask | null = null;
+let task: ReturnType<typeof scheduleLeased> | null = null;
 
 /** Daily at 07:10 UTC — morning in DE/TR, before the pair's day starts. */
 export function initProgramJourneyCron() {
   if (task) return;
-  task = cron.schedule('10 7 * * *', async () => {
+  task = scheduleLeased('10 7 * * *', async () => {
     try {
       const r = await runProgramJourney();
       if (r.delivered || r.skipped) logger.warning('Program journey ran', { delivered: r.delivered, skipped: r.skipped, unresolved: r.unresolved.length });

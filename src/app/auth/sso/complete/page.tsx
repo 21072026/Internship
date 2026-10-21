@@ -4,11 +4,13 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { absoluteHere } from '@/lib/safeRedirect';
+import { useT } from '@/i18n/client';
 
 // Landing page the ACS route redirects to after verifying the SAML assertion.
 // It consumes the single-use grant via the `sso` NextAuth provider to establish
 // the session, then lands the user in the app.
 function Complete() {
+  const t = useT();
   const params = useSearchParams();
   // The redemption waits for the SessionProvider's first /api/auth/session
   // round-trip (#2858). A tab opened from the IdP's redirect holds no NextAuth
@@ -44,11 +46,11 @@ function Complete() {
       <div className="text-center">
         {failed ? (
           <>
-            <p className="text-gray-900 dark:text-gray-100 font-medium">Could not complete sign-in.</p>
-            <a href="/auth/signin" className="text-blue-600 hover:underline text-sm">Back to sign in</a>
+            <p className="text-gray-900 dark:text-gray-100 font-medium">{t.auth.ssoFailed}</p>
+            <a href="/auth/signin" className="text-blue-600 hover:underline text-sm">{t.auth.ssoBackToSignIn}</a>
           </>
         ) : (
-          <p className="text-gray-600 dark:text-gray-300">Signing you in…</p>
+          <p className="text-gray-600 dark:text-gray-300">{t.auth.ssoSigningIn}</p>
         )}
       </div>
     </div>
@@ -56,8 +58,9 @@ function Complete() {
 }
 
 export default function SsoCompletePage() {
+  const t = useT();
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><p className="text-gray-600 dark:text-gray-300">Signing you in…</p></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><p className="text-gray-600 dark:text-gray-300">{t.auth.ssoSigningIn}</p></div>}>
       <Complete />
     </Suspense>
   );
