@@ -9,6 +9,7 @@ import { registerJob } from '@/lib/jobs/registry';
 import { pruneJobRuns } from '@/lib/jobs/queue';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
+import { runApiExport } from '@/lib/api/v1Exports';
 
 let registered = false;
 
@@ -33,4 +34,10 @@ export function registerAllJobs(): void {
   // The cursor moves only on a 2xx and receivers dedupe on the row id
   // (docs/audit-stream.md), so a repeated tick re-ships at most one batch.
   registerJob('audit.drain', async () => ({ ...(await runAuditDrains()) }));
+
+  // A READY or FAILED export is left alone and the file is stored in one
+  // guarded update, so a repeated run rewrites at most an unfinished one.
+  registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {
+    timeoutMs: 10 * 60 * 1000,
+  });
 }

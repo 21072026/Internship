@@ -40,6 +40,8 @@ export const API_ERROR_TYPES = [
   'duplicate_candidate',
   'invalid_transition',
   'stage_conflict',
+  // A signed export link that is tampered, expired or no longer backed by its key (#3002).
+  'invalid_link',
 ] as const;
 export type ApiErrorType = (typeof API_ERROR_TYPES)[number];
 
