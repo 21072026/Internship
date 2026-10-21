@@ -1,5 +1,5 @@
 import { scheduleLeased } from '@/lib/jobs/leasedCron';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
@@ -766,7 +766,25 @@ async function pruneRosterRowResults(ctx: RetentionContext) {
       ).map((r) => r.id),
     handleBatch: async (ids) => (await prisma.rosterRowResult.deleteMany({ where: { id: { in: ids } } })).count,
   });
-  return { deleted: processed, capped };
+  // A run's `absentKeys` is per-person too (the keys the feed did not mention),
+  // so it gets the same window; the run's counts, hash and status stay. Masked,
+  // not deleted, so it is reported as such.
+  const masked = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: Math.max(0, ctx.budget - processed),
+    selectIds: async (take) =>
+      (
+        await prisma.rosterRun.findMany({
+          where: { startedAt: { lt: ctx.cutoff }, NOT: { absentKeys: { equals: Prisma.DbNull } } },
+          orderBy: { startedAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.rosterRun.updateMany({ where: { id: { in: ids } }, data: { absentKeys: Prisma.DbNull } })).count,
+  });
+  return { deleted: processed, masked: masked.processed, capped: capped || masked.capped };
 }
 
 /**
@@ -922,7 +940,7 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     // No setting: part of the roster feed's design (#1964, docs/roster-feed.md).
     defaultDays: 90,
     reason:
-      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail.',
+      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail — only its per-person `absentKeys` list is cleared on the same window.',
     run: pruneRosterRowResults,
   },
 ];

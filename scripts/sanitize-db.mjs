@@ -55,7 +55,12 @@
  *   MentorshipRequest.message, CompanyInterest.note, InterviewRequest.note,
  *   Offer.compensationNote/declineNote, Meeting.title/meetLink,
  *   MenteeOnboarding.steps, Announcement (text/translations/link),
- *   StatusChange.reasonNote
+ *   StatusChange.reasonNote, RosterRun.absentKeys (the keys — addresses — a
+ *   roster feed did not mention)
+ *
+ * Neutralised (a live link to a customer's system):
+ *   RosterFeed — secretEnc dropped and every feed switched off, so a preview
+ *   never fetches from a customer's HR server with a copied credential.
  *
  *   The per-person half of this list is ALSO what account erasure must reach:
  *   src/lib/accountErasure.ts scrubs every one of them for a single person, and
@@ -66,7 +71,8 @@
  *   CvFile, AvatarFile, Document, AnnouncementImage, MessageAttachment,
  *   SupportAttachment, InvitationToken, PasswordResetToken,
  *   EmailVerificationToken, ImpersonationGrant, SsoLoginGrant, ApiKey,
- *   Webhook, MeetingRoomState, PageView
+ *   Webhook, MeetingRoomState, PageView, RosterRowResult (the roster-feed run
+ *   log: one row per person per run, keyed by their address)
  *
  * Left alone on purpose (structure, not people — this is the test value):
  *   Organization, PipelineStage, StageSla, UserConsent, MentorshipRelation,
@@ -79,7 +85,7 @@
  *   (+Reminder), WeeklyReportReminder, Offer status/dates.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -203,6 +209,7 @@ async function run() {
     ['webhook', () => prisma.webhook.deleteMany({})],
     ['meetingRoomState', () => prisma.meetingRoomState.deleteMany({})],
     ['pageView', () => prisma.pageView.deleteMany({})],
+    ['rosterRowResult', () => prisma.rosterRowResult.deleteMany({})],
   ];
   for (const [label, fn] of deletions) {
     const { count } = await fn();
@@ -233,6 +240,9 @@ async function run() {
     ['interviewRequest', () => prisma.interviewRequest.updateMany({ data: { note: null } })],
     ['offer', () => prisma.offer.updateMany({ data: { compensationNote: null, declineNote: null } })],
     ['statusChange', () => prisma.statusChange.updateMany({ data: { reasonNote: null } })],
+    ['rosterRun', () => prisma.rosterRun.updateMany({ data: { absentKeys: Prisma.DbNull } })],
+    // A copied credential and a live schedule against a customer's HR server.
+    ['rosterFeed', () => prisma.rosterFeed.updateMany({ data: { secretEnc: null, enabled: false } })],
     ['menteeOnboarding', () => prisma.menteeOnboarding.updateMany({ data: { steps: {} } })],
     // A meeting title often names the person; the link is a live room.
     ['meeting', () => prisma.meeting.updateMany({ data: { title: PLACEHOLDER, meetLink: null } })],
@@ -328,7 +338,11 @@ async function verify() {
   const bodies = await prisma.message.count({ where: { NOT: { body: PLACEHOLDER } } });
   if (bodies > 0) problems.push(`${bodies} message bodies remain`);
 
-  const secrets = (await prisma.apiKey.count()) + (await prisma.webhook.count()) + (await prisma.passwordResetToken.count());
+  const secrets =
+    (await prisma.apiKey.count()) +
+    (await prisma.webhook.count()) +
+    (await prisma.passwordResetToken.count()) +
+    (await prisma.rosterFeed.count({ where: { OR: [{ secretEnc: { not: null } }, { enabled: true }] } }));
   if (secrets > 0) problems.push(`${secrets} credentials remain`);
 
   if (problems.length > 0) {
