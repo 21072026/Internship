@@ -411,6 +411,14 @@ const FLOORS = new Map([
       why: 'the account match key: VAT beats the name, and the name half must survive İ/ı/ü/ß — a plain toLowerCase() creates a twin account on every run (#2405)',
     },
   ],
+  [
+    'src/lib/jobs/forEachTenantRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'with isolation off a sweep makes ONE unscoped pass (per-org passes would each read every tenant and mail N times); with it on, one pass per org (#1561)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────

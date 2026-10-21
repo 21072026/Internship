@@ -458,6 +458,31 @@ Existing rows keep `orgId = NULL` and go on working as the global layer;
 reason. Stamping them with the `default` org would turn platform-wide defaults
 into one tenant's private settings and leave every other tenant with nothing.
 
+### Background jobs: one pass per tenant (#1561)
+
+A cron or queue handler has no session, so nothing binds an org for it, and the
+middleware reads "no bound org" as "do not scope". `forEachTenant(job, fn)`
+(`src/lib/jobs/forEachTenant.ts`) is the one way a sweep gets a tenant context.
+It runs `fn(orgId)` inside `runWithOrg(orgId, …)` once per organization,
+**sequentially**. A failing pass is logged as `tenant_pass.failed` with the job
+name and org id, and the next tenant still runs.
+
+The pass list is the pure rule in `src/lib/jobs/forEachTenantRule.ts`
+(unit-tested):
+
+- **Isolation on:** one pass per org.
+- **Isolation off:** ONE unscoped pass, exactly today's behaviour. With the flag
+  off nothing scopes a query, so per-org passes of a sweep that relies on the
+  middleware would each read every tenant and mail N times.
+- **`perOrgWhenUnenforced`:** per-org passes even with the flag off. Only for a
+  sweep that filters by `currentOrgId()` itself.
+
+Every query of a pass is made inside `fn`. A lazy Prisma promise created outside
+it fires unscoped (#958).
+
+Adoption: the scheduled job bodies move into `src/jobs/*` handlers (#1677), and
+each handler is bound at that boundary.
+
 ### Per-route rollout status
 
 Handlers adopt the engine by wrapping their body in `withTenantScope(session, …)`.

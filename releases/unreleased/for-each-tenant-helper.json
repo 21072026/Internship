@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Tenant isolation (#1561, part 1):** `forEachTenant(job, fn)` (`src/lib/jobs/forEachTenant.ts`) runs a background sweep once per organization inside `runWithOrg`, one org after another. A failing tenant is logged (`tenant_pass.failed`, job + org id) and the remaining tenants still run. The pass list is the pure, unit-tested `tenantPasses()` (`forEachTenantRule.ts`): per org when `MT_ENFORCE_ISOLATION` is on; one unscoped pass, identical to today, when it is off. No sweep uses it yet: the scheduled handlers adopt it once they move into `src/jobs/*` (#1677)."
+}
