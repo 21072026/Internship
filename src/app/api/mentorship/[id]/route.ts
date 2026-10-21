@@ -6,6 +6,9 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 import { withTenantScope } from '@/lib/orgContext';
+import { getLocale } from '@/i18n/server';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { agreementBlockFor } from '@/lib/mentoringAgreement';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
@@ -137,7 +140,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // only to the roles that can already list the pool (GET /api/re-engagement).
       const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
 
+      // The mentoring agreement (#1792), for the two detail screens without a
+      // second request. Informational only: nothing on either screen is
+      // disabled by a missing acceptance — it is a prompt and a report line.
+      const agreement = (await shellCapabilities(relation.orgId)).includes('mentorship')
+        ? await agreementBlockFor(relation.id, session.user.id, await getLocale())
+        : null;
+
       return NextResponse.json({
+        agreement,
         relation: {
           // The next-action note is the owner's prose about the mentee (#2563):
           // the mentee reads this same route, so the three columns ship only to

@@ -253,6 +253,8 @@ export const NOTIFICATION_EVENTS = [
   // the mail goes in the existing `goals-evaluation` category (src/lib/evaluationDue.ts).
   { key: 'evaluation.dueInterim', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
   { key: 'evaluation.dueFinal', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
+  // The kickoff prompt to read the mentoring agreement (#1792) — in-app, a prompt not a gate.
+  { key: 'agreement.review', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
   // Program journey steps (#1852): in-app only — the daily sweep delivers each
   // step to the pair once, under the recipient's `mentorship` preference
   // (src/lib/programJourney.ts). No mail: #1703's automation engine owns that.

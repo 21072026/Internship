@@ -4,6 +4,7 @@ import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
 import Link from "next/link";
 
 import { useState, useEffect, useCallback } from 'react';
+import { AGREEMENT_STATUSES, type AgreementStatus } from '@/lib/mentoringAgreementRule';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -49,6 +50,9 @@ interface MentorshipRelation {
   mentee: { id: string; fullName: string; email: string };
   company: { id: string; name: string } | null;
   _count: { interactions: number };
+  // The mentoring agreement against the version in force (#1792) — a report
+  // column; absent for a vertical without pairs.
+  agreementStatus?: AgreementStatus | null;
 }
 
 /**
@@ -91,6 +95,7 @@ export default function MentorshipPage() {
   const [formError, setFormError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
+  const [agreementFilter, setAgreementFilter] = useState<AgreementStatus | ''>('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
   // Confirmation held for a picked mentor whose server-reported
@@ -120,6 +125,7 @@ export default function MentorshipPage() {
       const params = new URLSearchParams();
       if (statusFilter !== 'ALL') params.set('status', statusFilter);
       if (search) params.set('search', search);
+      if (agreementFilter) params.set('agreement', agreementFilter);
       params.set('page', String(page));
       params.set('pageSize', String(PAGE_SIZE));
       const res = await fetch(`/api/mentorship?${params}`);
@@ -131,7 +137,7 @@ export default function MentorshipPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, page, t.mentorships.loadFailed]);
+  }, [statusFilter, search, agreementFilter, page, t.mentorships.loadFailed]);
 
   const fetchPickers = async () => {
     try {
@@ -190,7 +196,7 @@ export default function MentorshipPage() {
   // Any filter change returns to the first page.
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, agreementFilter]);
 
   const handleCreate = async () => {
     if (!formData.mentorId || !formData.menteeId) {
@@ -618,6 +624,17 @@ export default function MentorshipPage() {
             {sf === 'ALL' ? t.usersAdmin.all : sf === 'ACTIVE' ? t.mentorships.active : t.mentorships.completed}
           </button>
         ))}
+        {/* Filter by agreement status (#1792). A report, not a gate. */}
+        <select
+          aria-label={t.agreementCard.column}
+          data-testid="mentorship-agreement-filter"
+          value={agreementFilter}
+          onChange={(e) => setAgreementFilter(e.target.value as AgreementStatus | '')}
+          className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
+        >
+          <option value="">{t.agreementCard.column}: {t.agreementCard.filterAll}</option>
+          {AGREEMENT_STATUSES.map((a) => <option key={a} value={a}>{t.agreementCard.status[a]}</option>)}
+        </select>
         <input
           type="search"
           data-testid="mentorship-search"
@@ -680,6 +697,11 @@ export default function MentorshipPage() {
                     )}
                     <span>📅 {t.mentorships.started} {formatDate(rel.startDate, locale)}</span>
                     <Badge variant="default">{rel._count.interactions} {t.mentorships.interactions}</Badge>
+                    {rel.agreementStatus && (
+                      <Badge variant={rel.agreementStatus === 'SIGNED' ? 'success' : rel.agreementStatus === 'UNSIGNED' ? 'default' : 'warning'} data-testid={`mentorship-agreement-${rel.id}`} data-status={rel.agreementStatus}>
+                        {t.agreementCard.column}: {t.agreementCard.status[rel.agreementStatus]}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end sm:shrink-0">

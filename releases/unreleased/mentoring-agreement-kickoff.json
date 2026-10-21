@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mentoring agreement at kickoff (#1792):** `AgreementCard` on `/portal` and `/mentor/mentees/[id]` shows the agreement in force in the viewer's language (binding text as fallback) with an unticked box; `POST /api/mentorship/[id]/agreement/accept { version }` records the caller's own side only (ADMIN 403), the version in force only (409 `stale_version`), idempotently, with hashed client evidence. `GET /api/mentorship/[id]` carries an `agreement` block; `POST /api/mentorship` prompts both sides in-app (`agreement.review`). `/admin/mentorship` gets an agreement badge and filter (`?agreement=SIGNED|MENTOR_ONLY|MENTEE_ONLY|UNSIGNED`, one SQL predicate on the acceptance's recorded side) and `GET /api/admin/agreements/acceptances` reports the whole programme. A prompt, never a gate: an unsigned pair keeps messaging, meetings, goals and the portal — asserted in `e2e/mentoring-agreement-kickoff.spec.ts`. A new version never invalidates an earlier acceptance; the person sees \"the agreement has been updated\".",
+  "notes": {
+    "en": ["Mentors and mentees now read and accept the mentoring agreement when their pairing starts, and admins can see and filter which pairings have signed — nothing is ever locked while it is unsigned."],
+    "tr": ["Mentorlar ve mentee'ler artık eşleşmeleri başlarken mentorluk sözleşmesini okuyup kabul ediyor; yöneticiler hangi eşleşmelerin imzaladığını görüp filtreleyebiliyor — imzalanmadığı sürece hiçbir şey kilitlenmez."],
+    "de": ["Mentor:innen und Mentees lesen und bestätigen die Mentoring-Vereinbarung jetzt zum Start ihres Paares, und Admins sehen und filtern, welche Paare unterschrieben haben — solange nichts unterschrieben ist, wird nichts gesperrt."]
+  }
+}

@@ -1,7 +1,9 @@
 import { createHmac } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireServerSecret } from '@/lib/serverSecret';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
+import { agreementStatusOf, type AgreementStatus } from '@/lib/mentoringAgreementRule';
 import { DEFAULT_AGREEMENT_AUTHORITATIVE, DEFAULT_AGREEMENT_BODY, DEFAULT_AGREEMENT_VERSION } from '@/lib/mentoringAgreementDefault';
 
 /**
@@ -245,4 +247,76 @@ export async function acceptanceReport(orgId: string | null, now = new Date()) {
       return { relationId: r.id, mentorName: r.mentor.fullName, menteeName: r.mentee.fullName, mentorAcceptedAt, menteeAcceptedAt, bothAccepted: !!mentorAcceptedAt && !!menteeAcceptedAt };
     }),
   };
+}
+
+// ── Kickoff (#1792) ──────────────────────────────────────────────────────────
+// A PROMPT, NOT A GATE: everything below reports and records. No caller may use
+// a missing acceptance to disable messaging, meetings, goals, the portal or the
+// pipeline (see src/lib/mentoringAgreementRule.ts).
+
+/**
+ * The `agreement` block of GET /api/mentorship/[id]: the version in force, its
+ * text in the viewer's language (the binding text when there is no
+ * translation), each side's acceptance, and whether the viewer accepted an
+ * EARLIER version — the "the agreement has been updated" prompt.
+ */
+export async function agreementBlockFor(relationId: string, viewerId: string, locale: string) {
+  const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId }, select: { orgId: true, mentorId: true, menteeId: true } });
+  if (!rel) return null;
+  const active = await getActiveAgreement(rel.orgId, locale);
+  if (!active) return null;
+  const rows = await prisma.mentoringAgreementAcceptance.findMany({
+    where: { relationId, agreementKey: active.key },
+    select: { userId: true, version: true, acceptedAt: true },
+  });
+  const current = (userId: string) => rows.find((r) => r.userId === userId && r.version === active.version)?.acceptedAt ?? null;
+  const mentorAcceptedAt = current(rel.mentorId);
+  const menteeAcceptedAt = current(rel.menteeId);
+  const seat: 'MENTOR' | 'MENTEE' | null = viewerId === rel.mentorId ? 'MENTOR' : viewerId === rel.menteeId ? 'MENTEE' : null;
+  return {
+    version: active.version,
+    locale: active.locale,
+    authoritativeLocale: active.authoritativeLocale,
+    body: active.body,
+    mentorAcceptedAt: mentorAcceptedAt?.toISOString() ?? null,
+    menteeAcceptedAt: menteeAcceptedAt?.toISOString() ?? null,
+    status: agreementStatusOf(mentorAcceptedAt, menteeAcceptedAt),
+    seat,
+    viewerAcceptedAt: seat ? (current(viewerId)?.toISOString() ?? null) : null,
+    viewerAcceptedEarlier: seat ? rows.some((r) => r.userId === viewerId && r.version !== active.version) : false,
+  };
+}
+
+/**
+ * The admin list filter: relations of one org in `status` against `version`.
+ * Keyed on the acceptance's recorded side (MENTOR/MENTEE), so it is one SQL
+ * predicate rather than a page of rows filtered in memory.
+ */
+export function agreementStatusWhere(status: AgreementStatus, version: string, key = DEFAULT_AGREEMENT_KEY): Prisma.MentorshipRelationWhereInput {
+  const side = (role: 'MENTOR' | 'MENTEE') => ({ agreementAcceptances: { some: { agreementKey: key, version, role } } });
+  const noSide = (role: 'MENTOR' | 'MENTEE') => ({ agreementAcceptances: { none: { agreementKey: key, version, role } } });
+  if (status === 'SIGNED') return { AND: [side('MENTOR'), side('MENTEE')] };
+  if (status === 'MENTOR_ONLY') return { AND: [side('MENTOR'), noSide('MENTEE')] };
+  if (status === 'MENTEE_ONLY') return { AND: [noSide('MENTOR'), side('MENTEE')] };
+  return { AND: [noSide('MENTOR'), noSide('MENTEE')] };
+}
+
+/** Each relation's status against the version in force for its org — the admin list's column. */
+export async function agreementStatusesFor(relations: readonly { id: string; orgId: string | null }[]): Promise<Map<string, AgreementStatus>> {
+  const out = new Map<string, AgreementStatus>();
+  const byOrg = new Map<string | null, string[]>();
+  for (const r of relations) byOrg.set(r.orgId, [...(byOrg.get(r.orgId) ?? []), r.id]);
+  for (const [orgId, ids] of byOrg) {
+    const active = await getActiveAgreement(orgId);
+    if (!active) continue;
+    const rows = await prisma.mentoringAgreementAcceptance.findMany({
+      where: { relationId: { in: ids }, agreementKey: active.key, version: active.version },
+      select: { relationId: true, role: true },
+    });
+    for (const id of ids) {
+      const mine = rows.filter((r) => r.relationId === id);
+      out.set(id, agreementStatusOf(mine.some((r) => r.role === 'MENTOR'), mine.some((r) => r.role === 'MENTEE')));
+    }
+  }
+  return out;
 }
