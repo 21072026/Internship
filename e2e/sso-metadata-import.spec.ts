@@ -227,7 +227,7 @@ test('test connection reports each step, mints no session, and is admin-only', {
   }
 });
 
-test('expiry warnings: one mail at 30 days, one at 7, none repeated, a new certificate restarts', async ({ page }) => {
+test('expiry warnings: one mail at 30 days, one at 7, none repeated, a new certificate restarts', async ({ page, playwright }) => {
   const supportEmail = uniqueEmail('meta-support');
   const org = await seedOrg('warn', {
     ssoEnabled: true,
@@ -237,6 +237,19 @@ test('expiry warnings: one mail at 30 days, one at 7, none repeated, a new certi
     ssoCertificate: testCertificate(25, 'warn-idp'),
     supportEmail,
   });
+  // The org's own ADMIN cannot run (or time-shift) the sweep: it is an
+  // operator job, and a run with a future `at` would spend the warnings early.
+  const tenant = await apiAs(playwright, await seedAccount('meta-warn-tenant', 'ADMIN', { orgId: org.id }));
+  try {
+    const at = new Date(Date.now() + 40 * 86_400_000).toISOString();
+    const refused = await tenant.get(`/api/cron?job=sso-certificates&orgId=${org.id}&at=${encodeURIComponent(at)}`);
+    expect(refused.status()).toBe(403);
+    expect((await tenant.get('/api/cron?job=sso-certificates')).status()).toBe(403);
+  } finally {
+    await tenant.dispose();
+  }
+  expect((await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).ssoCertWarnStage).toBeNull();
+
   await signInAdmin(page, 'meta-warn', { superAdmin: true });
   const run = async (daysAhead = 0) => {
     const at = new Date(Date.now() + daysAhead * 86_400_000).toISOString();

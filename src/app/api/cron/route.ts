@@ -210,12 +210,17 @@ export async function GET(request: Request) {
       const trialReminders = await runTrialReminders(targetOrgId ? { orgIds: [targetOrgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
     }
-    // IdP certificate-expiry warnings alone (#1933). `orgId` narrows the sweep
-    // (never broadens it) and `at` moves "now", for the same reason the trial
-    // job takes them: e2e/sso-metadata-import.spec.ts asserts exact mails.
+    // IdP certificate-expiry warnings alone (#1933). Not an own-org job: the
+    // gate above already refused anyone but a super admin. `orgId` narrows the
+    // sweep (never broadens it), and only to an org of the caller's own world
+    // (super admin is per world, #2647); `at` moves "now", for the same reason
+    // the trial job takes it: e2e/sso-metadata-import.spec.ts asserts exact mails.
     if (job === 'sso-certificates') {
-      const params = new URL(request.url).searchParams;
       const orgId = params.get('orgId');
+      if (orgId && !(await isSuperAdminFor(session, orgId))) {
+        await logCrossTenantDenial(session, '/api/cron?job=sso-certificates', orgId);
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
       const at = params.get('at');
       const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
       const ssoCertificates = await runSsoCertificateExpiry({ ...(orgId ? { orgIds: [orgId] } : {}), now });
