@@ -15,6 +15,7 @@ import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { gotoSettled } from './helpers/auth';
+import { operatorRequest } from './helpers/operator';
 import {
   BROADCAST_EMAIL_CATEGORIES,
   broadcastMonth,
@@ -244,7 +245,10 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
     await signIn(page, adminEmail, pw, '/admin');
 
     // ── 1. The tick reaches the other tenant, and finishes the resume ───────
-    const tick = await page.request.get('/api/cron?job=newsletters');
+    // The newsletter tick is platform-wide, so the operator fires it, not this
+    // tenant's admin (#1575).
+    const operator = await operatorRequest(test.info().project.use.baseURL);
+    const tick = await operator.get('/api/cron?job=newsletters');
     expect(tick.ok()).toBeTruthy();
     const { newsletters } = await tick.json();
 
@@ -287,7 +291,8 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
     expect(detail).toEqual({ orgId: spent.id, month: new Date().toISOString().slice(0, 7) });
 
     // A second tick refuses the same issues again, and reports nothing new.
-    expect((await page.request.get('/api/cron?job=newsletters')).ok()).toBeTruthy();
+    expect((await operator.get('/api/cron?job=newsletters')).ok()).toBeTruthy();
+    await operator.dispose();
     expect((await holdRows()).length).toBe(first.length);
 
     // ── 3. The admin can see why a past-due issue has not gone out ──────────

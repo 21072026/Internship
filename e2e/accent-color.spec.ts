@@ -84,3 +84,61 @@ test('the newest accent (magenta) is accepted by the profile API and persists', 
     await cleanupByEmail(email);
   }
 });
+
+// The organization's accent (#1666, shipped as #2922): a brand colour alone
+// does not recolour anyone — the organization opts in with brandAccent='brand',
+// and the ramp is then derived from that one colour (no stored palette). A
+// member's own accent still wins over the organization's, across a reload.
+test('an organization that opts into its brand colour paints its members; their own accent still wins', async ({ page }) => {
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const quiet = await prisma.organization.create({ data: { name: `Accent Quiet ${stamp}`, slug: `accent-quiet-${stamp}`, brandColor: '#7c2d12' } });
+  const branded = await prisma.organization.create({
+    data: { name: `Accent Brand ${stamp}`, slug: `accent-brand-${stamp}`, brandColor: '#7c2d12', brandAccent: 'brand' },
+  });
+  const quietEmail = uniqueEmail('accent-org-quiet');
+  const email = uniqueEmail('accent-org-brand');
+  const pw = 'AccentPass123';
+  await seedUser(quietEmail, pw, 'MENTEE', 'Quiet Org Mentee', quiet.id);
+  const user = await seedUser(email, pw, 'MENTEE', 'Brand Org Mentee', branded.id);
+  const html = page.locator('html');
+
+  try {
+    // A brand colour on its own: the vertical's default accent, no palette.
+    await signIn(page, quietEmail, pw, '/portal');
+    await page.goto('/account');
+    await expect(html).toHaveAttribute('data-accent', 'blue');
+    expect(await html.getAttribute('style') ?? '').not.toMatch(/--brand-600/);
+    await page.context().clearCookies();
+
+    // Opted in: the brand accent, its ramp derived from the one colour.
+    await signIn(page, email, pw, '/portal');
+    await page.goto('/account');
+    await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(html).toHaveAttribute('data-accent', 'brand');
+    expect(await html.getAttribute('style')).toMatch(/--brand-600:\s*#[0-9a-f]{6}/);
+
+    // The member picks their own accent: it applies, persists, and the
+    // organization's default does not take it back on a reload.
+    const done = page.waitForResponse(
+      (r) => r.url().includes('/api/profile') && r.request().method() === 'PUT',
+      { timeout: 20_000 }
+    );
+    await page.getByRole('radio', { name: 'Teal' }).click();
+    expect((await done).status()).toBe(200);
+    await expect(html).toHaveAttribute('data-accent', 'teal');
+    await expect
+      .poll(async () => (await prisma.user.findUnique({ where: { id: user.id } }))?.accentColor, { timeout: 10_000 })
+      .toBe('teal');
+    await page.reload();
+    await expect(html).toHaveAttribute('data-accent', 'teal');
+
+    // On another device (no accent cookie) the saved choice still wins.
+    await page.context().clearCookies();
+    await signIn(page, email, pw, '/portal');
+    await expect(html).toHaveAttribute('data-accent', 'teal');
+  } finally {
+    await cleanupByEmail(quietEmail);
+    await cleanupByEmail(email);
+    await prisma.organization.deleteMany({ where: { id: { in: [quiet.id, branded.id] } } });
+  }
+});

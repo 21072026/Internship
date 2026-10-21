@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Plan-change requests and the operator queue (#1743):** new tenant model `PlanChangeRequest` (`orgId` + `TENANT_MODELS`; strings, not enums; a unique `openKey` = `orgId` while `NEW` holds ONE open request per org, so a second submit updates it). `POST /api/org/plan-change` (ADMIN only, 403 from the handler; the org is the session's — an `orgId` in the body is dropped; `mentorship` capability; 5/h per user) validates the PROGRAM plan and interval through the pure `src/lib/planChangeRule.ts`, snapshots the current plan and this month's `ACTIVE_MATCHED_PAIRS` from `UsageRollup` (never a live scan), audits `org.plan_change_requested` and notifies the super admins of the org's world; `GET` returns the caller's own history. The queue — `GET /api/admin/plan-requests` and `PATCH /api/admin/plan-requests/[id]` — is a **super admin of the org's world** only (`superAdminWorld` / `isSuperAdminFor`; a tenant admin 403, another world 404). Applying is one transaction in `src/lib/planChange.ts`: a guarded `updateMany` on `NEW` (a second handler gets 409), the `Subscription` plan + interval (+ the operator's education-discount decision), and the legacy `Organization.plan` via `legacyPlanFor()` (Program Plus → ENTERPRISE, where white-label and SSO live in the old gate). A rejection needs a note. New in-app events `plan_change.requested|applied|rejected`. The queue page `/admin/plan-requests` is linked from `/admin/organizations` for super admins.",
+  "notes": {
+    "en": ["Admins can ask to move to another plan; operators apply or decline the request from a queue, and the plan changes immediately."],
+    "tr": ["Adminler başka bir plana geçmeyi talep edebilir; operatörler talebi bir kuyruktan uygular ya da reddeder ve plan hemen değişir."],
+    "de": ["Admins können einen Planwechsel anfragen; Operatoren wenden die Anfrage aus einer Warteschlange an oder lehnen sie ab, und der Plan ändert sich sofort."]
+  }
+}

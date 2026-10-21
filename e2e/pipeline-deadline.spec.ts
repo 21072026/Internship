@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
@@ -11,6 +11,8 @@ test('stage deadlines flag overdue, surface on the calendar, and trigger reminde
   const mentorEmail = uniqueEmail('dl-mentor');
   const menteeEmail = uniqueEmail('dl-mentee');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'DL Admin');
+  // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+  await markSuperAdmin(adminEmail);
   const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'DL Mentor');
   const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'DL Mentee');
   const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
