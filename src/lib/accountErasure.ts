@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { runUnscoped } from '@/lib/tenantAmbient';
@@ -117,6 +117,49 @@ async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<u
     // (src/lib/externalProfileErasure.ts).
     externalProfileErasureOp({ orgId: erasureOrgId(user.orgId, fallbackOrgId), emails: [user.email], leadUserId: userId }),
   ];
+}
+
+/**
+ * The roster-feed run log (#1964/#1966, docs/roster-feed.md) names people: a
+ * `RosterRowResult` carries the person's key (their e-mail, or the HR system's
+ * personnel number) and their `userId`, and a run's `absentKeys` lists the keys
+ * the feed did not mention. `RosterRowResult.userId` has NO foreign key, so a
+ * hard delete does not cascade it either. Both paths therefore forget the
+ * person here: their row results go (matched by id, and by key for a row the
+ * engine could not tie to an account), and their key is cut out of every run's
+ * `absentKeys` in their org. The run rows themselves — counts, hash, status —
+ * stay: they are the feed's record, not the person's. Pre-read (like
+ * `companyContactOps`) because the key is the address, which anonymise rewrites
+ * in the same transaction.
+ */
+async function rosterLogOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, externalId: true, orgId: true },
+  });
+  if (!user) return [];
+  // The engine stores keys trimmed and lower-cased (rosterRowKey in rosterIngest.ts).
+  const keys = [user.email, user.externalId]
+    .map((k) => (k ?? '').trim().toLowerCase())
+    .filter(Boolean);
+  const ops: Prisma.PrismaPromise<unknown>[] = [
+    prisma.rosterRowResult.deleteMany({
+      where: { OR: [{ userId }, ...(user.orgId && keys.length ? [{ orgId: user.orgId, key: { in: keys } }] : [])] },
+    }),
+  ];
+  if (!user.orgId || !keys.length) return ops;
+  const runs = await prisma.rosterRun.findMany({
+    where: { orgId: user.orgId, NOT: { absentKeys: { equals: Prisma.DbNull } } },
+    select: { id: true, absentKeys: true },
+  });
+  for (const run of runs) {
+    if (!Array.isArray(run.absentKeys)) continue;
+    const kept = run.absentKeys.filter((k) => !(typeof k === 'string' && keys.includes(k.trim().toLowerCase())));
+    if (kept.length !== run.absentKeys.length) {
+      ops.push(prisma.rosterRun.update({ where: { id: run.id }, data: { absentKeys: kept as Prisma.InputJsonValue } }));
+    }
+  }
+  return ops;
 }
 
 /**
@@ -260,6 +303,9 @@ export async function forgetCompanyContact(
 //     row; `forgetCompanyContact()` below (#2559) forgets them by address
 //     through the SAME scrub builder, and unconverted enquiries age out through
 //     the `companyInquiry` retention entry.
+//   - the roster-feed run log (`RosterRowResult.key/message`, `RosterRun.absentKeys`)
+//     is not free text but names the person by key: forgotten by `rosterLogOps()`
+//     on both paths, and bounded by the `rosterRowResult` retention entry (90 days).
 // A new `@db.Text` column about a person belongs in BOTH lists — here and in
 // the sanitize-db header — or in this block with its reason.
 //
@@ -376,13 +422,14 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // Built while the row — and with it the address and the org — still exists.
   const companyContact = await companyContactOps(userId);
   const openText = await openTextArtifactOps(userId);
+  const rosterLog = await rosterLogOps(userId);
   // BEFORE the relations go: deleting a relation cascades to its meetings, and
   // `PersonalNote.meetingId` is SetNull — so a note taken in this person's
   // meeting would survive with its text intact and its only link to them
   // nulled, unreachable by any later query (#2052). One $transaction so a
   // partial scrub cannot happen; the deletes below keep their existing failure
   // mode (an FK that neither cascades nor is detached).
-  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText]);
+  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText, ...rosterLog]);
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
   // Optional references without a DB-level cascade (FK restrict) would abort
@@ -404,8 +451,10 @@ export async function anonymizeUser(userId: string): Promise<void> {
   await forgetEmailLog(userId);
   const companyContact = await companyContactOps(userId);
   const openText = await openTextArtifactOps(userId);
+  const rosterLog = await rosterLogOps(userId);
   await prisma.$transaction([
     ...openText,
+    ...rosterLog,
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
     // What an AI wrote about the person (#2044): the row stays, the person's
