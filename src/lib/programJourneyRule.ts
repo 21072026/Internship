@@ -277,3 +277,26 @@ export function readStepTranslations(value: unknown): Partial<Record<'en' | 'tr'
   }
   return out;
 }
+
+// ── The participant view (#1855) ─────────────────────────────────────────────
+
+export type ParticipantGroup = 'now' | 'next' | 'done';
+
+/**
+ * Where a step sits on the participant's screen, or null when it is not theirs
+ * to see: a draft, an archived step, one that will never be sent (missed) and
+ * one the org cannot schedule are admin concerns, not the pair's to-do list.
+ * A step already satisfied is DONE — it shows its evidence, never a nag.
+ */
+export function participantGroup(status: StepStatus): ParticipantGroup | null {
+  if (status === 'due') return 'now';
+  if (status === 'upcoming' || status === 'waiting') return 'next';
+  if (status === 'delivered' || status === 'skipped' || status === 'would_skip' || status === 'claimed') return 'done';
+  return null;
+}
+
+/** The condition a satisfied status was satisfied by — "satisfied:meeting_exists" → "meeting_exists". */
+export function satisfiedCondition(reason: string | null): JourneySkipCondition | null {
+  const cond = reason?.startsWith('satisfied:') ? reason.slice('satisfied:'.length) : null;
+  return isJourneySkipCondition(cond) ? cond : null;
+}

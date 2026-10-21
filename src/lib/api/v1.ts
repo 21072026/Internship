@@ -34,6 +34,12 @@ export const API_ERROR_TYPES = [
   // Writes (#1994, src/lib/api/v1Write.ts).
   'idempotency_key_reused',
   'idempotency_in_progress',
+  // A per-key cap was reached (#2002: subscriptions).
+  'limit_reached',
+  // Domain refusals of the writes (#1996).
+  'duplicate_candidate',
+  'invalid_transition',
+  'stage_conflict',
 ] as const;
 export type ApiErrorType = (typeof API_ERROR_TYPES)[number];
 

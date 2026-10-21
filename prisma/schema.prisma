@@ -207,6 +207,8 @@ model Organization {
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
+  // Org-defined segmentation attributes (#1920).
+  orgAttributes           OrgAttribute[]
   aiArtifacts             AiArtifact[]
   aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
@@ -754,6 +756,8 @@ model User {
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
   savedViews                        SavedView[]                   @relation("SavedViewAuthor")
+  // Segmentation attribute values (#1920); removed with the user.
+  attributeValues                   UserAttributeValue[]
   aiArtifacts                       AiArtifact[]                  @relation("AiArtifactSubject")
   attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
@@ -2642,8 +2646,17 @@ model Webhook {
   events    Json          @default("[]")
   active    Boolean       @default(true)
   createdAt DateTime      @default(now())
+  // A subscription a connector made for itself through POST /api/v1/hooks
+  // (#2002): the key that owns it — the only key that may list or delete it —
+  // and where it came from (`admin` | `api`). Both null on every admin-created
+  // row; additive and nullable on purpose, never a re-key of Webhook. A
+  // revoked or expired owner key stops its deliveries (src/lib/webhooks.ts).
+  apiKeyId  String?
+  apiKey    ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  source    String?       @db.VarChar(20)
 
   @@index([orgId, active])
+  @@index([apiKeyId])
 }
 
 // THE event table (#1691): one append-only row per domain event the product
@@ -2723,6 +2736,7 @@ model ApiKey {
   quotaLimit      Int?
   usage           ApiKeyUsage[]
   idempotencyKeys ApiIdempotencyKey[]
+  webhooks        Webhook[]
 
   @@index([orgId])
   @@index([createdById])
@@ -3323,15 +3337,26 @@ model MentorshipRelation {
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.
   nextActionRemindedAt    DateTime?
-  // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
-  // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
-  // different mentor and an admin approved it. Nullable and additive: an
-  // untouched row keeps meaning exactly what it meant before. `status` still
-  // carries "is this pairing live", so every existing ACTIVE/COMPLETED check is
-  // unchanged; this column is what keeps a re-match from being counted (or
-  // certified) as a successful completion. Keys live in
-  // src/lib/relationLifecycle.ts.
-  lifecycleState          String?
+  // The state the pairing is in (#1768): ACTIVE | PAUSED | COMPLETED |
+  // ENDED_REMATCHED | ENDED_REASSIGNED | ENDED_CHURNED — keys, transitions and
+  // the one derivation of `status` live in src/lib/relationLifecycle.ts. It
+  // started (#1801) as "how did it END"; it now says every state, and `status`
+  // is the derived liveness flag (statusForLifecycle) that the many existing
+  // ACTIVE/COMPLETED readers keep reading unchanged — a PAUSED pair is still
+  // status ACTIVE.
+  //
+  // A free String, NOT an enum — same reasoning as `pipelineStatus` (#747): an
+  // ENUM→VARCHAR change is a migration we cannot review under `db push`, and a
+  // new state must never need one. Don't tidy it into an enum.
+  //
+  // Nullable with a DB default: expand → backfill → contract (#2298). New rows
+  // get 'ACTIVE'; rows written before #1768 hold NULL until
+  // prisma/backfill-relation-lifecycle.mjs fills them on deploy. Making it
+  // required is a later, separate contract step.
+  lifecycleState          String?          @default("ACTIVE")
+  // When the pairing was paused (#1768); cleared on resume. Never on a live,
+  // unpaused row.
+  pausedAt                DateTime?
   // Why the pairing ended, as picked by the person who ended it (#2289): a code
   // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
   // never backfilled — a relation closed before this column existed, or closed
@@ -5455,6 +5480,13 @@ model Job {
   /// whole queue, which is what an operator alert has to do.
   orgId String?
 
+  /// Provenance of the ENQUEUE (#1673), one of 'schedule' | 'manual' | 'boot'
+  /// (JobTrigger in src/lib/jobs/types.ts). The worker copies it onto every
+  /// `JobRun` it writes for this job, so an admin's re-run of a scheduled job
+  /// reads as 'manual' on the ledger. A database-side default, so existing rows
+  /// (the mail queue's) read 'schedule' and `db push` can add it to a full table.
+  trigger String @default("schedule") @db.VarChar(16)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -6082,6 +6114,12 @@ model RosterFeed {
   /// The NAME of the environment variable holding the SFTP secret — never the
   /// secret. A credential in a database row is a credential in every backup.
   credentialEnvVar       String? @db.VarChar(120)
+  /// The feed's secret (SFTP password / private key, or the HTTPS bearer
+  /// token), sealed with `seal(…, 'roster-feed-secret')` (#1964). Written only
+  /// by /api/admin/roster-feeds, which answers `secretSet: boolean` and never
+  /// the value. Takes precedence over `credentialEnvVar`, which stays for an
+  /// operator who would rather keep the secret out of the database altogether.
+  secretEnc              String? @db.Text
 
   /// Force a delimiter instead of sniffing it (';' for a German Excel export).
   delimiter String? @db.VarChar(4)
@@ -6099,6 +6137,11 @@ model RosterFeed {
   authoritative Boolean @default(false)
 
   chunkSize Int?
+
+  /// When the feed runs: a five-field cron expression evaluated in UTC
+  /// (`src/lib/rosterFeed.ts`). Null = run by hand only.
+  cronExpression String?   @db.VarChar(120)
+  lastRunAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6187,6 +6230,9 @@ model RosterRowResult {
   @@unique([runId, rowNumber])
   @@index([runId, status])
   @@index([orgId, createdAt])
+  /// The retention sweep (#1964): row detail older than 90 days goes, across
+  /// every tenant at once — see `rosterRowResult` in src/lib/retentionEntries.ts.
+  @@index([createdAt])
 }
 
 // ── Scheduled report delivery (#1905) ────────────────────────────────────────
@@ -6600,6 +6646,56 @@ model SavedView {
 
   @@unique([orgId, surface, createdById, name])
   @@index([orgId, surface])
+}
+
+// Org-defined segmentation attributes (#1920) — the dimensions a registry report
+// can be sliced by (department, level, location, a start date…). Generic on
+// purpose: `type` is SELECT | TEXT | DATE | NUMBER and the labels are the
+// admin's own words in EN/TR/DE, never a dictionary key. No special-category
+// preset ships (docs/analytics.md § Dimensions). Vocabularies are VARCHAR + a
+// whitelist in src/lib/orgAttributesRule.ts, never a Prisma enum (#747).
+// Tenure is DERIVED from a DATE attribute at read time, never stored.
+model OrgAttribute {
+  id            String               @id @default(cuid())
+  orgId         String
+  org           Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Stable machine key (a-z, 0-9, _), what `segmentBy` and the import name.
+  key           String               @db.VarChar(64)
+  labelEn       String               @db.VarChar(191)
+  labelTr       String               @db.VarChar(191)
+  labelDe       String               @db.VarChar(191)
+  /// SELECT | TEXT | DATE | NUMBER
+  type          String               @db.VarChar(16)
+  /// SELECT only: the allowed values, as a string array.
+  options       Json?
+  /// USER today; RELATION is reserved for a later slice.
+  appliesTo     String               @default("USER") @db.VarChar(16)
+  isSegmentable Boolean              @default(true)
+  sortOrder     Int                  @default(0)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  values        UserAttributeValue[]
+
+  @@unique([orgId, key])
+  @@index([orgId, sortOrder])
+}
+
+/// One person's value of one attribute. The (orgId, attributeId, value) index
+/// is what makes a segmented report one grouped query rather than a scan.
+model UserAttributeValue {
+  id          String       @id @default(cuid())
+  orgId       String
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   OrgAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String       @db.VarChar(191)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([userId, attributeId])
+  @@index([orgId, attributeId, value])
+  @@index([attributeId])
 }
 
 // A text-only practice interview (#2051): the mentee answers, an AI interviewer

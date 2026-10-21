@@ -62,6 +62,7 @@ const MUST_BE_BLOCKED = [
   ['/api/admin/users/SEGMENT/reset-password', 'rotates a shared password'],
   ['/api/admin/webhooks', 'POSTs from the production host to any URL'],
   ['/api/admin/api-keys', 'mints a real credential'],
+  ['/api/admin/roster-feeds', 'stores a real remote credential (#1964)'],
   ['/api/admin/email-test', 'mails an arbitrary recipient'],
   ['/api/cv', 'uploads a file'],
   ['/api/avatar', 'uploads a file'],

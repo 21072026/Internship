@@ -7,6 +7,8 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
+import { syncUserSkills } from '@/lib/skillsResolve';
+import { resolveOrgId } from '@/lib/orgScope';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT } from '@/lib/brandRule';
@@ -364,6 +366,8 @@ export async function PUT(request: Request) {
         },
         select: PROFILE_SELECT,
       });
+      // Dual-write the canonical twin of the list just saved (#1818).
+      if (rest.skills !== undefined) await syncUserSkills(session.user.id, resolveOrgId(session), rest.skills);
 
       const delta = before ? notificationDelta(before, user) : null;
       const detail = delta ? notificationDetail(delta) : null;

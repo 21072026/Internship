@@ -330,6 +330,10 @@ _in_image "$IMAGE" node prisma/backfill-organization.mjs \
   || echo "WARN: org backfill FAILED (exit non-zero) — see the output above"
 # Legacy needs require company orgId; include rows created by the demo seed.
 _in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
+# Canonical skills (#1819/#1820): the skill filters read UserSkill rows, so the
+# demo set's free-text skills must be mapped here too, or a topic env's skill
+# search finds only the free-text half. Idempotent.
+_in_image "$IMAGE" node prisma/backfill-skill-taxonomy.mjs --apply || true
 
 # Point the demo MARKETING org at THIS topic's marketing host so the landing
 # demo form opens and e-mail links stay on the topic env, not production
@@ -429,6 +433,8 @@ docker run -d \
   -e MAIL_THROTTLE_LADDER_SEC="${MAIL_THROTTLE_LADDER_SEC:-}" \
   -e MAIL_QUEUE_LANES="${MAIL_QUEUE_LANES:-}" \
   -e MAIL_WORKER_ENABLED="${MAIL_WORKER_ENABLED:-}" \
+  -e JOBS_WORKER_ENABLED="${JOBS_WORKER_ENABLED:-}" \
+  -e JOBS_CONCURRENCY="${JOBS_CONCURRENCY:-}" \
   -e MAIL_INLINE_TIMEOUT_MS="${MAIL_INLINE_TIMEOUT_MS:-}" \
   -e MAIL_DAILY_CAP="${TOPIC_MAIL_DAILY_CAP:-${MAIL_DAILY_CAP:-}}" \
   -e MAIL_BULK_DAILY_CAP="${MAIL_BULK_DAILY_CAP:-}" \

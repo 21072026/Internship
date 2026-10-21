@@ -779,6 +779,28 @@ async function anonymizeOrphanApplicants(ctx: RetentionContext) {
   };
 }
 
+async function pruneRosterRowResults(ctx: RetentionContext) {
+  // Row-level detail only: the RosterRun summary it hangs off is kept, so
+  // "did the sync run that night and what did it change in total?" stays
+  // answerable after "which rows?" no longer is. Served by
+  // @@index([createdAt]) on RosterRowResult (the sweep spans every tenant).
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.rosterRowResult.findMany({
+          where: { createdAt: { lt: ctx.cutoff } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => (await prisma.rosterRowResult.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 /**
  * The built-in policy, in one place.
  *
@@ -927,6 +949,14 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets a year rather than one of the short windows above (only companyUsage, a hygiene window for the same reason, is longer).',
     run: pruneTrialReminders,
+  },
+  {
+    key: 'rosterRowResult',
+    // No setting: part of the roster feed's design (#1964, docs/roster-feed.md).
+    defaultDays: 90,
+    reason:
+      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail.',
+    run: pruneRosterRowResults,
   },
 ];
 

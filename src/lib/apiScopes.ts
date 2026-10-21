@@ -33,6 +33,9 @@ export const API_SCOPES = [
   'candidates:write',
   'relationships:write',
   'interactions:write',
+  // A connector managing its OWN webhook subscriptions (#2002): POST/GET/DELETE
+  // /api/v1/hooks: only the subscriptions this key made, never an admin-created one.
+  'hooks:write',
   'companies:write',
 ] as const;
 
@@ -64,6 +67,7 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'candidates:write': 'INTEGRATIONS_API',
   'relationships:write': 'INTEGRATIONS_API',
   'interactions:write': 'INTEGRATIONS_API',
+  'hooks:write': 'INTEGRATIONS_API',
   'companies:write': null,
 };
 
