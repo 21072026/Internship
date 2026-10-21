@@ -150,6 +150,14 @@ model Organization {
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
   ssoSyncRole      Boolean  @default(false)
+  // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
+  // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
+  // and OUR per-org SP signing key — generated on first use, the private half
+  // sealed with secretBox (purpose 'sso-sp-signing-key'), the self-signed
+  // public certificate published in the SP metadata.
+  ssoLogoutUrl     String?  @db.Text
+  ssoSpKey         String?  @db.Text
+  ssoSpCert        String?  @db.Text
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe

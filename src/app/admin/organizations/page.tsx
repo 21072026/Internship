@@ -39,6 +39,8 @@ interface Organization {
     ssoProvider: string | null;
     ssoIssuer: string | null;
     ssoEntryPoint: string | null;
+    ssoLogoutUrl: string | null;
+    sloUrl: string;
     ssoCertificateSet: boolean;
     active: boolean;
     spEntityId: string;
@@ -497,6 +499,7 @@ export default function AdminOrganizationsPage() {
   const [ssoProvider, setSsoProvider] = useState('');
   const [ssoIssuer, setSsoIssuer] = useState('');
   const [ssoEntryPoint, setSsoEntryPoint] = useState('');
+  const [ssoLogoutUrl, setSsoLogoutUrl] = useState('');
   const [ssoCertificate, setSsoCertificate] = useState('');
   const [ssoMsg, setSsoMsg] = useState<string | null>(null);
 
@@ -508,6 +511,7 @@ export default function AdminOrganizationsPage() {
     setSsoProvider(o?.sso.ssoProvider ?? '');
     setSsoIssuer(o?.sso.ssoIssuer ?? '');
     setSsoEntryPoint(o?.sso.ssoEntryPoint ?? '');
+    setSsoLogoutUrl(o?.sso.ssoLogoutUrl ?? '');
     setSsoCertificate(''); // never prefilled; leave blank to keep the stored cert
   };
 
@@ -517,7 +521,7 @@ export default function AdminOrganizationsPage() {
     setSaving(true); setSsoMsg(null);
     try {
       const body: Record<string, unknown> = {
-        id: ssoOrgId, ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint,
+        id: ssoOrgId, ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoLogoutUrl,
       };
       // Only send the cert when the admin actually typed one (blank = keep).
       if (ssoCertificate.trim()) body.ssoCertificate = ssoCertificate;
@@ -851,6 +855,7 @@ export default function AdminOrganizationsPage() {
                       <SpRow label={t.organizations.spEntityId} value={o.sso.spEntityId} testId="sp-entity-id" />
                       <SpRow label={t.organizations.spAcsUrl} value={o.sso.acsUrl} testId="sp-acs-url" />
                       <SpRow label={t.organizations.spMetadataUrl} value={o.sso.metadataUrl} testId="sp-metadata-url" link />
+                      <SpRow label={t.organizations.spSloUrl} value={o.sso.sloUrl} testId="sp-slo-url" />
                     </div>
                   );
                 })()}
@@ -868,6 +873,7 @@ export default function AdminOrganizationsPage() {
                   </div>
                   <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoTrustLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
                   <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
+                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoLogoutUrl} value={ssoLogoutUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoLogoutUrl(e.target.value)} placeholder="https://idp.example.com/slo" data-testid="sso-logout-url" /></div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoCertificate}</label>
