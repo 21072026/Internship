@@ -6104,6 +6104,29 @@ model JobLease {
   @@index([expiresAt])
 }
 
+// What the deploy's data migrations have done, one row per registered backfill
+// (#1540; prisma/backfills/registry.mjs, prisma/run-backfills.mjs). The id is
+// the registry entry's id. A `once` backfill with a recorded success is skipped
+// on later deploys; every other entry runs every deploy (they are idempotent)
+// and this row only records that it did and how it ended.
+//
+// INFRASTRUCTURE, NOT TENANT DATA: deliberately no `orgId` and deliberately NOT
+// in TENANT_MODELS (src/lib/orgContext.ts). A backfill runs across every
+// tenant at once; scoping its ledger to one would be meaningless. A later
+// isolation audit must not "fix" this.
+model BackfillRun {
+  id         String    @id @db.VarChar(96)
+  // ok | failed — of the latest run.
+  lastStatus String    @db.VarChar(16)
+  lastRunAt  DateTime
+  // The first successful run: what `once` reads.
+  firstOkAt  DateTime?
+  runs       Int       @default(0)
+  // The tail of the latest failure (exit code and the last output line).
+  lastError  String?   @db.Text
+  createdAt  DateTime  @default(now())
+}
+
 // ── Mail send budget ─────────────────────────────────────────────────────────
 // The shared send budget of ONE environment (every replica and every lane of
 // it): a GCRA meter in one row per SMTP channel. Rules — lanes, tolerance, the
