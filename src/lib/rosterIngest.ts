@@ -62,40 +62,31 @@ import {
 } from './importPreview';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { assertPublicHttpsUrl } from './ssrfGuard';
+import {
+  ROSTER_PROFILE_FIELDS,
+  type RosterColumnMap,
+  type RosterKeyField,
+  type RosterProfileField,
+  type RosterTransport,
+} from './rosterFeed';
 
 // ── Feed configuration ───────────────────────────────────────────────────────
 
-export const ROSTER_TRANSPORTS = ['HTTPS', 'SFTP'] as const;
-export type RosterTransport = (typeof ROSTER_TRANSPORTS)[number];
-
-/**
- * Which column identifies a person.
- *
- * EMAIL is the obvious choice and the wrong one for any tenant whose people
- * ever change their address: with e-mail as the key, one person renaming their
- * mailbox is indistinguishable from a leaver plus a joiner — and #1966 would
- * deprovision the leaver. EXTERNAL_ID (the HR system's own personnel number) is
- * what makes an e-mail change readable as an update.
- */
-export const ROSTER_KEY_FIELDS = ['EMAIL', 'EXTERNAL_ID'] as const;
-export type RosterKeyField = (typeof ROSTER_KEY_FIELDS)[number];
+// The vocabulary (transports, key fields, mappable columns) lives in
+// `rosterFeed.ts` (#1964) so the admin console can import it without pulling
+// the transport and its DNS-based SSRF guard into a client bundle.
+export {
+  ROSTER_KEY_FIELDS,
+  ROSTER_PROFILE_FIELDS,
+  ROSTER_TRANSPORTS,
+  type RosterColumnMap,
+  type RosterKeyField,
+  type RosterProfileField,
+  type RosterTransport,
+} from './rosterFeed';
 
 export const ROSTER_RUN_STATUSES = ['RUNNING', 'SUCCEEDED', 'FAILED', 'NOOP'] as const;
 export type RosterRunStatus = (typeof ROSTER_RUN_STATUSES)[number];
-
-/** Profile columns a feed may carry, beyond the identity ones. */
-export const ROSTER_PROFILE_FIELDS = ['fullName', 'phone', 'university', 'department'] as const;
-export type RosterProfileField = (typeof ROSTER_PROFILE_FIELDS)[number];
-
-/** Our field name → the header the tenant's export happens to use. */
-export interface RosterColumnMap {
-  email?: string;
-  externalId?: string;
-  fullName?: string;
-  phone?: string;
-  university?: string;
-  department?: string;
-}
 
 export interface RosterFeedConfig {
   id: string;
@@ -121,6 +112,13 @@ export interface RosterFeedConfig {
    * to read it from.
    */
   credentialEnvVar?: string | null;
+  /**
+   * The secret itself, resolved by the store at fetch time from the sealed
+   * column or the named environment variable (#1964) — never read from a row
+   * by this module, never logged, never part of a run record. HTTPS sends it as
+   * a bearer token.
+   */
+  secret?: string | null;
   /** Force a delimiter instead of sniffing it (`;` for a German Excel export). */
   delimiter?: string | null;
   keyField: RosterKeyField;
@@ -266,7 +264,10 @@ export async function fetchFeedFile(
 
   const doFetch = options.fetchImpl ?? fetch;
   const response = await doFetch(safeUrl.toString(), {
-    headers: { accept: 'text/csv, text/plain;q=0.9, */*;q=0.1' },
+    headers: {
+      accept: 'text/csv, text/plain;q=0.9, */*;q=0.1',
+      ...(feed.secret ? { authorization: `Bearer ${feed.secret}` } : {}),
+    },
     redirect: 'error', // a redirect would escape the address check above
   });
   if (!response.ok) {
