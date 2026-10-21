@@ -207,6 +207,12 @@ export const NOTIFICATION_EVENTS = [
   { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'mentor_application.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Plan-change requests (#1743): to the operators of the org's world, and the
+  // answer back to the requesting admin. In-app only — the operator queue and
+  // the billing screen are where the request lives.
+  { key: 'plan_change.requested', category: 'announcements', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['org', 'plan'] },
+  { key: 'plan_change.applied', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['plan'] },
+  { key: 'plan_change.rejected', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['plan'] },
   { key: 'signup.pendingApproval', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'signup.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   // An operational anomaly rather than news: somebody registered through an
