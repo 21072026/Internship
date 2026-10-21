@@ -14,6 +14,7 @@ import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
 import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
+import { purgeExpiredImports } from '@/lib/api/v1Imports';
 import { purgeExpiredExports } from '@/lib/api/v1Exports';
 import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
@@ -6481,6 +6482,9 @@ export function initCronJobs() {
       // a sweep that silently stopped running is visible as a missing line.
       const idem = await purgeExpiredIdempotencyKeys();
       console.log(`[Cron] API idempotency key purge: ${idem} keys`);
+      // And the /api/v1 bulk imports (#3015) past their 7-day report window.
+      const importsPurged = await purgeExpiredImports();
+      console.log(`[Cron] API import purge: ${importsPurged} imports`);
       // And the /api/v1 exports (#3002) past their expiry: the file is
       // already refused from that instant; this deletes it.
       const exportsPurged = await purgeExpiredExports();
