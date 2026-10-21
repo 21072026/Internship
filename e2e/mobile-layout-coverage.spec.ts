@@ -372,6 +372,26 @@ test('phone width: the programme-setup admin screens stay inside the viewport in
   await sweep(page, SETUP, 'the programme-setup admin screens');
 });
 
+// The sweep above measures German only and the vocabulary tab only. /admin/skills
+// (#1817/#1819) shipped with a toolbar that fit nowhere below ~370px: a fixed
+// w-56 input plus its button on one line. Both tabs, all three locales.
+test('phone width: the skill vocabulary and review queue fit in every locale', async ({ page }) => {
+  test.slow();
+  await asAdmin(page);
+  const findings: string[] = [];
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    await page.evaluate((l) => { document.cookie = `locale=${l};path=/`; }, locale);
+    await gotoSettled(page, '/admin/skills');
+    await settle(page, { timeout: READY });
+    await page.getByTestId('skill-admin-search').waitFor({ state: 'visible', timeout: READY });
+    for (const problem of await auditLayout(page)) findings.push(`${locale} vocabulary: ${problem}`);
+    await page.getByTestId('skill-admin-tab-queue').click();
+    await expect(page.getByTestId('skill-admin-tab-queue')).toHaveAttribute('aria-selected', 'true');
+    for (const problem of await auditLayout(page)) findings.push(`${locale} queue: ${problem}`);
+  }
+  expect(findings, `/admin/skills at ${PHONE.width}px`).toEqual([]);
+});
+
 test('phone width: the scheduling and outbound admin screens stay inside the viewport in German', async ({ page }) => {
   test.slow();
   await asAdmin(page);
