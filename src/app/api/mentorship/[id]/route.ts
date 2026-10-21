@@ -10,7 +10,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
-import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, validateDropoffReason, validateEmploymentAttribution } from '@/lib/stageChange';
+import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
 import {
   findActiveMentorship,
@@ -42,6 +43,11 @@ const updateRelationSchema = z.object({
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
+  // What the relation is for (#1503): PLACEMENT | COACHING. ADMIN only, and a
+  // whitelist (src/lib/placementKind.ts), never z.enum.
+  kind: z.string().max(16).optional(),
+  // Whose outcome a hire is (#1503); null clears it. Whitelisted below.
+  employmentAttribution: z.string().max(24).nullable().optional(),
   // The agreed end (#1784); null clears it. An edit, never an extension:
   // durationExtendedCount moves only through the explicit extend action.
   expectedEndDate: z.string().max(40).nullable().optional(),
@@ -197,12 +203,31 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, expectedEndDate, ...rest } = parsed.data;
+      const {
+        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote,
+        kind, employmentAttribution, expectedEndDate, ...rest
+      } = parsed.data;
 
       // The agreed end (#1784), checked against the pairing's own start.
       const schedule = expectedEndDate !== undefined ? parseSchedule({ expectedEndDate }, relation.startDate) : null;
       if (schedule && !schedule.ok) {
         return NextResponse.json({ error: 'Invalid end date', code: schedule.code }, { status: 400 });
+      }
+
+      // Kind (#1503): reclassifying a relation moves it in or out of every
+      // placement count, so only an ADMIN may, checked here (not by hiding a
+      // control). Echoing the current value stays a no-op for anyone.
+      const kindChanging = kind !== undefined && kind !== relation.kind;
+      if (kindChanging) {
+        if (session.user.role !== 'ADMIN') {
+          return NextResponse.json({ error: 'Only an admin can change the relation kind', code: 'kind_admin_only' }, { status: 403 });
+        }
+        if (!isRelationKind(kind)) {
+          return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
+        }
+      }
+      if (employmentAttribution != null && !isEmploymentAttribution(employmentAttribution)) {
+        return NextResponse.json({ error: 'Unknown employmentAttribution', code: 'invalid_attribution' }, { status: 400 });
       }
 
       // Parsed before anything is written, like the drop-off reason below.
@@ -250,6 +275,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (!reasonCheck.ok) {
           return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
         }
+        // The hire-stage attribution rule (#1503) — not enforced until the UI
+        // sends it (EMPLOYMENT_ATTRIBUTION_REQUIRED), but every move asks it.
+        const attributionCheck = await validateEmploymentAttribution({
+          orgId: relation.orgId,
+          toStatus: pipelineStatus!,
+          attribution: employmentAttribution,
+        });
+        if (!attributionCheck.ok) {
+          return NextResponse.json({ error: attributionCheck.error, code: 'invalid_attribution' }, { status: 400 });
+        }
       }
 
       // Back door (#419): reopening a COMPLETED relation to ACTIVE is a second
@@ -269,6 +304,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         // and the trial window a move into TRIAL_ACTIVE stamps (#2551).
         ...(stageChanging ? await stageMoveData(relation, pipelineStatus!) : {}),
       };
+      if (kindChanging && isRelationKind(kind)) {
+        data.kind = kind;
+        const entered = funnelEnteredAtForKindChange(relation.kind, kind, new Date());
+        if (entered !== undefined) data.funnelEnteredAt = entered;
+      }
+      if (employmentAttribution !== undefined) data.employmentAttribution = employmentAttribution;
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
       if (parsed.data.status && parsed.data.status !== relation.status) {

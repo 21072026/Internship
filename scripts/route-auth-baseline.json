@@ -48,7 +48,11 @@
   },
   "src/app/api/auth/sso/[slug]/metadata/route.ts": {
     "methods": ["GET"],
-    "why": "The tenant's SAML SP metadata (#1931) — the two URLs we already publish plus the NameID format, no secret and no tenant data. It is what the customer's IT team reads WHILE configuring SSO, i.e. before anyone there can sign in."
+    "why": "The tenant's SAML SP metadata (#1931) — the URLs we already publish, the NameID format and our PUBLIC logout-signing certificate (#1952), no secret and no tenant data. It is what the customer's IT team reads WHILE configuring SSO, i.e. before anyone there can sign in."
+  },
+  "src/app/api/auth/sso/[slug]/slo/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "SAML SingleLogoutService (#1952): the IdP sends a signed LogoutRequest through the browser, and the signature — required on both bindings, checked against the tenant's stored certificate — is the credential. Pre-auth by nature: the person's session is exactly what it ends. Rate-limited per IP."
   },
   "src/app/api/auth/verify-email/route.ts": {
     "methods": ["POST"],
@@ -89,6 +93,10 @@
   "src/app/api/inbound-email/poll/route.ts": {
     "methods": ["POST"],
     "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."
+  },
+  "src/app/api/webhooks/email/[provider]/route.ts": {
+    "methods": ["POST"],
+    "why": "The mail provider's bounce/complaint webhook (#1692). A provider holds no session: the credential is the EMAIL_WEBHOOK_SECRET shared secret (header, bearer or Basic password; timingSafeEqual), required outright in production like the inbound-email webhook (#870). Rate-limited per IP before the body is read; it only ever writes suppression rows."
   },
   "src/app/api/inbound-email/route.ts": {
     "methods": ["POST"],
@@ -145,6 +153,14 @@
   "src/app/api/register/route.ts": {
     "methods": ["POST"],
     "why": "Registration. There is no session to read before the account exists; what authorises the write is the InvitationToken (or the org's open sign-up policy), checked inside the handler."
+  },
+  "src/app/api/document-review/[token]/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "An external document reviewer's emailed link (#1859). DocumentReview.reviewToken is the credential — the reviewer has no account — and answers only for the CURRENT EXTERNAL step of one PENDING document; it is cleared when the step is decided, so it works once."
+  },
+  "src/app/api/document-review/[token]/file/route.ts": {
+    "methods": ["GET"],
+    "why": "The file that same external reviewer is asked to decide on (#1859), readable through the same token for exactly as long as the token can still decide its step."
   },
   "src/app/api/rsvp/route.ts": {
     "methods": ["GET", "POST"],

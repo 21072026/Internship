@@ -38,6 +38,25 @@ export async function resolveStageSlas(orgId: string | null | undefined): Promis
 }
 
 /**
+ * The escalation ladder's second rung per stage (#1722), keyed by stage: how
+ * many days after a breach the org's administrators are told. Only stages that
+ * also carry a service level — an escalation of a deadline nobody set means
+ * nothing.
+ */
+export async function resolveStageEscalations(
+  orgId: string | null | undefined
+): Promise<Map<string, number>> {
+  if (!orgId) return new Map();
+  const rows = await prisma.stageSla.findMany({
+    where: { orgId, days: { not: null }, escalateAfterDays: { not: null } },
+    select: { stageKey: true, escalateAfterDays: true },
+  });
+  return new Map(
+    rows.flatMap((r) => (r.escalateAfterDays == null ? [] : [[r.stageKey, r.escalateAfterDays] as [string, number]]))
+  );
+}
+
+/**
  * Every per-stage board WIP limit an org has configured (#1439), keyed by stage.
  * A stored 0 is kept as 0 — it means "never warn about this stage", which is not
  * the same as having configured nothing. Resolution against the org-wide

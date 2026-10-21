@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -848,7 +848,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   return { queued: true, newsletterId: created.id, templateKey: template.key, scheduledAt };
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Registers the two newsletter schedules in this server process. Idempotent —
@@ -860,7 +860,7 @@ export function initNewsletterCron() {
   // Every 15 minutes: sends whatever has come due. Not hourly, because an admin
   // who schedules an issue for 14:30 means 14:30, and not every minute because
   // the query is pointless 59 times out of 60.
-  const dispatch = cron.schedule('*/15 * * * *', async () => {
+  const dispatch = scheduleLeased('*/15 * * * *', async () => {
     try {
       const { dispatched } = await dispatchDueNewsletters();
       if (dispatched > 0) logger.info('Newsletter dispatch ran', { dispatched });
@@ -872,7 +872,7 @@ export function initNewsletterCron() {
 
   // Daily at 06:00: decides whether this cycle's issue should be queued. Early
   // enough that the default 09:00 send still leaves three hours of review.
-  const queue = cron.schedule('0 6 * * *', async () => {
+  const queue = scheduleLeased('0 6 * * *', async () => {
     try {
       const result = await queueScheduledNewsletter();
       if (result.queued) logger.info('Newsletter queued by schedule', { ...result });

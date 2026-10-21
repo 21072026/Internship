@@ -2,7 +2,9 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
+import { suppressedAmong } from '@/lib/emailSuppression';
+import { suppressedLogReason } from '@/lib/emailSuppressionRule';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -16,7 +18,7 @@ import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
-import { notify, notifyIfAllowed } from '@/lib/notify';
+import { notify } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
@@ -95,6 +97,10 @@ import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
+import { resolveStageEscalations } from '@/lib/stageSla';
+import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
+import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
+import { notifyEvent } from '@/lib/notifications/router';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
 import { expireDrafts, holdIfRequired } from '@/lib/outboundDrafts';
@@ -294,9 +300,15 @@ export function mailMeterIdleForTests(): Promise<void> {
   return meterObserver.idle();
 }
 
+/** Does a bulk relay exist? The load-time answer, or — once the test seam has
+ *  re-pointed this process (`requestFromEnv`) — the current environment's. */
+function bulkChannelExists(): boolean {
+  return requestFromEnv ? Boolean(process.env.SMTP_BULK_HOST && process.env.SMTP_BULK_USER) : !!bulkTransporter;
+}
+
 function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter {
   // `transportFor()` only ever answers 'bulk' when the bulk channel exists.
-  const ch: MailTransport = channel === 'bulk' && bulkTransporter ? 'bulk' : 'primary';
+  const ch: MailTransport = channel === 'bulk' && bulkChannelExists() ? 'bulk' : 'primary';
   if (mode === 'request' && !requestFromEnv) return ch === 'bulk' ? bulkTransporter! : transporter;
   const key = `${ch}:${mode}`;
   let t = modeTransports.get(key);
@@ -1013,6 +1025,23 @@ export async function prepareEmail({
     return { status: 'SKIPPED' };
   }
 
+  // ── A SUPPRESSED ADDRESS IS NOT MAILED (#1692) ────────────────────────────
+  // The mailbox said "this address does not exist" (a hard bounce, or soft
+  // ones that kept coming) or the person told their provider "this is spam"
+  // (a complaint) — src/lib/emailSuppressionRule.ts. Ahead of the opt-out gate
+  // and, unlike it, for EVERY group, essential mail included: a password reset
+  // to a dead mailbox reaches nobody and only adds a bounce to the sending
+  // domain every tenant shares. Recorded SKIPPED with the reason, nothing
+  // queued, nothing drafted; the caller learns SKIPPED, never a pretend SENT.
+  // The lookup fails open, like the preference read below.
+  const suppressed = await suppressedAmong(addressparser(to, { flatten: true }).map((a) => (typeof a.address === 'string' ? a.address : '')));
+  if (suppressed.size > 0) {
+    const reason = [...suppressed.values()][0];
+    logger.info('Email not sent: suppressed address', { category, reason });
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), suppressedLogReason(reason));
+    return { status: 'SKIPPED' };
+  }
+
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
   // user who simply never replied (#1194) — the whole reason a batch of
@@ -1611,7 +1640,27 @@ export function mailDrainDeps(): DrainDeps {
     record: (e, status, error) => recordEmailOutcome(e, status, error),
     observe: (e) => observeMeterSpend(e as unknown as PreparedEmail),
     finalFailure: (e) => noteFinalMailFailure(e.category),
+    failover: (e) => failoverEnvelope(e),
   };
+}
+
+/**
+ * A primary-channel mail moved onto the bulk relay (#1690): the same message
+ * under the bulk From identity — the bulk relay signs for its own domain
+ * (`SMTP_BULK_FROM`), so a primary From on it would fail DMARC alignment. The
+ * display name (the tenant's brand) is kept. Null when no bulk relay is
+ * configured (one channel: nothing to fail over to) or the mail is not a
+ * primary one.
+ */
+export function failoverEnvelope<E extends { transport: MailTransport; message: { from?: unknown } }>(e: E): E | null {
+  if (!bulkChannelExists() || e.transport !== 'primary') return null;
+  const bulk = fromIdentity(null, 'bulk');
+  const from = e.message.from;
+  let name: string | null = null;
+  if (from && typeof from === 'object' && typeof (from as { name?: unknown }).name === 'string') name = (from as { name: string }).name;
+  else if (typeof from === 'string' && from) name = addressparser(from, { flatten: true })[0]?.name || null;
+  const nextFrom = !bulk.address ? from : name ? { name, address: bulk.address } : bulk.address;
+  return { ...e, transport: 'bulk', message: { ...e.message, from: nextFrom } };
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -2077,6 +2126,49 @@ export async function sendMeetingInviteEmail({
 //     organizer's clock and the mail says whose clock that is;
 //   - the mail has to say who invited them and to what, since an unexpected
 //     invitation from an unknown system otherwise reads as spam.
+// The account-less reviewer's link (#1859): the programme named this address
+// as the reviewer of one step of a document's review chain. The link is the
+// credential and works once — deciding the step clears it.
+export async function sendDocumentReviewInviteEmail({
+  to,
+  token,
+  documentTitle,
+  requirement,
+  ownerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  token: string;
+  documentTitle: string;
+  requirement: string;
+  ownerName: string;
+  locale?: string | null;
+  orgId: string;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const M = (await emailDictionary(resolved, orgId)).notifications.documentReviewEmail;
+  const link = `${brand.appUrl}/document-review/${token}`;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId,
+    subject: M.subject.replace('{requirement}', requirement),
+    // no-user-row: an external reviewer is an address the programme typed in
+    // (#1859) — an employer supervisor with no account, reached once per step.
+    category: 'document-review',
+    locale: resolved,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(M.body.replace('{owner}', ownerName).replace('{title}', documentTitle).replace('{requirement}', requirement))}</p>
+        <a href="${link}" style="display:inline-block;background:${esc(brand.accent)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.cta)}</a>
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">${esc(M.footer)}</p>
+      </div>`,
+  });
+}
+
 export async function sendMeetingGuestInviteEmail({
   to,
   name,
@@ -3654,31 +3746,43 @@ export async function checkMentorInteractionReminders() {
   };
 }
 
-// Notify mentors about mentees whose current stage deadline has passed. Each
-// relation is reminded once per deadline (deadlineReminderSentAt guards it).
+// The stage-SLA escalation ladder (#1722). Every relation past its stage
+// deadline has ONE open SlaBreach for that deadline; this sweep opens it
+// (level 1: the mentor is told — the reminder this job always sent, still once
+// per deadline), climbs it (level 2: the org's administrators, once the stage's
+// `escalateAfterDays` have passed without a move, unless acknowledged or
+// snoozed) and closes the ones that no longer stand. The rule is
+// src/lib/slaLadderRule.ts; the table's only writer is src/lib/slaBreach.ts.
+// A stage move closes its breach on the spot (stageChangeEffects.ts) — this
+// sweep is the backstop for everything else that ends one.
+//
+// THE FIRST RUN AFTER THE DEPLOY sends nothing it already sent: a breach that
+// opens on a relation whose `deadlineReminderSentAt` is set adopts level 1
+// silently (`mentorAlreadyTold`). Every write of a new deadline clears that
+// stamp, so it can only mean "this deadline was reminded about". The stamp is
+// still written when level 1 is sent, so it keeps meaning that.
+//
+// Both channels of both rungs go through the same 'deadlines' gate: the bell
+// through notifyEvent() (category 'deadlines'), the mail inline through
+// sendEmail() under 'stage-deadline' after the same preference checks —
+// the router's e-mail channel only enqueues a job no worker consumes yet
+// (see src/lib/securityNotices.ts, which made the same call).
 //
 // PER RELATION HERE IS CORRECT, and that is a decision rather than an oversight
 // (#2287 asked for it to be settled rather than left ambiguous). The cap the
 // dormant and weekly-report sweeps had to fix was "one HUMAN, N identical
 // messages": a mentee with two ACTIVE mentorships received the same mail twice.
-// This sweep's recipient is the MENTOR, and each message is about a different
-// mentee of theirs — same person, different content, no duplicate. Collapsing
-// them would drop a deadline on the floor. The same reasoning covers
-// checkMentorInteractionReminders above, which already batches a mentor's
-// mentees into ONE mail with a list.
-//
-// The residual is a volume question, not a correctness one: a mentor with ten
-// overdue relations gets ten mails in one tick. If that ever needs fixing it is
-// a digest (batch this sweep by mentor the way the interaction reminder does),
-// not a per-person cap — a cap would silently drop deadlines.
+// This sweep's recipient is the MENTOR (or an admin), and each message is about
+// a different mentee — same person, different content, no duplicate.
+// Collapsing them would drop a deadline on the floor. If volume ever needs
+// fixing it is a digest, not a per-person cap.
 export async function checkStageDeadlineReminders() {
   const now = new Date();
   // Whether a deadline is still actionable is the ONE stage-clock rule every
   // surface reads (`isStageOverdue`, src/lib/stageClock.ts, #1724), fed the
-  // tenant's own stages (#1884) — not a list of three default keys that a
-  // renamed pipeline does not have, so every placed candidate on it was nagged
-  // forever. Stages are resolved once per org per run; the job has no session,
-  // so the relation's own orgId decides.
+  // tenant's own stages (#1884) and the re-engagement pool as `paused`.
+  // Stages and escalation settings are resolved once per org per run; the job
+  // has no session, so the relation's own orgId decides.
   const stagesByOrg = new Map<string, Promise<ResolvedStage[]>>();
   const stagesOf = (orgId: string | null) => {
     const key = orgId ?? '';
@@ -3689,19 +3793,25 @@ export async function checkStageDeadlineReminders() {
     }
     return hit;
   };
-  const capabilitiesOf = capabilitiesMemo();
+  const escalationsByOrg = new Map<string, Promise<Map<string, number>>>();
+  const escalationsOf = (orgId: string | null) => {
+    const key = orgId ?? '';
+    let hit = escalationsByOrg.get(key);
+    if (!hit) {
+      hit = resolveStageEscalations(orgId);
+      escalationsByOrg.set(key, hit);
+    }
+    return hit;
+  };
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
 
-  const overdue = await prisma.mentorshipRelation.findMany({
-    where: {
-      status: 'ACTIVE',
-      stageDeadline: { lt: now },
-      deadlineReminderSentAt: null,
-    },
+  const candidates = await prisma.mentorshipRelation.findMany({
+    where: { status: 'ACTIVE', stageDeadline: { lt: now } },
     include: {
       mentor: {
         select: {
+          id: true,
           email: true,
           fullName: true,
           emailNotifications: true,
@@ -3709,41 +3819,125 @@ export async function checkStageDeadlineReminders() {
           preferredLanguage: true,
         },
       },
-      mentee: { select: { fullName: true } },
+      mentee: { select: { id: true, fullName: true, reEngageAt: true } },
+      slaBreaches: {
+        where: { resolvedAt: null },
+        select: { id: true, dueAt: true, level: true, acknowledgedAt: true, snoozedUntil: true },
+      },
     },
   });
 
-  for (const rel of overdue) {
-    if (!isStageOverdue({ stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus }, await stagesOf(rel.orgId), now.getTime())) continue;
-    // The in-app half respects the same 'deadlines' preference the e-mail half
-    // does (#817) — opting out of deadline mail and still being pinged in-app
-    // for the identical event is not a preference anyone chose.
-    // A MARKETING rep's record is /sales/leads/<id> (#2580); notificationLink
-    // keeps /mentor/mentees/<id> for everyone else.
-    const stageLink = notificationLink('MENTOR', 'relation', { relationId: rel.id }, { capabilities: await capabilitiesOf(rel.orgId) });
-    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, stageLink);
-    if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
-      const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
+  let reminded = 0;
+  let adopted = 0;
+  let escalated = 0;
+  // The breaches that still stand after this pass; every other open one closes.
+  const standing = new Set<string>();
+
+  for (const rel of candidates) {
+    const overdue = isStageOverdue(
+      { stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus, paused: rel.mentee.reEngageAt != null },
+      await stagesOf(rel.orgId),
+      now.getTime()
+    );
+    if (!overdue || !rel.stageDeadline) continue;
+    const dueAt = rel.stageDeadline;
+
+    // The open breach for THIS deadline. One for an older deadline (moved by
+    // hand without a stage move) is not standing and closes below.
+    let breach = rel.slaBreaches.find((b) => b.dueAt.getTime() === dueAt.getTime()) ?? null;
+    if (!breach) {
+      const opened = await openBreach({ orgId: rel.orgId, relationId: rel.id, stageKey: rel.pipelineStatus, dueAt, now });
+      if (opened) {
+        if (mentorAlreadyTold(rel.deadlineReminderSentAt)) {
+          adopted++;
+        } else {
+          // A MARKETING rep's record is /sales/leads/<id> (#2580); notificationLink
+          // keeps /mentor/mentees/<id> for everyone else.
+          await notifyEvent(
+            rel.mentor,
+            'deadline.stagePassed',
+            { menteeName: rel.mentee.fullName, relationId: rel.id },
+            { channels: ['inApp'], orgId: rel.orgId, dedupeKey: `sla-breach:${opened.id}:1` }
+          );
+          if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
+            const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
+            const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
+            const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.deadlineEmail;
+            const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
+            const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
+            const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+            await brandOf(rel.orgId).then((brand) => sendEmail({
+              category: 'stage-deadline',
+              userId: rel.mentorId,
+              // The record's org — the same one that picks the bell's link above.
+              orgId: rel.orgId,
+              locale: rel.mentor.preferredLanguage,
+              to: rel.mentor.email,
+              subject,
+              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+            })).catch((error) => {
+              console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
+            });
+          }
+          await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
+          reminded++;
+        }
+        breach = { id: opened.id, dueAt, level: SLA_LEVEL_MENTOR, acknowledgedAt: null, snoozedUntil: null };
+      } else {
+        // Another tick opened it between our read and our insert; it is
+        // standing, and that tick owns its first rung.
+        const existing = await prisma.slaBreach.findFirst({
+          where: { relationId: rel.id, dueAt, resolvedAt: null },
+          select: { id: true, dueAt: true, level: true, acknowledgedAt: true, snoozedUntil: true },
+        });
+        if (!existing) continue;
+        breach = existing;
+      }
+    }
+    standing.add(breach.id);
+
+    const escalateAfterDays = (await escalationsOf(rel.orgId)).get(rel.pipelineStatus);
+    if (!escalationDue(breach, escalateAfterDays, now)) continue;
+    if (!(await claimEscalation(breach.id, breach.level, now))) continue;
+    escalated++;
+    const days = daysOverdue(dueAt, now);
+    const admins = await escalationRecipients(rel.orgId);
+    await notifyEvent(
+      admins,
+      'deadline.slaEscalated',
+      { menteeName: rel.mentee.fullName, mentorName: rel.mentor.fullName, days: String(days), relationId: rel.id, menteeId: rel.menteeId },
+      { channels: ['inApp'], orgId: rel.orgId, dedupeKey: `sla-breach:${breach.id}:${breach.level + 1}` }
+    );
+    for (const admin of admins) {
+      if (!emailAllowed(admin, 'deadlines') || !emailGroupAllowedForCategory(admin, 'stage-deadline')) continue;
+      const preferredLanguage = admin.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-      const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.deadlineEmail;
-      const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
-      const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
-      const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+      const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.slaEscalationEmail;
+      const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName).replace('{days}', String(days));
+      const greeting = emailText.greeting.replace('{admin}', esc(admin.fullName));
+      const body = emailText.body
+        .replace('{mentee}', `<strong>${esc(rel.mentee.fullName)}</strong>`)
+        .replace('{mentor}', esc(rel.mentor.fullName))
+        .replace('{days}', String(days));
       await brandOf(rel.orgId).then((brand) => sendEmail({
         category: 'stage-deadline',
-        userId: rel.mentorId,
-        // The record's org — the same one that picks the bell's link above.
+        userId: admin.id,
         orgId: rel.orgId,
-        locale: rel.mentor.preferredLanguage,
-        to: rel.mentor.email,
+        locale: admin.preferredLanguage,
+        to: admin.email,
         subject,
         html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
       })).catch((error) => {
-        console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
+        console.error('SLA escalation email failed:', { relationId: rel.id, adminId: admin.id, error });
       });
     }
-    await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
   }
+
+  // Close every open breach that did not stand this pass: the deadline was
+  // cleared or moved, the relation left ACTIVE, its stage stopped the clock,
+  // or the mentee went into the pool.
+  const open = await prisma.slaBreach.findMany({ where: { resolvedAt: null }, select: { id: true } });
+  const resolved = await resolveBreaches({ ids: open.filter((b) => !standing.has(b.id)).map((b) => b.id) }, now);
 
   // The owner's own follow-up dates (#2563) ride on this same job: the issue
   // asked for no second timer and no new notification category, and "a record
@@ -3751,7 +3945,7 @@ export async function checkStageDeadlineReminders() {
   // pair already means (the trial ladder made the same call, #2412).
   const nextActions = await checkNextActionReminders(now);
 
-  return { reminded: overdue.length, nextActions };
+  return { reminded, adopted, escalated, resolved, nextActions };
 }
 
 // Remind each owner once on the day of the next action they wrote on a record
@@ -5839,13 +6033,13 @@ export async function pruneEmailLog(
   return { deleted: processed, cutoff, capped };
 }
 
-const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const scheduledTasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 export function initCronJobs() {
   if (scheduledTasks.has('mentor-reminders')) return;
 
   // Run every day at 9:00 AM
-  const task = cron.schedule('0 9 * * *', async () => {
+  const task = scheduleLeased('0 9 * * *', async () => {
     console.log('[Cron] Running mentor interaction reminder check...');
     try {
       // Before the reminders, not after: the sweep is what decides who counts as
@@ -5858,7 +6052,7 @@ export function initCronJobs() {
       const result = await checkMentorInteractionReminders();
       console.log(`[Cron] Done. Checked: ${result.checked}, Reminded: ${result.reminded}`);
       const dl = await checkStageDeadlineReminders();
-      console.log(`[Cron] Stage deadline reminders: ${dl.reminded}`);
+      console.log(`[Cron] Stage deadline reminders: ${dl.reminded}, escalated ${dl.escalated}, resolved ${dl.resolved}`);
       const rr = await checkRetentionReminders();
       console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
       const nm = await checkCompanyNeedMatches();
@@ -5879,7 +6073,7 @@ export function initCronJobs() {
   // (MEETING_REMINDER_WINDOW_MINUTES); an hourly tick would fire anywhere from
   // 0 to 60 minutes ahead, so a quarter-hourly tick is what actually delivers
   // "about an hour before" (45-60 min). reminderSentAt keeps it single-shot.
-  const meetingTask = cron.schedule('*/15 * * * *', async () => {
+  const meetingTask = scheduleLeased('*/15 * * * *', async () => {
     try {
       const r = await sendMeetingReminders();
       if (r.reminded) {
@@ -5910,7 +6104,7 @@ export function initCronJobs() {
   scheduledTasks.set('meeting-reminders', meetingTask);
 
   // Weekly mentor digest — Mondays 8:00.
-  const digestTask = cron.schedule('0 8 * * 1', async () => {
+  const digestTask = scheduleLeased('0 8 * * 1', async () => {
     try {
       const r = await sendWeeklyMentorDigests();
       console.log(`[Cron] Weekly digests sent: ${r.sent}`);
@@ -5923,7 +6117,7 @@ export function initCronJobs() {
 
   // Hourly e-mail delivery health check (#1190) — alerts when sends keep
   // failing or the last success goes stale while attempts continue.
-  const emailHealthTask = cron.schedule('5 * * * *', async () => {
+  const emailHealthTask = scheduleLeased('5 * * * *', async () => {
     try {
       await runEmailHealthCheck();
     } catch (e) {
@@ -5939,7 +6133,7 @@ export function initCronJobs() {
   scheduledTasks.set('email-health', emailHealthTask);
 
   // Missing mandatory documents — Mondays 08:30, offset from the other weekly jobs.
-  const documentTask = cron.schedule('30 8 * * 1', async () => {
+  const documentTask = scheduleLeased('30 8 * * 1', async () => {
     try {
       const result = await sendWeeklyMissingDocumentReminders();
       console.log(`[Cron] Missing document reminders: ${result.notified}`);
@@ -5951,7 +6145,7 @@ export function initCronJobs() {
 
   // AI artefact retention (#2044) — daily at 03:20: nothing generated about a
   // person outlives the org's retentionMonths.
-  const artifactRetention = cron.schedule('20 3 * * *', async () => {
+  const artifactRetention = scheduleLeased('20 3 * * *', async () => {
     try {
       const r = await sweepAiArtifacts();
       if (r.deleted) console.log(`[Cron] AI artefacts past retention removed: ${r.deleted}`);
@@ -5962,7 +6156,7 @@ export function initCronJobs() {
   scheduledTasks.set('ai-artifact-retention', artifactRetention);
 
   // Daily mentee-activity digest — every day at 7:30.
-  const activityTask = cron.schedule('30 7 * * *', async () => {
+  const activityTask = scheduleLeased('30 7 * * *', async () => {
     try {
       const r = await sendDailyActivityDigests();
       console.log(`[Cron] Daily activity digests sent: ${r.sent}`);
@@ -5972,7 +6166,7 @@ export function initCronJobs() {
   });
   scheduledTasks.set('activity-digest', activityTask);
 
-  const weeklyReportTask = cron.schedule('0 15 * * 5', async () => {
+  const weeklyReportTask = scheduleLeased('0 15 * * 5', async () => {
     try {
       const result = await sendWeeklyReportReminders();
       console.log(`[Cron] Weekly report reminders: ${result.reminded}`);
@@ -5983,7 +6177,7 @@ export function initCronJobs() {
   scheduledTasks.set('weekly-report-reminders', weeklyReportTask);
 
   // Unread-message digest — hourly at :20 (offset from the other hourly jobs).
-  const unreadDigestTask = cron.schedule('20 * * * *', async () => {
+  const unreadDigestTask = scheduleLeased('20 * * * *', async () => {
     try {
       const r = await sendUnreadMessageDigests();
       if (r.sent) console.log(`[Cron] Unread message digests sent: ${r.sent}`);
@@ -5997,7 +6191,7 @@ export function initCronJobs() {
   // device rows and the spent one-minute refresh grants have no further use;
   // revoked devices are kept a month longer so a replayed cookie is still
   // recognisable (see purgeExpiredTrustedDevices).
-  const trustedDeviceTask = cron.schedule('40 3 * * *', async () => {
+  const trustedDeviceTask = scheduleLeased('40 3 * * *', async () => {
     try {
       const r = await purgeExpiredTrustedDevices();
       if (r.devices || r.grants) {

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -33,6 +34,8 @@ const createRelationSchema = z.object({
   companyId: z.string().optional(),
   projectId: z.string().optional(),
   startDate: z.string().optional(),
+  // PLACEMENT (default) | COACHING (#1503); whitelisted below, never z.enum.
+  kind: z.string().max(16).optional(),
   // What the pair agreed at the match (#1784) — rules in src/lib/relationSchedule.ts.
   expectedEndDate: z.string().max(40).nullable().optional(),
   durationMonths: z.number().int().nullable().optional(),
@@ -209,7 +212,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mentorId, menteeId, companyId, projectId, startDate } = parsed.data;
+    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind } = parsed.data;
+    if (rawKind !== undefined && !isRelationKind(rawKind)) {
+      return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
+    }
+    const kind = rawKind ?? DEFAULT_RELATION_KIND;
     const start = startDate ? new Date(startDate) : new Date();
     // Validated before anything is written, like every other field here.
     const schedule = parseSchedule(parsed.data, start);
@@ -315,6 +322,9 @@ export async function POST(request: Request) {
             companyId: companyId || null,
             projectId: projectId || null,
             startDate: start,
+            kind,
+            // A placement enters the funnel when it starts; coaching never does (#1503).
+            funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
             ...schedule.data,
           },
           include: {

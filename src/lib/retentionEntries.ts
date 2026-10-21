@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -11,6 +11,8 @@ import {
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
 import { OUTBOUND_DRAFT_RETENTION_DAYS, pruneOutboundDrafts } from '@/lib/outboundDrafts';
+import { pruneDeliveryEvents } from '@/lib/emailSuppression';
+import { DELIVERY_EVENT_RETENTION_DAYS } from '@/lib/emailSuppressionRule';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { messageRetentionCutoff } from '@/lib/safeguarding';
 import { inquiryErasureData } from '@/lib/companyContactErasure';
@@ -898,6 +900,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     run: async (ctx) => pruneOutboundDrafts(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
   },
   {
+    key: 'emailDeliveryEvent',
+    // No setting: part of the suppression loop's design (#1692,
+    // docs/EMAIL_DELIVERABILITY.md § Bounces and complaints).
+    defaultDays: DELIVERY_EVENT_RETENTION_DAYS,
+    reason:
+      'A provider bounce/complaint event is kept for two questions only: "have we seen this event already?" (providers retry for hours, a day at most) and "how many soft bounces inside the seven-day window?". Thirty days answers both with room to spare. Each row holds an address, so it is not kept beyond that; the suppression it produced lives on in EmailSuppression, which is the record.',
+    run: async (ctx) => pruneDeliveryEvents(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
+  },
+  {
     key: 'trialReminder',
     // No setting: nothing an operator would ever want to tune, and a knob for
     // a table with no personal data in it is a knob nobody reads.
@@ -972,7 +983,7 @@ export async function runRetentionPrune(options: {
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Register THE retention schedule in this server process. Idempotent — a
@@ -1000,7 +1011,7 @@ const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 export function initRetentionCron() {
   if (tasks.has('retention-prune')) return;
 
-  const task = cron.schedule('20 3 * * *', async () => {
+  const task = scheduleLeased('20 3 * * *', async () => {
     try {
       await runRetentionPrune();
     } catch (e) {

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Bounce and complaint suppression (#1692):** new `EmailSuppression` (one row per address, stored and matched trimmed + lower-cased, deliberately not tenant-scoped — the sending domain is shared) and `EmailDeliveryEvent` (one row per provider event, unique on `(provider, eventId)`, retention key `emailDeliveryEvent`, 30 days). `POST /api/webhooks/email/[provider]` (`brevo`, `generic`) takes the provider's bounce/complaint events behind `EMAIL_WEBHOOK_SECRET` (header, bearer or Basic password; fails closed in production), rate-limited, idempotent. A hard bounce or a complaint suppresses at once, a soft bounce only after 3 in 7 days; a complaint also turns off `emailNotifications` on every account of the address. `prepareEmail()` refuses a suppressed recipient before the opt-out gate, for every group including `account_security` (recorded `SKIPPED` / `Suppressed: <REASON>`, nothing queued or drafted), and the queue's drain re-checks it. Admin → Settings → Email deliverability gains a Suppressions tab (mail-queue scope) with an audited, reason-required delist; a complaint needs `confirm: true`. Rules in `src/lib/emailSuppressionRule.ts`, doc in `docs/EMAIL_DELIVERABILITY.md` § 2e.",
+  "notes": {
+    "en": ["Addresses that bounce or report our mail as spam are no longer mailed; admins can review and delist them under Settings → Email deliverability → Suppressions."],
+    "tr": ["Geri dönen ya da e-postalarımızı spam olarak bildiren adreslere artık e-posta gönderilmiyor; yöneticiler bunları Ayarlar → E-posta ulaşılabilirliği → Engellenenler altında inceleyip listeden çıkarabilir."],
+    "de": ["An Adressen, die zurückprallen oder unsere Mails als Spam melden, wird nicht mehr gesendet; Admins können sie unter Einstellungen → E-Mail-Zustellbarkeit → Sperrungen prüfen und entsperren."]
+  }
+}

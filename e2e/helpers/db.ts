@@ -85,6 +85,17 @@ export async function seedInvite(email: string, role: 'ADMIN' | 'MENTOR' | 'MENT
  * the same address twice into ONE world is building a fixture the app would
  * never produce, so it should not.
  */
+/**
+ * Make a seeded ADMIN the super admin of its world (#1535, per world since
+ * #2647). The platform-wide cron jobs (`/api/cron` without one of the
+ * own-org job names) are the operator's trigger and refuse a plain tenant
+ * ADMIN since #1575 — a spec that drives one signs in as this.
+ */
+export async function markSuperAdmin(email: string) {
+  const { count } = await prisma.user.updateMany({ where: { email, role: 'ADMIN' }, data: { isSuperAdmin: true } });
+  if (count !== 1) throw new Error(`markSuperAdmin: expected one ADMIN ${email}, found ${count}`);
+}
+
 export async function seedUser(
   email: string,
   password: string,

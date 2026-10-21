@@ -115,7 +115,7 @@ son tarihi düşürmek olurdu.
 ## Elle çalıştırma
 
 ```
-GET /api/cron?job=dormant     # süpürme + due olan check-in'ler (ADMIN)
+GET /api/cron?job=dormant     # süpürme + due olan check-in'ler (süper admin, #1575)
 ```
 
 Günlük cron'da 09:00'da, hatırlatma işlerinden **önce** çalışır.

@@ -23,6 +23,22 @@ enum Role {
   SOURCE
 }
 
+// The admin tier of an ADMIN account (#1567). Additive on purpose: `Role` is
+// never widened or split (that is the drop-and-recreate `db push` cannot be
+// trusted with), so the tier is its own nullable column on User.
+//
+// There is deliberately no SUPER_ADMIN value. The platform operator is
+// `User.isSuperAdmin` — read from the database per request and scoped to its
+// world (src/lib/superAdmin.ts, docs/worlds.md); a second "super admin" stored
+// here would be a second source of truth that the JWT could carry stale for
+// 12h. Adding a value to this enum later is additive; removing one is not, so
+// the value waits until something needs it.
+enum AdminLevel {
+  ORG_ADMIN // everything inside one tenant (today's ADMIN)
+  PROGRAM_ADMIN // only the cohorts/companies named in its AdminScopeGrant rows
+  OBSERVER // read-only, across its own tenant (grants are not read)
+}
+
 enum MentorshipStatus {
   ACTIVE
   COMPLETED
@@ -150,6 +166,14 @@ model Organization {
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
   ssoSyncRole      Boolean  @default(false)
+  // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
+  // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
+  // and OUR per-org SP signing key — generated on first use, the private half
+  // sealed with secretBox (purpose 'sso-sp-signing-key'), the self-signed
+  // public certificate published in the SP metadata.
+  ssoLogoutUrl     String?  @db.Text
+  ssoSpKey         String?  @db.Text
+  ssoSpCert        String?  @db.Text
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
@@ -190,6 +214,7 @@ model Organization {
   pipelineStages          PipelineStage[]
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
+  slaBreaches             SlaBreach[]
   tags                    Tag[]
   skills                  Skill[]
   skillAliases            SkillAlias[]
@@ -198,6 +223,7 @@ model Organization {
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
+  documentReviews         DocumentReview[]
   weeklyReports           WeeklyReport[]
   // Scheduled report delivery (#1905).
   reportSubscriptions     ReportSubscription[]
@@ -205,6 +231,9 @@ model Organization {
   // Nightly relationship-health snapshots (#1901).
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
+  mentoringAgreements     MentoringAgreement[]
+  formDefinitions         FormDefinition[]
+  formResponses           FormResponse[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
   // Org-defined segmentation attributes (#1920).
@@ -223,6 +252,8 @@ model Organization {
   messageTemplates        MessageTemplate[]
   apiKeys                 ApiKey[]
   matchFeedback           MatchFeedback[]
+  matchRuleSets           MatchRuleSet[]
+  matchRules              MatchRule[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -230,6 +261,7 @@ model Organization {
   subscription            Subscription?
   orgEntitlements         OrgEntitlement[]
   usageRollups            UsageRollup[]
+  planChangeRequests      PlanChangeRequest[]
   companyUsage            CompanyUsage[]
   contactPermissions      ContactPermission[]
   integrationEvents       IntegrationEvent[]
@@ -241,6 +273,7 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   auditDrains             AuditDrain[]
+  adminScopeGrants        AdminScopeGrant[]
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
@@ -464,27 +497,67 @@ model UnmappedSkillTerm {
 }
 
 model StageSla {
-  id        String   @id @default(cuid())
-  orgId     String
+  id                String   @id @default(cuid())
+  orgId             String
   // The stage this applies to. A plain key, not a relation: it must work for
   // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
-  stageKey  String
+  stageKey          String
   /// Calendar days somebody may wait at this stage before the mentor is warned.
   /// NULL = no service level here (the row then exists only for `wipLimit`).
-  days      Int?
+  days              Int?
   /// Board work-in-progress limit for this stage (#1439): the column's count
   /// turns amber above this many cards. NULL = inherit the org-wide
   /// `boardWipLimit` setting; a stored 0 means "never warn about this stage",
   /// which is a different statement and is why it is stored rather than
   /// normalised away. The rule lives in src/lib/boardWip.ts.
-  wipLimit  Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  wipLimit          Int?
+  /// Escalation ladder (#1722): once a breach of this stage's `days` has stood
+  /// this many further calendar days without the stage moving, the org's
+  /// administrators are told too. NULL = the ladder stops at the mentor, which
+  /// is exactly what every org had before. Meaningless without `days`.
+  escalateAfterDays Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, stageKey])
   @@index([orgId])
+}
+
+// One stage deadline that passed (#1722) — the state the escalation ladder
+// climbs and the breach queue (#1723) lists. Opened by the daily sweep the
+// first time it sees a relation past `stageDeadline`, keyed by the exact
+// deadline it breached, so a hand-moved deadline opens a fresh breach rather
+// than inheriting the old one's level. Closed (`resolvedAt`) by a stage move,
+// a cleared or future deadline, or the relation leaving ACTIVE — never by a
+// delete, because the compliance rate is computed from these rows.
+// The rules are pure in src/lib/slaLadderRule.ts; src/lib/slaBreach.ts is
+// the only writer.
+model SlaBreach {
+  id               String    @id @default(cuid())
+  orgId            String?
+  relationId       String
+  stageKey         String    @db.VarChar(64)
+  /// The `stageDeadline` this breach is about.
+  dueAt            DateTime
+  /// 1 = the mentor was told, 2 = the org's administrators were told.
+  level            Int       @default(1)
+  lastEscalatedAt  DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  /// No escalation before this instant. The reason goes to the ActivityLog.
+  snoozedUntil     DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org      Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, dueAt])
+  @@index([orgId, resolvedAt])
+  @@index([relationId, resolvedAt])
 }
 
 model PipelineStage {
@@ -606,6 +679,13 @@ model User {
   // `src/lib/superAdmin.ts` reads it from the database per request so revoking
   // it takes effect on the next request, like `sessionsValidFrom`.
   isSuperAdmin            Boolean       @default(false)
+  // The admin tier inside a tenant (#1567, docs/role-access-matrix.md §
+  // Admin tiers). NULL means "no tier recorded"; `role` stays the source of
+  // truth for MENTOR/MENTEE/COMPANY/SOURCE and a non-ADMIN never holds a tier,
+  // whatever this column says. PROGRAM_ADMIN's reach is its AdminScopeGrant
+  // rows — none means none. The platform tier is NOT here: that is
+  // `isSuperAdmin` above, read live and per world (src/lib/superAdmin.ts).
+  adminLevel              AdminLevel?
   // Break-glass exemption from the tenant's enforced SSO (#1950). Only an
   // active ADMIN may hold one, only an admin may grant it, and every grant and
   // revocation is audited (`sso.exempt_granted` / `sso.exempt_revoked`). It is
@@ -619,6 +699,15 @@ model User {
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin
   // deactivated you" — both are isActive=false. Cleared on activation.
   pendingApproval         Boolean       @default(false)
+  // Roster-feed deprovisioning (#1966, docs/roster-feeds.md). `rosterAbsentSince`
+  // is when a feed first stopped mentioning this person — stamped by the first
+  // successful run they are absent from, cleared the moment they reappear, and
+  // what the grace period counts from. `deactivatedBy` says WHO switched the
+  // account off: "roster:<feedId>" for a feed, a user id for a human. A feed
+  // reactivates only what a feed deactivated; null (every deactivation before
+  // this column) reads as a human's decision and is never undone by a file.
+  rosterAbsentSince       DateTime?
+  deactivatedBy           String?       @db.VarChar(64)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
   publicProfile           Boolean       @default(false)
   // For COMPANY-role users: which company they observe (read-only).
@@ -693,12 +782,12 @@ model User {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  mentorRelations                   MentorshipRelation[]          @relation("MentorRelations")
-  menteeRelations                   MentorshipRelation[]          @relation("MenteeRelations")
-  statusChanges                     StatusChange[]                @relation("StatusChangedBy")
+  mentorRelations                   MentorshipRelation[]           @relation("MentorRelations")
+  menteeRelations                   MentorshipRelation[]           @relation("MenteeRelations")
+  statusChanges                     StatusChange[]                 @relation("StatusChangedBy")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
-  tags                              UserTag[]                     @relation("UserTags")
+  tags                              UserTag[]                      @relation("UserTags")
   // Canonical skills (#1815). `skills` above stays the free-text JSON until a
   // separate contract PR retires it; this is the joinable twin.
   skillRows                         UserSkill[]
@@ -708,83 +797,91 @@ model User {
   pushSubscriptions                 PushSubscription[]
   nativePushTokens                  NativePushToken[]
   conversationParticipants          ConversationParticipant[]
-  ownedProjects                     Project[]                     @relation("ProjectOwner")
-  projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
+  ownedProjects                     Project[]                      @relation("ProjectOwner")
+  projectMemberships                ProjectMember[]                @relation("ProjectMemberships")
   availabilitySlots                 AvailabilitySlot[]
-  availabilityExceptions            AvailabilityException[]       @relation("AvailabilityExceptions")
-  bookingPolicy                     MentorBookingPolicy?          @relation("MentorBookingPolicy")
-  company                           Company?                      @relation("CompanyUsers", fields: [companyId], references: [id])
-  source                            Source?                       @relation(fields: [sourceId], references: [id])
-  documents                         Document[]                    @relation("DocumentOwner")
+  availabilityExceptions            AvailabilityException[]        @relation("AvailabilityExceptions")
+  bookingPolicy                     MentorBookingPolicy?           @relation("MentorBookingPolicy")
+  company                           Company?                       @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                            Source?                        @relation(fields: [sourceId], references: [id])
+  documents                         Document[]                     @relation("DocumentOwner")
   personalNotes                     PersonalNote[]
   consents                          UserConsent[]
   contributorTermsAcceptances       ContributorTermsAcceptance[]
+  mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
-  companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
-  companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
-  mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
-  decidedRequests                   MentorshipRequest[]           @relation("DecidedMentorshipRequests")
-  preferredInRequests               MentorshipRequest[]           @relation("PreferredMentorRequests")
-  decidedMentorApplications         MentorApplication[]           @relation("DecidedMentorApplications")
-  handledCompanyInquiries           CompanyInquiry[]              @relation("HandledCompanyInquiries")
-  supportTickets                    SupportTicket[]               @relation("SupportRequester")
-  assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
-  supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
-  authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
-  sessionNotes                      SessionNote[]                 @relation("SessionNoteAuthor")
-  sessionNoteRevisions              SessionNoteRevision[]         @relation("SessionNoteRevisionAuthor")
+  companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
+  companyNeedAlerts                 CompanyNeedAlert[]             @relation("CompanyNeedAlertMentee")
+  mentorshipRequests                MentorshipRequest[]            @relation("MentorshipRequests")
+  decidedRequests                   MentorshipRequest[]            @relation("DecidedMentorshipRequests")
+  preferredInRequests               MentorshipRequest[]            @relation("PreferredMentorRequests")
+  decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
+  handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
+  supportTickets                    SupportTicket[]                @relation("SupportRequester")
+  assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
+  supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
+  authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
+  sessionNotes                      SessionNote[]                  @relation("SessionNoteAuthor")
+  sessionNoteRevisions              SessionNoteRevision[]          @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
-  referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
-  referredUsers                     User[]                        @relation("UserReferrals")
-  sentInvitations                   InvitationToken[]             @relation("InvitationInviter")
-  assignedProjectTasks              ProjectTask[]                 @relation("ProjectTaskAssignee")
-  authoredProjectTasks              ProjectTask[]                 @relation("ProjectTaskAuthor")
-  projectJoinRequests               ProjectJoinRequest[]          @relation("JoinRequester")
-  decidedJoinRequests               ProjectJoinRequest[]          @relation("JoinRequestDecider")
-  taskTemplates                     ProjectTaskTemplate[]         @relation("TaskTemplateAuthor")
-  agendaTemplates                   AgendaTemplate[]              @relation("AgendaTemplateAuthor")
-  mentorOnboardings                 MenteeOnboarding[]            @relation("OnboardingMentor")
-  menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
-  missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
-  missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
-  weeklyReportReminders             WeeklyReportReminder[]        @relation("WeeklyReportReminderRecipient")
-  createdOffers                     Offer[]                       @relation("OfferCreatedBy")
-  decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
-  reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
+  referredBy                        User?                          @relation("UserReferrals", fields: [referredById], references: [id])
+  referredUsers                     User[]                         @relation("UserReferrals")
+  sentInvitations                   InvitationToken[]              @relation("InvitationInviter")
+  assignedProjectTasks              ProjectTask[]                  @relation("ProjectTaskAssignee")
+  authoredProjectTasks              ProjectTask[]                  @relation("ProjectTaskAuthor")
+  projectJoinRequests               ProjectJoinRequest[]           @relation("JoinRequester")
+  decidedJoinRequests               ProjectJoinRequest[]           @relation("JoinRequestDecider")
+  taskTemplates                     ProjectTaskTemplate[]          @relation("TaskTemplateAuthor")
+  agendaTemplates                   AgendaTemplate[]               @relation("AgendaTemplateAuthor")
+  mentorOnboardings                 MenteeOnboarding[]             @relation("OnboardingMentor")
+  menteeOnboarding                  MenteeOnboarding[]             @relation("OnboardingMentee")
+  missingDocumentReminderSubjects   DocumentRequirementReminder[]  @relation("MissingDocumentReminderSubject")
+  missingDocumentReminderRecipients DocumentRequirementReminder[]  @relation("MissingDocumentReminderRecipient")
+  weeklyReportReminders             WeeklyReportReminder[]         @relation("WeeklyReportReminderRecipient")
+  createdOffers                     Offer[]                        @relation("OfferCreatedBy")
+  decidedOffers                     Offer[]                        @relation("OfferDecidedBy")
+  reviewedWeeklyReports             WeeklyReport[]                 @relation("WeeklyReportReviewer")
   // Report subscriptions this user receives (#1905); removed with the user.
-  reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
-  surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
-  savedViews                        SavedView[]                   @relation("SavedViewAuthor")
+  reportSubscriptions               ReportSubscription[]           @relation("ReportSubscriptionRecipient")
+  surveyInvitations                 SurveyInvitation[]             @relation("SurveyInvitee")
+  savedViews                        SavedView[]                    @relation("SavedViewAuthor")
   // Segmentation attribute values (#1920); removed with the user.
   attributeValues                   UserAttributeValue[]
-  aiArtifacts                       AiArtifact[]                  @relation("AiArtifactSubject")
-  attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
-  attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
-  surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
-  meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
-  ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
-  interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
-  applications                      Application[]                 @relation("ApplicationMentee")
-  applicationEvents                 ApplicationEvent[]            @relation("ApplicationEventActor")
-  decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
-  cancelledInterviewRequests        InterviewRequest[]            @relation("InterviewRequestCanceller")
+  aiArtifacts                       AiArtifact[]                   @relation("AiArtifactSubject")
+  attendanceRecords                 MeetingAttendance[]            @relation("AttendanceSubject")
+  attendanceRecorded                MeetingAttendance[]            @relation("AttendanceRecorder")
+  surveyResponses                   SurveyResponse[]               @relation("SurveyRespondent")
+  formResponses                     FormResponse[]
+  meetingFeedback                   MeetingFeedback[]              @relation("MeetingFeedbackRater")
+  ownedRequisitions                 Requisition[]                  @relation("RequisitionOwner")
+  interviewRequests                 InterviewRequest[]             @relation("InterviewRequestMentee")
+  applications                      Application[]                  @relation("ApplicationMentee")
+  applicationEvents                 ApplicationEvent[]             @relation("ApplicationEventActor")
+  decidedInterviewRequests          InterviewRequest[]             @relation("InterviewRequestDecider")
+  cancelledInterviewRequests        InterviewRequest[]             @relation("InterviewRequestCanceller")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
   signInDevices                     SignInDevice[]
-  ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
-  authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
-  createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
-  suggestedAsMentee                 MatchFeedback[]               @relation("MatchFeedbackMentee")
-  suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
-  matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
+  ownedMessageTemplates             MessageTemplate[]              @relation("MessageTemplateOwner")
+  authoredMessageTemplates          MessageTemplate[]              @relation("MessageTemplateAuthor")
+  createdApiKeys                    ApiKey[]                       @relation("ApiKeyCreatedBy")
+  suggestedAsMentee                 MatchFeedback[]                @relation("MatchFeedbackMentee")
+  suggestedAsMentor                 MatchFeedback[]                @relation("MatchFeedbackMentor")
+  matchFeedbackActions              MatchFeedback[]                @relation("MatchFeedbackActor")
+  /// Direct reporting line (#1781) — what the "never the direct manager"
+  /// matching rule reads. Nullable and populated by hand or import for now.
+  managerId                         String?
+  manager                           User?                          @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports                     User[]                         @relation("UserManager")
   guidanceStates                    UserGuidanceState[]
-  createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
-  placements                        Placement[]                   @relation("PlacementMentee")
+  createdProgramCosts               ProgramCost[]                  @relation("ProgramCostCreatedBy")
+  placements                        Placement[]                    @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
+  adminScopeGrants                  AdminScopeGrant[]
   // Text-only practice interviews (#2051).
-  practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
-  safeguardingReviews               SafeguardingFlag[]            @relation("SafeguardingReviewer")
+  practiceSessions                  PracticeSession[]              @relation("PracticeSessions")
+  safeguardingReviews               SafeguardingFlag[]             @relation("SafeguardingReviewer")
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -942,6 +1039,57 @@ model ContributorTermsAcceptance {
   @@unique([userId, termsKey, version, projectId])
   @@index([userId])
   @@index([termsKey, version])
+}
+
+// The mentoring agreement (#1790, story #1788) — the ContributorTerms design,
+// per organisation: the text a pair accepts at kickoff is DATA, versioned, so
+// the exact wording someone accepted can be produced later. Changing the text
+// is a NEW version (new rows, one per locale), never an edit — the write
+// boundary (src/lib/mentoringAgreement.ts) has no update path at all and the
+// API refuses PATCH. Unlike contributor terms it belongs to the organisation
+// running the programme, hence orgId + TENANT_MODELS.
+model MentoringAgreement {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key             String        @default("default") @db.VarChar(64)
+  version         String        @db.VarChar(32)
+  locale          String        @db.VarChar(8)
+  // Exactly one locale per (org, key, version) binds; the others translate it.
+  isAuthoritative Boolean       @default(false)
+  body            String        @db.Text // markdown
+  effectiveFrom   DateTime
+  createdById     String?
+  createdAt       DateTime      @default(now())
+
+  @@unique([orgId, key, version, locale])
+  @@index([orgId, key, effectiveFrom])
+}
+
+// Who accepted which version for which pairing, and on which side. Written
+// once, never updated — a later version produces another row, so the history
+// is the record. Reached through its relation (tenant-scoped), like
+// StatusChange — deliberately not in TENANT_MODELS.
+model MentoringAgreementAcceptance {
+  id           String             @id @default(cuid())
+  relationId   String
+  relation     MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agreementKey String             @db.VarChar(64)
+  version      String             @db.VarChar(32)
+  // MENTOR | MENTEE — which side of the pairing signed.
+  role         String             @db.VarChar(16)
+  // The locale of the text that was shown when they accepted.
+  locale       String?            @db.VarChar(8)
+  acceptedAt   DateTime           @default(now())
+  // Hashed, never raw — the contributor-terms evidence rule.
+  ipHash       String?
+  uaHash       String?
+
+  @@unique([relationId, userId, version])
+  @@index([relationId])
+  @@index([userId])
 }
 
 // A referral source — the education/agency a mentee came from, or (#2421/#2570)
@@ -1595,6 +1743,15 @@ model DocumentRequirement {
   mandatory      Boolean  @default(true)
   order          Int      @default(0)
   active         Boolean  @default(true)
+  // The review chain (#1859). NONE (the default) keeps today's rule — a file
+  // attached is a requirement met. SINGLE / CHAIN leave it unmet until the
+  // ordered steps in reviewerRoles ([{ step, role, label? }], role one of
+  // MENTOR | ADMIN | COMPANY | EXTERNAL) approve the document; the rules are
+  // src/lib/documentReview.ts. validityDays stamps Document.validUntil on
+  // approval; the nightly sweep then expires it.
+  approvalMode   String   @default("NONE")
+  validityDays   Int?
+  reviewerRoles  Json     @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1644,15 +1801,49 @@ model Document {
   version       Int          @default(1)
   isTemplate    Boolean      @default(false)
   requirementId String?
+  // PENDING | APPROVED | REJECTED | EXPIRED (#1859). Written APPROVED at upload
+  // unless the requirement has a review chain; rows older than the column are
+  // set APPROVED by scripts/backfill-document-reviews.mjs on deploy.
+  reviewStatus  String       @default("PENDING")
+  validFrom     DateTime?
+  validUntil    DateTime?
   createdAt     DateTime     @default(now())
 
   owner       User?                @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   requirement DocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  reviews     DocumentReview[]
 
   @@index([ownerId])
   @@index([requirementId])
   @@index([ownerId, requirementId, version])
   @@index([isTemplate])
+  @@index([reviewStatus, validUntil])
+}
+
+/// One step of a document's review chain (#1859): created for every step when
+/// a document is attached to a requirement with approvalMode SINGLE / CHAIN,
+/// decided in step order by a signed-in reviewer of `reviewerRole` — or, for an
+/// EXTERNAL step, by whoever holds `reviewToken` (no account; the MeetingGuest
+/// precedent). The token is cleared when the step is decided, so it works once.
+model DocumentReview {
+  id            String    @id @default(cuid())
+  orgId         String
+  documentId    String
+  step          Int
+  reviewerRole  String
+  reviewerId    String?
+  reviewerEmail String?
+  reviewToken   String?   @unique
+  decision      String?
+  note          String?   @db.Text
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  document Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, step])
+  @@index([orgId, decision])
 }
 
 model Company {
@@ -1772,6 +1963,7 @@ model Company {
   contacts           CompanyContact[]
   // The marketplaces, shop systems and carriers it works on (#2408).
   channels           CompanyChannel[]
+  adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -2775,16 +2967,29 @@ model ApiIdempotencyKey {
 // index constrains the per-tenant rows only; uniqueness of the global layer is
 // held by settings.ts being the single writer (read-modify-write, never a blind
 // insert).
+// Three scopes (#1553 org, #1619 programme): a row with neither id is the
+// GLOBAL layer, one with an orgId is that tenant's override, and one with an
+// orgId AND a programId is one programme's override inside that tenant. The
+// chain and its only writer live in src/lib/settings.ts; the typed reader is
+// src/lib/settingsResolver.ts. MySQL treats NULLs as distinct in a unique
+// index, so the widened key below binds programme rows only — the org and
+// global layers stay single because setSetting() reads before it writes.
 model Setting {
   id        String   @id @default(cuid())
   orgId     String?
+  // The programme container — the Cohort row, which #1622 renames to Program
+  // behind @@map("Cohort"), so this FK survives the rename untouched.
+  programId String?
   key       String
   value     String   @db.Text
   updatedAt DateTime @updatedAt
 
-  org Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org     Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  program Cohort?       @relation(fields: [programId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, key])
+  @@unique([orgId, programId, key])
+  @@index([orgId, key])
+  @@index([programId])
 }
 
 enum ProjectStatus {
@@ -3129,9 +3334,11 @@ model Cohort {
   term      String?
   createdAt DateTime      @default(now())
 
-  relations    MentorshipRelation[]
-  programCosts ProgramCost[]
-  steps        ProgramStep[]
+  relations        MentorshipRelation[]
+  programCosts     ProgramCost[]
+  steps            ProgramStep[]
+  adminScopeGrants AdminScopeGrant[]
+  settings         Setting[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -3236,6 +3443,21 @@ model MentorshipRelation {
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
   // them), so single-tenant behaviour is identical.
   pipelineStatus          String           @default("APPLICATION_100")
+  // WHY the relation exists (#1503): PLACEMENT (the person is in the hiring
+  // funnel — every placement count reads only these) or COACHING (mentoring
+  // with no placement goal; its stage means nothing to a funnel). Free String,
+  // not an enum, for the same reason as pipelineStatus (#747): changing an
+  // enum under `db push` is an ENUM→VARCHAR migration. Vocabulary and guard:
+  // src/lib/placementKind.ts.
+  kind                    String           @default("PLACEMENT") @db.VarChar(16)
+  // WHOSE outcome a hire is (#1503): THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED.
+  // NULL = not stated; never backfilled, and read as THROUGH_US for rows from
+  // before the column (the UNSPECIFIED pattern of #810).
+  employmentAttribution   String?          @db.VarChar(24)
+  // When the relation (re-)entered the placement funnel: the start for a
+  // PLACEMENT, the moment of a COACHING → PLACEMENT switch. NULL → readers fall
+  // back to startDate.
+  funnelEnteredAt         DateTime?
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
   stageDeadline           DateTime?
@@ -3347,13 +3569,15 @@ model MentorshipRelation {
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId      String?
 
-  mentor                User                     @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee                User                     @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company               Company?                 @relation(fields: [companyId], references: [id])
-  project               Project?                 @relation(fields: [projectId], references: [id])
-  cohort                Cohort?                  @relation(fields: [cohortId], references: [id])
+  mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company               Company?                       @relation(fields: [companyId], references: [id])
+  project               Project?                       @relation(fields: [projectId], references: [id])
+  cohort                Cohort?                        @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
+  agreementAcceptances  MentoringAgreementAcceptance[]
+  slaBreaches           SlaBreach[]
   meetings              Meeting[]
   // Who attended its meetings (#2014), kept even when a meeting is deleted.
   attendance            MeetingAttendance[]
@@ -3376,11 +3600,11 @@ model MentorshipRelation {
   // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
   // here; see model RelationValue for why.
   value                 RelationValue?
-  rematchRequests       MentorshipRequest[]      @relation("RematchRequests")
-  previousRelation      MentorshipRelation?      @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
+  rematchRequests       MentorshipRequest[]            @relation("RematchRequests")
+  previousRelation      MentorshipRelation?            @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
   // but the FK cannot express that, so Prisma types it as a list.
-  nextRelations         MentorshipRelation[]     @relation("RelationChain")
+  nextRelations         MentorshipRelation[]           @relation("RelationChain")
   // Standing 1:1 rules on this pairing (#2013).
   meetingSeries         MeetingSeries[]
   // Nightly health snapshots (#1901); removed with the relation.
@@ -3405,6 +3629,7 @@ model MentorshipRelation {
   @@index([status])
   @@index([lifecycleState])
   @@index([pipelineStatus])
+  @@index([kind])
   @@index([previousRelationId])
   // The daily trial sweep asks for one org's relations in one stage whose trial
   // ends inside the next week; this is the column that narrows it.
@@ -4746,6 +4971,72 @@ enum EmailStatus {
   HELD
 }
 
+// ── Bounce / complaint suppression (#1692) ──────────────────────────────────
+// What a mailbox told us through the provider's webhook. SENT above is "the
+// relay took it", never "it arrived"; these two tables are the loop that closes
+// that gap: an address that hard-bounced or complained is SUPPRESSED, and
+// sendEmail() (and the queue's drain) refuses it until a human delists it.
+//
+// DELIBERATELY NOT TENANT-SCOPED — the one place the multi-tenancy rule
+// (docs/tenant-isolation.md) is knowingly not applied. Sender reputation is a
+// property of the sending domain, and every tenant shares it: a complaint rate
+// built up by one tenant's mail is charged to all of them. So there is no
+// orgId here and no TENANT_MODELS entry; the admin screen applies its own
+// scope (src/lib/emailSuppression.ts § suppressionScopeWhere).
+// Rules: src/lib/emailSuppressionRule.ts. Doc: docs/EMAIL_DELIVERABILITY.md.
+enum SuppressionReason {
+  HARD_BOUNCE
+  SOFT_BOUNCE_REPEATED
+  COMPLAINT
+  MANUAL
+  UNSUBSCRIBE_ALL
+}
+
+model EmailSuppression {
+  id            String            @id @default(cuid())
+  // Trimmed and lower-cased on write AND on match (normalizeSuppressedAddress):
+  // a suppression that misses on case is not a suppression.
+  email         String            @unique @db.VarChar(320)
+  reason        SuppressionReason
+  // The provider's own words (an SMTP diagnostic, a feedback-loop type) —
+  // shown to the admin, never to the recipient.
+  detail        String?           @db.Text
+  // The provider key the event came in through ('brevo', 'generic'), or
+  // 'admin' for a manual entry.
+  source        String?           @db.VarChar(32)
+  suppressedAt  DateTime          @default(now())
+  // A delist keeps the row (and its history) and stamps these; a new bounce
+  // after a delist re-suppresses the same row.
+  releasedAt    DateTime?
+  releasedById  String?
+  releaseReason String?           @db.Text
+
+  @@index([reason])
+  @@index([releasedAt, suppressedAt])
+}
+
+// One provider event, as received. Exists for two reasons only: idempotency
+// (providers retry; the unique key makes a replay a no-op) and the soft-bounce
+// window (N soft bounces inside it suppress). Pruned by the retention registry
+// (key 'emailDeliveryEvent').
+model EmailDeliveryEvent {
+  id         String   @id @default(cuid())
+  provider   String   @db.VarChar(32)
+  // The provider's event id, or a sha256 of the fields that identify the
+  // event when the provider sends none (emailBounce.ts § normaliser).
+  eventId    String   @db.VarChar(191)
+  email      String   @db.VarChar(320)
+  // 'bounce' | 'complaint'
+  type       String   @db.VarChar(16)
+  hard       Boolean  @default(false)
+  detail     String?  @db.Text
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([email, type, receivedAt])
+  @@index([receivedAt])
+}
+
 // Delivery log for outgoing mail (#1194).
 //
 // Without this there is no record anywhere that a mail was (or wasn't) sent:
@@ -4785,6 +5076,40 @@ model EmailLog {
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
+// "This admin's authority extends to this programme / company" (#1567). One
+// row per delegated scope of a PROGRAM_ADMIN; the authorization
+// layer (src/lib/authz.ts) reads them per request. FAIL CLOSED: a
+// PROGRAM_ADMIN with no rows has no scope at all — never "everything" — the
+// same rule as NO_MATCH in src/lib/authzScope.ts. A row names a cohort, a
+// company, or both (narrowing to that company's mentees in that cohort).
+//
+// Tenant data: `orgId` + an entry in TENANT_MODELS (src/lib/orgContext.ts).
+// The unique key cannot stop two all-NULL-scope rows (MySQL treats NULLs as
+// distinct), which is harmless: such a row grants nothing, and the writer
+// refuses it.
+model AdminScopeGrant {
+  id          String   @id @default(cuid())
+  userId      String
+  orgId       String
+  cohortId    String?
+  companyId   String?
+  // The admin who granted it. A plain id, no relation, like AuditLog.actorId:
+  // erasing the granter must not erase the grant's history.
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  cohort  Cohort?      @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  company Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId, cohortId, companyId])
+  @@index([userId])
+  @@index([orgId])
+  @@index([cohortId])
+  @@index([companyId])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   // The tenant the audited action happened in (#2012). Nullable + backfilled:
@@ -5399,6 +5724,63 @@ model MatchFeedback {
   @@index([actorId])
 }
 
+/// How a matching rule takes part in a score (#1781). WEIGHTED adds
+/// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
+/// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
+/// rule named — never a silent drop.
+enum MatchRuleKind {
+  WEIGHTED
+  HARD_REQUIRE
+  HARD_EXCLUDE
+}
+
+/// An organisation's mentor-matching rule set (#1781). The pure scorer lives
+/// in src/lib/matching/score.ts; an org with no set here scores with the
+/// built-in DEFAULT_RULE_SET, which reproduces the pre-#1781 ranking exactly.
+model MatchRuleSet {
+  id          String    @id @default(cuid())
+  orgId       String?
+  name        String
+  description String?   @db.Text
+  /// The set resolveRuleSet() picks for the org. At most one per org is
+  /// intended; the resolver takes the newest default if two ever exist.
+  isDefault   Boolean   @default(false)
+  version     Int       @default(1)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  org   Organization? @relation(fields: [orgId], references: [id])
+  rules MatchRule[]
+
+  @@index([orgId, isDefault, archivedAt])
+}
+
+/// One rule of a MatchRuleSet (#1781). `dimension` is a key from the client-
+/// safe registry in src/lib/matching/dimensions.ts; an unknown key is scored
+/// as a non-match rather than ignored. Carries its own orgId (same as its set)
+/// so it is tenant-scoped on its own and listed in TENANT_MODELS.
+model MatchRule {
+  id        String        @id @default(cuid())
+  orgId     String?
+  ruleSetId String
+  dimension String
+  kind      MatchRuleKind @default(WEIGHTED)
+  /// 0-100. Only WEIGHTED rules use it.
+  weight    Int           @default(0)
+  /// Per-dimension settings, e.g. `{ "maxHours": 3 }` for timezone.
+  config    Json          @default("{}")
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  org     Organization? @relation(fields: [orgId], references: [id])
+  ruleSet MatchRuleSet  @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+
+  @@index([ruleSetId, sortOrder])
+  @@index([orgId])
+}
+
 // ── Background job queue ─────────────────────────────────────────────────────
 //
 // The durable substrate for the queue engine (#1669). Only the `Job` half is
@@ -5815,6 +6197,18 @@ model OrgEntitlement {
 //
 // Rules in src/lib/jobs/lease.ts; unit-tested in scripts/test/job-lease.test.mjs.
 // No `orgId`: this is operational state about processes, not tenant data.
+/// One row per QUEUE schedule (#1676, `src/lib/jobs/schedules.ts`): the last
+/// slot the scheduler enqueued. It is what lets a tick after an outage tell a
+/// missed slot from one already handled. System-level, no `orgId` — a schedule
+/// is the deployment's, not a tenant's. Advanced only by one conditional write
+/// (`src/lib/jobs/scheduleStateStore.ts`), so it never moves backwards.
+model ScheduleState {
+  /// The schedule key — `QueueSchedule.key`.
+  name             String    @id @db.VarChar(64)
+  lastEnqueuedSlot DateTime?
+  updatedAt        DateTime  @updatedAt
+}
+
 model JobLease {
   /// The lease name — 'scheduler', 'imap-bridge'. Primary key on purpose: the
   /// uniqueness of a lease is the invariant this table exists to enforce.
@@ -5844,6 +6238,29 @@ model JobLease {
   /// Cheap sweep of leases nobody renewed (an environment that shrank back to
   /// one replica, a renamed container).
   @@index([expiresAt])
+}
+
+// What the deploy's data migrations have done, one row per registered backfill
+// (#1540; prisma/backfills/registry.mjs, prisma/run-backfills.mjs). The id is
+// the registry entry's id. A `once` backfill with a recorded success is skipped
+// on later deploys; every other entry runs every deploy (they are idempotent)
+// and this row only records that it did and how it ended.
+//
+// INFRASTRUCTURE, NOT TENANT DATA: deliberately no `orgId` and deliberately NOT
+// in TENANT_MODELS (src/lib/orgContext.ts). A backfill runs across every
+// tenant at once; scoping its ledger to one would be meaningless. A later
+// isolation audit must not "fix" this.
+model BackfillRun {
+  id         String    @id @db.VarChar(96)
+  // ok | failed — of the latest run.
+  lastStatus String    @db.VarChar(16)
+  lastRunAt  DateTime
+  // The first successful run: what `once` reads.
+  firstOkAt  DateTime?
+  runs       Int       @default(0)
+  // The tail of the latest failure (exit code and the last output line).
+  lastError  String?   @db.Text
+  createdAt  DateTime  @default(now())
 }
 
 // ── Mail send budget ─────────────────────────────────────────────────────────
@@ -5889,6 +6306,62 @@ model MailBudget {
   dayCount Int     @default(0)
 
   updatedAt DateTime @updatedAt @db.DateTime(3)
+}
+
+// A tenant admin's request to move to another plan (#1743): the recorded,
+// audited step between "I want to upgrade" and a checkout, which a self-serve
+// checkout never removes. An operator (a super admin of the org's world,
+// src/lib/superAdmin.ts) applies or rejects it from /admin/plan-requests.
+//
+// Strings, not enums, for the same reason as Subscription: `db push
+// --accept-data-loss` resolves a MySQL ENUM change as DROP + CREATE. The
+// vocabularies and every rule over them live in src/lib/planChangeRule.ts.
+model PlanChangeRequest {
+  id    String @id @default(cuid())
+  orgId String
+
+  // Who asked. Deliberately NOT a foreign key (same as OrgEntitlement's
+  // grantedById): the record of a commercial request outlives the account.
+  requestedById String
+
+  // A PROGRAM-audience key from src/lib/plans.ts, and MONTHLY | YEARLY.
+  requestedPlan String @db.VarChar(32)
+  billingCycle  String @db.VarChar(16)
+
+  // Snapshots at request time, so the operator decides on what the tenant saw:
+  // the plan it was on, and this month's active pairs as the nightly rollup
+  // last counted them (null = not counted yet; never a live scan).
+  currentPlan String @db.VarChar(32)
+  activePairs Int?
+
+  // Free text — also where "we are over the band" goes.
+  reason         String? @db.Text
+  // The tenant claims the education/non-profit discount; the operator decides.
+  educationClaim Boolean @default(false)
+
+  // NEW | APPLIED | REJECTED (PLAN_CHANGE_STATUSES).
+  status String  @default("NEW") @db.VarChar(16)
+  // The requester's UI language, so a reply can be written in it.
+  locale String? @db.VarChar(8)
+
+  // ONE open request per org: equal to orgId while NEW, NULL once handled. A
+  // second submit therefore updates the open row instead of piling up — the
+  // unique index, not a read-then-write, is what holds that under a race (the
+  // same shape as MentorshipRelation.activeMenteeKey).
+  openKey String? @unique
+
+  handledById String?
+  handledAt   DateTime?
+  // The operator's note, shown to the requester on a rejection.
+  note        String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([status, createdAt])
 }
 
 // ── Usage ledger ─────────────────────────────────────────────────────────────
@@ -6055,6 +6528,8 @@ enum RosterRunStatus {
   SUCCEEDED
   FAILED
   NOOP
+  /// A safety valve stopped the run before anything was written (#1966).
+  ABORTED_SAFETY
 }
 
 /// Mirrors `RowStatus` in src/lib/importPreview.ts, token for token. One
@@ -6066,6 +6541,12 @@ enum RosterRowStatus {
   UNCHANGED
   SKIP
   ERROR
+  /// The deprovisioning phase (#1966), which runs after the import and outside
+  /// `runImport` — so these two have no counterpart in importPreview.ts.
+  /// Their rows carry a negative `rowNumber`: they describe a person the file
+  /// did NOT contain, so there is no file row to point at.
+  DEACTIVATE
+  REACTIVATE
 }
 
 /// One configured feed for one tenant.
@@ -6116,6 +6597,19 @@ model RosterFeed {
 
   chunkSize Int?
 
+  /// Deprovisioning (#1966, docs/roster-feeds.md). Off by default: a feed
+  /// deactivates nobody until a tenant asks it to. The three valves below are
+  /// read only when it is on; every one has a DB-side default (#2298).
+  deprovision          Boolean @default(false)
+  /// Abort, write nothing and alert when the people the feed would offboard
+  /// exceed this share of the org's active people the feed covers.
+  maxDeactivatePercent Int     @default(10)
+  /// Abort, write nothing and alert when the file has fewer data rows.
+  minRowCount          Int     @default(1)
+  /// A person is deactivated only on a successful run at least this many UTC
+  /// days after the run that first found them absent.
+  deprovisionGraceDays Int     @default(1)
+
   /// When the feed runs: a five-field cron expression evaluated in UTC
   /// (`src/lib/rosterFeed.ts`). Null = run by hand only.
   cronExpression String?   @db.VarChar(120)
@@ -6154,19 +6648,25 @@ model RosterRun {
   /// re-attempted next run instead of being skipped for ever.
   nextChunkIndex Int @default(0)
 
-  rowCount       Int     @default(0)
-  createdCount   Int     @default(0)
-  updatedCount   Int     @default(0)
-  unchangedCount Int     @default(0)
-  skippedCount   Int     @default(0)
-  errorCount     Int     @default(0)
+  rowCount         Int     @default(0)
+  createdCount     Int     @default(0)
+  updatedCount     Int     @default(0)
+  unchangedCount   Int     @default(0)
+  skippedCount     Int     @default(0)
+  errorCount       Int     @default(0)
+  /// Deprovisioning outcome (#1966).
+  deactivatedCount Int     @default(0)
+  reactivatedCount Int     @default(0)
+  /// Why a safety valve stopped the run (`row_floor` / `deactivation_ceiling`),
+  /// with the numbers, for the alert and the console.
+  safetyReason     String? @db.Text
   /// Keys the roster holds that the feed did not mention. Reported only —
   /// acting on them is #1966.
-  absentKeys     Json?
+  absentKeys       Json?
   /// Host and path of the file, for the run log. Never a query string: it can
   /// carry a token.
-  source         String? @db.Text
-  error          String? @db.Text
+  source           String? @db.Text
+  error            String? @db.Text
 
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
@@ -6308,6 +6808,98 @@ model RelationHealthSnapshot {
 
   @@unique([relationId, takenOn])
   @@index([orgId, takenOn])
+}
+
+// ── Admin-defined forms (#1800, story #1798) ─────────────────────────────────
+//
+// Questions an admin adds to registration, onboarding, the profile or a
+// mentorship request, and the answers people give. The field-type union and
+// the ONE validator are src/lib/forms/schema.ts (client-safe, shared with the
+// survey engine); the write boundary is src/lib/forms/definitions.ts. Two
+// rules carry the design:
+//   • ANSWERS ARE KEYED BY fieldKey, not by a field id. A published definition
+//     is never edited in place — an edit is version N+1 — so a field id changes
+//     with every version while its key does not; an answer given to v1 still
+//     resolves under v2.
+//   • A KEY'S TYPE IS FIXED across the versions of a form once published (409),
+//     and a free-text field can never be `matchable` (refused at the write).
+// The vocabularies (audience, surface, field type) are Strings validated by
+// whitelists, the house rule for enum-like columns.
+
+model FormDefinition {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // The form's stable name within the org, e.g. "mentee_registration".
+  key         String        @db.VarChar(80)
+  // MENTEE | MENTOR | BOTH
+  audience    String        @db.VarChar(16)
+  // REGISTRATION | ONBOARDING | PROFILE | MENTORSHIP_REQUEST
+  surface     String        @db.VarChar(32)
+  version     Int           @default(1)
+  // { en?, tr?, de? } — the builder's name for it. Nullable: Json columns
+  // carry no default under MariaDB (prisma/backfill-json-columns.mjs).
+  title       Json?
+  publishedAt DateTime?
+  // Set on a version superseded by a newer published one, or retired.
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  fields    FormField[]
+  responses FormResponse[]
+
+  @@unique([orgId, key, version])
+  @@index([orgId, surface])
+}
+
+// Deliberately NOT in TENANT_MODELS: a field is only ever reached through its
+// FormDefinition, which is scoped — the SurveyQuestion reasoning. It carries
+// no orgId, so every nested write stays a plain nested create.
+model FormField {
+  id           String         @id @default(cuid())
+  definitionId String
+  definition   FormDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  // The answer join key: stable across versions, its type fixed once published.
+  key          String         @db.VarChar(80)
+  // A FormFieldType (src/lib/forms/schema.ts).
+  type         String         @db.VarChar(20)
+  // { en?, tr?, de? }. Every writer sets it (no Json default under MariaDB).
+  labels       Json
+  helpText     Json?
+  // [{ value, labels: { en?, tr?, de? } }] for SELECT / MULTI_SELECT; null otherwise.
+  options      Json?
+  required     Boolean        @default(false)
+  // May feed matching (#1803). Only a bounded type — canBeMatchable().
+  matchable    Boolean        @default(false)
+  sortOrder    Int            @default(0)
+  // Removed from the form: no longer asked, its answers still read.
+  archivedAt   DateTime?
+
+  @@unique([definitionId, key])
+  @@index([definitionId, sortOrder])
+}
+
+// One person's answer to one field of one version. Carries orgId itself —
+// the matching engine loads a cohort's answers for one field without a join
+// (@@index([orgId, fieldKey])).
+model FormResponse {
+  id           String         @id @default(cuid())
+  orgId        String?
+  org          Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  definitionId String
+  definition   FormDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  fieldKey     String         @db.VarChar(80)
+  // Every writer sets it (no Json default under MariaDB).
+  value        Json
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([userId, definitionId, fieldKey])
+  @@index([orgId, fieldKey])
+  @@index([definitionId])
 }
 
 // ── Surveys (#1879, epic #1877) ──────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { getReportDefinition } from '@/lib/reports/definitions';
 import { SUBSCRIPTION_SELECT, subscriptionAdminOrg, subscriptionWriteProblem } from '@/lib/reportSubscriptionAdmin';
 
 // /api/admin/report-subscriptions (#1905) — the org's scheduled reports.
@@ -22,6 +23,9 @@ const createSchema = z.object({
   recipientUserId: z.string().max(64).nullable().optional(),
   recipientEmail: z.string().trim().toLowerCase().max(320).nullable().optional(),
   recipientName: z.string().trim().max(191).nullable().optional(),
+  // Slice by an org attribute (#1920): its key, and optionally one value.
+  segmentBy: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).nullable().optional(),
+  segment: z.string().trim().max(191).nullable().optional(),
 });
 
 export async function GET() {
@@ -54,6 +58,13 @@ export async function POST(request: Request) {
   };
   const problem = await subscriptionWriteProblem(gate.orgId, input);
   if (problem) return problem;
+  // A slice must name a segmentable attribute of this org, on a report that can be sliced.
+  if (d.segmentBy) {
+    const attr = await prisma.orgAttribute.findFirst({ where: { orgId: gate.orgId, key: d.segmentBy, isSegmentable: true }, select: { id: true } });
+    if (!attr || !getReportDefinition(d.reportKey)?.segmentSubject) {
+      return NextResponse.json({ error: 'Not a segmentable attribute for this report', code: 'invalid_segment' }, { status: 400 });
+    }
+  }
 
   const created = await prisma.reportSubscription.create({
     data: {
@@ -69,6 +80,7 @@ export async function POST(request: Request) {
       recipientEmail: input.recipientEmail,
       recipientName: input.recipientEmail ? d.recipientName || null : null,
       createdById: session.user.id,
+      ...(d.segmentBy ? { params: { segmentBy: d.segmentBy, ...(d.segment ? { segment: d.segment } : {}) } } : {}),
     },
     select: SUBSCRIPTION_SELECT,
   });
