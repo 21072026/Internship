@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { createFormDefinition, createFormSchema, FormWriteError } from '@/lib/forms/definitions';
 
@@ -32,7 +33,9 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', code: 'invalid', issues: parsed.error.issues }, { status: 400 });
   return withTenantScope(session, async () => {
     try {
-      const form = await createFormDefinition(resolveOrgId(session), parsed.data);
+      // Never a NULL org: the deploy's backfill-organization.mjs would move it into
+      // the default org and collide on @@unique([orgId, key, version]).
+      const form = await createFormDefinition(resolveOrgId(session) ?? (await defaultOrgId()), parsed.data);
       return NextResponse.json({ form }, { status: 201 });
     } catch (error) {
       if (error instanceof FormWriteError) return NextResponse.json({ error: error.code, code: error.code, ...error.detail }, { status: error.status });
