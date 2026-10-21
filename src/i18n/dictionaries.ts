@@ -328,6 +328,7 @@ const en = {
     suggestHint: 'Suggest the best mentor (AI-assisted when available)',
     suggested: 'Suggested',
     sharedSkills: 'shared skills',
+    relatedSkill: '{skill} (related to {via})',
     ruleBased: 'rule-based',
     // The org lacks the AI pack (#1738): one neutral line, no price, no CTA.
     locked: 'Rule-based order — the AI ranking is part of the AI pack, which is not included for this organisation; the platform operator can add it.',
@@ -3542,6 +3543,16 @@ const en = {
       greeting: 'Hi {mentee},',
       body: '{mentor} is now your mentor. Open your portal to say hi and get the mentorship started.',
       cta: 'Open your portal',
+    },
+    // #1821 — the premium "a candidate matches your open position" alert.
+    needMatchEmail: {
+      subject: 'A candidate matches your open position',
+      heading: 'New matching candidate',
+      greeting: 'Hi {name},',
+      body: '{candidate} matches one of {company}\'s open positions{position}.',
+      skills: 'Matching skills: {skills}',
+      related: '{skill} (related to {via})',
+      cta: 'View profile',
     },
     // #2715 — the weekly analytics report to admins. Placeholders in `summary`
     // are filled with <strong>-wrapped numbers by the sender.
@@ -8577,6 +8588,7 @@ const tr: Dict = {
     suggestHint: 'En uygun mentörü öner (varsa AI destekli)',
     suggested: 'Önerilen',
     sharedSkills: 'ortak yetenekler',
+    relatedSkill: '{skill} ({via} ile ilişkili)',
     ruleBased: 'kural tabanlı',
     locked: 'Kural tabanlı sıra — AI sıralaması bu organizasyona dahil olmayan AI paketinin parçası; platform işletmecisi ekleyebilir.',
     noSuggestion: 'Önerilecek uygun mentör yok.',
@@ -11677,6 +11689,16 @@ const tr: Dict = {
       greeting: 'Merhaba {mentee},',
       body: '{mentor} artık senin mentorun. Merhaba demek ve mentorluğu başlatmak için portalını aç.',
       cta: 'Portalını aç',
+    },
+    // #1821 — premium "açık pozisyonuna uyan aday" uyarısı.
+    needMatchEmail: {
+      subject: 'Açık pozisyonuna uyan bir aday var',
+      heading: 'Yeni uygun aday',
+      greeting: 'Merhaba {name},',
+      body: '{candidate}, {company} şirketinin açık pozisyonlarından birine uyuyor{position}.',
+      skills: 'Eşleşen beceriler: {skills}',
+      related: '{skill} ({via} ile ilişkili)',
+      cta: 'Profili görüntüle',
     },
     deadlineEmail: {
       subject: 'Gecikmiş: {mentee} için aşama son tarihi',
@@ -16625,6 +16647,7 @@ const de: Dict = {
     suggestHint: 'Den passendsten Mentor vorschlagen (KI-gestützt, wenn verfügbar)',
     suggested: 'Vorgeschlagen',
     sharedSkills: 'gemeinsame Fähigkeiten',
+    relatedSkill: '{skill} (verwandt mit {via})',
     ruleBased: 'regelbasiert',
     locked: 'Regelbasierte Reihenfolge — die KI-Rangfolge gehört zum KI-Paket, das für diese Organisation nicht enthalten ist; der Plattformbetreiber kann es hinzufügen.',
     noSuggestion: 'Kein verfügbarer Mentor zum Vorschlagen.',
@@ -19727,6 +19750,16 @@ const de: Dict = {
       greeting: 'Hallo {mentee},',
       body: '{mentor} ist jetzt dein Mentor. Öffne dein Portal, um Hallo zu sagen und das Mentoring zu starten.',
       cta: 'Portal öffnen',
+    },
+    // #1821 — der Premium-Hinweis „Kandidat:in passt zu deiner offenen Stelle“.
+    needMatchEmail: {
+      subject: 'Ein:e Kandidat:in passt zu deiner offenen Stelle',
+      heading: 'Neue:r passende:r Kandidat:in',
+      greeting: 'Hallo {name},',
+      body: '{candidate} passt zu einer der offenen Stellen von {company}{position}.',
+      skills: 'Passende Skills: {skills}',
+      related: '{skill} (verwandt mit {via})',
+      cta: 'Profil ansehen',
     },
     deadlineEmail: {
       subject: 'Überfällig: Phasenfrist für {mentee}',
