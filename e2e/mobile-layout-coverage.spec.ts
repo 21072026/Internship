@@ -118,6 +118,8 @@ const SETUP: Route[] = [
     '/admin/projects',
     '/admin/goal-templates',
     '/admin/agenda-templates',
+    // Org-defined segmentation attributes (#1920).
+    '/admin/attributes',
     '/admin/message-templates',
     '/admin/cohorts',
     '/admin/tags',
@@ -150,6 +152,8 @@ const OPERATIONS: Route[] = shell(
   '/admin/weekly-reports',
   // Report subscriptions (#1905) — in the sidebar without an entry here.
   '/admin/reports/subscriptions',
+  // The registry's reports, read and sliced (#1920).
+  '/admin/reports',
   // AI usage, spend and quota (#2030) — a wide per-task table, scrolled in its own container.
   '/admin/ai',
   // The safeguarding review queue (#2056).
