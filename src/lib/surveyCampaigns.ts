@@ -21,7 +21,7 @@
 // node-cron is only the carrier until the leader-elected scheduler (#1668);
 // the sweep is a plain exported function either way.
 
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { MentorshipRelation, SurveyAudience, SurveyCampaign, User } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -245,7 +245,7 @@ async function sendInvite(user: Person, campaign: SurveyCampaign, token: string,
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
 
-const tasks = new Map<string, cron.ScheduledTask>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /**
  * Daily at 10:00 UTC — mid-morning in DE/TR, when a short survey gets read.
@@ -254,7 +254,7 @@ const tasks = new Map<string, cron.ScheduledTask>();
  */
 export function initSurveyCampaignsCron() {
   if (tasks.has('surveys')) return;
-  const task = cron.schedule('0 10 * * *', async () => {
+  const task = scheduleLeased('0 10 * * *', async () => {
     try {
       const r = await dispatchDueSurveyCampaigns();
       if (r.due) logger.warning('Survey campaigns ran', { ...r });

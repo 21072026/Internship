@@ -119,20 +119,32 @@ test.describe.serial('Story #806 requisitions', () => {
     expect(created.status()).toBe(201);
     const id = (await created.json()).requisition.id as string;
 
+    // Two edits that are each valid on the row as it stands (0 ≤ 3 filled; 0 ≤ 2
+    // openings) but not together (3 filled > 2 openings). Exactly one may win
+    // whatever the interleaving — and the test must not depend on which one the
+    // server happens to produce:
+    //   - truly concurrent: both read (3, 0); the guarded updateMany (expected
+    //     openings/filled in the WHERE) lets one through and answers the other
+    //     409 `concurrent_update` — the race guard under test;
+    //   - serialized (what `next dev` does with two requests to one route): the
+    //     second reads the first's write and is refused by the invariant check,
+    //     409 `filled_exceeds_openings`.
+    // The previous pair (filled 1, openings 2) stayed valid together, so a
+    // serialized run legitimately answered 200 twice and the spec failed under
+    // `next dev` while passing on `next start` (CI).
     const [filledUpdate, openingsUpdate] = await Promise.all([
-      page.request.patch(`/api/requisitions/${id}`, { data: { filled: 1 } }),
+      page.request.patch(`/api/requisitions/${id}`, { data: { filled: 3 } }),
       page.request.patch(`/api/requisitions/${id}`, { data: { openings: 2 } }),
     ]);
     const responses = [filledUpdate, openingsUpdate];
-    expect(responses.filter((response) => response.status() === 200)).toHaveLength(1);
-    const conflict = responses.find((response) => response.status() === 409);
-    expect(conflict).toBeTruthy();
-    expect((await conflict!.json()).code).toBe('concurrent_update');
+    expect(responses.map((response) => response.status()).sort()).toEqual([200, 409]);
+    const conflict = responses.find((response) => response.status() === 409)!;
+    expect(['concurrent_update', 'filled_exceeds_openings']).toContain((await conflict.json()).code);
 
     const final = await prisma.requisition.findUniqueOrThrow({ where: { id } });
-    expect(final.openings).toBeGreaterThanOrEqual(1);
-    expect(final.filled).toBeGreaterThanOrEqual(0);
     expect(final.filled).toBeLessThanOrEqual(final.openings);
+    // One of the two edits landed, never both and never neither.
+    expect(['3/3', '2/0']).toContain(`${final.openings}/${final.filled}`);
   });
 
   for (const [role, email] of [['MENTOR', emails.mentor], ['MENTEE', emails.mentee], ['SOURCE', emails.source]] as const) {

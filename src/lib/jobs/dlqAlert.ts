@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
@@ -170,38 +169,5 @@ export async function runDeadLetterAlert(): Promise<DeadLetterAlertRun> {
   return { sent: true, total: summary.total, delivery };
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
-
-/**
- * Registers the daily dead-letter check in this server process. Idempotent — a
- * retried call from `/api/cron/start` is harmless.
- *
- * Registered from `/api/cron/start` rather than from `initCronJobs()`, for the
- * same reason the newsletter cron is (#1469): this module imports
- * `emailService`, so registering it there would make emailService import it
- * back and turn a one-way dependency into a cycle.
- *
- * node-cron is the carrier only until the queue can schedule itself: #1673's
- * worker and the scheduler story turn this into a `jobs.dlq-alert` handler
- * registered on the queue, and this timer goes away with the other twelve.
- * `runDeadLetterAlert()` is the handler either way.
- */
-export function initDeadLetterAlertCron() {
-  if (tasks.has('jobs-dlq-alert')) return;
-
-  // 06:45 UTC — offset from every other daily slot (07:30 activity digests,
-  // 08:15/08:30 the Monday weeklies, 09:00 the reminder batch) so it never sits
-  // behind the mail-heavy ones.
-  const task = cron.schedule('45 6 * * *', async () => {
-    try {
-      const result = await runDeadLetterAlert();
-      // Nothing to say when the queue is clean — the log stays as quiet as the
-      // mailbox does. When it is not clean, the line names what actually
-      // happened to the mail, not merely that the job ran.
-      if (result.total > 0) logger.warning('Dead-letter alert ran', { ...result });
-    } catch (e) {
-      logger.error('Dead-letter alert cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('jobs-dlq-alert', task);
-}
+// Scheduled by the queue (#1676): `jobs.deadLetterAlert` in src/lib/jobs/schedules.ts
+// (06:45 UTC, catch-up 'latest'), run by its handler in src/jobs/index.ts.

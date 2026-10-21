@@ -80,15 +80,35 @@ async function askWorkerToPurge(): Promise<boolean> {
  * the sign-out still proceeds — a cookie that outlives its session is a smaller
  * problem than a sign-out button that refuses to work.
  */
+//
+// SAML Single Logout (#1952): for a person whose organization signs in through
+// an IdP that advertises an SLO endpoint, the server ends their sessions and
+// remembered devices FIRST (POST /api/auth/sso/logout) and hands back a signed
+// LogoutRequest URL; the browser then continues to the IdP instead of our
+// sign-in page. Best-effort like the rest: if that call fails, this is an
+// ordinary local sign-out, and if the IdP is unreachable the person is already
+// signed out here.
 export async function signOutEverywhere(callbackUrl = '/auth/signin'): Promise<void> {
   try {
     await fetch('/api/auth/remember', { method: 'DELETE' });
   } catch {
     // Ignored on purpose — see above.
   }
+  let idpLogout: string | null = null;
+  try {
+    const res = await fetch('/api/auth/sso/logout', { method: 'POST' });
+    if (res.ok) idpLogout = ((await res.json()) as { redirect?: string | null }).redirect ?? null;
+  } catch {
+    // Ignored on purpose — see above.
+  }
   // Before the redirect, not after: `signOut()` navigates, and a purge started
   // on a page that is being torn down is a purge that may not finish.
   await purgeServiceWorkerCaches();
+  if (idpLogout) {
+    await signOut({ redirect: false });
+    window.location.assign(idpLogout);
+    return;
+  }
   // Absolute on THIS origin (#2488): a relative callbackUrl is resolved by
   // NextAuth against NEXTAUTH_URL — the internship host — so a marketing user
   // used to land on the other product after signing out.

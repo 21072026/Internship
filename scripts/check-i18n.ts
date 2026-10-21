@@ -115,7 +115,9 @@ const LEAK_EXEMPT: Record<string, string> = {
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   migration: '/admin/migrate (#2073) — gatePage closes it, and POST /api/admin/migrate refuses (requireCapability), for an org without the `mentorship` capability.',
   adminInsights: '/admin/insights (#2046) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
+  billing: '/admin/billing (#1739) — gatePage closes it, and GET /api/org/billing refuses (requireCapability), for an org without `mentorship`: the active-pair meter and the price list are the internship product\'s (src/lib/plans.ts); MARKETING has its own (src/lib/marketingPlans.ts).',
   adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
+  forecastCapacity: 'The capacity half of the forecast panel (#1897) — /api/admin/analytics/forecast returns `capacity: null` for an org without the `mentorship` capability, and the executive page renders these strings only when it is present.',
   evaluationDue: 'Sent only by src/lib/evaluationDue.ts, whose sweep skips every org without the `evaluations` capability — a MARKETING tenant is never reminded of an evaluation (#1891).',
   productTour: 'The internship landing\'s product tour (#1399): ProductTour reads it only for an INTERNSHIP host, and its screenshots show the internship product. The MARKETING tour reads `productTourMarketing`, which is deliberately not exempt.',
   // Internship-only surfaces a MARKETING org cannot reach (the bulk overlay pass).
@@ -126,6 +128,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   codeOfConduct: '/code-of-conduct — requireVerticalCapability(\'mentorship\') answers 404 on a vertical without the module, and PublicFooter drops the link on the marketing hosts (isMarketing).',
   participantJourney: 'Read only by JourneyView (#1855), mounted on /portal/journey (the portal layout sends an org without `mentorship` to /account) and /mentor/mentees/[id] (the mentor layout sends a MARKETING MENTOR to /sales); GET /api/journey refuses (requireCapability).',
   programJourney: '/admin/programs/[id]/journey (#1853) — its layout\'s gatePage closes it, and every /api/admin/programs/[id]/journey route refuses (requireCapability), for an org without `mentorship`.',
+  agreementsAdmin: '/admin/agreements (#1790) — gatePage closes it (its nav link carries `mentorship`), and /api/admin/agreements refuses (requireCapability), for an org without `mentorship`.',
   cohorts: '/admin/cohorts — gatePage closes it, and /api/cohorts refuses (requireCapability), for an org without `mentorship`; /admin/candidates/[id] only reads `d.cohorts` from that API\'s JSON, never the namespace.',
   dormantCheckIn: 'Sent only by sendDormantCheckIns (src/services/emailService.ts), whose sweep skips every org without `mentorship` (dormantCheckInApplies, src/lib/salesSurface.ts, #2970) before anything is claimed — a MARKETING lead is never mailed.',
   emailTemplates: 'Read by TargetedEmailComposer, mounted only on /admin/email (gatePage, `mentorship`) and /mentor/email (mentor shell), and by emitOutcomeComms (src/lib/outcomeComms.server.ts), which returns before the auto-send for an org without `placements`.',

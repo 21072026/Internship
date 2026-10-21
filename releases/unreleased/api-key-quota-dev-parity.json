@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The API-key quota tally and the rate-limit breach row behave under `next dev` as in production:** `src/lib/apiKeyQuota.ts` keeps its per-process tally on `globalThis` (the `src/lib/prisma.ts` pattern), because the dev server compiles each route into its own module graph and the admin key list read `0` for a request the `/api/v1` door had just counted — `e2e/api-key-quota.spec.ts:81` was red on every local run, green in CI's production build. The rate limiter's `ratelimit.exceeded` row, a platform-level event, is written through the new `outsideApiKeyRequest()` (`src/lib/orgContext.ts`), so an `/api/v1` key breach no longer trips the dev-only unbound-org guard and loses the row; in production that guard is not installed and the row is written exactly as before."
+}

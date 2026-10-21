@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, markSuperAdmin } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 import { makeMeetingFeedbackToken } from '../src/lib/meetingFeedbackToken';
 
@@ -30,6 +30,8 @@ test.describe('meeting feedback', () => {
   test.beforeAll(async () => {
     orgId = (await prisma.organization.create({ data: { name: `MF Org ${stamp}`, slug: `mf-${stamp}` } })).id;
     await seedUser(admin, PW, 'ADMIN', `MF Admin ${stamp}`, orgId);
+    // It drives a platform-wide /api/cron job: the operator's trigger (#1575).
+    await markSuperAdmin(admin);
     mentorId = (await seedUser(mentor, PW, 'MENTOR', `MF Mentor ${stamp}`, orgId)).id;
     for (const [i, email] of mentees.entries()) {
       const id = (await seedUser(email, PW, 'MENTEE', `MF Mentee ${i} ${stamp}`, orgId)).id;

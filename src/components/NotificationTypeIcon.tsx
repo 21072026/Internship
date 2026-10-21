@@ -1,5 +1,6 @@
 import {
   Bell,
+  Receipt,
   Clock,
   UserCheck,
   Target,
@@ -37,6 +38,7 @@ const NOTIFICATION_TYPE_ICONS: Record<string, LucideIcon> = {
   meeting_request: CalendarClock,
   announcement: Megaphone,
   mentor_application: GraduationCap,
+  plan_change: Receipt,
   interaction: FileText,
   meeting: CalendarClock,
   goal: Target,

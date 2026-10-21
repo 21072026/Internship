@@ -154,6 +154,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     // #2563 — core CRM (a person-written follow-up date on any record), so untagged.
     { key: 'followUps', category: 'tracking', icon: CalendarClock, color: 'amber', title: C.followUps.t, desc: C.followUps.d },
+    // #1722/#1723 — stage service levels, their escalation and the breach queue.
+    // Every vertical has a pipeline, so untagged.
+    { key: 'stageSla', category: 'tracking', icon: CalendarClock, color: 'rose', title: C.stageSla.t, desc: C.stageSla.d },
     // #2580 — each owner's own workspace (a mentor's /mentor, a MARKETING
     // rep's /sales). True in every vertical, so untagged; the rep's wording is a
     // MARKETING overlay sentence, not a second card.
@@ -192,5 +195,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
     { key: 'safeguarding', category: 'trust', icon: ShieldAlert, color: 'amber', capability: 'mentorship', title: C.safeguarding.t, desc: C.safeguarding.d },
     { key: 'programJourney', category: 'collaboration', icon: CalendarDays, color: 'indigo', capability: 'mentorship', title: C.programJourney.t, desc: C.programJourney.d },
+    // #1920 — every registry report sliced by the org's own attributes, small segments combined.
+    { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
   ];
 }
