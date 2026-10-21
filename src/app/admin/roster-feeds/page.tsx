@@ -155,6 +155,19 @@ const draftOf = (f: Feed): Draft => ({
 const fill = (template: string, values: Record<string, string | number>) =>
   template.replace(/\{(\w+)\}/g, (m, k: string) => (k in values ? String(values[k]) : m));
 
+/** The row actions a run detail can filter by — the only values a filter may carry. */
+const ROW_ACTIONS = ['CREATE', 'UPDATE', 'UNCHANGED', 'SKIP', 'ERROR', 'DEACTIVATE', 'REACTIVATE'] as const;
+
+/**
+ * The CSV export link. The filter is read back from a <select>, so it is matched
+ * against ROW_ACTIONS and encoded rather than spliced into the URL as typed.
+ */
+function csvHref(feedId: string, runId: string, filter: string): string {
+  const q = new URLSearchParams({ format: 'csv' });
+  if ((ROW_ACTIONS as readonly string[]).includes(filter)) q.set('status', filter);
+  return `/api/admin/roster-feeds/${encodeURIComponent(feedId)}/runs/${encodeURIComponent(runId)}?${q}`;
+}
+
 const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'default'> = {
   SUCCEEDED: 'success',
   FAILED: 'danger',
@@ -739,7 +752,7 @@ export default function AdminRosterFeedsPage() {
               <div className="flex gap-2">
                 <a
                   className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200"
-                  href={`/api/admin/roster-feeds/${detail.feed.id}/runs/${detail.run.id}?format=csv${rowFilter ? `&status=${rowFilter}` : ''}`}
+                  href={csvHref(detail.feed.id, detail.run.id, rowFilter)}
                   data-testid="roster-run-csv"
                 >
                   <Download className="mr-1 h-3.5 w-3.5" /> {L.downloadCsv}
@@ -760,7 +773,7 @@ export default function AdminRosterFeedsPage() {
               }}
               options={[
                 { value: '', label: L.allActions },
-                ...['CREATE', 'UPDATE', 'UNCHANGED', 'SKIP', 'ERROR', 'DEACTIVATE', 'REACTIVATE'].map((s) => ({
+                ...ROW_ACTIONS.map((s) => ({
                   value: s,
                   label: actionLabel(s),
                 })),
