@@ -499,6 +499,12 @@ model PipelineStage {
   order      Int
   isTerminal Boolean      @default(false)
   isOffPath  Boolean      @default(false)
+  /// The board phase this stage is grouped under (#1637): 'pre' | 'internship'
+  /// | 'result', whitelisted by PIPELINE_PHASES in src/lib/pipeline.ts. NULL =
+  /// derive it: a canonical key takes its built-in phase, any other key the
+  /// trailing "custom" group — exactly what every existing row showed before
+  /// the column existed, which is why it is nullable rather than defaulted.
+  phase      String?      @db.VarChar(16)
   color      String?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt

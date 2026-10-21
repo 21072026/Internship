@@ -297,6 +297,21 @@ export default function CandidatesPage() {
         if (action === 'assignOwner') {
           setBulkNote(t.candidates.bulkOwnerReassigned.replace('{n}', String(data.updated ?? 0)));
         }
+        // Bulk advance says what moved and why the rest did not (#1637) —
+        // a custom pipeline used to skip every row behind a plain success.
+        if (action === 'advanceStage' && typeof data.advanced === 'number') {
+          const why = Object.entries((data.reasons ?? {}) as Record<string, number>)
+            .map(([k, n]) => {
+              const text = (t.candidates.advanceSkip as Record<string, string>)[k];
+              return text ? text.replace('{n}', String(n)) : null;
+            })
+            .filter(Boolean)
+            .join(' · ');
+          const head = t.candidates.bulkAdvanced
+            .replace('{advanced}', String(data.advanced))
+            .replace('{skipped}', String(data.skipped ?? 0));
+          setBulkNote(why ? `${head} — ${why}` : head);
+        }
         setSelected(new Set());
         await fetchCandidates();
       }
