@@ -368,15 +368,14 @@ SIGKILLed), so the work resumes on the other replica within one TTL — three
 poll intervals, i.e. about three minutes for the mail bridge. Late, never
 double.
 
-**The cron is leased per tick (#1676).** Every replica registers the cron
-timers and runs the 30 s queue scheduler; each tick and each timer first takes
-or renews the `'scheduler'` lease (`src/lib/jobs/leasedCron.ts`), and only the
-holder does the work. Replica ≥2 therefore no longer runs with
-`CRON_ENABLED=0`: while replica 1 is down or mid-swap, replica 2 takes the
-lease within one TTL (90 s) — a graceful SIGTERM releases it at once. The
-queue schedules (`src/lib/jobs/schedules.ts`) also catch up a missed slot; the
-node-cron ones still lose a slot that fires while no replica holds the lease,
-until #1677 moves them onto the queue.
+**The cron is leased per tick (#1676, #1677).** Every replica runs the 30 s
+queue scheduler; each tick first takes or renews the `'scheduler'` lease
+(`src/lib/jobs/leasedCron.ts`), and only the holder enqueues the due slots of
+`src/lib/jobs/schedules.ts` — every scheduled job in the product, with
+missed-slot catch-up. The job worker runs them on every replica (SKIP LOCKED).
+Replica ≥2 therefore no longer runs with `CRON_ENABLED=0`: while replica 1 is
+down or mid-swap, replica 2 takes the lease within one TTL (90 s) — a graceful
+SIGTERM releases it at once — and the slot it missed is enqueued late, not lost.
 
 **Also set `RATE_LIMIT_REDIS_URL`** for a two-replica environment (see the
 section above) or every limit becomes twice as generous.

@@ -202,7 +202,7 @@ queued mail.
 Bulk: `POST /api/admin/outbox/bulk` (≤ 50 ids) runs the same action draft by
 draft and answers `{ done, skipped[] }` with each skipped draft's reason code.
 
-**Expiry**: the hourly mail tick (`initCronJobs`, `:05`) moves every `DRAFT`
+**Expiry**: the hourly job `outbound.expireDrafts` (`:05`, `src/lib/jobs/schedules.ts`) moves every `DRAFT`
 past its `notAfter` to `EXPIRED` and deletes its mail (`expireDrafts()`).
 
 ## Who sees which draft

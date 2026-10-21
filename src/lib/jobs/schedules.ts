@@ -1,21 +1,11 @@
 // Every schedule in the product, in one list (#1676). Pure data — no imports
 // beyond types — so the unit test can hold it against the source.
 //
-// TWO CARRIERS, during the move off node-cron:
-//
-//   'queue'     — the scheduler tick (`./scheduler`) enqueues a `Job` for each
-//                 slot, under the 'scheduler' lease, with missed-slot catch-up;
-//                 the worker (#1673) runs it with retries and a JobRun.
-//   'node-cron' — still a `cron.schedule` timer in its own module, but fired
-//                 through `scheduleLeased()` (`./leasedCron`), so only the
-//                 'scheduler' lease holder runs the body. No catch-up yet: a
-//                 slot that fires while no replica is up is lost, as before.
-//                 #1677 moves each of these onto the queue, and the entry's
-//                 carrier changes in the same diff.
-//
-// The expression of a 'node-cron' entry must match the one in its `source`
-// file character for character (the unit test reads the file). Changing a
-// cadence means changing both.
+// Every entry is a QUEUE schedule (#1677 moved the last node-cron timers
+// here): the scheduler tick (`./scheduler`) enqueues a `Job` for each slot,
+// under the 'scheduler' lease, with missed-slot catch-up, and the worker
+// (#1673) runs it with retries and a JobRun. Nothing in `src/` calls
+// `cron.schedule()` any more; the unit test fails if something does.
 //
 // TIMEZONE: process local time, i.e. UTC in the containers — see `./cronSlot`.
 // `catchUp` applies to 'queue' entries: 'latest' enqueues only the most recent
@@ -42,22 +32,13 @@ export interface QueueSchedule<N extends JobName = JobName> extends Base {
   maxAttempts?: number;
 }
 
-export interface NodeCronSchedule extends Base {
-  carrier: 'node-cron';
-  /** The file whose `scheduleLeased('<cron>', …)` call carries it today. */
-  source: string;
-}
-
-export type Schedule = QueueSchedule | NodeCronSchedule;
+export type Schedule = QueueSchedule;
 
 function queue<N extends JobName>(s: Omit<QueueSchedule<N>, 'carrier'>): QueueSchedule {
   return { carrier: 'queue', ...s } as QueueSchedule;
 }
 
-const EMAIL = 'src/services/emailService.ts';
-
 export const SCHEDULES: readonly Schedule[] = [
-  // ── On the queue ──────────────────────────────────────────────────────────
   queue({
     key: 'jobs.deadLetterAlert',
     cron: '45 6 * * *',
@@ -85,93 +66,39 @@ export const SCHEDULES: readonly Schedule[] = [
     why: 'The JobRun ledger grows by one row per attempt; 04:10 UTC sits after the 03:20/03:40 housekeeping and before the morning mail.',
   }),
 
-  // ── Still node-cron, leased per tick ──────────────────────────────────────
-  {
-    carrier: 'node-cron',
-    key: 'mentor-reminders',
-    cron: '0 9 * * *',
-    source: EMAIL,
-    why: 'The 09:00 batch: dormancy sweep FIRST (it decides who is dormant), then check-ins, mentor reminders, stage deadlines, re-consent, need-match alerts — the start of a working day.',
-  },
-  {
-    carrier: 'node-cron',
-    key: 'meeting-reminders',
-    cron: '*/15 * * * *',
-    source: EMAIL,
-    why: 'The reminder window is 60 min; a quarter-hourly tick is what delivers "about an hour before" (45-60 min). Also project series reminders and meeting auto-logs.',
-  },
-  { carrier: 'node-cron', key: 'weekly-digest', cron: '0 8 * * 1', source: EMAIL, why: 'Weekly mentor digest, Monday 08:00 — start of the working week.' },
-  {
-    carrier: 'node-cron',
-    key: 'email-health',
-    cron: '5 * * * *',
-    source: EMAIL,
-    why: 'Hourly delivery health check (#1190) and held-draft expiry (#2960); :05 keeps it off the top of the hour.',
-  },
-  {
-    carrier: 'node-cron',
-    key: 'missing-document-reminders',
-    cron: '30 8 * * 1',
-    source: EMAIL,
-    why: 'Monday 08:30, offset from the 08:00 digest so the two weeklies do not share a minute.',
-  },
-  {
-    carrier: 'node-cron',
-    key: 'ai-artifact-retention',
-    cron: '20 3 * * *',
-    source: EMAIL,
-    why: 'Nightly 03:20 (#2044): nothing generated about a person outlives the org retentionMonths.',
-  },
-  { carrier: 'node-cron', key: 'activity-digest', cron: '30 7 * * *', source: EMAIL, why: 'Daily mentee-activity digest at 07:30, before the working day.' },
-  {
-    carrier: 'node-cron',
-    key: 'weekly-report-reminders',
-    cron: '0 15 * * 5',
-    source: EMAIL,
-    why: 'Friday 15:00 — the end of the working week, while there is still time to write the report.',
-  },
-  { carrier: 'node-cron', key: 'unread-message-digest', cron: '20 * * * *', source: EMAIL, why: 'Hourly at :20, offset from the other hourly jobs.' },
-  {
-    carrier: 'node-cron',
-    key: 'trusted-device-purge',
-    cron: '40 3 * * *',
-    source: EMAIL,
-    why: 'Nightly 03:40 housekeeping: trusted devices, refresh grants, login links, stale sign-in devices, idempotency keys.',
-  },
-  {
-    carrier: 'node-cron',
-    key: 'newsletter-dispatch',
-    cron: '*/15 * * * *',
-    source: 'src/lib/newsletterDispatch.ts',
-    why: 'Sends issues whose scheduled time has come; quarter-hourly is the scheduling granularity the editor offers.',
-  },
-  { carrier: 'node-cron', key: 'newsletter-queue', cron: '0 6 * * *', source: 'src/lib/newsletterDispatch.ts', why: 'Daily 06:00: queues the next curated issue ahead of the morning dispatch.' },
-  {
-    carrier: 'node-cron',
-    key: 'retention',
-    cron: '20 3 * * *',
-    source: 'src/lib/retentionEntries.ts',
-    why: 'The one retention job (#1678), nightly 03:20 — the quiet hour.',
-  },
-  { carrier: 'node-cron', key: 'usage-rollup', cron: '40 2 * * *', source: 'src/lib/jobs/usageRollup.ts', why: 'Nightly billing rollup (#1750) at 02:40, after the day has closed in UTC.' },
-  {
-    carrier: 'node-cron',
-    key: 'trial-reminders',
-    cron: '20 5 * * *',
-    source: 'src/lib/jobs/trialReminders.ts',
-    why: 'Expires the trials that ran out overnight and reminds the rest (#2415), early and ahead of the mail-heavy slots.',
-  },
-  { carrier: 'node-cron', key: 'report-subscriptions', cron: '25 * * * *', source: 'src/lib/jobs/reportSubscriptions.ts', why: 'Scheduled report delivery (#1905), hourly at :25.' },
-  {
-    carrier: 'node-cron',
-    key: 'relation-health',
-    cron: '0 2 * * *',
-    source: 'src/lib/jobs/relationHealthSweep.ts',
-    why: 'Nightly relationship-health sweep (#1901) at 02:00; mails the at-risk digest.',
-  },
-  { carrier: 'node-cron', key: 'survey-campaigns', cron: '0 10 * * *', source: 'src/lib/surveyCampaigns.ts', why: 'Survey campaigns (#1887), daily 10:00 — mid-morning.' },
-  { carrier: 'node-cron', key: 'evaluation-reminders', cron: '15 8 * * *', source: 'src/lib/evaluationDue.ts', why: 'Evaluation due reminders (#1891), daily 08:15.' },
-  { carrier: 'node-cron', key: 'program-journey', cron: '10 7 * * *', source: 'src/lib/programJourney.ts', why: 'Program journey steps (#1852), daily 07:10, in-app only.' },
+  // ── The former node-cron jobs (#1677) ────────────────────────────────────
+  //
+  // The 09:00 batch used to be six sweeps in one `try`. Now four of them are
+  // independent schedules, and the other two — the dormancy check-in and the
+  // mentor interaction reminder — are CHAIN-ENQUEUED by `dormancy.sweep` on
+  // success (src/jobs/reminders.ts), because they read the state the sweep
+  // writes. They have no schedule of their own on purpose.
+  queue({ key: 'dormancy.sweep', cron: '0 9 * * *', job: 'dormancy.sweep', payload: {}, catchUp: 'latest', why: 'The start of the working day. Decides who is a dormant first contact today, then enqueues dormancy.checkIn and reminders.mentorInteraction, which read that state.' }),
+  queue({ key: 'reminders.stageDeadline', cron: '0 9 * * *', job: 'reminders.stageDeadline', payload: {}, catchUp: 'latest', why: 'Part of the 09:00 batch: stage service-level reminders and escalations (#817), at the start of the working day.' }),
+  queue({ key: 'reminders.retentionReconsent', cron: '0 9 * * *', job: 'reminders.retentionReconsent', payload: {}, catchUp: 'latest', why: 'Part of the 09:00 batch: retention re-consent reminders, one per person per window.' }),
+  queue({ key: 'matching.needMatchAlerts', cron: '0 9 * * *', job: 'matching.needMatchAlerts', payload: {}, catchUp: 'latest', why: 'Part of the 09:00 batch: company need-match alerts, read at the start of the day.' }),
+  queue({ key: 'meetings.reminders', cron: '*/15 * * * *', job: 'meetings.reminders', payload: {}, catchUp: 'latest', why: 'The reminder window is 60 min; a quarter-hourly tick is what delivers "about an hour before" (45-60 min).' }),
+  queue({ key: 'meetings.seriesReminders', cron: '*/15 * * * *', job: 'meetings.seriesReminders', payload: {}, catchUp: 'latest', why: 'Recurring project meetings: 1h/24h windows, so the same quarter-hourly tick keeps "an hour before" accurate.' }),
+  queue({ key: 'meetings.autoLog', cron: '*/15 * * * *', job: 'meetings.autoLog', payload: {}, catchUp: 'latest', why: 'Logs meetings nobody ended (#1489) two hours after they started, and asks for feedback once (#1896); same rows as the reminders.' }),
+  queue({ key: 'digest.weeklyMentor', cron: '0 8 * * 1', job: 'digest.weeklyMentor', payload: {}, catchUp: 'latest', why: 'Weekly mentor digest, Monday 08:00 — start of the working week.' }),
+  queue({ key: 'email.healthCheck', cron: '5 * * * *', job: 'email.healthCheck', payload: {}, catchUp: 'latest', why: 'Hourly delivery health check (#1190); :05 keeps it off the top of the hour.' }),
+  queue({ key: 'outbound.expireDrafts', cron: '5 * * * *', job: 'outbound.expireDrafts', payload: {}, catchUp: 'latest', why: 'Held drafts past their deadline (#2960) expire on the same hourly mail tick.' }),
+  queue({ key: 'documents.missingReminders', cron: '30 8 * * 1', job: 'documents.missingReminders', payload: {}, catchUp: 'latest', why: 'Monday 08:30, offset from the 08:00 digest so the two weeklies do not share a minute.' }),
+  queue({ key: 'ai.artifactRetention', cron: '20 3 * * *', job: 'ai.artifactRetention', payload: {}, catchUp: 'latest', why: 'Nightly 03:20 (#2044): nothing generated about a person outlives the org retentionMonths.' }),
+  queue({ key: 'digest.dailyActivity', cron: '30 7 * * *', job: 'digest.dailyActivity', payload: {}, catchUp: 'latest', why: 'Daily mentee-activity digest at 07:30, before the working day.' }),
+  queue({ key: 'reports.weeklyReportReminders', cron: '0 15 * * 5', job: 'reports.weeklyReportReminders', payload: {}, catchUp: 'latest', why: 'Friday 15:00 — the end of the working week, while there is still time to write the report.' }),
+  queue({ key: 'digest.unreadMessages', cron: '20 * * * *', job: 'digest.unreadMessages', payload: {}, catchUp: 'latest', why: 'Hourly at :20, offset from the other hourly jobs.' }),
+  queue({ key: 'auth.trustedDevicePurge', cron: '40 3 * * *', job: 'auth.trustedDevicePurge', payload: {}, catchUp: 'latest', why: 'Nightly 03:40 housekeeping: trusted devices, refresh grants, login links, stale sign-in devices, idempotency keys.' }),
+  queue({ key: 'newsletter.dispatch', cron: '*/15 * * * *', job: 'newsletter.dispatch', payload: {}, catchUp: 'latest', why: 'Sends issues whose scheduled time has come; quarter-hourly is the scheduling granularity the editor offers.' }),
+  queue({ key: 'newsletter.queue', cron: '0 6 * * *', job: 'newsletter.queue', payload: {}, catchUp: 'latest', why: 'Daily 06:00: queues the next curated issue ahead of the morning dispatch.' }),
+  queue({ key: 'retention.prune', cron: '20 3 * * *', job: 'retention.prune', payload: {}, catchUp: 'latest', why: 'The one retention job (#1678), nightly 03:20 — the quiet hour.' }),
+  queue({ key: 'usage.rollup', cron: '40 2 * * *', job: 'usage.rollup', payload: {}, catchUp: 'latest', why: 'Nightly billing rollup (#1750) at 02:40, after the day has closed in UTC.' }),
+  queue({ key: 'trial.reminders', cron: '20 5 * * *', job: 'trial.reminders', payload: {}, catchUp: 'latest', why: 'Expires the trials that ran out overnight and reminds the rest (#2415), early and ahead of the mail-heavy slots.' }),
+  queue({ key: 'reports.subscriptions', cron: '25 * * * *', job: 'reports.subscriptions', payload: {}, catchUp: 'latest', why: 'Scheduled report delivery (#1905), hourly at :25.' }),
+  queue({ key: 'relationHealth.sweep', cron: '0 2 * * *', job: 'relationHealth.sweep', payload: {}, catchUp: 'latest', why: 'Nightly relationship-health sweep (#1901) at 02:00; mails the at-risk digest.' }),
+  queue({ key: 'surveys.campaigns', cron: '0 10 * * *', job: 'surveys.campaigns', payload: {}, catchUp: 'latest', why: 'Survey campaigns (#1887) and their reminders (#1889), daily 10:00 — mid-morning.' }),
+  queue({ key: 'evaluations.reminders', cron: '15 8 * * *', job: 'evaluations.reminders', payload: {}, catchUp: 'latest', why: 'Evaluation due reminders (#1891), daily 08:15.' }),
+  queue({ key: 'programJourney.run', cron: '10 7 * * *', job: 'programJourney.run', payload: {}, catchUp: 'latest', why: 'Program journey steps (#1852), daily 07:10, in-app only.' }),
 ];
 
 export const QUEUE_SCHEDULES: readonly QueueSchedule[] = SCHEDULES.filter((s): s is QueueSchedule => s.carrier === 'queue');

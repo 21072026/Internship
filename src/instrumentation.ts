@@ -29,8 +29,8 @@ function localUrl(path: string): string {
   return `http://127.0.0.1:${process.env.PORT || 3000}${path}`;
 }
 
-// The scheduled reminder/digest jobs (`initCronJobs` in
-// `src/services/emailService.ts`). Gated on CRON_SECRET so only the environment
+// The queue scheduler (src/lib/jobs/schedules.ts → /api/cron/start, #1676/#1677):
+// every scheduled reminder, digest and sweep in the product. Gated on CRON_SECRET so only the environment
 // that should mail real people does: the preview DB is shared with every topic
 // env and holds the same addresses, so a scheduler running there would email
 // real users. CRON_ENABLED=0 is the kill switch.
