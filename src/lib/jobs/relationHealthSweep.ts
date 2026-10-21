@@ -12,7 +12,7 @@
 // lands; sweepRelationHealth() is the handler either way. Registered from
 // /api/cron/start, never from initCronJobs, to keep the import graph one-way.
 
-import cron from 'node-cron';
+import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -203,12 +203,12 @@ async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
   return mailed;
 }
 
-const tasks = new Map<string, cron.ScheduledTask>();
+const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
 /** Nightly at 02:00 — before anyone's day starts, after the day's writes. */
 export function initRelationHealthCron() {
   if (tasks.has('relation-health')) return;
-  const task = cron.schedule('0 2 * * *', async () => {
+  const task = scheduleLeased('0 2 * * *', async () => {
     try {
       const r = await sweepRelationHealth();
       logger.warning('Relation health sweep ran', { ...r });
