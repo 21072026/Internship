@@ -16,6 +16,8 @@ ones to preserve if you change any of it.
 | `src/lib/importPreview.ts` | **The engine and the vocabulary** (#2072): `runImport({ parse, validate, resolve, apply })`, `RowStatus` / `RowResult` / `ImportReport`, and the shared delimited parser. Free of Prisma, `next` and React. |
 | `src/lib/rosterIngest.ts` | The feed layer: transport, the SHA-256 file hash, `diffRoster()`, chunked apply, the resume protocol. Also free of Prisma — it talks to ports. |
 | `src/lib/rosterIngestStore.ts` | The only Prisma-aware file: `RosterRun` / `RosterRowResult`, one transaction per chunk, and the org-explicit entry point (`runRosterFeed`, `sweepRosterFeeds`). |
+| `src/lib/rosterFeed.ts` | **The configuration rules** (#1964): the vocabulary (transports, key fields, mappable columns), `validateFeedConfig()`, `resolveColumns()`, and the UTC cron parser (`parseCron` / `cronMatches` / `nextCronRun`). Pure and client-safe. |
+| `src/lib/rosterFeedAdmin.ts` + `/api/admin/roster-feeds` | The admin CRUD: the sealed secret going in, `secretSet` coming out. |
 | `src/lib/externalSyncPolicy.ts` | What an external system may overwrite on a user — shared with SSO/SCIM sync (#1943), deliberately one policy and not two. |
 | `prisma/schema.prisma` | `RosterFeed`, `RosterRun`, `RosterRowResult` (+ their enums). All three carry `orgId` and are registered in `TENANT_MODELS`. |
 | `scripts/test/roster-ingest.test.mjs` | The suite that pins the parser fixtures, the diff, resume-after-crash, idempotency and two-tenant isolation. `npm run test:roster-ingest`. |
@@ -78,9 +80,10 @@ turning the id on for an existing tenant does not re-create their roster.
 1. `fetchFeedFile(feed)` — HTTPS through `assertPublicHttpsUrl()` (the URL is
    tenant-supplied and fetched from the server's network position, so SSRF is not
    hypothetical), `redirect: 'error'`, and an 8 MiB cap. SFTP checks the **pinned host key
-   fingerprint** and refuses without one; the credential is read from the environment
-   variable the feed *names* — never stored in the row, because a credential in a database
-   row is a credential in every backup.
+   fingerprint** and refuses without one. The feed's secret (SFTP password or key, or the
+   HTTPS bearer token) is resolved at fetch time by `resolveFeedSecret()`: the sealed
+   `secretEnc` column first, else the environment variable the feed *names* — see
+   [The feed's secret](#the-feeds-secret).
 2. Hash the bytes. Equal to the last successful run's hash → record a no-op and stop.
 3. `parseRoster` — the shared parser: quoted embedded newlines, CRLF, a UTF-8 BOM, `""`
    escapes, and a sniffed delimiter (`,` `;` `\t` `|`). A German or Turkish Excel export
@@ -117,15 +120,59 @@ then binds that org for the whole run with `runWithOrg(feed.orgId, …)`. The wr
 its `updateMany` by `(id, orgId)` on top of the middleware, and the suite proves with a
 two-tenant fixture that a feed for org A can neither read nor write a row of org B.
 
+## Configuring a feed (#1964)
+
+`/api/admin/roster-feeds` (list, create) and `/api/admin/roster-feeds/[id]` (read, edit,
+delete) are ADMIN-only, run inside the tenant scope and filter every query by the caller's
+org as well; another org's feed answers **404** on every verb. Every write goes through
+`validateFeedConfig()`, which reports all problems at once and refuses:
+
+- a `cronExpression` it cannot parse. Five fields (minute hour day-of-month month
+  day-of-week), numbers / `*` / ranges / steps / lists, **evaluated in UTC**; when both day
+  fields are restricted either one matches (classic cron). Null means "run by hand only".
+- a transport without its own fields — HTTPS needs an `https://` URL without credentials
+  in it (and the URL must pass the SSRF guard at save time, not only at fetch time); SFTP
+  needs host, username, path **and the pinned host key fingerprint**;
+- a `columnMap` with no `email` mapping, an `EXTERNAL_ID` feed without an `externalId`
+  mapping, or a mapping for a field we do not have (it would be ignored, and an ignored
+  mapping reads as a working one).
+
+An edit is validated as the **whole merged config**, so a PATCH that switches the transport
+cannot leave the new one's requirements unchecked. `resolveColumns(header, columnMap)` is
+the same trimmed, case-insensitive header match the engine reads with, so the console's
+"column not found" and a run cannot disagree.
+
+### The feed's secret
+
+The secret goes in as `secret` on a create or an edit and is stored only as
+`seal(secret, 'roster-feed-secret')` (`src/lib/secretBox.ts`, AES-256-GCM, a key of its own).
+Nothing returns it: the API answers `secretSet: boolean` (the `ssoCertificateSet` pattern),
+the activity trail records "secret replaced/cleared" without the value, and
+`clearSecret: true` removes it. The only reader is the run, at fetch time. A sealed value
+that no longer opens (the server secret rotated, a row copied between environments) fails
+the run with "enter it again" rather than fetching without it.
+
+`credentialEnvVar` remains for an operator who wants the secret out of the database
+altogether; the sealed column wins when both are set.
+
+The route is on the public demo's write blocklist (`src/lib/demoMode.ts`): it stores a real
+remote credential.
+
+### Retention
+
+`RosterRowResult` grows by the size of the roster on every run. The one retention job
+(`rosterRowResult` in `src/lib/retentionEntries.ts`) deletes row-level results older than
+**90 days**; `RosterRun` summaries are kept indefinitely.
+
 ## Not in this engine
 
 - **Deprovisioning.** `absent[]` is computed, reported and stored on the run. Deciding to
   act on it — offboarding, archiving, closing a relation — is #1966, on purpose: a bug in
   the diff should cost a wrong report, not a wrong offboarding.
-- **The admin surface and the schedule** (#1964): creating a feed, mapping its columns,
-  the run log screen and the cron registration. The engine is callable from a route handler
-  and from a scheduled job today (`runRosterFeed`, `sweepRosterFeeds`); nothing calls it
-  yet.
+- **The console and the scheduler** (#1967): the `/admin/roster-feeds` screen, the column
+  mapper, the run log and running a feed on its `cronExpression`. The configuration API
+  exists (#1964) and the engine is callable from a route handler and a scheduled job
+  (`runRosterFeed`, `sweepRosterFeeds`); nothing schedules it yet.
 - **Row-level retry.** A row that throws is recorded `ERROR` and its chunk still commits, so
   the checkpoint moves past it. Re-running the *same* file therefore resumes at the end and
   changes nothing: the errored row is retried when the file next changes (the plan is

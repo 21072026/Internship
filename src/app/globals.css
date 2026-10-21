@@ -372,6 +372,28 @@ html[data-accent="brand"] {
   --accent-tint-hover:var(--brand-tint-hover, rgba(30,58,138,0.35));
 }
 
+/* Chart colours (#1890). An SVG chart cannot see Tailwind classes or the
+   html.dark utility overrides below, so src/components/charts reads these
+   instead: one set of tokens, redefined for dark, with series 1 on the accent
+   ramp so a user's accent and an org's brand palette reach the charts too.
+   The fallbacks are the blue ramp — production with no accent sets none. */
+:root {
+  --chart-1: var(--accent-500, #3b82f6);
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-grid: #e5e7eb;
+  --chart-label: #6b7280;
+}
+html.dark {
+  --chart-1: var(--accent-400, #60a5fa);
+  --chart-2: #34d399;
+  --chart-3: #fbbf24;
+  --chart-4: #a78bfa;
+  --chart-grid: #374151;
+  --chart-label: #9ca3af;
+}
+
 /* --- Utility remap (written once; references the palette vars above). --- */
 /* Backgrounds */
 html[data-accent] .bg-blue-50 { background-color: var(--accent-50); }
