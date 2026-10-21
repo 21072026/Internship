@@ -17,7 +17,7 @@ test.afterAll(async () => {
   await appPrisma.$disconnect();
 });
 
-test('concurrent seed passes claim an org once', async () => {
+test('concurrent seed passes claim an org once', { tag: '@smoke' }, async () => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const org = await prisma.organization.create({ data: { name: `Seed Claim ${stamp}`, slug: `seed-claim-${stamp}` } });
   const admin = uniqueEmail('seed-claim-admin');
