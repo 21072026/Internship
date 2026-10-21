@@ -300,9 +300,15 @@ export function mailMeterIdleForTests(): Promise<void> {
   return meterObserver.idle();
 }
 
+/** Does a bulk relay exist? The load-time answer, or — once the test seam has
+ *  re-pointed this process (`requestFromEnv`) — the current environment's. */
+function bulkChannelExists(): boolean {
+  return requestFromEnv ? Boolean(process.env.SMTP_BULK_HOST && process.env.SMTP_BULK_USER) : !!bulkTransporter;
+}
+
 function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter {
   // `transportFor()` only ever answers 'bulk' when the bulk channel exists.
-  const ch: MailTransport = channel === 'bulk' && bulkTransporter ? 'bulk' : 'primary';
+  const ch: MailTransport = channel === 'bulk' && bulkChannelExists() ? 'bulk' : 'primary';
   if (mode === 'request' && !requestFromEnv) return ch === 'bulk' ? bulkTransporter! : transporter;
   const key = `${ch}:${mode}`;
   let t = modeTransports.get(key);
@@ -1634,7 +1640,27 @@ export function mailDrainDeps(): DrainDeps {
     record: (e, status, error) => recordEmailOutcome(e, status, error),
     observe: (e) => observeMeterSpend(e as unknown as PreparedEmail),
     finalFailure: (e) => noteFinalMailFailure(e.category),
+    failover: (e) => failoverEnvelope(e),
   };
+}
+
+/**
+ * A primary-channel mail moved onto the bulk relay (#1690): the same message
+ * under the bulk From identity — the bulk relay signs for its own domain
+ * (`SMTP_BULK_FROM`), so a primary From on it would fail DMARC alignment. The
+ * display name (the tenant's brand) is kept. Null when no bulk relay is
+ * configured (one channel: nothing to fail over to) or the mail is not a
+ * primary one.
+ */
+export function failoverEnvelope<E extends { transport: MailTransport; message: { from?: unknown } }>(e: E): E | null {
+  if (!bulkChannelExists() || e.transport !== 'primary') return null;
+  const bulk = fromIdentity(null, 'bulk');
+  const from = e.message.from;
+  let name: string | null = null;
+  if (from && typeof from === 'object' && typeof (from as { name?: unknown }).name === 'string') name = (from as { name: string }).name;
+  else if (typeof from === 'string' && from) name = addressparser(from, { flatten: true })[0]?.name || null;
+  const nextFrom = !bulk.address ? from : name ? { name, address: bulk.address } : bulk.address;
+  return { ...e, transport: 'bulk', message: { ...e.message, from: nextFrom } };
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
