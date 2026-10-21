@@ -66,6 +66,12 @@ export default function CompaniesPage() {
   const [permission, setPermission] = useState<PermissionFilter>('all');
   // "My accounts" (#2397) — MARKETING only, where an admin can own leads too.
   const [owner, setOwner] = useState<'all' | 'me'>('all');
+  // "From Klaviyo" (docs/integrations/klaviyo.md) — MARKETING only, server-side
+  // like the other filters. Pre-set by the new-leads bell's ?source=klaviyo link.
+  const [source, setSource] = useState<'all' | 'klaviyo'>('all');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('source') === 'klaviyo') setSource('klaviyo');
+  }, []);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [impact, setImpact] = useState<{
     cascade: Record<string, number>;
@@ -166,6 +172,7 @@ export default function CompaniesPage() {
       if (search.trim()) params.set('search', search.trim());
       if (permission === 'email') params.set('permission', 'email');
       if (owner === 'me') params.set('owner', 'me');
+      if (source === 'klaviyo') params.set('source', 'klaviyo');
       const res = await fetch(`/api/companies?${params}`);
       const data = await res.json();
       setCompanies(data.companies || []);
@@ -175,7 +182,7 @@ export default function CompaniesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, sort, permission, owner, t]);
+  }, [page, search, sort, permission, owner, source, t]);
 
   const fetchAllCompanies = useCallback(async () => {
     try {
@@ -208,7 +215,7 @@ export default function CompaniesPage() {
   // previous result set is an empty screen with no explanation.
   useEffect(() => {
     setPage(1);
-  }, [search, sort, permission, owner]);
+  }, [search, sort, permission, owner, source]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -550,6 +557,18 @@ export default function CompaniesPage() {
           >
             <option value="all">{t.companiesPage.ownerFilter.all}</option>
             <option value="me">{t.companiesPage.ownerFilter.me}</option>
+          </select>
+        )}
+        {isMarketing && (
+          <select
+            data-testid="companies-source-filter"
+            aria-label={t.companiesPage.sourceFilter.label}
+            value={source}
+            onChange={(e) => setSource(e.target.value === 'klaviyo' ? 'klaviyo' : 'all')}
+            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+          >
+            <option value="all">{t.companiesPage.sourceFilter.all}</option>
+            <option value="klaviyo">{t.companiesPage.sourceFilter.klaviyo}</option>
           </select>
         )}
         {/* The filter checks the stored row; that its address is still the

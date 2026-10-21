@@ -1,0 +1,72 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { z } from 'zod';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { matchRuleSetDraftSchema } from '@/lib/matching/ruleSetSchema';
+import { createRuleSet, ruleSetSelect, serializeRuleSet, updateRuleSet } from '@/lib/matching/ruleSetStore';
+import { DEFAULT_RULE_SET } from '@/lib/matching/score';
+
+// The org's matching rule sets (#1783): list, create, edit, set default.
+// ADMIN only, checked here; archiving is DELETE on /[id]. Every write goes
+// through src/lib/matching/ruleSetStore.ts (version bump, one default).
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  const refusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (refusal) return { error: refusal };
+  return { session };
+}
+
+const createSchema = matchRuleSetDraftSchema.extend({ isDefault: z.boolean().optional() });
+const updateSchema = matchRuleSetDraftSchema.partial().extend({ id: z.string().min(1), isDefault: z.boolean().optional() });
+
+export async function GET(request: Request) {
+  const { session, error } = await requireAdmin();
+  if (error) return error;
+  const includeArchived = new URL(request.url).searchParams.get('archived') === '1';
+  return await withTenantScope(session, async () => {
+    const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+    const rows = await prisma.matchRuleSet.findMany({
+      where: { orgId, ...(includeArchived ? {} : { archivedAt: null }) },
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+      select: ruleSetSelect,
+    });
+    // The built-in set is what an org with no default scores with; the editor
+    // starts a new set from it.
+    return NextResponse.json({ ruleSets: rows.map(serializeRuleSet), builtIn: DEFAULT_RULE_SET });
+  });
+}
+
+export async function POST(request: Request) {
+  const { session, error } = await requireAdmin();
+  if (error) return error;
+  return await withTenantScope(session, async () => {
+    const parsed = createSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
+    const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+    const row = await createRuleSet(orgId, parsed.data, parsed.data.isDefault ?? false);
+    return NextResponse.json({ ruleSet: serializeRuleSet(row) }, { status: 201 });
+  });
+}
+
+export async function PUT(request: Request) {
+  const { session, error } = await requireAdmin();
+  if (error) return error;
+  return await withTenantScope(session, async () => {
+    const parsed = updateSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
+    const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+    const { id, isDefault, ...draft } = parsed.data;
+    const row = await updateRuleSet(orgId, id, draft, isDefault);
+    // Not this org's, or archived: the same 404 either way.
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ ruleSet: serializeRuleSet(row) });
+  });
+}

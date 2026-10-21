@@ -34,7 +34,6 @@ test('the floor applies per bucket: a small cohort shows its knowledge rate and 
   const s = summarizeOutcomes(people, answers);
   const spring = s.byCohort.find((b) => b.label === 'Spring');
   const autumn = s.byCohort.find((b) => b.label === 'Autumn');
-  assert.ok(spring.destinations);
   assert.equal(autumn.destinations, null);
   assert.equal(autumn.placedRate, null);
   assert.equal(autumn.knowledgeRate, 1);
@@ -43,6 +42,27 @@ test('the floor applies per bucket: a small cohort shows its knowledge rate and 
   // A floor can be raised, never lowered below the survey default.
   assert.equal(summarizeOutcomes(people, answers, 1).floor, 5);
   assert.equal(summarizeOutcomes(people, answers, 10).overall.destinations, null);
+});
+
+test('the residual is hidden too: overall minus the shown cohorts never gives a small cohort back (#1906)', () => {
+  // Spring 5, Autumn 2, unassigned 1: Autumn + unassigned are 3 people, so
+  // showing Spring next to the overall would hand those 3 back by subtraction.
+  const people = [...['a', 'b', 'c', 'd', 'e'].map((id) => person(id, 'Spring')), ...['x', 'y'].map((id) => person(id, 'Autumn')), person('z', null)];
+  const answers = new Map(people.map((p) => [p.personId, { destination: p.cohort === 'Spring' ? 'SEEKING' : 'EMPLOYED_HERE', consent: true }]));
+  const s = summarizeOutcomes(people, answers);
+  assert.ok(s.overall.destinations);
+  for (const b of s.byCohort) {
+    assert.equal(b.destinations, null, `${b.label} hidden`);
+    assert.equal(b.placedRate, null);
+  }
+  // The knowledge rate is not a destination and stays on every bucket.
+  assert.equal(s.byCohort.find((b) => b.label === 'Spring').knowledgeRate, 1);
+
+  // Once the hidden ones add up to the floor, the large cohort shows again.
+  const more = [...people, ...['p', 'q'].map((id) => person(id, 'Autumn'))];
+  const s2 = summarizeOutcomes(more, new Map(more.map((p) => [p.personId, { destination: 'SEEKING', consent: true }])));
+  assert.ok(s2.byCohort.find((b) => b.label === 'Spring').destinations);
+  assert.equal(s2.byCohort.find((b) => b.label === 'Autumn').destinations, null);
 });
 
 test('a stored response parses only with a known destination code', () => {

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Two gaps closed in the survey/health epic (#1876):** (1) **A paused pairing is no longer scored (#1894).** A pause keeps `status: ACTIVE` (`src/lib/relationLifecycle.ts`), so the health rules scored, snapshotted and could alert on a paused pair; `scoreRelation()` now excludes `lifecycleState: PAUSED` (`why: 'paused'`), `/admin/health` counts them in a new footnote (`excluded.paused`), and the badge shows nothing for them. (2) **The first-destination report now hides its residual (#1906).** Each cohort/source bucket under the floor already hid its destinations, but overall − the shown cohorts gave a small cohort's destinations back by subtraction; the breakdowns now go through `applyResponseFloor`, the same rule as every other survey breakdown. Hidden buckets keep their eligible/known counts and knowledge rate.",
+  "notes": {
+    "en": ["Paused mentorships are no longer flagged in relationship health, and the destination report never lets a small group be worked out from the totals."],
+    "tr": ["Duraklatılmış mentorluklar artık ilişki sağlığında işaretlenmiyor ve destinasyon raporu küçük bir grubun sonucunun toplamlardan çıkarılmasına izin vermiyor."],
+    "de": ["Pausierte Mentorings werden in der Beziehungsgesundheit nicht mehr markiert, und der Verbleibsbericht lässt eine kleine Gruppe nie aus den Gesamtzahlen herausrechnen."]
+  }
+}

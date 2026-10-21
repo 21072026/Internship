@@ -16,7 +16,7 @@ import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { hostVertical } from '@/lib/hostVertical';
 import { resolveReferrer } from '@/lib/referral';
 import { createOrGetProjectConversation } from '@/lib/conversations';
-import { getSetting } from '@/lib/settings';
+import { resolveSetting } from '@/lib/settingsResolver';
 import { isValidTimeZone } from '@/lib/timezone';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { resolveStartStage } from '@/lib/pipelineStages';
@@ -241,7 +241,7 @@ export async function POST(request: Request) {
     // lets the account in as soon as the emailed link is clicked — the front
     // door is open to anyone — while 'manual' parks it for an admin. Invited
     // users (proven email + chosen role) are active right away.
-    const pending = !token && (await getSetting('selfRegistration', orgId)) === 'manual';
+    const pending = !token && (await resolveSetting('selfRegistration', { orgId })) === 'manual';
     const selfRegistered = !token;
 
     const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;

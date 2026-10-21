@@ -57,7 +57,7 @@
 // there by construction.
 
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { NEWSLETTER_EMAIL_CATEGORY } from '@/lib/newsletter';
 import { resolveOrgEntitlements } from '@/lib/subscription';
 import type { PlanKey } from '@/lib/plans';
@@ -163,8 +163,8 @@ export async function resolveBroadcastBand(orgId: string): Promise<BroadcastBand
     resolveOrgEntitlements(orgId),
     // Read explicitly per layer: `getSetting(key, orgId)` alone would let a
     // tenant row REPLACE the global one, and this cap may only be tightened.
-    getSetting(BROADCAST_QUOTA_SETTING, null),
-    getSetting(BROADCAST_QUOTA_SETTING, orgId),
+    resolveSettingRaw(BROADCAST_QUOTA_SETTING, { orgId: null }),
+    resolveSettingRaw(BROADCAST_QUOTA_SETTING, { orgId }),
   ]);
 
   const planLimit = entitlements.limits.monthlyBroadcastRecipients;
