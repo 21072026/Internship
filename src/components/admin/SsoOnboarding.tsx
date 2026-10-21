@@ -115,7 +115,7 @@ export function SsoMetadataImport({ orgId, onApply }: { orgId: string; onApply: 
         value={xml}
         onChange={(e) => setXml(e.target.value)}
         rows={3}
-        placeholder="<md:EntityDescriptor …>"
+        placeholder={o.ssoImportXml}
         className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono"
       />
       <div className="flex flex-wrap items-center gap-2">
