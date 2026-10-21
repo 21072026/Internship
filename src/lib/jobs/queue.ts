@@ -97,6 +97,8 @@ export interface JobRecord {
   lockedBy: string | null;
   idempotencyKey: string | null;
   orgId: string | null;
+  /** Provenance of the enqueue, copied onto every `JobRun` (#1673). */
+  trigger: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -109,6 +111,7 @@ export interface NewJob {
   maxAttempts: number;
   idempotencyKey: string | null;
   orgId: string | null;
+  trigger: JobTrigger;
 }
 
 export interface NewJobRun {
@@ -116,6 +119,18 @@ export interface NewJobRun {
   attempt: number;
   trigger: JobTrigger;
   startedAt: Date;
+}
+
+/**
+ * What the worker (#1673) writes when an attempt ends. `PENDING` with a future
+ * `runAt` is a retry, `PENDING` with the same `attempts` is a released lease
+ * (graceful shutdown), `SUCCEEDED` and `DEAD_LETTER` are terminal.
+ */
+export interface JobSettlement {
+  status: Extract<JobStatusName, 'PENDING' | 'SUCCEEDED' | 'DEAD_LETTER'>;
+  attempts: number;
+  lastError: string | null;
+  runAt?: Date;
 }
 
 export interface JobRunPatch {
@@ -164,6 +179,20 @@ export interface QueueStore {
   finishRun(runId: string, patch: JobRunPatch): Promise<void>;
   /** `DELETE FROM JobRun WHERE startedAt < ?`. Returns how many rows went. */
   deleteRunsStartedBefore(cutoff: Date): Promise<number>;
+  /**
+   * ONE guarded statement (#1673): `UPDATE Job SET … , lockedAt=NULL,
+   * lockedBy=NULL WHERE id=? AND status='RUNNING' AND lockedBy=?`. Resolves
+   * whether it matched. A worker whose lease was reaped and re-claimed by
+   * another worker matches nothing — the newer owner's outcome stands.
+   */
+  settleJob(input: { id: string; workerId: string; data: JobSettlement }): Promise<boolean>;
+  /**
+   * Refresh `lockedAt = now` on the caller's own RUNNING rows, so a long job is
+   * not reaped while it is still being worked on. Returns how many matched.
+   */
+  heartbeat(input: { ids: readonly string[]; workerId: string; now: Date }): Promise<number>;
+  /** Distinct names of the PENDING and RUNNING rows — the worker's start check. */
+  openJobNames(): Promise<string[]>;
 }
 
 export interface QueueOptions {
@@ -222,6 +251,12 @@ export interface EnqueueOptions extends QueueOptions {
    */
   idempotencyKey?: string | null;
   orgId?: string | null;
+  /**
+   * Who asked for this job (#1673): `'schedule'` (the default — the scheduler
+   * is the common producer), `'manual'` for an operator's re-run, `'boot'` for
+   * work a process start fires. Every `JobRun` of the job carries it.
+   */
+  trigger?: JobTrigger;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 5;
@@ -252,6 +287,7 @@ export async function enqueue<N extends JobName>(
     maxAttempts: opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
     idempotencyKey: key,
     orgId: opts.orgId ?? null,
+    trigger: opts.trigger ?? 'schedule',
   };
 
   try {
@@ -575,6 +611,7 @@ export function createMemoryQueueStore(options: MemoryQueueOptions = {}): Memory
         lockedBy: null,
         idempotencyKey: data.idempotencyKey,
         orgId: data.orgId,
+        trigger: data.trigger,
         createdAt: at,
         updatedAt: at,
       };
@@ -649,6 +686,33 @@ export function createMemoryQueueStore(options: MemoryQueueOptions = {}): Memory
       runs.push(...keep);
       return removed;
     },
+
+    settleJob: async ({ id, workerId, data }) => {
+      const row = jobs.find((j) => j.id === id);
+      if (!row || row.status !== 'RUNNING' || row.lockedBy !== workerId) return false;
+      row.status = data.status;
+      row.attempts = data.attempts;
+      row.lastError = data.lastError;
+      if (data.runAt) row.runAt = data.runAt;
+      row.lockedAt = null;
+      row.lockedBy = null;
+      row.updatedAt = new Date();
+      return true;
+    },
+
+    heartbeat: async ({ ids, workerId, now }) => {
+      let n = 0;
+      for (const row of jobs) {
+        if (ids.includes(row.id) && row.status === 'RUNNING' && row.lockedBy === workerId) {
+          row.lockedAt = now;
+          n += 1;
+        }
+      }
+      return n;
+    },
+
+    openJobNames: async () =>
+      [...new Set(jobs.filter((j) => j.status === 'PENDING' || j.status === 'RUNNING').map((j) => j.name))],
   };
 
   return store;
