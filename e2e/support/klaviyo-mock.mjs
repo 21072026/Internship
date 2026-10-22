@@ -153,10 +153,20 @@ const server = createServer(async (req, res) => {
       return json(res, 200, body);
     }
     // `greater-than(<field>,<iso>)` and `equals(metric_id,"X")`, comma-joined.
-    const filters = (url.searchParams.get('filter') || '').match(/[a-z-]+\([^)]*\)/g) ?? [];
+    // Parsed by plain string splitting — no regex over the request's text.
+    const filters = (url.searchParams.get('filter') || '')
+      .split('),')
+      .map((part) => {
+        const open = part.indexOf('(');
+        const comma = part.indexOf(',', open);
+        if (open < 1 || comma < 0) return null;
+        const value = part.slice(comma + 1).replace(/\)$/, '');
+        return { op: part.slice(0, open), field: part.slice(open + 1, comma), value: value.replace(/^"|"$/g, '') };
+      })
+      .filter(Boolean);
     const after = (field) => {
-      const f = filters.map((x) => new RegExp(`^greater-than\\(${field},([^)]+)\\)$`).exec(x)).find(Boolean);
-      return f ? Date.parse(f[1]) : null;
+      const f = filters.find((x) => x.op === 'greater-than' && x.field === field);
+      return f ? Date.parse(f.value) : null;
     };
     const since = (items, field) => {
       const t = after(field);
@@ -188,7 +198,7 @@ const server = createServer(async (req, res) => {
       return serve(account.metrics.map((m) => ({ type: 'metric', id: m.id, attributes: { name: m.name, integration: { name: 'Klaviyo', category: 'Internal' } } })), 200);
     }
     if (url.pathname === '/api/events') {
-      const metric = filters.map((x) => /^equals\(metric_id,"([^"]+)"\)$/.exec(x)).find(Boolean)?.[1];
+      const metric = filters.find((x) => x.op === 'equals' && x.field === 'metric_id')?.value;
       if (!metric) return json(res, 400, { errors: [{ status: 400, title: 'metric_id filter expected' }] });
       const items = account.events
         .filter((e) => e.metric === metric)
