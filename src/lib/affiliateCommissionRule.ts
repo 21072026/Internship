@@ -15,14 +15,10 @@
 //
 // Money is integer minor units with an ISO currency. Never a float.
 
-<<<<<<< HEAD
 // The ceiling of every amount — a payment, a tier, a commission. It is the signed
 // 32-bit `Int` the columns use, so a value the plan accepts can always be stored;
 // amount × bps (≤ 2.2e13) stays far below 2^53.
 export const MAX_AMOUNT_MINOR = 2_147_483_647;
-=======
-export const MAX_AMOUNT_MINOR = 100_000_000_000; // keeps amount × bps far below 2^53
->>>>>>> origin/main
 export const MAX_TIERS = 20;
 
 export type BoundaryCustomer = 'TIER' | 'PERCENT';
