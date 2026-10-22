@@ -21,6 +21,7 @@ import {
   type ResolvedStage,
 } from './pipeline';
 import type { Locale } from '@/i18n/config';
+import { orgWhere } from './tenantFilter';
 import { defaultTemplateForVertical, localizeResolvedStageLabels, templateStagePayload } from './programTemplates';
 
 export { CANONICAL_OUTCOME_KEYS, defaultPipelineStages, isDefaultLabel, onPathKeys, outcomeStageKeysFrom, stageLabel, startStageKey, type OutcomeStageKeys, type ResolvedStage };
@@ -117,6 +118,20 @@ export function createStartStageResolver(locale: Locale = 'en'): StartStageResol
     cache.set(cacheKey, key);
     return key;
   };
+}
+
+/**
+ * How many relations of this org sit on each stage key (#1635), whatever their
+ * status: a completed pairing on a removed key loses its stage label in every
+ * report too. The default org also owns the org-less rows (`orgWhere`).
+ */
+export async function stageUsage(orgId: string): Promise<Record<string, number>> {
+  const rows = await prisma.mentorshipRelation.groupBy({
+    by: ['pipelineStatus'],
+    where: await orgWhere(orgId),
+    _count: { _all: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.pipelineStatus, r._count._all]));
 }
 
 // ── Writing a stage set ──────────────────────────────────────────────────────
