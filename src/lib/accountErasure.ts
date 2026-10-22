@@ -427,6 +427,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.supportAttachment.deleteMany({ where: { message: { senderId: userId } } }),
     prisma.supportMessage.updateMany({ where: { senderId: userId }, data: { body: '' } }),
     prisma.supportTicket.updateMany({ where: { requesterId: userId }, data: { subject: null } }),
+    // Their in-app bug reports (#3130): their words and a picture of their
+    // screen, theirs alone — deleted (the files cascade), not emptied.
+    prisma.supportReport.deleteMany({ where: { userId } }),
     // The person's own private notes: theirs alone, so deleted rather than kept
     // as an empty row. (A hard delete cascades these; anonymise does not.)
     prisma.personalNote.deleteMany({ where: { userId } }),

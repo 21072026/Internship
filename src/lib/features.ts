@@ -39,6 +39,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import {
+  MessageSquareWarning,
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, ShieldAlert, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
@@ -204,5 +205,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'mentoringAgreement', category: 'trust', icon: FileSignature, color: 'blue', capability: 'mentorship', title: C.mentoringAgreement.t, desc: C.mentoringAgreement.d },
     // #1920 — every registry report sliced by the org's own attributes, small segments combined.
     { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
+    // #3130 — the floating feedback button: screenshot + masked console/network context, triaged by admins.
+    { key: 'feedbackReports', category: 'trust', icon: MessageSquareWarning, color: 'blue', title: C.feedbackReports.t, desc: C.feedbackReports.d },
   ];
 }

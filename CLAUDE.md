@@ -718,6 +718,15 @@ marketing names redirect there, and their apex now serves **mail only**.
   text. Schedules, future dates, date-only calendar fields and anything printed, signed or
   exported stay absolute. Don't hand-roll `relativeTime()` text in JSX: it loses the hover and
   the element's hydration guard (keyed on hydration, so a server's or a cache's "now" never sticks).
+- **In-app bug reports mask in ONE place** ([`docs/feedback-reports.md`](docs/feedback-reports.md),
+  #3130): the floating feedback button sends a `SupportReport` (tenant model) with a screenshot and
+  the console / failed-request context the browser kept **in memory only** until Send. What a report
+  may carry and how it is masked (query values, tokens, JWTs, `password=` pairs, e-mail addresses) is
+  `src/lib/feedbackContext.ts` — the collector masks before it keeps, and `POST /api/support/reports`
+  runs `sanitizeFeedbackContext()` again; never add a second masking path. Fields that must never be
+  in a screenshot get `data-private` (or `.rr-block`, which the Phase 2 replay will honour too).
+  A report is not a `SupportTicket` (a record to triage, not a conversation); the inbox is ADMIN-only
+  and org-scoped (another org's id is 404).
 - **Images open in the app, never in a new tab** (#2147): every user-supplied image
   (message and support attachments, announcement images) is a `<button>` that opens
   `ImageLightbox` (`src/components/ui/ImageLightbox.tsx`) via `useImageLightbox()` — never an

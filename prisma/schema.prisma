@@ -296,6 +296,7 @@ model Organization {
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
   outboundDrafts          OutboundDraft[]
+  supportReports          SupportReport[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
@@ -876,6 +877,7 @@ model User {
   decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
+  supportReports                    SupportReport[]                @relation("SupportReportAuthor")
   assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
   supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
@@ -2192,6 +2194,79 @@ model SupportAttachment {
   message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+}
+
+// In-app bug / feedback reports (#3129/#3130): what a person sends from the
+// floating "Report a problem" button — description, optional rating, a
+// screenshot and the technical context the browser collected (recent console
+// errors, failed requests, route, viewport). Deliberately NOT a SupportTicket:
+// a ticket is a conversation, a report is a structured record the support team
+// triages. Registered in TENANT_MODELS; the route always passes orgId.
+// Blobs live in SupportReportFile, never in the list query.
+enum SupportReportType {
+  BUG
+  FEEDBACK
+}
+
+enum SupportReportStatus {
+  NEW
+  TRIAGED
+  IN_PROGRESS
+  RESOLVED
+  WONT_FIX
+}
+
+model SupportReport {
+  id             String              @id @default(cuid())
+  orgId          String
+  org            Organization        @relation(fields: [orgId], references: [id])
+  userId         String
+  type           SupportReportType
+  rating         Int?
+  description    String              @db.Text
+  // Stamped by the browser but re-masked by the server (src/lib/feedbackContext.ts).
+  url            String              @db.VarChar(512)
+  // Stamped by the SERVER: the build that answered, not what the client claims.
+  appVersion     String              @db.VarChar(64)
+  env            String              @db.VarChar(16)
+  userAgent      String              @db.VarChar(512)
+  viewport       String              @db.VarChar(32)
+  // { consoleErrors[], failedRequests[] } — nullable on purpose (a non-null
+  // Json column backfills '' on MariaDB and breaks every existing row).
+  context        Json?
+  contactAllowed Boolean
+  status         SupportReportStatus @default(NEW)
+  githubIssueUrl String?             @db.VarChar(512)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user  User                @relation("SupportReportAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  files SupportReportFile[]
+
+  @@index([orgId, status, createdAt])
+  @@index([userId])
+}
+
+enum SupportReportFileKind {
+  SCREENSHOT
+  ATTACHMENT
+}
+
+// Reached only through its report (no orgId, deliberately unregistered — the
+// same shape as SupportAttachment). Same type/size rules as support uploads.
+model SupportReportFile {
+  id          String                @id @default(cuid())
+  reportId    String
+  kind        SupportReportFileKind
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime              @default(now())
+
+  report SupportReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
 }
 
 // A mentee's self-serve request for mentorship (#590). One PENDING request at
