@@ -414,6 +414,18 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // alone: the version is a hash and names no tenant. Registered so any later
   // reader (an admin listing, a cleanup) stays inside its own tenant.
   'BrandAsset',
+  // The affiliate module (docs/affiliate-module.md, #3114): a partner programme's
+  // partners, customers, payments, commissions and payouts are one tenant's
+  // commercial data. The one writer (src/lib/affiliatePaymentWriter.ts) passes
+  // orgId on every create and in every WHERE, so it is right without a bound
+  // context too (an API import, a migration script).
+  'AffiliateProgramSettings',
+  'AffiliatePartner',
+  'AffiliateCustomer',
+  'AffiliatePayment',
+  'AffiliateCommission',
+  'AffiliatePayout',
+  'AffiliateContractAcceptance',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.
