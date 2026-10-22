@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**SAML Single Logout, both directions (#1952):** IdP-initiated — `GET|POST /api/auth/sso/[slug]/slo` verifies the `LogoutRequest` against the org's stored IdP certificate (an unsigned HTTP-Redirect request is refused by us: node-saml's `validateRedirect` accepts a missing signature), resolves NameID → user **within that org only**, stamps `sessionsValidFrom` AND revokes every remembered device (`endAllSessionsForSlo`, `src/lib/ssoLogout.ts`), logs `auth.slo` and answers with a signed `LogoutResponse`; refusals log `auth.slo_refused`; rate-limited. SP-initiated — `signOutEverywhere()` calls the new `POST /api/auth/sso/logout`, which ends the sessions and devices locally first and returns a signed `LogoutRequest` URL the browser follows to the IdP. Our messages are signed with a per-org SP key generated on first use, sealed with secretBox in `Organization.ssoSpKey` (certificate in `ssoSpCert`, published as a signing `KeyDescriptor` and `SingleLogoutService` in the SP metadata; `src/lib/ssoSpKey.ts`, `src/lib/x509SelfSigned.ts`). New `Organization.ssoLogoutUrl` (https, part of the IdP trust a super admin sets, #1575). Sessions are JWTs, so an SLO ends every session of the person rather than one SessionIndex — documented in `docs/sso-saml.md`.",
-  "notes": {
-    "en": ["Single sign-on now supports Single Logout: signing out of your identity provider signs you out here on every device, and signing out here also signs you out at your identity provider."],
-    "tr": ["Tek oturum açma artık Tek Çıkış'ı (Single Logout) destekliyor: kimlik sağlayıcınızdan çıkmak sizi buradan tüm cihazlarda çıkarır, buradan çıkmak da kimlik sağlayıcınızdan çıkarır."],
-    "de": ["Single Sign-on unterstützt jetzt Single Logout: Wer sich beim Identity Provider abmeldet, ist hier auf allen Geräten abgemeldet, und wer sich hier abmeldet, auch beim Identity Provider."]
-  }
-}

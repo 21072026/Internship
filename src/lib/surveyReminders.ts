@@ -18,8 +18,8 @@
 //     reminder mints its own (SurveyInvitationToken); the first mail's link
 //     answers the same invitation.
 //
-// Registered with the campaign sweep (initSurveyCampaignsCron), not from
-// initCronJobs: it sends through emailService.
+// Runs in the same queued job as the campaign sweep (`surveys.campaigns`,
+// src/jobs/platform.ts), after the invitations.
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';

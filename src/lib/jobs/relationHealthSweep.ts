@@ -8,11 +8,9 @@
 // alert is marked on the snapshot it belongs to, so a second pass the same day
 // neither adds a row nor mails again.
 //
-// node-cron is the carrier only until the leader-elected scheduler (#1676)
-// lands; sweepRelationHealth() is the handler either way. Registered from
-// /api/cron/start, never from initCronJobs, to keep the import graph one-way.
+// Scheduled as the queued job `relationHealth.sweep` (src/lib/jobs/schedules.ts,
+// handler in src/jobs/platform.ts, #1677); sweepRelationHealth() is the body.
 
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -203,18 +201,4 @@ async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
   return mailed;
 }
 
-const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
-/** Nightly at 02:00 — before anyone's day starts, after the day's writes. */
-export function initRelationHealthCron() {
-  if (tasks.has('relation-health')) return;
-  const task = scheduleLeased('0 2 * * *', async () => {
-    try {
-      const r = await sweepRelationHealth();
-      logger.warning('Relation health sweep ran', { ...r });
-    } catch (error) {
-      logger.error('Relation health sweep failed', { error: String(error) });
-    }
-  });
-  tasks.set('relation-health', task);
-}

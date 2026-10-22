@@ -43,7 +43,6 @@
 //   own backoff and the tick catches per connection.
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { seal, open } from '@/lib/secretBox';
@@ -1133,26 +1132,8 @@ export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoC
   return tick;
 }
 
-let cronStarted = false;
-
-/**
- * Registers the 15-minute schedule in this process. Idempotent. One tick per
- * environment because replica ≥ 2 runs with CRON_ENABLED=0 (CLAUDE.md §
- * Single-owner background work) — and the per-connection lease makes a second
- * runner harmless anyway: it answers `busy` and moves on.
- */
-export function initKlaviyoSyncCron(): void {
-  if (cronStarted) return;
-  cronStarted = true;
-  // The expression is a literal on purpose: src/lib/jobs/schedules.ts names
-  // it and the registry test reads it from this call (KLAVIYO_SYNC_CRON).
-  scheduleLeased('*/15 * * * *', async () => {
-    try {
-      const tick = await runKlaviyoTick();
-      if (tick.due > 0) logger.info('klaviyo sync tick', { ...tick });
-    } catch (e) {
-      logger.error('klaviyo sync cron failed', { error: e instanceof Error ? e.name : 'unknown' });
-    }
-  });
-}
+// Scheduled as the queued job `klaviyo.sync` (src/lib/jobs/schedules.ts,
+// handler in src/jobs/platform.ts, #1677): only the 'scheduler' lease holder
+// enqueues it, and the per-connection lease makes a second runner harmless
+// anyway — it answers `busy` and moves on.
 

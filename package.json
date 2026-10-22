@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.385.0-beta",
+  "version": "0.429.1-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -57,6 +57,8 @@
     "test:notification-catalog": "node --test --experimental-strip-types scripts/test/notification-catalog.test.mjs",
     "test:roster-ingest": "node --test --experimental-strip-types scripts/test/roster-ingest.test.mjs",
     "test:request-id": "node --test --experimental-strip-types scripts/test/request-id.test.mjs",
+    "test:runner-queue": "node --test scripts/test/runner-queue.test.mjs",
+    "test:capacity": "bash infra/test/capacity.test.sh",
     "test:service-worker": "node --test scripts/test/service-worker-cache.test.mjs",
     "test:recovery-codes": "node --test --experimental-strip-types scripts/test/recovery-code-format.test.mjs",
     "test:email-suppression": "node --test --experimental-strip-types scripts/test/email-suppression.test.mjs",

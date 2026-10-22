@@ -99,13 +99,95 @@ export interface JobPayloadMap {
   /// `ApiExport` row's file. The row carries everything else (org, key,
   /// resource), so a payload can never widen what the request was granted.
   'api.export': { exportId: string };
+  /// The Klaviyo pull connector's tick (src/lib/klaviyoSync.ts): every enabled
+  /// connection whose turn it is. Each connection takes its own lease.
+  'klaviyo.sync': Record<string, never>;
+  /// IdP certificate-expiry warnings (#1933, src/lib/jobs/ssoCertificateExpiry.ts).
+  'sso.certificateExpiry': Record<string, never>;
+  // ── The scheduled jobs (#1677, src/jobs/*). Each is enqueued by the
+  // scheduler (src/lib/jobs/schedules.ts) with an empty payload — "every
+  // tenant, now" — or by GET /api/cron?job=…&enqueue=1 with the narrowing an
+  // operator asked for. `at` is an ISO instant that pins the clock (the
+  // route's `?at=`), `orgIds` limits a sweep to those tenants.
+  'dormancy.sweep': Record<string, never>;
+  'dormancy.checkIn': Record<string, never>;
+  'reminders.mentorInteraction': Record<string, never>;
+  'reminders.stageDeadline': Record<string, never>;
+  'reminders.retentionReconsent': Record<string, never>;
+  'matching.needMatchAlerts': Record<string, never>;
+  'meetings.reminders': Record<string, never>;
+  'meetings.seriesReminders': Record<string, never>;
+  'meetings.autoLog': Record<string, never>;
+  'digest.weeklyMentor': Record<string, never>;
+  'digest.dailyActivity': Record<string, never>;
+  'digest.unreadMessages': Record<string, never>;
+  'reports.weeklyReportReminders': Record<string, never>;
+  'reports.subscriptions': ScopedPayload;
+  'documents.missingReminders': Record<string, never>;
+  'email.healthCheck': Record<string, never>;
+  'outbound.expireDrafts': Record<string, never>;
+  'auth.trustedDevicePurge': Record<string, never>;
+  'ai.artifactRetention': Record<string, never>;
+  'newsletter.dispatch': Record<string, never>;
+  'newsletter.queue': Record<string, never>;
+  'retention.prune': Record<string, never>;
+  'usage.rollup': Record<string, never>;
+  'trial.reminders': ScopedPayload;
+  'relationHealth.sweep': ScopedPayload;
+  'surveys.campaigns': ScopedPayload & { batch?: number };
+  'evaluations.reminders': ScopedPayload;
+  'programJourney.run': ScopedPayload;
+}
+
+/// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
+export interface ScopedPayload {
+  orgIds?: string[];
+  at?: string;
 }
 
 export type JobName = keyof JobPayloadMap;
 
 export type JobPayload<N extends JobName = JobName> = JobPayloadMap[N];
 
-export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain', 'roster.sweep', 'email.send', 'api.export', 'api.import.candidates'] as const;
+export const JOB_NAMES: readonly JobName[] = [
+  'jobs.pruneRuns',
+  'jobs.deadLetterAlert',
+  'audit.drain',
+  'roster.sweep',
+  'email.send',
+  'api.export',
+  'api.import.candidates',
+  'sso.certificateExpiry',
+  'klaviyo.sync',
+  'dormancy.sweep',
+  'dormancy.checkIn',
+  'reminders.mentorInteraction',
+  'reminders.stageDeadline',
+  'reminders.retentionReconsent',
+  'matching.needMatchAlerts',
+  'meetings.reminders',
+  'meetings.seriesReminders',
+  'meetings.autoLog',
+  'digest.weeklyMentor',
+  'digest.dailyActivity',
+  'digest.unreadMessages',
+  'reports.weeklyReportReminders',
+  'reports.subscriptions',
+  'documents.missingReminders',
+  'email.healthCheck',
+  'outbound.expireDrafts',
+  'auth.trustedDevicePurge',
+  'ai.artifactRetention',
+  'newsletter.dispatch',
+  'newsletter.queue',
+  'retention.prune',
+  'usage.rollup',
+  'trial.reminders',
+  'relationHealth.sweep',
+  'surveys.campaigns',
+  'evaluations.reminders',
+  'programJourney.run',
+] as const;
 
 export function isJobName(value: unknown): value is JobName {
   return typeof value === 'string' && (JOB_NAMES as readonly string[]).includes(value);

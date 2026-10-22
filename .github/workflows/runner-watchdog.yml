@@ -11,6 +11,19 @@ name: Runner Watchdog (self-hosted health)
 # Requires the same SSH_* secrets the deploy workflow uses:
 #   SSH_PRIVATE_KEY, SSH_HOST, SSH_USER, SSH_PORT
 # The SSH user must be root, or have (passwordless) sudo for systemctl.
+#
+# THIS runner, by name (vars.RUNNER_NAME, default `interncrm`). The box also
+# runs runners for other repositories, and this watchdog used to check the
+# FIRST `actions.runner.*` unit it found — another repository's. On 2026-10-21
+# a deploy was OOM-killed, this runner stopped taking jobs for a day, and the
+# watchdog reported "OK" every run about a runner that was not ours.
+#
+# "Active" is not "working", either: before SSHing in, scripts/runner-queue.mjs
+# asks GitHub whether jobs for the runner's label have been queued for more than
+# vars.RUNNER_STUCK_AFTER_MIN (30) minutes with nothing running on it. If so,
+# the service is restarted even though systemd calls it active. And the unit
+# gets a `Restart=always` drop-in, so a runner the OOM killer takes down comes
+# back on its own instead of waiting for the next watchdog tick.
 
 on:
   schedule:
@@ -23,12 +36,33 @@ concurrency:
 
 permissions:
   contents: read
+  # scripts/runner-queue.mjs reads the queued and running jobs.
+  actions: read
 
 jobs:
   watchdog:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # Not RUNNER_NAME: the runner sets that variable itself in every step (to
+      # the HOSTED runner's name, "GitHub Actions 1000…"), overriding the job
+      # env — the first run of this watchdog refused to touch the box over it.
+      WATCHED_RUNNER: ${{ vars.RUNNER_NAME || 'interncrm' }}
+      # The label the deploy jobs ask for — the same expression as their runs-on.
+      WATCHED_LABEL: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/runner-queue.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Is the runner draining its queue?
+        id: queue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STUCK_AFTER_MIN: ${{ vars.RUNNER_STUCK_AFTER_MIN || '30' }}
+        run: node scripts/runner-queue.mjs
+
       - name: Setup SSH key
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -48,33 +82,64 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
+          STUCK: ${{ steps.queue.outputs.stuck || 'false' }}
         run: |
+          # The name travels into a remote shell: letters, digits, . _ - only.
+          [[ "$WATCHED_RUNNER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ERROR: unexpected WATCHED_RUNNER '$WATCHED_RUNNER'"; exit 1; }
+          [ "$STUCK" = true ] || STUCK=false
           ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
-            "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+            "${SSH_USER}@${SSH_HOST}" "WATCHED_RUNNER=${WATCHED_RUNNER} STUCK=${STUCK} bash -s" <<'REMOTE'
           set -uo pipefail
 
-          # Use sudo only when we're not already root and it's available non-interactively.
           SUDO=""
           if [ "$(id -u)" -ne 0 ]; then
             if sudo -n true 2>/dev/null; then SUDO="sudo -n"; fi
           fi
 
-          # 1) Preferred path: the systemd unit created by `svc.sh install`
-          #    (named actions.runner.<org>-<repo>.<name>.service).
-          UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | awk '{print $1}' | head -1)"
+          # Which box did SSH_HOST land on? Markers only — no host, user or
+          # other repository's runner name reaches this public log.
+          echo "Box: plesk=$([ -d /usr/local/psa ] && echo yes || echo no)" \
+            "opt-internship-crm=$([ -d /opt/internship-crm ] && echo yes || echo no)" \
+            "prod-container=$($SUDO docker ps --format '{{.Names}}' 2>/dev/null | grep -cx internship-crm || true)" \
+            "privileged=$([ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] && echo yes || echo no)" \
+            "runner-units=$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | wc -l)" \
+            "listeners=$(pgrep -fc 'bin/Runner[.]Listener' 2>/dev/null || echo 0)"
+
+          # 1) THIS runner's systemd unit: actions.runner.<scope>.<name>.service.
+          UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend "actions.runner.*.${WATCHED_RUNNER}.service" 2>/dev/null | awk '{print $1}' | head -1)"
           if [ -z "$UNIT" ]; then
-            UNIT="$($SUDO systemctl list-units --type=service --all --no-legend 'actions.runner.*' 2>/dev/null | awk '{print $1}' | head -1)"
+            UNIT="$($SUDO systemctl list-units --type=service --all --no-legend "actions.runner.*.${WATCHED_RUNNER}.service" 2>/dev/null | awk '{print $1}' | head -1)"
           fi
 
           if [ -n "$UNIT" ]; then
             echo "Runner service: $UNIT"
+            # Self-healing between ticks: the generated unit has no Restart=, so
+            # a runner killed by the OOM killer stayed dead until someone looked.
+            DROPIN="/etc/systemd/system/${UNIT}.d/10-restart.conf"
+            if ! $SUDO test -f "$DROPIN"; then
+              $SUDO mkdir -p "$(dirname "$DROPIN")" \
+                && printf '[Service]\nRestart=always\nRestartSec=15\n' | $SUDO tee "$DROPIN" >/dev/null \
+                && $SUDO systemctl daemon-reload \
+                && echo "Installed $DROPIN (Restart=always)"
+            fi
             if $SUDO systemctl is-active --quiet "$UNIT"; then
-              echo "OK: runner service already active."
-              exit 0
+              if [ "$STUCK" != "true" ]; then
+                echo "OK: runner service active and taking jobs."
+                exit 0
+              fi
+              echo "Runner service is active but has not taken a job (see the queue step) — restarting..."
+              $SUDO systemctl restart "$UNIT" || { echo "ERROR: restart of $UNIT failed"; $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20; exit 1; }
+              sleep 5
+              if $SUDO systemctl is-active --quiet "$UNIT"; then
+                echo "RECOVERED: stuck runner restarted."
+                exit 0
+              fi
+              echo "ERROR: runner not active after the restart."
+              $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20
+              exit 1
             fi
             echo "Runner service NOT active — starting..."
             $SUDO systemctl start "$UNIT" || { echo "ERROR: failed to start $UNIT"; $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20; exit 1; }
-            # Enable so a future server reboot brings it back automatically (root cause fix).
             $SUDO systemctl enable "$UNIT" 2>/dev/null || true
             sleep 3
             if $SUDO systemctl is-active --quiet "$UNIT"; then
@@ -86,32 +151,45 @@ jobs:
             exit 1
           fi
 
-          # 2) No systemd unit found. Locate the runner dir and recover it.
-          echo "No systemd unit found; locating the runner directory..."
-          SVC="$(find /root /home /opt -maxdepth 5 -name svc.sh -path '*actions-runner*' 2>/dev/null | head -1)"
-          if [ -z "$SVC" ]; then
-            echo "ERROR: could not locate the runner (no actions.runner.* unit, no svc.sh)."
+          # 2) No systemd unit. Find THIS runner's directory by the name in its
+          #    .runner file — never just the first actions-runner on the box.
+          echo "No systemd unit for ${WATCHED_RUNNER}; locating its runner directory..."
+          RUNNER_DIR=""
+          while IFS= read -r f; do
+            if $SUDO grep -qE "\"agentName\"[[:space:]]*:[[:space:]]*\"${WATCHED_RUNNER}\"" "$f" 2>/dev/null; then
+              RUNNER_DIR="$(dirname "$f")"
+              break
+            fi
+          done < <($SUDO find /root /home /opt /srv /var/lib /usr/local -maxdepth 5 -name .runner -type f 2>/dev/null)
+          if [ -z "$RUNNER_DIR" ]; then
+            echo "ERROR: no runner named ${WATCHED_RUNNER} on this box (no unit, no .runner file)."
+            echo "       The SSH_* secrets reach a box that does not host it — check the 'Box:' line"
+            echo "       above, and point SSH_HOST/SSH_USER/SSH_PORT/SSH_PRIVATE_KEY at the runner's box."
             exit 1
           fi
-          RUNNER_DIR="$(dirname "$SVC")"
           echo "Runner dir: $RUNNER_DIR"
           cd "$RUNNER_DIR"
+          LISTENER="${RUNNER_DIR}/bin/Runner.Listener"
 
-          # Already up (e.g. run.sh started manually)? Then nothing to do.
-          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
-            echo "OK: runner process (Runner.Listener) already running."
-            exit 0
+          if pgrep -f "$LISTENER" >/dev/null 2>&1; then
+            if [ "$STUCK" != "true" ]; then
+              echo "OK: runner process (Runner.Listener) running and taking jobs."
+              exit 0
+            fi
+            echo "Runner process running but not taking jobs — stopping it to restart..."
+            $SUDO pkill -f "$LISTENER" || true
+            sleep 3
           fi
 
-          # The runner was running UNMANAGED (no service) and died on reboot. Install
-          # it as a systemd service so it survives future reboots, then start it.
+          # The runner was running UNMANAGED (no service) and died, or was stuck.
+          # Install it as a systemd service so it survives reboots, then start it.
           # RUNNER_ALLOW_RUNASROOT=1 because this runner lives under /root.
           echo "Runner down and not installed as a service — installing + starting..."
           $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh install 2>&1 | tail -5 || true
           $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh start   2>&1 | tail -5 || true
           sleep 4
           if $SUDO ./svc.sh status 2>/dev/null | grep -qiE 'active \(running\)|is running' \
-             || pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+             || pgrep -f "$LISTENER" >/dev/null 2>&1; then
             echo "RECOVERED: runner installed as a service and started (survives reboot)."
             exit 0
           fi
@@ -120,7 +198,7 @@ jobs:
           echo "Service route failed — launching run.sh detached as a fallback..."
           $SUDO bash -c "cd '$RUNNER_DIR' && RUNNER_ALLOW_RUNASROOT=1 setsid nohup ./run.sh >/tmp/gha-runner.log 2>&1 </dev/null &"
           sleep 6
-          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+          if pgrep -f "$LISTENER" >/dev/null 2>&1; then
             echo "RECOVERED (unmanaged): runner launched via run.sh. NOTE: reboot persistence still needs the service."
             exit 0
           fi

@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**`/admin/reports` builds its request and download URLs from trusted parts only (#1920 follow-up):** the report key from the registry definition and the attribute key as the server listed it, with the typed segment value percent-encoded — never the raw form values (clears the CodeQL DOM-text alert on #3064). `/admin/attributes` and `/admin/reports` join the phone-width layout audit inventory (`e2e/mobile-layout-coverage.spec.ts`)."
-}

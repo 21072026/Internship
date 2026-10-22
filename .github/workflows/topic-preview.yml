@@ -99,6 +99,11 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+    # Set by topic-deploy.sh's capacity check (infra/server/capacity.sh): a
+    # deferred deploy ends green and the comment job says the server is busy.
+    outputs:
+      deployed: ${{ steps.deploy.outputs.deployed }}
+      reason: ${{ steps.deploy.outputs.reason }}
     steps:
       - name: Derive topic + port from PR number
         id: t
@@ -155,6 +160,7 @@ jobs:
           git clean -qfdx
 
       - name: Deploy topic environment
+        id: deploy
         env:
           TOPIC: ${{ steps.t.outputs.topic }}
           PORT: ${{ steps.t.outputs.port }}
@@ -164,7 +170,13 @@ jobs:
           ENV_FILE: ${{ env.ENV_FILE }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Capacity knobs (infra/server/capacity.sh); empty → the script's defaults.
+          TOPIC_MAX_ENVS: ${{ vars.TOPIC_MAX_ENVS }}
+          TOPIC_MEMORY_MB: ${{ vars.TOPIC_MEMORY_MB }}
+          TOPIC_HEADROOM_MB: ${{ vars.TOPIC_HEADROOM_MB }}
         run: |
+          # An empty repo variable must mean "default", not "0".
+          for v in TOPIC_MAX_ENVS TOPIC_MEMORY_MB TOPIC_HEADROOM_MB; do [ -n "${!v}" ] || unset "$v"; done
           chmod +x infra/server/topic-deploy.sh
           # No SKIP_PULL: the image comes from ghcr, built on the hosted runner.
           ./infra/server/topic-deploy.sh
@@ -184,13 +196,25 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/github-script@v9
+        env:
+          DEPLOYED: ${{ needs.deploy.outputs.deployed }}
+          REASON: ${{ needs.deploy.outputs.reason }}
         with:
           script: |
             const topic = `pr${context.issue.number}`;
             const url = `https://${{ env.ENV_PREFIX }}${topic}.${{ env.BASE_DOMAIN }}`;
             const marketingUrl = `https://${{ env.ENV_PREFIX }}${topic}-m.${{ env.BASE_DOMAIN }}`;
             const marker = '<!-- topic-preview -->';
-            const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
+            // Deferred by the capacity check: say so, and never point at an
+            // environment that was not deployed. An older "ready" comment is
+            // replaced, because what it points at may be an older commit.
+            const deferred = process.env.DEPLOYED === 'false';
+            const body = deferred
+              ? `${marker}\n### ⏸ Topic preview not deployed — the server is busy\n\n` +
+                `${process.env.REASON || 'The shared server has no room for another environment right now.'}\n\n` +
+                `> Nothing is wrong with this PR, and CI is not affected. The environment is deployed on the next ` +
+                `push, or re-run the **Topic Preview** workflow once other PRs have been merged or closed.`
+              : `${marker}\n### 🧪 Topic preview ready\n\n` +
               `Branch **\`${{ github.head_ref }}\`** → **${url}**\n` +
               `Marketing world → **${marketingUrl}** (#2612)\n\n` +
               `> Isolated environment for this PR (container \`internship-crm-${topic}\`, ` +
