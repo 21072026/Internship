@@ -99,6 +99,8 @@ import { notifyEvent } from '@/lib/notifications/router';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
 import { holdIfRequired } from '@/lib/outboundDrafts';
+import { customerMailLocked } from '@/lib/customerMailLock';
+import { CUSTOMER_MAIL_LOCK_REASON } from '@/lib/customerMailLockRule';
 import { PAUSED, activeRelationWhere } from '@/lib/relationLifecycle';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
@@ -1299,6 +1301,12 @@ export async function sendPrepared(
   prepared: PreparedEmail,
   opts: { via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
 ): Promise<'SENT' | 'QUEUED'> {
+  // The customer-mail lock (see sendEmail()): an approved draft to a marketing
+  // org's lead is refused too — it throws, so the draft is not marked sent.
+  if (await customerMailLocked(prepared)) {
+    await recordEmailOutcome(prepared, 'SKIPPED', CUSTOMER_MAIL_LOCK_REASON);
+    throw new Error('customer_mail_locked');
+  }
   const now = new Date();
   return dispatchPrepared(prepared, { ref: fallbackRef(now), now }, { via: opts.via, observer: opts.observer });
 }
@@ -1320,6 +1328,17 @@ export type SendEmailResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'HELD';
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const result = await prepareEmail(args);
   if (result.status === 'SKIPPED') return 'SKIPPED';
+  // THE CUSTOMER-MAIL LOCK (src/lib/customerMailLockRule.ts): while the
+  // marketing product is in its test phase, a MARKETING org's lead, customer
+  // or contact gets nothing — no campaign, no reminder, no system mail; its
+  // staff still do. Ahead of the approval hold, so no draft is built that
+  // somebody could approve either. Recorded SKIPPED with the reason.
+  if (await customerMailLocked(result.prepared)) {
+    const p = result.prepared;
+    logger.info('Email not sent: customer mail locked', { category: p.category });
+    await recordEmailOutcome(p, 'SKIPPED', CUSTOMER_MAIL_LOCK_REASON);
+    return 'SKIPPED';
+  }
   const now = new Date();
   // OUTBOUND APPROVAL (#2960) — the ONE hook, here and nowhere else, so every
   // sender is covered: after every consent decision (an opted-out lead is not

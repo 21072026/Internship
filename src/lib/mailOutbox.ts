@@ -9,6 +9,8 @@ import type { JobPayloadMap } from '@/lib/jobs/types';
 import { replicaId } from '@/lib/jobs/lease';
 import { emailGroupAllowed, isEmailGroupId, isEssentialGroup } from '@/lib/emailGroups';
 import { suppressedAmong } from '@/lib/emailSuppression';
+import { customerMailLocked } from '@/lib/customerMailLock';
+import { CUSTOMER_MAIL_LOCK_REASON } from '@/lib/customerMailLockRule';
 import { normalizeSuppressedAddress, suppressedLogReason } from '@/lib/emailSuppressionRule';
 import {
   HIGHER_LANE_MIN_PRIORITY,
@@ -334,6 +336,8 @@ export interface DrainSummary {
   unmailable: number;
   /** Rows addressed to a bounce/complaint-suppressed address (#1692), cancelled unsent. */
   suppressed: number;
+  /** Rows to a marketing org's lead/customer while the customer-mail lock is on, cancelled unsent. */
+  customerLocked: number;
   /** Primary-channel rows sent on the bulk relay this tick (#1690). */
   failedOver: number;
   reaped: number;
@@ -458,6 +462,7 @@ export async function drainOnce(opts: DrainOptions): Promise<DrainSummary> {
     unsubscribed: 0,
     unmailable: 0,
     suppressed: 0,
+    customerLocked: 0,
     failedOver: 0,
     reaped: 0,
     capped: 0,
@@ -597,6 +602,20 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
     await settleMailRef(payload.ref, 'SKIPPED', 'unmailable');
     logger.info('mail_outbox.unmailable', meta);
     summary.unmailable++;
+    return null;
+  }
+
+  // ── The customer-mail lock (src/lib/customerMailLockRule.ts) ─────────────
+  // A marketing org's lead, customer or contact receives nothing while the
+  // marketing product is in its test phase — re-checked here, at the last
+  // door, so a mail queued before the lock (or an approved draft) cannot leave
+  // either. Fails closed: a check that cannot be made cancels the row.
+  if (await customerMailLocked({ to: envelope.to, userId: envelope.userId ?? null, orgId: envelope.orgId ?? null })) {
+    await settle(row, workerId, { status: 'CANCELLED', lastError: 'customer_mail_locked', payload: clearedPayload(payload) });
+    await deps.record(envelope, 'SKIPPED', CUSTOMER_MAIL_LOCK_REASON);
+    await settleMailRef(payload.ref, 'SKIPPED', 'customer_mail_locked');
+    logger.info('mail_outbox.customer_mail_locked', meta);
+    summary.customerLocked++;
     return null;
   }
 

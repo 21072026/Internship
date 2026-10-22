@@ -165,6 +165,13 @@ export const E2E_ROSTER_SOURCE_PORT = 4604;
 // spec that forges `x-forwarded-host` with it, and the workers, which inherit
 // process.env — `*.unit.spec.ts` files resolve the marketing world in-process.
 process.env.MARKETING_HOSTS = E2E_MARKETING_HOST;
+// The customer-mail lock (src/lib/customerMailLockRule.ts) is ON by default for
+// every MARKETING org; the mail specs assert deliveries to (and drafts for)
+// marketing leads, so the suite opens it. On process.env for the same reason as
+// above: the app servers AND the workers (specs that run a cron in-process)
+// must agree. The lock's own decision is unit-tested
+// (scripts/test/customer-mail-lock.test.mjs); no deployment sets this.
+process.env.MARKETING_CUSTOMER_MAIL_ENABLED = '1';
 
 export default defineConfig({
   testDir: './e2e',
