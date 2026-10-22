@@ -77,7 +77,8 @@ test('the verdict carries the numbers the alert quotes', () => {
 test('step outputs: stuck always, the numbers only when known', () => {
   assert.equal(queueOutputLines({ stuck: true, queued: 3, waitedMin: 120 }), 'stuck=true\nqueued=3\nwaited_min=120\n');
   assert.equal(queueOutputLines({ stuck: false, queued: 0, waitedMin: null }), 'stuck=false\n');
-  // "could not read the queue" stays green: no stuck=true, no numbers.
-  assert.equal(queueOutputLines({ stuck: false, reason: 'could not read the queue' }), 'stuck=false\n');
-  assert.equal(queueOutputLines({ stuck: 'true', queued: 1, waitedMin: 31 }), 'stuck=false\nqueued=1\nwaited_min=31\n');
+  // "could not read the queue" (stuck: null) is neither stuck nor fine: `unknown`,
+  // so the alert neither opens nor closes on it; a non-boolean is never "true".
+  assert.equal(queueOutputLines({ stuck: null, reason: 'could not read the queue' }), 'stuck=unknown\n');
+  assert.equal(queueOutputLines({ stuck: 'true', queued: 1, waitedMin: 31 }), 'stuck=unknown\nqueued=1\nwaited_min=31\n');
 });

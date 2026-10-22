@@ -22,10 +22,15 @@ test('stuck, then restarted and recovered → still RED: a stall happened', () =
   });
   assert.equal(v.mode, 'red');
   assert.equal(v.kind, 'stalled_recovered');
-  assert.match(v.title, /stalled \(restarted, recovered\)/);
+  assert.match(v.title, /stalled and was restarted/);
   assert.match(v.summary, /Stuck for 1740 min \(~29 h\):\*\* 7 job\(s\) for the `self-hosted` label/);
   assert.match(v.summary, /RECOVERED: stuck runner restarted\./);
-  assert.equal(v.signature, '2026-10-22.stalled_recovered');
+  // "active" after a restart is not proof the queue drains — the issue must not claim it.
+  assert.match(v.summary, /"Active" is not "taking jobs"/);
+  assert.doesNotMatch(v.summary, /should drain now|Nothing to do/);
+  // A stall is news every time it comes back: per-run signature, so each one comments.
+  assert.equal(v.signature, '2026-10-22.stalled_recovered.12:00');
+  assert.equal(runnerAlertVerdict({ ...base, stuck: 'true', outcome: 'recovered', runId: '4711' }).signature, '2026-10-22.stalled_recovered.4711');
 });
 
 test('stuck but the box shows a job in flight (BUSY) → green: the box has the last word', () => {
@@ -45,10 +50,19 @@ test('healthy runs are green: OK, not stuck; a runner started before anything wa
   assert.equal(runnerAlertVerdict({ ...base, stuck: 'false', outcome: 'recovered' }).mode, 'green');
 });
 
-test('"could not read the queue" stays green — no restart, no alert', () => {
-  // runner-queue.mjs answers stuck=false (and no numbers) when the API fails.
-  const v = runnerAlertVerdict({ ...base, stuck: 'false', outcome: 'ok' });
-  assert.equal(v.mode, 'green');
+test('"could not read the queue" neither opens nor closes the alert', () => {
+  // runner-queue.mjs answers stuck=unknown when the API fails; the box then only
+  // checks is-active, so an "OK" here says nothing about the queue.
+  assert.equal(runnerAlertVerdict({ ...base, stuck: 'unknown', outcome: 'ok' }).mode, 'skip');
+  assert.equal(runnerAlertVerdict({ ...base, stuck: 'unknown', outcome: 'busy' }).mode, 'skip');
+  // …but what the box itself reports still counts.
+  const v = runnerAlertVerdict({ ...base, jobResult: 'failure', stuck: 'unknown', outcome: 'error', exitCode: '255' });
+  assert.equal(v.mode, 'red');
+  assert.equal(v.kind, 'unreachable');
+});
+
+test('error kinds keep one comment per day', () => {
+  assert.equal(runnerAlertVerdict({ ...base, jobResult: 'failure', stuck: 'false', outcome: 'error', exitCode: '255', runId: '9' }).signature, '2026-10-22.unreachable');
 });
 
 test('box unreachable (ssh exit 255, nothing printed) → red', () => {

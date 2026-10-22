@@ -25,10 +25,14 @@
 //   BUSY — a live Runner.Worker beats the API's "stuck", exactly as it does for
 //   the restart, because GitHub's filtered run listings come back empty now and
 //   then; when nothing was stuck (a runner found stopped and started before any
-//   job waited the threshold is not a stall); and when the queue could not be
-//   read at all — an API hiccup is neither a restart nor an alert.
+//   job waited the threshold is not a stall).
 //   SKIP (touch nothing) when the watchdog run was cancelled or skipped without
-//   any verdict: a run cancelled by hand says nothing about the runner.
+//   any verdict — a run cancelled by hand says nothing about the runner — and
+//   when the queue could not be read (stuck=unknown) while the box answered
+//   OK/BUSY: without the queue, "active" proves nothing, so an open stall issue
+//   must not close on it (an ERROR from the box still counts).
+//   A stall's signature is per run, so a stall that comes back after a restart
+//   comments again; every other condition comments once per UTC day.
 //
 // Every input may be missing: the runner drops a job output that happens to
 // contain a secret's value, so the summary falls back to the run link rather
@@ -36,7 +40,8 @@
 //
 // Env (all from the watchdog job's outputs): JOB_RESULT, STUCK, QUEUED,
 //   WAITED_MIN, OUTCOME (ok|recovered|busy|error|unknown), DETAIL (the box's
-//   verdict line), EXIT_CODE, WATCHED_RUNNER, WATCHED_LABEL, STUCK_AFTER_MIN.
+//   verdict line), EXIT_CODE, WATCHED_RUNNER, WATCHED_LABEL, STUCK_AFTER_MIN,
+//   GITHUB_RUN_ID (the runner's own, for the stall signature).
 // Writes GITHUB_OUTPUT: mode=red|green|skip, kind, title, signature, summary.
 
 import { appendFileSync } from 'node:fs';
@@ -77,7 +82,7 @@ export function classifyError({ detail, exitCode }) {
 }
 
 const TITLES = {
-  stalled_recovered: '⚠️ runner-watchdog — the self-hosted runner stalled (restarted, recovered)',
+  stalled_recovered: '⚠️ runner-watchdog — the self-hosted runner stalled and was restarted',
   stalled: '🛑 runner-watchdog — the self-hosted runner is stuck',
   unreachable: "🛑 runner-watchdog — the runner's box does not answer over SSH",
   missing: '🛑 runner-watchdog — the box has no runner by that name',
@@ -104,8 +109,11 @@ function summaryFor(kind, { isStuck, queued, waitedMin, detail, exitCode, runner
   let firstMove;
   switch (kind) {
     case 'stalled_recovered':
-      lines.push(`**Recovered:** this run restarted the runner and it is active again${quoted}. The queued jobs should drain now.`);
-      firstMove = 'Nothing to do unless it recurs; then find out why it stalls (an OOM kill shows in `journalctl -k` on the box).';
+      lines.push(
+        `**Restarted:** this run restarted the runner and systemd reports it active again${quoted}.`,
+        '"Active" is not "taking jobs": if this issue is still open after the next watchdog run, the restart did not drain the queue.',
+      );
+      firstMove = 'Watch the queued runs start. If the next watchdog run reports the stall again, look at the unit on the box (`journalctl -u` the unit), free memory and the box\'s outbound connection to GitHub; an OOM kill shows in `journalctl -k`.';
       break;
     case 'stalled':
       lines.push(`**Not recovered:** the restart step did not report a result${quoted}.`);
@@ -150,13 +158,17 @@ function summaryFor(kind, { isStuck, queued, waitedMin, detail, exitCode, runner
 /**
  * @param {{ jobResult?: string, stuck?: string | boolean, queued?: unknown, waitedMin?: unknown,
  *           outcome?: string, detail?: string, exitCode?: unknown,
- *           runnerName?: string, label?: string, stuckAfterMin?: unknown, now?: Date }} input
+ *           runnerName?: string, label?: string, stuckAfterMin?: unknown, runId?: string, now?: Date }} input
  * @returns {{ mode: 'red' | 'green' | 'skip', kind: string | null, title: string, signature: string,
  *             summary: string, reason: string }}
  */
+const STALL_KINDS = new Set(['stalled', 'stalled_recovered']);
+
 export function runnerAlertVerdict(input) {
   const jobResult = String(input.jobResult ?? '');
   const isStuck = input.stuck === true || input.stuck === 'true';
+  // The queue step answers `unknown` when it could not read GitHub.
+  const queueRead = isStuck || input.stuck === false || input.stuck === 'false';
   const outcome = OUTCOMES.has(input.outcome) ? input.outcome : '';
   const detail = cleanDetail(input.detail);
   const exitCode = toCount(input.exitCode);
@@ -176,6 +188,7 @@ export function runnerAlertVerdict(input) {
   if (outcome === 'error') kind = classifyError({ detail, exitCode });
   else if (isStuck && outcome === 'busy') return quiet('green', 'the queue read stuck, but the box shows a job in flight (BUSY) — the box has the last word');
   else if (isStuck) kind = outcome === 'recovered' ? 'stalled_recovered' : 'stalled';
+  else if (!queueRead && SETTLED.has(outcome)) return quiet('skip', 'the queue could not be read — neither opening nor closing the alert on a run that never saw it');
   else if (!SETTLED.has(outcome) && jobResult === 'failure') kind = 'incomplete';
   else if (!SETTLED.has(outcome) && jobResult !== 'success') return quiet('skip', `the watchdog run ended '${jobResult || 'unknown'}' without a verdict — touching nothing`);
   else return quiet('green', `not stuck, box said ${outcome || 'nothing readable'} (job ${jobResult || 'unknown'})`);
@@ -186,8 +199,10 @@ export function runnerAlertVerdict(input) {
     kind,
     title: TITLES[kind],
     // One comment per UTC day per condition: a box down for a day pings once,
-    // a change of condition (unreachable → restart failed) pings again.
-    signature: `${day}.${kind}`,
+    // a change of condition (unreachable → restart failed) pings again. A
+    // stall is different — one that comes back after a restart is news every
+    // time, so its signature is per run.
+    signature: STALL_KINDS.has(kind) ? `${day}.${kind}.${input.runId || (input.now ?? new Date()).toISOString().slice(11, 16)}` : `${day}.${kind}`,
     summary: summaryFor(kind, facts),
     reason: kind,
   };
@@ -208,6 +223,7 @@ function main() {
       runnerName: env.WATCHED_RUNNER,
       label: env.WATCHED_LABEL,
       stuckAfterMin: env.STUCK_AFTER_MIN,
+      runId: env.GITHUB_RUN_ID,
     });
   } catch (error) {
     // In doubt, alert: a decision that crashed must not read as "healthy".

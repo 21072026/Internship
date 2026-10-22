@@ -49,7 +49,10 @@ export function runnerStuckVerdict({ queuedJobs, runningJobs, runnerName, label,
 
 /** The step outputs for a verdict: `stuck` always, the numbers when known. */
 export function queueOutputLines({ stuck, queued, waitedMin }) {
-  const lines = [`stuck=${stuck === true}`];
+  // `unknown` when the queue could not be read: the restart treats it as
+  // "not stuck", but the alert must neither open nor close on a run that never
+  // saw the queue (scripts/runner-watchdog-alert.mjs skips it).
+  const lines = [`stuck=${stuck === true ? 'true' : stuck === false ? 'false' : 'unknown'}`];
   if (Number.isInteger(queued) && queued > 0) lines.push(`queued=${queued}`);
   if (Number.isInteger(waitedMin) && waitedMin >= 0) lines.push(`waited_min=${waitedMin}`);
   return `${lines.join('\n')}\n`;
@@ -96,9 +99,9 @@ async function main() {
     });
   } catch (err) {
     // Green, not red: an API hiccup is neither a restart nor an alert.
-    verdict = { stuck: false, reason: `could not read the queue (${err.message}) — not restarting`, queued: 0, waitedMin: null };
+    verdict = { stuck: null, reason: `could not read the queue (${err.message}) — not restarting`, queued: 0, waitedMin: null };
   }
-  console.log(`${verdict.stuck ? 'STUCK' : 'ok'}: ${verdict.reason}`);
+  console.log(`${verdict.stuck === true ? 'STUCK' : verdict.stuck === false ? 'ok' : 'unknown'}: ${verdict.reason}`);
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import('node:fs');
     appendFileSync(process.env.GITHUB_OUTPUT, queueOutputLines(verdict));
