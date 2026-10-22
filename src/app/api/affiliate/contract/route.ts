@@ -28,7 +28,7 @@ export async function GET() {
 
 const acceptSchema = z.object({ version: z.number().int().positive() });
 
-const STATUS: Record<AffiliateContractError['code'], number> = { stale_version: 409, nothing_to_accept: 409, conflict: 409 };
+const STATUS: Record<AffiliateContractError['code'], number> = { stale_version: 409, nothing_to_accept: 409, conflict: 409, invalid_contract: 400 };
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -36,6 +36,11 @@ export async function POST(request: Request) {
 
   const gate = await affiliatePartnerGate(session, { contract: 'skip' });
   if (!gate.ok) return gate.response;
+  // Accepting a contract is the partner's own declaration: never while an admin
+  // is signed in as them (the same rule as /api/account).
+  if (session.user.impersonatorId) {
+    return NextResponse.json({ code: 'impersonating', error: 'Cannot accept the contract while impersonating' }, { status: 400 });
+  }
   const parsed = acceptSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
 

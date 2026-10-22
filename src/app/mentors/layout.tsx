@@ -11,7 +11,9 @@ export const metadata = NO_INDEX;
 export default async function MentorsLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
-  if (session.user.role === 'COMPANY' || session.user.role === 'SOURCE') {
+  // An allowlist: the mentor directory is for the mentoring roles only. A role
+  // added later (AFFILIATE, #3115) is sent home instead of falling through.
+  if (!['ADMIN', 'MENTOR', 'MENTEE'].includes(session.user.role)) {
     redirect(roleHome(session.user.role));
   }
 

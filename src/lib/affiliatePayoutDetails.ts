@@ -13,7 +13,9 @@ import { open, seal } from '@/lib/secretBox';
 import { sendSecurityNotice } from '@/lib/securityNotices';
 import { maskIban, type PayoutDetails } from '@/lib/payoutDetailsRule';
 
-const PURPOSE = 'affiliate-payout-details';
+// Bound to the organisation AND the partner: a sealed value copied onto another
+// partner's row (a database-level swap) does not open there.
+const purposeFor = (orgId: string, partnerId: string) => `affiliate-payout-details:${orgId}:${partnerId}`;
 
 export type PayoutDetailsErrorCode = 'partner_not_found' | 'partner_suspended';
 
@@ -43,7 +45,7 @@ export async function setPayoutDetails(input: {
   actor: PayoutDetailsActor;
   request?: HeaderSource | null;
 }): Promise<{ masked: string }> {
-  const sealed = seal(JSON.stringify(input.details), PURPOSE);
+  const sealed = seal(JSON.stringify(input.details), purposeFor(input.orgId, input.partnerId));
   const masked = maskIban(input.details.iban);
 
   const partner = await prisma.$transaction(async (tx) => {
@@ -53,10 +55,12 @@ export async function setPayoutDetails(input: {
     });
     if (!row) throw new PayoutDetailsError('partner_not_found');
     if (row.status === 'SUSPENDED') throw new PayoutDetailsError('partner_suspended');
-    await tx.affiliatePartner.updateMany({
-      where: { id: row.id, orgId: input.orgId },
+    // Guarded: a suspension committed after the read above still wins.
+    const { count } = await tx.affiliatePartner.updateMany({
+      where: { id: row.id, orgId: input.orgId, status: { not: 'SUSPENDED' } },
       data: { payoutDetailsCipher: sealed },
     });
+    if (count !== 1) throw new PayoutDetailsError('partner_suspended');
     await tx.auditLog.create({
       data: {
         orgId: input.orgId,
@@ -85,7 +89,7 @@ export async function readPayoutDetails(orgId: string, partnerId: string): Promi
     select: { payoutDetailsCipher: true },
   });
   if (!row?.payoutDetailsCipher) return null;
-  const plain = open(row.payoutDetailsCipher, PURPOSE);
+  const plain = open(row.payoutDetailsCipher, purposeFor(orgId, partnerId));
   if (!plain) return null;
   try {
     const parsed = JSON.parse(plain) as PayoutDetails;

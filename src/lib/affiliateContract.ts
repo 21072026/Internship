@@ -8,12 +8,13 @@ import type { Session } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { shellCapabilities } from '@/lib/shellCapabilities';
-import { contractChanged, contractStateFor, type ContractState, type ContractTexts } from '@/lib/affiliateContractRule';
+import { canonicalContract, contractChanged, contractStateFor, parseContractTexts, type ContractState, type ContractTexts } from '@/lib/affiliateContractRule';
 
 export type AffiliateContractErrorCode =
   | 'conflict' // another save changed the contract between our read and our write
   | 'stale_version' // the partner accepted a version that is no longer current
-  | 'nothing_to_accept'; // no contract has been published
+  | 'nothing_to_accept' // no contract has been published
+  | 'invalid_contract' // malformed texts, or no text at all (an empty contract would hold every partner on nothing)
 
 export class AffiliateContractError extends Error {
   readonly code: AffiliateContractErrorCode;
@@ -32,7 +33,12 @@ const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownR
  * again. The bump is a guarded update on the version that was read: two saves at
  * once cannot both write the same next version with different texts.
  */
-export async function saveContract(orgId: string, texts: ContractTexts, actorId: string): Promise<{ changed: boolean; version: number }> {
+export async function saveContract(orgId: string, raw: ContractTexts, actorId: string): Promise<{ changed: boolean; version: number }> {
+  // Normalised here too, whatever the caller did: a text the rule would store
+  // differently (CRLF) must not read as "changed" on every save.
+  const parsed = parseContractTexts(raw);
+  if (!parsed.ok || canonicalContract(parsed.texts).length === 0) throw new AffiliateContractError('invalid_contract');
+  const texts = parsed.texts;
   try {
     return await prisma.$transaction(async (tx) => {
       const current = await tx.affiliateProgramSettings.findUnique({

@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard } from 'lucide-react';
+import { AFFILIATE_NAV_LINKS } from '@/lib/navLinks';
 import { authOptions } from '@/lib/auth';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -46,13 +46,16 @@ export default async function AffiliateLayout({ children }: { children: React.Re
           </div>
 
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            <Link
-              href="/affiliate"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-            >
-              <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-              {t.nav.dashboard}
-            </Link>
+            {AFFILIATE_NAV_LINKS.map(({ href, icon: Icon, key }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+              >
+                <Icon className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+                {t.nav[key as keyof typeof t.nav]}
+              </Link>
+            ))}
             <InstallAppButton />
           </nav>
 

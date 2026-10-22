@@ -3,7 +3,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
 import { prisma as appPrisma } from '../src/lib/prisma';
-import { saveContract } from '../src/lib/affiliateContract';
+import { saveContract, AffiliateContractError } from '../src/lib/affiliateContract';
 
 /**
  * The partner gate and the contract (docs/affiliate-module.md, #3115).
@@ -61,7 +61,9 @@ test.afterAll(async () => {
     await prisma.affiliatePartner.deleteMany({ where: { orgId } }).catch(() => {});
     await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
     await prisma.auditLog.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.setting.deleteMany({ where: { orgId } }).catch(() => {});
   }
+  await prisma.impersonationGrant.deleteMany({ where: { token: { startsWith: 'e2e-aff-' } } }).catch(() => {});
   if (partnerUserId) await prisma.notification.deleteMany({ where: { userId: partnerUserId } }).catch(() => {});
   for (const e of [partnerEmail, orphanEmail, leadEmail, strayEmail]) if (e) await cleanupByEmail(e);
   if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
@@ -154,4 +156,51 @@ test('payout details: validated, sealed, masked on the way out, audited and anno
   await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'SUSPENDED' } });
   expect((await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Someone Else' } })).status()).toBe(409);
   await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'ACTIVE' } });
+});
+
+test('an empty or malformed contract is refused, never published', { tag: '@smoke' }, async () => {
+  for (const texts of [{}, { en: '   ' }, { fr: 'x' } as never]) {
+    await expect(saveContract(orgId, texts, 'e2e-admin')).rejects.toMatchObject({ code: 'invalid_contract' });
+  }
+  expect(AffiliateContractError).toBeTruthy();
+  expect((await prisma.affiliateProgramSettings.findUniqueOrThrow({ where: { orgId } })).contractVersion).toBe(2);
+});
+
+test('the money and declaration writes refuse an impersonating admin and an un-enrolled partner under 2FA', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  // An admin signed in AS the partner (the real grant → session path).
+  const token = `e2e-aff-${crypto.randomBytes(8).toString('hex')}`;
+  await prisma.impersonationGrant.create({
+    data: { token, adminId: partnerUserId, targetId: partnerUserId, kind: 'START', expiresAt: new Date(Date.now() + 60_000) },
+  });
+  const imp = await playwright.request.newContext({ baseURL });
+  contexts.push(imp);
+  const csrf = await (await imp.get('/api/auth/csrf', { headers: host })).json();
+  await imp.post('/api/auth/callback/impersonate', { headers: host, form: { csrfToken: csrf.csrfToken, grant: token, json: 'true' }, maxRedirects: 0 });
+  const session = await (await imp.get('/api/auth/session', { headers: host })).json();
+  expect(session?.user?.impersonatorId).toBeTruthy();
+
+  const iban = 'DE89370400440532013000';
+  const put = await imp.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Impostor' } });
+  expect(put.status()).toBe(400);
+  expect(await put.json()).toMatchObject({ code: 'impersonating' });
+  expect((await imp.post('/api/affiliate/contract', { headers: host, data: { version: 2 } })).status()).toBe(400);
+
+  // 2FA policy 'all' and the partner has not enrolled: the payout write is refused.
+  const partner = await signedIn(playwright, baseURL, partnerEmail);
+  await prisma.setting.create({ data: { orgId, key: 'require2fa', value: 'all' } });
+  const held = await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Gate Partner' } });
+  expect(held.status()).toBe(403);
+  expect(await held.json()).toMatchObject({ code: 'two_factor_required' });
+  await prisma.setting.deleteMany({ where: { orgId, key: 'require2fa' } });
+
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payout_details.update' } })).toBe(1); // still only the partner's own change
+});
+
+test('a partner is sent home from the mentoring pages, never shown the mentee shell', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const partner = await signedIn(playwright, baseURL, partnerEmail);
+  for (const path of ['/mentors', '/todos', '/messages']) {
+    const res = await partner.get(path, { headers: host, maxRedirects: 0 });
+    expect([307, 308], path).toContain(res.status());
+    expect(new URL(res.headers()['location'], 'http://x.invalid').pathname, path).toBe('/affiliate');
+  }
 });

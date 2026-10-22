@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate module, partner role and security (#3115):** new `Role.AFFILIATE` with its own shell at `/affiliate` (marketing vertical only, the same server-side 2FA gate as every role shell, its own menu for web and the native app — never the mentee portal) and a row in the 2FA coverage report. The partner contract is versioned per organisation (`src/lib/affiliateContract.ts`: a save bumps the version only on a real text change, compared locale by locale) and every partner API sits behind `affiliatePartnerGate()` (AFFILIATE only, own partner record, current contract accepted → otherwise 403/404/409). Payout details (IBAN, ISO 13616 check) are sealed per partner, masked to the last four characters, refused while impersonating or while an un-enrolled partner is held by the 2FA policy, audited, and announced with the new `payoutDetailsChanged` security notice. Payment, resync and contract writes leave `affiliate.*` AuditLog rows. SSO role sync never touches an AFFILIATE. The marketing demo tenant gets a demo partner.",
+  "notes": {
+    "en": ["Affiliate partners get their own sign-in area and are covered by your two-factor policy.", "Partners must accept the current programme contract before they can use their area, and they are notified whenever their payout bank details change."],
+    "tr": ["Affiliate partnerleri kendi giriş alanına sahip ve iki adımlı doğrulama politikanız onları da kapsıyor.", "Partnerler, alanlarını kullanmadan önce güncel program sözleşmesini kabul ediyor ve ödeme banka bilgileri her değiştiğinde bilgilendiriliyor."],
+    "de": ["Affiliate-Partner erhalten einen eigenen Anmeldebereich und sind von Ihrer Zwei-Faktor-Richtlinie erfasst.", "Partner müssen den aktuellen Programmvertrag akzeptieren, bevor sie ihren Bereich nutzen, und werden bei jeder Änderung ihrer Bankverbindung für Auszahlungen benachrichtigt."]
+  }
+}

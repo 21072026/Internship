@@ -116,10 +116,25 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 ## Security
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner
-  shell carries the same server-side 2FA gate as every role shell.
+  shell carries the same server-side 2FA gate as every role shell. That gate is a
+  page redirect and does not protect an API (true of every role today), so the one
+  write that redirects money — `PUT /api/affiliate/me/payout-details` — checks the
+  policy itself and answers `403 two_factor_required` to an un-enrolled partner.
+  A step-up (password or code on every IBAN change) is a separate, later task.
+- While an admin impersonates a partner, the partner's own declarations and money
+  writes are refused (400 `impersonating`): accepting the contract and changing
+  payout details — the same rule as `/api/account`.
+- A partner never falls through to the mentee portal: `AFFILIATE_NAV_LINKS` is the
+  web and native-app menu, the shared shell (`RoleShell`: /messages, /todos, …)
+  sends a partner home, and `/mentors` admits the mentoring roles only.
+- SSO: a returning user's role sync never touches an AFFILIATE (like ADMIN). In an
+  organisation that enforces SSO, an external partner without an IdP account needs
+  a password exemption to sign in — a product decision per organisation.
 - Payout details (`src/lib/affiliatePayoutDetails.ts`, the one writer and reader)
   are validated by the ISO 13616 IBAN check (`src/lib/payoutDetailsRule.ts`),
-  sealed with `secretBox`, frozen while the partner is SUSPENDED, and every change
+  sealed with `secretBox` under a purpose bound to the organisation and the
+  partner (a sealed value copied to another partner's row does not open), frozen
+  while the partner is SUSPENDED (a guarded write, so a concurrent suspension wins), and every change
   sends the `payoutDetailsChanged` security notice (essential `account_security`
   group: no preference silences it) to the partner. The partner's API answers the
   last four characters only.

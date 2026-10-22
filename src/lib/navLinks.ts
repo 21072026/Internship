@@ -241,6 +241,15 @@ export const SALES_NAV_LINKS: NavLink[] = [
   { href: '/sales/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },
 ];
 
+/**
+ * The affiliate partner's menu (docs/affiliate-module.md). The partner shell
+ * (src/app/affiliate/layout.tsx) and the native app read it; a partner never
+ * gets the portal's links (#3115).
+ */
+export const AFFILIATE_NAV_LINKS: NavLink[] = [
+  { href: '/affiliate', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'affiliate' },
+];
+
 /** Roles that get a sidebar (and therefore a "Go to" group in the palette). */
 export type NavRole = 'ADMIN' | 'MENTOR' | 'MENTEE';
 

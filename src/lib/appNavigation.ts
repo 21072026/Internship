@@ -1,5 +1,6 @@
 import {
   ADMIN_NAV_LINKS,
+  AFFILIATE_NAV_LINKS,
   MENTOR_NAV_LINKS,
   PORTAL_NAV_LINKS,
   SALES_NAV_LINKS,
@@ -20,7 +21,8 @@ import type { VerticalCapability } from '@/lib/verticals';
  *
  * The shell choice mirrors the layouts: ADMIN → admin sidebar; MENTOR → the
  * mentor sidebar, or the sales one where the vertical has no mentorship
- * (src/lib/salesSurface.ts); everyone else → the portal. Pure.
+ * (src/lib/salesSurface.ts); AFFILIATE → the partner menu, never the portal
+ * (#3115); everyone else → the portal. Pure.
  */
 export function appNavLinks(
   role: string | null | undefined,
@@ -34,6 +36,8 @@ export function appNavLinks(
         ? hasSalesSurface(role, capabilities)
           ? SALES_NAV_LINKS
           : MENTOR_NAV_LINKS
-        : PORTAL_NAV_LINKS;
+        : role === 'AFFILIATE'
+          ? AFFILIATE_NAV_LINKS
+          : PORTAL_NAV_LINKS;
   return visibleNavLinks(links, capabilities, opts);
 }
