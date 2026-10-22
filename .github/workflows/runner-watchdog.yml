@@ -25,6 +25,16 @@ name: Runner Watchdog (self-hosted health)
 # shows a job in flight (a live Runner.Worker), which always wins over the API. And the unit
 # gets a `Restart=always` drop-in, so a runner the OOM killer takes down comes
 # back on its own instead of waiting for the next watchdog tick.
+#
+# And it TELLS someone. On 2026-10-21 every self-hosted job sat queued for ~29
+# hours and no alert fired: a queued job never fails, so the deploys' own alert
+# jobs never ran, and this watchdog had none. Now a stall (stuck=true, even when
+# this run restarted the runner), an unreachable box, a missing runner or a
+# failed restart opens one `ci-alert` issue (scripts/ci-alert-issue.mjs, key
+# `runner-watchdog`, the SMTP-free trail of #2322 — its cc is the e-mail), and
+# the next healthy run closes it. The red/green rule is
+# scripts/runner-watchdog-alert.mjs. GitHub starts this `*/15` schedule late,
+# often hours apart, so the alert is best-effort and can lag the stall.
 
 on:
   schedule:
@@ -44,6 +54,16 @@ jobs:
   watchdog:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # What the alert job decides on. Any of these can come back empty (a step
+    # that never ran, or an output the runner dropped because it happened to
+    # contain a secret's value); scripts/runner-watchdog-alert.mjs copes.
+    outputs:
+      stuck: ${{ steps.queue.outputs.stuck }}
+      queued: ${{ steps.queue.outputs.queued }}
+      waited_min: ${{ steps.queue.outputs.waited_min }}
+      outcome: ${{ steps.recover.outputs.outcome }}
+      detail: ${{ steps.recover.outputs.detail }}
+      exit_code: ${{ steps.recover.outputs.exit_code }}
     env:
       # Not RUNNER_NAME: the runner sets that variable itself in every step (to
       # the HOSTED runner's name, "GitHub Actions 1000…"), overriding the job
@@ -79,17 +99,50 @@ jobs:
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Check & (re)start the self-hosted runner service
+        id: recover
+        # A box too busy to answer must end as a failed STEP (the alert reads it
+        # as red), well inside the job's own timeout. ConnectTimeout makes an
+        # unreachable box fail in 30 s with ssh's exit 255 instead.
+        timeout-minutes: 3
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           STUCK: ${{ steps.queue.outputs.stuck || 'false' }}
         run: |
+          # The alert job needs this step's verdict on EVERY exit path — the
+          # box's last OK:/RECOVERED:/BUSY:/ERROR: line, ssh failing to connect
+          # (exit 255, no line at all), the name check below — so the outputs
+          # are written by an EXIT trap from what the step printed. Only those
+          # verdict lines are recorded: never the Box: line or anything else.
+          VERDICT_LOG="${RUNNER_TEMP:-/tmp}/runner-watchdog.log"
+          : > "$VERDICT_LOG"
+          record_outcome() {
+            local rc=$? line outcome
+            set +e # a grep that finds no verdict line must not end the trap early
+            line="$(grep -aE '^(OK|RECOVERED|BUSY|ERROR)\b' "$VERDICT_LOG" | tail -1 | tr -d '\r' | cut -c1-300)"
+            case "$line" in
+              OK*) outcome=ok ;;
+              RECOVERED*) outcome=recovered ;;
+              BUSY*) outcome=busy ;;
+              ERROR*) outcome=error ;;
+              *) if [ "$rc" -eq 0 ]; then outcome=unknown; else outcome=error; fi ;;
+            esac
+            {
+              echo "outcome=${outcome}"
+              echo "detail=${line}"
+              echo "exit_code=${rc}"
+            } >> "$GITHUB_OUTPUT"
+            exit "$rc"
+          }
+          trap record_outcome EXIT
+          set -o pipefail
+
           # The name travels into a remote shell: letters, digits, . _ - only.
-          [[ "$WATCHED_RUNNER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ERROR: unexpected WATCHED_RUNNER '$WATCHED_RUNNER'"; exit 1; }
+          [[ "$WATCHED_RUNNER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ERROR: unexpected WATCHED_RUNNER '$WATCHED_RUNNER'" | tee -a "$VERDICT_LOG"; exit 1; }
           [ "$STUCK" = true ] || STUCK=false
-          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
-            "${SSH_USER}@${SSH_HOST}" "WATCHED_RUNNER=${WATCHED_RUNNER} STUCK=${STUCK} bash -s" <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+            "${SSH_USER}@${SSH_HOST}" "WATCHED_RUNNER=${WATCHED_RUNNER} STUCK=${STUCK} bash -s" <<'REMOTE' | tee -a "$VERDICT_LOG"
           set -uo pipefail
 
           SUDO=""
@@ -241,3 +294,85 @@ jobs:
           tail -25 /tmp/gha-runner.log 2>/dev/null || true
           exit 1
           REMOTE
+
+  # The SMTP-free trail (#2322), the same as every other net's: one `ci-alert`
+  # issue while the runner is stalled or out of reach (its cc to the maintainer
+  # is the e-mail), refreshed by every red run — one comment per UTC day and
+  # condition at most — and closed by the next healthy run. Its own job on a
+  # hosted runner, never the self-hosted one it is watching, and `always()`
+  # rather than `!cancelled()`, so the decision is taken whatever became of the
+  # watchdog job; the helper itself leaves the issue alone for a run that ended
+  # cancelled without any verdict (stopped by hand).
+  alert:
+    name: Record the result as an issue (no SMTP)
+    needs: [watchdog]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      mode: ${{ steps.verdict.outputs.mode }}
+      title: ${{ steps.verdict.outputs.title }}
+      summary: ${{ steps.verdict.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Red or green?
+        id: verdict
+        env:
+          JOB_RESULT: ${{ needs.watchdog.result }}
+          STUCK: ${{ needs.watchdog.outputs.stuck }}
+          QUEUED: ${{ needs.watchdog.outputs.queued }}
+          WAITED_MIN: ${{ needs.watchdog.outputs.waited_min }}
+          OUTCOME: ${{ needs.watchdog.outputs.outcome }}
+          DETAIL: ${{ needs.watchdog.outputs.detail }}
+          EXIT_CODE: ${{ needs.watchdog.outputs.exit_code }}
+          WATCHED_RUNNER: ${{ vars.RUNNER_NAME || 'interncrm' }}
+          WATCHED_LABEL: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
+          STUCK_AFTER_MIN: ${{ vars.RUNNER_STUCK_AFTER_MIN || '30' }}
+        run: node scripts/runner-watchdog-alert.mjs
+      - name: Open, refresh or close the runner alert
+        if: steps.verdict.outputs.mode == 'red' || steps.verdict.outputs.mode == 'green'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: runner-watchdog
+          ALERT_SIGNATURE: ${{ steps.verdict.outputs.signature }}
+          ALERT_TITLE: ${{ steps.verdict.outputs.title }}
+          ALERT_SUMMARY: ${{ steps.verdict.outputs.summary }}
+        run: node scripts/ci-alert-issue.mjs ${{ steps.verdict.outputs.mode == 'green' && 'green' || 'red' }}
+
+  notify:
+    name: Email alert when the runner is stalled or out of reach
+    needs: [alert]
+    if: ${{ always() && needs.alert.outputs.mode == 'red' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Send alert email
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: ${{ needs.alert.outputs.title }}
+          ALERT_BODY: |
+            ${{ needs.alert.outputs.summary }}
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs

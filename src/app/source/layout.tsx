@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -13,12 +13,16 @@ import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 export default async function SourceLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
 
   if (!session) redirect('/auth/signin');
   if (session.user.role !== 'SOURCE' && session.user.role !== 'ADMIN') redirect('/');
+  // The referral-partner portal is the `sourcing` module; a vertical without it
+  // (MARKETING) has no portal, so the URL answers 404 like a gated admin page.
+  if (!(await shellCapabilities(session.user.orgId)).includes('sourcing')) notFound();
 
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });

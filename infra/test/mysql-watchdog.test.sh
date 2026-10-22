@@ -3,18 +3,23 @@
 # Regression tests for infra/mysql-watchdog.sh.
 #
 # WHY THIS EXISTS
-#   The watchdog only ever runs on the production box, at the moment the
+#   The watchdog only ever matters on the production box, at the moment the
 #   database is already down — the worst possible time to discover that its
-#   liveness probe is wrong. Two mistakes here are worse than having no
-#   watchdog at all:
+#   liveness probe is wrong. The mistakes worth pinning:
 #     · treating a HEALTHY server as dead (a server that answers "Access
-#       denied" to an unauthenticated ping is alive) would restart the database
-#       every minute, forever;
-#     · treating a DEAD server as healthy would silently do nothing, which is
-#       the exact failure the watchdog exists to end.
-#   Both are pure shell logic, so both are testable without a database: the
-#   tests stub `mysqladmin` and `systemctl` on PATH and assert what the script
-#   decides and which commands it issues.
+#       denied" to an unauthenticated ping is alive) pages somebody — and opens
+#       a public alert issue — about a perfectly good database;
+#     · treating a DEAD server as healthy silently does nothing, which is the
+#       exact failure the watchdog exists to end;
+#     · restarting the database itself. Docker's restart policy owns recovery
+#       (#3135); a `docker start` from here would undo a deliberate stop under
+#       a restore, and a `docker restart` would interrupt InnoDB's own crash
+#       recovery. Every test asserts the script issued no such call;
+#     · dumping the container with a bare `docker inspect`, whose healthcheck
+#       carries the root password, into a public Actions log.
+#   All of it is shell logic, so all of it is testable without a database or a
+#   Docker daemon: the tests stub `mysqladmin`, `docker` and `journalctl` on
+#   PATH and assert what the script decides and which commands it issues.
 #
 # USAGE
 #   bash infra/test/mysql-watchdog.test.sh
@@ -33,23 +38,17 @@ contains() { case "$2" in *"$3"*) ok "$1" ;; *) bad "$1 (missing '$3' in: $2)" ;
 lacks() { case "$2" in *"$3"*) bad "$1 (unexpectedly found '$3')" ;; *) ok "$1" ;; esac; }
 
 # ── stub harness ──────────────────────────────────────────────────────────────
-# PING_MODE drives the fake mysqladmin; every systemctl call is appended to
-# $BIN/systemctl.calls so a test can assert that the database was (or was not)
-# restarted. `systemctl start` flips PING_MODE to alive when START_RECOVERS=1,
-# which is how a real recovery looks from the script's point of view.
+# $STUB_STATE/ping_mode drives the fake mysqladmin: alive | denied | dead |
+# recovering (dead for $STUB_STATE/dead_polls probes, then alive — what Docker
+# bringing the container back looks like from the script's point of view).
+# $STUB_STATE/container is the line the fake `docker inspect --format` answers.
 BIN="$TMP/bin"
 mkdir -p "$BIN"
-# The script only trusts systemctl when systemd is actually PID 1 (it probes
-# $SYSTEMD_RUN_DIR). Fake that directory so the systemd path is the one under
-# test; the SysV fallback gets its own case at the bottom, with it removed.
-FAKE_SYSTEMD_RUN="$TMP/run-systemd"
-mkdir -p "$FAKE_SYSTEMD_RUN"
 
 # The stub is picky in exactly the way the real MariaDB client is: it accepts
 # `--no-defaults` ONLY as the first argument and otherwise exits 2 with
-# `unknown option`. The real client's behaviour here is not a detail — passing
-# that flag second made every probe report a healthy server as down, which
-# would have restarted the production database once a minute.
+# `unknown option`. Passing that flag second once made every probe report a
+# healthy server as down.
 cat > "$BIN/mysqladmin" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$STUB_STATE/mysqladmin.calls"
@@ -59,161 +58,218 @@ for i in $(seq 2 $#); do
   fi
 done
 mode="$(cat "$STUB_STATE/ping_mode" 2>/dev/null || echo alive)"
+if [ "$mode" = recovering ]; then
+  n="$(cat "$STUB_STATE/dead_polls" 2>/dev/null || echo 0)"
+  if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$STUB_STATE/dead_polls"; mode=dead; else mode=alive; fi
+fi
 case "$mode" in
   alive)  echo "mysqld is alive"; exit 0 ;;
-  denied) echo "mysqladmin: connect to server at 'localhost' failed"
-          echo "error: 'Access denied for user 'root'@'localhost' (using password: NO)'"; exit 1 ;;
+  denied) echo "mysqladmin: connect to server at '127.0.0.1' failed"
+          echo "error: 'Access denied for user 'ubuntu'@'172.18.0.1' (using password: NO)'"; exit 1 ;;
   *)      echo "mysqladmin: connect to server at '127.0.0.1' failed"
           echo "error: 'Can't connect to MySQL server on '127.0.0.1:3306' (111)'"; exit 1 ;;
 esac
 EOF
 
-cat > "$BIN/systemctl" <<'EOF'
+# Every call is recorded twice: the verb alone (docker.verbs), so a test can
+# assert that nothing but `inspect`/`logs` was ever issued, and in full
+# (docker.calls). A bare `inspect` answers with what the real one would print —
+# the healthcheck's command line, root password included — as a canary.
+cat > "$BIN/docker" <<'EOF'
 #!/usr/bin/env bash
-echo "$*" >> "$STUB_STATE/systemctl.calls"
+echo "$1" >> "$STUB_STATE/docker.verbs"
+echo "$*" >> "$STUB_STATE/docker.calls"
 case "$1" in
-  cat) [ "$2" = "mysql.service" ] && exit 0 || exit 1 ;;
-  start)
-    [ "${START_RECOVERS:-1}" = "1" ] && echo alive > "$STUB_STATE/ping_mode"
+  inspect)
+    case "$*" in
+      *--format*|*" -f "*) ;;
+      *) echo '"Test": ["CMD", "mysqladmin", "ping", "-pCANARY-ROOT-PASSWORD"]'; exit 0 ;;
+    esac
+    if [ -f "$STUB_STATE/docker_down" ]; then
+      echo "permission denied while trying to connect to the Docker daemon socket"; exit 1
+    fi
+    if [ ! -f "$STUB_STATE/container" ]; then
+      echo "Error: No such object: internship-mysql"; exit 1
+    fi
+    cat "$STUB_STATE/container"; exit 0 ;;
+  logs)
+    echo "2026-10-21T14:38:09.236675Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections."
     exit 0 ;;
-  is-active) echo active ;;
-  is-enabled) echo enabled ;;
 esac
 exit 0
 EOF
 
-# The script escalates privileges with `sudo -n <cmd>` whenever it is not root.
-# The REAL sudo resets PATH (secure_path), so the stubs above would be bypassed
-# and the command would hit the host's actual init system — on a CI runner that
-# means these tests would start and stop the machine's real MySQL. Shadowing
-# sudo keeps every privileged call inside this PATH.
-cat > "$BIN/sudo" <<'EOF'
+# The kernel log as the box printed it on 2026-10-21: a runner shell killed
+# first, then mysqld — two lines per kill, only one of them names the victim
+# in the form the script counts.
+cat > "$BIN/journalctl" <<'EOF'
 #!/usr/bin/env bash
-[ "${1:-}" = "-n" ] && shift
-exec "$@"
+cat "$STUB_STATE/kernel_log" 2>/dev/null
+exit 0
 EOF
 
-chmod +x "$BIN/mysqladmin" "$BIN/systemctl" "$BIN/sudo"
+# Keep the tests off the host's syslog, and fast: the wait loop's sleeps are
+# accounted by WAIT_SECONDS/POLL_SECONDS, not by real time.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/logger"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/sleep"
+chmod +x "$BIN"/*
 
-run_watchdog() { # $1 = ping mode, rest = extra args; sets $out and $rc
-  local mode="$1"; shift
+KILL_MYSQLD='Oct 21 14:37:42 internshipcrm kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=fail2ban.service,mems_allowed=0,global_oom,task_memcg=/system.slice/docker-44ce.scope,task=mysqld,pid=1885,uid=999
+Oct 21 14:37:42 internshipcrm kernel: Out of memory: Killed process 1885 (mysqld) total-vm:2063200kB, anon-rss:664268kB, file-rss:8kB, shmem-rss:0kB, UID:999 pgtables:3452kB oom_score_adj:0'
+KILL_BASH='Oct 21 14:37:42 internshipcrm kernel: Out of memory: Killed process 1047672 (bash) total-vm:6076kB, anon-rss:976kB, file-rss:1492kB, shmem-rss:0kB, UID:1001 pgtables:48kB oom_score_adj:500'
+HEALTHY='running|healthy|unless-stopped|1|2026-10-21T14:37:51.529425391Z'
+
+# $1 = ping mode, $2 = container line ('' = no such container), rest = args.
+# Sets $out, $rc, $verbs (docker verbs issued), $mutations (any verb other
+# than inspect/logs), $pings (mysqladmin calls) and $dcalls.
+run_watchdog() {
+  local mode="$1" container="$2"; shift 2
   export STUB_STATE="$TMP/state"
   rm -rf "$STUB_STATE"; mkdir -p "$STUB_STATE"
   echo "$mode" > "$STUB_STATE/ping_mode"
-  : > "$STUB_STATE/systemctl.calls"
-  : > "$STUB_STATE/mysqladmin.calls"
-  out="$(PATH="$BIN:$PATH" \
-    LOG_FILE="$TMP/watchdog.log" STATE_DIR="$TMP/state-dir" SYSTEMD_DIR="$TMP/systemd" \
-    SYSTEMD_RUN_DIR="${SYSTEMD_RUN_DIR_OVERRIDE:-$FAKE_SYSTEMD_RUN}" \
-    INITD_DIR="${INITD_DIR_OVERRIDE:-$TMP/empty-initd}" \
-    WAIT_SECONDS=2 POLL_SECONDS=1 ATTEMPTS=1 \
-    bash "$WATCHDOG" "$@" 2>&1)"
+  echo "${DEAD_POLLS:-0}" > "$STUB_STATE/dead_polls"
+  [ -n "$container" ] && echo "$container" > "$STUB_STATE/container"
+  [ -n "${KERNEL_LOG:-}" ] && printf '%s\n' "$KERNEL_LOG" > "$STUB_STATE/kernel_log"
+  [ -n "${DOCKER_DOWN:-}" ] && : > "$STUB_STATE/docker_down"
+  : > "$STUB_STATE/docker.verbs"; : > "$STUB_STATE/docker.calls"; : > "$STUB_STATE/mysqladmin.calls"
+  out="$(PATH="$BIN:$PATH" WAIT_SECONDS=4 POLL_SECONDS=1 bash "$WATCHDOG" "$@" 2>&1)"
   rc=$?
-  calls="$(cat "$STUB_STATE/systemctl.calls" 2>/dev/null)"
-  pings="$(cat "$STUB_STATE/mysqladmin.calls" 2>/dev/null)"
+  verbs="$(cat "$STUB_STATE/docker.verbs")"
+  mutations="$(grep -vE '^(inspect|logs)$' "$STUB_STATE/docker.verbs" | tr '\n' ' ')"
+  dcalls="$(cat "$STUB_STATE/docker.calls")"
+  pings="$(cat "$STUB_STATE/mysqladmin.calls")"
 }
+ping_count() { printf '%s\n' "$pings" | grep -c ping; }
 
 echo "mysql-watchdog.sh"
 
-# 1. A healthy database is left completely alone — no restart, no noise.
-run_watchdog alive
+# 1. A healthy database is left completely alone — no docker call, no noise.
+run_watchdog alive "$HEALTHY"
 check "healthy database → exit 0" "$rc" "0"
-lacks "healthy database is not restarted" "$calls" "start"
 check "healthy database logs nothing" "$out" ""
+check "healthy database asks docker nothing" "$verbs" ""
 
 # 1b. The probe must never read a ~/.my.cnf (it needs no credentials), and the
 #     flag that guarantees that only works as the FIRST argument.
-run_watchdog alive
 case "$pings" in
   "--no-defaults "*) ok "probe passes --no-defaults first, where the client accepts it" ;;
   *) bad "probe does not pass --no-defaults first (got: $pings)" ;;
 esac
 
-# 2. THE regression that would make the watchdog worse than nothing: an
-#    unauthenticated ping answered with "Access denied" is a LIVE server.
-run_watchdog denied
+# 2. An unauthenticated ping answered with "Access denied" is a LIVE server.
+#    This is what the box answers today (verified on s.interncrm.com).
+run_watchdog denied "$HEALTHY"
 check "access-denied ping → exit 0 (server answered)" "$rc" "0"
-lacks "access-denied ping does not restart the database" "$calls" "start"
+check "access-denied ping raises no alarm" "$out" ""
 
-# 3. A dead database is detected and started.
-run_watchdog dead
-check "dead database → exit 0 after recovery" "$rc" "0"
-contains "dead database is started" "$calls" "start mysql.service"
-contains "recovery is logged" "$out" "RECOVERED"
+# 3. Docker brings it back while we wait: green, said out loud, and no restart
+#    of ours — the kill is recorded, not repaired twice.
+DEAD_POLLS=2 KERNEL_LOG="$KILL_MYSQLD" \
+  run_watchdog recovering 'restarting|starting|unless-stopped|2|2026-10-22T20:01:02.1Z'
+check "Docker restarts it during the wait → exit 0" "$rc" "0"
+contains "the recovery is credited to Docker's policy" "$out" "RECOVERED"
+contains "the recovery carries the kernel's verdict" "$out" "Killed process 1885 (mysqld)"
+check "the watchdog itself restarted nothing" "$mutations" ""
 
-# 4. When the start does not help, the run FAILS — that is what turns into an
-#    email. Recovering quietly from an unrecoverable state is the failure mode
-#    that lets a database stay down all night.
-START_RECOVERS=0 run_watchdog dead
-check "unrecoverable database → exit 1" "$rc" "1"
-contains "unrecoverable database says so" "$out" "needs a human"
+# 4. Running but not answering for the whole window: red, with the evidence,
+#    and STILL no restart — that would interrupt InnoDB's crash recovery.
+KERNEL_LOG="$KILL_MYSQLD" run_watchdog dead 'running|unhealthy|unless-stopped|1|2026-10-21T14:37:51Z'
+check "never answers → exit 1" "$rc" "1"
+contains "says it needs a human" "$out" "needs a human"
+contains "reports the container's state" "$out" "running (health: unhealthy), restart policy unless-stopped, 1 restart(s)"
+contains "prints mysqld's last log lines" "$out" "ready for connections"
+check "a hung database is not restarted by the watchdog" "$mutations" ""
+check "it waited for Docker before calling it down" "$([ "$(ping_count)" -ge 4 ] && echo yes || echo no)" "yes"
 
-# 5. --install writes both the timer and the unit hardening, and the hardening
-#    is the part that must contain Restart=always: without it systemd gives up
-#    after a handful of OOM kills and the box stays down until a human logs in.
-export STUB_STATE="$TMP/state"; mkdir -p "$STUB_STATE"; echo alive > "$STUB_STATE/ping_mode"
-PATH="$BIN:$PATH" LOG_FILE="$TMP/watchdog.log" SYSTEMD_DIR="$TMP/systemd" \
-  SYSTEMD_RUN_DIR="$FAKE_SYSTEMD_RUN" bash "$WATCHDOG" --install >/dev/null 2>&1
-dropin="$TMP/systemd/mysql.service.d/10-internship-oom.conf"
-check "--install writes the OOM drop-in" "$([ -f "$dropin" ] && echo yes || echo no)" "yes"
-contains "drop-in restarts the database always" "$(cat "$dropin" 2>/dev/null)" "Restart=always"
-contains "drop-in removes the start-rate limit" "$(cat "$dropin" 2>/dev/null)" "StartLimitIntervalSec=0"
-contains "drop-in de-prioritizes mysqld for the OOM killer" "$(cat "$dropin" 2>/dev/null)" "OOMScoreAdjust=-500"
-check "--install writes the timer" \
-  "$([ -f "$TMP/systemd/internship-mysql-watchdog.timer" ] && echo yes || echo no)" "yes"
-contains "timer runs the check, not something else" \
-  "$(cat "$TMP/systemd/internship-mysql-watchdog.service" 2>/dev/null)" "mysql-watchdog.sh --check"
+# 5. Stopped under unless-stopped = stopped by hand. Red at once (Docker will
+#    not bring it back, so waiting is pointless), and never a `docker start`:
+#    that is how a restore gets a database started underneath it.
+run_watchdog dead 'exited|none|unless-stopped|0|2026-10-21T14:37:51Z'
+check "stopped container → exit 1" "$rc" "1"
+contains "says it was most likely stopped by hand" "$out" "stopped by hand"
+contains "tells the human the one command" "$out" "docker start internship-mysql"
+check "a stopped database is not started by the watchdog" "$mutations" ""
+check "no pointless wait for a restart Docker will not do" "$(ping_count)" "1"
 
-# 6. --uninstall leaves nothing behind (a half-removed watchdog that still
-#    holds the Restart=always drop-in is a surprise for the next person).
-PATH="$BIN:$PATH" LOG_FILE="$TMP/watchdog.log" SYSTEMD_DIR="$TMP/systemd" \
-  SYSTEMD_RUN_DIR="$FAKE_SYSTEMD_RUN" bash "$WATCHDOG" --uninstall >/dev/null 2>&1
-check "--uninstall removes the drop-in" "$([ -f "$dropin" ] && echo yes || echo no)" "no"
-check "--uninstall removes the timer" \
-  "$([ -f "$TMP/systemd/internship-mysql-watchdog.timer" ] && echo yes || echo no)" "no"
+# 5b. Paused is a hand-made state too; the way back is unpause, not start.
+run_watchdog dead 'paused|healthy|unless-stopped|0|2026-10-21T14:37:51Z'
+contains "a paused container is answered with unpause" "$out" "docker unpause internship-mysql"
+check "a paused database is not touched" "$mutations" ""
 
-# 7. --status never touches the database, whatever it finds.
-run_watchdog dead --status
-lacks "--status does not restart anything" "$calls" "start"
-check "--status reports a dead database as down" "$rc" "1"
-contains "--status names the state" "$out" "DOWN"
+# 6. Exited with no restart policy: nothing will ever bring it back.
+run_watchdog dead 'exited|none|no|0|2026-10-21T14:37:51Z'
+check "exited without a restart policy → exit 1" "$rc" "1"
+contains "names the missing policy" "$out" "restart policy is 'no'"
+contains "points at the compose file that restores it" "$out" "docker compose -f /opt/internship-crm/mysql/compose.yml up -d"
 
-# 8. No systemd (a container, or an older box): `systemctl` may still be
-#    INSTALLED and answer every call with "System has not been booted with
-#    systemd" — trusting its presence would leave the database down while the
-#    log claims a restart was issued. The script must fall back to the SysV
-#    `service` command that `service mysql start` actually drives.
-cat > "$BIN/service" <<'EOF'
-#!/usr/bin/env bash
-echo "service $*" >> "$STUB_STATE/systemctl.calls"
-[ "${2:-}" = "start" ] && [ "${START_RECOVERS:-1}" = "1" ] && echo alive > "$STUB_STATE/ping_mode"
-exit 0
-EOF
-chmod +x "$BIN/service"
-mkdir -p "$TMP/initd" "$TMP/empty-initd"
-: > "$TMP/initd/mysql" && chmod +x "$TMP/initd/mysql"
+# 7. The container is gone altogether.
+run_watchdog dead ''
+check "missing container → exit 1" "$rc" "1"
+contains "says the container is gone" "$out" "container is gone"
+check "a missing container is not recreated by the watchdog" "$mutations" ""
 
-SYSTEMD_RUN_DIR_OVERRIDE="$TMP/no-systemd" INITD_DIR_OVERRIDE="$TMP/initd" run_watchdog dead
-check "no systemd but an init script → recovers via service(8)" "$rc" "0"
-contains "uses the SysV command" "$calls" "service mysql start"
-lacks "does not issue a systemd start it cannot make" "$calls" "start mysql.service"
+# 8. Docker itself does not answer (permission, or the daemon is down — with
+#    live-restore the container keeps running): the probe decides, and a dead
+#    probe still waits and then fails, saying docker was unreachable.
+DOCKER_DOWN=1 run_watchdog dead "$HEALTHY"
+check "docker unreachable + database dead → exit 1" "$rc" "1"
+contains "says docker did not answer" "$out" "docker did not answer"
+DOCKER_DOWN=1 run_watchdog alive "$HEALTHY"
+check "docker unreachable + database answering → exit 0" "$rc" "0"
 
-# 9. Neither systemd nor an init script: refuse clearly instead of reporting a
-#    restart that never happened.
-SYSTEMD_RUN_DIR_OVERRIDE="$TMP/no-systemd" INITD_DIR_OVERRIDE="$TMP/empty-initd" run_watchdog dead
-check "nothing to restart with → exit 1" "$rc" "1"
-contains "says why it cannot restart" "$out" "cannot restart"
+# 9. --status reports and never touches anything.
+KERNEL_LOG="$KILL_MYSQLD
+$KILL_BASH" run_watchdog denied "$HEALTHY" --status
+check "--status on a healthy box → exit 0" "$rc" "0"
+contains "--status names the container and its health" "$out" "internship-mysql — running (health: healthy)"
+contains "--status shows the restart policy" "$out" "restart policy:  unless-stopped"
+contains "--status shows restarts with a readable timestamp" "$out" "1 since the container was created; last start 2026-10-21T14:37:51Z"
+contains "--status says UP" "$out" "database:        UP"
+contains "--status counts mysqld's OOM kills, not the shell's" "$out" "mysqld OOM kills in the last 24h: 1"
+lacks "--status does not count another process's kill" "$out" "(bash)"
+lacks "one kill is not called flapping" "$out" "flapping"
+check "--status issues no mutating docker call" "$mutations" ""
 
-# 10. A probe that cannot run is not a probe that says "down": mysqladmin
-#     failing on its own arguments must be reported and fall through to the TCP
-#     check, never silently restart a database nobody proved was down.
+run_watchdog dead "$HEALTHY" --status
+check "--status on a dead database → exit 1" "$rc" "1"
+contains "--status says DOWN" "$out" "database:        DOWN"
+check "--status on a dead database restarts nothing" "$mutations" ""
+check "--status does not wait for a restart" "$(ping_count)" "1"
+
+KERNEL_LOG="$KILL_MYSQLD
+$KILL_MYSQLD
+$KILL_MYSQLD" run_watchdog denied "$HEALTHY" --status
+contains "three kills in a day are called flapping" "$out" "this is flapping, not health"
+
+run_watchdog denied 'running|healthy|no|0|2026-10-21T14:37:51Z' --status
+contains "--status flags a container nothing restarts" "$out" "NOTHING restarts this database"
+
+# 10. The container's healthcheck carries the root password. No run — healthy,
+#     failed, status — may ever ask docker for an unformatted inspect.
+for args in "" "--status"; do
+  run_watchdog dead 'running|unhealthy|unless-stopped|1|2026-10-21T14:37:51Z' $args
+  lacks "no root password in the ${args:-check} output" "$out" "CANARY-ROOT-PASSWORD"
+  bare="$(printf '%s\n' "$dcalls" | grep '^inspect' | grep -v -- '--format')"
+  check "every inspect in ${args:-check} mode carries --format" "$bare" ""
+done
+
+# 11. The Plesk-era install flags are refused out loud, not silently accepted.
+run_watchdog alive "$HEALTHY" --install
+check "--install is retired → exit 2" "$rc" "2"
+contains "--install says why" "$out" "restart policy is the recovery layer"
+run_watchdog alive "$HEALTHY" --uninstall
+check "--uninstall is retired → exit 2" "$rc" "2"
+
+# 12. A probe that cannot run is not a probe that says "down": mysqladmin
+#     failing on its own arguments is reported and falls through to the TCP
+#     check, never read as a dead database.
 cat > "$BIN/mysqladmin" <<'EOF'
 #!/usr/bin/env bash
 echo "mysqladmin: unknown option '--some-flag'"
 exit 2
 EOF
 chmod +x "$BIN/mysqladmin"
-run_watchdog alive
+run_watchdog alive "$HEALTHY"
 contains "an unusable mysqladmin is reported, not believed" "$out" "falling back to a TCP connect"
 
 echo

@@ -1,7 +1,7 @@
 // The Runner Watchdog's "is the runner stuck?" rule (scripts/runner-queue.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runnerStuckVerdict } from '../runner-queue.mjs';
+import { runnerStuckVerdict, queueOutputLines } from '../runner-queue.mjs';
 
 const NOW = Date.parse('2026-10-22T12:00:00Z');
 const ago = (min) => new Date(NOW - min * 60_000).toISOString();
@@ -59,4 +59,26 @@ test('a custom runner label is matched exactly', () => {
 test('an unparseable timestamp never triggers a restart', () => {
   const v = runnerStuckVerdict({ ...base, queuedJobs: [{ labels: ['self-hosted'], created_at: 'soon' }], runningJobs: [] });
   assert.equal(v.stuck, false);
+});
+
+test('the verdict carries the numbers the alert quotes', () => {
+  const v = runnerStuckVerdict({
+    ...base,
+    queuedJobs: [{ labels: ['self-hosted'], created_at: ago(95) }, { labels: ['self-hosted'], created_at: ago(5) }],
+    runningJobs: [],
+  });
+  assert.equal(v.queued, 2);
+  assert.equal(v.waitedMin, 95);
+  const empty = runnerStuckVerdict({ ...base, queuedJobs: [], runningJobs: [] });
+  assert.equal(empty.queued, 0);
+  assert.equal(empty.waitedMin, null);
+});
+
+test('step outputs: stuck always, the numbers only when known', () => {
+  assert.equal(queueOutputLines({ stuck: true, queued: 3, waitedMin: 120 }), 'stuck=true\nqueued=3\nwaited_min=120\n');
+  assert.equal(queueOutputLines({ stuck: false, queued: 0, waitedMin: null }), 'stuck=false\n');
+  // "could not read the queue" (stuck: null) is neither stuck nor fine: `unknown`,
+  // so the alert neither opens nor closes on it; a non-boolean is never "true".
+  assert.equal(queueOutputLines({ stuck: null, reason: 'could not read the queue' }), 'stuck=unknown\n');
+  assert.equal(queueOutputLines({ stuck: 'true', queued: 1, waitedMin: 31 }), 'stuck=unknown\nqueued=1\nwaited_min=31\n');
 });
