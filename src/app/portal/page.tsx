@@ -29,6 +29,9 @@ import { daysInStage } from '@/lib/stageClock';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { profileCompleteness } from '@/lib/profileCompleteness';
 import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
+import { AgreementCard } from '@/components/AgreementCard';
+import { agreementBlockFor } from '@/lib/mentoringAgreement';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -96,6 +99,11 @@ export default async function PortalDashboard({
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
   const { user, relation, isArchived, visibilityDecided, projects, missingDocuments } = await getMenteeData(session.user.id, locale);
+  // The mentoring agreement (#1792): a prompt on the live pairing, never a gate
+  // — nothing below is disabled while it is unaccepted.
+  const agreement = relation && !isArchived && (await shellCapabilities(session.user.orgId)).includes('mentorship')
+    ? await agreementBlockFor(relation.id, session.user.id, locale)
+    : null;
   // "Request this mentor" deep link (#1773). The panel below reads the same
   // param client-side; the dashboard needs it too, because the panel is not
   // mounted at all while a mentorship is active — and an unacknowledged click
@@ -200,6 +208,8 @@ export default async function PortalDashboard({
       {/* Compact mentor card: who my mentor is + the two actions a mentee
           reaches for daily. Company details and the interaction history moved
           to /portal/journey. */}
+      {relation && agreement && <AgreementCard relationId={relation.id} agreement={agreement} />}
+
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center gap-2">

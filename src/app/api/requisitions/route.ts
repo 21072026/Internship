@@ -119,6 +119,7 @@ export async function POST(request: Request) {
         status: data.status, openings: data.openings, filled: data.filled, requiredSkills: skills,
         city: data.city || null, workMode: data.workMode || null,
         startDate: data.startDate ? new Date(data.startDate) : null, ownerId: data.ownerId || null,
+        ...(data.screeningQuestions ? { screeningQuestions: data.screeningQuestions } : {}),
         closedAt: closedAtForStatus(data.status),
       },
       include: { company: { select: { id: true, name: true } }, owner: { select: { id: true, fullName: true } } },

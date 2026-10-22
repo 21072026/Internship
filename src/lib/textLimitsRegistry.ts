@@ -287,6 +287,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     ssoIssuer: { limit: 'orgSsoIssuer', files: ORG_WRITERS },
     brandLogoUrl: { exempt: '@db.Text, capped at 2000 by the route' },
     ssoEntryPoint: { exempt: '@db.Text, capped at 2000 by the route' },
+    ssoCertWarnFp: { exempt: 'a SHA-256 fingerprint (95 chars) the expiry job writes, never a person (#1933)' },
     ssoLogoutUrl: { exempt: '@db.Text, capped at 2000 by the route (#1952)' },
     ssoSpKey: SERVER_SET,
     ssoSpCert: SERVER_SET,

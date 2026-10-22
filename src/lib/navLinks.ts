@@ -17,6 +17,7 @@ import {
   RefreshCw,
   type LucideIcon,
   ShieldAlert,
+  FileSearch,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -130,6 +131,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Safeguarding review queue (#2056). Untagged: every vertical has messaging.
   { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
+  // The privileged-action trail (#1583) — gated on the `audit.read` permission
+  // server-side; untagged, every vertical has admins and impersonation.
+  { href: '/admin/audit', icon: FileSearch, key: 'audit' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
   { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },

@@ -14,6 +14,7 @@ import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
 import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
+import { purgeExpiredImports } from '@/lib/api/v1Imports';
 import { purgeExpiredExports } from '@/lib/api/v1Exports';
 import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
@@ -3499,6 +3500,60 @@ export async function sendRoleChangeEmail({
   });
 }
 
+// An organization's IdP signing certificate is about to lapse (#1933). Sent by
+// the `sso-certificates` job (src/lib/jobs/ssoCertificateExpiry.ts), which owns
+// the decision — which org, which mark (30 or 7 days), claimed before sending;
+// this only renders. Category `sso-certificate`, in the essential
+// account_security group: a lapsed certificate locks the whole tenant out of
+// single sign-on, so no preference may mute the two warnings.
+export async function sendSsoCertificateExpiryEmail({
+  to,
+  fullName,
+  orgName,
+  notAfter,
+  daysLeft,
+  fingerprint,
+  locale,
+  orgId,
+  userId,
+}: {
+  to: string;
+  fullName?: string | null;
+  orgName: string;
+  notAfter: Date;
+  daysLeft: number;
+  fingerprint: string;
+  locale?: string | null;
+  orgId: string;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const loc = resolveLocale(locale);
+  const M = (await emailDictionary(loc, orgId)).ssoCertExpiryEmail;
+  const date = new Intl.DateTimeFormat(dateLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' }).format(notAfter);
+  const fill = (t: string) => t.replace('{org}', orgName).replace('{date}', date).replace('{days}', String(daysLeft));
+  return sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'sso-certificate',
+    locale,
+    fromName: brand.name,
+    subject: fill(M.subject),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(fullName ? M.greeting.replace('{name}', fullName) : M.greetingNoName)}</p>
+        <p>${esc(fill(M.body))}</p>
+        <p>${esc(M.action)}</p>
+        <p style="color:#666;font-size:12px;font-family:monospace;">${esc(M.fingerprint.replace('{fingerprint}', fingerprint))}</p>
+        ${ctaBlock(brand, `${base}/admin/organizations`, esc(M.cta))}
+      </div>
+    `,
+  });
+}
+
 // The account owner's copy of an admin 2FA reset (#1543). Sent from the reset
 // route, not left to a preference: their second factor is gone and somebody else
 // removed it, so this is a disclosure rather than a notification — the same
@@ -6481,6 +6536,9 @@ export function initCronJobs() {
       // a sweep that silently stopped running is visible as a missing line.
       const idem = await purgeExpiredIdempotencyKeys();
       console.log(`[Cron] API idempotency key purge: ${idem} keys`);
+      // And the /api/v1 bulk imports (#3015) past their 7-day report window.
+      const importsPurged = await purgeExpiredImports();
+      console.log(`[Cron] API import purge: ${importsPurged} imports`);
       // And the /api/v1 exports (#3002) past their expiry: the file is
       // already refused from that instant; this deletes it.
       const exportsPurged = await purgeExpiredExports();

@@ -124,6 +124,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'ops-alert': { exempt: true, why: `${ESSENTIAL} — operator alerts go to staff addresses` },
   test: { exempt: true, why: `${ESSENTIAL} — the admin's own test mail` },
   consent: { exempt: true, why: `${ESSENTIAL} — the demo form's double-opt-in confirmation, triggered by the person` },
+  'sso-certificate': { exempt: true, why: `${ESSENTIAL} — the IdP certificate-expiry warning, addressed to the org's admins and support address` },
   // ── triggered by the person themselves ────────────────────────────────────
   'mentor-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own application' },
   // ── held although essential-grouped ───────────────────────────────────────
