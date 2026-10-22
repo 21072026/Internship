@@ -119,6 +119,54 @@ braces; it is deliberately out of scope for the harness in #1936 because turning
 it on is a behaviour change for any tenant whose stored issuer does not match
 their IdP's entity ID character for character.
 
+### IdP metadata in, certificate expiry, Test connection (#1933)
+
+The mirror image of the SP metadata below: instead of hand-copying issuer,
+entry point and PEM, a super admin hands the card the IdP's metadata.
+
+- **Import** — `POST /api/admin/organizations/[id]/sso/metadata` with `{ xml }`
+  (pasted or uploaded) or `{ url }`. It **writes nothing**: it answers with a
+  preview (issuer = `EntityDescriptor@entityID`, entry point = the
+  HTTP-Redirect `SingleSignOnService`, else POST, the signing certificate —
+  of several, the valid one with the latest expiry — with its SHA-256
+  fingerprint and expiry, and the `SingleLogoutService` for #1952). "Use these
+  values" fills the card's fields; **Save** stores them through the PATCH, so
+  `validateSsoConfig` and the super-admin gate apply exactly as to typed values.
+  The route itself is a super admin's too (`sso_super_admin_only` for the
+  tenant ADMIN): a preview they could never apply is no use, and the URL form
+  makes the server fetch on the caller's say-so.
+- **Parsing** — `src/lib/ssoMetadata.ts` (`@xmldom/xmldom`, exact-pinned):
+  256 KiB cap, and any `<!DOCTYPE`/`<!ENTITY` is refused before the parser
+  runs (`dtd_not_allowed`) — metadata never needs one, and that closes XXE and
+  entity expansion as a class. The parser resolves no external entity anyway;
+  `scripts/test/sso-metadata.test.mjs` pins both.
+- **URL fetch** — `src/lib/ssoFetch.ts`: `assertPublicHttpsUrl()` on every hop,
+  redirects followed by hand and each target re-checked, 5s timeout, the same
+  byte cap read incrementally.
+- **Certificate at save time** — `validateSsoConfig(c, { checkCertificate })`
+  refuses a PEM that does not parse or has expired, naming which. Judged only
+  when the request **writes a certificate or switches SSO on**: switching off,
+  enforcing or clearing must keep working for a tenant whose certificate has
+  already lapsed.
+- **Badge** — the list's `sso.certificate` carries `notAfter`, `daysLeft` and
+  `status` (`valid` / `expiring` ≤ 30 days / `expired`, or `invalid` for a row
+  stored before the check), never the body.
+- **Warnings** — the daily `sso-certificates` job (06:40 UTC, registered from
+  `/api/cron/start`; `GET /api/cron?job=sso-certificates[&orgId=][&at=]` by
+  hand) mails the org's active ADMINs and its `supportEmail` at **30 and 7
+  days**, once each per certificate: the rule is
+  `src/lib/ssoCertificateRule.ts`, what was sent is
+  `Organization.ssoCertWarnFp` + `ssoCertWarnStage`, claimed with one
+  conditional `updateMany` before sending, so a redeploy never re-sends and a
+  rotated certificate starts afresh. Category `sso-certificate`
+  (account_security — not mutable), activity `sso.certificate_expiring`.
+- **Test connection** — `POST /api/admin/organizations/[id]/sso/test` (the
+  org's ADMIN or a super admin) runs the read-only half of a sign-in on the
+  **stored** config: complete, provider supported, certificate readable and in
+  date, AuthnRequest built, entry point answering below HTTP 500 (through the
+  SSRF guard). No ACS, no grant, no session; one `sso.test_connection`
+  activity line.
+
 ### SP identifiers to register in the IdP (per tenant)
 **Don't copy these by hand — we publish them.** For a tenant with slug `<slug>`
 on base URL `<BASE>` (e.g. `https://preview.interncrm.com`):
@@ -195,7 +243,9 @@ so only a super admin of the org's world sets it — #1575).
   one RSA-2048 key **per organization**, generated on first use (the first
   metadata fetch or logout), its private half sealed with secretBox (purpose
   `sso-sp-signing-key`, AES-256-GCM under NEXTAUTH_SECRET) in
-  `Organization.ssoSpKey`, its self-signed 10-year certificate in `ssoSpCert`
+  `Organization.ssoSpKey` (a credential column: `withoutOrgCredentials()` in
+  `src/lib/orgCredentials.ts` keeps it out of every organization response), its
+  self-signed 10-year certificate in `ssoSpCert`
   and in the metadata as a signing `KeyDescriptor`. Per org so no tenant's IdP
   ever trusts a key another tenant's configuration makes us use; no new env
   secret to provision. Only logout messages are signed (a separate node-saml

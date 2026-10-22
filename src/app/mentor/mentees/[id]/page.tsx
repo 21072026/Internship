@@ -19,6 +19,7 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { JourneyView } from '@/components/JourneyView';
+import { AgreementCard, type AgreementBlock } from '@/components/AgreementCard';
 import { AgendaPanel } from '@/components/AgendaPanel';
 import { SessionNotePanel } from '@/components/SessionNotePanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
@@ -128,6 +129,7 @@ export default function MenteeDetailPage() {
   const typeOptions = INTERACTION_TYPES.map((ty) => ({ value: ty, label: t.interactionTypes[ty] }));
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
+  const [agreement, setAgreement] = useState<AgreementBlock | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ date: '', subject: '', notes: '', type: 'Meeting' });
@@ -158,6 +160,7 @@ export default function MenteeDetailPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setRelation(data.relation);
+      setAgreement(data.agreement ?? null);
     } catch {
       setLoadError(true);
     } finally {
@@ -630,6 +633,9 @@ export default function MenteeDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* The mentoring agreement (#1792): a prompt, never a gate. */}
+          {agreement && relation.status === 'ACTIVE' && <AgreementCard relationId={id} agreement={agreement} onAccepted={fetchRelation} />}
 
           {/* The programme journey (#1855) — forward-looking, onboarding as its
               first milestone; the timeline right below is the record behind it. */}

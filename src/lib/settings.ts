@@ -156,6 +156,9 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // The domain-event record (#1691, DomainEvent). Held only as long as a
+  // receiver could still ask for a replay or a timeline could still read it.
+  domainEventRetentionDays: '90',
   // Company enquiries (#2559): an unconverted one is deleted after this many
   // days, a converted one keeps its row and loses its personal columns.
   companyInquiryRetentionDays: '730',
@@ -397,6 +400,7 @@ export const SETTING_SCHEMA = {
   pageViewRetentionDays: { type: 'number', scopes: G },
   pushSubscriptionStaleDays: { type: 'number', scopes: G },
   jobRetentionDays: { type: 'number', scopes: G },
+  domainEventRetentionDays: { type: 'number', scopes: G },
   companyInquiryRetentionDays: { type: 'number', scopes: O },
   viewLogWindowMinutes: { type: 'number', scopes: G },
   notificationRetentionDays: { type: 'number', scopes: O },
@@ -487,7 +491,7 @@ export function settingAllowsScope(key: SettingKey, scope: SettingScope): boolea
 // alone, whatever org they are asked about, and `setSetting` refuses a tenant
 // row for them. Writing them is a platform-operator (super admin) action — see
 // PUT /api/admin/settings. The list is the keys whose SETTING_SCHEMA scopes
-// stop at 'global' (today: the four telemetry retention windows,
+// stop at 'global' (today: the five telemetry retention windows,
 // `viewLogWindowMinutes` and `orphanApplicantGraceDays`).
 export const GLOBAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set<SettingKey>(
   (Object.keys(SETTING_SCHEMA) as SettingKey[]).filter((k) => !settingAllowsScope(k, 'org')),

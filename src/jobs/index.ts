@@ -10,6 +10,7 @@ import { registerJob } from '@/lib/jobs/registry';
 import { pruneJobRuns } from '@/lib/jobs/queue';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
+import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
@@ -50,6 +51,13 @@ export function registerAllJobs(): void {
   registerHousekeepingJobs();
   registerPlatformJobs();
 
+  // A DONE or FAILED import is left alone, and a row the dead attempt already
+  // created is found by its e-mail and skipped — nothing is created twice.
+  registerJob(
+    'api.import.candidates',
+    async (payload, { job, attempt, signal }) => ({ ...(await runApiImport(payload.importId, { signal, attempt, maxAttempts: job.maxAttempts })) }),
+    { timeoutMs: 10 * 60 * 1000 },
+  );
   // A READY or FAILED export is left alone and the file is stored in one
   // guarded update, so a repeated run rewrites at most an unfinished one.
   registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {

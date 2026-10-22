@@ -100,6 +100,7 @@ export const SCHEDULES: readonly Schedule[] = [
   queue({ key: 'evaluations.reminders', cron: '15 8 * * *', job: 'evaluations.reminders', payload: {}, catchUp: 'latest', why: 'Evaluation due reminders (#1891), daily 08:15.' }),
   queue({ key: 'programJourney.run', cron: '10 7 * * *', job: 'programJourney.run', payload: {}, catchUp: 'latest', why: 'Program journey steps (#1852), daily 07:10, in-app only.' }),
   queue({ key: 'klaviyo.sync', cron: '*/15 * * * *', job: 'klaviyo.sync', payload: {}, catchUp: 'latest', why: 'The Klaviyo pull connector (docs/integrations/klaviyo.md), every 15 minutes — the cadence the owner asked for; each connection also takes its own JobLease and backoff.' }),
+  queue({ key: 'sso.certificateExpiry', cron: '40 6 * * *', job: 'sso.certificateExpiry', payload: {}, catchUp: 'latest', why: 'IdP certificate-expiry warnings (#1933), daily 06:40; two mails per certificate, at 30 and 7 days.' }),
 ];
 
 export const QUEUE_SCHEDULES: readonly QueueSchedule[] = SCHEDULES.filter((s): s is QueueSchedule => s.carrier === 'queue');

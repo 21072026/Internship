@@ -12,6 +12,7 @@
 //   surveys.campaigns      — invitations and reminders are claimed per recipient.
 //   evaluations.reminders  — due rows are created once; reminders stamped.
 //   programJourney.run     — a unique claim per step and person.
+//   sso.certificateExpiry  — each warning stage is stamped per certificate before it mails.
 //   klaviyo.sync           — each connection takes its own lease and cursor;
 //                            a rerun finds the connection busy or up to date.
 import { registerJob } from '@/lib/jobs/registry';
@@ -27,6 +28,7 @@ import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { sendEvaluationReminders } from '@/lib/evaluationDue';
 import { runProgramJourney } from '@/lib/programJourney';
 import { runKlaviyoTick } from '@/lib/klaviyoSync';
+import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
 
 /** `at` as a Date when it parses; anything else is "now". */
 export function atOf(p: ScopedPayload | undefined): Date | undefined {
@@ -62,4 +64,5 @@ export function registerPlatformJobs(): void {
     return { delivered: r.delivered, skipped: r.skipped, unresolved: r.unresolved.length };
   }, SWEEP_OPTS);
   registerJob('klaviyo.sync', async () => counters(await runKlaviyoTick()), SWEEP_OPTS);
+  registerJob('sso.certificateExpiry', async () => counters(await runSsoCertificateExpiry()), SWEEP_OPTS);
 }

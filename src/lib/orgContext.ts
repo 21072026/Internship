@@ -134,6 +134,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKeyUsage',
   // Idempotency keys of /api/v1 writes (#1994) — the key's tenant owns them.
   'ApiIdempotencyKey',
+  // Queued /api/v1 bulk imports (#3015) — one tenant's submitted rows and report.
+  'ApiImport',
   // Async /api/v1 exports (#3002) — a snapshot of one tenant's data.
   'ApiExport',
   // A mentee's practice interview transcript (#2051).
@@ -317,6 +319,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // INTERNSHIP tenant's endpoint, and one global newsletter cadence reaches
   // both tenants' members.
   'Webhook',
+  // The domain-event record (#1691): one tenant's history of what happened.
+  // The outbox relay (#1680) and the retention sweep read it with no session,
+  // so once MT_ENFORCE_ISOLATION is on they must pass `orgId` themselves or
+  // run in an explicit context — otherwise they silently see zero rows.
+  'DomainEvent',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a

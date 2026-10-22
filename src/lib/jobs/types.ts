@@ -87,6 +87,10 @@ export interface JobPayloadMap {
     /// Optional: absent on a fresh row.
     releases?: number;
   };
+  /// One /api/v1 bulk import (#3015, `src/lib/api/v1Imports.ts`). The
+  /// `ApiImport` row holds the org, the key and the rows; the payload is only
+  /// its id, so a payload can never widen what the request was granted.
+  'api.import.candidates': { importId: string };
   /// One /api/v1 export (#3002, `src/lib/api/v1Exports.ts`): write the
   /// `ApiExport` row's file. The row carries everything else (org, key,
   /// resource), so a payload can never widen what the request was granted.
@@ -94,6 +98,8 @@ export interface JobPayloadMap {
   /// The Klaviyo pull connector's tick (src/lib/klaviyoSync.ts): every enabled
   /// connection whose turn it is. Each connection takes its own lease.
   'klaviyo.sync': Record<string, never>;
+  /// IdP certificate-expiry warnings (#1933, src/lib/jobs/ssoCertificateExpiry.ts).
+  'sso.certificateExpiry': Record<string, never>;
   // ── The scheduled jobs (#1677, src/jobs/*). Each is enqueued by the
   // scheduler (src/lib/jobs/schedules.ts) with an empty payload — "every
   // tenant, now" — or by GET /api/cron?job=…&enqueue=1 with the narrowing an
@@ -145,6 +151,8 @@ export const JOB_NAMES: readonly JobName[] = [
   'audit.drain',
   'email.send',
   'api.export',
+  'api.import.candidates',
+  'sso.certificateExpiry',
   'klaviyo.sync',
   'dormancy.sweep',
   'dormancy.checkIn',

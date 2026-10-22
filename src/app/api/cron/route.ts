@@ -33,6 +33,7 @@ import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
 import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { enqueue } from '@/lib/jobs/queue';
 import { manualJobFor } from '@/lib/jobs/manualJobs';
@@ -227,6 +228,22 @@ export async function GET(request: Request) {
       // `runUsageRollup()` takes `orgIds`.
       const trialReminders = await runTrialReminders(targetOrgId ? { orgIds: [targetOrgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
+    }
+    // IdP certificate-expiry warnings alone (#1933). Not an own-org job: the
+    // gate above already refused anyone but a super admin. `orgId` narrows the
+    // sweep (never broadens it), and only to an org of the caller's own world
+    // (super admin is per world, #2647); `at` moves "now", for the same reason
+    // the trial job takes it: e2e/sso-metadata-import.spec.ts asserts exact mails.
+    if (job === 'sso-certificates') {
+      const orgId = params.get('orgId');
+      if (orgId && !(await isSuperAdminFor(session, orgId))) {
+        await logCrossTenantDenial(session, '/api/cron?job=sso-certificates', orgId);
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const at = params.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      const ssoCertificates = await runSsoCertificateExpiry({ ...(orgId ? { orgIds: [orgId] } : {}), now });
+      return NextResponse.json({ message: 'SSO certificate warnings ran', ssoCertificates });
     }
     // Recurring-meeting reminders alone (#2013) — the same function the batch
     // runs, and as safe to click twice: every occurrence is claimed in

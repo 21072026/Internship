@@ -11,6 +11,7 @@ import { purgeExpiredLoginLinks } from '@/lib/magicLink';
 import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
 import { purgeExpiredExports } from '@/lib/api/v1Exports';
+import { purgeExpiredImports } from '@/lib/api/v1Imports';
 import { sweepAiArtifacts } from '@/lib/ai/artifacts';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 
@@ -30,6 +31,7 @@ export function registerHousekeepingJobs(): void {
       // The /api/v1 exports (#3002) past their expiry: refused from that
       // instant already; this deletes the file.
       apiExports: await purgeExpiredExports(),
+      apiImports: await purgeExpiredImports(),
     };
   }, SWEEP_OPTS);
   registerJob('ai.artifactRetention', async () => counters(await sweepAiArtifacts()), SWEEP_OPTS);

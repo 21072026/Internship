@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { SkillsField } from '@/components/ui/SkillsField';
 import { splitSkillInput, REQUISITION_SKILL_LIMITS } from '@/lib/skills';
+import { SCREENING_LIMITS, SCREENING_QUESTION_TYPES, parseScreeningQuestions, type ScreeningQuestion, type ScreeningQuestionType } from '@/lib/screeningQuestions';
 
 type Company = { id: string; name: string };
 type Owner = { id: string; fullName: string; companyId: string | null };
@@ -21,6 +22,7 @@ type Requisition = {
   id: string; companyId: string; title: string; description: string | null; status: string;
   openings: number; filled: number; requiredSkills: unknown; city: string | null;
   workMode: string | null; startDate: string | null; ownerId: string | null;
+  screeningQuestions?: unknown;
   company: Company; owner: { id: string; fullName: string } | null;
 };
 
@@ -28,6 +30,14 @@ const STATUSES = ['DRAFT', 'OPEN', 'ON_HOLD', 'FILLED', 'CANCELLED'] as const;
 const badgeVariant: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   DRAFT: 'default', OPEN: 'success', ON_HOLD: 'warning', FILLED: 'info', CANCELLED: 'danger',
 };
+
+// The screening-question editor's draft (#1832): options as one comma-separated line.
+type QuestionDraft = { id: string; type: ScreeningQuestionType; en: string; tr: string; de: string; options: string; required: boolean };
+const toDraft = (q: ScreeningQuestion): QuestionDraft => ({ id: q.id, type: q.type, en: q.label.en, tr: q.label.tr, de: q.label.de, options: (q.options ?? []).join(', '), required: q.required });
+const fromDraft = (d: QuestionDraft): ScreeningQuestion => ({
+  id: d.id, type: d.type, label: { en: d.en.trim(), tr: d.tr.trim(), de: d.de.trim() }, required: d.required,
+  ...(d.type === 'SELECT' ? { options: d.options.split(',').map((o) => o.trim()).filter(Boolean) } : {}),
+});
 
 const emptyForm = { companyId: '', title: '', description: '', status: 'DRAFT', openings: '1', filled: '0', requiredSkills: '', city: '', workMode: '', startDate: '', ownerId: '' };
 
@@ -48,6 +58,7 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [questions, setQuestions] = useState<QuestionDraft[]>([]);
   const formDialogRef = useModalFocus<HTMLFormElement>(showForm, () => setShowForm(false));
 
   const statusLabel = (status: string) => r.statuses[status as keyof typeof r.statuses] ?? status;
@@ -74,9 +85,10 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
   useEffect(() => { setPage(1); }, [search, companyFilter, statusFilter]);
 
   const availableOwners = useMemo(() => owners.filter((o) => !form.companyId || o.companyId === form.companyId), [owners, form.companyId]);
-  const openCreate = () => { setEditing(null); setForm({ ...emptyForm, companyId: admin ? '' : companies[0]?.id ?? '' }); setShowForm(true); };
+  const openCreate = () => { setEditing(null); setQuestions([]); setForm({ ...emptyForm, companyId: admin ? '' : companies[0]?.id ?? '' }); setShowForm(true); };
   const openEdit = (item: Requisition) => {
     setEditing(item);
+    setQuestions(parseScreeningQuestions(item.screeningQuestions).map(toDraft));
     setForm({
       companyId: item.companyId, title: item.title, description: item.description ?? '', status: item.status,
       openings: String(item.openings), filled: String(item.filled),
@@ -93,6 +105,7 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
       description: form.description || null, city: form.city || null, workMode: form.workMode || null,
       startDate: form.startDate ? new Date(`${form.startDate}T00:00:00.000Z`).toISOString() : null,
       ownerId: form.ownerId || null,
+      screeningQuestions: questions.map(fromDraft),
     };
     if (editing) delete (payload as Partial<typeof payload>).companyId;
     try {
@@ -157,6 +170,31 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
       />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><Input label={r.city} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /><Input label={r.workMode} value={form.workMode} onChange={(e) => setForm({ ...form, workMode: e.target.value })} /><Input type="date" label={r.startDate} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
       <Select label={r.owner} value={form.ownerId} onChange={(e) => setForm({ ...form, ownerId: e.target.value })} options={[{ value: '', label: r.noOwner }, ...availableOwners.map((o) => ({ value: o.id, label: o.fullName }))]} />
+      <fieldset className="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="requisition-screening">
+        <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{r.screening.title}</legend>
+        <p className="text-xs text-gray-600 dark:text-gray-400">{r.screening.hint}</p>
+        {questions.map((q, index) => {
+          const patch = (change: Partial<QuestionDraft>) => setQuestions((all) => all.map((x, i) => (i === index ? { ...x, ...change } : x)));
+          return (
+            <div key={q.id} className="space-y-2 rounded-md bg-gray-50 p-2 dark:bg-gray-800/60" data-testid={`requisition-question-${index}`}>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Input label={r.screening.labelEn} value={q.en} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ en: e.target.value })} data-testid={`requisition-question-${index}-en`} />
+                <Input label={r.screening.labelTr} value={q.tr} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ tr: e.target.value })} data-testid={`requisition-question-${index}-tr`} />
+                <Input label={r.screening.labelDe} value={q.de} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ de: e.target.value })} data-testid={`requisition-question-${index}-de`} />
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="w-40"><Select label={r.screening.type} value={q.type} onChange={(e) => patch({ type: e.target.value as ScreeningQuestionType })} options={SCREENING_QUESTION_TYPES.map((type) => ({ value: type, label: r.screening.types[type] }))} /></div>
+                {q.type === 'SELECT' && <div className="min-w-48 flex-1"><Input label={r.screening.options} value={q.options} onChange={(e) => patch({ options: e.target.value })} /></div>}
+                <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={q.required} onChange={(e) => patch({ required: e.target.checked })} />{r.screening.required}</label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setQuestions((all) => all.filter((_, i) => i !== index))}>{r.screening.remove}</Button>
+              </div>
+            </div>
+          );
+        })}
+        <Button type="button" variant="outline" size="sm" disabled={questions.length >= SCREENING_LIMITS.questions}
+          onClick={() => setQuestions((all) => [...all, { id: `q${Date.now().toString(36)}${all.length}`, type: 'TEXT', en: '', tr: '', de: '', options: '', required: false }])}
+          data-testid="requisition-add-question">{r.screening.add}</Button>
+      </fieldset>
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setShowForm(false)}>{r.cancel}</Button><Button type="submit" loading={saving}>{r.save}</Button></div>
     </form></div>}
   </div>;

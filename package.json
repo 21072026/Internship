@@ -115,6 +115,7 @@
     "@visx/responsive": "^4.0.0",
     "@visx/scale": "^4.0.0",
     "@visx/shape": "^4.0.0",
+    "@xmldom/xmldom": "0.8.15",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "imapflow": "^1.7.8",
