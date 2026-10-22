@@ -320,13 +320,10 @@ _in_image() {
 
 if [ "${EXISTING_TABLES:-0}" -gt 0 ]; then
   # An existing topic database predates this push and may carry rows written by
-  # an older schema — the same repairs prod runs before its push (#1288).
-  _in_image "$IMAGE" node prisma/push-company-interest-expand.mjs || true
-  _in_image "$IMAGE" node prisma/backfill-company-interest-scope.mjs || true
-  _in_image "$IMAGE" node prisma/push-setting-id-expand.mjs || true
-  _in_image "$IMAGE" node prisma/backfill-setting-id.mjs || true
-  _in_image "$IMAGE" node prisma/push-setting-program-expand.mjs || true
-  _in_image "$IMAGE" node prisma/backfill-json-columns.mjs --repair || true
+  # an older schema — the same steps prod runs before its push (#1288), from the
+  # same list (prisma/pre-push/registry.mjs, #3144). Best effort here, as before:
+  # --keep-going runs every step even after one fails, and the push still runs.
+  _in_image "$IMAGE" node prisma/run-pre-push.mjs --keep-going || true
 fi
 
 # --skip-generate: the image already carries the client generated from this very

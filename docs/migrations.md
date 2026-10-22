@@ -21,7 +21,8 @@ deploy does not know about.
 | `infra/schema-guard.sh` (deploy, before the push) | Asks Prisma for the SQL the push would run (`migrate diff --script`, writes nothing) and stops a prod deploy on a statement that destroys data (`DROP COLUMN`, `DROP TABLE`, an enum narrowing …). Enum *widening* is recognised and allowed (#1244). Preview/topic run it `--warn-only`. `ALLOW_DESTRUCTIVE=1` needs `BACKUP_TAKEN=1`. |
 | `infra/backup-db.sh` (deploy, before the guard) | The pre-deploy dump. Required on prod. |
 | The expand helpers (`prisma/push-*-expand.mjs`) | Push an intermediate schema first, so the final push only has a contract step left. Worked example below. |
-| `prisma/backfill-json-columns.mjs --repair` | Runs **before and after** the push — the MariaDB Json trap, below. |
+| `prisma/run-pre-push.mjs` + `prisma/pre-push/registry.mjs` (#3144) | The expand helpers and their backfills, in order, before the push — ONE list run by every path that pushes onto existing tables: prod/preview (`infra/deploy-prod.sh`), an existing topic DB (`infra/server/topic-deploy.sh`) and the public demo (`infra/server/demo-refresh.sh`). |
+| `prisma/backfill-json-columns.mjs --repair` | Runs **before** (the last pre-push step) **and after** the push — the MariaDB Json trap, below. |
 | `prisma/run-backfills.mjs` + `prisma/backfills/registry.mjs` (#1540) | Every data migration (seeds, backfills) after the push, in order, recorded in `BackfillRun`. |
 
 ## How to change the schema
@@ -73,13 +74,17 @@ next is written. Inside one deploy, an expand helper can stage steps 1 and 3
 around a backfill when the intermediate schema is only needed for minutes —
 that is the worked example:
 
-**CompanyInterest** (`infra/deploy-prod.sh`, step 3):
+**CompanyInterest** (`prisma/pre-push/registry.mjs`, then the push):
+
+```js
+{ id: 'company-interest-expand', script: 'prisma/push-company-interest-expand.mjs', … }   // expand: old unique + new FK indexes together
+{ id: 'company-interest-scope',  script: 'prisma/backfill-company-interest-scope.mjs', … } // backfill: deterministic scope keys
+// … the Setting expand/backfill pairs …
+```
 
 ```bash
-run_tool node prisma/push-company-interest-expand.mjs   # expand: old unique + new FK indexes together
-run_tool node prisma/backfill-company-interest-scope.mjs # backfill: deterministic scope keys
-# … the Setting expand/backfill pair …
-run_tool npx prisma db push --accept-data-loss           # contract: the final schema
+run_tool node prisma/run-pre-push.mjs                     # every entry above, in order
+run_tool npx prisma db push --accept-data-loss            # contract: the final schema
 ```
 
 MySQL used the legacy `(companyId, menteeId)` unique index to back the
@@ -198,3 +203,8 @@ its own expand → backfill → contract plan, reviewed before the first PR.
   expand → backfill → contract.
 - **Never add a backfill as a new line in `infra/deploy-prod.sh`.** Add an entry
   to `prisma/backfills/registry.mjs`; the unit test fails on a direct line.
+- **Never add an expand step as a line in a deploy script.** Add an entry to
+  `prisma/pre-push/registry.mjs`. Three scripts push onto existing tables, and a
+  step copied into two of them is how the demo died on `Setting_orgId_key_key`
+  (#3144). `scripts/test/pre-push-registry.test.mjs` fails on a direct line and
+  on a `prisma/push-*-expand.mjs` the registry does not list.

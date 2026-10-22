@@ -30,3 +30,12 @@
 - **`/usr/local/bin/gh` can vanish mid-session** (a concurrent brew operation unlinked it). The
   binary is still at `/usr/local/Cellar/gh/<ver>/bin/gh`. Call that path rather than relinking
   someone else's brew.
+- **Re-read every file you edit after cutting the branch, not from an earlier snapshot.** It
+  happened twice in one session: #3127, then #3143 (the demo's copy of the expand lines) landed
+  while the follow-up was being planned. The Edit tool's "modified since read" was the only
+  warning. `git log --oneline origin/main -3 -- <each file you will touch>` costs one command.
+- **A hand-copied step list drifts the day it is copied.** The demo's copy of the pre-push
+  steps (#3143) had five of prod's six on the day it merged. The fix was one registry plus one
+  runner for all three push paths (#3144), with a test that reads the three shell scripts and
+  fails on a direct line. A test that greps the callers is cheap, and it is the only thing that
+  keeps a "single source" single.
