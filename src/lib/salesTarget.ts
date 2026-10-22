@@ -13,7 +13,7 @@ import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { resolvePipelineStages, outcomeStageKeysFrom } from '@/lib/pipelineStages';
 import { currentPeriod, periodRange, type Period } from '@/lib/meteringRules';
 import {
@@ -45,8 +45,8 @@ export async function loadSalesTargetView(session: Session, locale = 'en', now: 
   const userId = session.user.id;
   const [tenant, settingsOrg] = await Promise.all([tenantWhere(session), settingsOrgOf(session)]);
   const [rawTarget, rawForReps, stages] = await Promise.all([
-    getSetting('salesMonthlyWonTarget', settingsOrg),
-    getSetting('salesLeaderboardForReps', settingsOrg),
+    resolveSettingRaw('salesMonthlyWonTarget', { orgId: settingsOrg }),
+    resolveSettingRaw('salesLeaderboardForReps', { orgId: settingsOrg }),
     resolvePipelineStages(session.user.orgId),
   ]);
   const target = parseWonTarget(rawTarget);

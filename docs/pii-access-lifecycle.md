@@ -235,6 +235,23 @@ ve `InteractionLog.notes` zorunlu kolonlar. Boş gövde bu yüzeylerde zaten
 ulaşılabilir ve zaten render edilen bir durum (yalnızca ek içeren destek
 mesajı, mezar taşı yapılmış sohbet mesajı).
 
+### Kişi listesi beslemesinin çalıştırma kaydı
+
+Roster feed'in kaydı (#1964/#1966, [`roster-feed.md`](roster-feed.md)) serbest metin
+değil, ama kişiyi **anahtarıyla** anar. Her `RosterRowResult` satırı kişinin
+anahtarını (e-posta ya da İK sistemindeki personel numarası) ve `userId`'sini
+taşır. Bir çalıştırmanın `absentKeys` listesi de beslemenin anmadığı anahtarlardır.
+`RosterRowResult.userId`'nin yabancı anahtarı **yok**, yani hard delete'te cascade
+ile de gitmiyordu. Artık iki yol da `rosterLogOps()` ile kişinin satır sonuçlarını
+siler (id ile; hesaba bağlanamamış bir satırı da anahtarla), org'undaki her
+çalıştırmanın `absentKeys` listesinden anahtarını çıkarır. Çalıştırma satırının
+kendisi (sayılar, dosya özeti, durum) beslemenin kaydıdır ve kalır. Ayrıca
+`rosterRowResult` saklama kaydı 90 günden eski satır sonuçlarını siler ve aynı
+pencerede `absentKeys`'i boşaltır. `scripts/sanitize-db.mjs` önizlemede satır
+sonuçlarını siler, `absentKeys`'i boşaltır, beslemelerin mühürlü gizli bilgisini
+düşürür ve hepsini kapatır. Böylece bir önizleme, müşterinin İK sunucusundan
+kopyalanmış bir kimlik bilgisiyle veri çekemez.
+
 ### Ulaşılamayanlar — sessiz boşluk yok
 
 Kanıt testi: [`e2e/erasure-free-text.spec.ts`](../e2e/erasure-free-text.spec.ts)
@@ -348,6 +365,7 @@ ile değiştirilir.
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
 | `CompanyInquiry` | `companyInquiryRetentionDays` | 730 gün | Her talep bir kişinin adı, adresi, telefonu ve kendi yazdıklarıdır ve bu girdiden önce hiçbiri silinmiyordu (#2559). Hiç hesaba dönüştürülmemiş talep **silinir**; dönüştürülmüş olan satır kalır (hesap oradan geldi) ve yalnızca kişisel kolonlarını kaybeder — hesap silmenin temizlediği kolonların aynısı (`inquiryErasureData()`). İki yıl: sessizleşen bir müşteri adayının geri dönmesine ve talep kaynaklarının yıldan yıla karşılaştırılmasına yeter, cevapsız kalmış bir talebi sonsuza dek tutmaz. Talepteki pazarlama izni kaydı da satırla birlikte gider; kalıcı bir opt-out kanıtı gerekiyorsa o #2577'nin kararıdır. |
+| `DomainEvent` | `domainEventRetentionDays` | 90 gün | Olay kaydı (#1691): bir şeyin olduğu ve hangi kimliklere olduğu. En eski halka açık yükler (`application.created`) bir ad ve adres taşıyor. Okuyucuları günlere bakıyor, yıllara değil: webhook alıcısının yeniden gönderim isteği (#1695), bir otomasyon koşusunun tetikleyicisi (#1703). 90 gün, diğer "gitti mi?" defteri olan `EmailLog` ile aynı. Bir kaydın kalıcı geçmişi kaydın kendisi ve ActivityLog/AuditLog izidir, bu tablo değil. Yalnızca **global** katmandan okunur. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
 | `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
 | `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki, kişisel veri taşımayan iki girdiden biri (#2414; diğeri `CompanyUsage`): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |
@@ -417,7 +435,7 @@ kalır, ağ kimliklendiricileri kalmaz. (Bu aynı zamanda kayıt defterinin
 
 ### Kayıt defteri sözleşmesi — yeni bir tablo nasıl eklenir
 
-Üründe **tek bir saklama zamanlaması** var: `initRetentionCron()`, her gün
+Üründe **tek bir saklama zamanlaması** var: kuyruk işi `retention.prune` (`src/lib/jobs/schedules.ts`, #1677), her gün
 03:20 UTC. İkinci bir temizlik işi, ikinci bir zamanlayıcı ya da ikinci bir
 prune modülü açılmıyor. Yeni bir tablo **tek bir `registerRetention()`
 çağrısıdır**:

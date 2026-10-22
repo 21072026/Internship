@@ -8,6 +8,7 @@ import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { logActivity } from '@/lib/activity';
 import type { DocumentType } from '@prisma/client';
 import { applicableRequirementsForUser } from '@/lib/documentRequirements';
+import { chainFor, validityWindow } from '@/lib/documentReview';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId, sameTenant } from '@/lib/orgScope';
@@ -17,7 +18,9 @@ import { orgIdsOfUsers, userInCallerOrg } from '@/lib/ownerOrg';
 const META_SELECT = {
   id: true, ownerId: true, uploaderId: true, type: true, title: true,
   filename: true, contentType: true, size: true, version: true, isTemplate: true, createdAt: true,
-  requirementId: true,
+  requirementId: true, reviewStatus: true, validFrom: true, validUntil: true,
+  // The latest decision's reason, for the owner's list (#1859): a rejection says why.
+  reviews: { where: { decision: 'REJECTED' }, select: { note: true, decidedAt: true }, orderBy: { decidedAt: 'desc' as const }, take: 1 },
 } as const;
 
 const uploadSchema = z.object({
@@ -142,8 +145,19 @@ export async function POST(request: Request) {
   if (!contentMatchesType(data, file.type)) {
     return NextResponse.json({ error: CONTENT_MISMATCH_ERROR }, { status: 400 });
   }
+  // The review chain (#1859): a requirement with SINGLE / CHAIN opens one
+  // DocumentReview per step and leaves the document PENDING; everything else
+  // is APPROVED at once — NONE keeps today's "attached is done".
+  const requirement = requirementId
+    ? await prisma.documentRequirement.findUnique({ where: { id: requirementId }, select: { orgId: true, approvalMode: true, reviewerRoles: true, validityDays: true } })
+    : null;
+  const chain = requirement ? chainFor(requirement) : [];
+  const now = new Date();
   const doc = await prisma.document.create({
     data: {
+      ...(chain.length > 0
+        ? { reviewStatus: 'PENDING', reviews: { create: chain.map((step) => ({ orgId: requirement!.orgId, step: step.step, reviewerRole: step.role })) } }
+        : { reviewStatus: 'APPROVED', ...validityWindow(requirement?.validityDays, now) }),
       ownerId,
       uploaderId: session.user.id,
       type: type as DocumentType,

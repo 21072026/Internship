@@ -80,9 +80,8 @@ before it**. The previous month is re-read because activity is still being *logg
 (a backdated `InteractionLog.date` is exactly that case), and because the first run of a new
 month would otherwise freeze the old one at whatever the last nightly tick happened to see.
 
-It is a **plain handler**: `node-cron` is only the carrier until the leader-elected
-scheduler (#1676) lands, when this becomes a queue handler and the timer goes away with the
-other twelve. `runUsageRollup()` is the handler either way.
+It is a **plain handler**: it runs as the queued job `usage.rollup` (`src/lib/jobs/schedules.ts`,
+#1677) and `runUsageRollup()` is its body.
 
 **A request path must never compute the pair count.** The definition is a scan across seven
 activity tables; a usage screen or an invoice reads `UsageRollup`. The tenant's own bill

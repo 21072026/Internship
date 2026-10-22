@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Create a survey from a built-in instrument (#1877):** `/admin/surveys` gains a picker — instrument, who answers, privacy, and an optional \"open and send now\" that opens the survey and adds a MANUAL campaign (#1887). `POST /api/admin/surveys` accepts `{ templateKey, audience, anonymity }` and resolves the wording on the server in EN/TR/DE through the new `surveyInputFromTemplate()` (`src/lib/surveyTemplateInput.ts`, now also behind the first-destination instrument). An instrument that words a question differently for mentors is refused for `BOTH` (`unsupported_template`) — one survey per role. **The response floor now also applies per question:** once a survey clears its floor, a question fewer than the floor answered reports its count and `suppressed: true` only — before, two answers to an optional question were returned as numbers and text. The token answer flow (`e2e/survey-respond.spec.ts`) joins the `@smoke` set.",
-  "notes": {
-    "en": ["Admins can now create a survey from a ready-made instrument and send it right away; questions that too few people answered stay hidden in the results."],
-    "tr": ["Yöneticiler artık hazır bir şablondan anket oluşturup hemen gönderebiliyor; çok az kişinin yanıtladığı sorular sonuçlarda gizli kalıyor."],
-    "de": ["Admins können jetzt eine Umfrage aus einer fertigen Vorlage anlegen und sofort versenden; Fragen, die zu wenige beantwortet haben, bleiben in den Ergebnissen verborgen."]
-  }
-}

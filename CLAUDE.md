@@ -15,7 +15,7 @@ along the way.
 - **Prisma 5** ORM → **MySQL**
 - **NextAuth 4** (Credentials provider, JWT sessions, bcrypt password hashing)
 - **Tailwind CSS**, **lucide-react**, **react-hook-form**, **zod**
-- **Nodemailer** (SMTP) + **node-cron** for interaction reminders
+- **Nodemailer** (SMTP) + a DB job queue and leased scheduler (`src/lib/jobs/`, `docs/job-worker.md`) for reminders and sweeps
 - Containerized (**Docker**); deployed to a **Caddy-fronted Docker host** (Oracle ARM,
   `interncrm.com`) by GitHub Actions through the box's **self-hosted runner** — the
   Plesk box was retired on 2026-09-06 (`docs/server-migration.md`)
@@ -99,7 +99,7 @@ flowchart LR
   subgraph Server[Next.js server]
     API[API routes /api/*]
     AUTH[NextAuth + JWT]
-    MAIL[emailService + node-cron]
+    MAIL[emailService + job queue]
   end
   DB[(MySQL via Prisma)]
   UI --> API --> DB
@@ -232,7 +232,8 @@ marketing names redirect there, and their apex now serves **mail only**.
 
 - **Schema first**: change `prisma/schema.prisma`, run `prisma format && prisma validate &&
   prisma generate`. This project uses **`db push`**, there is **no `migrations/` folder** — do
-  not author SQL migrations.
+  not author SQL migrations. Expand/contract, rollback, a half-applied push and the
+  dangerous-change list: [`docs/migrations.md`](docs/migrations.md).
 - **"Additive" is not the same as "appliable"** (#2298): `db push` outright *refuses* — not
   warns, and `--accept-data-loss` does not cover it — a new **required** column whose default
   is client-side (`@default(cuid()/uuid()/nanoid())`) or absent, and any `@id`/`@@id` change,
@@ -346,8 +347,8 @@ marketing names redirect there, and their apex now serves **mail only**.
   undeletable**. Curated issues live in `src/lib/newsletterContent.ts` (EN/TR/DE, house
   style documented there). Full design in [`docs/newsletter.md`](docs/newsletter.md) — read
   it before extending: `lib/newsletter.ts` is client-safe on purpose (the HMAC token and
-  URL builders live in `lib/newsletterTokens.ts`), and the cron is registered from
-  `/api/cron/start`, never from `initCronJobs`, to keep the import graph one-way.
+  URL builders live in `lib/newsletterTokens.ts`), and its schedules are queued jobs
+  (`src/jobs/platform.ts`) that import it — `emailService` never imports it back.
 - **Staying signed in** (`docs/remember-me.md`, #1495): the session JWT is 12h and stays that
   way; "keep me signed in" is a separate rotating, hashed, revocable per-device token that
   silently mints a new session. Two rules to keep in mind when touching auth: anything that
@@ -452,6 +453,15 @@ marketing names redirect there, and their apex now serves **mail only**.
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Admin permissions are one rule and one guard** (`docs/role-access-matrix.md` § Admin tiers,
+  #1567/#1569): `User.adminLevel` (`ORG_ADMIN` · `PROGRAM_ADMIN` · `OBSERVER`, an empty column on an
+  ADMIN = `ORG_ADMIN`) + `AdminScopeGrant` rows; the catalogue, the tier table and every allow/deny
+  are pure in `src/lib/authzRule.ts`, and a route asks through `requirePermission(permission,
+  { subject, request })` in `src/lib/authz.ts` (server-only; reads the actor LIVE, writes an
+  `authz.capability_denied` row per refusal). Do not confuse it with `requireCapability()`
+  (`capabilityGate.ts`, the per-vertical product gate). `platform.*` is held only by the per-world
+  super admin (`isSuperAdmin`) — there is no SUPER_ADMIN tier — and no tenant permission crosses an
+  org, the super admin's included. A PROGRAM_ADMIN with no grant gets nothing.
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to
@@ -546,12 +556,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   through a handler registered in `src/jobs/index.ts`; every settle is one guarded
   `updateMany` on the claim, retries back off with jitter, and `maxAttempts` ends in
   `DEAD_LETTER`. Handlers are at-least-once — say in each one why a rerun is harmless.
-  The **cron is leased per tick** (#1676): every schedule is declared in
-  `src/lib/jobs/schedules.ts`; a `'queue'` one is enqueued by the 30 s scheduler tick
-  (`scheduleLeased`/`schedulerTick`, idempotencyKey `<key>:<slotISO>`, missed-slot
-  catch-up via `ScheduleState`), a `'node-cron'` one fires through `scheduleLeased()`
-  — either way only the `'scheduler'` lease holder does the work, so replica ≥2 no
-  longer runs with `CRON_ENABLED=0`. Never call `cron.schedule()` directly.
+  The **cron is leased per tick** (#1676/#1677): every schedule is declared in
+  `src/lib/jobs/schedules.ts` and enqueued by the 30 s `schedulerTick` on the `'scheduler'`
+  lease holder (idempotencyKey `<key>:<slotISO>`, missed-slot catch-up via `ScheduleState`);
+  each body runs as a handler in `src/jobs/` through the worker — so replica ≥2 no longer
+  runs with `CRON_ENABLED=0`. Never call `cron.schedule()`; a new schedule is a
+  `queue({ … })` entry plus a `registerJob()`.
 - **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
   that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
   retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a

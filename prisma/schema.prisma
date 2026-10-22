@@ -151,6 +151,11 @@ model Organization {
   ssoIssuer        String? // IdP entity ID / issuer
   ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
   ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  // The certificate-expiry warning already mailed (#1933, src/lib/ssoCertificateRule.ts):
+  // the SHA-256 fingerprint it was about and the mark (30 or 7 days). Keyed to the
+  // fingerprint so a rotated certificate starts afresh and a redeploy never re-sends.
+  ssoCertWarnFp    String?  @db.VarChar(100)
+  ssoCertWarnStage Int?
   // Enforced SSO (#1950): when true, NO password-derived path may mint a
   // session for this tenant's users — sign-in, remember-me silent re-auth,
   // password reset/SET_INITIAL, invitation registration and password change all
@@ -198,6 +203,15 @@ model Organization {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // Ownership of `publicHost` as a TENANT's own domain (#1661). The mapping
+  // above is an operator's word; a domain a tenant brings itself is proven with
+  // a DNS TXT record carrying `publicHostToken` (#1662), and only once
+  // `publicHostVerifiedAt` is set does the host resolve to this org
+  // (src/lib/hostOrg.ts) and pass the redirect allowlist (src/lib/servedHosts.ts).
+  // An unverified host resolves to nobody. Both nullable — additive (#2298).
+  publicHostToken      String?   @db.VarChar(64)
+  publicHostVerifiedAt DateTime?
+
   // Conferencing policy (#2007): which video room this tenant's meetings get.
   // On the Organization, NOT on Setting — Setting is keyed by a `String @id`,
   // and giving it an orgId re-keys the table (a drop-and-recreate under
@@ -215,6 +229,7 @@ model Organization {
   evaluationTemplates     EvaluationTemplate[]
   stageSlas               StageSla[]
   slaBreaches             SlaBreach[]
+  notificationTemplates   NotificationTemplate[]
   tags                    Tag[]
   skills                  Skill[]
   skillAliases            SkillAlias[]
@@ -223,6 +238,7 @@ model Organization {
   mentorApplications      MentorApplication[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
+  documentReviews         DocumentReview[]
   weeklyReports           WeeklyReport[]
   // Scheduled report delivery (#1905).
   reportSubscriptions     ReportSubscription[]
@@ -271,7 +287,10 @@ model Organization {
   contactSuppressions     ContactSuppression[]
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
+  domainEvents            DomainEvent[]
   auditDrains             AuditDrain[]
+  externalConnections     ExternalConnection[]
+  externalProfileLinks    ExternalProfileLink[]
   adminScopeGrants        AdminScopeGrant[]
   announcements           Announcement[]
   newsletters             Newsletter[]
@@ -521,6 +540,37 @@ model StageSla {
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, stageKey])
+  @@index([orgId])
+}
+
+// The words of one notification event, per locale, as an org (and later one
+// programme) wrote them (#1718). The code default is the dictionary's
+// `notifications.events.<key>` line; a row here overrides it for that org /
+// programme and that locale only. Resolution — programme row → org row → code
+// default in the SAME locale, never another language — is
+// src/lib/notifications/templates.ts; the renderer (merge-tag allowlist,
+// escape-by-default, strict tag/attribute allowlist on the body) is the pure
+// src/lib/notifications/templateRender.ts. Admin-authored, so UNTRUSTED.
+model NotificationTemplate {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // '' = the org-wide row; a programme id = that programme's override. Not
+  // nullable on purpose: MySQL treats NULLs as distinct in a unique index, so a
+  // nullable column would let two org-wide rows for one event and locale
+  // coexist. Programmes do not exist yet (#1618) — every row is '' until then.
+  programId   String       @default("") @db.VarChar(64)
+  // A key of NOTIFICATION_EVENTS (src/lib/notifications/catalog.ts).
+  eventKey    String       @db.VarChar(96)
+  // 'en' | 'tr' | 'de'
+  locale      String       @db.VarChar(8)
+  subject     String       @db.VarChar(255)
+  body        String       @db.Text
+  updatedById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([orgId, programId, eventKey, locale])
   @@index([orgId])
 }
 
@@ -816,6 +866,8 @@ model User {
   mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
   companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
+  // Company → candidate message requests (#1840); removed with the person.
+  candidateOutreach                 CandidateOutreach[]            @relation("CandidateOutreachMentee")
   companyNeedAlerts                 CompanyNeedAlert[]             @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]            @relation("MentorshipRequests")
   decidedRequests                   MentorshipRequest[]            @relation("DecidedMentorshipRequests")
@@ -929,6 +981,11 @@ model UserGuidanceState {
 model PageView {
   id          String   @id @default(cuid())
   userId      String
+  // The viewer's tenant (#1556). Nullable so the column applies to the
+  // populated table; the beacon stamps the session's org, and
+  // prisma/backfill-telemetry-org.mjs attributes legacy rows by viewer before
+  // backfill-organization.mjs. Registered in TENANT_MODELS.
+  orgId       String?
   // App-relative path only (query string stripped), capped in the API.
   path        String
   // Seconds spent on this page before navigating away (0 for the entry hit,
@@ -945,6 +1002,7 @@ model PageView {
   /// batch — on the table that grows fastest in the product, which is exactly
   /// the table the sweep exists for. This is the only schema change #1678 needs.
   @@index([createdAt])
+  @@index([orgId, createdAt])
 }
 
 // Reusable, auditable per-user consent (GDPR). A consent is "active" when
@@ -1748,6 +1806,15 @@ model DocumentRequirement {
   mandatory      Boolean  @default(true)
   order          Int      @default(0)
   active         Boolean  @default(true)
+  // The review chain (#1859). NONE (the default) keeps today's rule — a file
+  // attached is a requirement met. SINGLE / CHAIN leave it unmet until the
+  // ordered steps in reviewerRoles ([{ step, role, label? }], role one of
+  // MENTOR | ADMIN | COMPANY | EXTERNAL) approve the document; the rules are
+  // src/lib/documentReview.ts. validityDays stamps Document.validUntil on
+  // approval; the nightly sweep then expires it.
+  approvalMode   String   @default("NONE")
+  validityDays   Int?
+  reviewerRoles  Json     @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1797,15 +1864,49 @@ model Document {
   version       Int          @default(1)
   isTemplate    Boolean      @default(false)
   requirementId String?
+  // PENDING | APPROVED | REJECTED | EXPIRED (#1859). Written APPROVED at upload
+  // unless the requirement has a review chain; rows older than the column are
+  // set APPROVED by scripts/backfill-document-reviews.mjs on deploy.
+  reviewStatus  String       @default("PENDING")
+  validFrom     DateTime?
+  validUntil    DateTime?
   createdAt     DateTime     @default(now())
 
   owner       User?                @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   requirement DocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  reviews     DocumentReview[]
 
   @@index([ownerId])
   @@index([requirementId])
   @@index([ownerId, requirementId, version])
   @@index([isTemplate])
+  @@index([reviewStatus, validUntil])
+}
+
+/// One step of a document's review chain (#1859): created for every step when
+/// a document is attached to a requirement with approvalMode SINGLE / CHAIN,
+/// decided in step order by a signed-in reviewer of `reviewerRole` — or, for an
+/// EXTERNAL step, by whoever holds `reviewToken` (no account; the MeetingGuest
+/// precedent). The token is cleared when the step is decided, so it works once.
+model DocumentReview {
+  id            String    @id @default(cuid())
+  orgId         String
+  documentId    String
+  step          Int
+  reviewerRole  String
+  reviewerId    String?
+  reviewerEmail String?
+  reviewToken   String?   @unique
+  decision      String?
+  note          String?   @db.Text
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  document Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, step])
+  @@index([orgId, decision])
 }
 
 model Company {
@@ -1903,6 +2004,7 @@ model Company {
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
   users              User[]                  @relation("CompanyUsers")
+  candidateOutreach  CandidateOutreach[]
   projects           Project[]               @relation("CompanyProjects")
   interests          CompanyInterest[]
   entitlements       CompanyEntitlement[]
@@ -1925,6 +2027,9 @@ model Company {
   contacts           CompanyContact[]
   // The marketplaces, shop systems and carriers it works on (#2408).
   channels           CompanyChannel[]
+  // The third-party marketing profiles this account was imported from or
+  // matched to by a pull connector (Klaviyo, docs/integrations/klaviyo.md).
+  externalProfiles   ExternalProfileLink[]
   adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
@@ -2785,6 +2890,39 @@ model CompanyInterest {
   @@index([requisitionId])
 }
 
+// A company's request to message a shortlisted candidate (#1840) — mentor-gated,
+// quota'd, revocable by the candidate. The first message is STORED here and
+// delivered only on approval (into the DIRECT conversation between the
+// requesting company user and the candidate). One row per company × candidate:
+// a repeat request reuses it. The rules (transitions, cooldown, quota period)
+// are pure in src/lib/outreachRule.ts; docs/candidate-outreach.md is the prose.
+// Status is VARCHAR + a whitelist in code, never a Prisma enum (#747).
+model CandidateOutreach {
+  id             String    @id @default(cuid())
+  orgId          String
+  companyId      String
+  menteeId       String
+  applicationId  String?
+  /// PENDING | APPROVED | DECLINED | REVOKED
+  status         String    @default("PENDING") @db.VarChar(16)
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?
+  /// When the candidate revoked it — a new request is refused for 90 days after.
+  revokedAt      DateTime?
+  conversationId String?
+  firstMessage   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CandidateOutreachMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
+  @@index([orgId, status])
+  @@index([menteeId])
+}
+
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
 // POSTs (HMAC-SHA256 of the body in the X-Signature header).
 model Webhook {
@@ -2810,6 +2948,39 @@ model Webhook {
 
   @@index([orgId, active])
   @@index([apiKeyId])
+}
+
+// THE event table (#1691): one append-only row per domain event the product
+// raised. The vocabulary — which names exist, at which version, with which
+// payload — is src/lib/events/catalog.ts and nowhere else; `name` + `version`
+// here always name an entry there. This is the ONE event table of the
+// programme: the transactional outbox (#1680) adds its relay columns
+// (status / relayedAt / attempts) to THIS model, there is no second
+// OutboxEvent table. Tenant data, registered in TENANT_MODELS; background
+// readers (the relay, the retention sweep) have no session and must pass
+// `orgId` / run in an explicit context. Pruned by the `domainEvent` entry of
+// the retention registry (`domainEventRetentionDays`). docs/domain-events.md.
+model DomainEvent {
+  id            String        @id @default(cuid())
+  orgId         String?
+  org           Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name          String        @db.VarChar(96)
+  version       Int           @default(1)
+  payload       Json
+  // 'user' | 'system' | 'apikey' (EVENT_ACTOR_TYPES)
+  actorId       String?
+  actorType     String?       @db.VarChar(16)
+  // A Prisma model name (the catalogue entry's subjectType) + that row's id.
+  subjectType   String?       @db.VarChar(64)
+  subjectId     String?
+  correlationId String?
+  createdAt     DateTime      @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([name, createdAt])
+  @@index([subjectType, subjectId, createdAt])
+  // The retention sweep's cross-tenant range (pruneDomainEvents).
+  @@index([createdAt])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
@@ -2855,8 +3026,10 @@ model ApiKey {
   quotaPeriod     String?             @db.VarChar(10)
   quotaLimit      Int?
   usage           ApiKeyUsage[]
+  imports         ApiImport[]
   idempotencyKeys ApiIdempotencyKey[]
   webhooks        Webhook[]
+  exports         ApiExport[]
 
   @@index([orgId])
   @@index([createdById])
@@ -2910,6 +3083,66 @@ model ApiIdempotencyKey {
   @@unique([apiKeyId, key])
   @@index([orgId])
   @@index([createdAt])
+}
+
+// A queued bulk candidate import from /api/v1 (#3015): POST
+// /api/v1/imports/candidates stores the rows and enqueues `api.import.candidates`;
+// the job runs them through the one import engine (runImport) and writes the
+// per-row report here. `input` holds the submitted rows only until the run
+// ends; the row itself is deleted after `expiresAt`.
+model ApiImport {
+  id         String    @id @default(cuid())
+  orgId      String
+  apiKeyId   String
+  apiKey     ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  kind       String    @db.VarChar(40)
+  dryRun     Boolean   @default(false)
+  // PENDING | RUNNING | DONE | FAILED
+  status     String    @default("PENDING") @db.VarChar(16)
+  total      Int
+  // The submitted rows (JSON); null once the run has ended.
+  input      String?   @db.LongText
+  // The per-row report (JSON); null until DONE.
+  report     String?   @db.LongText
+  error      String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  expiresAt  DateTime
+
+  @@index([orgId])
+  @@index([apiKeyId, status])
+  @@index([expiresAt])
+}
+
+// An asynchronous snapshot of one /api/v1 resource (#3002): queued by
+// POST /api/v1/exports, written by the `api.export` job as gzipped NDJSON
+// (src/lib/api/v1Exports.ts), fetched only through a signed link that expires,
+// and deleted after `expiresAt`. Stored in the database like CvFile — there is
+// no object storage, and a file on one replica's disk is not on the other's.
+model ApiExport {
+  id         String    @id @default(cuid())
+  orgId      String
+  apiKeyId   String
+  apiKey     ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  resource   String    @db.VarChar(40)
+  // Interaction note bodies included — the key's `interactions:read_notes` at
+  // request time, re-checked when the file is fetched.
+  withNotes  Boolean   @default(false)
+  // PENDING | RUNNING | READY | FAILED
+  status     String    @default("PENDING") @db.VarChar(16)
+  rowCount   Int?
+  byteSize   Int?
+  // gzip(NDJSON); null until READY.
+  content    Bytes?
+  // A stable code (`too_many_rows`, `too_large`, `key_inactive`), never a message.
+  error      String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  expiresAt  DateTime
+
+  @@index([orgId])
+  @@index([apiKeyId, status])
+  @@index([expiresAt])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
@@ -3826,17 +4059,25 @@ enum MeetingRequestStatus {
 // A mentee-initiated meeting request. The mentor accepts (creating a Meeting)
 // or declines. Distinct from Meeting, which is the confirmed event.
 model MeetingRequest {
-  id            String               @id @default(cuid())
-  relationId    String
-  requestedById String
-  topic         String
-  proposedAt    DateTime
-  status        MeetingRequestStatus @default(PENDING)
-  createdAt     DateTime             @default(now())
+  id                 String               @id @default(cuid())
+  relationId         String
+  requestedById      String
+  topic              String
+  proposedAt         DateTime
+  status             MeetingRequestStatus @default(PENDING)
+  createdAt          DateTime             @default(now())
+  // A counter-proposal (#1982): the invitee declined `counterOfMeeting` from the
+  // RSVP page and suggested `proposedAt` instead. It sits in the same list as
+  // every other request, but accepting it MOVES that meeting through
+  // PATCH /api/meetings/[id] rather than creating a second one. SetNull: a
+  // deleted meeting leaves an ordinary request behind, never a dangling id.
+  counterOfMeetingId String?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation         MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  counterOfMeeting Meeting?           @relation(fields: [counterOfMeetingId], references: [id], onDelete: SetNull)
 
   @@index([relationId])
+  @@index([counterOfMeetingId])
 }
 
 // A mentee's private personal note (only the author can see it).
@@ -4245,6 +4486,7 @@ model Meeting {
   agenda           SessionAgenda?
   sessionNotes     SessionNote[]
   interviewRequest InterviewRequest?
+  counterProposals MeetingRequest[]
   interviewPanel   InterviewPanel?
 
   @@index([relationId])
@@ -4998,6 +5240,13 @@ model EmailDeliveryEvent {
 // that account erasure would have to chase.
 model EmailLog {
   id        String      @id @default(cuid())
+  // The RECIPIENT's tenant (#1556), written explicitly by every writer (the
+  // caller's orgId, else the recipient account's) — never the sender's request
+  // scope. NULL when nobody knows (an address with no account). Legacy rows
+  // are attributed by prisma/backfill-telemetry-org.mjs only where the address
+  // names one org (#2605: one mailbox can be in two worlds). Registered in
+  // TENANT_MODELS.
+  orgId     String?
   to        String      @db.VarChar(320)
   subject   String      @db.VarChar(512)
   // Coarse bucket ("verification", "message", "invitation", …) so the admin
@@ -5023,6 +5272,7 @@ model EmailLog {
   // Without it MySQL filesorts the status set or walks createdAt past every
   // row of the other statuses — the documented ep:health landmine.
   @@index([status, createdAt])
+  @@index([orgId, createdAt])
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
@@ -5128,6 +5378,125 @@ model AuditDrain {
 
   @@index([orgId])
   @@index([active, nextAttemptAt])
+}
+
+// A PULL connector to a third-party marketing platform (Klaviyo today,
+// docs/integrations/klaviyo.md): one row per organization and provider. The CRM
+// only ever READS from the provider — nothing here is ever written back.
+//
+// The key is a READ-ONLY private API key, sealed with secretBox (purpose
+// `external-connection:<provider>`) because the sync has to send it, not only
+// verify it. It is never returned to a client after it is saved: the admin
+// screen shows `keyLast4` and nothing else.
+//
+// THE PROFILES CURSOR (src/lib/klaviyoRule.ts) is three columns, all nullable:
+//   profilesSince          the `updated` instant the current query starts after
+//                          (null = the first, full import);
+//   profilesQueryStartedAt when the current query began — the next query's
+//                          `since`, so a profile edited WHILE a long query was
+//                          being paged is fetched again rather than missed;
+//   profilesPageCursor     the provider's opaque page cursor inside the current
+//                          query, committed after every page: a run cut off by
+//                          the per-tick budget resumes on the next page.
+// `initialSyncDoneAt` is null until the first full query completed — that run
+// is the SILENT one (no bell, one aggregated activity line).
+//
+// Mail engagement (opens/clicks, K2) will add its own nullable events cursor
+// next to these rather than reuse them.
+model ExternalConnection {
+  id                     String                @id @default(cuid())
+  orgId                  String
+  org                    Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // 'klaviyo' (EXTERNAL_PROVIDERS in src/lib/klaviyoRule.ts).
+  provider               String                @db.VarChar(40)
+  sealedKey              String                @db.Text
+  keyLast4               String                @db.VarChar(8)
+  enabled                Boolean               @default(true)
+  // The admin who saved the key; the lead owner when the org has no default
+  // lead owner (src/lib/klaviyoSync.ts). Not a foreign key: the row outlives a
+  // deactivated admin, and the owner rule re-checks the user on every run.
+  connectedById          String?               @db.VarChar(191)
+  profilesSince          DateTime?
+  profilesQueryStartedAt DateTime?
+  profilesPageCursor     String?               @db.Text
+  // The oldest `updated` of a profile that ERRORED during the open query, and
+  // how many consecutive queries were held back to re-read such a profile
+  // (afterPage() in klaviyoRule.ts): a failed row is retried, a permanent
+  // failure is given up after KLAVIYO_ERROR_RETRY_QUERIES queries.
+  profilesErrorFloor     DateTime?
+  profilesErrorHolds     Int?
+  initialSyncDoneAt      DateTime?
+  lastSyncAt             DateTime?
+  lastSyncOkAt           DateTime?
+  // 'ok' | 'partial' | 'error' (KLAVIYO_SYNC_STATUSES).
+  lastStatus             String?               @db.VarChar(20)
+  // A CODE, never a response body or an address (KLAVIYO_ERROR_CODES).
+  lastErrorCode          String?               @db.VarChar(40)
+  // Consecutive failed runs; drives the backoff (nextAttemptAt).
+  failures               Int                   @default(0)
+  nextAttemptAt          DateTime?
+  // The last run's counts — numbers only, the admin card renders them.
+  lastCreated            Int                   @default(0)
+  lastUpdated            Int                   @default(0)
+  lastUnchanged          Int                   @default(0)
+  lastSkipped            Int                   @default(0)
+  lastErrors             Int                   @default(0)
+  totalCreated           Int                   @default(0)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  profileLinks           ExternalProfileLink[]
+
+  @@unique([orgId, provider])
+  @@index([enabled, nextAttemptAt])
+}
+
+// One provider profile <-> the CRM account it became or was matched to
+// (src/lib/klaviyoSync.ts is the only writer). The link — not
+// `Company.externalId`, which belongs to the tenant's own product — is what
+// makes a re-sync an update instead of a duplicate.
+//
+// `attributes` and `consent` are the provider's own data, shown as INFO on the
+// account and overwritten on every sync: bounded JSON TEXT (never a Json
+// column — the MariaDB empty-string trap), capped by KLAVIYO_ATTRIBUTES_MAX.
+// The consent summary is information only: it never creates a contact
+// permission (docs/contact-permission.md — a machine writes NONE only).
+model ExternalProfileLink {
+  id               String              @id @default(cuid())
+  orgId            String
+  org              Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // SetNull, not Cascade: disconnecting deletes the LIVE links itself
+  // (deleteKlaviyoConnection) but an erasure tombstone must outlive the
+  // connection, or reconnecting would import the erased person again.
+  connectionId     String?
+  connection       ExternalConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  provider         String              @db.VarChar(40)
+  // The provider's profile id.
+  externalId       String              @db.VarChar(64)
+  // Cascade: deleting (or erasing) the account takes its provider link.
+  companyId        String?
+  company          Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // The lead person (a stand-in MENTEE); a plain id, the account is the anchor.
+  leadUserId       String?             @db.VarChar(191)
+  // The Source name the profile was attributed to (leadSourceName()).
+  sourceName       String?             @db.VarChar(120)
+  consent          String?             @db.Text
+  attributes       String?             @db.Text
+  profileUpdatedAt DateTime?
+  // sha256 of the profile's lower-cased address, so an erasure of that person
+  // (src/lib/accountErasure.ts) finds this link without an address stored on it.
+  emailHash        String?             @db.Char(64)
+  // Set when the person this profile describes was erased: the link becomes a
+  // tombstone (externalId only — every other column nulled) and every later
+  // sync SKIPS the profile instead of writing the person back.
+  erasedAt         DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([connectionId, externalId])
+  @@index([orgId, provider, externalId])
+  @@index([orgId, companyId])
+  @@index([orgId, emailHash])
+  @@index([orgId, leadUserId])
 }
 
 // Single-use, time-limited token to confirm a user's email address.
@@ -5395,6 +5764,10 @@ model Requisition {
   openings            Int
   filled              Int       @default(0)
   requiredSkills      Json      @default("[]")
+  // Up to 8 questions a candidate answers when applying (#1832):
+  // [{ id, type: TEXT|BOOLEAN|SELECT, label: { en, tr, de }, options?, required }],
+  // validated by src/lib/screeningQuestions.ts on write and on every answer.
+  screeningQuestions  Json      @default("[]")
   city                String?
   workMode            String?
   startDate           DateTime?

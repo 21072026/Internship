@@ -16,6 +16,7 @@ import {
   sendDormantCheckIns,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
+import { expireDocuments } from '@/lib/documentReviewStore';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
@@ -32,7 +33,10 @@ import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
 import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
+import { enqueue } from '@/lib/jobs/queue';
+import { manualJobFor } from '@/lib/jobs/manualJobs';
 
 // The named jobs that are scoped to the CALLER's own organization (they read
 // it from the session, never from the request). Every other job — and the
@@ -65,6 +69,22 @@ export async function GET(request: Request) {
     } else if (!OWN_ORG_JOBS.has(job ?? '') && !(await isSuperAdmin(session))) {
       await logCrossTenantDenial(session, `/api/cron?job=${job ?? 'batch'}`, null);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // `&enqueue=1` (#1677): hand the named job to the queue instead of running
+    // it in this request. The worker runs it with retries and a JobRun whose
+    // trigger is 'manual', so an operator's re-run reads apart from a scheduled
+    // one. Opt-in: without it the job runs inline and answers with its full
+    // result, exactly as before (every e2e spec reads that body).
+    if (params.get('enqueue') === '1') {
+      const plan = manualJobFor(job, {
+        orgId: OWN_ORG_JOBS.has(job ?? '') ? await settingsOrgOf(session) : targetOrgId,
+        at: params.get('at'),
+        batch: params.get('batch'),
+      });
+      if (!plan) return NextResponse.json({ error: 'not_enqueueable' }, { status: 400 });
+      const row = await enqueue(plan.name, plan.payload as never, { trigger: 'manual', orgId: plan.orgId });
+      return NextResponse.json({ message: 'Job queued', queued: true, jobs: [{ name: plan.name, id: row.id }] }, { status: 202 });
     }
 
     if (job === 'weekly-reports') {
@@ -209,6 +229,22 @@ export async function GET(request: Request) {
       const trialReminders = await runTrialReminders(targetOrgId ? { orgIds: [targetOrgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
     }
+    // IdP certificate-expiry warnings alone (#1933). Not an own-org job: the
+    // gate above already refused anyone but a super admin. `orgId` narrows the
+    // sweep (never broadens it), and only to an org of the caller's own world
+    // (super admin is per world, #2647); `at` moves "now", for the same reason
+    // the trial job takes it: e2e/sso-metadata-import.spec.ts asserts exact mails.
+    if (job === 'sso-certificates') {
+      const orgId = params.get('orgId');
+      if (orgId && !(await isSuperAdminFor(session, orgId))) {
+        await logCrossTenantDenial(session, '/api/cron?job=sso-certificates', orgId);
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const at = params.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      const ssoCertificates = await runSsoCertificateExpiry({ ...(orgId ? { orgIds: [orgId] } : {}), now });
+      return NextResponse.json({ message: 'SSO certificate warnings ran', ssoCertificates });
+    }
     // Recurring-meeting reminders alone (#2013) — the same function the batch
     // runs, and as safe to click twice: every occurrence is claimed in
     // MeetingSeriesReminder before anything is sent. Named so an operator (and
@@ -226,6 +262,9 @@ export async function GET(request: Request) {
     // read the state it just wrote, not race it.
     const dormantSweep = await sweepDormantFirstContacts();
     const dormantCheckIns = await sendDormantCheckIns();
+    // Ahead of the batch for the same reason (#1859): a document that expires
+    // today must already be missing when the reminder below reads the gaps.
+    const documentExpiry = await expireDocuments();
 
     const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
@@ -250,6 +289,7 @@ export async function GET(request: Request) {
       message: 'Scheduled jobs ran',
       dormantSweep,
       dormantCheckIns,
+      documentExpiry,
       interactions,
       meetings,
       projectMeetings,

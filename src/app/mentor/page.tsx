@@ -21,6 +21,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { interactionTypeStyle } from '@/lib/interactionTypes';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { getMentorImpact } from '@/lib/mentorImpact';
+import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -121,6 +122,9 @@ export default async function MentorDashboard() {
 
       {/* Volunteers itself while a newly joined mentee still needs onboarding (#51). */}
       <MenteeOnboardingWizard />
+
+      {/* Documents of my mentees waiting on my review step (#1859); silent when none. */}
+      <DocumentReviewQueue hideWhenEmpty />
 
       <MentorAttentionQueue items={attention.items} dormantCount={attention.dormantCount} t={t} locale={locale} />
 

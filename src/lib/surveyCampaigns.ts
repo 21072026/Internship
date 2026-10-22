@@ -18,10 +18,9 @@
 //     one is simply still due).
 //   • OPT-OUT FIRST. Someone who switched the `surveys` e-mail group off, or
 //     whose account is inactive, is not claimed and not invited.
-// node-cron is only the carrier until the leader-elected scheduler (#1668);
-// the sweep is a plain exported function either way.
+// Scheduled as the queued job `surveys.campaigns` (src/jobs/platform.ts,
+// #1677); the sweep is a plain exported function.
 
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { MentorshipRelation, SurveyAudience, SurveyCampaign, User } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -31,7 +30,6 @@ import { emailGroupAllowed } from '@/lib/emailGroups';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { surveyAcceptsAnswers } from '@/lib/surveys';
 import { createSurveyInvitation, surveyInviteUrl, SURVEY_INVITE_TTL_DAYS } from '@/lib/surveyTokens';
-import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { formatDate } from '@/lib/relativeTime';
@@ -245,26 +243,4 @@ async function sendInvite(user: Person, campaign: SurveyCampaign, token: string,
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
 
-const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
-/**
- * Daily at 10:00 UTC — mid-morning in DE/TR, when a short survey gets read.
- * Registered from /api/cron/start, never from initCronJobs: this module sends
- * through emailService, and importing it there would close the import cycle.
- */
-export function initSurveyCampaignsCron() {
-  if (tasks.has('surveys')) return;
-  const task = scheduleLeased('0 10 * * *', async () => {
-    try {
-      const r = await dispatchDueSurveyCampaigns();
-      if (r.due) logger.warning('Survey campaigns ran', { ...r });
-      // Reminders after the invitations (#1889): today's new invitations are
-      // not due for days, so the order only keeps one log line per pass.
-      const reminders = await sendDueSurveyReminders();
-      if (reminders.due) logger.warning('Survey reminders ran', { ...reminders });
-    } catch (error) {
-      logger.error('Survey campaigns failed', { error: String(error) });
-    }
-  });
-  tasks.set('surveys', task);
-}

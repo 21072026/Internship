@@ -58,6 +58,8 @@ npm run test:e2e      # Playwright (starts the app; needs a DB)
 - Change `prisma/schema.prisma`, then `npx prisma generate`. After switching
   branches, regenerate so the client matches the schema.
 - Do **not** run `db push` against the shared preview/prod DB — CI does it on deploy.
+- Changing a table that already has rows (expand/contract, rollback, the traps):
+  [docs/migrations.md](docs/migrations.md).
 
 ## Tests
 
