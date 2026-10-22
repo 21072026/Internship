@@ -5,6 +5,7 @@ import { LocaleProvider } from '@/i18n/client';
 import { ToastProvider } from '@/components/ui/Toast';
 import { LiveRegionProvider } from '@/components/ui/LiveRegion';
 import { CookieConsent } from '@/components/CookieConsent';
+import { FeedbackWidget } from '@/components/FeedbackWidget';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import { TimezoneSync } from '@/components/TimezoneSync';
@@ -52,6 +53,8 @@ export function Providers({
               <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
             </FloatingNotesProvider>
             <CookieConsent />
+            {/* Signed-in only; renders nothing otherwise (#3130). */}
+            <FeedbackWidget />
             <ActivityTracker />
             <TimezoneSync />
           </ToastProvider>

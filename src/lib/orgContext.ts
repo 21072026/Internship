@@ -395,6 +395,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // its own `orgId` in every WHERE; the registration keeps every other reader
   // inside one tenant.
   'OutboundDraft',
+  // In-app bug / feedback reports (#3130): a screenshot of one tenant's screen
+  // must never reach another tenant's support inbox. POST /api/support/reports
+  // stamps the reporter's org explicitly; its files are reached through it.
+  'SupportReport',
   // A funnel record's estimated monthly value (#2422). Commercial data, like
   // Placement next door: one tenant must never read or sum another's pipeline
   // value. Every writer — the owner/ADMIN edit route, the marketing import and
