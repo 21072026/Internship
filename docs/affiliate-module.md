@@ -119,12 +119,19 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   shell carries the same server-side 2FA gate as every role shell.
 - Changing payout details sends a security notice (`sendSecurityNotice`) and writes
   an `AuditLog` row. So do payment entries, commission status changes and payouts.
-- The contract-acceptance check runs in the API handlers, not only in the layout.
-- Contract version: texts are compared locale by locale in a fixed order (the JSON
-  column's key order is not stable), and the bump is a guarded update on the
-  version that was read.
-- One visibility rule for every read; a partner asking for another partner's row
-  gets 404.
+- Every partner API goes through `affiliatePartnerGate()` (`src/lib/affiliateContract.ts`):
+  AFFILIATE only (403), inside a vertical with the `affiliate` module (403), the
+  session's OWN partner record (404 without one — never taken from the request),
+  and the current contract accepted (409 `contract_not_accepted`). Only
+  `/api/affiliate/contract` (read the text, accept a version) skips the last check.
+- Contract version (`saveContract`): texts are compared locale by locale in a fixed
+  order (`src/lib/affiliateContractRule.ts`; the JSON column's key order is not
+  stable, and line endings are normalised), so an unchanged save keeps the
+  version. A change bumps it by a guarded update on the version that was read.
+  Accepting needs the current version; accepting it twice is the same answer.
+- One visibility rule for every read (`affiliateRowScope`): ADMIN the programme of
+  their organisation, AFFILIATE their own partner's rows, anyone else nothing; a
+  row outside it answers 404, never 403.
 - Payout details: ADMIN reads them in full (manual transfers); the partner sees the
   last four characters.
 
