@@ -743,6 +743,11 @@ which belongs to another repository). Three changes keep that from recurring:
   a `Restart=always` drop-in, and asks GitHub whether the runner drains its queue
   (`scripts/runner-queue.mjs`): jobs for its label waiting ≥ 30 min with nothing
   running on it → `systemctl restart`. "The service is active" is not "it takes jobs".
+  It reaches the box through the `SSH_*` secrets, which must point at **the runner's box**
+  (the Caddy host since the 2026-09 migration). Each run prints a `Box:` marker line
+  (`plesk=yes` means the secrets still reach the retired Plesk box); until they are
+  moved the watchdog can only report, not restart. `mysql-watchdog.yml` and
+  `infra-setup.yml` use the same secrets.
 
 | Knob | Where | Default | Meaning |
 |---|---|---|---|
