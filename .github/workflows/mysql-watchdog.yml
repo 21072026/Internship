@@ -1,37 +1,37 @@
 name: MySQL Watchdog (database health)
 
-# Keeps the server's MySQL 8 alive, and makes sure the thing that
-# keeps it alive is itself alive.
+# Watches the server's MySQL 8 from OUTSIDE the box, and is the only thing that
+# tells a human when it is down.
 #
-# The database is being OOM-killed: the kernel picks mysqld, the unit stops,
-# and every page of the app turns into an error until someone types
-# `service mysql start`. infra/mysql-watchdog.sh is the fix that lives ON the
-# box — a systemd timer that checks once a minute and restarts it, plus a
-# drop-in that lets systemd restart the unit itself within seconds.
+# The database is being OOM-killed: the kernel picks mysqld, and every page of
+# the app turns into an error until it is back. On the current box MySQL runs in
+# the Docker container `internship-mysql` with `restart: unless-stopped`
+# (infra/server/bootstrap.sh), so Docker brings it back by itself — on
+# 2026-10-21 nine seconds after the kill. The Plesk-era on-box timer and systemd
+# drop-in that used to do that are retired (#3135); infra/README.md → "MySQL
+# watchdog" has the reasoning, and infra/mysql-watchdog.sh's header says why the
+# script never restarts the database itself.
 #
-# This workflow is the layer that box cannot provide:
+# What this workflow adds on top of Docker:
 #   · it runs on a GitHub-HOSTED runner ON PURPOSE. A watchdog that needs the
-#     sick server to be healthy is not a watchdog — if the box is so short of
-#     memory that mysqld died, its self-hosted runner may be dead too;
-#   · it re-installs the timer when it is missing (a server rebuild, a host
-#     update that rewrote the unit), so the on-box watchdog cannot quietly
-#     disappear;
-#   · it is the only path that EMAILS. The on-box script logs; nobody reads
-#     logs they don't know to open.
+#     sick server to be healthy is not a watchdog — when the box is so short of
+#     memory that mysqld dies, its self-hosted runner can die too (both did on
+#     2026-10-21);
+#   · it is the only layer that ALERTS. Docker restarts quietly; a database
+#     that is down and STAYING down (stopped by hand and forgotten, crash-
+#     looping, running but not answering) is noticed only because this job goes
+#     red and opens a `ci-alert` issue;
+#   · its log keeps the evidence of the kills Docker did repair: the kernel's
+#     OOM lines, the container's restart count, a memory snapshot.
 #
-# Requires the SSH_* secrets the deploy workflows already use (SSH_PRIVATE_KEY,
-# SSH_HOST, SSH_USER, SSH_PORT); the SSH user must be root or have passwordless
-# sudo for systemctl.
+# Requires the SSH_* secrets (SSH_PRIVATE_KEY, SSH_HOST, SSH_USER, SSH_PORT)
+# pointing at the Docker host; the SSH user needs the `docker` group (container
+# state) and `adm` (kernel log). No sudo.
 
 on:
   schedule:
     - cron: '*/10 * * * *' # every 10 minutes
   workflow_dispatch:
-    inputs:
-      install:
-        description: 'Force a re-install of the on-box timer and unit hardening'
-        type: boolean
-        default: false
 
 concurrency:
   group: mysql-watchdog
@@ -80,38 +80,27 @@ jobs:
           scp -i ~/.ssh/deploy_key -P "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
             infra/mysql-watchdog.sh "${SSH_USER}@${SSH_HOST}:~/internship-infra/mysql-watchdog.sh"
 
-      - name: Check the database, recover it, keep the on-box timer installed
+      - name: Check the database from outside the box
         id: check
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
-          FORCE_INSTALL: ${{ github.event.inputs.install }}
         run: |
           set -o pipefail
           if ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
-              "${SSH_USER}@${SSH_HOST}" "FORCE_INSTALL='${FORCE_INSTALL:-false}' bash -s" 2>&1 \
+              "${SSH_USER}@${SSH_HOST}" "bash -s" 2>&1 \
               <<'REMOTE' | tee /tmp/mysql-watchdog.txt
           set -uo pipefail
           chmod +x ~/internship-infra/mysql-watchdog.sh
-
-          # Idempotent: --install only rewrites the unit files and re-enables the
-          # timer. Run it when the timer is absent (or when asked), so a server
-          # rebuild or a package update that replaced the unit cannot leave the
-          # box unprotected without anyone noticing.
-          if [ "${FORCE_INSTALL:-false}" = "true" ] || \
-             ! systemctl is-enabled internship-mysql-watchdog.timer >/dev/null 2>&1; then
-            echo "== installing the on-box watchdog =="
-            ~/internship-infra/mysql-watchdog.sh --install || echo "WARNING: install failed"
-          fi
 
           echo "== status =="
           ~/internship-infra/mysql-watchdog.sh --status || true
 
           echo "== check =="
           # This is what decides the job: exit 1 means the database is down AND
-          # the script could not bring it back, which is the only state worth an
-          # email at 3am.
+          # Docker did not bring it back within the script's wait, which is the
+          # only state worth an alert at 3am.
           ~/internship-infra/mysql-watchdog.sh --check
           REMOTE
           then
@@ -150,8 +139,8 @@ jobs:
           ALERT_KEY: mysql-watchdog
           ALERT_TITLE: '🛑 mysql-watchdog — the database is DOWN'
           ALERT_SUMMARY: |
-            MySQL is not answering on the server and the watchdog could not restart it. Every page that touches data is failing.
-            First move: `systemctl status mysql` and `journalctl -u mysql -n 50` on the box; the run log carries the watchdog's report. See infra/README.md → "MySQL watchdog".
+            MySQL is not answering on the server and Docker has not brought it back. Every page that touches data is failing.
+            First move on the box: `docker ps -a --filter name=internship-mysql` (stopped by hand? restarting in a loop?) and `docker logs --tail 50 internship-mysql`; the run log carries the watchdog's report. See infra/README.md → "MySQL watchdog".
         run: node scripts/ci-alert-issue.mjs ${{ needs.watchdog.result == 'success' && 'green' || 'red' }}
 
   notify:
@@ -179,15 +168,18 @@ jobs:
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
           ALERT_SUBJECT: '🛑 Internship CRM — the database is DOWN'
           ALERT_BODY: |
-            MySQL is not answering on the server and the watchdog could not
-            restart it. The app is up but every page that touches data is
+            MySQL is not answering on the server and Docker has not brought
+            it back. The app is up but every page that touches data is
             failing right now.
 
-            First move: `systemctl status mysql` and `journalctl -u mysql -n 50`
-            on the box — the report below usually already contains both.
-            If the kernel log shows an OOM kill, the restart is only first aid:
-            the box needs memory headroom (swap, or a lower
-            innodb_buffer_pool_size). See infra/README.md → "MySQL watchdog".
+            First move: `docker ps -a --filter name=internship-mysql` and
+            `docker logs --tail 50 internship-mysql` on the box — the report
+            below already carries the container's state and mysqld's last
+            lines. A stopped container is a `docker stop` nobody undid
+            (`docker start internship-mysql` once whatever stopped it is
+            done). If the kernel log shows OOM kills, restarts are only first
+            aid: the box needs memory headroom. See infra/README.md →
+            "MySQL watchdog".
 
             ${{ needs.watchdog.outputs.report }}
 
