@@ -1,4 +1,3 @@
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { runWithOrg } from '@/lib/orgContext';
@@ -590,42 +589,4 @@ export async function runTrialReminders(
   return { considered: due.length, sent, skipped, failed, expired, contractEnds, decisionWindows, orgs: inScope.length };
 }
 
-const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
-/**
- * Register the daily trial sweep in this server process. Idempotent — a retried
- * call from `/api/cron/start` is harmless.
- *
- * Registered from `/api/cron/start` rather than from `initCronJobs()`, the same
- * way the newsletter cron (#1469), the dead-letter alert (#1674), the retention
- * prune (#1678) and the usage rollup (#1750) are: this module imports
- * `emailService`, so registering it inside `initCronJobs` would close a one-way
- * import into a cycle.
- *
- * 05:20 UTC — clear of every other daily slot (02:40 the usage rollup, 03:20 the
- * retention prune, 06:45 the dead-letter alert, 07:30 activity digests,
- * 08:15/08:30 the Monday weeklies, 09:00 the reminder batch). Early enough that
- * a trial that ran out overnight has already flipped to TRIAL_EXPIRED before
- * anyone opens the board, and ahead of the mail-heavy slots so the reminder is
- * not queued behind them.
- *
- * node-cron is the carrier only until the leader-elected scheduler (#1676)
- * lands; `runTrialReminders()` is the handler either way.
- */
-export function initTrialRemindersCron() {
-  if (tasks.has('trial-reminders')) return;
-
-  const task = scheduleLeased('20 5 * * *', async () => {
-    try {
-      const result = await runTrialReminders();
-      // A tick that sent, skipped, failed or expired something is worth a line;
-      // a quiet one is not — the same discipline as the sibling jobs.
-      if (result.sent > 0 || result.skipped > 0 || result.failed > 0 || result.expired > 0) {
-        logger.warning('Trial reminders ran', { ...result });
-      }
-    } catch (error) {
-      logger.error('Trial reminders cron failed', { error: String(error) });
-    }
-  });
-  tasks.set('trial-reminders', task);
-}

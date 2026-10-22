@@ -19,12 +19,11 @@
 //     evaluation here: #1703's automation engine owns acting on conditions, and
 //     two engines mailing one person on one day is the bug that would ship.
 //
-// Registered from /api/cron/start (initProgramJourneyCron) and runnable on its
-// own as GET /api/cron?job=program-journey. The timer fires through
-// scheduleLeased() (#1676), so only the 'scheduler' lease holder runs it — and
-// the unique claim makes a double tick harmless anyway.
+// Scheduled as the queued job `programJourney.run` (src/lib/jobs/schedules.ts,
+// #1677) and runnable on its own as GET /api/cron?job=program-journey. Only the
+// 'scheduler' lease holder enqueues it — and the unique claim makes a double
+// run harmless anyway.
 
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -327,17 +326,4 @@ export async function previewJourney(programId: string, relationId: string, now 
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
-let task: ReturnType<typeof scheduleLeased> | null = null;
 
-/** Daily at 07:10 UTC — morning in DE/TR, before the pair's day starts. */
-export function initProgramJourneyCron() {
-  if (task) return;
-  task = scheduleLeased('10 7 * * *', async () => {
-    try {
-      const r = await runProgramJourney();
-      if (r.delivered || r.skipped) logger.warning('Program journey ran', { delivered: r.delivered, skipped: r.skipped, unresolved: r.unresolved.length });
-    } catch (error) {
-      logger.error('Program journey failed', { error: String(error) });
-    }
-  });
-}

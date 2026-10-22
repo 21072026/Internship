@@ -648,14 +648,15 @@ A `{ ok: true, created: true }` response means the message was threaded; open
 
 ## 4. Scheduled jobs (reminders & digests)
 
-`initCronJobs()` in `src/services/emailService.ts` registers the node-cron
-schedules: mentor-interaction + stage-deadline + retention reminders and
+Every schedule is a queued job declared in `src/lib/jobs/schedules.ts` (#1677,
+`docs/job-worker.md`): the dormancy sweep, which then enqueues the check-ins and
+the mentor-interaction reminders, plus the stage-deadline and retention reminders and
 company-need alerts (daily 09:00), meeting reminders (every 15 min, firing
 45–60 min ahead), the daily activity digest (07:30), the hourly unread-message
-digest (:20), and the weekly mentor digest + analytics report (Mondays 08:00 /
-08:15).
+digest (:20), the weekly mentor digest (Mondays 08:00) and the rest. Each runs
+as a handler in `src/jobs/` with retries and a `JobRun` row.
 
-It is started at boot by `src/instrumentation.ts`, which POSTs
+The scheduler is started at boot by `src/instrumentation.ts`, which POSTs
 `/api/cron/start` — the same edge-runtime workaround as the mail bridge, and
 deferred onto a timer because `register()` resolves before the server accepts
 connections. `GET /api/cron` still runs every job once — for a **super admin**:

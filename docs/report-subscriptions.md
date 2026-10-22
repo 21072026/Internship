@@ -44,9 +44,7 @@ a funder, a sponsor) who leaves through a signed link.
 
 ## Running it
 
-Hourly at :25 via node-cron, registered from `/api/cron/start` (not
-`initCronJobs`) until the leader-elected scheduler (#1676) takes it as a plain
-handler. An admin can fire their own org's due subscriptions with
+Hourly at :25 as the queued job `reports.subscriptions` (`src/lib/jobs/schedules.ts`, #1677). An admin can fire their own org's due subscriptions with
 `GET /api/cron?job=report-subscriptions` (`&at=<ISO>` pins the clock).
 
 ## The weekly analytics report

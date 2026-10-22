@@ -55,18 +55,7 @@ test.describe('schedule registry', () => {
     }
   });
 
-  test('every node-cron entry matches a scheduleLeased() call in its source, and vice versa', () => {
-    const declared = SCHEDULES.filter((s) => s.carrier === 'node-cron');
-    const bySource = new Map<string, string[]>();
-    for (const s of declared) {
-      if (s.carrier !== 'node-cron') continue;
-      bySource.set(s.source, [...(bySource.get(s.source) ?? []), s.cron]);
-    }
-    for (const [source, crons] of bySource) {
-      const found = [...read(source).matchAll(/scheduleLeased\('([^']+)'/g)].map((m) => m[1]);
-      expect(found.sort(), source).toEqual([...crons].sort());
-    }
-    // And no scheduleLeased() call lives in a file the registry does not name.
+  test('nothing in src/ runs a timer of its own: no cron.schedule(), no node-cron import (#1677)', () => {
     const files: string[] = [];
     const walk = (dir: string) => {
       for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
@@ -77,20 +66,29 @@ test.describe('schedule registry', () => {
     };
     walk('src');
     for (const f of files) {
-      const text = read(f);
-      if (f !== 'src/lib/jobs/leasedCron.ts' && f !== 'src/lib/jobs/schedules.ts') {
-        expect(/\bcron\.schedule\(/.test(text), `${f} calls cron.schedule() directly`).toBe(false);
-        if (/scheduleLeased\('/.test(text)) expect(bySource.has(f), f).toBe(true);
-      }
+      const code = read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      expect(/\bcron\.schedule\(/.test(code), `${f} calls cron.schedule()`).toBe(false);
+      expect(/from ['"]node-cron['"]/.test(code), `${f} imports node-cron`).toBe(false);
     }
   });
 
-  test('every queue entry names a known job with a registered handler', () => {
-    const handlers = read('src/jobs/index.ts');
+  test('every schedule names a known job with a registered handler', () => {
+    const handlers = fs
+      .readdirSync(path.join(ROOT, 'src/jobs'))
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => read(`src/jobs/${f}`))
+      .join('\n');
     for (const s of QUEUE_SCHEDULES) {
       expect(JOB_NAMES).toContain(s.job);
-      expect(handlers).toContain(`registerJob('${s.job}'`);
+      expect(new RegExp(`registerJob\\(\\s*'${s.job.replace('.', '\\.')}'`).test(handlers), s.job).toBe(true);
     }
+  });
+
+  test('the two jobs the dormancy sweep chains have no schedule of their own (#1677)', () => {
+    const scheduled = new Set(QUEUE_SCHEDULES.map((s) => s.job));
+    expect(scheduled.has('dormancy.sweep')).toBe(true);
+    expect(scheduled.has('dormancy.checkIn')).toBe(false);
+    expect(scheduled.has('reminders.mentorInteraction')).toBe(false);
   });
 });
 

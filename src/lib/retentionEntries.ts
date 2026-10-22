@@ -1,4 +1,3 @@
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -1046,43 +1045,4 @@ export async function runRetentionPrune(options: {
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
-/**
- * Register THE retention schedule in this server process. Idempotent — a
- * retried call from `/api/cron/start` is harmless.
- *
- * Registered from `/api/cron/start` rather than from `initCronJobs()`, for the
- * same reason the newsletter cron (#1469) and the dead-letter alert (#1674)
- * are: this module imports `emailService` (for the EmailLog window it took
- * over), so registering it inside `initCronJobs` would close a one-way import
- * into a cycle. It is also the honest place for it — `initCronJobs` lives in
- * the mail service, and the product's retention policy should not be owned by
- * the module that sends e-mail.
- *
- * node-cron is the carrier only until the scheduler story (#1676) lands: this
- * becomes the `retention.prune` handler registered on the queue, and the timer
- * goes away with the other twelve. `runRetentionPrune()` is the handler either
- * way.
- *
- * 03:20 UTC — deliberately in the quiet hours and clear of every other slot
- * (06:45 the dead-letter alert, 07:30 activity digests, 08:15/08:30 the Monday
- * weeklies, 09:00 the reminder batch). Deleting rows in bulk is the one
- * scheduled thing here that competes with live traffic for the same table
- * locks, so it runs when there is least of it.
- */
-export function initRetentionCron() {
-  if (tasks.has('retention-prune')) return;
-
-  const task = scheduleLeased('20 3 * * *', async () => {
-    try {
-      await runRetentionPrune();
-    } catch (e) {
-      // runRetentionPrune already swallows per-entry failures; reaching here
-      // means the run itself could not complete (the settings read, the audit
-      // row). Loud, because then there is no ActivityLog row to find later.
-      logger.error('Retention prune cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('retention-prune', task);
-}

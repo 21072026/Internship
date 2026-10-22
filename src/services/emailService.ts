@@ -2,7 +2,6 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { suppressedAmong } from '@/lib/emailSuppression';
 import { suppressedLogReason } from '@/lib/emailSuppressionRule';
 import { randomUUID } from 'node:crypto';
@@ -10,13 +9,6 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { directKeyFor } from '@/lib/conversations';
 import { orgIdsEntitledTo } from '@/lib/subscription';
-import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
-import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
-import { purgeExpiredLoginLinks } from '@/lib/magicLink';
-import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
-import { purgeExpiredImports } from '@/lib/api/v1Imports';
-import { purgeExpiredExports } from '@/lib/api/v1Exports';
-import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
@@ -39,8 +31,7 @@ import { orgWhere } from '@/lib/tenantFilter';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
-import { sweepAiArtifacts } from '@/lib/ai/artifacts';
+import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
 import { overdueBefore } from '@/lib/taskDue';
 import { visibleToViewer } from '@/lib/todoVisibility';
@@ -107,7 +98,7 @@ import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from 
 import { notifyEvent } from '@/lib/notifications/router';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
-import { expireDrafts, holdIfRequired } from '@/lib/outboundDrafts';
+import { holdIfRequired } from '@/lib/outboundDrafts';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -4691,8 +4682,8 @@ export async function sendDormantCheckIns(now = new Date()) {
   return { checked, sent };
 }
 
-// How far ahead a meeting reminder fires. The cron ticks every 15 minutes
-// (see initCronJobs), so a meeting is reminded 45-60 minutes before it starts —
+// How far ahead a meeting reminder fires. The job ticks every 15 minutes
+// (`meetings.reminders` in src/lib/jobs/schedules.ts), so a meeting is reminded 45-60 minutes before it starts —
 // close enough to "one hour before" to be useful, and never late.
 export const MEETING_REMINDER_WINDOW_MINUTES = 60;
 
@@ -6359,195 +6350,3 @@ export async function pruneEmailLog(
   return { deleted: processed, cutoff, capped };
 }
 
-const scheduledTasks = new Map<string, ReturnType<typeof scheduleLeased>>();
-
-export function initCronJobs() {
-  if (scheduledTasks.has('mentor-reminders')) return;
-
-  // Run every day at 9:00 AM
-  const task = scheduleLeased('0 9 * * *', async () => {
-    console.log('[Cron] Running mentor interaction reminder check...');
-    try {
-      // Before the reminders, not after: the sweep is what decides who counts as
-      // a dormant first contact today, and the interaction reminder reads that
-      // same rule to leave them alone.
-      const dormant = await sweepDormantFirstContacts();
-      console.log(`[Cron] Dormant first contacts: flagged ${dormant.flagged}, cleared ${dormant.cleared}`);
-      const checkIns = await sendDormantCheckIns();
-      console.log(`[Cron] Dormant check-ins sent: ${checkIns.sent}`);
-      const result = await checkMentorInteractionReminders();
-      console.log(`[Cron] Done. Checked: ${result.checked}, Reminded: ${result.reminded}`);
-      const dl = await checkStageDeadlineReminders();
-      console.log(`[Cron] Stage deadline reminders: ${dl.reminded}, escalated ${dl.escalated}, resolved ${dl.resolved}`);
-      const rr = await checkRetentionReminders();
-      console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
-      const nm = await checkCompanyNeedMatches();
-      console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
-      // The EmailLog prune used to be the last line of this tick. It moved to
-      // the one retention job (#1678, `src/lib/retentionEntries.ts`, 03:20 UTC)
-      // together with the four other tables that need a window — housekeeping
-      // that happens to be about mail is still housekeeping, and the product
-      // should have exactly one place where rows are deleted on a clock.
-    } catch (error) {
-      console.error('[Cron] Error running reminder check:', error);
-    }
-  });
-
-  scheduledTasks.set('mentor-reminders', task);
-
-  // Meeting reminders — every 15 minutes. The reminder window is 60 minutes
-  // (MEETING_REMINDER_WINDOW_MINUTES); an hourly tick would fire anywhere from
-  // 0 to 60 minutes ahead, so a quarter-hourly tick is what actually delivers
-  // "about an hour before" (45-60 min). reminderSentAt keeps it single-shot.
-  const meetingTask = scheduleLeased('*/15 * * * *', async () => {
-    try {
-      const r = await sendMeetingReminders();
-      if (r.reminded) {
-        console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}, in-app: ${r.notified}, emails: ${r.emailed}`);
-      }
-      // Recurring project meetings ride the same tick: their windows are 1h/24h
-      // wide, so a quarter-hourly check is what makes "an hour before" accurate.
-      const s = await sendProjectMeetingSeriesReminders();
-      if (s.reminded) {
-        console.log(`[Cron] Project meeting reminders. Occurrences: ${s.reminded}, in-app: ${s.notified}, emails: ${s.emailed}`);
-      }
-      // Meetings that took place get their interaction log written for them
-      // (#1489). Rides this tick because it watches the same rows: a meeting
-      // ended by hand is logged on the click, this catches the ones nobody
-      // ended, two hours after they started.
-      const a = await sweepMeetingInteractionLogs();
-      if (a.logged) {
-        console.log(`[Cron] Meeting interaction logs written: ${a.logged}`);
-        // …and their mentees get the one "how was it?" e-mail (#1896).
-        // Imported lazily: meetingFeedback imports this module's sendEmail.
-        const { askForMeetingFeedback } = await import('@/lib/meetingFeedback');
-        await askForMeetingFeedback(a.loggedIds);
-      }
-    } catch (e) {
-      console.error('[Cron] Meeting reminder error:', e);
-    }
-  });
-  scheduledTasks.set('meeting-reminders', meetingTask);
-
-  // Weekly mentor digest — Mondays 8:00.
-  const digestTask = scheduleLeased('0 8 * * 1', async () => {
-    try {
-      const r = await sendWeeklyMentorDigests();
-      console.log(`[Cron] Weekly digests sent: ${r.sent}`);
-    } catch (e) {
-      console.error('[Cron] Digest error:', e);
-    }
-  });
-  scheduledTasks.set('weekly-digest', digestTask);
-
-
-  // Hourly e-mail delivery health check (#1190) — alerts when sends keep
-  // failing or the last success goes stale while attempts continue.
-  const emailHealthTask = scheduleLeased('5 * * * *', async () => {
-    try {
-      await runEmailHealthCheck();
-    } catch (e) {
-      logger.error('Email health cron failed', { error: String(e) });
-    }
-    // Held drafts past their deadline (#2960): the same hourly mail tick.
-    try {
-      await expireDrafts();
-    } catch (e) {
-      logger.error('Outbound draft expiry failed', { error: String(e) });
-    }
-  });
-  scheduledTasks.set('email-health', emailHealthTask);
-
-  // Missing mandatory documents — Mondays 08:30, offset from the other weekly jobs.
-  const documentTask = scheduleLeased('30 8 * * 1', async () => {
-    try {
-      const result = await sendWeeklyMissingDocumentReminders();
-      console.log(`[Cron] Missing document reminders: ${result.notified}`);
-    } catch (error) {
-      console.error('[Cron] Missing document reminder error:', error);
-    }
-  });
-  scheduledTasks.set('missing-document-reminders', documentTask);
-
-  // AI artefact retention (#2044) — daily at 03:20: nothing generated about a
-  // person outlives the org's retentionMonths.
-  const artifactRetention = scheduleLeased('20 3 * * *', async () => {
-    try {
-      const r = await sweepAiArtifacts();
-      if (r.deleted) console.log(`[Cron] AI artefacts past retention removed: ${r.deleted}`);
-    } catch (e) {
-      console.error('[Cron] AI artefact retention error:', e);
-    }
-  });
-  scheduledTasks.set('ai-artifact-retention', artifactRetention);
-
-  // Daily mentee-activity digest — every day at 7:30.
-  const activityTask = scheduleLeased('30 7 * * *', async () => {
-    try {
-      const r = await sendDailyActivityDigests();
-      console.log(`[Cron] Daily activity digests sent: ${r.sent}`);
-    } catch (e) {
-      console.error('[Cron] Activity digest error:', e);
-    }
-  });
-  scheduledTasks.set('activity-digest', activityTask);
-
-  const weeklyReportTask = scheduleLeased('0 15 * * 5', async () => {
-    try {
-      const result = await sendWeeklyReportReminders();
-      console.log(`[Cron] Weekly report reminders: ${result.reminded}`);
-    } catch (error) {
-      console.error('[Cron] Weekly report reminder error:', error);
-    }
-  });
-  scheduledTasks.set('weekly-report-reminders', weeklyReportTask);
-
-  // Unread-message digest — hourly at :20 (offset from the other hourly jobs).
-  const unreadDigestTask = scheduleLeased('20 * * * *', async () => {
-    try {
-      const r = await sendUnreadMessageDigests();
-      if (r.sent) console.log(`[Cron] Unread message digests sent: ${r.sent}`);
-    } catch (e) {
-      console.error('[Cron] Unread message digest error:', e);
-    }
-  });
-  scheduledTasks.set('unread-message-digest', unreadDigestTask);
-
-  // Housekeeping for "keep me signed in" (#1495) — nightly at 03:40. Expired
-  // device rows and the spent one-minute refresh grants have no further use;
-  // revoked devices are kept a month longer so a replayed cookie is still
-  // recognisable (see purgeExpiredTrustedDevices).
-  const trustedDeviceTask = scheduleLeased('40 3 * * *', async () => {
-    try {
-      const r = await purgeExpiredTrustedDevices();
-      if (r.devices || r.grants) {
-        console.log(`[Cron] Trusted device purge: ${r.devices} devices, ${r.grants} grants`);
-      }
-      // Same nightly slot for the magic-link rows (#1959): spent and expired
-      // sign-in links can admit nothing and are not kept.
-      const links = await purgeExpiredLoginLinks();
-      if (links) console.log(`[Cron] Login link purge: ${links} links`);
-      // And the sign-in device memory (#1717): a browser not seen for half a
-      // year is forgotten, so its next sign-in is "new" again.
-      const devices = await purgeStaleSignInDevices();
-      if (devices) console.log(`[Cron] Sign-in device purge: ${devices} devices`);
-      // And the /api/v1 Idempotency-Key rows (#1994): past their 24h replay
-      // window they can answer nothing. The count is logged even when zero, so
-      // a sweep that silently stopped running is visible as a missing line.
-      const idem = await purgeExpiredIdempotencyKeys();
-      console.log(`[Cron] API idempotency key purge: ${idem} keys`);
-      // And the /api/v1 bulk imports (#3015) past their 7-day report window.
-      const importsPurged = await purgeExpiredImports();
-      console.log(`[Cron] API import purge: ${importsPurged} imports`);
-      // And the /api/v1 exports (#3002) past their expiry: the file is
-      // already refused from that instant; this deletes it.
-      const exportsPurged = await purgeExpiredExports();
-      console.log(`[Cron] API export purge: ${exportsPurged} exports`);
-    } catch (e) {
-      console.error('[Cron] Trusted device purge error:', e);
-    }
-  });
-  scheduledTasks.set('trusted-device-purge', trustedDeviceTask);
-
-  console.log('[Cron] Scheduled jobs initialized');
-}

@@ -435,7 +435,7 @@ kalır, ağ kimliklendiricileri kalmaz. (Bu aynı zamanda kayıt defterinin
 
 ### Kayıt defteri sözleşmesi — yeni bir tablo nasıl eklenir
 
-Üründe **tek bir saklama zamanlaması** var: `initRetentionCron()`, her gün
+Üründe **tek bir saklama zamanlaması** var: kuyruk işi `retention.prune` (`src/lib/jobs/schedules.ts`, #1677), her gün
 03:20 UTC. İkinci bir temizlik işi, ikinci bir zamanlayıcı ya da ikinci bir
 prune modülü açılmıyor. Yeni bir tablo **tek bir `registerRetention()`
 çağrısıdır**:

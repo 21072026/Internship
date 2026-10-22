@@ -3,14 +3,21 @@
 // never claimed and is reported at worker start (`checkHandlers()`).
 //
 // One `registerJob()` per name. Handlers are at-least-once — each one states
-// what makes a second run harmless. The schedule that ENQUEUES them is #1676's
-// registry; #1677 moves the node-cron bodies in here, one file per handler.
+// what makes a second run harmless. The schedule that ENQUEUES them is
+// src/lib/jobs/schedules.ts (#1676); the bodies they call stay where the domain
+// lives (emailService, newsletterDispatch, …) — only the wiring is here.
 import { registerJob } from '@/lib/jobs/registry';
 import { pruneJobRuns } from '@/lib/jobs/queue';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
 import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
+import { counters } from './summary';
+import { registerReminderJobs } from './reminders';
+import { registerMeetingJobs } from './meetings';
+import { registerDigestJobs } from './digests';
+import { registerHousekeepingJobs } from './housekeeping';
+import { registerPlatformJobs } from './platform';
 
 let registered = false;
 
@@ -34,7 +41,15 @@ export function registerAllJobs(): void {
 
   // The cursor moves only on a 2xx and receivers dedupe on the row id
   // (docs/audit-stream.md), so a repeated tick re-ships at most one batch.
-  registerJob('audit.drain', async () => ({ ...(await runAuditDrains()) }));
+  registerJob('audit.drain', async () => counters(await runAuditDrains()));
+
+  // The former node-cron jobs (#1677), grouped by area; each file states why
+  // a rerun of each of its handlers is harmless.
+  registerReminderJobs();
+  registerMeetingJobs();
+  registerDigestJobs();
+  registerHousekeepingJobs();
+  registerPlatformJobs();
 
   // A DONE or FAILED import is left alone, and a row the dead attempt already
   // created is found by its e-mail and skipped — nothing is created twice.
