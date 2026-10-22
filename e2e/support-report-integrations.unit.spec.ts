@@ -36,6 +36,11 @@ test.describe('support report integrations', { tag: '@smoke' }, () => {
     expect(isIssueUrlOf('example-org/example-repo', 'https://github.com/example-org/example-repo/issues/12')).toBe(true);
     expect(isIssueUrlOf('example-org/example-repo', 'https://github.com/other/example-repo/issues/12')).toBe(false);
     expect(isIssueUrlOf('example-org/example-repo', 'https://github.com/example-org/example-repo/pull/12')).toBe(false);
+    // A dot in the repo name is literal, and nothing may ride along.
+    expect(isIssueUrlOf('example-org/example.repo', 'https://github.com/example-org/exampleXrepo/issues/1')).toBe(false);
+    expect(isIssueUrlOf('example-org/example-repo', 'https://github.com/example-org/example-repo/issues/1?x=1')).toBe(false);
+    expect(isIssueUrlOf('example-org/example-repo', 'https://github.com.evil.example/example-org/example-repo/issues/1')).toBe(false);
+    expect(isIssueUrlOf('example-org/example-repo', 'not a url')).toBe(false);
   });
 
   test('an issue draft carries technical facts only — no reporter, no words, no host', () => {

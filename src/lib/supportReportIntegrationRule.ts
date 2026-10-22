@@ -50,7 +50,22 @@ export function githubConfig(env: Record<string, string | undefined>): GithubCon
 
 /** The only issue URL a report may store: an issue of the configured repository. */
 export function isIssueUrlOf(repo: string, url: string): boolean {
-  return new RegExp(`^https://github\\.com/${repo.replace(/[.]/g, '\\.')}/issues/\\d+$`).test(url);
+  // Parsed and compared as strings — no pattern is built from `repo`.
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const prefix = `/${repo}/issues/`;
+  return (
+    u.protocol === 'https:' &&
+    u.host === 'github.com' &&
+    !u.search &&
+    !u.hash &&
+    u.pathname.startsWith(prefix) &&
+    /^\d+$/.test(u.pathname.slice(prefix.length))
+  );
 }
 
 export const ISSUE_TITLE_MAX = 200;
