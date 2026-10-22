@@ -724,6 +724,9 @@ marketing names redirect there, and their apex now serves **mail only**.
   in a screenshot get `data-private` (or `.rr-block`, which the Phase 2 replay will honour too).
   A report is not a `SupportTicket` (a record to triage, not a conversation); the inbox is ADMIN-only
   and org-scoped (another org's id is 404).
+  The session replay (#3131) is OFF in production unless `FEEDBACK_REPLAY_ENABLED` says otherwise,
+  records with `maskAllInputs`, forgets its buffer on sign-out, and is accepted by the route only as a
+  gzip that decodes (80 MB ceiling) to rrweb events — keep all four if you touch it.
 - **Images open in the app, never in a new tab** (#2147): every user-supplied image
   (message and support attachments, announcement images) is a `<button>` that opens
   `ImageLightbox` (`src/components/ui/ImageLightbox.tsx`) via `useImageLightbox()` — never an

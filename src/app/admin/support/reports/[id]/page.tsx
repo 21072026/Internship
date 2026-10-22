@@ -9,6 +9,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { SupportTabs } from '@/components/SupportTabs';
+import { ReplayPlayer } from '@/components/ReplayPlayer';
 import { useT } from '@/i18n/client';
 import type { FeedbackContext } from '@/lib/feedbackContext';
 import {
@@ -17,7 +18,7 @@ import {
   type SupportReportStatusKey,
 } from '@/lib/supportReportStatus';
 
-interface ReportFile { id: string; kind: 'SCREENSHOT' | 'ATTACHMENT'; filename: string; contentType: string; size: number }
+interface ReportFile { id: string; kind: 'SCREENSHOT' | 'ATTACHMENT' | 'REPLAY'; filename: string; contentType: string; size: number }
 interface Report {
   id: string;
   type: 'BUG' | 'FEEDBACK';
@@ -94,6 +95,7 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
   const fileUrl = (f: ReportFile) => `/api/admin/support/reports/${report.id}/files/${f.id}`;
   const screenshot = report.files.find((f) => f.kind === 'SCREENSHOT');
   const attachments = report.files.filter((f) => f.kind === 'ATTACHMENT');
+  const replay = report.files.find((f) => f.kind === 'REPLAY');
   const images = [screenshot, ...attachments.filter((f) => f.contentType.startsWith('image/'))]
     .filter((f): f is ReportFile => !!f)
     .map((f) => ({ src: fileUrl(f), filename: f.filename }));
@@ -180,6 +182,13 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
           )}
         </Card>
       </div>
+
+      {replay && (
+        <Card className="mt-4">
+          <h2 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{a.replay}</h2>
+          <ReplayPlayer src={fileUrl(replay)} context={report.context} />
+        </Card>
+      )}
 
       <Card className="mt-4">
         <div role="tablist" className="mb-3 flex gap-2 border-b border-gray-200 dark:border-gray-800">

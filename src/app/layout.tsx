@@ -16,6 +16,8 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { isAccentColor, resolveAccent, themeColorFor } from '@/lib/accent';
 import { DENSITY_CLASS, resolveDensity } from '@/lib/density';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { APP_ENV } from '@/lib/appEnv';
+import { replayConfig } from '@/lib/feedbackReplayRule';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
@@ -203,7 +205,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             offline fallback and the install prompt used to exist only behind
             login. Renders nothing. */}
         <ServiceWorkerRegistrar />
-        <Providers locale={locale} dict={dict} vertical={vertical} brand={clientBrandOf(brand)}>
+        {/* The bug-report replay switch is read at REQUEST time (#3131), so an
+            env change takes effect without a rebuild. */}
+        <Providers locale={locale} dict={dict} vertical={vertical} brand={clientBrandOf(brand)} feedbackReplay={replayConfig(process.env, APP_ENV)}>
           {/* Public demo (#966) — above everything, on every route, so a visitor
               never mistakes the demo for their own tenant. */}
           {IS_DEMO_MODE && <DemoModeBanner />}

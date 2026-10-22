@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
@@ -18,12 +19,21 @@ import {
   maskUrl,
   sanitizeFeedbackContext,
 } from '@/lib/feedbackContext';
+import {
+  FEEDBACK_REPLAY_MAX_BYTES,
+  FEEDBACK_REPLAY_MAX_JSON_BYTES,
+  checkReplayEvents,
+  isGzip,
+  replayConfig,
+} from '@/lib/feedbackReplayRule';
 
 // In-app bug / feedback report (#3130). Any signed-in role may send one; the
 // row lands in the reporter's own org and is read only through
 // /api/admin/support/reports. The browser's context is re-sanitized here
 // (feedbackContext.ts) — the client masked it already, but a body is never
 // trusted — and version/env/user agent are stamped by the server.
+// A session replay (#3131) is accepted only while the switch is on, and only
+// as a gzip that decodes, within a ceiling, to rrweb events.
 
 const schema = z.object({
   type: z.enum(['BUG', 'FEEDBACK']),
@@ -55,10 +65,12 @@ export async function POST(request: Request) {
       const fields: Record<string, string> = {};
       const screenshots: File[] = [];
       const files: File[] = [];
+      const replays: File[] = [];
       for (const [key, value] of form.entries()) {
         if (typeof value === 'string') fields[key] = value;
         else if (key === 'screenshot') screenshots.push(value);
         else if (key === 'files') files.push(value);
+        else if (key === 'replay') replays.push(value);
       }
       const parsed = schema.safeParse(fields);
       if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
@@ -74,6 +86,30 @@ export async function POST(request: Request) {
       }
       const extra = await buildSupportAttachments(files);
       if (!extra.ok) return NextResponse.json({ error: extra.error }, { status: extra.status });
+
+      let replay: Buffer | null = null;
+      if (replays.length > 0) {
+        if (replays.length > 1) return NextResponse.json({ error: 'One replay at most' }, { status: 400 });
+        if (!replayConfig(process.env, APP_ENV).enabled) {
+          return NextResponse.json({ error: 'Session replay is off', code: 'replay_disabled' }, { status: 400 });
+        }
+        const file = replays[0];
+        if (file.size === 0 || file.size > FEEDBACK_REPLAY_MAX_BYTES) {
+          return NextResponse.json({ error: 'Replay too large', code: 'replay_too_large' }, { status: 400 });
+        }
+        const bytes = Buffer.from(await file.arrayBuffer());
+        let events: unknown;
+        try {
+          if (!isGzip(bytes)) throw new Error('not gzip');
+          events = JSON.parse(gunzipSync(bytes, { maxOutputLength: FEEDBACK_REPLAY_MAX_JSON_BYTES }).toString('utf8'));
+        } catch {
+          return NextResponse.json({ error: 'Invalid replay', code: 'replay_invalid' }, { status: 400 });
+        }
+        if (checkReplayEvents(events)) {
+          return NextResponse.json({ error: 'Invalid replay', code: 'replay_invalid' }, { status: 400 });
+        }
+        replay = bytes;
+      }
 
       let rawContext: unknown = {};
       try {
@@ -104,6 +140,9 @@ export async function POST(request: Request) {
             create: [
               ...shot.attachments.map((a) => ({ ...a, kind: 'SCREENSHOT' as const })),
               ...extra.attachments.map((a) => ({ ...a, kind: 'ATTACHMENT' as const })),
+              ...(replay
+                ? [{ kind: 'REPLAY' as const, filename: 'replay.json.gz', contentType: 'application/gzip', size: replay.length, data: replay }]
+                : []),
             ],
           },
         },

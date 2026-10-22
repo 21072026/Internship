@@ -14,3 +14,14 @@
   `next dev` compile exceeds its 20 s `waitForURL`; the second run (warm `.next`) is the real result.
 - **`gitignore-exports.test.mjs` fails locally on macOS on an untouched checkout** — not a
   regression signal for `test:unit:coverage` on this machine.
+
+## 2026-10-23 — session replay, phase 2 (#3131)
+
+- **A DOM-screenshot library and rrweb fight each other.** `modern-screenshot` appends a scratch
+  `iframe#__SANDBOX__<uuid>` to `<body>` and fills it with one sample element per tag; rrweb records
+  same-origin iframes, so every capture bloated the replay buffer until the Send button hung on
+  "Sending…". Block it in rrweb (`blockSelector: 'iframe[id^="__SANDBOX__"]'`).
+- **A zod `.regex().optional().default('')` judges its own default.** An omitted field fails the
+  regex with a bare 400 — make the pattern accept `''` (`/^(…)?$/`).
+- **On `next dev` the first POST to a route includes its compile.** A 10 s first report and a 0.5 s
+  second one are the same code; measure the second before calling anything slow.
