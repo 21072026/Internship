@@ -27,6 +27,7 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
   const locale = useLocale();
   const [data, setData] = useState<Cadence | null>(null);
   const [saving, setSaving] = useState(false);
+  const [endError, setEndError] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/mentorship/${relationId}/cadence`).catch(() => null);
@@ -50,7 +51,6 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
     await load();
   };
 
-  const [endError, setEndError] = useState(false);
   // A date input's value is the UTC calendar day; the column stores midnight UTC.
   const setEndDate = async (value: string) => {
     setSaving(true);
