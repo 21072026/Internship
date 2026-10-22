@@ -108,6 +108,19 @@ done
 
 log "Wiping (refuses anything not named *_demo)"
 run node prisma/reset-demo.mjs
+# The wipe TRUNCATEs, it does not drop: the tables keep whatever schema the demo
+# last ran, which can be many releases old (the demo refresh failed on every
+# deploy from the 2026-10-21 runner outage until #3127). So the same expand
+# phases prod (infra/deploy-prod.sh) and topic envs (infra/server/topic-deploy.sh)
+# run before their push must run here too — a plain push from an older schema
+# dies on, e.g., "Cannot drop index 'Setting_orgId_key_key': needed in a foreign
+# key constraint" (#1619). The tables are empty here, so the backfills are no-ops.
+log "Expand phases (the same list deploy-prod.sh runs before its push)"
+run node prisma/push-company-interest-expand.mjs || true
+run node prisma/backfill-company-interest-scope.mjs || true
+run node prisma/push-setting-id-expand.mjs || true
+run node prisma/backfill-setting-id.mjs || true
+run node prisma/push-setting-program-expand.mjs || true
 log "Re-applying the schema"
 run npx prisma db push --accept-data-loss --skip-generate
 log "Seeding the first admin"
