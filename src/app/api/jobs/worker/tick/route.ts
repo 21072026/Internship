@@ -9,6 +9,7 @@ import { sanitizeError } from '@/lib/sanitizeError';
 import { logger } from '@/lib/logger';
 import { withRequestScope } from '@/lib/requestContext';
 import { registerAllJobs } from '@/jobs';
+import { runWithOrg } from '@/lib/orgContext';
 
 // Prisma and the handlers' mail — never the edge.
 export const runtime = 'nodejs';
@@ -56,6 +57,7 @@ function worker(): JobWorker {
     // The mail outbox drains its own rows (src/lib/mailOutbox.ts).
     ownedElsewhere: ['email.send'],
     logger,
+    bindOrg: runWithOrg,
     onDeadLetter: (job, error) =>
       logActivity({
         action: 'job.dead_letter',

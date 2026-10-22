@@ -20,6 +20,8 @@ import { useModalFocus } from '@/components/ui/useModalFocus';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
+import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
 // asks the API for the `mentorAvailability` field set — still no email/phone/
@@ -268,15 +270,6 @@ export default function MentorshipPage() {
   const confirmCreate = () => {
     setPendingConfirm(null);
     handleCreate();
-  };
-
-  const handleComplete = async (id: string) => {
-    await fetch(`/api/mentorship/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'COMPLETED' }),
-    });
-    await fetchRelations();
   };
 
   // Reassign (or clear) the company on an existing mentorship. The backend PUT
@@ -687,6 +680,11 @@ export default function MentorshipPage() {
                     {/* A pairing the mentee left did not finish. Rendering both
                         as plain "Completed" is the record #1801/#2289 exist to
                         stop being written. */}
+                    {(effectiveLifecycleState(rel) === 'PAUSED' || effectiveLifecycleState(rel) === 'ENDED_EARLY') && (
+                      <Badge variant="warning" data-testid="lifecycle-state-badge">
+                        {t.relationLifecycle.states[effectiveLifecycleState(rel)]}
+                      </Badge>
+                    )}
                     {(rel.lifecycleState === 'ENDED_REASSIGNED' ||
                       rel.lifecycleState === 'ENDED_REMATCHED') && (
                       <Badge variant="warning" data-testid="lifecycle-badge">
@@ -736,16 +734,19 @@ export default function MentorshipPage() {
                       >
                         {t.changeMentor.action}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full sm:w-auto"
-                        onClick={() => handleComplete(rel.id)}
-                      >
-                        {t.mentorships.markComplete}
-                      </Button>
                     </div>
                   )}
+                  {/* Pause / resume / end with a reason / reopen (#1770) —
+                      replaces the bare "mark complete", which recorded every
+                      ending as a success. */}
+                  <RelationLifecycleControls
+                    relationId={rel.id}
+                    state={effectiveLifecycleState(rel)}
+                    isAdmin
+                    menteeName={rel.mentee.fullName}
+                    mentorName={rel.mentor.fullName}
+                    onChanged={fetchRelations}
+                  />
                 </div>
               </div>
             </Card>

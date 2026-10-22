@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Admin tiers and delegated scope — the schema (#1567).** `User` gains a nullable `adminLevel` (`AdminLevel`: `ORG_ADMIN` · `PROGRAM_ADMIN` · `OBSERVER`) and a new `AdminScopeGrant` model (`userId`, `orgId`, optional `cohortId` / `companyId`, `createdById`; registered in `TENANT_MODELS`) records which programmes or companies a delegated admin reaches — none means none. Purely additive: the `Role` enum is untouched and the push adds one column and one table (no DROP). There is deliberately no `SUPER_ADMIN` tier: the platform operator stays `User.isSuperAdmin`, read live and per world. `prisma/backfill-admin-level.mjs` (on deploy) gives every ADMIN without a tier `ORG_ADMIN` and never touches a tier already set; the seeded first admin gets `ORG_ADMIN` too. Nothing reads the new axis yet — the capability layer is #1569. Documented in `docs/role-access-matrix.md` § Admin tiers."
-}

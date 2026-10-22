@@ -595,7 +595,7 @@ back to red-only alerts.
 ## How a red scheduled net reaches a person (#2322)
 
 Every scheduled safety net is **silent when green**: `e2e-full`, `k6-load`, `stress`,
-`backup-verify`, `mysql-watchdog`, `release-compact` and the deploys. So a broken alert
+`backup-verify`, `mysql-watchdog`, `runner-watchdog`, `release-compact` and the deploys. So a broken alert
 channel looks exactly like a healthy repo.
 
 **Root cause of the silent e-mails.** None of the e-mail alerts can leave a GitHub-hosted
@@ -615,6 +615,7 @@ depends on SMTP:
 | `stress.yml` | `stress` | UTC day | the next green run |
 | `backup-verify.yml` | `backup-verify` | UTC day | the next green check |
 | `mysql-watchdog.yml` | `mysql-watchdog` | UTC day (it runs every 10 min) | the next green check |
+| `runner-watchdog.yml` | `runner-watchdog` | UTC day + condition (stalled / unreachable / missing / restart failed) | the next healthy run (OK, BUSY or nothing stuck) |
 | `release-compact.yml` | `release-compact` | UTC day | the next green compaction |
 | `deploy-prod.yml` / `deploy-preview.yml` | `deploy-prod` / `deploy-preview` | the deployed sha | the next deploy that ran green (a drift-gate no-op touches nothing) |
 

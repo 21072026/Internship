@@ -16,11 +16,9 @@
 // `analytics-report`, an external address must not be on the org's e-mail
 // block list. A skip is recorded with its reason, never retried.
 //
-// node-cron is the carrier only until the leader-elected scheduler (#1676)
-// lands; `runReportSubscriptions()` is the handler either way. Registered from
-// /api/cron/start, never from initCronJobs, to keep the import graph one-way.
+// Scheduled as the queued job `reports.subscriptions` (src/lib/jobs/schedules.ts,
+// handler in src/jobs/platform.ts, #1677); `runReportSubscriptions()` is the body.
 
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { Prisma, type ReportSubscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -318,19 +316,4 @@ export async function runReportSubscriptions(opts: { now?: Date; orgIds?: string
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
-/** Hourly at :25 — off the mail-heavy :00/:15 slots the other jobs use. */
-export function initReportSubscriptionsCron() {
-  if (tasks.has('report-subscriptions')) return;
-  const task = scheduleLeased('25 * * * *', async () => {
-    try {
-      const r = await runReportSubscriptions();
-      // A quiet hour is not worth a line; one that did anything is.
-      if (r.due > 0) logger.warning('Report subscriptions ran', { ...r });
-    } catch (error) {
-      logger.error('Report subscriptions cron failed', { error: String(error) });
-    }
-  });
-  tasks.set('report-subscriptions', task);
-}

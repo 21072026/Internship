@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**/admin/sla — the stage-SLA breach queue and the compliance rate (#1723):** `GET /api/admin/sla` pages the caller's open `SlaBreach` rows (#1722) server-side, oldest deadline first, filtered by stage, escalation level, owner, acknowledged state and name; `POST /api/admin/sla/acknowledge` acknowledges up to 50 at once through the same audited writer as the one-row route (`acknowledgeBreaches()`), and acknowledge/snooze now scope by the session's tenant fragment (`tenantWhere`). `GET /api/admin/sla/compliance?days=` reports the compliance rate as numerator, denominator and period — of the moves out of a stage with a service level, the share made before it elapsed, from stage history (`computeSlaCompliance()`, pure, in `src/lib/slaCompliance.ts`), excluding the re-engagement pool and stopped stages. The rate is shown with its definition on /admin/sla and /admin/analytics (free core, not behind `premiumAnalytics`) and as two rows of the `pipeline-summary` report the weekly analytics e-mail is built from.",
-  "notes": {
-    "en": ["New SLA queue for administrators: every overdue stage in one list, with filters, bulk acknowledge and snooze — plus your stage SLA compliance rate, with exactly how it is counted."],
-    "tr": ["Yöneticiler için yeni SLA kuyruğu: geciken tüm aşamalar tek listede, filtreler, toplu onay ve erteleme ile — ayrıca aşama SLA uyum oranınız ve tam olarak nasıl hesaplandığı."],
-    "de": ["Neue SLA-Warteschlange für Administratoren: alle überfälligen Phasen in einer Liste, mit Filtern, Sammelbestätigung und Zurückstellen — dazu eure Phasen-SLA-Einhaltung und genau, wie sie gezählt wird."]
-  }
-}

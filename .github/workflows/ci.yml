@@ -366,11 +366,12 @@ jobs:
       # only thing keeping it off prod is the name check at the top (#966).
       - name: demo reset guard (#966)
         run: bash infra/test/reset-demo-guard.test.sh
-      # The MySQL watchdog only ever runs on the box at the moment the database
-      # is already down, so its two decisions — "is this server alive?" and
-      # "should I restart it?" — get their coverage here instead. A probe that
-      # mistakes a healthy "Access denied" for a dead server would restart prod's
-      # database every minute.
+      # The MySQL watchdog only ever matters on the box at the moment the
+      # database is already down, so its decisions — "is this server alive?",
+      # "is Docker bringing it back?" — and its promise never to restart the
+      # database itself (#3135) get their coverage here instead. A probe that
+      # mistakes a healthy "Access denied" for a dead server would open a public
+      # alert issue about a perfectly good database.
       - name: mysql watchdog probe logic
         run: bash infra/test/mysql-watchdog.test.sh
       # The rolling two-replica deploy (#1701) has the same problem: it only
@@ -386,6 +387,13 @@ jobs:
       # test also pins that it never prints a host, a title or a brand (#2919).
       - name: marketing host title check (#2579, #2919)
         run: bash infra/test/marketing-title-check.test.sh
+      # The memory admission rules of the shared box (infra/server/capacity.sh):
+      # a topic environment is deferred, and a prod/preview deploy refused
+      # before its schema sync, when the server is short — instead of an OOM
+      # kill mid-deploy, which on 2026-10-21 left the runner dead for a day.
+      # They only ever run on the server, so their arithmetic is pinned here.
+      - name: topic capacity gate + deploy memory preflight
+        run: bash infra/test/capacity.test.sh
       # The steps above each run ONE unit suite because each was added by the
       # incident it names. Nothing held the set together, so a suite whose rule
       # got refactored away could lose its assertions and stay green — the test

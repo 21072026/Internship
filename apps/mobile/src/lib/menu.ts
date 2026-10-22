@@ -62,6 +62,7 @@ const ICONS: Record<string, string> = {
   email: 'mail',
   goalTemplates: 'list',
   integrations: 'git-network',
+  rosterFeeds: 'sync',
   invitations: 'mail-open',
   invite: 'person-add',
   inviteMentee: 'person-add',

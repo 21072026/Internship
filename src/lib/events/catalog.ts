@@ -234,6 +234,22 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: 'An acceptance took the last opening of a requisition.',
   },
+  {
+    // A pairing paused, resumed, ended or reopened (#1770). Registered, not yet
+    // dispatched — a direct call would be the eleventh that
+    // scripts/check-events.mjs caps; it is raised through emit() once that
+    // exists. `from`/`to` are lifecycle states; `reasonCode` is set on an end
+    // only (LIFECYCLE_END_REASON_CODES), null otherwise.
+    name: 'mentorship.lifecycle_changed',
+    version: 1,
+    subjectType: 'MentorshipRelation',
+    subjectKey: 'relationId',
+    payload: z
+      .object({ relationId: id, from: z.string(), to: z.string(), reasonCode: z.string().nullable() })
+      .strict(),
+    visibility: 'public',
+    description: 'A mentorship was paused, resumed, ended or reopened (`from` and `to` are lifecycle states).',
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // None has a producer yet. Ids only: a payload that needs a person's name or

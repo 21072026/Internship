@@ -37,7 +37,7 @@ No hand-rolled copy of the filter is left in `src/`. There is exactly one seam:
 |---|---|---|
 | `POST /api/mentorship` | 409, but read-then-write with the plan gate, an availability count and a stage lookup in between | 409 from a guard **inside** the `$transaction` that creates |
 | `src/lib/mentorshipDecision.ts` (approve a request) | 409, guard outside an array `$transaction` | 409 from inside an interactive transaction; the request `update` also matches on `status: 'PENDING'`, so two concurrent approvals of one request cannot both win |
-| `PUT /api/mentorship/[id]` (reopen) | **nothing** — a `COMPLETED` relation could go back to `ACTIVE` beside another live one | 409, `exceptRelationId` excluding itself |
+| `POST /api/mentorship/[id]/lifecycle` (reopen, `to: ACTIVE` from an ended state; `PUT` stopped taking `status` in #1770) | **nothing** — a `COMPLETED` relation could go back to `ACTIVE` beside another live one | 409, `exceptRelationId` excluding itself |
 | `POST /api/register` (invitation auto-link, #51) | **nothing** — matched the `(mentorId, menteeId)` **pair** with no status filter, so pre-linking an existing mentee created a second `ACTIVE` relation *and notified the mentee* | no relation created, no "connected" notification, a `mentorship.autolink_skipped` ActivityLog entry and an admin notification |
 | `POST /api/invite` | **nothing** | 409 at invite time, while the admin is still looking at the form |
 | `POST /api/mentor/mentees` | no guard (safe only because the mentee row was three statements old) | account + relation in one transaction, with the assertion inside it |

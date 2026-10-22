@@ -15,6 +15,7 @@ import {
   ArrowRightLeft,
   SlidersHorizontal,
   Table2,
+  RefreshCw,
   type LucideIcon,
   ShieldAlert,
   FileSearch,
@@ -159,6 +160,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/reports', icon: Table2, key: 'reportsExplorer' },
   { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
+  // Scheduled HR roster sync (#1967): config, runs, row-level outcomes.
+  { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
@@ -211,7 +214,7 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   // The open roles of the programme's employers (#1830).
   { href: '/portal/jobs', icon: BriefcaseBusiness, key: 'jobs', capability: 'placements' },
   // Opted-in mentors only (#938) — consent-gated, see /api/mentors.
-  { href: '/mentors', icon: Users, key: 'mentorDirectory' },
+  { href: '/mentors', icon: Users, key: 'mentorDirectory', capability: 'mentorship' },
   { href: '/todos', icon: ListChecks, key: 'todos' },
   // The shared inbox, not a portal-only copy of it (#1156).
   { href: '/messages', icon: MessageSquare, key: 'messages' },

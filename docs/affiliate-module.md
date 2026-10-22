@@ -51,6 +51,7 @@ One plan per organisation, stored on `AffiliateProgramSettings` and edited at
   instant earns `percentBps` — for all of the partner's customers, the earlier ones
   included — inside each customer's window. Nothing is recomputed retroactively.
 - A customer's ordinal is decided by **first-payment date**, not by entry order.
+<<<<<<< HEAD
   The engine therefore judges a partner's **whole** history in one pass, and a
   back-dated entry is answered by running it again.
 - A first payment of zero does not make a paying customer.
@@ -88,6 +89,15 @@ reconciliation.
 - Every guarded write must hit exactly the rows it planned, or the transaction is
   undone (`conflict`). Waiting too long for the lock, or a deadlock, answers `busy`
   (retry). Amounts are capped at the signed 32-bit column (`MAX_AMOUNT_MINOR`).
+=======
+  When a back-dated first payment changes the order, the writer re-evaluates the
+  affected partner's not-yet-paid commissions in the same transaction; a commission
+  already `PAID` is never changed (a correction is a separate adjustment the admin
+  records).
+- A first payment of zero does not make a paying customer.
+- Each commission records the plan version it was computed under. A plan change
+  applies to payments received after it.
+>>>>>>> origin/main
 
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
@@ -96,6 +106,7 @@ unit-tested with synthetic plans.
 
 All models carry `orgId` and are registered in `TENANT_MODELS`.
 
+<<<<<<< HEAD
 - **AffiliatePartner** — `userId` (1:1, null until the invitation is accepted),
   `code`, `displayName`, `contactEmail`, `status` (ACTIVE / SUSPENDED / TERMINATED),
   `noticeEffectiveAt`, sealed payout details (IBAN, holder).
@@ -111,6 +122,23 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
   validated by `parseCommissionPlan`) and its `planVersion`, landing copy, contract
   text and `contractVersion`. Without a valid plan the writer refuses payments.
+=======
+- **AffiliatePartner** — `userId` (1:1), `code`, `status` (ACTIVE / SUSPENDED /
+  TERMINATED), `noticeEffectiveAt`, sealed payout details (IBAN, holder). A partner
+  that is not ACTIVE accrues nothing new, and a SUSPENDED one cannot change payout
+  details.
+- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org),
+  `firstPaymentAt`, `firstPaymentMinor`, `payingCustomerOrdinal`.
+- **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
+  future), `source`, `externalPaymentRef` (**required, unique per organisation**, so a
+  double entry is caught even under a mistyped customer).
+- **AffiliateCommission** — `kind` (TIER / PERCENT), `amountMinor`, `accruedAt`,
+  `windowEndsAt`, `planVersion`, `status` (PENDING / APPROVED / PAID / REJECTED),
+  `payoutId`. Never edited once PAID.
+- **AffiliatePayout** — a batch that marks commissions PAID; all-or-nothing.
+- **AffiliateProgramSettings** — landing copy, contract text, `contractVersion`, the
+  commission plan and its `planVersion`.
+>>>>>>> origin/main
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 
 ## Security

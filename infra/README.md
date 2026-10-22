@@ -368,15 +368,14 @@ SIGKILLed), so the work resumes on the other replica within one TTL — three
 poll intervals, i.e. about three minutes for the mail bridge. Late, never
 double.
 
-**The cron is leased per tick (#1676).** Every replica registers the cron
-timers and runs the 30 s queue scheduler; each tick and each timer first takes
-or renews the `'scheduler'` lease (`src/lib/jobs/leasedCron.ts`), and only the
-holder does the work. Replica ≥2 therefore no longer runs with
-`CRON_ENABLED=0`: while replica 1 is down or mid-swap, replica 2 takes the
-lease within one TTL (90 s) — a graceful SIGTERM releases it at once. The
-queue schedules (`src/lib/jobs/schedules.ts`) also catch up a missed slot; the
-node-cron ones still lose a slot that fires while no replica holds the lease,
-until #1677 moves them onto the queue.
+**The cron is leased per tick (#1676, #1677).** Every replica runs the 30 s
+queue scheduler; each tick first takes or renews the `'scheduler'` lease
+(`src/lib/jobs/leasedCron.ts`), and only the holder enqueues the due slots of
+`src/lib/jobs/schedules.ts` — every scheduled job in the product, with
+missed-slot catch-up. The job worker runs them on every replica (SKIP LOCKED).
+Replica ≥2 therefore no longer runs with `CRON_ENABLED=0`: while replica 1 is
+down or mid-swap, replica 2 takes the lease within one TTL (90 s) — a graceful
+SIGTERM releases it at once — and the slot it missed is enqueued late, not lost.
 
 **Also set `RATE_LIMIT_REDIS_URL`** for a two-replica environment (see the
 section above) or every limit becomes twice as generous.
@@ -719,6 +718,60 @@ and docker (builds, tests, linting) goes to `ubuntu-latest`, which is free for t
 public repo. Moving builds onto the runner in 2026-06 was a quota workaround
 (#636), and it made the production host compile on every PR push.
 
+### When the box is full (memory admission, 2026-10-22)
+On 2026-10-21 a preview deploy's tool container was OOM-killed mid-`prisma db push`
+(exit 137) while many topic environments were up. The runner never took another
+job, and every deploy — prod's included — queued behind it for a day, while the
+watchdog reported OK (it checked the first `actions.runner.*` unit on the box,
+which belongs to another repository). Three changes keep that from recurring:
+
+- **Topic environments are admitted, not assumed.** Before anything is pulled,
+  `topic-deploy.sh` asks `topic_capacity_verdict()` (`infra/server/capacity.sh`)
+  whether the box has room for one more container plus the headroom a prod/preview
+  deploy needs. If not, nothing is started, the job ends **green** and the PR gets a
+  "⏸ Topic preview not deployed — the server is busy" comment: a full server is not
+  a broken PR. Re-run the **Topic Preview** workflow once other PRs have closed.
+  Every topic container also gets a hard `--memory` limit, so one PR cannot eat
+  the box.
+- **Prod/preview deploys check memory first.** `deploy-prod.sh` refuses to start
+  (before the backup and the schema sync, never in the middle of them) when
+  `MemAvailable` is below `DEPLOY_MIN_AVAILABLE_MB`, and logs the biggest
+  containers. The schema sync runs `prisma db push --skip-generate`: the image
+  already carries the generated client, and `generate` is where the OOM hit.
+- **The watchdog watches *our* runner, and its queue.** `runner-watchdog.yml`
+  selects the unit by runner name (`vars.RUNNER_NAME`, default `interncrm`), installs
+  a `Restart=always` drop-in, and asks GitHub whether the runner drains its queue
+  (`scripts/runner-queue.mjs`): jobs for its label waiting ≥ 30 min with nothing
+  running on it → `systemctl restart`. "The service is active" is not "it takes jobs".
+  The box has the last word: while this runner has a live `bin/Runner.Worker` (a job in
+  flight) it is never restarted, whatever the API said — GitHub's filtered run listings
+  come back empty now and then, and a restart would cancel the job, a prod deploy included.
+  It reaches the box through the `SSH_*` secrets, which must point at **the runner's box**
+  (the Caddy host since the 2026-09 migration). Each run prints a `Box:` marker line
+  (`plesk=yes` means the secrets still reach the retired Plesk box); until they are
+  moved the watchdog can only report, not restart. `mysql-watchdog.yml` uses the
+  same secrets (its user needs the `docker` and `adm` groups, see § 6). The
+  Plesk-era `infra-setup.yml` that also used them was removed in #3135: its DNS
+  step is `infra/setup-dns-cloudflare.sh`, its TLS step is `wildcard-cert.yml`,
+  and its nginx step has nothing to check on a Caddy host.
+  A stall (even one this run restarted away), an unreachable box, a missing runner or a
+  failed restart now opens one `ci-alert` issue keyed `runner-watchdog` — its cc to the
+  maintainer is the e-mail — and the next healthy run closes it
+  (`scripts/runner-watchdog-alert.mjs`). GitHub starts the `*/15` schedule late, often hours
+  apart, so this detection is best-effort: an alert can arrive well after the stall began.
+
+| Knob | Where | Default | Meaning |
+|---|---|---|---|
+| `TOPIC_MEMORY_MB` | repo variable | 1024 | hard memory limit of one topic container |
+| `TOPIC_HEADROOM_MB` | repo variable | 2048 | kept free for prod/preview deploys |
+| `TOPIC_MAX_ENVS` | repo variable | 8 | topic containers running at once, at most (a redeploy of a running one is not counted again) |
+| `DEPLOY_MIN_AVAILABLE_MB` | env of `deploy-prod.sh` | 768 | a prod/preview deploy needs this free (`0` = off) |
+| `RUNNER_NAME` | repo variable | `interncrm` | the runner the watchdog looks after |
+| `RUNNER_STUCK_AFTER_MIN` | repo variable | 30 | queue wait that counts as stuck |
+
+The rules are pinned by `infra/test/capacity.test.sh`,
+`scripts/test/runner-queue.test.mjs` and `scripts/test/runner-watchdog-alert.test.mjs` (all in CI).
+
 ---
 
 ## 5. Database backups & the destructive-schema gate
@@ -850,56 +903,103 @@ Invalid `prisma.user.findUnique()` invocation:
 Can't reach database server at `localhost:3306`
 ```
 
-`service mysql start` fixes it. That is the whole problem: the repair takes two
-seconds and the *detection* takes hours, because nothing on the box was watching
-and nothing off the box was told.
-
 **Cause.** The kernel's OOM killer picks `mysqld` — it is normally the largest
-process on the server — and SIGKILLs it. The packaged systemd unit then either
-does not restart after a SIGKILL, or gives up after a few rapid restarts
-(`StartLimitBurst`), and the database stays down.
+process on the server — and SIGKILLs it. On the retired Plesk box the packaged
+systemd unit then stayed down until somebody typed `service mysql start`: the
+repair took two seconds, the *detection* took hours.
 
-### Three layers, on purpose
+### Two layers on the Docker host (#3135)
+
+MySQL 8 runs in the container `internship-mysql`
+(`/opt/internship-crm/mysql/compose.yml`, written by `infra/server/bootstrap.sh`),
+published on `127.0.0.1:3306` and holding every database on the box — prod,
+preview, the topic environments and demo.
 
 | Layer | What it covers | Where it lives |
 |---|---|---|
-| systemd drop-in (`Restart=always`, no start-rate limit, `OOMScoreAdjust=-500`) | brings mysqld back within ~10s of a kill, and asks the kernel to prefer another victim next time | `/etc/systemd/system/<unit>.service.d/10-internship-oom.conf` |
-| on-box timer, every minute | the cases systemd will not handle: a unit left `inactive`, a start that failed on a transient, a `stop` nobody meant to leave behind | `internship-mysql-watchdog.timer` → `infra/mysql-watchdog.sh --check` |
-| GitHub-hosted workflow, every 10 min | notices when the box itself is unresponsive, re-installs the timer if it vanished, and is the only layer that **emails** | `.github/workflows/mysql-watchdog.yml` |
+| Docker's restart policy (`restart: unless-stopped`) | brings mysqld back seconds after a kill, with no start-rate limit to give up on | the compose file above |
+| GitHub-hosted workflow, every 10 min | the states Docker leaves alone — a container stopped by hand and forgotten, a crash loop, a mysqld that runs but does not answer — and the box itself being unreachable. The only layer that **alerts** (a `ci-alert` issue; the e-mail is best effort) | `.github/workflows/mysql-watchdog.yml` → `infra/mysql-watchdog.sh` over SSH |
 
-The third layer runs off-box deliberately: an alert that needs the sick server
-to be healthy is not an alert.
+The first layer is not a theory. On 2026-10-21 at 14:37:42 the kernel OOM-killed
+mysqld; Docker had the container running again at 14:37:51 and it took
+connections at 14:38:09. `dockerd` itself runs with `Restart=always` and
+`OOMScoreAdjust=-500`, and `live-restore` is on, so a daemon restart does not take
+the database down with it.
 
-### Install (idempotent, safe to re-run)
+The second layer runs off-box deliberately: an alert that needs the sick server
+to be healthy is not an alert. That day the box's self-hosted runner died in the
+same OOM.
+
+### What was retired, and why
+
+The Plesk box needed two more layers: a systemd drop-in for the MySQL unit
+(`Restart=always`, no start-rate limit, `OOMScoreAdjust=-500`) and a once-a-minute
+on-box timer that ran `systemctl start`. There is no MySQL unit on this host, and
+the drop-in's job is the restart policy's. So `--install`/`--uninstall` are gone
+(the script refuses them with a pointer here), and **the watchdog never restarts
+the database itself**. Every state in which `unless-stopped` leaves it down is one
+a restart from outside would make worse:
+
+- **being restarted** — Docker is already doing it. The check waits up to
+  `WAIT_SECONDS` (120 s) before it calls the database down, so a kill Docker
+  repairs ends green, with the kernel's verdict in the log;
+- **stopped by hand** — Docker records a `docker stop` as deliberate and leaves it.
+  Starting a database underneath a restore or a migration is how a restore gets
+  corrupted, so the alert names the command (`docker start internship-mysql`) and
+  leaves the decision to a human;
+- **running but not answering** — InnoDB replaying its redo log after a kill, or a
+  box swapping itself to a standstill. A restart interrupts the recovery it is
+  waiting for, and loops.
+
+### Run it by hand
 
 ```bash
-sudo ./infra/mysql-watchdog.sh --install     # drop-in + timer, both enabled
-./infra/mysql-watchdog.sh --status           # unit, timer, OOM kills, memory
+./infra/mysql-watchdog.sh --status   # container, restart policy, restarts, OOM kills, memory
+./infra/mysql-watchdog.sh            # the check the workflow runs: exit 0 up, 1 down
 ```
 
-The workflow installs it too, so a server rebuild that wipes `/etc/systemd`
-re-arms itself within ten minutes without anybody remembering this file.
+The SSH user needs the `docker` group (container state) and `adm` (kernel log) —
+no sudo, no credentials. The workflow copies the script to `~/internship-infra/`
+on every run rather than having the box pull it.
 
 ### What "alive" means here
 
 The probe asks whether the **server answers the protocol**, not whether we can
 log in: a `mysqladmin ping` answered with `Access denied` is a healthy server
-refusing an anonymous client. Reading that as "down" would restart a perfectly
-good database every minute, so it is a case the tests cover explicitly
-(`infra/test/mysql-watchdog.test.sh`, run in CI). No credentials are read or
-stored anywhere in the script.
+refusing an anonymous client — which is exactly what the box answers today. It
+uses the host's `mysql-client` (a bootstrap package); the bare TCP connect is only
+a fallback, and a weak one here, because `docker-proxy` holds the published port
+open for as long as the container runs. The decisions — alive or not, wait or
+not, and that no run issues `docker start`/`restart` or an unformatted `docker
+inspect` (the healthcheck carries the root password on its command line) — are
+pinned by `infra/test/mysql-watchdog.test.sh`, run in CI.
+
+### The kernel log is the evidence, not Docker's `OOMKilled`
+
+The container has no memory limit, so a kill comes from the host-wide OOM killer,
+and Docker's `State.OOMKilled` stays `false` — it reports only a kill by the
+container's own limit. The record is the kernel log:
+
+```bash
+journalctl -k --since '-7 days' | grep -iE 'killed process [0-9]+ \((mysqld|mariadbd)\)'
+```
+
+`--status` counts those lines for the last 24 hours, and calls three of them
+*flapping*: Docker repaired each one, which is exactly why nobody noticed.
 
 ### The restart is first aid, not the cure
 
-Every recovery logs the kernel's OOM lines and a memory snapshot, and three
-restarts inside an hour are reported as *flapping* rather than health. When that
-happens the box needs headroom, not a faster watchdog:
+When kills repeat, the box needs headroom, not a faster watchdog:
 
-- add swap (a 2–4 GB swapfile is usually enough to turn a kill into a slowdown);
-- lower `innodb_buffer_pool_size` — on a Plesk box it is often left at a value
-  that assumes MySQL is the only thing running;
-- check what else grew: `./infra/mysql-watchdog.sh --status` prints the top
-  memory consumers by RSS.
+- see "When the box is full (memory admission, 2026-10-22)" above — the 2026-10-21
+  kill came during a preview deploy with many topic environments up;
+- the box has a 4 GB swapfile (bootstrap step `swap`); check it is still on with
+  `swapon --show`;
+- `--status` prints the top memory consumers by RSS;
+- mysqld runs with the default `oom_score_adj` of 0. The drop-in's `-500` has a
+  Docker equivalent (`oom_score_adj` in the compose file), but it takes effect only
+  when the container is recreated — a restart of every database on the box — so it
+  is a decision for a maintenance window, not a side effect of a watchdog change.
 
 ### What the user sees while it is down
 

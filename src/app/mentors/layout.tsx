@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { roleHome } from '@/lib/roleHome';
 import { RoleShell } from '@/components/RoleShell';
+import { gatePage } from '@/lib/pageCapabilityGate';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -14,6 +15,9 @@ export default async function MentorsLayout({ children }: { children: React.Reac
   if (session.user.role === 'COMPANY' || session.user.role === 'SOURCE') {
     redirect(roleHome(session.user.role));
   }
+  // Choosing a mentor is the `mentorship` module (src/lib/pageCapabilityGate.ts):
+  // a vertical without it has no directory, so the URL answers 404.
+  await gatePage('/mentors');
 
   return <RoleShell>{children}</RoleShell>;
 }

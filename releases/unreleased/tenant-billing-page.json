@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**A tenant admin reads their own bill at `/admin/billing` (#1739):** the new `GET /api/org/billing` takes no `orgId` of any kind — the org is the session's — and answers 403 from the handler for every non-ADMIN role and for an org without the `mentorship` capability (the meter and price list are the internship product's, `src/lib/plans.ts`). It returns the plan from `getOrCreateSubscription()`, the band, this month's active pairs and admin seats, the over-band count and its cost at the published overage rate, and twelve months of history — all read from `UsageRollup`, never computed on the request path; a month the rollup has not written reads `null` (\"not counted yet\"). The arithmetic is pure in `src/lib/billingSummary.ts` (unit-tested). The page is a tabbed shell (`TABS` + one component per tab) so #1734 and #1763 add their tabs without restructuring it; it states that mentors and mentees are never counted. New nav entry `billing` (mobile icon `receipt`), `billing` dictionary block in EN/TR/DE, `@smoke` spec `e2e/org-billing.spec.ts` pins the two-tenant isolation.",
-  "notes": {
-    "en": ["Admins can now see their own plan, this month's active pairs against the plan's band and the last twelve months under Billing."],
-    "tr": ["Adminler artık Faturalandırma altında kendi planlarını, bu ayki aktif çiftlerini planın bandına göre ve son on iki ayı görebilir."],
-    "de": ["Admins sehen unter Abrechnung jetzt ihren eigenen Plan, die aktiven Paare dieses Monats im Verhältnis zum Kontingent und die letzten zwölf Monate."]
-  }
-}

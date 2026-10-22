@@ -2,9 +2,11 @@ import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/pageMetadata';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { ApplyMentorForm } from '@/components/forms/ApplyMentorForm';
-import { requireVerticalCapability } from '@/lib/verticalPage';
+import { requestVerticalHas, requireVerticalCapability } from '@/lib/verticalPage';
 
 export async function generateMetadata(): Promise<Metadata> {
+  // Emitted on the page's 404 too (see /for-companies).
+  if (!(await requestVerticalHas('mentorship'))) return {};
   return pageMetadata((t) => ({ title: t.seo.applyAsMentorTitle, description: t.seo.applyAsMentorDescription }), '/apply-as-mentor/opengraph-image');
 }
 

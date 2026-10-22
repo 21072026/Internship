@@ -233,6 +233,22 @@ export function assertHostKeyFingerprint(presented: string, pinned: string | nul
 export interface FetchFeedOptions {
   fetchImpl?: typeof fetch;
   maxBytes?: number;
+  /**
+   * The e2e switch (ROSTER_FEED_ALLOW_INSECURE_STUB=1, set only by
+   * playwright.config.ts): a plain-http LOOPBACK URL skips the SSRF guard so the
+   * suite's local roster source can serve the file. Never set on a deployment.
+   */
+  allowInsecureLoopback?: boolean;
+}
+
+/** `http://127.0.0.1:<port>/…` — the only shape the e2e switch admits. */
+export function isLoopbackStubUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'http:' && u.hostname === '127.0.0.1' && !u.username && !u.password;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -270,7 +286,8 @@ export async function fetchFeedFile(
 
   const url = (feed.url ?? '').trim();
   if (!url) throw new RosterTransportError('This feed has no URL configured.');
-  const safeUrl = await assertPublicHttpsUrl(url);
+  const safeUrl =
+    options.allowInsecureLoopback && isLoopbackStubUrl(url) ? new URL(url) : await assertPublicHttpsUrl(url);
 
   const doFetch = options.fetchImpl ?? fetch;
   const response = await doFetch(safeUrl.toString(), {
@@ -712,6 +729,11 @@ export interface RosterIngestOptions {
    * break-glass refusals all still apply.
    */
   approved?: boolean;
+  /**
+   * The file an approval was given for (#1967). A file that changed since the
+   * stopped run is a different file, and was not what the admin looked at.
+   */
+  expectFileHash?: string;
 }
 
 /**
@@ -755,6 +777,9 @@ export async function ingestRoster(
   const now = options.now ?? new Date();
   const fetchFile = deps.fetchFile ?? ((f: RosterFeedConfig) => fetchFeedFile(f));
   const file = await fetchFile(feed);
+  if (options.expectFileHash && options.expectFileHash !== file.fileHash) {
+    throw new RosterIngestError('The feed file has changed since this run was stopped; review the new run instead.');
+  }
 
   const base = { feedId: feed.id, fileHash: file.fileHash, dryRun };
 

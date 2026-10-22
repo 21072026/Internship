@@ -152,6 +152,12 @@ export const E2E_HIBP_MOCK_PORT = 4602;
 // KLAVIYO_API_BASE_URL points the app at it, honoured only with KLAVIYO_ALLOW_INSECURE_STUB=1
 // (which also skips the SSRF guard for it) — a test-only pair no deployment sets.
 export const E2E_KLAVIYO_MOCK_PORT = 4603;
+// Shared with e2e/roster-feeds-console.spec.ts (#1967). A local stand-in for a
+// tenant's HR export URL, so a roster feed's "Run now" fetches a real file over
+// the real transport. ROSTER_FEED_ALLOW_INSECURE_STUB=1 on the app server lets
+// exactly a plain-http 127.0.0.1 URL past the https rule and the SSRF guard —
+// a test-only switch no deployment sets.
+export const E2E_ROSTER_SOURCE_PORT = 4604;
 // The marketing product's host (#2926). There is no built-in one any more, so the
 // suite names its own (e2e/helpers/marketingHost.ts). Set on process.env, not only
 // on a webServer's env, because three parties must agree on it: both app servers
@@ -265,6 +271,13 @@ export default defineConfig({
         env: { KLAVIYO_MOCK_PORT: String(E2E_KLAVIYO_MOCK_PORT) },
       },
       {
+        command: `node e2e/support/roster-source.mjs`,
+        url: `http://127.0.0.1:${E2E_ROSTER_SOURCE_PORT}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { ROSTER_SOURCE_PORT: String(E2E_ROSTER_SOURCE_PORT) },
+      },
+      {
         command: `node e2e/support/audit-sink.mjs`,
         url: `http://127.0.0.1:${E2E_AUDIT_SINK_PORT}/__state`,
         reuseExistingServer: !process.env.CI,
@@ -340,6 +353,8 @@ export default defineConfig({
           // the local stand-in above. Test-only switch.
           KLAVIYO_API_BASE_URL: `http://127.0.0.1:${E2E_KLAVIYO_MOCK_PORT}`,
           KLAVIYO_ALLOW_INSECURE_STUB: '1',
+          // Roster feeds (#1967) against the local HR-export stub above.
+          ROSTER_FEED_ALLOW_INSECURE_STUB: '1',
           // The marketing hosts this server serves: the default list FIRST
           // (unchanged, so it stays the primary marketing host every link and
           // spec already uses) plus one host of the suite's own (#2922), which

@@ -719,7 +719,9 @@ export default function AdminSettingsPage() {
       <Card className="mt-6">
         <CardHeader><CardTitle>{t.settings.emailHealth}</CardTitle></CardHeader>
         {queueAllowed && (
-          <div role="tablist" aria-label={t.settings.emailHealth} className="mb-4 inline-flex gap-1 rounded-lg border border-gray-200 dark:border-gray-800 p-1">
+          /* Wraps rather than spills: three German tab labels (Suppressions, #1692)
+             are wider than a phone's card (e2e/mobile-layout-coverage.spec.ts). */
+          <div role="tablist" aria-label={t.settings.emailHealth} className="mb-4 inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-gray-200 dark:border-gray-800 p-1">
             {(['delivery', 'queue', 'suppressions'] as const).map((tab) => (
               <button
                 key={tab}

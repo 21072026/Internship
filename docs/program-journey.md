@@ -30,7 +30,7 @@ Vocabularies (free Strings in the schema, whitelists in `src/lib/programJourneyR
 
 ## Running it
 
-Daily at 07:10 UTC from `/api/cron/start` (`initProgramJourneyCron`). An admin can run it
+Daily at 07:10 UTC as the queued job `programJourney.run` (`src/lib/jobs/schedules.ts`, #1677). An admin can run it
 for their own org with `GET /api/cron?job=program-journey` (`?at=<ISO>` pins the clock).
 `runProgramJourney()` is a plain handler, so the durable scheduler (#1676/#1677) registers
 it in one line. Its timer takes the `'scheduler'` lease per tick (#1676), so only one

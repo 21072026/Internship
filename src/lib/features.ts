@@ -39,6 +39,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import {
+  MessageSquareWarning,
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, ShieldAlert, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
@@ -199,8 +200,12 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
     { key: 'safeguarding', category: 'trust', icon: ShieldAlert, color: 'amber', capability: 'mentorship', title: C.safeguarding.t, desc: C.safeguarding.d },
     { key: 'programJourney', category: 'collaboration', icon: CalendarDays, color: 'indigo', capability: 'mentorship', title: C.programJourney.t, desc: C.programJourney.d },
+    // #1840 — a company asks to message a shortlisted candidate; the mentor decides.
+    { key: 'candidateOutreach', category: 'companies', icon: Send, color: 'blue', capability: 'placements', title: C.candidateOutreach.t, desc: C.candidateOutreach.d },
     { key: 'mentoringAgreement', category: 'trust', icon: FileSignature, color: 'blue', capability: 'mentorship', title: C.mentoringAgreement.t, desc: C.mentoringAgreement.d },
     // #1920 — every registry report sliced by the org's own attributes, small segments combined.
     { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
+    // #3130 — the floating feedback button: screenshot + masked console/network context, triaged by admins.
+    { key: 'feedbackReports', category: 'trust', icon: MessageSquareWarning, color: 'blue', title: C.feedbackReports.t, desc: C.feedbackReports.d },
   ];
 }

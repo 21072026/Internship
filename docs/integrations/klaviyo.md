@@ -113,7 +113,7 @@ name and the stage are never touched by a re-sync. The link's own columns (`attr
 
 ## The schedule and the cursor
 
-- Every 15 minutes (`/api/cron/start` → `initKlaviyoSyncCron`), every enabled connection
+- Every 15 minutes (the queued job `klaviyo.sync`, `src/lib/jobs/schedules.ts`), every enabled connection
   whose backoff has elapsed, one after the other; a connection that fails is logged and
   the next one runs. One run per connection at a time: a `JobLease` named
   `klaviyo-sync:<connectionId>` (the cron also runs on one replica only).

@@ -296,6 +296,7 @@ model Organization {
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
   outboundDrafts          OutboundDraft[]
+  supportReports          SupportReport[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
@@ -848,6 +849,7 @@ model User {
   mentorRelations                   MentorshipRelation[]           @relation("MentorRelations")
   menteeRelations                   MentorshipRelation[]           @relation("MenteeRelations")
   statusChanges                     StatusChange[]                 @relation("StatusChangedBy")
+  relationLifecycleEvents           RelationLifecycleEvent[]       @relation("RelationLifecycleChangedBy")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                      @relation("UserTags")
@@ -874,6 +876,8 @@ model User {
   mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
   companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
+  // Company → candidate message requests (#1840); removed with the person.
+  candidateOutreach                 CandidateOutreach[]            @relation("CandidateOutreachMentee")
   companyNeedAlerts                 CompanyNeedAlert[]             @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]            @relation("MentorshipRequests")
   decidedRequests                   MentorshipRequest[]            @relation("DecidedMentorshipRequests")
@@ -881,6 +885,7 @@ model User {
   decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
+  supportReports                    SupportReport[]                @relation("SupportReportAuthor")
   assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
   supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
@@ -2012,6 +2017,7 @@ model Company {
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
   users              User[]                  @relation("CompanyUsers")
+  candidateOutreach  CandidateOutreach[]
   projects           Project[]               @relation("CompanyProjects")
   interests          CompanyInterest[]
   entitlements       CompanyEntitlement[]
@@ -2198,6 +2204,79 @@ model SupportAttachment {
   message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+}
+
+// In-app bug / feedback reports (#3129/#3130): what a person sends from the
+// floating "Report a problem" button — description, optional rating, a
+// screenshot and the technical context the browser collected (recent console
+// errors, failed requests, route, viewport). Deliberately NOT a SupportTicket:
+// a ticket is a conversation, a report is a structured record the support team
+// triages. Registered in TENANT_MODELS; the route always passes orgId.
+// Blobs live in SupportReportFile, never in the list query.
+enum SupportReportType {
+  BUG
+  FEEDBACK
+}
+
+enum SupportReportStatus {
+  NEW
+  TRIAGED
+  IN_PROGRESS
+  RESOLVED
+  WONT_FIX
+}
+
+model SupportReport {
+  id             String              @id @default(cuid())
+  orgId          String
+  org            Organization        @relation(fields: [orgId], references: [id])
+  userId         String
+  type           SupportReportType
+  rating         Int?
+  description    String              @db.Text
+  // Stamped by the browser but re-masked by the server (src/lib/feedbackContext.ts).
+  url            String              @db.VarChar(512)
+  // Stamped by the SERVER: the build that answered, not what the client claims.
+  appVersion     String              @db.VarChar(64)
+  env            String              @db.VarChar(16)
+  userAgent      String              @db.VarChar(512)
+  viewport       String              @db.VarChar(32)
+  // { consoleErrors[], failedRequests[] } — nullable on purpose (a non-null
+  // Json column backfills '' on MariaDB and breaks every existing row).
+  context        Json?
+  contactAllowed Boolean
+  status         SupportReportStatus @default(NEW)
+  githubIssueUrl String?             @db.VarChar(512)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user  User                @relation("SupportReportAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  files SupportReportFile[]
+
+  @@index([orgId, status, createdAt])
+  @@index([userId])
+}
+
+enum SupportReportFileKind {
+  SCREENSHOT
+  ATTACHMENT
+}
+
+// Reached only through its report (no orgId, deliberately unregistered — the
+// same shape as SupportAttachment). Same type/size rules as support uploads.
+model SupportReportFile {
+  id          String                @id @default(cuid())
+  reportId    String
+  kind        SupportReportFileKind
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime              @default(now())
+
+  report SupportReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
 }
 
 // A mentee's self-serve request for mentorship (#590). One PENDING request at
@@ -2897,6 +2976,39 @@ model CompanyInterest {
   @@index([requisitionId])
 }
 
+// A company's request to message a shortlisted candidate (#1840) — mentor-gated,
+// quota'd, revocable by the candidate. The first message is STORED here and
+// delivered only on approval (into the DIRECT conversation between the
+// requesting company user and the candidate). One row per company × candidate:
+// a repeat request reuses it. The rules (transitions, cooldown, quota period)
+// are pure in src/lib/outreachRule.ts; docs/candidate-outreach.md is the prose.
+// Status is VARCHAR + a whitelist in code, never a Prisma enum (#747).
+model CandidateOutreach {
+  id             String    @id @default(cuid())
+  orgId          String
+  companyId      String
+  menteeId       String
+  applicationId  String?
+  /// PENDING | APPROVED | DECLINED | REVOKED
+  status         String    @default("PENDING") @db.VarChar(16)
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?
+  /// When the candidate revoked it — a new request is refused for 90 days after.
+  revokedAt      DateTime?
+  conversationId String?
+  firstMessage   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CandidateOutreachMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
+  @@index([orgId, status])
+  @@index([menteeId])
+}
+
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
 // POSTs (HMAC-SHA256 of the body in the X-Signature header).
 model Webhook {
@@ -3586,67 +3698,67 @@ model CompanyNeed {
 }
 
 model MentorshipRelation {
-  orgId                   String?
-  org                     Organization?    @relation(fields: [orgId], references: [id])
-  id                      String           @id @default(cuid())
+  orgId                      String?
+  org                        Organization?    @relation(fields: [orgId], references: [id])
+  id                         String           @id @default(cuid())
   // A row of the starter pack's sample programme (#2066): synthetic, labelled,
   // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
-  sampleData              Boolean          @default(false)
-  mentorId                String
-  menteeId                String
-  companyId               String?
-  projectId               String?
-  cohortId                String?
-  startDate               DateTime         @default(now())
-  status                  MentorshipStatus @default(ACTIVE)
+  sampleData                 Boolean          @default(false)
+  mentorId                   String
+  menteeId                   String
+  companyId                  String?
+  projectId                  String?
+  cohortId                   String?
+  startDate                  DateTime         @default(now())
+  status                     MentorshipStatus @default(ACTIVE)
   // When the relation was marked COMPLETED. Anchors the post-mentorship CV and
   // document access window (#854) — without it, "access ended six months ago"
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
-  completedAt             DateTime?
+  completedAt                DateTime?
   // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
   // table with rows; existing rows start at the deploy instant.
-  updatedAt               DateTime         @default(now()) @updatedAt
+  updatedAt                  DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
   // them), so single-tenant behaviour is identical.
-  pipelineStatus          String           @default("APPLICATION_100")
+  pipelineStatus             String           @default("APPLICATION_100")
   // WHY the relation exists (#1503): PLACEMENT (the person is in the hiring
   // funnel — every placement count reads only these) or COACHING (mentoring
   // with no placement goal; its stage means nothing to a funnel). Free String,
   // not an enum, for the same reason as pipelineStatus (#747): changing an
   // enum under `db push` is an ENUM→VARCHAR migration. Vocabulary and guard:
   // src/lib/placementKind.ts.
-  kind                    String           @default("PLACEMENT") @db.VarChar(16)
+  kind                       String           @default("PLACEMENT") @db.VarChar(16)
   // WHOSE outcome a hire is (#1503): THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED.
   // NULL = not stated; never backfilled, and read as THROUGH_US for rows from
   // before the column (the UNSPECIFIED pattern of #810).
-  employmentAttribution   String?          @db.VarChar(24)
+  employmentAttribution      String?          @db.VarChar(24)
   // When the relation (re-)entered the placement funnel: the start for a
   // PLACEMENT, the moment of a COACHING → PLACEMENT switch. NULL → readers fall
   // back to startDate.
-  funnelEnteredAt         DateTime?
+  funnelEnteredAt            DateTime?
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
-  stageDeadline           DateTime?
+  stageDeadline              DateTime?
   // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
-  deadlineReminderSentAt  DateTime?
+  deadlineReminderSentAt     DateTime?
   // Set when a stale-mentee in-app notification was last sent; cleared once the
   // mentee has a recent interaction again, so each staleness episode notifies the
   // mentor only once (#573).
-  stalenessReminderSentAt DateTime?
+  stalenessReminderSentAt    DateTime?
   // Dormant first contact (#1501). Stamped by the daily sweep when the relation
   // is still parked in the pipeline's FIRST stage, an outreach already went out
   // and nothing came back (lib/dormantFirstContact.ts). Cleared the moment any
   // sign of life appears, so a later silence can flag — and nudge — again.
-  dormantSince            DateTime?
+  dormantSince               DateTime?
   // "Still interested?" check-ins sent to the MENTEE for the current dormancy
   // episode: how many (capped at DORMANT_MAX_NUDGES) and when the last one went
   // out. Both reset with dormantSince, so a person who comes back and goes quiet
   // months later is written to again rather than being silently written off.
-  dormantNudgeCount       Int              @default(0)
-  dormantNudgeSentAt      DateTime?
+  dormantNudgeCount          Int              @default(0)
+  dormantNudgeSentAt         DateTime?
   // The contractual trial window of a MARKETING funnel record (#2413, story
   // #2392). Both nullable and both additive: a mentorship relation never has a
   // trial, and a marketing record only has one once it reaches the TRIAL_ACTIVE
@@ -3660,18 +3772,18 @@ model MentorshipRelation {
   // every stage change, and it is the thing the reminders are counted back
   // from. Storing it in `stageDeadline` would make an SLA edit move a
   // contractual date, and moving the record to another stage would erase it.
-  trialStartedAt          DateTime?
-  trialEndsAt             DateTime?
+  trialStartedAt             DateTime?
+  trialEndsAt                DateTime?
   // A won customer's notice period (#2841): the day
   // their contract ends after they gave notice. Same class of date as
   // `trialEndsAt` — agreed, contractual, survives every stage change — so the
   // same reasoning against `stageDeadline` applies. Set only on a DEAL_WON
   // record (src/lib/contractEndRule.ts); cleared when the customer withdraws
   // the notice. The record stays DEAL_WON until a human moves it to DEAL_LOST.
-  contractEndsAt          DateTime?
+  contractEndsAt             DateTime?
   // When the end-day bell went out, so a re-run never rings twice. Cleared
   // with the date.
-  contractEndRemindedAt   DateTime?
+  contractEndRemindedAt      DateTime?
   // The owner's own "next step" on this record (#2563): a date and a short
   // line — "call Thursday about pricing". All three nullable and additive, so
   // `db push` adds them over a populated table and an untouched row means what
@@ -3688,12 +3800,12 @@ model MentorshipRelation {
   // before it is already the InteractionLog. The note is owner/ADMIN prose, so
   // the read paths that hand relation scalars to the MENTEE strip all three
   // (stripNextActionFor in the same module).
-  nextActionAt            DateTime?
-  nextActionNote          String?          @db.VarChar(280)
+  nextActionAt               DateTime?
+  nextActionNote             String?          @db.VarChar(280)
   // Set when the due-day reminder for the CURRENT nextActionAt went out, by a
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.
-  nextActionRemindedAt    DateTime?
+  nextActionRemindedAt       DateTime?
   // The state the pairing is in (#1768): ACTIVE | PAUSED | COMPLETED |
   // ENDED_REMATCHED | ENDED_REASSIGNED | ENDED_CHURNED — keys, transitions and
   // the one derivation of `status` live in src/lib/relationLifecycle.ts. It
@@ -3710,10 +3822,16 @@ model MentorshipRelation {
   // get 'ACTIVE'; rows written before #1768 hold NULL until
   // prisma/backfill-relation-lifecycle.mjs fills them on deploy. Making it
   // required is a later, separate contract step.
-  lifecycleState          String?          @default("ACTIVE")
+  lifecycleState             String?          @default("ACTIVE")
   // When the pairing was paused (#1768); cleared on resume. Never on a live,
   // unpaused row.
-  pausedAt                DateTime?
+  pausedAt                   DateTime?
+  // The stage clock, frozen (#1772): whole days that were left to
+  // `stageDeadline` when the pairing was paused (negative = already overdue).
+  // `stageDeadline` is cleared while paused and re-derived from this on resume,
+  // so a pause neither runs the clock out nor hands back a fresh full window.
+  // Written only by stageClockPatch() through the lifecycle endpoint.
+  stageDeadlineRemainingDays Int?
   // Why the pairing ended, as picked by the person who ended it (#2289): a code
   // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
   // never backfilled — a relation closed before this column existed, or closed
@@ -3727,7 +3845,7 @@ model MentorshipRelation {
   // read back. A coarse code is the same kind of fact `StatusChange.reasonCode`
   // already exposes on those paths; the admin's free-text elaboration lives in
   // the ActivityLog entry, which only admins read.
-  endReasonCode           String?
+  endReasonCode              String?
   // The pairing this one continues (#2289). Set on the relation CREATED by a
   // mentor transfer, pointing at the one that was closed as ENDED_REASSIGNED —
   // so the incoming mentor's blank page has a readable predecessor and the
@@ -3736,7 +3854,7 @@ model MentorshipRelation {
   // evaluations, notes, messages) stays on the relation it was written under,
   // because re-pointing `relationId` would re-attribute the outgoing mentor's
   // work to the incoming one — InteractionLog has no author column of its own.
-  previousRelationId      String?
+  previousRelationId         String?
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -3745,6 +3863,7 @@ model MentorshipRelation {
   cohort                Cohort?                        @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
+  lifecycleEvents       RelationLifecycleEvent[]
   agreementAcceptances  MentoringAgreementAcceptance[]
   slaBreaches           SlaBreach[]
   meetings              Meeting[]
@@ -4737,6 +4856,35 @@ model StatusChange {
   // person's moves explicitly (accountErasure.ts), and an implicit SET NULL
   // would silently relabel them as the system's.
   changedBy User?              @relation("StatusChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+}
+
+// One row per move between lifecycle states (#1770) — who paused, resumed,
+// ended or reopened a pairing, when, and why. Written ONLY by
+// POST /api/mentorship/[id]/lifecycle, in the same transaction as the move.
+// Tenant data reached through its relation, like StatusChange: no orgId and no
+// TENANT_MODELS entry (only parents are registered).
+model RelationLifecycleEvent {
+  id          String   @id @default(cuid())
+  relationId  String
+  // Lifecycle keys from src/lib/relationLifecycle.ts — free Strings, like the
+  // column they mirror.
+  fromState   String
+  toState     String
+  // A code from LIFECYCLE_END_REASON_CODES; required for an end, null otherwise.
+  reasonCode  String?
+  // Free-text elaboration. Admin- and mentor-written; scrubbed on the mentee's
+  // erasure like StatusChange.reasonNote (accountErasure.ts).
+  reasonNote  String?  @db.Text
+  changedById String
+  createdAt   DateTime @default(now())
+
+  relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // Restrict, like StatusChange.changedBy: erasure deletes a person's own moves
+  // explicitly rather than relabelling them.
+  changedBy User               @relation("RelationLifecycleChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([relationId])
+  @@index([changedById])
 }
 
 model InvitationToken {
@@ -6912,6 +7060,18 @@ model RosterFeed {
   cronExpression String?   @db.VarChar(120)
   lastRunAt      DateTime?
 
+  /// The run claim (#1967): a conditional UPDATE sets it to now + the claim
+  /// window, and only the process whose UPDATE matched may run the feed. It is
+  /// cleared when the run ends and simply expires if the process dies, so two
+  /// processes — the waker, a "Run now", a second replica — never run one feed
+  /// at the same time.
+  claimedUntil        DateTime?
+  /// Consecutive runs that ended FAILED or threw. Three pause the feed
+  /// (`enabled = false` + `pausedReason`), so a broken credential does not
+  /// retry against a customer's server for ever. A successful run resets it.
+  consecutiveFailures Int       @default(0)
+  pausedReason        String?   @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -6945,25 +7105,29 @@ model RosterRun {
   /// re-attempted next run instead of being skipped for ever.
   nextChunkIndex Int @default(0)
 
-  rowCount         Int     @default(0)
-  createdCount     Int     @default(0)
-  updatedCount     Int     @default(0)
-  unchangedCount   Int     @default(0)
-  skippedCount     Int     @default(0)
-  errorCount       Int     @default(0)
+  rowCount         Int       @default(0)
+  createdCount     Int       @default(0)
+  updatedCount     Int       @default(0)
+  unchangedCount   Int       @default(0)
+  skippedCount     Int       @default(0)
+  errorCount       Int       @default(0)
   /// Deprovisioning outcome (#1966).
-  deactivatedCount Int     @default(0)
-  reactivatedCount Int     @default(0)
+  deactivatedCount Int       @default(0)
+  reactivatedCount Int       @default(0)
   /// Why a safety valve stopped the run (`row_floor` / `deactivation_ceiling`),
   /// with the numbers, for the alert and the console.
-  safetyReason     String? @db.Text
+  safetyReason     String?   @db.Text
+  /// The admin who approved a run the ceiling stopped (#1967), and when an
+  /// admin dismissed the console banner for a failed or stopped run.
+  approvedById     String?
+  acknowledgedAt   DateTime?
   /// Keys the roster holds that the feed did not mention. Reported only —
   /// acting on them is #1966.
   absentKeys       Json?
   /// Host and path of the file, for the run log. Never a query string: it can
   /// carry a token.
-  source           String? @db.Text
-  error            String? @db.Text
+  source           String?   @db.Text
+  error            String?   @db.Text
 
   startedAt  DateTime  @default(now())
   finishedAt DateTime?

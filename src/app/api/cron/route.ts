@@ -35,6 +35,8 @@ import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
 import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
+import { enqueue } from '@/lib/jobs/queue';
+import { manualJobFor } from '@/lib/jobs/manualJobs';
 
 // The named jobs that are scoped to the CALLER's own organization (they read
 // it from the session, never from the request). Every other job — and the
@@ -67,6 +69,22 @@ export async function GET(request: Request) {
     } else if (!OWN_ORG_JOBS.has(job ?? '') && !(await isSuperAdmin(session))) {
       await logCrossTenantDenial(session, `/api/cron?job=${job ?? 'batch'}`, null);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // `&enqueue=1` (#1677): hand the named job to the queue instead of running
+    // it in this request. The worker runs it with retries and a JobRun whose
+    // trigger is 'manual', so an operator's re-run reads apart from a scheduled
+    // one. Opt-in: without it the job runs inline and answers with its full
+    // result, exactly as before (every e2e spec reads that body).
+    if (params.get('enqueue') === '1') {
+      const plan = manualJobFor(job, {
+        orgId: OWN_ORG_JOBS.has(job ?? '') ? await settingsOrgOf(session) : targetOrgId,
+        at: params.get('at'),
+        batch: params.get('batch'),
+      });
+      if (!plan) return NextResponse.json({ error: 'not_enqueueable' }, { status: 400 });
+      const row = await enqueue(plan.name, plan.payload as never, { trigger: 'manual', orgId: plan.orgId });
+      return NextResponse.json({ message: 'Job queued', queued: true, jobs: [{ name: plan.name, id: row.id }] }, { status: 202 });
     }
 
     if (job === 'weekly-reports') {
