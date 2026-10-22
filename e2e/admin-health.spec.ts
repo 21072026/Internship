@@ -9,8 +9,10 @@ import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 //   amber — in touch, but the deadline passed and nothing moved → WATCH;
 //   quiet — brand new, in touch, a goal open → nothing to do, not listed;
 //   dormant — messaged at first contact four months ago, never replied;
-//   done  — a COMPLETED relation.
-// The last three are the footnote counts.
+//   done  — a COMPLETED relation;
+//   paused — never in touch, deadline passed, but PAUSED (status stays ACTIVE):
+//           excluded, not flagged (#1894).
+// The last four are the footnote counts.
 
 const PW = 'AdminHealth123!';
 const DAY = 24 * 60 * 60 * 1000;
@@ -20,7 +22,7 @@ test.describe('admin health monitor', () => {
   const admin = uniqueEmail('ah-admin');
   const mentor = uniqueEmail('ah-mentor');
   const goneMentor = uniqueEmail('ah-gone-mentor');
-  const mentees = ['red', 'amber', 'quiet', 'dormant', 'done'].map((k) => ({ k, email: uniqueEmail(`ah-${k}`) }));
+  const mentees = ['red', 'amber', 'quiet', 'dormant', 'done', 'paused'].map((k) => ({ k, email: uniqueEmail(`ah-${k}`) }));
   let orgId = '';
   const rel: Record<string, string> = {};
 
@@ -45,6 +47,7 @@ test.describe('admin health monitor', () => {
     await create('dormant', { pipelineStatus: 'APPLICATION_100', startDate: new Date(Date.now() - 150 * DAY) });
     await prisma.interactionLog.create({ data: { relationId: rel.dormant, date: new Date(Date.now() - 120 * DAY), notes: 'Welcome email', type: 'Email' } });
     await create('done', { status: 'COMPLETED', completedAt: new Date() });
+    await create('paused', { pipelineStatus: 'INTERVIEW_PENDING_250', startDate: new Date(Date.now() - 200 * DAY), stageDeadline: new Date(Date.now() - 5 * DAY), lifecycleState: 'PAUSED', pausedAt: new Date() });
   });
 
   test.afterAll(async () => {
@@ -63,7 +66,7 @@ test.describe('admin health monitor', () => {
     expect(api.rows[1]).toMatchObject({ band: 'WATCH', nextAction: { kind: 'set_deadline' } });
     expect(api.rows[1].reasons).toEqual(expect.arrayContaining(['overdue', 'stage_stalled']));
     expect(api.counts).toMatchObject({ AT_RISK: 1, WATCH: 1, HEALTHY: 1 });
-    expect(api.excluded).toEqual({ dormant: 1, notActive: 1, quiet: 1 });
+    expect(api.excluded).toEqual({ dormant: 1, paused: 1, notActive: 1, quiet: 1 });
 
     await page.goto('/admin/health');
     const rows = page.getByTestId('health-table').locator('tbody tr');
@@ -74,6 +77,7 @@ test.describe('admin health monitor', () => {
     await expect(page.getByTestId(`health-action-${rel.amber}`)).toHaveAttribute('href', `/admin/candidates/${(await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.amber } })).menteeId}#relation-stage`);
     await expect(page.getByTestId('health-foot-dormant')).toContainText('1');
     await expect(page.getByTestId('health-foot-not-active')).toContainText('1');
+    await expect(page.getByTestId('health-foot-paused')).toContainText('1');
     await expect(page.getByTestId('health-foot-quiet')).toContainText('1');
 
     // The band filter, by its own testid — never the AdminNav search box.

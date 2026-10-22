@@ -9,6 +9,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import {
+  isPipelinePhase,
   CANONICAL_OUTCOME_KEYS,
   defaultPipelineStages,
   isDefaultLabel,
@@ -46,6 +47,7 @@ export async function resolvePipelineStages(
           isTerminal: r.isTerminal,
           isOffPath: r.isOffPath,
           color: r.color,
+          phase: r.phase,
         })),
         locale,
       );
@@ -72,6 +74,7 @@ export async function resolveCustomStages(
     isTerminal: r.isTerminal,
     isOffPath: r.isOffPath,
     color: r.color,
+    phase: r.phase,
   }));
 }
 
@@ -135,6 +138,8 @@ export interface StageWrite {
   isTerminal?: boolean;
   isOffPath?: boolean;
   color?: string | null;
+  /** Board phase (#1637); anything outside PIPELINE_PHASES is stored as null ("derive it"). */
+  phase?: string | null;
 }
 
 // `client` runs both writes inside a caller's interactive transaction (tenant
@@ -149,6 +154,7 @@ export async function replaceStages(orgId: string, stages: StageWrite[], client?
     isTerminal: s.isTerminal ?? false,
     isOffPath: s.isOffPath ?? false,
     color: s.color && s.color.trim() ? s.color.trim() : null,
+    phase: isPipelinePhase(s.phase) ? s.phase : null,
   }));
   if (client) {
     await client.pipelineStage.deleteMany({ where: { orgId } });

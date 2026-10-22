@@ -3,45 +3,18 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
+import { WEBHOOK_EVENTS } from '@/lib/events/catalog';
 
 // A receiver that cannot answer in five seconds is not worth blocking a request
 // handler on; delivery is fire-and-forget anyway.
 const WEBHOOK_TIMEOUT_MS = 5_000;
 
-// Known webhook event types.
-export const WEBHOOK_EVENTS = [
-  'application.created',
-  'pipeline.stage_change',
-  'mentorship.created',
-  'interaction.logged',
-  'evaluation.added',
-  'meeting.scheduled',
-  // A meeting moved, or was called off (#1980). An integration mirroring the
-  // calendar needs both, or its copy keeps the time nobody is coming at.
-  'meeting.rescheduled',
-  'meeting.cancelled',
-  // Every assigned interviewer has submitted (or an admin closed the panel):
-  // the scores are now comparable (#824).
-  'interview_panel.completed',
-  // A pairing paused, resumed, ended or reopened: { relationId, from, to, reasonCode } (#1770).
-  // Registered, not yet dispatched — a direct call would be the eleventh that
-  // scripts/check-events.mjs caps; it is raised through emit() once that exists.
-  'mentorship.lifecycle_changed',
-  // A closed panel's decision: ADVANCE | REJECT | OFFER (#1846). Registered, not yet dispatched.
-  'interview_panel.outcome',
-  // An approved interview request got a real meeting / was called off (#1844).
-  // Registered, not yet dispatched: see scripts/check-events.mjs.
-  'interview_request.scheduled',
-  'interview_request.cancelled',
-  // An offer was decided by the candidate (#1854), and an acceptance took the
-  // last seat of its requisition. Registered, not yet raised: they leave
-  // through `emit()` (#1693) once it exists — see the note in
-  // src/app/api/offers/[id]/route.ts. `requisition.filled` is meant to fire
-  // once, on the acceptance that made `filled` reach `openings`.
-  'offer.accepted',
-  'offer.declined',
-  'requisition.filled',
-] as const;
+// The subscribable event names. Derived from the public entries of the
+// versioned domain-event catalogue (#1691), which is where an event is added,
+// documented and given a payload schema — in the same order as before, because
+// the list is published in /api/v1/openapi.json. Re-exported here so the
+// admin route, the v1 spec and the dispatcher keep importing it from this file.
+export { WEBHOOK_EVENTS };
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 // Subscriptions one API key may hold through POST /api/v1/hooks (#2002): an

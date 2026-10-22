@@ -45,6 +45,12 @@ export interface HealthInput {
   /** Org setting `reminderDays` — the same "stale" the weekly digest uses. */
   reminderDays: number;
   status: string;
+  /**
+   * The relation's lifecycle state (src/lib/relationLifecycle.ts). A PAUSED
+   * pair keeps `status: ACTIVE` by design, so `status` alone would score it as
+   * dying (#1894: "a paused relationship is excluded, not flagged").
+   */
+  lifecycleState?: string | null;
   /** A dormant first contact (src/lib/dormantFirstContact.ts) is not scored. */
   dormant: boolean;
   startDate: Date;
@@ -200,7 +206,7 @@ export type HealthAssessment =
       contributions: Contribution[];
       version: number;
     }
-  | { excluded: true; why: 'dormant' | 'not_active'; version: number };
+  | { excluded: true; why: 'dormant' | 'not_active' | 'paused'; version: number };
 
 export function bandFor(score: number): HealthBand {
   return HEALTH_BANDS.find((b) => score >= b.min)!.band;
@@ -211,6 +217,7 @@ export function scoreRelation(input: HealthInput): HealthAssessment {
   // relationship; a completed or paused relation is not being worked on.
   if (input.dormant) return { excluded: true, why: 'dormant', version: HEALTH_RULES_VERSION };
   if (input.status !== 'ACTIVE') return { excluded: true, why: 'not_active', version: HEALTH_RULES_VERSION };
+  if (input.lifecycleState === 'PAUSED') return { excluded: true, why: 'paused', version: HEALTH_RULES_VERSION };
 
   const reasons: HealthReason[] = [];
   const contributions: Contribution[] = [];

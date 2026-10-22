@@ -14,10 +14,12 @@
 //   the sign-in path reads (#1150).
 //
 // WHAT COUNTS AS A GUARD
-//   Exactly two calls, reached from the handler body directly or through any
+//   Exactly three calls, reached from the handler body directly or through any
 //   function declared in the same file:
 //     getServerSession(…)  the NextAuth session — how 537 call sites do it
 //     withApiKey(…)        the API-key door, src/lib/apiKey.ts
+//     requirePermission(…) the admin permission guard, src/lib/authz.ts (#1569) —
+//                          it reads the session itself and answers 401 without one
 //   Deliberately nothing else. `requireCapability()` in particular is NOT a
 //   guard: it decides what an organisation may do, not who is calling, and
 //   accepting it would pass a route that took the orgId out of the request
@@ -89,7 +91,7 @@ const BASELINE_FILE = 'scripts/route-auth-baseline.json';
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 /** The only two calls that count as "this handler authenticated its caller". */
-const GUARDS = /\b(getServerSession|withApiKey)\s*\(/;
+const GUARDS = /\b(getServerSession|withApiKey|requirePermission)\s*\(/;
 
 // Files this guard does not examine, and why. A pattern ending in `/` matches a
 // whole directory; anything else is an exact path.

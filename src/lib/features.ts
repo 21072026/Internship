@@ -44,7 +44,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send, ImagePlus,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -144,6 +144,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', capability: 'mentorship', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
     { key: 'trustCenter', category: 'trust', icon: ScrollText, color: 'sky', title: C.trustCenter.t, desc: C.trustCenter.d },
     { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', capability: 'mentorship', title: C.matchQuality.t, desc: C.matchQuality.d },
+    { key: 'matchingRules', category: 'tracking', icon: Target, color: 'indigo', capability: 'mentorship', title: C.matchingRules.t, desc: C.matchingRules.d },
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
     { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
@@ -154,6 +155,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     // #2563 — core CRM (a person-written follow-up date on any record), so untagged.
     { key: 'followUps', category: 'tracking', icon: CalendarClock, color: 'amber', title: C.followUps.t, desc: C.followUps.d },
+    // #1722/#1723 — stage service levels, their escalation and the breach queue.
+    // Every vertical has a pipeline, so untagged.
+    { key: 'stageSla', category: 'tracking', icon: CalendarClock, color: 'rose', title: C.stageSla.t, desc: C.stageSla.d },
     // #2580 — each owner's own workspace (a mentor's /mentor, a MARKETING
     // rep's /sales). True in every vertical, so untagged; the rep's wording is a
     // MARKETING overlay sentence, not a second card.
@@ -185,6 +189,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'contactPermission', category: 'trust', icon: MailCheck, color: 'green', capability: 'companies', title: C.contactPermission.t, desc: C.contactPermission.d },
     // #2697 — outbound acquisition by letter, the lawful cold channel.
     { key: 'postalCampaigns', category: 'companies', icon: Send, color: 'blue', capability: 'companies', title: C.postalCampaigns.t, desc: C.postalCampaigns.d },
+    // The Klaviyo pull connector — the sales product only (its leads land on a
+    // marketing funnel), hence the opposite tag, like the estimated deal value.
+    { key: 'klaviyo', category: 'platform', icon: Link2, color: 'indigo', withoutCapability: 'mentorship', title: C.klaviyo.t, desc: C.klaviyo.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
     // Light gamification: the mentee portal's profile completeness meter. Lives
@@ -192,6 +199,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
     { key: 'safeguarding', category: 'trust', icon: ShieldAlert, color: 'amber', capability: 'mentorship', title: C.safeguarding.t, desc: C.safeguarding.d },
     { key: 'programJourney', category: 'collaboration', icon: CalendarDays, color: 'indigo', capability: 'mentorship', title: C.programJourney.t, desc: C.programJourney.d },
+    // #1840 — a company asks to message a shortlisted candidate; the mentor decides.
+    { key: 'candidateOutreach', category: 'companies', icon: Send, color: 'blue', capability: 'placements', title: C.candidateOutreach.t, desc: C.candidateOutreach.d },
+    { key: 'mentoringAgreement', category: 'trust', icon: FileSignature, color: 'blue', capability: 'mentorship', title: C.mentoringAgreement.t, desc: C.mentoringAgreement.d },
     // #1920 — every registry report sliced by the org's own attributes, small segments combined.
     { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
   ];

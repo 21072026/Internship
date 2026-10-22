@@ -1,9 +1,9 @@
-import cron from 'node-cron';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
-import { getSetting, getSettings, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { resolveSettingRaw, resolveSettings } from '@/lib/settingsResolver';
 import {
   RETAINED_NOTIFICATION_TYPES,
   notificationRetentionCutoff,
@@ -41,8 +41,8 @@ import {
 // policy meets the database.
 //
 // Notification (#1646) arrived exactly that way — one more entry, no new
-// schedule. Three tables are still queued behind this file and each will arrive
-// the same way: AuditLog (#1585), DomainEvent (#1691) and Message (#2056, which
+// schedule. Two tables are still queued behind this file and each will arrive
+// the same way: AuditLog (#1585) and Message (#2056, which
 // masks rather than deletes). The contract they follow is written down in
 // docs/pii-access-lifecycle.md.
 //
@@ -253,6 +253,40 @@ async function pruneFinishedJobs(ctx: RetentionContext) {
   return { deleted: processed, capped };
 }
 
+/** Default window for the domain-event record (#1691); `domainEventRetentionDays` overrides it. */
+export const DOMAIN_EVENT_RETENTION_DAYS = 90;
+
+/**
+ * Domain events older than `cutoff` (#1691), oldest first, in bounded batches.
+ *
+ * Every tenant's rows in one pass, by the explicit `createdAt` filter alone: the
+ * sweep runs with no session, so it must not depend on a bound org (with
+ * MT_ENFORCE_ISOLATION on and a context bound it would see one tenant only).
+ * Served by DomainEvent's @@index([createdAt]). When the outbox (#1680) adds
+ * its relay columns, a row not yet relayed
+ * must be excluded here — this is the one place to add that condition.
+ */
+export async function pruneDomainEvents(
+  cutoff: Date,
+  opts: { batchSize: number; budget: number },
+): Promise<RetentionOutcome> {
+  const { processed, capped } = await pruneInBatches({
+    batchSize: opts.batchSize,
+    budget: opts.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.domainEvent.findMany({
+          where: { createdAt: { lt: cutoff } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => (await prisma.domainEvent.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 /**
  * Settled mail-queue rows (#2944). A queued mail carries no address in the
  * clear and its sealed envelope is cleared the moment it settles, but the row
@@ -449,7 +483,7 @@ async function pruneCompanyInquiries(ctx: RetentionContext) {
 async function notificationWindowFor(orgId: string | null): Promise<number> {
   const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
   try {
-    const parsed = Number.parseInt(await getSetting('notificationRetentionDays', orgId), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('notificationRetentionDays', { orgId }), 10);
     return Number.isFinite(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -568,7 +602,7 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
 /** One org's message window, falling back to keep-forever on any read error. */
 async function messageWindowFor(orgId: string): Promise<number> {
   try {
-    const parsed = Number.parseInt(await getSetting('messageRetentionDays', orgId), 10);
+    const parsed = Number.parseInt(await resolveSettingRaw('messageRetentionDays', { orgId }), 10);
     return Number.isFinite(parsed) ? parsed : 0;
   } catch {
     return 0;
@@ -766,7 +800,25 @@ async function pruneRosterRowResults(ctx: RetentionContext) {
       ).map((r) => r.id),
     handleBatch: async (ids) => (await prisma.rosterRowResult.deleteMany({ where: { id: { in: ids } } })).count,
   });
-  return { deleted: processed, capped };
+  // A run's `absentKeys` is per-person too (the keys the feed did not mention),
+  // so it gets the same window; the run's counts, hash and status stay. Masked,
+  // not deleted, so it is reported as such.
+  const masked = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: Math.max(0, ctx.budget - processed),
+    selectIds: async (take) =>
+      (
+        await prisma.rosterRun.findMany({
+          where: { startedAt: { lt: ctx.cutoff }, NOT: { absentKeys: { equals: Prisma.DbNull } } },
+          orderBy: { startedAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.rosterRun.updateMany({ where: { id: { in: ids } }, data: { absentKeys: Prisma.DbNull } })).count,
+  });
+  return { deleted: processed, masked: masked.processed, capped: capped || masked.capped };
 }
 
 /**
@@ -808,6 +860,16 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A finished job is read for debugging within days, and the queue is the highest-churn table in the product. Thirty days covers "what ran last month?" and keeps the table small enough that the claim query stays fast. DEAD_LETTER and FAILED rows are never pruned.',
     run: pruneFinishedJobs,
+  },
+  {
+    key: 'domainEvent',
+    // Resolved from the GLOBAL settings row (GLOBAL_SETTING_KEYS): the sweep has
+    // no org bound and takes every tenant's events in one pass.
+    settingKey: 'domainEventRetentionDays',
+    defaultDays: DOMAIN_EVENT_RETENTION_DAYS,
+    reason:
+      'An event row is a fact that something happened plus the ids it happened to — and the oldest public payloads (application.created) carry a name and an address. Its readers look back days, not years: a webhook receiver asks for a replay within a week or two (#1695), an automation run reads the event that triggered it (#1703). Ninety days covers a full quarter of "what fired, and why?" and matches the e-mail delivery log, the other "did it go out?" ledger. The durable history of a record is the record itself and its ActivityLog/AuditLog trail, not this table.',
+    run: async (ctx) => pruneDomainEvents(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
   },
   {
     key: 'mailOutbox',
@@ -922,7 +984,7 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     // No setting: part of the roster feed's design (#1964, docs/roster-feed.md).
     defaultDays: 90,
     reason:
-      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail.',
+      'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail — only its per-person `absentKeys` list is cleared on the same window.',
     run: pruneRosterRowResults,
   },
 ];
@@ -949,7 +1011,7 @@ export async function runRetentionPrune(options: {
   maxPerRun?: number;
 } = {}): Promise<RetentionRunResult> {
   // One settings read for the whole run, not one per entry.
-  const settings = await getSettings().catch(() => null);
+  const settings = await resolveSettings().then((r) => r.raw).catch(() => null);
 
   const result = await runRetention({
     ...options,
@@ -983,43 +1045,4 @@ export async function runRetentionPrune(options: {
   return result;
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
-/**
- * Register THE retention schedule in this server process. Idempotent — a
- * retried call from `/api/cron/start` is harmless.
- *
- * Registered from `/api/cron/start` rather than from `initCronJobs()`, for the
- * same reason the newsletter cron (#1469) and the dead-letter alert (#1674)
- * are: this module imports `emailService` (for the EmailLog window it took
- * over), so registering it inside `initCronJobs` would close a one-way import
- * into a cycle. It is also the honest place for it — `initCronJobs` lives in
- * the mail service, and the product's retention policy should not be owned by
- * the module that sends e-mail.
- *
- * node-cron is the carrier only until the scheduler story (#1676) lands: this
- * becomes the `retention.prune` handler registered on the queue, and the timer
- * goes away with the other twelve. `runRetentionPrune()` is the handler either
- * way.
- *
- * 03:20 UTC — deliberately in the quiet hours and clear of every other slot
- * (06:45 the dead-letter alert, 07:30 activity digests, 08:15/08:30 the Monday
- * weeklies, 09:00 the reminder batch). Deleting rows in bulk is the one
- * scheduled thing here that competes with live traffic for the same table
- * locks, so it runs when there is least of it.
- */
-export function initRetentionCron() {
-  if (tasks.has('retention-prune')) return;
-
-  const task = cron.schedule('20 3 * * *', async () => {
-    try {
-      await runRetentionPrune();
-    } catch (e) {
-      // runRetentionPrune already swallows per-entry failures; reaching here
-      // means the run itself could not complete (the settings read, the audit
-      // row). Loud, because then there is no ActivityLog row to find later.
-      logger.error('Retention prune cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('retention-prune', task);
-}

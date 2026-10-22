@@ -682,6 +682,31 @@ export function manualAccountTable(fields: ManualAccountFields): ParsedTable {
   return { header, rows: [{ row: 1, values }], delimiter: ',' };
 }
 
+/**
+ * MANY rows of the import contract, for a machine caller that creates a batch
+ * of accounts at once (the Klaviyo pull connector, docs/integrations/klaviyo.md).
+ * Same rule as `manualAccountTable`: a column exists when any row sends the
+ * field, and a row that does not send it carries a blank cell — which the
+ * contract reads as "no opinion", never as a value. Row N of the table is
+ * `rows[N - 1]`.
+ */
+export function manualAccountsTable(rows: ManualAccountFields[]): ParsedTable {
+  const specs = MARKETING_IMPORT_COLUMNS.filter((spec) =>
+    rows.some((fields) => typeof (fields as Record<string, unknown>)[spec.field] === 'string'),
+  );
+  return {
+    header: specs.map((spec) => spec.header),
+    rows: rows.map((fields, index) => ({
+      row: index + 1,
+      values: specs.map((spec) => {
+        const value = (fields as Record<string, unknown>)[spec.field];
+        return typeof value === 'string' ? value.trim() : '';
+      }),
+    })),
+    delimiter: ',',
+  };
+}
+
 // ── The target snapshot ──────────────────────────────────────────────────────
 
 export interface MarketingAccountTarget {

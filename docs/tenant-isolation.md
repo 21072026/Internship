@@ -438,12 +438,64 @@ If it was never loaded, the fallbacks (no bound org, call `fn` directly) are the
 right answers anyway — there is no middleware installed to escape from. The same
 seam is the way in for any other client-reachable module that needs the bound org.
 
-Uniqueness has a MySQL wrinkle worth knowing: the pair is enforced by
-`@@unique([orgId, key])`, and MySQL treats `NULL`s as distinct in a unique index.
-The constraint therefore binds the per-tenant rows only; the global layer stays
-single because `setSetting()` is its only writer and does a read-modify-write
-rather than a blind insert. (`upsert` is not an option either way — a compound
-unique cannot address a `NULL` component.)
+Uniqueness has a MySQL wrinkle worth knowing: the key is enforced by
+`@@unique([orgId, programId, key])`, and MySQL treats `NULL`s as distinct in a
+unique index. The constraint therefore binds the **programme** rows only; the
+org layer (`programId = NULL`) and the global layer (both `NULL`) stay single
+because `setSetting()` is their only writer and does a read-modify-write rather
+than a blind insert (pinned by `e2e/settings-resolver.spec.ts`). (`upsert` is not
+an option either way — a compound unique cannot address a `NULL` component.)
+
+#### The programme layer and the typed accessor (#1619)
+
+A third scope sits on top: a row with an `orgId` **and** a `programId` (the
+`Cohort` row — `Program` after #1622) is one programme's override inside its
+tenant. The full order, written once in `pickSetting()` (`src/lib/settings.ts`):
+
+**programme row → org row → global row → `SETTING_DEFAULTS`**
+
+- Which keys may have a programme row is declared per key in `SETTING_SCHEMA`
+  (`scopes`): only decisions that genuinely differ between two programmes of one
+  tenant (reminder cadence, evaluation stages, WIP limit, blind review, …) —
+  never a security policy, a quota or a retention window. A programme row for any
+  other key is refused by the writer and ignored by the reader.
+  `GLOBAL_SETTING_KEYS` is derived from the same catalogue (the keys whose scopes
+  stop at `global`).
+- `setSetting(key, value, orgId, { programId })` writes a programme row only
+  under an explicit org, and only for a programme that belongs to that org —
+  checked against the database, never taken from input.
+- `resolveSetting(key, { orgId?, programId? })` in `src/lib/settingsResolver.ts`
+  (server-only) returns the **parsed** value (`14`, not `'14'`); `resolveSettings()`
+  the whole map plus the layer each value came from; `resolveSettingRaw()` the
+  stored string for a reader whose own rule module parses it. An omitted `orgId`
+  resolves exactly as the string readers do (the bound tenant, else the global
+  layer); a `programId` is never guessed — `resolveProgramScope({ relationId } |
+  { cohortId })` returns both ids in one query.
+- One query per scope loads every key, memoised for the request
+  (`withRequestScope`'s memo) or a job (`withSettingsCache(fn)`), and dropped
+  when `setSetting()` writes — so a sweep over hundreds of relations of one
+  programme costs one settings query.
+
+The index re-key needed its own one-shot expand phase on a populated table,
+`prisma/push-setting-program-expand.mjs`: MySQL leans on the old
+`Setting_orgId_key_key` index for the `orgId` foreign key, and Prisma's diff drops
+it before it creates the replacements.
+
+**Every reader goes through the accessor (#1621).** The call sites read
+`resolveSettingRaw(key, { orgId })` when their own rule module parses the string
+(a clamp, a list, a JSON document — the semantics of the old `getSetting(key,
+orgId)` exactly, plus the cache), or the typed `resolveSetting()` where the value
+is a plain boolean/enum (`blindReview`, `outcomeAutoSend`, `selfRegistration`,
+`autoAdvanceOnOfferAccept`). Where a programme is known it is passed:
+`reminderDays` in the mentor queue, the stale-contact reminder sweep and the
+relation-health reader (per relation's `cohortId`), and `outcomeAutoSend`. A
+sweep resolves **inside** its loop, per relation, under `withSettingsCache` —
+never once at the top, which would hand every tenant the first one's value.
+`npm run check:settings-accessor` (in CI) fails on a direct `prisma.setting`
+read outside the settings modules and on any new `getSetting`/`getSettings`
+import; the legacy readers still waiting (`src/lib/retention.ts`, which is
+client-reachable and cannot import the server-only resolver yet) are a pinned
+ratchet in that script.
 
 **The AI quota is the worked example of a per-tenant setting with a per-tenant
 meter** (#2681). `aiMonthlyQuota` resolves per org, so the `AiUsage` rows it is

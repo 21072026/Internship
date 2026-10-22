@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
-import { getSettings, isGlobalSettingKey, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { isGlobalSettingKey, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { resolveSettings } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { withTenantScope } from '@/lib/orgContext';
@@ -24,7 +25,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const orgId = await settingsOrgOf(session);
-  return withTenantScope(session, async () => NextResponse.json({ settings: await getSettings(orgId) }));
+  return withTenantScope(session, async () => NextResponse.json({ settings: await resolveSettings({ orgId }).then((r) => r.raw) }));
 }
 
 const schema = z.object({
@@ -69,6 +70,7 @@ const schema = z.object({
   pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  domainEventRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   companyInquiryRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   // Repeat-read suppression window for the access log, in minutes (#2433).
   // Same reasoning as the retention windows above: writable, not on the form.
@@ -202,6 +204,6 @@ export async function PUT(request: Request) {
     // the read-modify-write inside setSetting into a duplicate row.
     for (const [key, value] of entries) await setSetting(key, value, isGlobalSettingKey(key) ? null : orgId);
     await logActivity({ action: 'settings.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
-    return NextResponse.json({ settings: await getSettings(orgId) });
+    return NextResponse.json({ settings: await resolveSettings({ orgId }).then((r) => r.raw) });
   });
 }
