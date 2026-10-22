@@ -1,4 +1,5 @@
 import {
+  Scale,
   BookOpenCheck,
   Activity, AlarmClock, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
@@ -16,6 +17,7 @@ import {
   Table2,
   type LucideIcon,
   ShieldAlert,
+  FileSearch,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -77,6 +79,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  // Matching rule sets and their dry run (#1783).
+  { href: '/admin/matching', icon: Scale, key: 'matching', capability: 'mentorship' },
   // The org-wide at-risk queue (#1902): every pair, worst first, one next action.
   { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
@@ -129,6 +133,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Safeguarding review queue (#2056). Untagged: every vertical has messaging.
   { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
+  // The privileged-action trail (#1583) — gated on the `audit.read` permission
+  // server-side; untagged, every vertical has admins and impersonation.
+  { href: '/admin/audit', icon: FileSearch, key: 'audit' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
   { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },

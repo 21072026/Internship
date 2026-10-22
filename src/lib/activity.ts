@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { logger, type LogLevel } from '@/lib/logger';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { pickActivityOrg, USER_TARGET_TYPES } from '@/lib/activityOrgRule';
 import {
   attributeView,
@@ -141,7 +141,7 @@ export async function logViewActivity(input: ViewActivityInput): Promise<ViewLog
   const entry: ActivityInput = { action, actorId, actorEmail, targetType, targetId, detail, request };
 
   return recordViewOnce({
-    windowMinutes: async () => parseViewLogWindowMinutes(await getSetting('viewLogWindowMinutes')),
+    windowMinutes: async () => parseViewLogWindowMinutes(await resolveSettingRaw('viewLogWindowMinutes')),
     hasRecent: async (since) => {
       const recent = await prisma.activityLog.findFirst({
         where: {

@@ -16,7 +16,7 @@ import { CONTACT_CHANNELS } from '@/lib/contactPermissionRule';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { addressBlock, postIneligibility, suppressionKeys, type PostIneligibility } from '@/lib/postCampaignRule';
 import { defaultBalancingNote, resolveLetterBody } from '@/lib/postCampaignTemplates';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { verticalFor } from '@/lib/verticalContext';
 
 /**
@@ -29,7 +29,7 @@ export async function campaignDefaultsFor(orgId: string): Promise<{
   letterSource: 'org' | 'builtin';
   balancingNote: string;
 }> {
-  const [vertical, stored] = await Promise.all([verticalFor(orgId), getSetting('postLetterTemplate', orgId)]);
+  const [vertical, stored] = await Promise.all([verticalFor(orgId), resolveSettingRaw('postLetterTemplate', { orgId })]);
   const { letterBody, source } = resolveLetterBody(stored, vertical);
   return { letterBody, letterSource: source, balancingNote: defaultBalancingNote(vertical) };
 }

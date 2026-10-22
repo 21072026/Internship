@@ -563,3 +563,44 @@ test("erasing the MENTOR takes the prose they authored, and leaves the mentee's 
     await cleanup(s);
   }
 });
+
+// The roster-feed run log (#2098): not free text, but it names the person by
+// key — their address on a row result, and in a run's `absentKeys`.
+// `RosterRowResult.userId` has no foreign key, so without an explicit sweep it
+// outlived even a hard delete.
+for (const path of ['anonymize', 'hardDelete'] as const) {
+  test(`${path}: the roster-feed run log forgets the person and keeps everyone else`, async () => {
+    const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const org = await prisma.organization.create({ data: { name: `Erasure roster ${stamp}`, slug: `er-roster-${stamp}` } });
+    const email = uniqueEmail('erasure-roster');
+    const other = `other-${stamp}@example.test`;
+    const person = await seedUser(email, PASSWORD, 'MENTEE', 'Roster Person');
+    await prisma.user.update({ where: { id: person.id }, data: { orgId: org.id } });
+    try {
+      const feed = await prisma.rosterFeed.create({ data: { orgId: org.id, name: 'HR', columnMap: { email: 'email' } } });
+      const run = await prisma.rosterRun.create({
+        data: { orgId: org.id, feedId: feed.id, fileHash: 'c'.repeat(64), status: 'SUCCEEDED', absentKeys: [email, other] },
+      });
+      await prisma.rosterRowResult.createMany({
+        data: [
+          { orgId: org.id, runId: run.id, rowNumber: 1, key: email, status: 'UPDATE', userId: person.id },
+          // An unreadable row the engine could not tie to an account: matched by key.
+          { orgId: org.id, runId: run.id, rowNumber: 2, key: email, status: 'ERROR', message: 'missing external id' },
+          { orgId: org.id, runId: run.id, rowNumber: 3, key: other, status: 'CREATE' },
+        ],
+      });
+
+      if (path === 'anonymize') await anonymizeUser(person.id);
+      else await hardDeleteUser(person.id);
+
+      const rows = await prisma.rosterRowResult.findMany({ where: { runId: run.id } });
+      expect(rows.map((r) => r.key)).toEqual([other]);
+      const after = await prisma.rosterRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(after.absentKeys).toEqual([other]);
+      expect(after.status).toBe('SUCCEEDED');
+    } finally {
+      await cleanupByEmail(email);
+      await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+    }
+  });
+}

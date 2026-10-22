@@ -172,6 +172,14 @@ export const SCHEDULES: readonly Schedule[] = [
   { carrier: 'node-cron', key: 'survey-campaigns', cron: '0 10 * * *', source: 'src/lib/surveyCampaigns.ts', why: 'Survey campaigns (#1887), daily 10:00 — mid-morning.' },
   { carrier: 'node-cron', key: 'evaluation-reminders', cron: '15 8 * * *', source: 'src/lib/evaluationDue.ts', why: 'Evaluation due reminders (#1891), daily 08:15.' },
   { carrier: 'node-cron', key: 'program-journey', cron: '10 7 * * *', source: 'src/lib/programJourney.ts', why: 'Program journey steps (#1852), daily 07:10, in-app only.' },
+  { carrier: 'node-cron', key: 'sso-certificates', cron: '40 6 * * *', source: 'src/lib/jobs/ssoCertificateExpiry.ts', why: 'IdP certificate-expiry warnings (#1933), daily 06:40; two mails per certificate, at 30 and 7 days.' },
+  {
+    carrier: 'node-cron',
+    key: 'klaviyo-sync',
+    cron: '*/15 * * * *',
+    source: 'src/lib/klaviyoSync.ts',
+    why: 'The Klaviyo pull connector (docs/integrations/klaviyo.md), every 15 minutes — the cadence the owner asked for; each connection also takes its own JobLease and backoff.',
+  },
 ];
 
 export const QUEUE_SCHEDULES: readonly QueueSchedule[] = SCHEDULES.filter((s): s is QueueSchedule => s.carrier === 'queue');

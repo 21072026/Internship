@@ -133,6 +133,11 @@ export async function GET(request: Request) {
     // leads. Any other value is no filter.
     const ownerFilter: Prisma.CompanyWhereInput | undefined =
       searchParams.get('owner') === 'me' ? { mentorships: { some: { mentorId: session.user.id } } } : undefined;
+    // "From Klaviyo": the accounts a pull connector imported or matched — any
+    // account with a Klaviyo profile link (docs/integrations/klaviyo.md). Any
+    // other value is no filter.
+    const sourceFilter: Prisma.CompanyWhereInput | undefined =
+      searchParams.get('source') === 'klaviyo' ? { externalProfiles: { some: { provider: 'klaviyo' } } } : undefined;
 
     // The same two columns the client-side `filter()` used to match on, so the
     // move to the server is not also a change of what "search" means.
@@ -159,6 +164,7 @@ export async function GET(request: Request) {
         searchFilter,
         permissionFilter,
         ownerFilter,
+        sourceFilter,
       );
       const include = {
         needs: true,

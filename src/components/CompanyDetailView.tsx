@@ -307,6 +307,39 @@ export function CompanyDetailView({
         </Card>
       )}
 
+      {/* What a pull connector knows about the account (docs/integrations/klaviyo.md):
+          the provider's own data, shown as information. Its consent is never
+          this CRM's contact permission — that card is above. */}
+      {data.externalProfiles.map((info, i) => (
+        <Card className="mb-6" data-testid="company-klaviyo-card" key={`${info.provider}-${i}`}>
+          <CardHeader>
+            <CardTitle>{d.klaviyo.title}</CardTitle>
+          </CardHeader>
+          <p className="mb-4 text-xs text-gray-500">{d.klaviyo.note}</p>
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label={d.klaviyo.source} value={info.source} testId="company-klaviyo-source" />
+            <Field label={d.klaviyo.emailConsent} value={info.emailConsent} testId="company-klaviyo-consent" />
+            <Field label={d.klaviyo.smsConsent} value={info.smsConsent} />
+            <Field label={d.klaviyo.jobTitle} value={info.jobTitle} />
+            <Field label={d.klaviyo.location} value={info.location} testId="company-klaviyo-location" />
+            <Field label={d.klaviyo.updated} value={info.updatedAt ? <RelativeTime date={info.updatedAt} /> : null} />
+          </dl>
+          {info.properties.length > 0 && (
+            <div className="mt-4" data-testid="company-klaviyo-properties">
+              <p className="text-xs text-gray-500">{d.klaviyo.properties}</p>
+              <dl className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                {info.properties.map(([k, v]) => (
+                  <div key={k} className="flex gap-2 break-all">
+                    <dt className="font-medium text-gray-700 dark:text-gray-300">{k}</dt>
+                    <dd className="text-gray-600 dark:text-gray-400">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+        </Card>
+      ))}
+
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>{d.sections.funnel}</CardTitle>

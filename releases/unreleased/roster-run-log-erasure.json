@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Erasure reaches the roster-feed run log (#2098):** `RosterRowResult.userId` has no foreign key, so a person's row results (their address as the key) survived even a hard delete, and a run's `absentKeys` listed their address forever. `anonymizeUser()` and `hardDeleteUser()` now forget both through `rosterLogOps()` (row results by id and by key, the key cut out of every run's `absentKeys` in their org) inside the erasure transaction. The `rosterRowResult` retention entry also clears `absentKeys` after 90 days. `scripts/sanitize-db.mjs` deletes row results, clears `absentKeys`, and drops every feed's sealed secret and switches it off, so a preview never fetches from a customer's HR server. Recorded in the `COVERAGE` block and `docs/pii-access-lifecycle.md`."
+}

@@ -23,7 +23,7 @@
 // than placing a lead with the wrong person or across a tenant boundary.
 
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import type { MarketingImportOwner } from '@/lib/marketingImportStore';
 
@@ -48,7 +48,7 @@ export async function findLeadOwner(orgId: string, userId: string): Promise<Mark
 
 /** The org's default lead owner, or null when none is set or the one set is no longer valid. */
 export async function resolveDefaultLeadOwner(orgId: string): Promise<MarketingImportOwner | null> {
-  const id = (await getSetting('defaultLeadOwnerId', orgId)).trim();
+  const id = (await resolveSettingRaw('defaultLeadOwnerId', { orgId })).trim();
   if (!id) return null;
   return findLeadOwner(orgId, id);
 }

@@ -35,8 +35,8 @@
 //   derived from `params` in one line the day a caller needs one.
 //
 // NOT A SECOND EVENT VOCABULARY
-//   `WEBHOOK_EVENTS` (src/lib/webhooks.ts — seven names) and the versioned
-//   domain-event catalogue of #1691 describe what HAPPENED, for consumers
+//   The versioned domain-event catalogue (src/lib/events/catalog.ts, #1691),
+//   whose public entries ARE `WEBHOOK_EVENTS`, describes what HAPPENED, for consumers
 //   outside this app. These keys describe what a PERSON IS TOLD, and they are
 //   the keys the dictionary and every existing `Notification.type` row already
 //   use. The two map onto each other (a `pipeline.stage_change` domain event is
@@ -145,9 +145,16 @@ export const NOTIFICATION_EVENTS = [
   { key: 'meeting.startedGeneric', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'meeting.scheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'meeting.scheduledNoTime', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  // A meeting that moved or was called off (#1982) — the mail is sent inline by
+  // src/lib/meetingChangeNotices.ts, so the router is asked for in-app only.
+  { key: 'meeting.rescheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'from', 'to'] },
+  { key: 'meeting.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'meeting.cancelledReason', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when', 'reason'] },
   // An RSVP is the organizer's own bookkeeping: in-app only, no mail per answer.
   { key: 'rsvp.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'rsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  // A decline that suggested another time (#1982); the counter sits in the organiser's requests list.
+  { key: 'rsvp.counterProposed', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'guestRsvp.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['guest', 'title'] },
   { key: 'guestRsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['guest', 'title'] },
 
@@ -170,6 +177,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'safeguarding.flagged', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'public_contact.message', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name', 'email', 'preview'] },
   { key: 'signup.companyInquiry', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['companyName', 'contactName'] },
+  // New leads a pull connector imported in one run (docs/integrations/klaviyo.md):
+  // to the lead owner, in-app only, a count — never a name.
+  { key: 'integration.newLeads', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['count', 'provider'] },
 
   // Pipeline: where a candidate stands, and what came of it.
   { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
@@ -181,6 +191,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'offer_sent.new', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['position'] },
   { key: 'offer_accepted.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
   { key: 'offer_declined.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
+  // A mentee applied through the job board (#1832): the company's users and the mentee's mentor hear it.
+  { key: 'job_application.received', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['candidate', 'role'] },
+  { key: 'job_application.mentee_applied', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['candidate', 'role'] },
   { key: 'offer_expired.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
   { key: 'company_interest.mentee', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'company_interest.interested', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
@@ -269,6 +282,8 @@ export const NOTIFICATION_EVENTS = [
   // the mail goes in the existing `goals-evaluation` category (src/lib/evaluationDue.ts).
   { key: 'evaluation.dueInterim', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
   { key: 'evaluation.dueFinal', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
+  // The kickoff prompt to read the mentoring agreement (#1792) — in-app, a prompt not a gate.
+  { key: 'agreement.review', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
   // Program journey steps (#1852): in-app only — the daily sweep delivers each
   // step to the pair once, under the recipient's `mentorship` preference
   // (src/lib/programJourney.ts). No mail: #1703's automation engine owns that.

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
+import { initKlaviyoSyncCron } from '@/lib/klaviyoSync';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
 import { startScheduler } from '@/lib/jobs/schedulerRuntime';
 import { initRetentionCron } from '@/lib/retentionEntries';
@@ -11,6 +12,7 @@ import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
 import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
 import { initEvaluationRemindersCron } from '@/lib/evaluationDue';
 import { initProgramJourneyCron } from '@/lib/programJourney';
+import { initSsoCertificateExpiryCron } from '@/lib/jobs/ssoCertificateExpiry';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -70,6 +72,12 @@ export async function POST(request: Request) {
   // Program journey steps (#1852), daily 07:10 — in-app only, but registered
   // here with the other daily sweeps so #1676 finds every schedule in one place.
   initProgramJourneyCron();
+  // IdP certificate-expiry warnings (#1933), daily 06:40 — they mail through emailService too.
+  initSsoCertificateExpiryCron();
+  // The Klaviyo pull connector (docs/integrations/klaviyo.md), every fifteen
+  // minutes through scheduleLeased() (a 'node-cron' entry in
+  // src/lib/jobs/schedules.ts). Imports leads; never mails one.
+  initKlaviyoSyncCron();
   // The queue scheduler (#1676): every 30 s the 'scheduler' lease holder
   // enqueues the due slots of the QUEUE schedules in src/lib/jobs/schedules.ts
   // (the dead-letter alert, the audit stream, the JobRun prune), with missed-
