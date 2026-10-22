@@ -42,6 +42,7 @@ const STATUS: Record<AffiliateWriteErrorCode, number> = {
   unknown_customer: 400,
   customer_of_another_partner: 409,
   duplicate_payment: 409,
+  payout_mismatch: 409,
   busy: 503,
   conflict: 409,
 };

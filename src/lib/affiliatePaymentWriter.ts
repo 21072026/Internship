@@ -29,9 +29,10 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { evaluatePartner, parseCommissionPlan, type CommissionPlan, type PaymentFact } from '@/lib/affiliateCommissionRule';
+import { evaluatePartner, MAX_AMOUNT_MINOR, parseCommissionPlan, type CommissionPlan, type PaymentFact } from '@/lib/affiliateCommissionRule';
 import {
   checkPaymentInput,
+  MAX_REF_LENGTH,
   normalizeRef,
   planCommissionChanges,
   type CommissionDrift,
@@ -48,6 +49,7 @@ export type AffiliateWriteErrorCode =
   | 'unknown_customer' // a new customer needs a partner
   | 'customer_of_another_partner'
   | 'duplicate_payment' // the external payment reference is already recorded in this organisation
+  | 'payout_mismatch' // a payout's commissions are not all APPROVED, of this partner, in one currency
   | 'busy' // the partner is locked by long-running work or a deadlock was resolved; retry
   | 'conflict'; // a guarded commission write found a row in another state than it read — an invariant broke
 
@@ -441,4 +443,73 @@ export async function driftReport(orgId: string): Promise<(CommissionDrift & { p
     for (const d of changes.drift) out.push({ ...d, partnerId: partner.id });
   }
   return out;
+}
+
+export interface PayoutInput {
+  partnerId: string;
+  commissionIds: string[];
+  /** The day the bank transfer was made (a calendar day; not in the future). */
+  paidAt: Date;
+  reference?: string | null;
+  /** Injected for tests; defaults to the wall clock (+14 h, a calendar day typed east of UTC). */
+  now?: Date;
+}
+
+/**
+ * Records a manual bank transfer: ALL of the given commissions — APPROVED, of this
+ * partner, in one currency — become PAID and point at one new AffiliatePayout
+ * whose amount is their sum. All or nothing, under the partner's lock: if any id
+ * does not qualify, nothing is written (`payout_mismatch`). Audited
+ * (`affiliate.payout.create`). The transfer itself happens outside the CRM.
+ */
+export async function createPayout(orgId: string, input: PayoutInput, actorId: string): Promise<{ payoutId: string; amountMinor: number; currency: string; count: number }> {
+  const ids = [...new Set(input.commissionIds)];
+  const now = input.now ?? new Date(Date.now() + 14 * 60 * 60 * 1000);
+  const reference = input.reference?.trim() || null;
+  if (
+    ids.length === 0 ||
+    ids.length > MAX_COMMISSIONS_PER_ACTION ||
+    !(input.paidAt instanceof Date) ||
+    Number.isNaN(input.paidAt.getTime()) ||
+    input.paidAt.getTime() > now.getTime() ||
+    (reference !== null && reference.length > MAX_REF_LENGTH)
+  ) {
+    throw new AffiliateWriteError('invalid_input');
+  }
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await lockPartner(tx, orgId, input.partnerId);
+      const rows = await tx.affiliateCommission.findMany({
+        where: { orgId, partnerId: input.partnerId, id: { in: ids }, status: 'APPROVED' },
+        select: { id: true, amountMinor: true, currency: true },
+      });
+      const currencies = new Set(rows.map((r) => r.currency));
+      if (rows.length !== ids.length || currencies.size !== 1) throw new AffiliateWriteError('payout_mismatch');
+      const currency = rows[0].currency;
+      const amountMinor = rows.reduce((sum, r) => sum + r.amountMinor, 0);
+      if (amountMinor > MAX_AMOUNT_MINOR) throw new AffiliateWriteError('payout_mismatch');
+
+      const payout = await tx.affiliatePayout.create({
+        data: { orgId, partnerId: input.partnerId, amountMinor, currency, paidAt: input.paidAt, paidById: actorId, reference },
+        select: { id: true },
+      });
+      const { count } = await tx.affiliateCommission.updateMany({
+        where: { orgId, partnerId: input.partnerId, id: { in: ids }, status: 'APPROVED' },
+        data: { status: 'PAID', payoutId: payout.id, paidAt: input.paidAt },
+      });
+      if (count !== ids.length) throw new AffiliateWriteError('conflict');
+      await tx.auditLog.create({
+        data: {
+          orgId,
+          actorId,
+          action: 'affiliate.payout.create',
+          targetId: payout.id,
+          detail: JSON.stringify({ partnerId: input.partnerId, count, amountMinor, currency }),
+        },
+      });
+      return { payoutId: payout.id, amountMinor, currency, count };
+    }, TX_OPTIONS);
+  } catch (e) {
+    throw mapPrismaError(e);
+  }
 }

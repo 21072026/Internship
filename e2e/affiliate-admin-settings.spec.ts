@@ -65,6 +65,7 @@ test.afterAll(async () => {
   if (orgId) {
     const where = { orgId };
     await prisma.affiliateCommission.deleteMany({ where }).catch(() => {});
+    await prisma.affiliatePayout.deleteMany({ where }).catch(() => {});
     await prisma.affiliatePayment.deleteMany({ where }).catch(() => {});
     await prisma.affiliateCustomer.deleteMany({ where }).catch(() => {});
     await prisma.affiliatePartner.deleteMany({ where }).catch(() => {});
@@ -232,5 +233,43 @@ test('commissions: approve / reject / un-approve under the lock, PAID untouchabl
   const drift = (await (await observer.get('/api/admin/affiliate/commissions/drift', { headers: host })).json()).drift;
   expect(drift).toEqual(expect.arrayContaining([expect.objectContaining({ commissionId: v1.id, planVersion: 1, expected: { kind: 'TIER', amountMinor: 450 } })]));
   expect((await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: v1.id } })).amountMinor).toBe(300);
+});
+
+test('payouts: all or nothing under the lock, only APPROVED rows of that partner', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const byRef = async (ref: string) => prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, payment: { externalPaymentRef: ref } } });
+  const v1 = await byRef('inv-1');
+  const p94 = await byRef('inv-94');
+  const p90 = await byRef('inv-90'); // REJECTED in the previous test
+  await owner.post('/api/admin/affiliate/commissions/transition', { headers: host, data: { ids: [v1.id, p94.id], transition: 'APPROVE' } });
+  const pay = (ctx: APIRequestContext, data: Record<string, unknown>) =>
+    ctx.post('/api/admin/affiliate/payouts', { headers: host, data: { partnerId, paidOn: '2026-04-02', reference: 'bank-1', ...data } });
+
+  expect((await pay(observer, { commissionIds: [v1.id] })).status()).toBe(403);
+  // One rejected row in the batch: nothing is paid.
+  expect(await (await pay(owner, { commissionIds: [v1.id, p90.id] })).json()).toEqual({ code: 'payout_mismatch' });
+  expect((await byRef('inv-1')).status).toBe('APPROVED');
+  // Another partner's batch, a future date: refused.
+  const other = await prisma.affiliatePartner.findFirstOrThrow({ where: { orgId, code: 'new-1' } });
+  expect(await (await pay(owner, { partnerId: other.id, commissionIds: [v1.id] })).json()).toEqual({ code: 'payout_mismatch' });
+  expect((await pay(owner, { commissionIds: [v1.id], paidOn: '2999-01-01' })).status()).toBe(400);
+
+  const ok = await pay(owner, { commissionIds: [v1.id, p94.id] });
+  expect(ok.status()).toBe(201);
+  const body = await ok.json();
+  expect(body).toMatchObject({ amountMinor: v1.amountMinor + p94.amountMinor, currency: 'EUR', count: 2 });
+  for (const ref of ['inv-1', 'inv-94']) {
+    const c = await byRef(ref);
+    expect([c.status, c.payoutId, c.paidAt?.toISOString()]).toEqual(['PAID', body.payoutId, '2026-04-02T00:00:00.000Z']);
+  }
+  // Paying the same rows twice: nothing left to pay.
+  expect(await (await pay(owner, { commissionIds: [v1.id] })).json()).toEqual({ code: 'payout_mismatch' });
+
+  const list = await (await observer.get('/api/admin/affiliate/payouts', { headers: host })).json();
+  expect(list.rows[0]).toMatchObject({ id: body.payoutId, amountMinor: body.amountMinor, reference: 'bank-1', commissions: 2 });
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payout.create' } })).toBe(1);
+  const partners = (await (await owner.get('/api/admin/affiliate/partners', { headers: host })).json()).partners;
+  expect(partners.find((p: { id: string }) => p.id === partnerId).totals.PAID).toBe(body.amountMinor);
 });
 

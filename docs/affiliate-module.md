@@ -152,6 +152,13 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   audit row per partner (`affiliate.commission.approve|reject|unapprove`).
   `driftReport()` lists the frozen rows the current plan would calculate
   differently — read only, nothing written.
+- **Payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
+  recorded after the manual bank transfer. `createPayout()` (payment writer)
+  takes ONE partner's selected commissions under its lock: all APPROVED, all that
+  partner's, one currency — or nothing is written (`payout_mismatch`). The payout
+  row carries their sum, the transfer day (a calendar day, not in the future) and
+  an optional bank reference; the commissions become PAID with `payoutId` and
+  `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
 
 ## Security
 
@@ -183,7 +190,9 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   `affiliate.commissions.resync`, `affiliate.contract.publish`,
   `affiliate.contract.accept`, `affiliate.payout_details.update`. No row carries
   an IBAN (the masked last four at most) or a person's data beyond ids.
-  Commission status changes and payouts will add theirs with the admin screens.
+  The admin screens add `affiliate.plan.update`, `affiliate.partner.create`,
+  `affiliate.partner.state`, `affiliate.payout_details.read`,
+  `affiliate.commission.approve|reject|unapprove` and `affiliate.payout.create`.
 - Every partner API goes through `affiliatePartnerGate()` (`src/lib/affiliateContract.ts`):
   AFFILIATE only (403), inside a vertical with the `affiliate` module (403), the
   session's OWN partner record (404 without one — never taken from the request),
