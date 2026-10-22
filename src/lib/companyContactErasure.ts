@@ -150,3 +150,51 @@ export function companyContactErasureData() {
   // contactPosition (#2442) is the same person's job title: it goes with them.
   return { contactEmail: null, contactName: null, contactPhone: null, contactPosition: null };
 }
+
+// ── A lead on a stand-in address (#3136) ─────────────────────────────────────
+//
+// The address match above assumes the erased `User` carries the person's real
+// mailbox. A MARKETING lead does not: the import, the account events and the
+// pull connector all create the lead on a generated stand-in
+// (`leadStandInEmail()`, `@import.local`) and put the real address, name and
+// line on the account's `Company.contact*` columns. Matching on the lead's own
+// address therefore never reaches the account, and the person's real identity
+// survived their erasure.
+//
+// So for a lead the account side is decided per company LINKED to the lead
+// (`User.companyId`, a relation's `companyId`, a connector link's `companyId` —
+// the caller reads those), and the rule below says whether the person on that
+// company is this lead:
+//
+//   - a stored contact address is THIS lead when it is the lead's own address,
+//     or when it is the address the lead's stand-in was derived from (the
+//     derivation is deterministic: same contact, same org → same stand-in, and
+//     the org key is the run's org or `''` on a single-tenant install);
+//   - with no stored address, the stored NAME decides (trimmed, whitespace
+//     collapsed, case-insensitive) — the only identity left on the row;
+//   - anything else is a different person, and their company is never touched.
+//
+// Being linked is necessary but never sufficient: a lead moved onto an account
+// whose contact is someone else (the import re-points `companyId`) must not
+// erase that someone else.
+
+function normalizeContactName(value: string | null | undefined): string {
+  return (value ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** Is the person named on `company` the lead being erased? */
+export function leadIsAccountContact(
+  lead: { email: string; fullName: string | null; orgId: string | null },
+  company: { contactEmail: string | null; contactName: string | null },
+  standInFor: (contactEmailKey: string, orgKey: string) => string,
+): boolean {
+  const own = normalizeContactEmail(lead.email);
+  const contact = normalizeContactEmail(company.contactEmail ?? '');
+  if (contact) {
+    if (contact === own) return true;
+    const orgKeys = [...new Set([lead.orgId ?? '', ''])];
+    return orgKeys.some((k) => normalizeContactEmail(standInFor(contact, k)) === own);
+  }
+  const name = normalizeContactName(company.contactName);
+  return name !== '' && name === normalizeContactName(lead.fullName);
+}

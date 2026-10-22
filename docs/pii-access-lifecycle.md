@@ -211,6 +211,28 @@ temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContact
   (`prisma/backfill-organization.mjs`) onları varsayılan org'a atar — başka hiçbir
   org için NULL satıra dokunulmaz. Kanıt: [`e2e/erasure-company-contact.spec.ts`](../e2e/erasure-company-contact.spec.ts)
   (aynı adresi taşıyan iki kiracı, damgasız bir satır ve aynı kiracıda başka bir kişi).
+- **Yer tutucu adresteki lead (#3136):** MARKETING içe aktarımı, hesap olayları ve
+  çekme bağlayıcısı lead `User`'ını üretilmiş bir yer tutucuyla (`leadStandInEmail()`,
+  `@import.local`) oluşturur; kişinin **gerçek** adı, adresi ve telefonu yalnızca
+  hesabın `Company.contact*` kolonlarındadır. Lead'in kendi adresiyle eşleşme bu
+  hesaba hiç ulaşmıyordu — lead silinince gerçek kimlik hesapta kalıyordu. Artık
+  `companyContactOps()` lead'e **bağlı** hesapları okur (`User.companyId`, lead'in
+  ilişkilerinin `companyId`'si, canlı bir bağlayıcı bağlantısının `companyId`'si;
+  hepsi lead'in kiracısında) ve her biri için `leadIsAccountContact()` karar verir:
+  kayıtlı adres lead'in kendi adresiyse **ya da** lead'in yer tutucusunun
+  türetildiği adresse (türetme deterministik: aynı kişi + aynı org → aynı yer
+  tutucu; org anahtarı run'ın org'u ya da tek kiracılı kurulumda `''`) kişi
+  odur; adres yoksa kayıtlı **ad** karar verir. Başka her şey başka bir kişidir —
+  **bağlı olmak tek başına yetmez**, lead'in taşındığı ve muhatabı başkası olan
+  hesaba dokunulmaz. Bulunan gerçek adres aynı scrub kurucusundan
+  (`contactScrubOps()`, "Bu kişiyi unut" ile aynı) geçer — hesap, adres defteri
+  ve talepler — ve bağlayıcı mezar taşına (#2986) gerçek adresin hash'iyle de
+  girer, bir sonraki senkron kişiyi geri yazamaz. Adressiz, yalnızca adla
+  eşleşen hesabın dört iletişim kolonu kimliğiyle temizlenir.
+  Kanıt: [`e2e/erasure-stand-in-lead.spec.ts`](../e2e/erasure-stand-in-lead.spec.ts)
+  (`@smoke`; içe aktarıcının yazıcısıyla oluşturulan lead, anonimleştirme ve kalıcı
+  silme, muhatabı başkası olan bağlı hesap) ve
+  `scripts/test/company-contact-erasure.test.mjs`.
 - **Hesabı hiç olmamış muhatap (#2559):** web talebinin göndereni ya da içe
   aktarılan hesabın adı geçen kişisi bir `User` satırı olmadan yalnızca adres
   olarak durur. `/admin/company-inquiries` satırındaki **Bu kişiyi unut**

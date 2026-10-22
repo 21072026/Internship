@@ -37,6 +37,7 @@ const {
   erasureOrgId,
   erasureScoped,
   inquiryErasureData,
+  leadIsAccountContact,
 } = await import('../../src/lib/companyContactErasure.ts');
 
 const DEFAULT = 'org-default';
@@ -153,4 +154,44 @@ test('the company loses its three contact columns and nothing else', () => {
 test('one tombstone address for the User row and the enquiry', () => {
   assert.equal(erasedAddress('abc'), 'erased-abc@erased.local');
   assert.equal(inquiryErasureData('abc').email, erasedAddress('abc'));
+});
+
+// ── A lead on a stand-in address (#3136) ─────────────────────────────────────
+// The real derivation lives in src/lib/marketingImport.ts and is injected; this
+// stand-in mimics its shape (deterministic in org + contact address).
+const standIn = (contact, orgKey) => `${contact.replace(/[^a-z0-9]+/g, '.')}.${orgKey || 'single'}@import.local`;
+
+test('a stand-in lead is the contact whose address its stand-in was derived from', () => {
+  const lead = { email: standIn('jane@shop.example', A), fullName: 'Jane Roe', orgId: A };
+  assert.equal(leadIsAccountContact(lead, { contactEmail: 'jane@shop.example', contactName: 'Jane Roe' }, standIn), true);
+  // Stored mixed-case / padded: the same person.
+  assert.equal(leadIsAccountContact(lead, { contactEmail: ' Jane@Shop.example ', contactName: null }, standIn), true);
+});
+
+test('a single-tenant import (org key "") is recognised for an org-less lead and an org lead alike', () => {
+  const contact = { contactEmail: 'jane@shop.example', contactName: null };
+  assert.equal(leadIsAccountContact({ email: standIn('jane@shop.example', ''), fullName: null, orgId: null }, contact, standIn), true);
+  assert.equal(leadIsAccountContact({ email: standIn('jane@shop.example', ''), fullName: null, orgId: A }, contact, standIn), true);
+});
+
+test('a linked company whose contact is SOMEONE ELSE is never the lead', () => {
+  const lead = { email: standIn('jane@shop.example', A), fullName: 'Jane Roe', orgId: A };
+  // Different address — even with the same name.
+  assert.equal(leadIsAccountContact(lead, { contactEmail: 'max@shop.example', contactName: 'Jane Roe' }, standIn), false);
+  // Another tenant's derivation of the same address is a different stand-in.
+  const otherTenantLead = { email: standIn('jane@shop.example', B), fullName: null, orgId: A };
+  assert.equal(leadIsAccountContact(otherTenantLead, { contactEmail: 'jane@shop.example', contactName: null }, standIn), false);
+});
+
+test('a lead on its real address matches the stored address directly', () => {
+  const lead = { email: 'jane@shop.example', fullName: 'Jane Roe', orgId: A };
+  assert.equal(leadIsAccountContact(lead, { contactEmail: 'JANE@shop.example', contactName: null }, standIn), true);
+});
+
+test('with no stored address, the stored name decides — and an empty name never matches', () => {
+  const lead = { email: standIn('jane@shop.example', A), fullName: '  Jane   Roe ', orgId: A };
+  assert.equal(leadIsAccountContact(lead, { contactEmail: null, contactName: 'jane roe' }, standIn), true);
+  assert.equal(leadIsAccountContact(lead, { contactEmail: '', contactName: 'Max Muster' }, standIn), false);
+  assert.equal(leadIsAccountContact({ ...lead, fullName: null }, { contactEmail: null, contactName: null }, standIn), false);
+  assert.equal(leadIsAccountContact({ ...lead, fullName: '' }, { contactEmail: null, contactName: '' }, standIn), false);
 });
