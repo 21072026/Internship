@@ -719,6 +719,44 @@ and docker (builds, tests, linting) goes to `ubuntu-latest`, which is free for t
 public repo. Moving builds onto the runner in 2026-06 was a quota workaround
 (#636), and it made the production host compile on every PR push.
 
+### When the box is full (memory admission, 2026-10-22)
+On 2026-10-21 a preview deploy's tool container was OOM-killed mid-`prisma db push`
+(exit 137) while many topic environments were up. The runner never took another
+job, and every deploy — prod's included — queued behind it for a day, while the
+watchdog reported OK (it checked the first `actions.runner.*` unit on the box,
+which belongs to another repository). Three changes keep that from recurring:
+
+- **Topic environments are admitted, not assumed.** Before anything is pulled,
+  `topic-deploy.sh` asks `topic_capacity_verdict()` (`infra/server/capacity.sh`)
+  whether the box has room for one more container plus the headroom a prod/preview
+  deploy needs. If not, nothing is started, the job ends **green** and the PR gets a
+  "⏸ Topic preview not deployed — the server is busy" comment: a full server is not
+  a broken PR. Re-run the **Topic Preview** workflow once other PRs have closed.
+  Every topic container also gets a hard `--memory` limit, so one PR cannot eat
+  the box.
+- **Prod/preview deploys check memory first.** `deploy-prod.sh` refuses to start
+  (before the backup and the schema sync, never in the middle of them) when
+  `MemAvailable` is below `DEPLOY_MIN_AVAILABLE_MB`, and logs the biggest
+  containers. The schema sync runs `prisma db push --skip-generate`: the image
+  already carries the generated client, and `generate` is where the OOM hit.
+- **The watchdog watches *our* runner, and its queue.** `runner-watchdog.yml`
+  selects the unit by runner name (`vars.RUNNER_NAME`, default `interncrm`), installs
+  a `Restart=always` drop-in, and asks GitHub whether the runner drains its queue
+  (`scripts/runner-queue.mjs`): jobs for its label waiting ≥ 30 min with nothing
+  running on it → `systemctl restart`. "The service is active" is not "it takes jobs".
+
+| Knob | Where | Default | Meaning |
+|---|---|---|---|
+| `TOPIC_MEMORY_MB` | repo variable | 1024 | hard memory limit of one topic container |
+| `TOPIC_HEADROOM_MB` | repo variable | 2048 | kept free for prod/preview deploys |
+| `TOPIC_MAX_ENVS` | repo variable | 8 | topic containers running at once, at most |
+| `DEPLOY_MIN_AVAILABLE_MB` | env of `deploy-prod.sh` | 768 | a prod/preview deploy needs this free (`0` = off) |
+| `RUNNER_NAME` | repo variable | `interncrm` | the runner the watchdog looks after |
+| `RUNNER_STUCK_AFTER_MIN` | repo variable | 30 | queue wait that counts as stuck |
+
+The rules are pinned by `infra/test/capacity.test.sh` and
+`scripts/test/runner-queue.test.mjs` (both in CI).
+
 ---
 
 ## 5. Database backups & the destructive-schema gate

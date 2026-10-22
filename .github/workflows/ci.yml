@@ -386,6 +386,13 @@ jobs:
       # test also pins that it never prints a host, a title or a brand (#2919).
       - name: marketing host title check (#2579, #2919)
         run: bash infra/test/marketing-title-check.test.sh
+      # The memory admission rules of the shared box (infra/server/capacity.sh):
+      # a topic environment is deferred, and a prod/preview deploy refused
+      # before its schema sync, when the server is short — instead of an OOM
+      # kill mid-deploy, which on 2026-10-21 left the runner dead for a day.
+      # They only ever run on the server, so their arithmetic is pinned here.
+      - name: topic capacity gate + deploy memory preflight
+        run: bash infra/test/capacity.test.sh
       # The steps above each run ONE unit suite because each was added by the
       # incident it names. Nothing held the set together, so a suite whose rule
       # got refactored away could lose its assertions and stay green — the test

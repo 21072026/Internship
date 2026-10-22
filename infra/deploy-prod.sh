@@ -644,6 +644,24 @@ case "$CONTAINER" in
   *) ENV_LABEL="${CONTAINER#internship-crm-}" ;;
 esac
 
+# ── Memory preflight (infra/server/capacity.sh) ─────────────────────────────
+# Before the backup and the schema sync, never in the middle of them: on
+# 2026-10-21 a preview deploy was OOM-killed inside `prisma db push` (exit 137)
+# and the runner took no job for a day. A box too full to deploy now stops
+# HERE with the reason and the biggest consumers, and the schema is untouched.
+MEM_VERDICT=ok
+if [ -f "$REPO_DIR/infra/server/capacity.sh" ]; then
+  # shellcheck source=infra/server/capacity.sh
+  . "$REPO_DIR/infra/server/capacity.sh"
+  MEM_VERDICT=$(deploy_memory_verdict "$(mem_available_mb || true)")
+fi
+if [ "${MEM_VERDICT%% *}" = "refused" ]; then
+  warn "Deploy stopped before the backup and the schema sync: ${MEM_VERDICT#refused }"
+  log "Biggest memory consumers"
+  docker stats --no-stream --format '{{.MemUsage}}\t{{.Name}}' 2>/dev/null | sort -h -r | head -15 || true
+  exit 1
+fi
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_TAKEN=0
 if [ "$ENV_LABEL" != "prod" ] && [ "$ENV_LABEL" != "preview" ]; then
@@ -726,7 +744,10 @@ log "repair invalid Json column values (pre-push, idempotent)"
 run_tool node prisma/backfill-json-columns.mjs --repair || true
 
 log "prisma db push (final contract phase)"
-run_tool npx prisma db push --accept-data-loss
+# --skip-generate: the image carries the client generated from this very schema
+# (Dockerfile, builder stage); regenerating it in a throwaway container is the
+# memory spike the 2026-10-21 OOM killed.
+run_tool npx prisma db push --accept-data-loss --skip-generate
 
 # Immediately after the push, because the push itself is what breaks these
 # (#1150). Prisma DROPS `@default` when it emits DDL for a `Json` field, so a

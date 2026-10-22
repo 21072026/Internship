@@ -136,6 +136,33 @@ CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"  # legacy raw route (c
 
 echo "==> Deploying topic '${TOPIC}' → ${URL} + ${MARKETING_URL} (container ${CONTAINER}, port ${PORT})"
 
+# ── Capacity: is there room for one more environment? ───────────────────────
+# Asked BEFORE anything is pulled or created (infra/server/capacity.sh says why:
+# an OOM on this box once stopped every deploy for a day). A full server is not
+# a broken PR: the job ends green, and topic-preview.yml tells the PR it was
+# deferred instead of claiming an environment that does not exist.
+TOPIC_MEMORY_MB="${TOPIC_MEMORY_MB:-1024}"
+CAPACITY_SH="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)/capacity.sh"
+if [ -f "$CAPACITY_SH" ]; then
+  # shellcheck source=infra/server/capacity.sh
+  . "$CAPACITY_SH"
+  VERDICT=$(topic_capacity_verdict "$(mem_available_mb || true)" "$(container_mem_mb "$CONTAINER")" "$(topic_containers_except "$CONTAINER")")
+  if [ "${VERDICT%% *}" = "deferred" ]; then
+    REASON="${VERDICT#deferred }"
+    echo "==> NOT deploying ${TOPIC} — the server is busy: ${REASON}"
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      { echo "deployed=false"; echo "reason=${REASON}"; } >> "$GITHUB_OUTPUT"
+    fi
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      printf '### ⏸ Topic environment not deployed — the server is busy\n\n%s\n' "$REASON" >> "$GITHUB_STEP_SUMMARY"
+    fi
+    exit 0
+  fi
+else
+  echo "WARN: ${CAPACITY_SH} not found — deploying without the capacity check"
+fi
+[ -z "${GITHUB_OUTPUT:-}" ] || echo "deployed=true" >> "$GITHUB_OUTPUT"
+
 # ── Image: pull from GHCR unless it was built locally ────────────────────────
 if [ "${SKIP_PULL:-0}" != "1" ]; then
   if [ -n "${GHCR_TOKEN:-}" ]; then
@@ -302,7 +329,10 @@ if [ "${EXISTING_TABLES:-0}" -gt 0 ]; then
   _in_image "$IMAGE" node prisma/backfill-json-columns.mjs --repair || true
 fi
 
-_in_image "$IMAGE" npx prisma db push --accept-data-loss
+# --skip-generate: the image already carries the client generated from this very
+# schema (Dockerfile, builder stage). Regenerating it in a throwaway container is
+# pure memory spend — it is the step the 2026-10-21 OOM killed.
+_in_image "$IMAGE" npx prisma db push --accept-data-loss --skip-generate
 _in_image "$IMAGE" node prisma/seed-templates.mjs || true
 _in_image "$IMAGE" node prisma/seed-contributor-terms.mjs || true
 
@@ -410,10 +440,14 @@ docker rm   "$CONTAINER" 2>/dev/null || true
 # topic env shows the real /imprint a reviewer is here to look at. Absent from
 # the env file it renders the "no imprint published" state, which is the other
 # half worth being able to see.
+# A hard memory limit (TOPIC_MEMORY_MB, swap included): a topic env that leaks
+# is OOM-killed inside its own cgroup and restarted, instead of taking the
+# kernel's OOM killer to prod, MySQL or the runner.
 docker run -d \
   --name "$CONTAINER" \
   "${APP_NET_ARGS[@]}" \
   --restart=unless-stopped \
+  --memory "${TOPIC_MEMORY_MB}m" --memory-swap "${TOPIC_MEMORY_MB}m" \
   -e DATABASE_URL="$CONTAINER_DB" \
   -e MT_ENFORCE_ISOLATION=true \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
