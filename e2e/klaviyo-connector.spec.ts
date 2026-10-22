@@ -20,7 +20,11 @@ import { E2E_KLAVIYO_MOCK_PORT } from '../playwright.config';
 //     overwrite what a person typed; a new profile later rings the owner's bell;
 //   • a 429 with a long Retry-After backs the connection off; a short one is
 //     waited out inside the run;
-//   • the preview is a dry run: nothing written.
+//   • the preview is a dry run: nothing written;
+//   • beyond profiles: lists, segments + members, metrics, allow-listed events,
+//     campaigns + statistics and flows — idempotent, pruned by a full pass, a
+//     forbidden resource failing alone, an erased person's events and
+//     memberships removed and never written back (@smoke: a privacy boundary).
 
 const MOCK = `http://127.0.0.1:${E2E_KLAVIYO_MOCK_PORT}`;
 const PW = 'KlaviyoConn123';
@@ -627,6 +631,153 @@ test('an erased person is never written back by the next sync — neither onto t
     expect(again.counts.CREATE).toBe(0);
     expect(again.counts.UPDATE).toBe(0);
     expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(2);
+  } finally {
+    await api.dispose();
+    await cleanupOrg(org.id, [adminEmail]);
+  }
+});
+
+test('beyond profiles: lists, segments + members, metrics, allow-listed events, campaigns + statistics, flows — idempotent, pruned on a full pass, one forbidden resource fails alone, an erased person\'s events and memberships go', { tag: '@smoke' }, async ({ playwright }) => {
+  test.setTimeout(240_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const n = stamp.replace(/\D/g, '');
+  const { org } = await marketingOrg(`res-${stamp}`);
+  const adminEmail = uniqueEmail('kl-res-admin');
+  await seedUser(adminEmail, PW, 'ADMIN', 'Klaviyo Resource Admin', org.id);
+  const key = `pk_e2eR${n}`;
+  const domain = `res-${n}.example.test`;
+  const P1 = `RP1${n}`;
+  const P2 = `RP2${n}`;
+  const days = (d: number) => iso(new Date(Date.now() - d * 24 * 3600 * 1000));
+  await mock('/__account', {
+    key,
+    profiles: [profile(P1, { email: `pat@${domain}`, first_name: 'Pat', last_name: 'Lead', organization: `Acme Sales Res ${stamp}` })],
+    lists: [{ id: `L1${n}`, name: 'Newsletter' }],
+    segments: [{ id: `S1${n}`, name: 'Engaged' }],
+    members: {
+      [`L1${n}`]: [{ id: P1, joined_group_at: days(30) }, { id: P2, joined_group_at: days(20) }],
+      [`S1${n}`]: [{ id: P1, joined_group_at: days(10) }, { id: P2, joined_group_at: days(9) }],
+    },
+    metrics: [
+      { id: `M1${n}`, name: 'Opened Email' },
+      { id: `M2${n}`, name: 'Received Email' },
+      { id: `M3${n}`, name: 'Placed Order' },
+    ],
+    events: [
+      { id: `E1${n}`, metric: `M1${n}`, profile: P1, datetime: days(5), properties: { Subject: 'Hello' } },
+      { id: `E2${n}`, metric: `M2${n}`, profile: P1, datetime: days(5) }, // not allow-listed
+      { id: `E3${n}`, metric: `M1${n}`, profile: P2, datetime: days(4) },
+      { id: `E0${n}`, metric: `M1${n}`, profile: P2, datetime: days(800) }, // beyond the 13-month window
+    ],
+    campaigns: [{ id: `C1${n}`, name: 'Autumn', updated_at: days(3), messages: [{ id: `CM1${n}`, name: 'Email', status: 'sent' }] }],
+    flows: [{ id: `F1${n}`, name: 'Welcome' }],
+    report: [{ groupings: { campaign_id: `C1${n}`, campaign_message_id: `CM1${n}`, send_channel: 'email' }, statistics: { recipients: 100, open_rate: 0.5 } }],
+  });
+  const api = await apiAs(playwright, adminEmail, MARKETING_HOST);
+  const syncAll = async () => {
+    const res = await api.post('/api/admin/integrations/klaviyo/sync', { data: { scope: 'all' }, timeout: 180_000 });
+    expect(res.status()).toBe(200);
+    return res.json();
+  };
+  const counts = async () => ({
+    audiences: await prisma.externalAudience.count({ where: { orgId: org.id } }),
+    members: await prisma.externalAudienceMember.count({ where: { orgId: org.id } }),
+    metrics: await prisma.externalMetric.count({ where: { orgId: org.id } }),
+    events: await prisma.externalEvent.count({ where: { orgId: org.id } }),
+    campaigns: await prisma.externalCampaign.count({ where: { orgId: org.id } }),
+    messages: await prisma.externalCampaignMessage.count({ where: { orgId: org.id } }),
+    stats: await prisma.externalCampaignStat.count({ where: { orgId: org.id } }),
+    flows: await prisma.externalFlow.count({ where: { orgId: org.id } }),
+  });
+  try {
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key } })).status()).toBe(200);
+    const first = await syncAll();
+    expect(first.resourcesOutcome).toBe('ok');
+    expect(await counts()).toEqual({ audiences: 2, members: 4, metrics: 3, events: 2, campaigns: 1, messages: 1, stats: 1, flows: 1 });
+    const ev = await prisma.externalEvent.findFirstOrThrow({ where: { orgId: org.id, externalId: `E1${n}` } });
+    expect(ev.profileExternalId).toBe(P1);
+    expect(JSON.parse(ev.properties as string)).toEqual({ Subject: 'Hello' });
+    const stat = await prisma.externalCampaignStat.findFirstOrThrow({ where: { orgId: org.id } });
+    expect(stat.recipients).toBe(100);
+    // 'Placed Order' exists, so the conversion figures would be kept; the report had none.
+    expect(JSON.parse(stat.statistics)).toEqual({ recipients: 100, open_rate: 0.5 });
+    // The card's status lines.
+    const byName = Object.fromEntries((first.resources as { resource: string; rows: number; status: string }[]).map((r) => [r.resource, r]));
+    expect(byName.events.rows).toBe(2);
+    expect(byName.members.status).toBe('ok');
+
+    // Read-only throughout: GETs, plus exactly one reporting query; the revision is pinned.
+    const reqs = await mockRequests(key);
+    expect(reqs.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`)).toEqual(['POST /api/campaign-values-reports']);
+    expect(new Set(reqs.map((r) => r.revision))).toEqual(new Set(['2026-10-15']));
+    expect(reqs.some((r) => r.path.startsWith('/api/events') && decodeURIComponent(r.path).includes(`M2${n}`))).toBe(false);
+
+    // A second run writes no duplicate, and the statistics are not queried again (daily, 225/day).
+    await syncAll();
+    expect(await counts()).toEqual({ audiences: 2, members: 4, metrics: 3, events: 2, campaigns: 1, messages: 1, stats: 1, flows: 1 });
+    expect((await mockRequests(key)).filter((r) => r.method === 'POST').length).toBe(1);
+
+    // Deleted on the provider's side: invisible to an incremental pass, removed by the next full one.
+    await mock('/__account', {
+      key,
+      profiles: [profile(P1, { email: `pat@${domain}`, first_name: 'Pat', last_name: 'Lead', organization: `Acme Sales Res ${stamp}` })],
+      lists: [],
+      segments: [{ id: `S1${n}`, name: 'Engaged' }],
+      members: { [`S1${n}`]: [{ id: P1, joined_group_at: days(10) }] },
+      metrics: [{ id: `M1${n}`, name: 'Opened Email' }, { id: `M3${n}`, name: 'Placed Order' }],
+      events: [{ id: `E4${n}`, metric: `M1${n}`, profile: P1, datetime: days(1) }],
+      campaigns: [{ id: `C1${n}`, name: 'Autumn', updated_at: days(3), messages: [{ id: `CM1${n}`, name: 'Email', status: 'sent' }] }],
+      flows: [{ id: `F1${n}`, name: 'Welcome' }],
+      report: [],
+    });
+    await prisma.externalSyncState.updateMany({ where: { orgId: org.id }, data: { lastFullAt: new Date(Date.now() - 3 * 24 * 3600 * 1000) } });
+    // …and flows lose their scope: that resource alone fails.
+    await mock('/__forbid', { key, paths: ['/api/flows'] });
+    const pruned = await syncAll();
+    expect(pruned.resourcesOutcome).toBe('partial');
+    const after = await counts();
+    expect(after.audiences).toBe(1); // the list is gone, and its members with it
+    expect(after.members).toBe(1); // P2 left the segment
+    expect(after.metrics).toBe(2);
+    expect(after.events).toBe(3); // events are history: pruned only by retention or erasure
+    expect(after.flows).toBe(1); // kept as it was: the failed pass removed nothing
+    const flowState = await prisma.externalSyncState.findFirstOrThrow({ where: { orgId: org.id, resource: 'flows' } });
+    expect(flowState.status).toBe('error');
+    expect(flowState.errorCode).toBe('forbidden');
+    expect(flowState.nextAttemptAt).not.toBeNull();
+    const listMemberStates = await prisma.externalSyncState.count({ where: { orgId: org.id, resource: `members:L1${n}` } });
+    expect(listMemberStates).toBe(0);
+    const okStates = await prisma.externalSyncState.findMany({ where: { orgId: org.id, resource: { in: ['lists', 'segments', 'metrics', 'campaigns'] } } });
+    expect(okStates.every((s) => s.status === 'ok')).toBe(true);
+
+    // Erasing P1's lead removes their events and memberships; a later event of theirs is never written.
+    const link = await prisma.externalProfileLink.findFirstOrThrow({ where: { orgId: org.id, externalId: P1 } });
+    const lead = await prisma.user.findUniqueOrThrow({ where: { id: link.leadUserId as string }, select: { id: true, fullName: true } });
+    const erased = await api.post(`/api/admin/users/${lead.id}/erase`, { data: { mode: 'anonymize', confirmName: lead.fullName, adminPassword: PW } });
+    expect(erased.status()).toBe(200);
+    expect(await prisma.externalEvent.count({ where: { orgId: org.id, profileExternalId: P1 } })).toBe(0);
+    expect(await prisma.externalAudienceMember.count({ where: { orgId: org.id, profileExternalId: P1 } })).toBe(0);
+    await mock('/__forbid', { key, paths: [] });
+    // The provider still has P1 in the segment, and records a NEW event of theirs.
+    await mock('/__account', {
+      key,
+      profiles: [profile(P1, { email: `pat@${domain}`, first_name: 'Pat', last_name: 'Lead', organization: `Acme Sales Res ${stamp}` })],
+      segments: [{ id: `S1${n}`, name: 'Engaged' }],
+      members: { [`S1${n}`]: [{ id: P1, joined_group_at: days(10) }, { id: P2, joined_group_at: days(9) }] },
+      metrics: [{ id: `M1${n}`, name: 'Opened Email' }],
+      events: [{ id: `E5${n}`, metric: `M1${n}`, profile: P1, datetime: iso(new Date(Date.now() + 60_000)) }],
+    });
+    await prisma.externalSyncState.updateMany({ where: { orgId: org.id }, data: { lastFullAt: new Date(Date.now() - 3 * 24 * 3600 * 1000) } });
+    await syncAll();
+    expect(await prisma.externalEvent.count({ where: { orgId: org.id, profileExternalId: P1 } })).toBe(0);
+    expect(await prisma.externalAudienceMember.count({ where: { orgId: org.id, profileExternalId: P1 } })).toBe(0);
+    expect(await prisma.externalEvent.count({ where: { orgId: org.id, profileExternalId: P2 } })).toBe(1);
+    expect(await prisma.externalAudienceMember.count({ where: { orgId: org.id, profileExternalId: P2 } })).toBe(1);
+
+    // Disconnecting removes everything the connector kept beyond the leads.
+    expect((await api.delete('/api/admin/integrations/klaviyo')).status()).toBe(200);
+    expect(await counts()).toEqual({ audiences: 0, members: 0, metrics: 0, events: 0, campaigns: 0, messages: 0, stats: 0, flows: 0 });
+    expect(await prisma.externalSyncState.count({ where: { orgId: org.id } })).toBe(0);
   } finally {
     await api.dispose();
     await cleanupOrg(org.id, [adminEmail]);

@@ -16,7 +16,7 @@ import {
   leadIsAccountContact,
   normalizeContactEmail,
 } from '@/lib/companyContactErasure';
-import { externalProfileErasureOp } from '@/lib/externalProfileErasure';
+import { externalProfileDataErasureOps, externalProfileErasureOp } from '@/lib/externalProfileErasure';
 import { leadStandInEmail } from '@/lib/marketingImport';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
@@ -133,6 +133,13 @@ async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<u
     // A pull connector's profile of this person (as its lead, or by address)
     // becomes a tombstone, or the next sync writes them back
     // (src/lib/externalProfileErasure.ts).
+    // Its events and list/segment memberships go with it (read off the live
+    // links now, before the op above blanks them).
+    ...(await externalProfileDataErasureOps({
+      orgId: erasureOrgId(user.orgId, fallbackOrgId),
+      emails: [user.email, ...realAddresses],
+      leadUserId: userId,
+    })),
     externalProfileErasureOp({
       orgId: erasureOrgId(user.orgId, fallbackOrgId),
       emails: [user.email, ...realAddresses],
@@ -286,11 +293,14 @@ export async function forgetCompanyContact(
 ): Promise<{ inquiries: number; companies: number; contacts: number }> {
   const fallbackOrgId = await defaultOrgId();
   const address = normalizeContactEmail(email);
+  const profileData = await externalProfileDataErasureOps({ orgId: erasureOrgId(orgId, fallbackOrgId), emails: [address] });
   const [inquiries, companies, contacts] = await prisma.$transaction([
     ...contactScrubOps(address, orgId, accountlessTombstoneId(randomId), fallbackOrgId),
     // The pull connector's profile of this address: a tombstone, so the next
     // sync does not write the contact straight back onto the account.
     externalProfileErasureOp({ orgId: erasureOrgId(orgId, fallbackOrgId), emails: [address] }),
+    // …and its events and list/segment memberships.
+    ...profileData,
   ]);
   // A held mail to this contact (#2960) carries their address and the words
   // about them: it goes with them, inside the requesting org only.

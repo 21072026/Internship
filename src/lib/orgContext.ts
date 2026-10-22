@@ -233,6 +233,20 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // scheduled sync has no session and passes `orgId` explicitly on every write.
   'ExternalConnection',
   'ExternalProfileLink',
+  // The same connector's other resources — the per-resource cursor, the
+  // provider's lists/segments and their members, metrics, events, campaigns
+  // (+ messages, statistics) and flows. One tenant's marketing data; the only
+  // writer is src/lib/klaviyoResources.ts (scheduled, sessionless, `orgId`
+  // passed on every write) plus the erasure purge in externalProfileErasure.ts.
+  'ExternalSyncState',
+  'ExternalAudience',
+  'ExternalAudienceMember',
+  'ExternalMetric',
+  'ExternalEvent',
+  'ExternalCampaign',
+  'ExternalCampaignMessage',
+  'ExternalCampaignStat',
+  'ExternalFlow',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was
