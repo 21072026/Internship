@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Lease store passed explicitly (#3145):** the marketing account import, the Klaviyo sync and the migration runner now hand `prismaLeaseStore()` to `acquireLease`/`releaseLease` instead of relying on `lease.ts`'s lazy `import('./leaseStore')`. Under the Playwright spec runner that dynamic import failed, the lease read as held and an applied import was refused with `import_running` (`e2e/deal-value.spec.ts`). Runtime behaviour is unchanged."
+}

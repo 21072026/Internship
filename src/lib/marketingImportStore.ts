@@ -33,6 +33,10 @@ import { inTransaction, type Db } from './dbHandle';
 import { randomUUID } from 'node:crypto';
 import { runWithOrg } from './orgContext';
 import { acquireLease, releaseLease, replicaId } from './jobs/lease';
+// The store is passed in, not left to `lease.ts`'s lazy `import('./leaseStore')`:
+// the Playwright spec runner transforms static imports only, so under it that
+// dynamic import fails, the lease reads as held, and the run is refused (#3145).
+import { prismaLeaseStore } from './jobs/leaseStore';
 import { logActivity } from './activity';
 import { recordMachineContactPermission } from './contactPermission';
 import { runImport, parseDelimited, type ImportReport, type ParsedTable } from './importPreview';
@@ -631,7 +635,7 @@ export async function runMarketingAccountImport(
   if (options.apply !== true) return runMarketingAccountImportLocked(options, owner);
   const lease = marketingImportLeaseName(owner.orgId);
   const holder = `${replicaId().slice(0, 150)}:${randomUUID()}`;
-  if (!(await acquireLease(lease, holder, MARKETING_IMPORT_LEASE_TTL_MS))) {
+  if (!(await acquireLease(lease, holder, MARKETING_IMPORT_LEASE_TTL_MS, { store: prismaLeaseStore() }))) {
     throw new MarketingImportError(
       'import_running',
       'Another marketing account import is being applied in this organization; wait for it to finish',
@@ -641,7 +645,7 @@ export async function runMarketingAccountImport(
     return await runMarketingAccountImportLocked(options, owner);
   } finally {
     // An optimisation only: expiry is what frees a lease a crashed run held.
-    await releaseLease(lease, holder);
+    await releaseLease(lease, holder, { store: prismaLeaseStore() });
   }
 }
 
