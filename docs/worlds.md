@@ -270,11 +270,14 @@ olabilir — her dünyadaki kendi hesabıyla, tıpkı sıradan iki hesap gibi.
     yoklama yapılamaz); süper-admin olmayan `403`.
   - `…/[id]/pipeline-stages`, `POST /api/admin/users/[id]/sso-exempt`,
     `documentRequirementAccess.ts`: `isSuperAdminFor` (öbür dünya → `403`).
-  - `GET /api/admin/email-log`: yalnızca **bu dünyada hesabı olan adreslere** giden posta.
-    `EmailLog`'da `orgId` yok, tek bağ adres: iki dünyada hesabı olan bir adres iki logda da
-    görünür (aynı posta kutusu), henüz hesabı olmayan bir adrese giden posta (davet, demo
-    formu onayı) hiçbirinde görünmez. 24 saatlik SMTP kotası (`last24h`) iki dünyanın ortak
-    rölesidir, kurulum geneli kalır ve adres taşımaz.
+  - `GET /api/admin/email-log`: yalnızca **bu dünyanın** postası. Satırı `orgId` (alıcının
+    tenant'ı, her yazar damgalar) belirler: iki dünyada hesabı olan bir posta kutusuna giden
+    mail yalnızca gönderildiği hesabın dünyasının logunda görünür — eskiden adrese göre
+    birleştirildiği için birinin internship hatırlatmaları marketing logunda da çıkıyordu.
+    `orgId`'si olmayan satır (eski kayıt) adrese düşer, ama yalnızca adres **sadece bu
+    dünyada** hesap tutuyorsa; iki dünyada hesabı olan bir adresin sahipsiz satırı hiçbir
+    logda görünmez (yanlış logda görünmektense). 24 saatlik SMTP kotası (`last24h`) iki
+    dünyanın ortak rölesidir, kurulum geneli kalır ve adres taşımaz.
 - **Açık kalan:** `publicHost` hâlâ yalnızca CLI ile atanır (`prisma/set-public-host.mjs`);
   yeni bir dikeyin **ilk** org'unu o dünyanın süper-admin'i henüz olmadığı için bir operatör
   açar (seed/CLI) — sonra aşağıdaki script ile o dünyaya bir süper-admin verilir.

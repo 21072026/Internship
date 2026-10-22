@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { superAdminWorld } from '@/lib/superAdmin';
-import { worldUserWhere } from '@/lib/userWorld';
+import { worldOrgWhere, worldUserWhere } from '@/lib/userWorld';
 
 // GET — the outbound mail delivery log (#1194).
 //
@@ -19,13 +19,18 @@ import { worldUserWhere } from '@/lib/userWorld';
 // The relay figures below (7-day totals, 24h quota) are installation facts too.
 //
 // PER WORLD (docs/worlds.md § Super admin): the super admin of one product sees
-// only mail to addresses that hold an account IN ITS WORLD. EmailLog has no
-// orgId, so the address is the only join there is; an address with an account
-// in both worlds appears in both logs (it is the same mailbox), and mail to an
-// address with no account yet (an invitation, a demo-form confirmation) appears
-// in neither. The one exception is the 24h relay quota (`last24h`): both
-// worlds send through the same SMTP allowance, so it stays installation-wide
-// and carries no address.
+// only its own world's mail. A row is attributed by its `orgId` — the
+// RECIPIENT's tenant, which every writer stamps (#1556) — so mail to a mailbox
+// that holds an account in both worlds lands in exactly one log: the world of
+// the account it was sent to. Joining on the address instead (the first cut of
+// this) showed one person's internship reminders in the marketing operator's
+// log just because that person also had a marketing account.
+// A row with no `orgId` (legacy, or an address with no account yet) falls back
+// to the address, and only when that address holds an account in THIS world
+// and none in the other: whose mail an ambiguous row was cannot be told, so it
+// appears in neither log rather than in the wrong one.
+// The one installation-wide figure is the 24h relay quota (`last24h`): both
+// worlds send through the same SMTP allowance, and it carries no address.
 // DEFERRED (#2944): a temporary failure the mail queue is retrying.
 const STATUSES = ['SENT', 'FAILED', 'SKIPPED', 'DEFERRED'] as const;
 // The reason every honoured opt-out row carries — sendEmail()'s central check
@@ -41,10 +46,16 @@ export async function GET(request: Request) {
   if (!world) {
     return NextResponse.json({ error: 'Forbidden', code: 'super_admin_only' }, { status: 403 });
   }
-  const worldAddresses = (
-    await prisma.user.findMany({ where: worldUserWhere(world), select: { email: true }, distinct: ['email'] })
-  ).map((u) => u.email);
-  const inWorld = { to: { in: worldAddresses } };
+  const [worldOrgs, hereUsers, elsewhereUsers] = await Promise.all([
+    prisma.organization.findMany({ where: worldOrgWhere(world), select: { id: true } }),
+    prisma.user.findMany({ where: worldUserWhere(world), select: { email: true }, distinct: ['email'] }),
+    prisma.user.findMany({ where: { NOT: worldUserWhere(world) }, select: { email: true }, distinct: ['email'] }),
+  ]);
+  const elsewhere = new Set(elsewhereUsers.map((u) => u.email));
+  const onlyHere = hereUsers.map((u) => u.email).filter((e) => !elsewhere.has(e));
+  const inWorld = {
+    OR: [{ orgId: { in: worldOrgs.map((o) => o.id) } }, { orgId: null, to: { in: onlyHere } }],
+  };
 
   const params = new URL(request.url).searchParams;
   const limit = Math.min(Math.max(Number(params.get('limit')) || 50, 1), 200);
