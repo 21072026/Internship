@@ -366,11 +366,12 @@ jobs:
       # only thing keeping it off prod is the name check at the top (#966).
       - name: demo reset guard (#966)
         run: bash infra/test/reset-demo-guard.test.sh
-      # The MySQL watchdog only ever runs on the box at the moment the database
-      # is already down, so its two decisions — "is this server alive?" and
-      # "should I restart it?" — get their coverage here instead. A probe that
-      # mistakes a healthy "Access denied" for a dead server would restart prod's
-      # database every minute.
+      # The MySQL watchdog only ever matters on the box at the moment the
+      # database is already down, so its decisions — "is this server alive?",
+      # "is Docker bringing it back?" — and its promise never to restart the
+      # database itself (#3135) get their coverage here instead. A probe that
+      # mistakes a healthy "Access denied" for a dead server would open a public
+      # alert issue about a perfectly good database.
       - name: mysql watchdog probe logic
         run: bash infra/test/mysql-watchdog.test.sh
       # The rolling two-replica deploy (#1701) has the same problem: it only
