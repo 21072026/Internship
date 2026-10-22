@@ -486,6 +486,35 @@ generated-address check and before the budget: a suppressed recipient's row is
 CANCELLED (`lastError: suppressed`), its envelope cleared, and the EmailLog row
 reads `SKIPPED` / `Suppressed: <REASON>` — for every lane, CRITICAL included.
 
+## The customer-mail lock
+
+While the marketing product is in its test phase, **no lead, customer or contact of a
+MARKETING organization receives any mail** from this deployment: no campaign, no
+reminder, no system mail (password link, invitation, consent confirmation, outbox
+draft). The organization's own staff (ADMIN / MENTOR) still get theirs. The internship
+product is never affected.
+
+- **On by default, no in-app switch.** It opens only when the operator sets
+  `MARKETING_CUSTOMER_MAIL_ENABLED=1` on the server. No click, script or test can open it
+  on a deployment. The e2e web server sets it, because the mail specs assert deliveries
+  to marketing leads.
+- **The decision** is pure in `src/lib/customerMailLockRule.ts`
+  (`scripts/test/customer-mail-lock.test.mjs`). **The lookups** are in
+  `src/lib/customerMailLock.ts`. A recipient is placed by the mail's account (`userId`),
+  then by its org (`orgId`) and the address inside it. A mail that names no org is checked
+  against every MARKETING organization's accounts, account contacts and contact
+  e-mails, so a sender that forgot its `orgId` is not a hole. Several recipients: one
+  locked recipient locks the whole mail.
+- **Three doors, all checked.** `sendEmail()` checks right after `prepareEmail()` and
+  before the approval hold, so no draft is built either. `sendPrepared()` checks an
+  approved draft's inline send and throws, so the draft is not marked sent. The queue
+  drain checks before the budget, so a mail queued before the lock, or an approved
+  draft, is cancelled at the last moment. The `check:direct-sendmail` guard keeps those
+  the only doors.
+- **Fails closed.** A lookup that throws locks the mail. Every locked mail is recorded
+  `SKIPPED` with the reason *Customer mail locked (marketing test phase)*, so the admin
+  mail log shows what would have gone out.
+
 ## One door
 
 `npm run check:direct-sendmail` (in CI) fails when a transporter's own send call
