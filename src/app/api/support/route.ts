@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { markSupportNotificationsRead } from '@/lib/messageNotifications';
 import { notify } from '@/lib/notify';
+import { sendSupportPush } from '@/lib/messagePush';
+import { ADMIN_SUPPORT_PATH, supportPushRecipients } from '@/lib/supportPushRule';
 import {
   buildSupportAttachments,
   readSupportMessageRequest,
@@ -198,16 +200,29 @@ export async function POST(request: Request) {
       ? (from ? 'support.new' : 'support.newGeneric')
       : (from ? 'support.newMessage' : 'support.newMessageGeneric');
 
-    await Promise.all(
-      admins.map((admin) =>
+    // The bell for every admin, and a push for every admin but the writer
+    // (#3154): the same admins, the same event, the same link. All at once and
+    // awaited before responding, like the message route; sendSupportPush
+    // swallows everything, so a push service that is down cannot fail the send.
+    await Promise.all([
+      ...admins.map((admin) =>
         notify(
           admin.id,
           eventKey,
           from ? { from } : {},
-          '/admin/support',
+          ADMIN_SUPPORT_PATH,
         ),
       ),
-    );
+      ...supportPushRecipients(admins.map((admin) => admin.id), session.user.id).map((adminId) =>
+        sendSupportPush(adminId, {
+          type: eventKey,
+          params: from ? { from } : {},
+          link: ADMIN_SUPPORT_PATH,
+          preview: body,
+          ticketId: result.ticketId,
+        }),
+      ),
+    ]);
 
     return NextResponse.json(result, { status: 201 });
   });
