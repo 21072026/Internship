@@ -24,3 +24,7 @@
 - **A coordinator's interrupt reads like the maintainer's stop.** Streams that receive an
   interrupt plus a peer message may refuse further work "until the maintainer confirms";
   quote the maintainer's own words verbatim when you relay an instruction.
+- **Never name a workflow env var `RUNNER_*` (or `GITHUB_*`).** The runner sets `RUNNER_NAME`
+  (and `RUNNER_OS`, `RUNNER_TEMP`, …) itself in every step, *after* the job `env:` — the log's
+  env dump still shows your value, but the shell sees the hosted runner's "GitHub Actions 1000…".
+  The first run of the rewritten watchdog refused to touch the box over exactly that.

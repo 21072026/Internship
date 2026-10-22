@@ -13,7 +13,7 @@
 // scripts/test/runner-queue.test.mjs. The CLI below only fetches; any API
 // failure answers "not stuck", because a restart is never the safe default.
 //
-// Env: GITHUB_TOKEN, GITHUB_REPOSITORY, RUNNER_NAME, RUNNER_LABEL,
+// Env: GITHUB_TOKEN, GITHUB_REPOSITORY, WATCHED_RUNNER, WATCHED_LABEL,
 //      STUCK_AFTER_MIN (default 30), GITHUB_OUTPUT (stuck=true|false).
 
 /**
@@ -65,8 +65,8 @@ async function jobsOfRuns(status) {
 }
 
 async function main() {
-  const runnerName = process.env.RUNNER_NAME ?? '';
-  const label = process.env.RUNNER_LABEL || 'self-hosted';
+  const runnerName = process.env.WATCHED_RUNNER ?? '';
+  const label = process.env.WATCHED_LABEL || 'self-hosted';
   const stuckAfterMin = Number(process.env.STUCK_AFTER_MIN) > 0 ? Number(process.env.STUCK_AFTER_MIN) : 30;
   let verdict;
   try {
