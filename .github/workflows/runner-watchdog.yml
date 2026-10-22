@@ -101,7 +101,7 @@ jobs:
           echo "Box: plesk=$([ -d /usr/local/psa ] && echo yes || echo no)" \
             "opt-internship-crm=$([ -d /opt/internship-crm ] && echo yes || echo no)" \
             "prod-container=$($SUDO docker ps --format '{{.Names}}' 2>/dev/null | grep -cx internship-crm || true)" \
-            "root-or-sudo=$([ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] && echo yes || echo no)" \
+            "privileged=$([ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] && echo yes || echo no)" \
             "runner-units=$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | wc -l)" \
             "listeners=$(pgrep -fc 'bin/Runner[.]Listener' 2>/dev/null || echo 0)"
 
