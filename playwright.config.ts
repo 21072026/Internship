@@ -346,6 +346,9 @@ export default defineConfig({
           // as a receiver over plain http on a loopback port, which the URL
           // rule and the SSRF guard otherwise refuse. Test-only switch.
           AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS: '1',
+          // Bug-report session replay (#3131): off by default in a production
+          // build, which is what the e2e server is — the replay spec needs it on.
+          FEEDBACK_REPLAY_ENABLED: '1',
           // Breached-password screening (#1544) against the local stub above.
           HIBP_RANGE_URL: `http://127.0.0.1:${E2E_HIBP_MOCK_PORT}/range`,
           HIBP_ALLOW_INSECURE_STUB: '1',

@@ -2250,6 +2250,8 @@ model SupportReport {
 enum SupportReportFileKind {
   SCREENSHOT
   ATTACHMENT
+  // rrweb events of the last ~90 s, gzip (#3131) — validated by the route.
+  REPLAY
 }
 
 // Reached only through its report (no orgId, deliberately unregistered — the

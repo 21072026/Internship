@@ -58,7 +58,9 @@ test('feedback widget: send with screenshot + masked context, admin triages it',
     expect(report.type).toBe('BUG');
     expect(report.contactAllowed).toBe(true);
     expect(report.status).toBe('NEW');
-    expect(report.files).toEqual([expect.objectContaining({ kind: 'SCREENSHOT', contentType: 'image/jpeg' })]);
+    // One screenshot; the e2e server also has session replay on (#3131), whose
+    // file is pinned by feedback-replay.spec.ts.
+    expect(report.files.filter((f) => f.kind === 'SCREENSHOT')).toEqual([expect.objectContaining({ contentType: 'image/jpeg' })]);
     const stored = JSON.stringify(report.context);
     expect(stored).toContain('/api/feedback-e2e-missing?token=***');
     expect(stored).toContain('save failed password=***');

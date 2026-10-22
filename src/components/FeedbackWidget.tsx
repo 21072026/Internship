@@ -11,6 +11,8 @@ import { PendingAttachmentList } from '@/components/MessageThread';
 import { installFeedbackCollector, snapshotFeedbackContext } from '@/lib/feedbackCollector';
 import { captureViewport, FEEDBACK_UI_ATTR } from '@/lib/feedbackScreenshot';
 import { FEEDBACK_DESCRIPTION_MAX } from '@/lib/feedbackContext';
+import { exportReplay, startFeedbackRecorder, stopFeedbackRecorder } from '@/lib/feedbackRecorder';
+import type { ReplayConfig } from '@/lib/feedbackReplayRule';
 import {
   SUPPORT_ATTACHMENT_ACCEPT,
   appendSupportAttachments,
@@ -25,7 +27,7 @@ import {
 
 type Shot = { blob: Blob; url: string };
 
-export function FeedbackWidget() {
+export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
   const { status } = useSession();
   const t = useT();
   const f = t.feedback;
@@ -41,6 +43,8 @@ export function FeedbackWidget() {
   const [files, setFiles] = useState<PendingSupportAttachment[]>([]);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachReplay, setAttachReplay] = useState(true);
+  const replayOn = !!replay?.enabled;
   const ids = useId();
 
   // On mount, not on `authenticated`: the session resolves a beat after
@@ -50,6 +54,14 @@ export function FeedbackWidget() {
     installFeedbackCollector();
   }, []);
 
+  // The replay recorder (#3131) runs only for a signed-in session, and its
+  // buffer is dropped on sign-out — it never spans two people on one browser.
+  useEffect(() => {
+    if (!replay?.enabled) return;
+    if (status === 'authenticated') void startFeedbackRecorder(replay);
+    else if (status === 'unauthenticated') stopFeedbackRecorder();
+  }, [status, replay]);
+
   const reset = useCallback(() => {
     setType('BUG');
     setRating(null);
@@ -57,6 +69,7 @@ export function FeedbackWidget() {
     setContact('');
     setError('');
     setCaptureError(false);
+    setAttachReplay(true);
     setShot((s) => { if (s) URL.revokeObjectURL(s.url); return null; });
     setFiles((list) => { list.forEach((a) => URL.revokeObjectURL(a.url)); return []; });
   }, []);
@@ -109,6 +122,15 @@ export function FeedbackWidget() {
       form.append('context', JSON.stringify(snapshotFeedbackContext()));
       if (shot) form.append('screenshot', new File([shot.blob], 'screenshot.jpg', { type: 'image/jpeg' }));
       files.forEach(({ file }) => form.append('files', file));
+      if (replayOn && attachReplay) {
+        // Time-boxed: a recording that cannot be packed in time is left out
+        // rather than holding the report hostage.
+        const recording = await Promise.race([
+          exportReplay().catch(() => null),
+          new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+        ]);
+        if (recording) form.append('replay', new File([recording], 'replay.json.gz', { type: 'application/gzip' }));
+      }
       const res = await fetch('/api/support/reports', { method: 'POST', body: form });
       if (!res.ok) throw new Error(String(res.status));
       setOpen(false);
@@ -260,6 +282,16 @@ export function FeedbackWidget() {
                   })}
                 />
               </div>
+
+              {replayOn && (
+                <div>
+                  <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+                    <input type="checkbox" className="mt-0.5" checked={attachReplay} onChange={(e) => setAttachReplay(e.target.checked)} data-testid="feedback-replay" />
+                    <span>{f.replayLabel.replace('{seconds}', String(replay!.seconds))}</span>
+                  </label>
+                  <p className="ml-6 text-xs text-gray-600 dark:text-gray-400">{f.replayHint}</p>
+                </div>
+              )}
 
               <fieldset>
                 <legend className="mb-1 text-sm font-medium text-gray-800 dark:text-gray-200">{f.contactLabel}</legend>

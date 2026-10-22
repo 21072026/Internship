@@ -56,7 +56,43 @@ The collector masks **before** it keeps an entry, and the route runs
 `sanitizeFeedbackContext()` again on what arrives — a request body is never
 trusted. Nothing is sent before Send: the buffers live in the tab's memory.
 
-## Storage
+## Session replay (Phase 2, #3131)
+
+An rrweb recording of the last ~90 seconds can ride along with a report, so
+the support team watches what happened instead of reading about it.
+
+- **Switch:** `FEEDBACK_REPLAY_ENABLED` — `1`/`true` on, `0`/`false` off,
+  **unset = on in a preview build (topic envs, preview) and OFF in
+  production.** Turning it on for real users is a deliberate env change.
+  The root layout reads it per request (`replayConfig()` in
+  `src/lib/feedbackReplayRule.ts`) and hands it to the widget, so flipping it
+  needs a restart, not a rebuild. The route refuses a replay while it is off
+  (`400 replay_disabled`).
+- **Window:** `FEEDBACK_REPLAY_SECONDS`, default 90, clamped 30…300.
+- **Recorder** (`src/lib/feedbackRecorder.ts`): starts once the session is
+  authenticated, stops and **forgets the buffer on sign-out**, loads rrweb on
+  demand. Options: `maskAllInputs: true` (every typed value replays as `*`),
+  `blockClass: 'rr-block'` and `blockSelector: '[data-private], [data-feedback-ui]'`
+  (replayed as an empty box of the same size — the feedback panel included),
+  no canvas, no inlined images or fonts, `slimDOMOptions: 'all'`, sampled
+  mouse moves (50 ms) and scrolls (150 ms).
+- **Rolling buffer** (`ReplayBuffer`): a full snapshot every window/3
+  (`checkoutEveryNms`) opens a segment; segments wholly older than the window
+  are dropped, so memory is bounded and a replay always starts on a snapshot it
+  can render. It covers between 1× and 1⅓× the window.
+- **Consent:** the form shows "Attach a recording of the last ~90 seconds",
+  ticked by default, untickable. Nothing leaves the tab before Send — pinned by
+  `e2e/feedback-replay.spec.ts`, which watches every request body.
+- **Upload:** `CompressionStream('gzip')` in the browser, a `replay` multipart
+  part. The route checks the gzip magic, ≤ 8 MB compressed, decompresses with a
+  **80 MB ceiling** (`maxOutputLength`, so a gzip bomb stops there) and
+  `checkReplayEvents()` (an array of rrweb events with a full snapshot).
+  Stored as `SupportReportFile` kind `REPLAY`.
+- **Player** (`src/components/ReplayPlayer.tsx`, `rrweb-player`, loaded only on
+  the detail screen): the report's console errors (red) and failed requests
+  (orange) are injected as rrweb custom events at their timestamps, plus the
+  moment the report was sent (blue), so the timeline shows where it broke.
+
 
 - `SupportReport` — `orgId` (in `TENANT_MODELS`, stamped from the reporter's
   row by the route), `userId`, `type`, `rating?`, `description`, `url`,
