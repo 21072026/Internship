@@ -51,13 +51,43 @@ One plan per organisation, stored on `AffiliateProgramSettings` and edited at
   instant earns `percentBps` — for all of the partner's customers, the earlier ones
   included — inside each customer's window. Nothing is recomputed retroactively.
 - A customer's ordinal is decided by **first-payment date**, not by entry order.
-  When a back-dated first payment changes the order, the writer re-evaluates the
-  affected partner's not-yet-paid commissions in the same transaction; a commission
-  already `PAID` is never changed (a correction is a separate adjustment the admin
-  records).
+  The engine therefore judges a partner's **whole** history in one pass, and a
+  back-dated entry is answered by running it again.
 - A first payment of zero does not make a paying customer.
-- Each commission records the plan version it was computed under. A plan change
-  applies to payments received after it.
+- Each commission records the plan version it was computed under.
+
+## The writer and the reconciliation
+
+`src/lib/affiliatePaymentWriter.ts` is the only code that creates a payment, or
+creates, changes the amount of, or removes a commission (`recordAffiliatePayment`,
+and `resyncPartnerCommissions` after a plan or termination change). It locks the
+partner row first (`SELECT … FOR UPDATE`), reads the customer again under the lock,
+runs the engine over the partner's whole history, and lets the pure
+`src/lib/affiliateCommissionSync.ts` decide the changes. Status changes (approve,
+reject, pay) must take the same partner lock, so they never interleave with a
+reconciliation.
+
+- A commission that is `PENDING` **and** of the current plan version is a
+  projection: it is created, updated or removed to match the engine.
+- Everything else is **frozen**: `APPROVED`, `PAID`, `REJECTED`, and a `PENDING`
+  row of an older plan version (so a plan change applies to what comes after it).
+  A frozen row is never changed; when the engine disagrees, the writer returns the
+  difference as **drift** for the admin to look at. A correction is a separate,
+  explicit admin action.
+- **A plan change is not retroactive.** `AffiliateProgramSettings.planEffectiveAt`
+  stamps when the current version took effect. A payment *recorded* before it never
+  gets a commission created by the new plan (what it would give is drift); a
+  payment recorded after it is judged by the new plan, whatever its `receivedAt`.
+- A payment must be in the plan's currency (`currency_mismatch` otherwise), so a
+  mistyped currency never shifts a customer's first payment.
+- A `SUSPENDED` partner gets no new payments; a terminated one is judged by
+  `noticeEffectiveAt` and the plan's `afterNotice`.
+- External references are stored trimmed and compared **case-insensitively** (the
+  database collation): `INV-1` and `inv-1` are the same payment. Revisit before an
+  API import whose ids differ only by case.
+- Every guarded write must hit exactly the rows it planned, or the transaction is
+  undone (`conflict`). Waiting too long for the lock, or a deadlock, answers `busy`
+  (retry). Amounts are capped at the signed 32-bit column (`MAX_AMOUNT_MINOR`).
 
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
@@ -66,21 +96,21 @@ unit-tested with synthetic plans.
 
 All models carry `orgId` and are registered in `TENANT_MODELS`.
 
-- **AffiliatePartner** — `userId` (1:1), `code`, `status` (ACTIVE / SUSPENDED /
-  TERMINATED), `noticeEffectiveAt`, sealed payout details (IBAN, holder). A partner
-  that is not ACTIVE accrues nothing new, and a SUSPENDED one cannot change payout
-  details.
-- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org),
-  `firstPaymentAt`, `firstPaymentMinor`, `payingCustomerOrdinal`.
+- **AffiliatePartner** — `userId` (1:1, null until the invitation is accepted),
+  `code`, `displayName`, `contactEmail`, `status` (ACTIVE / SUSPENDED / TERMINATED),
+  `noticeEffectiveAt`, sealed payout details (IBAN, holder).
+- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org). Ordinals are
+  not stored: the engine derives them from the payments every time.
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
   future), `source`, `externalPaymentRef` (**required, unique per organisation**, so a
   double entry is caught even under a mistyped customer).
-- **AffiliateCommission** — `kind` (TIER / PERCENT), `amountMinor`, `accruedAt`,
-  `windowEndsAt`, `planVersion`, `status` (PENDING / APPROVED / PAID / REJECTED),
-  `payoutId`. Never edited once PAID.
+- **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT),
+  `amountMinor`, `accruedAt`, `dueAt`, `windowEndsAt`, `planVersion`, `status`
+  (PENDING / APPROVED / PAID / REJECTED), `payoutId`.
 - **AffiliatePayout** — a batch that marks commissions PAID; all-or-nothing.
-- **AffiliateProgramSettings** — landing copy, contract text, `contractVersion`, the
-  commission plan and its `planVersion`.
+- **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
+  validated by `parseCommissionPlan`) and its `planVersion`, landing copy, contract
+  text and `contractVersion`. Without a valid plan the writer refuses payments.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 
 ## Security
