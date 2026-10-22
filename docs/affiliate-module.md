@@ -28,7 +28,14 @@ per organisation, and every number in tests and examples here is synthetic.
 ## The commission plan
 
 One plan per organisation, stored on `AffiliateProgramSettings` and edited at
-`/admin/affiliates/settings`. Money is **integer minor units** with an ISO currency
+`/admin/affiliates/settings` (`src/lib/affiliateProgramSettings.ts`, the one writer;
+`PUT /api/admin/affiliate/settings/plan`). Reading the settings takes
+`affiliate.read` (every admin tier), changing them `affiliate.write` (ORG_ADMIN
+only, never while impersonating). **The currency is EUR only for now** — a product
+decision for the first release; the engine is currency-agnostic and widening is
+the one list `AFFILIATE_CURRENCIES`. A real plan change bumps `planVersion`, stamps
+`planEffectiveAt`, is audited (`affiliate.plan.update`) and re-evaluates every
+partner; an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
 (same rule as `Offer` / `ProgramCost`). Shape:
 
 | Field | Meaning |
