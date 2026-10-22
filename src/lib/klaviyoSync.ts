@@ -48,6 +48,10 @@ import { logger } from '@/lib/logger';
 import { seal, open } from '@/lib/secretBox';
 import { runWithOrg } from '@/lib/orgContext';
 import { acquireLease, releaseLease, replicaId } from '@/lib/jobs/lease';
+// The store is passed in, not left to `lease.ts`'s lazy `import('./leaseStore')`:
+// the Playwright spec runner transforms static imports only, so under it that
+// dynamic import fails, the lease reads as held, and the run is refused (#3145).
+import { prismaLeaseStore } from '@/lib/jobs/leaseStore';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
@@ -862,7 +866,7 @@ export async function runKlaviyoSync(
   const empty = (outcome: KlaviyoRunOutcome): KlaviyoRunResult => ({ outcome, pages: 0, counts, initial: false, initialCompleted: false });
   const lease = klaviyoLeaseName(connectionId);
   const holder = `${replicaId().slice(0, 150)}:${randomUUID()}`;
-  if (!(await acquireLease(lease, holder, KLAVIYO_LEASE_TTL_MS))) return empty('busy');
+  if (!(await acquireLease(lease, holder, KLAVIYO_LEASE_TTL_MS, { store: prismaLeaseStore() }))) return empty('busy');
   try {
     const row = await runWithOrg(null, () =>
       prisma.externalConnection.findUnique({
@@ -888,7 +892,7 @@ export async function runKlaviyoSync(
     if (!row.enabled) return empty('disabled');
     return await runWithOrg(row.orgId, () => runLocked(row, opts, counts));
   } finally {
-    await releaseLease(lease, holder);
+    await releaseLease(lease, holder, { store: prismaLeaseStore() });
   }
 }
 

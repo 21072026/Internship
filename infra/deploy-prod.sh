@@ -717,31 +717,15 @@ RUN_TOOL="docker run --rm ${TOOL_NET_ARGS[*]} -e DATABASE_URL=$DATABASE_URL $IMA
   BACKUP_TAKEN="$BACKUP_TAKEN" \
   "$REPO_DIR/infra/schema-guard.sh" "${GUARD_ARGS[@]+"${GUARD_ARGS[@]}"}"
 
-log "prisma db push (CompanyInterest FK-index expand phase)"
-run_tool node prisma/push-company-interest-expand.mjs
-
-log "backfill CompanyInterest deterministic scope keys"
-run_tool node prisma/backfill-company-interest-scope.mjs
-
-log "prisma db push (Setting.id surrogate-key expand phase)"
-run_tool node prisma/push-setting-id-expand.mjs
-
-log "backfill Setting surrogate ids"
-run_tool node prisma/backfill-setting-id.mjs
-
-log "prisma db push (Setting programme-index expand phase, #1619)"
-run_tool node prisma/push-setting-program-expand.mjs
-
-# ALSO before the push, not only after (#1288): when a previous half-applied
-# push has left a Json column filled with '' (the MariaDB longtext fill, see
-# the note below), the NEXT push can die before the post-push repair ever
-# runs — any step that rebuilds the table (AddForeignKey, index changes)
-# re-validates the json_valid() CHECK against the poisoned rows. That is
-# exactly how MentorshipRequest.preferredLanguages wedged the 2026-08-24 prod
-# deploy: the '' fill from the failed run's AddColumn step made every retry
-# fail at the AddForeignKey step. Repairing first makes the push re-runnable.
-log "repair invalid Json column values (pre-push, idempotent)"
-run_tool node prisma/backfill-json-columns.mjs --repair || true
+# The expand/backfill steps that make the push succeed against tables that
+# already exist (CompanyInterest and Setting index re-keys, Setting.id, the
+# pre-push Json repair of #1288). ONE list, prisma/pre-push/registry.mjs, run
+# by the topic deploy and the demo refresh too (#3144): a step added only here
+# once left the demo's push dying on an index its FK still needed. A new step
+# is an entry there, never a line here. Exit 1 on a required step stops the
+# deploy before the push, as each of those lines did.
+log "pre-push steps (prisma/pre-push/registry.mjs)"
+run_tool node prisma/run-pre-push.mjs
 
 log "prisma db push (final contract phase)"
 # --skip-generate: the image carries the client generated from this very schema

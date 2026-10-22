@@ -64,8 +64,9 @@ test('the ordering constraints hold', () => {
 test('deploy-prod.sh runs data migrations only through the runner', () => {
   const sh = read('infra/deploy-prod.sh');
   assert.equal((sh.match(/run_tool node prisma\/run-backfills\.mjs/g) ?? []).length, 1);
-  // The schema-bracketing steps stay around the push they make succeed.
-  const bracketing = new Set(['backfill-company-interest-scope.mjs', 'backfill-setting-id.mjs', 'backfill-json-columns.mjs']);
+  // The post-push Json repair stays right after the push it repairs; the
+  // pre-push steps are prisma/pre-push/registry.mjs (pre-push-registry.test.mjs).
+  const bracketing = new Set(['backfill-json-columns.mjs']);
   for (const m of sh.matchAll(/^\s*run_tool node (?:prisma|scripts)\/((?:backfill|seed)-[^\s]+\.mjs)/gm)) {
     assert.ok(bracketing.has(m[1]), `${m[1]} is run directly by deploy-prod.sh — register it in prisma/backfills/registry.mjs instead`);
   }

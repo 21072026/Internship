@@ -215,7 +215,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   weekly `schedule:`).
 - `topic-preview.yml` — per-PR isolated environment, torn down when the PR closes (#583).
   **Fork PRs get none** (their `GITHUB_TOKEN` can't push to ghcr, and unreviewed fork code
-  shouldn't run on the production host).
+  shouldn't run on the production host). A run whose PR **became conflicted while it was
+  building** (another PR landed on `main`) skips the server deploy — its `mergeable` job asks
+  GitHub between build and deploy, fails open, and the PR comment says why; the push that
+  resolves the conflict deploys again.
 - The Plesk-era `deploy.yml` ("Deploy to Plesk Server": hosted build + SSH into the old box)
   was **removed on 2026-09-15** — dead since 2026-07-17, superseded by the three workflows
   above, and its SSH target no longer exists. Don't reintroduce a GitHub→SSH deploy; the
