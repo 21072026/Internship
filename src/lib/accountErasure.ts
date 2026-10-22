@@ -13,9 +13,11 @@ import {
   erasureOrgId,
   erasureScoped,
   inquiryErasureData,
+  leadIsAccountContact,
   normalizeContactEmail,
 } from '@/lib/companyContactErasure';
 import { externalProfileErasureOp } from '@/lib/externalProfileErasure';
+import { leadStandInEmail } from '@/lib/marketingImport';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
 // - hardDeleteUser: same cascade cleanup as the existing self-service account
@@ -107,16 +109,85 @@ async function forgetEmailLog(userId: string): Promise<void> {
 // that decides which rows are theirs, never an unfiltered match on the address,
 // which would also rewrite another tenant's lead that happens to carry it.
 async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, orgId: true, fullName: true, companyId: true },
+  });
   if (!user?.email) return [];
   const fallbackOrgId = await defaultOrgId();
+  const { realAddresses, nameOnlyCompanyIds } = await leadAccountContacts(userId, user, fallbackOrgId);
   return [
     ...contactScrubOps(user.email, user.orgId, userId, fallbackOrgId),
+    // A lead on a stand-in address (#3136): the person's REAL address is on the
+    // account it is linked to. Forgotten through the same builder as any other
+    // contact address — the account, its address book and its enquiries.
+    ...realAddresses.flatMap((address) => contactScrubOps(address, user.orgId, userId, fallbackOrgId)),
+    ...(nameOnlyCompanyIds.length
+      ? [
+          prisma.company.updateMany({
+            where: erasureScoped({ id: { in: nameOnlyCompanyIds } }, user.orgId, fallbackOrgId),
+            data: companyContactErasureData(),
+          }),
+        ]
+      : []),
     // A pull connector's profile of this person (as its lead, or by address)
     // becomes a tombstone, or the next sync writes them back
     // (src/lib/externalProfileErasure.ts).
-    externalProfileErasureOp({ orgId: erasureOrgId(user.orgId, fallbackOrgId), emails: [user.email], leadUserId: userId }),
+    externalProfileErasureOp({
+      orgId: erasureOrgId(user.orgId, fallbackOrgId),
+      emails: [user.email, ...realAddresses],
+      leadUserId: userId,
+    }),
   ];
+}
+
+/**
+ * The accounts on which the erased person is the named contact although the
+ * address does not say so (#3136): a lead created on a generated stand-in. Read
+ * through the lead's LINKS to accounts — its own `companyId`, its relations',
+ * and a connector link's — inside the lead's tenant, then decided per account
+ * by `leadIsAccountContact()` (src/lib/companyContactErasure.ts). Returns the
+ * real addresses found (to forget everywhere the shared builder reaches) and
+ * the accounts that name the person without any address.
+ */
+async function leadAccountContacts(
+  userId: string,
+  user: { email: string; orgId: string | null; fullName: string | null; companyId: string | null },
+  fallbackOrgId: string,
+): Promise<{ realAddresses: string[]; nameOnlyCompanyIds: string[] }> {
+  const [relations, links] = await Promise.all([
+    prisma.mentorshipRelation.findMany({
+      where: { menteeId: userId, companyId: { not: null } },
+      select: { companyId: true },
+    }),
+    prisma.externalProfileLink.findMany({
+      where: { leadUserId: userId, erasedAt: null, companyId: { not: null } },
+      select: { companyId: true },
+    }),
+  ]);
+  const ids = [
+    ...new Set(
+      [user.companyId, ...relations.map((r) => r.companyId), ...links.map((l) => l.companyId)].filter(
+        (id): id is string => Boolean(id),
+      ),
+    ),
+  ];
+  if (!ids.length) return { realAddresses: [], nameOnlyCompanyIds: [] };
+  const companies = await runUnscoped(() =>
+    prisma.company.findMany({
+      where: erasureScoped({ id: { in: ids } }, user.orgId, fallbackOrgId),
+      select: { id: true, contactEmail: true, contactName: true },
+    }),
+  );
+  const realAddresses = new Set<string>();
+  const nameOnlyCompanyIds: string[] = [];
+  for (const company of companies) {
+    if (!leadIsAccountContact(user, company, leadStandInEmail)) continue;
+    const address = normalizeContactEmail(company.contactEmail ?? '');
+    if (!address) nameOnlyCompanyIds.push(company.id);
+    else if (address !== normalizeContactEmail(user.email)) realAddresses.add(address);
+  }
+  return { realAddresses: [...realAddresses], nameOnlyCompanyIds };
 }
 
 /**
@@ -254,7 +325,8 @@ export async function forgetCompanyContact(
 //      InteractionLog.notes + subject, RelationNote.body, any PersonalNote
 //      taken in a meeting that belongs to them, and — matched on their address,
 //      inside their own tenant only — CompanyInquiry.contactName/email/phone/
-//      note and Company.contactName/contactEmail/contactPhone (#2434).
+//      note and Company.contactName/contactEmail/contactPhone (#2434); for a
+//      lead on a stand-in address, through the accounts it is linked to (#3136).
 //
 // Scope of "about them": relation-scoped free text is scrubbed on relations
 // where the erased person is the MENTEE — the relation whose subject they are.
