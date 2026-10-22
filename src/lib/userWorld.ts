@@ -50,6 +50,18 @@ export function worldUserWhere(world: VerticalKey): Prisma.UserWhereInput {
   return others.length ? { NOT: { org: { is: { vertical: { in: others } } } } } : {};
 }
 
+/**
+ * The organizations of one world, as a Prisma `where` fragment — the same rule
+ * as worldUserWhere: a non-default vertical is exactly its key, the default
+ * world is every organization not carrying one of the others.
+ */
+export function worldOrgWhere(world: VerticalKey): Prisma.OrganizationWhereInput {
+  const w = toVerticalKey(world);
+  if (w !== DEFAULT_VERTICAL) return { vertical: w };
+  const others = VERTICAL_KEYS.filter((k) => k !== DEFAULT_VERTICAL);
+  return others.length ? { vertical: { notIn: others } } : {};
+}
+
 /** The world of an organization; a missing one is the default world (verticalFor's own rule). */
 export async function worldOfOrg(orgId: string | null | undefined): Promise<VerticalKey> {
   return orgId ? verticalFor(orgId) : DEFAULT_VERTICAL;

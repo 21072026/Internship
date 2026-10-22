@@ -33,5 +33,7 @@
   missing-module errors. `npm install` rewrites `package-lock.json`; `git checkout -- package-lock.json`
   before committing. `pkill -f "<pattern>"` also kills the shell whose command line contains the
   pattern.
-- **`npm run test:unit` had one red test on `main`** (`marketing-ops-clis.test.mjs`,
-  `ExternalProfileLink`). Confirm a failure on a clean `git stash` before blaming the diff.
+- **A unit test that reads the Prisma DMMF lies with a stale client.** `marketing-ops-clis.test.mjs`
+  failed with "MACHINE_TABLES names ExternalProfileLink, which the schema no longer has" — the
+  model was in the schema, the generated client was older. I reported it as broken on `main`; it
+  was not. Run `npx prisma generate` after every fetch before trusting a schema-shaped failure.
