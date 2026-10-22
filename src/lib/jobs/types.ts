@@ -60,6 +60,10 @@ export interface JobPayloadMap {
   /// the dead-letter alert; the name is here so #1673's worker can take it
   /// over as a handler without inventing one.
   'audit.drain': Record<string, never>;
+  /// One tick of the roster-feed waker (#1967, `src/lib/rosterFeedRunner.ts`):
+  /// run every enabled feed whose cron expression is due, each under its own
+  /// claim on the feed row.
+  'roster.sweep': Record<string, never>;
   /// One queued mail (#2944, `src/lib/mailOutbox.ts`). The drain claims only
   /// this name (`claim({ names })`), so no other job's rows are touched by it.
   /// `box` is the whole prepared mail sealed with `secretBox` (purpose
@@ -149,6 +153,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'jobs.pruneRuns',
   'jobs.deadLetterAlert',
   'audit.drain',
+  'roster.sweep',
   'email.send',
   'api.export',
   'api.import.candidates',

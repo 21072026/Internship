@@ -58,6 +58,14 @@ export const SCHEDULES: readonly Schedule[] = [
     why: 'Five minutes is the audit stream promise (docs/audit-stream.md); after an outage one tick ships the backlog, since the cursor reads forward.',
   }),
   queue({
+    key: 'roster.sweep',
+    cron: '*/5 * * * *',
+    job: 'roster.sweep',
+    payload: {},
+    catchUp: 'latest',
+    why: 'The roster-feed waker (#1967): five minutes is the finest a feed schedule is honoured to; one late tick runs every feed that came due meanwhile once, since due-ness is read from each feed\'s lastRunAt.',
+  }),
+  queue({
     key: 'jobs.pruneRuns',
     cron: '10 4 * * *',
     job: 'jobs.pruneRuns',

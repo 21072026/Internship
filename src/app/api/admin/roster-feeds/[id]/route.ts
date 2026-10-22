@@ -42,7 +42,12 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (!write.ok) return NextResponse.json({ error: 'Validation failed', errors: write.errors }, { status: 400 });
     const { count } = await prisma.rosterFeed.updateMany({
       where: { id, orgId },
-      data: feedWriteData(write.value, write.secretEnc),
+      data: {
+        ...feedWriteData(write.value, write.secretEnc),
+        // Switching a paused feed back on is the admin saying the cause is
+        // fixed (#1967): the streak and the reason go with the pause.
+        ...(write.value.enabled && !current.enabled ? { pausedReason: null, consecutiveFailures: 0 } : {}),
+      },
     });
     if (!count) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     await logActivity({

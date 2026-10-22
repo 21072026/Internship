@@ -12,6 +12,7 @@ import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
 import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
+import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -62,5 +63,13 @@ export function registerAllJobs(): void {
   // guarded update, so a repeated run rewrites at most an unfinished one.
   registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {
     timeoutMs: 10 * 60 * 1000,
+  });
+
+  // Each feed runs under its own claim (one conditional UPDATE), and a feed
+  // whose lastRunAt the first run already moved is no longer due — so a
+  // repeated tick runs nothing twice.
+  registerJob('roster.sweep', async () => {
+    const ran = await sweepDueRosterFeeds();
+    return { ran: ran.length, claimedElsewhere: ran.filter((r) => r.status === 'claimed_elsewhere').length };
   });
 }
