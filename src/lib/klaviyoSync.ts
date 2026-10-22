@@ -45,7 +45,7 @@ import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { seal, open } from '@/lib/secretBox';
+import { seal } from '@/lib/secretBox';
 import { runWithOrg } from '@/lib/orgContext';
 import { acquireLease, releaseLease, replicaId } from '@/lib/jobs/lease';
 // The store is passed in, not left to `lease.ts`'s lazy `import('./leaseStore')`:
@@ -66,14 +66,21 @@ import { normalizeNameKey } from '@/lib/duplicateDetection';
 import { profileEmailHash } from '@/lib/externalProfileErasure';
 import { createMarketingAccountsBatch, type MarketingImportOwner } from '@/lib/marketingImportStore';
 import { runImport, emptyCounts, importErrorMessage, type ImportReport, type PlannedRow, type RowResult, type RowStatus } from '@/lib/importPreview';
-import { fetchListNames, fetchProfilesPage, testKlaviyoKey, type KlaviyoClientOptions } from '@/lib/klaviyoClient';
+import { fetchListNames, fetchProfilesPage, klaviyoRevision, testKlaviyoKey, type KlaviyoClientOptions } from '@/lib/klaviyoClient';
+import { envKeyRef, envKlaviyoKey, envKlaviyoOrgRef, keySourceOf, openConnectionKey } from '@/lib/klaviyoKey';
+import {
+  KLAVIYO_LEASE_TTL_MS,
+  klaviyoLeaseName,
+  klaviyoResourceStatus,
+  resourceDataResetOps,
+  runKlaviyoResources,
+} from '@/lib/klaviyoResources';
 import {
   KLAVIYO_PAGES_PER_MANUAL_RUN,
   KLAVIYO_PAGES_PER_RUN,
   KLAVIYO_PREVIEW_MAX,
   KLAVIYO_PROVIDER,
   KLAVIYO_REQUIRED_SCOPES,
-  KLAVIYO_REVISION,
   KLAVIYO_SECRET_PURPOSE,
   afterPage,
   beginQuery,
@@ -91,19 +98,16 @@ import {
 /** `Company.createdBySource` of an account this connector created (the rollback CLI reads it). */
 export const KLAVIYO_CREATED_BY = KLAVIYO_PROVIDER;
 /** One run holds its connection's lease at most this long; expiry frees a crashed run's. */
-export const KLAVIYO_LEASE_TTL_MS = 10 * 60 * 1000;
+export { KLAVIYO_LEASE_TTL_MS, klaviyoLeaseName };
 /** A run stops starting new pages after this long, whatever its page budget. */
 const RUN_TIME_BUDGET_MS = 4 * 60 * 1000;
-
-export function klaviyoLeaseName(connectionId: string): string {
-  return `klaviyo-sync:${connectionId}`;
-}
 
 // ── The connection row ───────────────────────────────────────────────────────
 
 const VIEW_SELECT = {
   id: true,
   enabled: true,
+  sealedKey: true,
   keyLast4: true,
   initialSyncDoneAt: true,
   lastSyncAt: true,
@@ -126,19 +130,26 @@ const VIEW_SELECT = {
  * the same way an API key is shown after creation.
  */
 export async function klaviyoConnectionView(orgId: string) {
-  const row = await prisma.externalConnection.findFirst({
+  const found = await prisma.externalConnection.findFirst({
     where: { orgId, provider: KLAVIYO_PROVIDER },
     select: VIEW_SELECT,
   });
-  const linkedProfiles = row
-    ? await prisma.externalProfileLink.count({ where: { orgId, connectionId: row.id, erasedAt: null } })
+  return viewOf(orgId, found);
+}
+
+async function viewOf(orgId: string, found: Prisma.ExternalConnectionGetPayload<{ select: typeof VIEW_SELECT }> | null) {
+  // The sealed key (or the environment key's fingerprint) never leaves this function.
+  const { sealedKey, ...row } = found ?? { sealedKey: null };
+  const linkedProfiles = found
+    ? await prisma.externalProfileLink.count({ where: { orgId, connectionId: found.id, erasedAt: null } })
     : 0;
   return {
-    connected: Boolean(row),
-    connection: row,
+    connected: Boolean(found),
+    connection: found ? { ...row, keySource: keySourceOf(sealedKey!) } : null,
     linkedProfiles,
+    resources: found ? await klaviyoResourceStatus(orgId, found.id) : [],
     requiredScopes: [...KLAVIYO_REQUIRED_SCOPES],
-    revision: KLAVIYO_REVISION,
+    revision: klaviyoRevision(),
   };
 }
 
@@ -152,13 +163,24 @@ export async function klaviyoConnectionView(orgId: string) {
  * comes back UNCHANGED. The links stay either way.
  */
 export async function saveKlaviyoKey(orgId: string, key: string, actorId: string) {
+  return bindKlaviyoKey(orgId, key, seal(key, KLAVIYO_SECRET_PURPOSE), actorId);
+}
+
+/**
+ * Store a connection's key reference — a sealed key, or an environment key's
+ * fingerprint (klaviyoKey.ts) — with the reset rule above. A changed key also
+ * drops everything the connector kept beyond the profile links (lists,
+ * segments, events, campaigns …): it may be another account's, and a full
+ * re-read rebuilds it.
+ */
+async function bindKlaviyoKey(orgId: string, key: string, sealedKey: string, actorId: string | null) {
   const existing = await prisma.externalConnection.findFirst({
     where: { orgId, provider: KLAVIYO_PROVIDER },
-    select: { sealedKey: true },
+    select: { id: true, sealedKey: true },
   });
-  const keyChanged = !existing || open(existing.sealedKey, KLAVIYO_SECRET_PURPOSE) !== key;
+  const keyChanged = !existing || openConnectionKey(existing.sealedKey) !== key;
   const data = {
-    sealedKey: seal(key, KLAVIYO_SECRET_PURPOSE),
+    sealedKey,
     keyLast4: keyLast4(key),
     connectedById: actorId,
     enabled: true,
@@ -176,11 +198,72 @@ export async function saveKlaviyoKey(orgId: string, key: string, actorId: string
         }
       : {}),
   };
-  return prisma.externalConnection.upsert({
-    where: { orgId_provider: { orgId, provider: KLAVIYO_PROVIDER } },
-    create: { orgId, provider: KLAVIYO_PROVIDER, ...data },
-    update: data,
-    select: VIEW_SELECT,
+  return prisma.$transaction(async (tx) => {
+    if (existing && keyChanged) for (const op of resourceDataResetOps(tx, orgId, existing.id)) await op;
+    const { sealedKey: _sealed, ...row } = await tx.externalConnection.upsert({
+      where: { orgId_provider: { orgId, provider: KLAVIYO_PROVIDER } },
+      create: { orgId, provider: KLAVIYO_PROVIDER, ...data },
+      update: data,
+      select: VIEW_SELECT,
+    });
+    return row;
+  });
+}
+
+let warnedEnv: string | null = null;
+function warnEnvOnce(reason: string) {
+  if (warnedEnv === reason) return;
+  warnedEnv = reason;
+  logger.warning('Klaviyo connector: KLAVIYO_PRIVATE_API_KEY is set but not used', { reason });
+}
+
+/**
+ * The server-supplied key (`KLAVIYO_PRIVATE_API_KEY` + `KLAVIYO_ORG_ID`, an id
+ * or a slug of a MARKETING organization): bound to that organization's
+ * connection at the start of every tick. It creates the connection when there
+ * is none, and re-binds an environment-backed one whose key was rotated (the
+ * fingerprint differs → the query starts over, like any changed key). A key an
+ * admin saved in the app is never replaced by it — the admin's choice wins
+ * until they disconnect. Nothing about the key itself is ever stored.
+ */
+export async function ensureEnvKlaviyoConnection(): Promise<'none' | 'created' | 'rebound' | 'unchanged' | 'admin_key' | 'misconfigured'> {
+  const raw = (process.env.KLAVIYO_PRIVATE_API_KEY || '').trim();
+  if (!raw) return 'none';
+  const key = envKlaviyoKey();
+  const orgRef = envKlaviyoOrgRef();
+  if (!key) {
+    warnEnvOnce('not a private key (pk_…)');
+    return 'misconfigured';
+  }
+  if (!orgRef) {
+    warnEnvOnce('KLAVIYO_ORG_ID is not set');
+    return 'misconfigured';
+  }
+  const org = await runWithOrg(null, () =>
+    prisma.organization.findFirst({ where: { OR: [{ id: orgRef }, { slug: orgRef }] }, select: { id: true } }),
+  );
+  if (!org || (await verticalFor(org.id)) !== 'MARKETING') {
+    warnEnvOnce('KLAVIYO_ORG_ID names no MARKETING organization');
+    return 'misconfigured';
+  }
+  const ref = envKeyRef(key);
+  return runWithOrg(org.id, async () => {
+    const existing = await prisma.externalConnection.findFirst({
+      where: { orgId: org.id, provider: KLAVIYO_PROVIDER },
+      select: { sealedKey: true, connectedById: true },
+    });
+    if (existing && keySourceOf(existing.sealedKey) === 'db') return 'admin_key';
+    if (existing?.sealedKey === ref) return 'unchanged';
+    await bindKlaviyoKey(org.id, key, ref, existing?.connectedById ?? null);
+    await logActivity({
+      action: 'integration.klaviyo.connected',
+      level: 'warning',
+      orgId: org.id,
+      actorId: null,
+      targetType: 'ExternalConnection',
+      detail: existing ? 'environment key rotated' : 'environment key',
+    });
+    return existing ? 'rebound' : 'created';
   });
 }
 
@@ -214,7 +297,7 @@ export async function savedKlaviyoKey(orgId: string): Promise<string | null> {
     where: { orgId, provider: KLAVIYO_PROVIDER },
     select: { sealedKey: true },
   });
-  return row ? open(row.sealedKey, KLAVIYO_SECRET_PURPOSE) : null;
+  return row ? openConnectionKey(row.sealedKey) : null;
 }
 
 export { testKlaviyoKey };
@@ -948,7 +1031,7 @@ async function runLocked(
   // vertical keeps its row but imports nothing.
   if ((await verticalFor(orgId)) !== 'MARKETING') return { outcome: 'disabled', pages: 0, counts, initial, initialCompleted };
 
-  const key = open(row.sealedKey, KLAVIYO_SECRET_PURPOSE);
+  const key = openConnectionKey(row.sealedKey);
   if (!key) return fail('key_unreadable');
   const owner = await leadOwnerFor(orgId, row.connectedById);
   if (!owner) return fail('no_owner');
@@ -1068,7 +1151,7 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
       select: { id: true, sealedKey: true, connectedById: true },
     });
     if (!row) return { ok: false as const, code: 'not_connected' };
-    const key = open(row.sealedKey, KLAVIYO_SECRET_PURPOSE);
+    const key = openConnectionKey(row.sealedKey);
     if (!key) return { ok: false as const, code: 'key_unreadable' };
     const owner = await leadOwnerFor(orgId, row.connectedById);
     if (!owner) return { ok: false as const, code: 'no_owner' };
@@ -1108,6 +1191,11 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
  */
 export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoClientOptions } = {}) {
   const clock = opts.now ?? (() => new Date());
+  try {
+    await ensureEnvKlaviyoConnection();
+  } catch (e) {
+    logger.error('klaviyo environment key binding failed', { error: e instanceof Error ? e.name : 'unknown' });
+  }
   const rows = await runWithOrg(null, () =>
     prisma.externalConnection.findMany({
       where: { provider: KLAVIYO_PROVIDER, enabled: true },
@@ -1115,19 +1203,29 @@ export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoC
       orderBy: { lastSyncAt: 'asc' },
     }),
   );
-  const tick = { connections: rows.length, due: 0, ok: 0, failed: 0, busy: 0, created: 0 };
+  const tick = { connections: rows.length, due: 0, ok: 0, failed: 0, busy: 0, created: 0, resourcesFailed: 0 };
   const started = clock().getTime();
+  const pass = { ...(opts.now ? { now: opts.now } : {}), ...(opts.client ? { client: opts.client } : {}) };
   for (const row of rows) {
-    if (!isDue(row.nextAttemptAt, clock())) continue;
     // Bounded tick: what does not fit runs on the next one.
     if (clock().getTime() - started > 10 * 60 * 1000) break;
-    tick.due += 1;
     try {
-      const r = await runKlaviyoSync(row.id, { trigger: 'schedule', ...(opts.now ? { now: opts.now } : {}), ...(opts.client ? { client: opts.client } : {}) });
-      if (r.outcome === 'busy') tick.busy += 1;
-      else if (r.outcome === 'error') tick.failed += 1;
-      else tick.ok += 1;
-      tick.created += r.counts.CREATE;
+      let busy = false;
+      if (isDue(row.nextAttemptAt, clock())) {
+        tick.due += 1;
+        const r = await runKlaviyoSync(row.id, { trigger: 'schedule', ...pass });
+        busy = r.outcome === 'busy';
+        if (busy) tick.busy += 1;
+        else if (r.outcome === 'error') tick.failed += 1;
+        else tick.ok += 1;
+        tick.created += r.counts.CREATE;
+      }
+      // Then everything else. Each resource keeps its own schedule and backoff,
+      // so a profile run that failed or is backed off holds nothing else back.
+      if (!busy) {
+        const res = await runKlaviyoResources(row.id, { trigger: 'schedule', ...pass });
+        tick.resourcesFailed += res.failed;
+      }
     } catch (e) {
       tick.failed += 1;
       logger.error('klaviyo sync crashed', { connectionId: row.id, error: e instanceof Error ? e.name : 'unknown' });

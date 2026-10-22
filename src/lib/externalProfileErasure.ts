@@ -39,6 +39,16 @@ export function externalProfileTombstoneData(at: Date) {
   };
 }
 
+function erasureWhere(input: { orgId: string; emails?: (string | null | undefined)[]; leadUserId?: string | null }) {
+  const hashes = [...new Set((input.emails ?? []).map(profileEmailHash).filter((h): h is string => Boolean(h)))];
+  const or = [
+    ...(input.leadUserId ? [{ leadUserId: input.leadUserId }] : []),
+    ...(hashes.length ? [{ emailHash: { in: hashes } }] : []),
+  ];
+  // An empty OR would match nothing in Prisma; spelled out so it never widens.
+  return or.length ? { orgId: input.orgId, erasedAt: null, OR: or } : { id: '__none__' };
+}
+
 /**
  * The one write that tombstones a person's provider links inside ONE tenant —
  * by the lead's id and/or by the address. Returned unawaited so the erasure can
@@ -50,14 +60,30 @@ export function externalProfileErasureOp(input: {
   leadUserId?: string | null;
   at?: Date;
 }) {
-  const hashes = [...new Set((input.emails ?? []).map(profileEmailHash).filter((h): h is string => Boolean(h)))];
-  const or = [
-    ...(input.leadUserId ? [{ leadUserId: input.leadUserId }] : []),
-    ...(hashes.length ? [{ emailHash: { in: hashes } }] : []),
-  ];
   return prisma.externalProfileLink.updateMany({
-    // An empty OR would match nothing in Prisma; spelled out so it never widens.
-    where: or.length ? { orgId: input.orgId, erasedAt: null, OR: or } : { id: '__none__' },
+    where: erasureWhere(input),
     data: externalProfileTombstoneData(input.at ?? new Date()),
   });
+}
+
+/**
+ * What the connector kept about the same person beyond the link — their
+ * events and their list/segment memberships, keyed by the provider's profile
+ * id. Built BEFORE the transaction (the ids are read off the live links the
+ * tombstone op is about to blank) and run inside it, next to that op. Later
+ * syncs never write them back: an erased profile id is skipped
+ * (src/lib/klaviyoResources.ts).
+ */
+export async function externalProfileDataErasureOps(input: {
+  orgId: string;
+  emails?: (string | null | undefined)[];
+  leadUserId?: string | null;
+}) {
+  const links = await prisma.externalProfileLink.findMany({ where: erasureWhere(input), select: { externalId: true } });
+  const ids = [...new Set(links.map((l) => l.externalId))];
+  if (!ids.length) return [];
+  return [
+    prisma.externalEvent.deleteMany({ where: { orgId: input.orgId, profileExternalId: { in: ids } } }),
+    prisma.externalAudienceMember.deleteMany({ where: { orgId: input.orgId, profileExternalId: { in: ids } } }),
+  ];
 }

@@ -5516,21 +5516,21 @@ model AuditDrain {
 // Mail engagement (opens/clicks, K2) will add its own nullable events cursor
 // next to these rather than reuse them.
 model ExternalConnection {
-  id                     String                @id @default(cuid())
+  id                     String                 @id @default(cuid())
   orgId                  String
-  org                    Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org                    Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
   // 'klaviyo' (EXTERNAL_PROVIDERS in src/lib/klaviyoRule.ts).
-  provider               String                @db.VarChar(40)
-  sealedKey              String                @db.Text
-  keyLast4               String                @db.VarChar(8)
-  enabled                Boolean               @default(true)
+  provider               String                 @db.VarChar(40)
+  sealedKey              String                 @db.Text
+  keyLast4               String                 @db.VarChar(8)
+  enabled                Boolean                @default(true)
   // The admin who saved the key; the lead owner when the org has no default
   // lead owner (src/lib/klaviyoSync.ts). Not a foreign key: the row outlives a
   // deactivated admin, and the owner rule re-checks the user on every run.
-  connectedById          String?               @db.VarChar(191)
+  connectedById          String?                @db.VarChar(191)
   profilesSince          DateTime?
   profilesQueryStartedAt DateTime?
-  profilesPageCursor     String?               @db.Text
+  profilesPageCursor     String?                @db.Text
   // The oldest `updated` of a profile that ERRORED during the open query, and
   // how many consecutive queries were held back to re-read such a profile
   // (afterPage() in klaviyoRule.ts): a failed row is retried, a permanent
@@ -5541,22 +5541,32 @@ model ExternalConnection {
   lastSyncAt             DateTime?
   lastSyncOkAt           DateTime?
   // 'ok' | 'partial' | 'error' (KLAVIYO_SYNC_STATUSES).
-  lastStatus             String?               @db.VarChar(20)
+  lastStatus             String?                @db.VarChar(20)
   // A CODE, never a response body or an address (KLAVIYO_ERROR_CODES).
-  lastErrorCode          String?               @db.VarChar(40)
+  lastErrorCode          String?                @db.VarChar(40)
   // Consecutive failed runs; drives the backoff (nextAttemptAt).
-  failures               Int                   @default(0)
+  failures               Int                    @default(0)
   nextAttemptAt          DateTime?
   // The last run's counts — numbers only, the admin card renders them.
-  lastCreated            Int                   @default(0)
-  lastUpdated            Int                   @default(0)
-  lastUnchanged          Int                   @default(0)
-  lastSkipped            Int                   @default(0)
-  lastErrors             Int                   @default(0)
-  totalCreated           Int                   @default(0)
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
+  lastCreated            Int                    @default(0)
+  lastUpdated            Int                    @default(0)
+  lastUnchanged          Int                    @default(0)
+  lastSkipped            Int                    @default(0)
+  lastErrors             Int                    @default(0)
+  totalCreated           Int                    @default(0)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
   profileLinks           ExternalProfileLink[]
+  // Beyond profiles (src/lib/klaviyoResources.ts): the per-resource cursor and
+  // the provider's catalog, events and statistics. All of it goes with the
+  // connection on a disconnect — none of it is CRM data of its own.
+  syncStates             ExternalSyncState[]
+  audiences              ExternalAudience[]
+  metrics                ExternalMetric[]
+  events                 ExternalEvent[]
+  campaigns              ExternalCampaign[]
+  campaignStats          ExternalCampaignStat[]
+  flows                  ExternalFlow[]
 
   @@unique([orgId, provider])
   @@index([enabled, nextAttemptAt])
@@ -5609,6 +5619,201 @@ model ExternalProfileLink {
   @@index([orgId, companyId])
   @@index([orgId, emailHash])
   @@index([orgId, leadUserId])
+}
+
+// One resource's sync position on a pull connection (src/lib/klaviyoResources.ts,
+// the only writer): `lists`, `segments`, `metrics`, `flows`, `campaigns`,
+// `campaign_stats`, `members:<list or segment id>`, `events:<metric id>`. The
+// profiles keep their own cursor on ExternalConnection. Cursor + status +
+// backoff per resource, so a resource the key may not read (403) or a slow
+// one never holds back the others.
+model ExternalSyncState {
+  id             String             @id @default(cuid())
+  orgId          String
+  connectionId   String
+  connection     ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  resource       String             @db.VarChar(100)
+  // An incremental pass reads what changed after this.
+  since          DateTime?
+  // The open pass: when it began, 'full' | 'incremental', where it is.
+  queryStartedAt DateTime?
+  queryMode      String?            @db.VarChar(12)
+  pageCursor     String?            @db.Text
+  lastFullAt     DateTime?
+  lastRunAt      DateTime?
+  lastOkAt       DateTime?
+  // 'ok' | 'partial' | 'error'; a CODE, never a response body.
+  status         String?            @db.VarChar(20)
+  errorCode      String?            @db.VarChar(40)
+  failures       Int                @default(0)
+  nextAttemptAt  DateTime?
+  // Rows written by the last run, rows it could not map, rows so far.
+  lastCount      Int                @default(0)
+  lastErrors     Int                @default(0)
+  totalCount     Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([connectionId, resource])
+  @@index([orgId])
+}
+
+// A provider list or segment (kind 'list' | 'segment'), keyed by its id.
+model ExternalAudience {
+  id                String                   @id @default(cuid())
+  orgId             String
+  connectionId      String
+  connection        ExternalConnection       @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  kind              String                   @db.VarChar(10)
+  externalId        String                   @db.VarChar(64)
+  name              String                   @db.VarChar(255)
+  isActive          Boolean?
+  providerCreatedAt DateTime?
+  providerUpdatedAt DateTime?
+  // The pass that last saw it: a full pass removes what it did not see.
+  seenAt            DateTime
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  members           ExternalAudienceMember[]
+
+  @@unique([connectionId, kind, externalId])
+  @@index([orgId, kind])
+}
+
+// A profile in a list or segment: the provider's profile id and when it joined
+// — nothing else about the person (that is ExternalProfileLink's, joined on
+// (orgId, externalId) when read). An erasure deletes the row.
+model ExternalAudienceMember {
+  id                String           @id @default(cuid())
+  orgId             String
+  audienceId        String
+  audience          ExternalAudience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  profileExternalId String           @db.VarChar(64)
+  joinedAt          DateTime?
+  seenAt            DateTime
+
+  @@unique([audienceId, profileExternalId])
+  @@index([orgId, profileExternalId])
+  @@index([audienceId, seenAt])
+}
+
+model ExternalMetric {
+  id                  String             @id @default(cuid())
+  orgId               String
+  connectionId        String
+  connection          ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId          String             @db.VarChar(64)
+  name                String             @db.VarChar(255)
+  integrationName     String?            @db.VarChar(120)
+  integrationCategory String?            @db.VarChar(120)
+  providerCreatedAt   DateTime?
+  providerUpdatedAt   DateTime?
+  seenAt              DateTime
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@unique([connectionId, externalId])
+  @@index([orgId])
+}
+
+// One provider event of an allow-listed metric (KLAVIYO_EVENT_METRICS), kept
+// EVENT_RETENTION_DAYS. Immutable: inserted once, removed by the retention
+// sweep, an erasure of the person, or the disconnect.
+model ExternalEvent {
+  id                String             @id @default(cuid())
+  orgId             String
+  connectionId      String
+  connection        ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId        String             @db.VarChar(64)
+  metricExternalId  String             @db.VarChar(64)
+  profileExternalId String?            @db.VarChar(64)
+  occurredAt        DateTime
+  // Bounded JSON text (boundedEventProperties).
+  properties        String?            @db.Text
+  createdAt         DateTime           @default(now())
+
+  @@unique([connectionId, externalId])
+  @@index([orgId, occurredAt])
+  @@index([orgId, profileExternalId])
+  @@index([orgId, metricExternalId, occurredAt])
+}
+
+model ExternalCampaign {
+  id                String                    @id @default(cuid())
+  orgId             String
+  connectionId      String
+  connection        ExternalConnection        @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId        String                    @db.VarChar(64)
+  name              String                    @db.VarChar(255)
+  archived          Boolean                   @default(false)
+  status            String?                   @db.VarChar(20)
+  sendStrategy      String?                   @db.VarChar(40)
+  sendTime          DateTime?
+  providerCreatedAt DateTime?
+  providerUpdatedAt DateTime?
+  seenAt            DateTime
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  messages          ExternalCampaignMessage[]
+
+  @@unique([connectionId, externalId])
+  @@index([orgId, sendTime])
+}
+
+model ExternalCampaignMessage {
+  id                String           @id @default(cuid())
+  orgId             String
+  campaignId        String
+  campaign          ExternalCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  externalId        String           @db.VarChar(64)
+  name              String?          @db.VarChar(255)
+  status            String?          @db.VarChar(20)
+  channel           String?          @db.VarChar(30)
+  sendTime          DateTime?
+  providerUpdatedAt DateTime?
+
+  @@unique([campaignId, externalId])
+  @@index([orgId])
+}
+
+// A campaign message's statistics over CAMPAIGN_STATS_TIMEFRAME, from the
+// reporting API: numbers only (CAMPAIGN_STATISTICS), replaced once a day.
+model ExternalCampaignStat {
+  id                 String             @id @default(cuid())
+  orgId              String
+  connectionId       String
+  connection         ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  campaignExternalId String             @db.VarChar(64)
+  // '' when the report did not group by message / channel.
+  messageExternalId  String             @db.VarChar(64)
+  channel            String             @db.VarChar(30)
+  timeframe          String             @db.VarChar(30)
+  recipients         Int?
+  statistics         String             @db.Text
+  computedAt         DateTime
+
+  @@unique([connectionId, campaignExternalId, messageExternalId, channel])
+  @@index([orgId, campaignExternalId])
+}
+
+model ExternalFlow {
+  id                String             @id @default(cuid())
+  orgId             String
+  connectionId      String
+  connection        ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId        String             @db.VarChar(64)
+  name              String             @db.VarChar(255)
+  status            String?            @db.VarChar(20)
+  archived          Boolean            @default(false)
+  triggerType       String?            @db.VarChar(40)
+  providerCreatedAt DateTime?
+  providerUpdatedAt DateTime?
+  seenAt            DateTime
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([connectionId, externalId])
+  @@index([orgId])
 }
 
 // Single-use, time-limited token to confirm a user's email address.

@@ -14,13 +14,16 @@ import { KLAVIYO_REQUIRED_SCOPES } from '@/lib/klaviyoRule';
 
 // The Klaviyo connector's console on /admin/integrations, MARKETING only
 // (docs/integrations/klaviyo.md): paste a read-only key, test it, save it,
-// pause/resume, sync now, preview the first profiles (a dry run), disconnect.
+// pause/resume, sync now, preview the first profiles (a dry run), disconnect —
+// and the status of every other resource it reads (lists, segments and their
+// members, metrics, events, campaigns + statistics, flows), one line each.
 // Talks to /api/admin/integrations/klaviyo. The key is a password field and is
 // never shown again after saving — the server returns its last four only.
 
 interface Connection {
   enabled: boolean;
   keyLast4: string;
+  keySource: 'env' | 'db';
   initialSyncDoneAt: string | null;
   lastSyncAt: string | null;
   lastStatus: 'ok' | 'partial' | 'error' | null;
@@ -34,10 +37,24 @@ interface Connection {
   totalCreated: number;
 }
 
+type ResourceName = 'lists' | 'segments' | 'members' | 'metrics' | 'events' | 'campaigns' | 'campaign_stats' | 'flows';
+
+interface ResourceStatus {
+  resource: ResourceName;
+  parts: number;
+  lastOkAt: string | null;
+  status: 'ok' | 'partial' | 'error' | null;
+  errorCode: string | null;
+  failing: number;
+  rows: number;
+  nextAttemptAt: string | null;
+}
+
 interface View {
   connected: boolean;
   connection: Connection | null;
   linkedProfiles: number;
+  resources: ResourceStatus[];
 }
 
 interface PreviewRow {
@@ -117,14 +134,17 @@ export function KlaviyoCard() {
     if (res.ok) setView(data);
   };
 
-  const syncNow = async () => {
-    const { res, data } = await call('sync', '/api/admin/integrations/klaviyo/sync', { method: 'POST' });
+  const syncNow = async (scope: 'profiles' | 'all' = 'profiles') => {
+    const { res, data } = await call(scope === 'all' ? 'syncAll' : 'sync', '/api/admin/integrations/klaviyo/sync', {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    });
     if (res.status === 409) {
       setMessage({ ok: false, text: data.code === 'busy' ? k.busy : k.disabled });
       return;
     }
     if (res.ok) {
-      setView({ connected: data.connected, connection: data.connection, linkedProfiles: data.linkedProfiles });
+      setView({ connected: data.connected, connection: data.connection, linkedProfiles: data.linkedProfiles, resources: data.resources ?? [] });
       if (data.outcome === 'error') setMessage({ ok: false, text: errorText(data.code) });
     }
   };
@@ -159,6 +179,11 @@ export function KlaviyoCard() {
             <span className="font-mono text-gray-700 dark:text-gray-300" data-testid="klaviyo-key-last4">
               {interpolate(k.keySaved, { last4: c.keyLast4 })}
             </span>
+            {c.keySource === 'env' && (
+              <Badge variant="info" data-testid="klaviyo-key-source-env">
+                {k.keySourceEnv}
+              </Badge>
+            )}
             <Badge variant={c.enabled ? 'success' : 'default'}>{c.enabled ? k.enabled : k.disabled}</Badge>
             {c.lastStatus && (
               <Badge variant={STATUS_VARIANT[c.lastStatus]} data-testid="klaviyo-last-status">
@@ -219,8 +244,11 @@ export function KlaviyoCard() {
           </Button>
           {c && (
             <>
-              <Button type="button" variant="secondary" onClick={syncNow} loading={busy === 'sync'} disabled={!c.enabled} data-testid="klaviyo-sync-now">
+              <Button type="button" variant="secondary" onClick={() => syncNow()} loading={busy === 'sync'} disabled={!c.enabled} data-testid="klaviyo-sync-now">
                 {busy === 'sync' ? k.syncing : k.syncNow}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => syncNow('all')} loading={busy === 'syncAll'} disabled={!c.enabled} data-testid="klaviyo-sync-all">
+                {busy === 'syncAll' ? k.syncing : k.syncAll}
               </Button>
               <Button type="button" variant="outline" onClick={runPreview} loading={busy === 'preview'} data-testid="klaviyo-preview">
                 {k.preview}
@@ -240,6 +268,47 @@ export function KlaviyoCard() {
           </p>
         )}
       </div>
+
+      {c && view && view.resources.length > 0 && (
+        <div className="mt-6" data-testid="klaviyo-resources">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{k.resources.title}</h3>
+          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{k.resources.hint}</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-gray-500">
+                <tr>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.resource}</th>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.status}</th>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.rows}</th>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.lastOk}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {view.resources.map((r) => (
+                  <tr key={r.resource} data-testid={`klaviyo-resource-${r.resource}`}>
+                    <td className="py-1 pr-3">{k.resources.names[r.resource]}</td>
+                    <td className="py-1 pr-3">
+                      {r.status ? (
+                        <Badge variant={STATUS_VARIANT[r.status]}>{k.status[r.status]}</Badge>
+                      ) : (
+                        <span className="text-gray-500">{k.resources.pending}</span>
+                      )}
+                      {r.status === 'error' || r.failing > 0 ? (
+                        <span className="ml-2 text-red-600 dark:text-red-400" data-testid={`klaviyo-resource-error-${r.resource}`}>
+                          {r.parts > 1 ? `${interpolate(k.resources.failing, { count: String(r.failing) })} · ` : ''}
+                          {errorText(r.errorCode)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="py-1 pr-3 tabular-nums">{r.rows}</td>
+                    <td className="py-1 pr-3">{r.lastOkAt ? <RelativeTime date={r.lastOkAt} /> : k.never}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {preview && (
         <div className="mt-6" data-testid="klaviyo-preview-table">
