@@ -91,6 +91,7 @@ test('a layer the key does not allow is never read, and no other tenant leaks in
 test('GLOBAL_SETTING_KEYS is exactly the keys with no org scope', { tag: '@smoke' }, () => {
   expect([...GLOBAL_SETTING_KEYS].sort()).toEqual([
     'activityLogRetentionDays',
+    'domainEventRetentionDays',
     'jobRetentionDays',
     'orphanApplicantGraceDays',
     'pageViewRetentionDays',

@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notifyIfAllowed } from '@/lib/notify';
-import { getSetting } from '@/lib/settings';
+import { resolveSetting } from '@/lib/settingsResolver';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -62,6 +62,7 @@ export async function emitOutcomeComms(opts: {
         id: true,
         mentorId: true,
         orgId: true,
+        cohortId: true,
         mentor: { select: { role: true } },
         org: { select: { vertical: true } },
         mentee: {
@@ -101,8 +102,10 @@ export async function emitOutcomeComms(opts: {
 
     if (!placements) return;
     // The relation's own org decides — a stage change is not always inside a
-    // request bound to that org's tenant context (a NULL org is the default's).
-    if ((await getSetting('outcomeAutoSend', await settingsOrgOfRow(relation.orgId))) !== 'true') return;
+    // request bound to that org's tenant context (a NULL org is the default's),
+    // and inside it the relation's programme, which may opt in on its own (#1621).
+    const scope = { orgId: await settingsOrgOfRow(relation.orgId), programId: relation.cohortId };
+    if (!(await resolveSetting('outcomeAutoSend', scope))) return;
 
     // Auto-send is on: the same template the composer would have shown, in the
     // mentee's own language, with their opt-out respected.

@@ -84,6 +84,7 @@ export async function hasMentorship(userAId: string, userBId: string): Promise<b
 
 // May user A and user B exchange messages?
 //   true  — they are members of the same project, OR a mentorship links them,
+//           OR an approved company outreach links them (#1840),
 //           OR either of them is an ADMIN (admins can reach anyone, mirroring
 //           the admin bypass in getThreadIfAllowed).
 //   false — no shared project and no mentorship (unrelated users), or either id
@@ -101,7 +102,26 @@ export async function canMessage(userAId: string, userBId: string): Promise<bool
   if (users.some((u) => u.role === 'ADMIN')) return true;
 
   if (await sharesProject(userAId, userBId)) return true;
-  return hasMentorship(userAId, userBId);
+  if (await hasMentorship(userAId, userBId)) return true;
+  return hasApprovedOutreach(userAId, userBId);
+}
+
+// A company user and a candidate may talk while a mentor- or admin-APPROVED
+// outreach (#1840) links them — and only the company user who asked. A
+// candidate's revoke (REVOKED) closes it again: every post re-asks this, so
+// the company cannot write into the thread afterwards.
+export async function hasApprovedOutreach(userAId: string, userBId: string): Promise<boolean> {
+  const hit = await prisma.candidateOutreach.findFirst({
+    where: {
+      status: 'APPROVED',
+      OR: [
+        { requestedById: userAId, menteeId: userBId },
+        { requestedById: userBId, menteeId: userAId },
+      ],
+    },
+    select: { id: true },
+  });
+  return hit !== null;
 }
 
 // Filter a list of candidate userIds down to the ones the given user may

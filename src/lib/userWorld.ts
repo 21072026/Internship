@@ -94,6 +94,23 @@ export async function findUsersInWorld<S extends Prisma.UserSelect>(
 }
 
 /**
+ * The accounts of this world for any of these addresses — one query for a
+ * batch (the /api/v1 bulk import, #3015), the same rule as findUsersInWorld.
+ */
+export async function findUsersInWorldByEmails<S extends Prisma.UserSelect>(
+  emails: readonly string[],
+  world: VerticalKey,
+  select: S,
+): Promise<Prisma.UserGetPayload<{ select: S }>[]> {
+  if (emails.length === 0) return [];
+  return prisma.user.findMany({
+    where: { email: { in: Array.from(new Set(emails.map(normalizeEmail))) }, ...worldUserWhere(world) },
+    select,
+    orderBy: { createdAt: 'asc' },
+  }) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
+}
+
+/**
  * Every account this address holds, in ANY world. Only for callers whose whole
  * job is to cross worlds: the sign-in's WRONG_WORLD_* password check (the page
  * never names or links the other product), and account erasure. Anything that

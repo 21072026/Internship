@@ -68,6 +68,7 @@ export async function GET(request: Request) {
     const reminderDaysFor = reminderDaysReader();
     const scored: { row: HealthRelationRow; score: number | null; band: HealthBand; reasons: HealthReason[]; lastContactAt: Date | null }[] = [];
     let dormant = 0;
+    let paused = 0;
     let cursor: string | undefined;
     for (;;) {
       const rows = await prisma.mentorshipRelation.findMany({
@@ -81,7 +82,9 @@ export async function GET(request: Request) {
       cursor = rows[rows.length - 1].id;
       for (const a of await assessRelations(rows, now, reminderDaysFor)) {
         if (a.assessment.excluded) {
-          dormant++;
+          // A pause keeps status ACTIVE, so it arrives here too (#1894).
+          if (a.assessment.why === 'paused') paused++;
+          else dormant++;
           continue;
         }
         scored.push({ row: a.row, score: a.assessment.score, band: a.assessment.band, reasons: a.assessment.reasons, lastContactAt: a.lastContactAt });
@@ -176,7 +179,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       counts,
-      excluded: { dormant, notActive, quiet },
+      excluded: { dormant, paused, notActive, quiet },
       total: listed.length,
       page,
       pageSize,

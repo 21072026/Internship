@@ -1,0 +1,46 @@
+// The 09:00 reminder batch, split into one job per sweep (#1677). Today they
+// used to run in one `try`, so the first failure skipped the rest; now each
+// fails and retries on its own.
+//
+// THE DORMANCY CHAIN. `dormancy.sweep` decides who counts as a dormant first
+// contact today (docs/dormant-first-contacts.md); the check-in mail and the
+// mentor interaction reminder READ that state, so they must run after it, not
+// beside it. The sweep therefore enqueues both itself, and only when it
+// succeeded — a failed sweep retries before anything downstream runs. Both are
+// keyed on the sweep's job id, so a retried or re-run sweep enqueues them once.
+//
+// Idempotency (at-least-once delivery, src/lib/jobs/queue.ts):
+//   dormancy.sweep               — sets/clears `dormantSince`; a rerun finds nothing new.
+//   dormancy.checkIn             — at most two mails ever, counted on the relation.
+//   reminders.mentorInteraction  — `stalenessReminderSentAt` single-shot per window.
+//   reminders.stageDeadline      — `deadlineReminderSentAt` + mail dedupeKey.
+//   reminders.retentionReconsent — `retentionReminderSentAt`.
+//   matching.needMatchAlerts     — createMany(skipDuplicates) on the alert rows.
+import { registerJob } from '@/lib/jobs/registry';
+import { dormancySweepHandler } from './dormancyChain';
+import { counters, SWEEP_OPTS } from './summary';
+import { enqueue } from '@/lib/jobs/queue';
+import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
+import {
+  checkCompanyNeedMatches,
+  checkMentorInteractionReminders,
+  checkRetentionReminders,
+  checkStageDeadlineReminders,
+  sendDormantCheckIns,
+} from '@/services/emailService';
+
+export function registerReminderJobs(): void {
+  registerJob(
+    'dormancy.sweep',
+    dormancySweepHandler({
+      sweep: sweepDormantFirstContacts,
+      enqueueNext: (name, idempotencyKey, trigger) => enqueue(name, {}, { idempotencyKey, trigger }),
+    }),
+    SWEEP_OPTS
+  );
+  registerJob('dormancy.checkIn', async () => counters(await sendDormantCheckIns()), SWEEP_OPTS);
+  registerJob('reminders.mentorInteraction', async () => counters(await checkMentorInteractionReminders()), SWEEP_OPTS);
+  registerJob('reminders.stageDeadline', async () => counters(await checkStageDeadlineReminders()), SWEEP_OPTS);
+  registerJob('reminders.retentionReconsent', async () => counters(await checkRetentionReminders()), SWEEP_OPTS);
+  registerJob('matching.needMatchAlerts', async () => counters(await checkCompanyNeedMatches()), SWEEP_OPTS);
+}

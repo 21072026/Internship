@@ -9,6 +9,7 @@ import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
 import { recordOrgWrite } from '@/lib/orgAudit';
+import { isPipelinePhase } from '@/lib/pipeline';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
 // stages require a paid plan). Phase A: label / order / color / on-path grouping
@@ -63,6 +64,10 @@ const stageSchema = z.object({
   isTerminal: z.boolean().optional(),
   isOffPath: z.boolean().optional(),
   color: z.string().optional().nullable(),
+  // Board phase (#1637): one of PIPELINE_PHASES, or null/omitted for "derive
+  // it" (canonical keys keep their built-in phase, others the custom group).
+  // z.string() + the whitelist below, never z.enum (repo convention).
+  phase: z.string().max(16).optional().nullable(),
 });
 const putSchema = z.object({ stages: z.array(stageSchema).min(1).max(50) });
 
@@ -88,6 +93,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   for (const s of stages) {
     if (s.color && s.color.trim() && !isHexColor(s.color)) {
       return NextResponse.json({ error: `Color for "${s.key}" must be a hex value like #2563eb` }, { status: 400 });
+    }
+    if (s.phase != null && s.phase !== '' && !isPipelinePhase(s.phase)) {
+      return NextResponse.json({ error: `Phase for "${s.key}" must be one of pre, internship, result` }, { status: 400 });
     }
   }
 

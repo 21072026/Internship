@@ -16,6 +16,7 @@ import type { BusyWindow } from '@/lib/busyWindowsRule';
 import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
 import type { PolicyViolation } from '@/lib/bookingPolicyRule';
 import { cancelMeetingRows } from '@/lib/meetingCancel';
+import { noticeMeetingsCancelled, noticeMeetingsRescheduled } from '@/lib/meetingChangeNotices';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -35,7 +36,7 @@ import { cancelMeetingRows } from '@/lib/meetingCancel';
 //
 // Authorization is decided HERE, server-side, by `canManageMeeting` — being in
 // a meeting is not being in charge of it. Organiser, the relation's mentor, and
-// admin. A MENTEE declines (and, once #1982 lands, counter-proposes); a COMPANY
+// admin. A MENTEE declines or counter-proposes from the RSVP page (#1982); a COMPANY
 // or SOURCE session is refused by the same allowlist. Every refusal answers
 // exactly like an unknown id, so the id space stays opaque.
 
@@ -233,8 +234,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // spine has something to raise the moment it lands; dispatching it from the
       // handler would be the eleventh door.
       //
-      // Telling the participants is #1982's half of this story; the state and
-      // the calendar are this one's.
+      // Everyone it affects is told, in-app and by mail, on their own clock
+      // (#1982). Inline rather than after(): the rows are bounded by
+      // MAX_BATCH_ROWS and the reads must run inside this tenant scope.
+      await noticeMeetingsCancelled(ids, session.user.id, cancelReason ?? null);
       return NextResponse.json({ ok: true, status: 'CANCELLED', changed: ids.length });
     }
 
@@ -308,8 +311,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           }
         }
         const moved: Target[] = [];
+        const retimedIds: string[] = [];
         for (const t of targets) {
           const timeChanged = when !== null && t.scheduledAt?.getTime() !== when.getTime();
+          if (timeChanged) retimedIds.push(t.id);
           const updated = (await tx.meeting.update({
             where: { id: t.id },
             data: {
@@ -335,14 +340,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           })) as Target;
           moved.push(updated);
         }
-        return { moved, forcedOver, forcedRule };
+        // A guest's answer was to the old time too (#1982): the move mail asks
+        // them again, so their RSVP goes back to PENDING with the row's.
+        if (retimedIds.length > 0) {
+          await tx.meetingGuest.updateMany({ where: { meetingId: { in: retimedIds } }, data: { rsvp: 'PENDING', respondedAt: null } });
+        }
+        return { moved, retimedIds, forcedOver, forcedRule };
       },
       // A whole session is up to MAX_BATCH_ROWS rows, each checked and written.
       { timeout: 30_000 },
     );
     if (outcome.conflict) return NextResponse.json(conflictBody(outcome.conflict), { status: 409 });
     if (outcome.policy) return NextResponse.json(policyBody(outcome.policy), { status: 409 });
-    const { moved, forcedOver, forcedRule } = outcome;
+    const { moved, retimedIds, forcedOver, forcedRule } = outcome;
     if (forcedOver) await recordForcedBooking(session.user.id, row.id, forcedOver);
     if (forcedRule) await recordPolicyOverride(session.user.id, row.id, forcedRule);
     // The mirror follows the meeting. An existing GoogleCalendarEventLink
@@ -352,6 +362,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // `meeting.rescheduled` is registered, not dispatched — same reason as the
     // cancel branch above (#1697's ratchet; the door is `emit()`, #1693).
+
+    // Told on their own clock — only when the TIME moved; a new title or room
+    // link is not a reschedule (#1982).
+    await noticeMeetingsRescheduled(retimedIds, session.user.id);
 
     const head = moved[0] ?? row;
     return NextResponse.json({

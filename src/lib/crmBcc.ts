@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere } from '@/lib/tenantFilter';
 import { runWithOrg } from '@/lib/orgContext';
@@ -61,15 +61,15 @@ export async function routeInboundMail(input: InboundEmail): Promise<InboundMail
 
 /** Is BCC-to-CRM on for this org? Its setting, else its vertical's default. */
 export async function crmBccEnabled(orgId: string): Promise<boolean> {
-  const [stored, vertical] = await Promise.all([getSetting('crmBccEnabled', orgId), worldOfOrg(orgId)]);
+  const [stored, vertical] = await Promise.all([resolveSettingRaw('crmBccEnabled', { orgId }), worldOfOrg(orgId)]);
   return crmBccEnabledFor(stored, vertical);
 }
 
 /** What the admin screen shows: on/off, whether that is the default, and the address. */
 export async function crmBccState(orgId: string) {
   const [stored, version, vertical] = await Promise.all([
-    getSetting('crmBccEnabled', orgId),
-    getSetting('crmBccVersion', orgId),
+    resolveSettingRaw('crmBccEnabled', { orgId }),
+    resolveSettingRaw('crmBccVersion', { orgId }),
     worldOfOrg(orgId),
   ]);
   const enabled = crmBccEnabledFor(stored, vertical);
@@ -95,7 +95,7 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true } });
   if (!org) return { ok: false, status: 404, reason: 'Organization not found' };
   // A rotated address is dead: only the current version verifies for routing.
-  if ((await getSetting('crmBccVersion', orgId)) !== version) {
+  if ((await resolveSettingRaw('crmBccVersion', { orgId })) !== version) {
     logger.warning('CRM BCC mail to a rotated address ignored', { orgId });
     return { ok: false, status: 403, reason: 'Address rotated' };
   }

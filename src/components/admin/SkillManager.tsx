@@ -242,7 +242,7 @@ function Vocabulary() {
             onClick={create}
             disabled={busy === 'new' || !newLabel.trim()}
             data-testid="skill-admin-create"
-            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
           >
             <Plus className="h-4 w-4" /> {m.create}
           </button>

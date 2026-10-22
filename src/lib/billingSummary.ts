@@ -174,3 +174,31 @@ export function buildBillingSummary(input: {
     },
   };
 }
+
+// ── Included features (#1734) ───────────────────────────────────────────────
+
+export interface BillingFeatureRow {
+  key: string;
+  // 'plan' = included in the subscription's plan while its status carries it;
+  // 'override' = an OrgEntitlement granted on top (a pilot, an add-on).
+  source: 'plan' | 'override';
+  // A time-boxed grant's end; null for a plan feature or an open-ended grant.
+  expiresAt: string | null;
+}
+
+/**
+ * The features a tenant may use, each marked with where it comes from. Built
+ * from the resolver's own split (resolveEntitlements: fromPlan / fromGrant), so
+ * a feature the plan already includes is never listed twice and an unknown
+ * grant key never appears; `grants` only supplies each grant's expiry.
+ */
+export function billingFeatureRows(
+  resolution: { fromPlan: readonly string[]; fromGrant: readonly string[] },
+  grants: readonly { feature: string; expiresAt: string | null }[],
+): BillingFeatureRow[] {
+  const expiry = new Map(grants.map((g) => [g.feature, g.expiresAt]));
+  return [
+    ...resolution.fromPlan.map((key) => ({ key, source: 'plan' as const, expiresAt: null })),
+    ...resolution.fromGrant.map((key) => ({ key, source: 'override' as const, expiresAt: expiry.get(key) ?? null })),
+  ];
+}

@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**A CI guard against hardcoded user-facing strings (#1613):** `npm run check:hardcoded-strings` (`scripts/check-hardcoded-strings.mjs`, wired into `ci.yml` next to `check:i18n`) parses every `.tsx` under `src/app` and `src/components` with the TypeScript AST and flags JSX text and `placeholder` / `title` / `aria-label` / `alt` string literals that carry a word. Example values (URLs, addresses, colours, slugs) and all-caps technical tokens are excluded by shape; a short `ALLOW_TEXT` list holds brand names, each with its reason (an entry without one fails). Findings are pinned per file in `scripts/hardcoded-strings-baseline.json` and the check fails both ways — more than pinned, or fewer without lowering the number — so the baseline only shrinks (9 today). Sweep: the SSO sign-in pages (`/auth/sso`, `/auth/sso/complete`), the `Loading…` fallbacks of register/reset/verify, and the clear-filter, delete, notifications and language-switcher labels now come from EN/TR/DE dictionary keys. Locale-less dates stay with `check:locale-dates` (#1422).",
-  "notes": {
-    "en": ["Single sign-on pages and several screen-reader labels now appear in your language."],
-    "tr": ["Tek oturum açma (SSO) sayfaları ve birkaç ekran okuyucu etiketi artık sizin dilinizde görünüyor."],
-    "de": ["Die Single-Sign-on-Seiten und mehrere Screenreader-Beschriftungen erscheinen jetzt in Ihrer Sprache."]
-  }
-}
