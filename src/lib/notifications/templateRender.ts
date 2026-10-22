@@ -135,9 +135,27 @@ export function sanitizeBody(input: string): string {
   return out.join('');
 }
 
-/** The subject as plain text: no tags, no line breaks, capped. */
+/**
+ * Text with no markup left in it. One pass of a tag pattern is not enough —
+ * `<<b>script>` loses `<b>` and becomes `<script>` — so tags are removed until
+ * none is left, and a stray angle bracket goes too. For plain-text output only.
+ */
+export function stripTags(s: string): string {
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/<[^<>]*>/g, '');
+  } while (s !== prev);
+  return s.replace(/[<>]/g, '');
+}
+
+/**
+ * The subject as plain text: no tags, no line breaks, capped. Entities are
+ * decoded BEFORE the tags go, so an encoded tag (`&lt;b&gt;`) is removed like
+ * a literal one; a subject holds no `<` or `>` at all.
+ */
 export function sanitizeSubject(input: string): string {
-  return decodeEntities(String(input ?? '').replace(/<[^>]*>/g, ''))
+  return stripTags(decodeEntities(String(input ?? '')))
     .replace(/[\r\n\t\u0000-\u001f\u007f]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -188,7 +206,7 @@ export function renderStoredTemplate(
   if (!subject) return { ok: false, reason: 'empty_subject' };
   // Sanitise FIRST, then fill: a value is escaped text and can never become markup.
   const html = fill(sanitizeBody(tpl.body), allowed, values, escapeHtml);
-  if (!html.replace(/<[^>]*>/g, '').trim()) return { ok: false, reason: 'empty_body' };
+  if (!stripTags(html).trim()) return { ok: false, reason: 'empty_body' };
   return { ok: true, subject, html };
 }
 

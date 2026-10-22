@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { testCertificate } from './support/x509.mjs';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 // Multi-tenancy (#544): super-admin Organizations screen — create a tenant and
 // see it listed with per-tenant counts. Phase 1 is additive (orgId nullable,
@@ -379,6 +379,44 @@ test('a tenant admin can only reach their own organization', async ({ page }) =>
     // appears in the branding/SSO <select> options).
     await expect(page.locator('table').getByText(`Own Tenant ${tag}`, { exact: true })).toBeVisible();
     await expect(page.locator('table').getByText(`Foreign Tenant ${tag}`, { exact: true })).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('no organization response carries a credential column', { tag: '@smoke' }, async ({ page }) => {
+  // ORG_CREDENTIAL_FIELDS (src/lib/orgCredentials.ts): the sealed private half
+  // of our SP signing key is read on the server only. The PATCH and POST
+  // handlers answer with the Organization row, so they are the two doors.
+  const tag = Date.now();
+  const ownSlug = `e2e-cred-${tag}`;
+  const createdSlug = `e2e-cred-new-${tag}`;
+  createdSlugs.push(ownSlug, createdSlug);
+  const own = await prisma.organization.create({
+    data: { slug: ownSlug, name: `Cred Tenant ${tag}`, plan: 'ENTERPRISE', ssoSpKey: 'sealed-e2e-sp-key', ssoSpCert: 'e2e-sp-cert' },
+  });
+  const adminEmail = uniqueEmail('cred-admin');
+  const admin = await seedUser(adminEmail, 'CredPass123', 'ADMIN', 'Cred Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: own.id } });
+
+  try {
+    await signInAndSettle(page, adminEmail, 'CredPass123', '/admin');
+    const patched = await page.request.patch('/api/admin/organizations', { data: { id: own.id, brandName: 'Cred Brand' } });
+    expect(patched.ok()).toBeTruthy();
+    const body = await patched.json();
+    expect(body.organization.brandName).toBe('Cred Brand');
+    expect(body.organization).not.toHaveProperty('ssoSpKey');
+    expect(JSON.stringify(body)).not.toContain('sealed-e2e-sp-key');
+
+    // A super admin creating a tenant gets the new row without it too.
+    // The flag lives in the session token, so sign in again — through the
+    // helper made for a mid-test switch (a second signInAndSettle races the
+    // signed-in redirect and clicks a detached button).
+    await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
+    await signInAsFreshUser(page, adminEmail, 'CredPass123', '/admin');
+    const created = await page.request.post('/api/admin/organizations', { data: { name: `Cred New ${tag}`, slug: createdSlug, vertical: 'INTERNSHIP' } });
+    expect(created.status()).toBe(201);
+    expect((await created.json()).organization).not.toHaveProperty('ssoSpKey');
   } finally {
     await cleanupByEmail(adminEmail);
   }
