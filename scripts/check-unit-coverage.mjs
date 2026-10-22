@@ -340,6 +340,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/supportPushRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a support message reaches the admins\' phones and a reply the requester\'s, never the writer\'s own, and a closure does not buzz (#3154)',
+    },
+  ],
+  [
     'src/lib/recoveryCodeFormat.ts',
     {
       floor: 95,

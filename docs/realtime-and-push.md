@@ -119,7 +119,11 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
   edilip `failureCount` ile sayılır, üst üste 5 hatadan sonra satır düşer.
 - `src/lib/messagePush.ts` — bildirim metnini **alıcının dilinde**, zilin
   kullandığı sözlük şablonundan üretir; böylece bildirim alanı ile uygulama içi
-  satır aynı şeyi söyler.
+  satır aynı şeyi söyler. Push gönderen yalnızca iki kanal var: mesajlar
+  (`sendNewMessagePush`) ve destek hattı (`sendSupportPush`, #3154: kullanıcının
+  destek mesajı org'unun admin'lerine, admin yanıtı talep sahibine; kapatma push
+  göndermez). Hangi destek olayının push gönderdiği `src/lib/supportPushRule.ts`'te;
+  ayrıntı [`mobile-push.md`](mobile-push.md) § The shape.
 - `src/app/api/push/config` (GET), `src/app/api/push/subscribe` (GET/POST/DELETE).
   Public key build-time `NEXT_PUBLIC_*` değişkeni **değil** bir uç: imajlar
   GitHub runner'ında derleniyor, anahtarlar yalnızca sunucuda runtime env olarak
