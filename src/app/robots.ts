@@ -49,6 +49,7 @@ const PROTECTED_PATHS = [
   '/contact-permission',
   '/security-setup',
   '/source',
+  '/affiliate',
   '/offline',
   '/rsvp',
   '/document-review',

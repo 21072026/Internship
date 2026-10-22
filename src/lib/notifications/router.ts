@@ -125,7 +125,7 @@ export interface NotifyResult {
 
 const EMPTY_RESULT = (): NotifyResult => ({ sent: 0, queued: 0, skipped: 0, deduped: 0, failed: 0 });
 
-const KNOWN_ROLES: readonly NotificationRole[] = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'];
+const KNOWN_ROLES: readonly NotificationRole[] = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE'];
 
 function asRole(role: unknown): NotificationRole {
   return KNOWN_ROLES.includes(role as NotificationRole) ? (role as NotificationRole) : 'MENTEE';

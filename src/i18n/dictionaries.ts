@@ -88,6 +88,7 @@ const en = {
     mentee: 'Mentee Portal',
     company: 'Company Portal',
     source: 'Source Portal',
+    affiliate: 'Partner portal',
     sales: 'Pipeline workspace',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Language' },
@@ -549,6 +550,10 @@ const en = {
     sessionExpired: 'Your session has expired. Please sign in again.',
     forbidden: 'You are not allowed to do that.',
     alreadyGone: 'That record is no longer there — it may have been removed already.',
+  },
+  affiliatePortal: {
+    title: 'Your partner account',
+    emptyBody: 'Your referral link, customers and commissions will appear here.',
   },
   affiliateAdmin: {
     title: 'Affiliate programme',
@@ -3942,6 +3947,7 @@ const en = {
     roleMentee: 'Mentee',
     roleCompany: 'Company',
     roleSource: 'Referral source',
+    roleAffiliate: 'Affiliate partner',
   },
   languageBadge: {
     prefers: 'Prefers {lang}',
@@ -8949,6 +8955,7 @@ const tr: Dict = {
     mentee: 'Mentee Portalı',
     company: 'Şirket Portalı',
     source: 'Kaynak Portalı',
+    affiliate: 'Partner portalı',
     sales: 'Pipeline çalışma alanı',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Dil' },
@@ -9374,6 +9381,10 @@ const tr: Dict = {
     sessionExpired: 'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
     forbidden: 'Bunu yapma yetkiniz yok.',
     alreadyGone: 'Bu kayıt artık mevcut değil — daha önce kaldırılmış olabilir.',
+  },
+  affiliatePortal: {
+    title: 'Partner hesabın',
+    emptyBody: 'Referans linkin, müşterilerin ve komisyonların burada görünecek.',
   },
   affiliateAdmin: {
     title: 'Affiliate programı',
@@ -12657,6 +12668,7 @@ const tr: Dict = {
     roleMentee: 'Mentee',
     roleCompany: 'Şirket',
     roleSource: 'Yönlendiren kurum',
+    roleAffiliate: 'Affiliate partneri',
   },
   languageBadge: {
     prefers: 'Tercih ettiği dil: {lang}',
@@ -17586,6 +17598,7 @@ const de: Dict = {
     mentee: 'Mentee-Portal',
     company: 'Unternehmensportal',
     source: 'Quellen-Portal',
+    affiliate: 'Partner-Portal',
     sales: 'Pipeline-Arbeitsbereich',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Sprache' },
@@ -18011,6 +18024,10 @@ const de: Dict = {
     sessionExpired: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
     forbidden: 'Dazu bist du nicht berechtigt.',
     alreadyGone: 'Dieser Eintrag existiert nicht mehr – er wurde vermutlich bereits entfernt.',
+  },
+  affiliatePortal: {
+    title: 'Ihr Partnerkonto',
+    emptyBody: 'Ihr Empfehlungslink, Ihre Kunden und Provisionen erscheinen hier.',
   },
   affiliateAdmin: {
     title: 'Partnerprogramm',
@@ -21296,6 +21313,7 @@ const de: Dict = {
     roleMentee: 'Mentee',
     roleCompany: 'Unternehmen',
     roleSource: 'Zubringer',
+    roleAffiliate: 'Affiliate-Partner',
   },
   languageBadge: {
     prefers: 'Bevorzugt {lang}',

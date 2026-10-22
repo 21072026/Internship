@@ -99,7 +99,7 @@ export async function markSuperAdmin(email: string) {
 export async function seedUser(
   email: string,
   password: string,
-  role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE',
+  role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' | 'AFFILIATE',
   fullName: string,
   org?: string | null | { orgId?: string | null }
 ) {

@@ -25,7 +25,7 @@ test('`all` covers every role the product has; the older modes keep their meanin
   assert.deepEqual([...rolesCoveredBy('admins')], ['ADMIN']);
   assert.deepEqual([...rolesCoveredBy('admins_mentors')], ['ADMIN', 'MENTOR']);
   assert.deepEqual([...rolesCoveredBy('all')], [...TWO_FACTOR_ROLES]);
-  for (const role of ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE']) {
+  for (const role of ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE']) {
     assert.equal(roleCoveredBy('all', role), true, `all must hold ${role}`);
   }
   assert.equal(roleCoveredBy('admins_mentors', 'COMPANY'), false);

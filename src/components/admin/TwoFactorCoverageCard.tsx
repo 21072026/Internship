@@ -65,6 +65,7 @@ export function TwoFactorCoverageCard({
       MENTEE: t.personCard.roleMentee,
       COMPANY: t.personCard.roleCompany,
       SOURCE: t.personCard.roleSource,
+      AFFILIATE: t.personCard.roleAffiliate,
     };
     return labels[role as TwoFactorRole] ?? role;
   };

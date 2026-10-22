@@ -5,7 +5,7 @@
  *
  * A mode is a SET OF ROLES held at the setup gate: `off` covers nobody,
  * `admins` the ADMIN role, `admins_mentors` ADMIN + MENTOR, and `all` every
- * role the product has — MENTEE, COMPANY and SOURCE included. "Stricter" is
+ * role the product has — MENTEE, COMPANY, SOURCE and AFFILIATE included. "Stricter" is
  * set inclusion, not list order: a mode is stricter than another when it
  * covers a role the other does not. That is the one question the settings
  * form asks before letting an admin switch, because the gate holds a person on
@@ -17,7 +17,9 @@ export const REQUIRE_2FA_MODES = ['off', 'admins', 'admins_mentors', 'all'] as c
 export type Require2faMode = (typeof REQUIRE_2FA_MODES)[number];
 
 /** Every role a session can carry; the coverage report has one row per entry. */
-export const TWO_FACTOR_ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const;
+// AFFILIATE (docs/affiliate-module.md) is here so `all` holds partners too: a partner
+// edits the bank account commissions are paid to.
+export const TWO_FACTOR_ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE'] as const;
 export type TwoFactorRole = (typeof TWO_FACTOR_ROLES)[number];
 
 const COVERED: Record<Require2faMode, readonly TwoFactorRole[]> = {

@@ -21,6 +21,9 @@ enum Role {
   MENTEE
   COMPANY
   SOURCE
+  // A partner of an organisation's affiliate programme (docs/affiliate-module.md).
+  // Lands on /affiliate; never falls through to the mentee portal.
+  AFFILIATE
 }
 
 // The admin tier of an ADMIN account (#1567). Additive on purpose: `Role` is
