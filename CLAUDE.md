@@ -730,6 +730,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   The session replay (#3131) is OFF in production unless `FEEDBACK_REPLAY_ENABLED` says otherwise,
   records with `maskAllInputs`, forgets its buffer on sign-out, and is accepted by the route only as a
   gzip that decodes (80 MB ceiling) to rrweb events — keep all four if you touch it.
+  **A GitHub issue from a report is public-safe by construction** (#3132, `buildIssueDraft()`): path,
+  build, counts and request ids only — never the description, reporter, e-mail, console text, host,
+  screenshot or replay, because the target repo may be public. Don't add a field to the draft without
+  that question answered.
 - **Images open in the app, never in a new tab** (#2147): every user-supplied image
   (message and support attachments, announcement images) is a `<button>` that opens
   `ImageLightbox` (`src/components/ui/ImageLightbox.tsx`) via `useImageLightbox()` — never an

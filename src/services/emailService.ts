@@ -3732,6 +3732,110 @@ export async function sendPublicContactEmail({
   });
 }
 
+// A new in-app bug / feedback report (#3132), to one admin of the reporter's
+// org. Category 'support-report' (group inbound_requests); staff mail, so the
+// outbound approval never holds it. The description is the reporter's own
+// words — escaped, and shown to the same admins who can open the report.
+export async function sendSupportReportEmail({
+  to,
+  userId,
+  locale,
+  orgId,
+  reportId,
+  type,
+  path,
+  reporterName,
+  reporterEmail,
+  rating,
+  description,
+  contactAllowed,
+}: {
+  to: string;
+  userId: string;
+  locale?: string | null;
+  orgId: string;
+  reportId: string;
+  type: 'BUG' | 'FEEDBACK';
+  path: string;
+  reporterName: string;
+  reporterEmail: string;
+  rating: number | null;
+  description: string;
+  contactAllowed: boolean;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const M = D.supportReportEmail;
+  const link = `${await appUrlFor(orgId)}/admin/support/reports/${reportId}`;
+  const kind = type === 'BUG' ? M.typeBug : M.typeFeedback;
+  return await sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'support-report',
+    locale: resolved,
+    fromName: brand.name,
+    dedupeKey: `support-report:${reportId}:${userId}`,
+    subject: M.subjectNew.replace('{type}', kind).replace('{path}', path || '/'),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.headingNew))}
+        <p>${esc(M.from.replace('{name}', reporterName).replace('{email}', reporterEmail))}</p>
+        <p>${esc(M.page)}: <code>${esc(path || '/')}</code>${rating ? ` · ${esc(M.rating)}: ${rating}/5` : ''}</p>
+        <blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(description.slice(0, 2000)).replace(/\n/g, '<br>')}</blockquote>
+        <p style="color:#6b7280;font-size:14px;">${esc(contactAllowed ? M.contactYes : M.contactNo)}</p>
+        <a href="${link}" style="display:inline-block;background-color:${brand.accent};color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${esc(M.open)}</a>
+      </div>
+    `,
+  });
+}
+
+// The reporter is told that their report moved (#3132) — only when an admin
+// ticks "tell the reporter" AND the reporter allowed contact; the route checks
+// both. Category 'support-report-update' (group direct_messages: a human on
+// the support team chose to write); under outbound approval it waits like the
+// e-mail copy of any other message to a lead.
+export async function sendSupportReportUpdateEmail({
+  to,
+  userId,
+  locale,
+  orgId,
+  status,
+  note,
+}: {
+  to: string;
+  userId: string;
+  locale?: string | null;
+  orgId: string;
+  /** A SupportReportStatus key; labelled in the RECIPIENT's language. */
+  status: string;
+  note?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const M = D.supportReportEmail;
+  const statusLabel = (D.adminReports as Record<string, string>)[`status${status}`] ?? status;
+  return await sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'support-report-update',
+    locale: resolved,
+    fromName: brand.name,
+    subject: M.subjectUpdate,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.headingUpdate))}
+        <p>${esc(M.statusLine.replace('{status}', statusLabel))}</p>
+        ${note ? `<p><strong>${esc(M.noteLabel)}</strong></p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(note).replace(/\n/g, '<br>')}</blockquote>` : ''}
+        <p style="color:#6b7280;font-size:14px;">${esc(M.thanks)}</p>
+      </div>
+    `,
+  });
+}
+
 // A company enquiry from the public /for-companies page, mailed to every admin.
 // Reply-To is the company's address, so answering is one click — this is the
 // most time-sensitive thing the public site produces.
