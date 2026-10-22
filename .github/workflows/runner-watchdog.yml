@@ -96,6 +96,15 @@ jobs:
             if sudo -n true 2>/dev/null; then SUDO="sudo -n"; fi
           fi
 
+          # Which box did SSH_HOST land on? Markers only — no host, user or
+          # other repository's runner name reaches this public log.
+          echo "Box: plesk=$([ -d /usr/local/psa ] && echo yes || echo no)" \
+            "opt-internship-crm=$([ -d /opt/internship-crm ] && echo yes || echo no)" \
+            "prod-container=$($SUDO docker ps --format '{{.Names}}' 2>/dev/null | grep -cx internship-crm || true)" \
+            "root-or-sudo=$([ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] && echo yes || echo no)" \
+            "runner-units=$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | wc -l)" \
+            "listeners=$(pgrep -fc 'bin/Runner[.]Listener' 2>/dev/null || echo 0)"
+
           # 1) THIS runner's systemd unit: actions.runner.<scope>.<name>.service.
           UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend "actions.runner.*.${WATCHED_RUNNER}.service" 2>/dev/null | awk '{print $1}' | head -1)"
           if [ -z "$UNIT" ]; then
@@ -151,9 +160,11 @@ jobs:
               RUNNER_DIR="$(dirname "$f")"
               break
             fi
-          done < <($SUDO find /root /home /opt -maxdepth 5 -name .runner -type f 2>/dev/null)
+          done < <($SUDO find /root /home /opt /srv /var/lib /usr/local -maxdepth 5 -name .runner -type f 2>/dev/null)
           if [ -z "$RUNNER_DIR" ]; then
             echo "ERROR: no runner named ${WATCHED_RUNNER} on this box (no unit, no .runner file)."
+            echo "       The SSH_* secrets reach a box that does not host it — check the 'Box:' line"
+            echo "       above, and point SSH_HOST/SSH_USER/SSH_PORT/SSH_PRIVATE_KEY at the runner's box."
             exit 1
           fi
           echo "Runner dir: $RUNNER_DIR"
