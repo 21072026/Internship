@@ -173,3 +173,30 @@ test('partners: create, codes unique, state changes under the lock, IBAN reveal 
   expect(audit).toHaveLength(1);
   expect(audit[0].detail).not.toContain('DE89370400440532013000');
 });
+
+test('payments: recorded by the one writer through the admin API, refusals carry their codes', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const post = (ctx: APIRequestContext, data: unknown) => ctx.post('/api/admin/affiliate/payments', { headers: host, data });
+  const base = { partnerId, customerExternalRef: 'c-9', amountMinor: 2_500, receivedOn: '2026-03-10', externalPaymentRef: 'inv-90' };
+
+  expect((await post(observer, base)).status()).toBe(403);
+  const ok = await post(owner, base);
+  expect(ok.status()).toBe(201);
+  expect(await ok.json()).toMatchObject({ partnerId, created: 1 });
+  const code = async (data: unknown) => (await (await post(owner, data)).json()).code;
+  expect(await code(base)).toBe('duplicate_payment');
+  expect(await code({ ...base, externalPaymentRef: 'inv-91', receivedOn: '2999-01-01' })).toBe('invalid_input');
+  expect(await code({ ...base, partnerId: null, customerExternalRef: 'c-new', externalPaymentRef: 'inv-92' })).toBe('unknown_customer');
+  expect(await code({ ...base, amountMinor: 0, externalPaymentRef: 'inv-93' })).toBe('invalid_input');
+
+  // A known customer needs no partner; the list shows the commission the plan gave.
+  expect((await post(owner, { ...base, partnerId: null, externalPaymentRef: 'inv-94', receivedOn: '2026-03-11' })).status()).toBe(201);
+  const list = await (await observer.get('/api/admin/affiliate/payments', { headers: host })).json();
+  expect(list.canWrite).toBe(false);
+  const mine = list.rows.filter((r: { customerRef: string }) => r.customerRef === 'c-9');
+  expect(mine.map((r: { externalPaymentRef: string }) => r.externalPaymentRef)).toEqual(['inv-94', 'inv-90']); // newest first
+  expect(mine[1].commission).toMatchObject({ kind: 'PERCENT', status: 'PENDING' }); // the partner switched at customer 2
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payment.record', actorId: { not: 'system' } } })).toBe(2);
+});
+

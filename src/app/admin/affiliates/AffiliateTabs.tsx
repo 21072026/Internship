@@ -13,6 +13,7 @@ export function AffiliateTabs() {
   const tabs = [
     { href: '/admin/affiliates', label: L.overview, exact: true },
     { href: '/admin/affiliates/partners', label: t.affiliatePartners.tab, exact: false },
+    { href: '/admin/affiliates/payments', label: t.affiliatePayments.tab, exact: false },
     { href: '/admin/affiliates/settings', label: L.settings, exact: false },
   ];
   return (

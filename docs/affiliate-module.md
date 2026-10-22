@@ -135,6 +135,13 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   date, UTC midnight); reactivating clears it. The full IBAN is revealed to an
   `affiliate.write` admin only, and every reveal is audited
   (`affiliate.payout_details.read`).
+- **Payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
+  a manual entry goes straight to `recordAffiliatePayment()`; the currency is the
+  plan's, the amount is typed as people write it (`19,99`) and sent as minor
+  units, the received date is a calendar day (UTC midnight, up to +14 h ahead of
+  UTC is still "today"). A new customer number needs its partner; a known one
+  keeps its own. The list is newest first, paged, with the commission each
+  payment got.
 
 ## Security
 
