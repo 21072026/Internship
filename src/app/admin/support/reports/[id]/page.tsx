@@ -186,7 +186,7 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
       {replay && (
         <Card className="mt-4">
           <h2 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{a.replay}</h2>
-          <ReplayPlayer src={fileUrl(replay)} context={report.context} />
+          <ReplayPlayer src={fileUrl(replay)} context={report.context} size={replay.size} filename={`replay-${report.id}.json.gz`} />
         </Card>
       )}
 
