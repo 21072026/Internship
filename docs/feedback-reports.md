@@ -119,6 +119,10 @@ the support team watches what happened instead of reading about it.
 Configured by two server-side values — `SUPPORT_GITHUB_REPO` (`owner/name`)
 and the secret `SUPPORT_GITHUB_TOKEN` (fine-grained, *Issues: read & write* on
 that one repository). Without both the card says "not configured".
+**Deployment decision (2026-10-23): the target is a PRIVATE repository**, set by
+the operator on the server — never this public one. There is no default repo in
+the code; the preview showing the yellow public-repo warning means the wrong
+repository is configured.
 
 **The draft is public-safe by construction** (`buildIssueDraft()`): type, page
 **path** (never the host — a tenant's own domain is a tenant name), build,
