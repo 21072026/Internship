@@ -111,7 +111,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts', capability: 'mentorship' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },
   // The canonical skill vocabulary and its review queue (#1817).
-  { href: '/admin/skills', icon: Sparkles, key: 'skills' },
+  // Its consumers are mentor suggestion and candidate ↔ requisition matching, so
+  // it is an internship module: a MARKETING tenant has neither.
+  { href: '/admin/skills', icon: Sparkles, key: 'skills', capability: 'mentorship' },
   { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing' },
   { href: '/admin/users', icon: UserCog, key: 'users' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
