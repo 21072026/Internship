@@ -14,32 +14,48 @@
 // failure answers "not stuck", because a restart is never the safe default.
 //
 // Env: GITHUB_TOKEN, GITHUB_REPOSITORY, WATCHED_RUNNER, WATCHED_LABEL,
-//      STUCK_AFTER_MIN (default 30), GITHUB_OUTPUT (stuck=true|false).
+//      STUCK_AFTER_MIN (default 30), GITHUB_OUTPUT (stuck=true|false, plus
+//      queued=<jobs> and waited_min=<oldest wait> when jobs are waiting — the
+//      numbers the watchdog's ci-alert issue quotes, scripts/runner-watchdog-alert.mjs).
 
 /**
  * @param {{ queuedJobs: Array<{ labels?: string[], created_at: string }>,
  *           runningJobs: Array<{ runner_name?: string | null }>,
  *           runnerName: string, label: string, now: number, stuckAfterMin: number }} input
- * @returns {{ stuck: boolean, reason: string }}
+ * @returns {{ stuck: boolean, reason: string, queued: number, waitedMin: number | null }}
  */
 export function runnerStuckVerdict({ queuedJobs, runningJobs, runnerName, label, now, stuckAfterMin }) {
   const mine = queuedJobs.filter((j) => (j.labels ?? []).includes(label));
-  if (mine.length === 0) return { stuck: false, reason: `no job is waiting for '${label}'` };
+  const queued = mine.length;
+  if (queued === 0) return { stuck: false, reason: `no job is waiting for '${label}'`, queued, waitedMin: null };
   const oldest = Math.min(...mine.map((j) => Date.parse(j.created_at)).filter(Number.isFinite));
-  if (!Number.isFinite(oldest)) return { stuck: false, reason: 'queued jobs carry no usable timestamp' };
+  if (!Number.isFinite(oldest)) return { stuck: false, reason: 'queued jobs carry no usable timestamp', queued, waitedMin: null };
   const waitedMin = Math.floor((now - oldest) / 60_000);
   // A long job (a backup drill, a slow deploy) legitimately holds the queue: a
   // runner that is executing something is not stuck, however long others wait.
   if (runningJobs.some((j) => j.runner_name === runnerName)) {
-    return { stuck: false, reason: `${runnerName} is running a job; the oldest of ${mine.length} queued job(s) has waited ${waitedMin} min` };
+    return { stuck: false, reason: `${runnerName} is running a job; the oldest of ${queued} queued job(s) has waited ${waitedMin} min`, queued, waitedMin };
   }
   if (waitedMin < stuckAfterMin) {
-    return { stuck: false, reason: `the oldest of ${mine.length} queued job(s) has waited ${waitedMin} min (< ${stuckAfterMin})` };
+    return { stuck: false, reason: `the oldest of ${queued} queued job(s) has waited ${waitedMin} min (< ${stuckAfterMin})`, queued, waitedMin };
   }
   return {
     stuck: true,
-    reason: `${mine.length} job(s) for '${label}' are queued, the oldest for ${waitedMin} min, and nothing is running on ${runnerName}`,
+    reason: `${queued} job(s) for '${label}' are queued, the oldest for ${waitedMin} min, and nothing is running on ${runnerName}`,
+    queued,
+    waitedMin,
   };
+}
+
+/** The step outputs for a verdict: `stuck` always, the numbers when known. */
+export function queueOutputLines({ stuck, queued, waitedMin }) {
+  // `unknown` when the queue could not be read: the restart treats it as
+  // "not stuck", but the alert must neither open nor close on a run that never
+  // saw the queue (scripts/runner-watchdog-alert.mjs skips it).
+  const lines = [`stuck=${stuck === true ? 'true' : stuck === false ? 'false' : 'unknown'}`];
+  if (Number.isInteger(queued) && queued > 0) lines.push(`queued=${queued}`);
+  if (Number.isInteger(waitedMin) && waitedMin >= 0) lines.push(`waited_min=${waitedMin}`);
+  return `${lines.join('\n')}\n`;
 }
 
 async function api(path) {
@@ -82,12 +98,13 @@ async function main() {
       stuckAfterMin,
     });
   } catch (err) {
-    verdict = { stuck: false, reason: `could not read the queue (${err.message}) — not restarting` };
+    // Green, not red: an API hiccup is neither a restart nor an alert.
+    verdict = { stuck: null, reason: `could not read the queue (${err.message}) — not restarting`, queued: 0, waitedMin: null };
   }
-  console.log(`${verdict.stuck ? 'STUCK' : 'ok'}: ${verdict.reason}`);
+  console.log(`${verdict.stuck === true ? 'STUCK' : verdict.stuck === false ? 'ok' : 'unknown'}: ${verdict.reason}`);
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import('node:fs');
-    appendFileSync(process.env.GITHUB_OUTPUT, `stuck=${verdict.stuck}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, queueOutputLines(verdict));
   }
 }
 

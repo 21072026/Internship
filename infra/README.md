@@ -754,6 +754,11 @@ which belongs to another repository). Three changes keep that from recurring:
   Plesk-era `infra-setup.yml` that also used them was removed in #3135: its DNS
   step is `infra/setup-dns-cloudflare.sh`, its TLS step is `wildcard-cert.yml`,
   and its nginx step has nothing to check on a Caddy host.
+  A stall (even one this run restarted away), an unreachable box, a missing runner or a
+  failed restart now opens one `ci-alert` issue keyed `runner-watchdog` — its cc to the
+  maintainer is the e-mail — and the next healthy run closes it
+  (`scripts/runner-watchdog-alert.mjs`). GitHub starts the `*/15` schedule late, often hours
+  apart, so this detection is best-effort: an alert can arrive well after the stall began.
 
 | Knob | Where | Default | Meaning |
 |---|---|---|---|
@@ -764,8 +769,8 @@ which belongs to another repository). Three changes keep that from recurring:
 | `RUNNER_NAME` | repo variable | `interncrm` | the runner the watchdog looks after |
 | `RUNNER_STUCK_AFTER_MIN` | repo variable | 30 | queue wait that counts as stuck |
 
-The rules are pinned by `infra/test/capacity.test.sh` and
-`scripts/test/runner-queue.test.mjs` (both in CI).
+The rules are pinned by `infra/test/capacity.test.sh`,
+`scripts/test/runner-queue.test.mjs` and `scripts/test/runner-watchdog-alert.test.mjs` (all in CI).
 
 ---
 
