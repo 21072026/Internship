@@ -88,9 +88,9 @@ NETWORK=host
 mapfile -d '' -t extra < <(replica_extra_env 1)
 eq 'replica 1 keeps the scheduler' '' "${extra[*]:-}"
 mapfile -d '' -t extra < <(replica_extra_env 2)
-eq 'replica 2 runs with the cron switched off' '-e CRON_ENABLED=0' "${extra[*]:-}"
+eq 'replica 2 runs the cron too — the scheduler lease decides (#1676)' '' "${extra[*]:-}"
 mapfile -d '' -t extra < <(replica_extra_env 3)
-eq 'and so does any further replica' '-e CRON_ENABLED=0' "${extra[*]:-}"
+eq 'and so does any further replica' '' "${extra[*]:-}"
 
 printf '\nGenerated routing\n'
 SITES="$(mktemp -d)"

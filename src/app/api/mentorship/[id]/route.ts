@@ -6,20 +6,20 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 import { withTenantScope } from '@/lib/orgContext';
+import { getLocale } from '@/i18n/server';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { agreementBlockFor } from '@/lib/mentoringAgreement';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
-import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, validateDropoffReason, validateEmploymentAttribution } from '@/lib/stageChange';
+import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
-import {
-  findActiveMentorship,
-  hasOtherActiveMentorship,
-  ALREADY_MENTORED_ERROR,
-  AlreadyMentoredError,
-} from '@/lib/activeMentorship';
 
+// No `status` here any more (#1770): a pairing's state moves only through
+// POST /api/mentorship/[id]/lifecycle, which derives `status` from it. A body
+// that still sends one is refused below rather than silently ignored.
 const updateRelationSchema = z.object({
-  status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
   // Stage key is a free string now (#747) so tenants can use their own stages;
   // the UI only offers the tenant's resolved stages. Bounded to the PipelineStage
   // key constraint.
@@ -41,6 +41,11 @@ const updateRelationSchema = z.object({
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
+  // What the relation is for (#1503): PLACEMENT | COACHING. ADMIN only, and a
+  // whitelist (src/lib/placementKind.ts), never z.enum.
+  kind: z.string().max(16).optional(),
+  // Whose outcome a hire is (#1503); null clears it. Whitelisted below.
+  employmentAttribution: z.string().max(24).nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -137,7 +142,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // only to the roles that can already list the pool (GET /api/re-engagement).
       const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
 
+      // The mentoring agreement (#1792), for the two detail screens without a
+      // second request. Informational only: nothing on either screen is
+      // disabled by a missing acceptance — it is a prompt and a report line.
+      const agreement = (await shellCapabilities(relation.orgId)).includes('mentorship')
+        ? await agreementBlockFor(relation.id, session.user.id, await getLocale())
+        : null;
+
       return NextResponse.json({
+        agreement,
         relation: {
           // The next-action note is the owner's prose about the mentee (#2563):
           // the mentee reads this same route, so the three columns ship only to
@@ -184,6 +197,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const body = await request.json();
+      if (body && typeof body === 'object' && 'status' in body) {
+        return NextResponse.json(
+          { error: 'Use POST /api/mentorship/[id]/lifecycle to change the state', code: 'use_lifecycle_endpoint' },
+          { status: 400 }
+        );
+      }
       const parsed = updateRelationSchema.safeParse(body);
 
       if (!parsed.success) {
@@ -193,7 +212,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, ...rest } = parsed.data;
+      const {
+        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote,
+        kind, employmentAttribution, ...rest
+      } = parsed.data;
+
+      // Kind (#1503): reclassifying a relation moves it in or out of every
+      // placement count, so only an ADMIN may, checked here (not by hiding a
+      // control). Echoing the current value stays a no-op for anyone.
+      const kindChanging = kind !== undefined && kind !== relation.kind;
+      if (kindChanging) {
+        if (session.user.role !== 'ADMIN') {
+          return NextResponse.json({ error: 'Only an admin can change the relation kind', code: 'kind_admin_only' }, { status: 403 });
+        }
+        if (!isRelationKind(kind)) {
+          return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
+        }
+      }
+      if (employmentAttribution != null && !isEmploymentAttribution(employmentAttribution)) {
+        return NextResponse.json({ error: 'Unknown employmentAttribution', code: 'invalid_attribution' }, { status: 400 });
+      }
 
       // Parsed before anything is written, like the drop-off reason below.
       const parsedNextAt = nextActionAt !== undefined ? parseNextActionDate(nextActionAt) : null;
@@ -240,16 +278,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (!reasonCheck.ok) {
           return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
         }
-      }
-
-      // Back door (#419): reopening a COMPLETED relation to ACTIVE is a second
-      // assignment by another name, so it owes the same 409 POST /api/mentorship
-      // answers. `exceptRelationId` because this relation is itself part of the
-      // comparison. Checked before anything is written — clearing `completedAt`
-      // below also silently reopens the post-mentorship document window (#854).
-      if (parsed.data.status === 'ACTIVE' && relation.status !== 'ACTIVE') {
-        if (await hasOtherActiveMentorship(prisma, relation.menteeId, { exceptRelationId: id })) {
-          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+        // The hire-stage attribution rule (#1503) — not enforced until the UI
+        // sends it (EMPLOYMENT_ATTRIBUTION_REQUIRED), but every move asks it.
+        const attributionCheck = await validateEmploymentAttribution({
+          orgId: relation.orgId,
+          toStatus: pipelineStatus!,
+          attribution: employmentAttribution,
+        });
+        if (!attributionCheck.ok) {
+          return NextResponse.json({ error: attributionCheck.error, code: 'invalid_attribution' }, { status: 400 });
         }
       }
 
@@ -259,16 +296,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         // and the trial window a move into TRIAL_ACTIVE stamps (#2551).
         ...(stageChanging ? await stageMoveData(relation, pipelineStatus!) : {}),
       };
-      // Stamp/clear the end of the relation — it anchors the post-mentorship
-      // CV/document access window (#854).
-      if (parsed.data.status && parsed.data.status !== relation.status) {
-        data.completedAt = parsed.data.status === 'COMPLETED' ? new Date() : null;
-        // ACTIVE and COMPLETED are lifecycle states too (#1768): keep the column
-        // agreeing with `status`, or a reopened pairing would still read as
-        // ended to everything that filters on the lifecycle (the meter first).
-        data.lifecycleState = parsed.data.status;
-        data.pausedAt = null;
+      if (kindChanging && isRelationKind(kind)) {
+        data.kind = kind;
+        const entered = funnelEnteredAtForKindChange(relation.kind, kind, new Date());
+        if (entered !== undefined) data.funnelEnteredAt = entered;
       }
+      if (employmentAttribution !== undefined) data.employmentAttribution = employmentAttribution;
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
         // A fresh deadline (or cleared) re-arms the overdue reminder.
@@ -292,31 +325,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ relation, changed: false });
       }
 
-      // Guard + write in one transaction, mirroring the two front doors: a
-      // reopen must not slip past a mentor assigned in between.
-      let updated;
-      try {
-        updated = await prisma.$transaction(async (tx) => {
-          if (parsed.data.status === 'ACTIVE' && relation.status !== 'ACTIVE') {
-            const active = await findActiveMentorship(tx, relation.menteeId, { exceptRelationId: id });
-            if (active) throw new AlreadyMentoredError(relation.menteeId, active.id);
-          }
-          return tx.mentorshipRelation.update({
-            where: { id },
-            data,
-            include: {
-              mentor: { select: { id: true, fullName: true, email: true } },
-              mentee: { select: { id: true, fullName: true, email: true } },
-              company: { select: { id: true, name: true } },
-            },
-          });
-        });
-      } catch (e) {
-        if (e instanceof AlreadyMentoredError) {
-          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
-        }
-        throw e;
-      }
+      const updated = await prisma.mentorshipRelation.update({
+        where: { id },
+        data,
+        include: {
+          mentor: { select: { id: true, fullName: true, email: true } },
+          mentee: { select: { id: true, fullName: true, email: true } },
+          company: { select: { id: true, name: true } },
+        },
+      });
 
       // The audit row, activity entry and notification/webhook/SLA effects,
       // through the shared write path (#2658). `relation` still holds the

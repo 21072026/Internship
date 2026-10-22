@@ -2,26 +2,23 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
-import cron from 'node-cron';
+import { suppressedAmong } from '@/lib/emailSuppression';
+import { suppressedLogReason } from '@/lib/emailSuppressionRule';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { directKeyFor } from '@/lib/conversations';
 import { orgIdsEntitledTo } from '@/lib/subscription';
-import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
-import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
-import { purgeExpiredLoginLinks } from '@/lib/magicLink';
-import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
-import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
-import { notify, notifyIfAllowed } from '@/lib/notify';
+import { notify } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
-import { settingByOrg } from '@/lib/settingsOrg';
+import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
+import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -31,10 +28,10 @@ import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
+import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
-import { sweepAiArtifacts } from '@/lib/ai/artifacts';
+import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
 import { overdueBefore } from '@/lib/taskDue';
 import { visibleToViewer } from '@/lib/todoVisibility';
@@ -95,9 +92,14 @@ import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
+import { resolveStageEscalations } from '@/lib/stageSla';
+import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
+import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
+import { notifyEvent } from '@/lib/notifications/router';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
-import { expireDrafts, holdIfRequired } from '@/lib/outboundDrafts';
+import { holdIfRequired } from '@/lib/outboundDrafts';
+import { PAUSED, activeRelationWhere } from '@/lib/relationLifecycle';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -294,9 +296,15 @@ export function mailMeterIdleForTests(): Promise<void> {
   return meterObserver.idle();
 }
 
+/** Does a bulk relay exist? The load-time answer, or — once the test seam has
+ *  re-pointed this process (`requestFromEnv`) — the current environment's. */
+function bulkChannelExists(): boolean {
+  return requestFromEnv ? Boolean(process.env.SMTP_BULK_HOST && process.env.SMTP_BULK_USER) : !!bulkTransporter;
+}
+
 function smtpTransport(channel: MailTransport, mode: DeliveryMode): Transporter {
   // `transportFor()` only ever answers 'bulk' when the bulk channel exists.
-  const ch: MailTransport = channel === 'bulk' && bulkTransporter ? 'bulk' : 'primary';
+  const ch: MailTransport = channel === 'bulk' && bulkChannelExists() ? 'bulk' : 'primary';
   if (mode === 'request' && !requestFromEnv) return ch === 'bulk' ? bulkTransporter! : transporter;
   const key = `${ch}:${mode}`;
   let t = modeTransports.get(key);
@@ -464,10 +472,17 @@ async function recordEmail(
   status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED' | 'HELD',
   transport: MailTransport,
   error?: string,
+  // Whose mail this is (#1556): the RECIPIENT's tenant — the caller's `orgId`,
+  // else the org of the recipient's account (`userId`). Written explicitly,
+  // null included, so the tenant middleware never stamps the SENDER's request
+  // scope on someone else's mail. Unknown (an address with no account, a
+  // hand-built mail) stays NULL and reads as the default org's.
+  owner?: { orgId?: string | null; userId?: string | null },
 ) {
   try {
     await prisma.emailLog.create({
       data: {
+        orgId: await emailLogOrg(owner),
         to: to.slice(0, 320),
         subject: subject.slice(0, 512),
         category: category?.slice(0, 64) ?? null,
@@ -479,6 +494,15 @@ async function recordEmail(
   } catch (e) {
     logger.error('Failed to write EmailLog', { to, category, status, error: String(e) });
   }
+}
+
+async function emailLogOrg(owner?: { orgId?: string | null; userId?: string | null }): Promise<string | null> {
+  if (owner?.orgId) return owner.orgId;
+  if (!owner?.userId) return null;
+  // Unscoped on purpose: the recipient's row may sit in another tenant than
+  // the request that is sending (a super admin's invitation, a cron).
+  const u = await runUnscoped(() => prisma.user.findUnique({ where: { id: owner.userId! }, select: { orgId: true } })).catch(() => null);
+  return u?.orgId ?? null;
 }
 
 /**
@@ -498,10 +522,15 @@ async function recordEmail(
  *
  * A recipient with no address leaves no row: there is nothing to look it up by.
  */
-export async function recordOptOuts(rows: { to: string | null | undefined; category: string; subject: string }[]): Promise<number> {
+export async function recordOptOuts(
+  rows: { to: string | null | undefined; category: string; subject: string; orgId?: string | null }[],
+): Promise<number> {
   const data = rows
-    .filter((r): r is { to: string; category: string; subject: string } => typeof r.to === 'string' && r.to !== '')
+    .filter((r): r is { to: string; category: string; subject: string; orgId?: string | null } => typeof r.to === 'string' && r.to !== '')
     .map((r) => ({
+      // The recipient's tenant when the job holds it (#1556); explicit null
+      // otherwise, never the request scope's.
+      orgId: r.orgId ?? null,
       to: r.to.slice(0, 320),
       subject: r.subject.slice(0, 512),
       category: r.category.slice(0, 64),
@@ -521,8 +550,8 @@ export async function recordOptOuts(rows: { to: string | null | undefined; categ
 }
 
 /** One recipient's opt-out row — see recordOptOuts. */
-export async function recordOptOut(to: string | null | undefined, category: string, subject: string): Promise<void> {
-  await recordOptOuts([{ to, category, subject }]);
+export async function recordOptOut(to: string | null | undefined, category: string, subject: string, orgId?: string | null): Promise<void> {
+  await recordOptOuts([{ to, category, subject, orgId }]);
 }
 
 // ── E-mail delivery health alerts (#1190) ───────────────────────────────────
@@ -1009,7 +1038,24 @@ export async function prepareEmail({
   const unmailable = unmailableRecipient(to);
   if (unmailable) {
     logger.info('Email not sent: generated address', { category, reason: unmailable });
-    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), `Unmailable address: ${unmailable}`);
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), `Unmailable address: ${unmailable}`, { orgId, userId });
+    return { status: 'SKIPPED' };
+  }
+
+  // ── A SUPPRESSED ADDRESS IS NOT MAILED (#1692) ────────────────────────────
+  // The mailbox said "this address does not exist" (a hard bounce, or soft
+  // ones that kept coming) or the person told their provider "this is spam"
+  // (a complaint) — src/lib/emailSuppressionRule.ts. Ahead of the opt-out gate
+  // and, unlike it, for EVERY group, essential mail included: a password reset
+  // to a dead mailbox reaches nobody and only adds a bounce to the sending
+  // domain every tenant shares. Recorded SKIPPED with the reason, nothing
+  // queued, nothing drafted; the caller learns SKIPPED, never a pretend SENT.
+  // The lookup fails open, like the preference read below.
+  const suppressed = await suppressedAmong(addressparser(to, { flatten: true }).map((a) => (typeof a.address === 'string' ? a.address : '')));
+  if (suppressed.size > 0) {
+    const reason = [...suppressed.values()][0];
+    logger.info('Email not sent: suppressed address', { category, reason });
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), suppressedLogReason(reason));
     return { status: 'SKIPPED' };
   }
 
@@ -1072,7 +1118,7 @@ export async function prepareEmail({
     // preference lookup that breaks must not silently swallow the mail.
     if (u && !emailGroupAllowed(u, groupId!)) {
       logger.info('Email not sent: unsubscribed', { to, category, group: groupId });
-      await recordEmail(to, subject, category, 'SKIPPED', transport, `Unsubscribed: ${groupId}`);
+      await recordEmail(to, subject, category, 'SKIPPED', transport, `Unsubscribed: ${groupId}`, { orgId: orgId ?? storedOrg?.orgId, userId });
       // 'SKIPPED', never a bare return: #1431 made this function report what
       // actually happened, because four routes had been reading "did not throw"
       // as "was delivered". A suppressed send is the newest way for a mail not
@@ -1090,13 +1136,13 @@ export async function prepareEmail({
   // still shows what would have gone out — which is the part worth demoing.
   if (IS_DEMO_MODE) {
     logger.info('Email not sent: demo mode', { to, subject, category });
-    await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled', { orgId: orgId ?? storedOrg?.orgId, userId });
     return { status: 'SKIPPED' };
   }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
-    await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)', { orgId: orgId ?? storedOrg?.orgId, userId });
     return { status: 'SKIPPED' };
   }
 
@@ -1146,7 +1192,7 @@ export async function prepareEmail({
     } catch (e) {
       const message = `Recipient origin unresolved: ${e instanceof Error ? e.message : String(e)}`;
       logger.error('Email not sent: recipient origin unresolved', { to, category, error: message });
-      await recordEmail(to, subject, category, 'FAILED', transport, message);
+      await recordEmail(to, subject, category, 'FAILED', transport, message, { orgId: orgId ?? storedOrg?.orgId, userId });
       throw e;
     }
   }
@@ -1222,13 +1268,13 @@ export async function deliverPrepared(
     const cls = classifySmtpError(e);
     noteAuthFailure(cls.reason, e);
     logger.error('Email send failed', { category, transport, kind: cls.kind, reason: cls.reason, rcpt: recipientHash(to).slice(0, 16) });
-    await recordEmail(to, subject, category, 'FAILED', transport, message);
+    await recordEmail(to, subject, category, 'FAILED', transport, message, prepared);
     void maybeAlertEmailFailures(category).catch(() => {});
     observeSafely(() => observer.outcome(prepared, e));
     throw e;
   }
 
-  await recordEmail(to, subject, category, 'SENT', transport);
+  await recordEmail(to, subject, category, 'SENT', transport, undefined, prepared);
   observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
 }
@@ -1288,13 +1334,13 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   } catch (e) {
     const p = result.prepared;
     logger.error('outbound_hold.check_failed', { category: p.category, error: e instanceof Error ? e.message : String(e) });
-    await recordEmail(p.to, p.subject, p.category, 'FAILED', p.transport, 'Outbound approval check failed');
+    await recordEmailOutcome(p, 'FAILED', 'Outbound approval check failed');
     throw e;
   }
   if (hold.held) {
     if (hold.created) {
       const p = result.prepared;
-      await recordEmail(p.to, p.subject, p.category, 'HELD', p.transport, `Held for approval (${hold.code})`);
+      await recordEmailOutcome(p, 'HELD', `Held for approval (${hold.code})`);
     }
     return 'HELD';
   }
@@ -1361,7 +1407,7 @@ async function dispatchPrepared(
   if (prepared.lane === 'CRITICAL' && canQueue(prepared) && relay?.open) {
     if (await tryEnqueue(prepared, { ...queue, reason: 'breaker', priority: 100 })) {
       logger.warning('mail_outbox.breaker_open', { lane: prepared.lane, category: prepared.category, transport: prepared.transport });
-      await recordEmail(prepared.to, prepared.subject, prepared.category, 'DEFERRED', prepared.transport, 'Relay paused — queued without an attempt');
+      await recordEmailOutcome(prepared, 'DEFERRED', 'Relay paused — queued without an attempt');
       return 'QUEUED';
     }
   }
@@ -1380,7 +1426,7 @@ async function dispatchPrepared(
   } catch (e) {
     return onInlineFailure(prepared, e, queue, seams);
   }
-  await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
+  await recordEmailOutcome(prepared, 'SENT');
   observeSafely(() => observer.outcome(prepared, null));
   return 'SENT';
 }
@@ -1468,7 +1514,7 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
         reason: cls.reason,
         rcpt: recipientHash(to).slice(0, 16),
       });
-      await recordEmail(to, subject, category, 'DEFERRED', transport, message);
+      await recordEmail(to, subject, category, 'DEFERRED', transport, message, prepared);
       // A relay-wide failure is the outage signal: nothing goes FAILED while
       // the queue keeps it, so the health check reads the deferrals too.
       if (cls.relayWide) void maybeAlertEmailFailures(category).catch(() => {});
@@ -1484,7 +1530,7 @@ async function onInlineFailure(prepared: PreparedEmail, e: unknown, queue: Queue
     reason: cls.reason,
     rcpt: recipientHash(to).slice(0, 16),
   });
-  await recordEmail(to, subject, category, 'FAILED', transport, message);
+  await recordEmail(to, subject, category, 'FAILED', transport, message, prepared);
   void maybeAlertEmailFailures(category).catch(() => {});
   throw e;
 }
@@ -1516,7 +1562,7 @@ async function sendCriticalCapped(
 
   const finish = async (outcome: { error: unknown } | null): Promise<'SENT' | 'QUEUED'> => {
     if (outcome) return onInlineFailure(prepared, outcome.error, queue, seams);
-    await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
+    await recordEmailOutcome(prepared, 'SENT');
     observeSafely(() => observer.outcome(prepared, null));
     return 'SENT';
   };
@@ -1534,14 +1580,7 @@ async function sendCriticalCapped(
   if (!job) return finish(await inflight);
 
   logger.warning('mail_outbox.inline_timeout', { lane: prepared.lane, category: prepared.category, capMs });
-  await recordEmail(
-    prepared.to,
-    prepared.subject,
-    prepared.category,
-    'DEFERRED',
-    prepared.transport,
-    `Inline send exceeded ${capMs} ms — queued`,
-  );
+  await recordEmailOutcome(prepared, 'DEFERRED', `Inline send exceeded ${capMs} ms — queued`);
   void inflight
     .then(async (outcome) => {
       observeSafely(() => observer.outcome(prepared, outcome ? outcome.error : null));
@@ -1550,12 +1589,12 @@ async function sendCriticalCapped(
         if (classifySmtpError(outcome.error).retryable) return;
         if (await cancelQueuedMail(job, 'permanent_inline')) {
           const message = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
-          await recordEmail(prepared.to, prepared.subject, prepared.category, 'FAILED', prepared.transport, message);
+          await recordEmailOutcome(prepared, 'FAILED', message);
           void maybeAlertEmailFailures(prepared.category).catch(() => {});
         }
         return;
       }
-      await recordEmail(prepared.to, prepared.subject, prepared.category, 'SENT', prepared.transport);
+      await recordEmailOutcome(prepared, 'SENT');
       if (!(await cancelQueuedMail(job))) {
         // The drain took the copy before the slow send finished: at-least-once.
         logger.warning('mail_outbox.inline_late_duplicate', { jobId: job.id, category: prepared.category });
@@ -1580,11 +1619,11 @@ export async function transmit(
 /** The drain's ledger row for a queued mail (#2944): the same EmailLog row an
  *  inline send writes. */
 export async function recordEmailOutcome(
-  prepared: Pick<PreparedEmail, 'to' | 'subject' | 'category' | 'transport'>,
-  status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED',
+  prepared: Pick<PreparedEmail, 'to' | 'subject' | 'category' | 'transport' | 'orgId' | 'userId'>,
+  status: 'SENT' | 'FAILED' | 'SKIPPED' | 'DEFERRED' | 'HELD',
   error?: string,
 ): Promise<void> {
-  await recordEmail(prepared.to, prepared.subject, prepared.category, status, prepared.transport, error);
+  await recordEmail(prepared.to, prepared.subject, prepared.category, status, prepared.transport, error, prepared);
 }
 
 /** Observe mode for a queued mail: the meter sees the send the drain makes. */
@@ -1611,7 +1650,27 @@ export function mailDrainDeps(): DrainDeps {
     record: (e, status, error) => recordEmailOutcome(e, status, error),
     observe: (e) => observeMeterSpend(e as unknown as PreparedEmail),
     finalFailure: (e) => noteFinalMailFailure(e.category),
+    failover: (e) => failoverEnvelope(e),
   };
+}
+
+/**
+ * A primary-channel mail moved onto the bulk relay (#1690): the same message
+ * under the bulk From identity — the bulk relay signs for its own domain
+ * (`SMTP_BULK_FROM`), so a primary From on it would fail DMARC alignment. The
+ * display name (the tenant's brand) is kept. Null when no bulk relay is
+ * configured (one channel: nothing to fail over to) or the mail is not a
+ * primary one.
+ */
+export function failoverEnvelope<E extends { transport: MailTransport; message: { from?: unknown } }>(e: E): E | null {
+  if (!bulkChannelExists() || e.transport !== 'primary') return null;
+  const bulk = fromIdentity(null, 'bulk');
+  const from = e.message.from;
+  let name: string | null = null;
+  if (from && typeof from === 'object' && typeof (from as { name?: unknown }).name === 'string') name = (from as { name: string }).name;
+  else if (typeof from === 'string' && from) name = addressparser(from, { flatten: true })[0]?.name || null;
+  const nextFrom = !bulk.address ? from : name ? { name, address: bulk.address } : bulk.address;
+  return { ...e, transport: 'bulk', message: { ...e.message, from: nextFrom } };
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -2077,6 +2136,49 @@ export async function sendMeetingInviteEmail({
 //     organizer's clock and the mail says whose clock that is;
 //   - the mail has to say who invited them and to what, since an unexpected
 //     invitation from an unknown system otherwise reads as spam.
+// The account-less reviewer's link (#1859): the programme named this address
+// as the reviewer of one step of a document's review chain. The link is the
+// credential and works once — deciding the step clears it.
+export async function sendDocumentReviewInviteEmail({
+  to,
+  token,
+  documentTitle,
+  requirement,
+  ownerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  token: string;
+  documentTitle: string;
+  requirement: string;
+  ownerName: string;
+  locale?: string | null;
+  orgId: string;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const M = (await emailDictionary(resolved, orgId)).notifications.documentReviewEmail;
+  const link = `${brand.appUrl}/document-review/${token}`;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId,
+    subject: M.subject.replace('{requirement}', requirement),
+    // no-user-row: an external reviewer is an address the programme typed in
+    // (#1859) — an employer supervisor with no account, reached once per step.
+    category: 'document-review',
+    locale: resolved,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(M.body.replace('{owner}', ownerName).replace('{title}', documentTitle).replace('{requirement}', requirement))}</p>
+        <a href="${link}" style="display:inline-block;background:${esc(brand.accent)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.cta)}</a>
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">${esc(M.footer)}</p>
+      </div>`,
+  });
+}
+
 export async function sendMeetingGuestInviteEmail({
   to,
   name,
@@ -2184,6 +2286,251 @@ export async function sendMeetingGuestInviteEmail({
         <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
           ${esc(M.guestFooter)}
         </p>
+      </div>
+    `,
+  });
+}
+
+// A meeting moved or was called off (#1982). The human half of PATCH
+// /api/meetings/[id]: everyone it affects learns it in their own language and on
+// their own clock. Same split as the invite: a participant's mail reads their
+// saved zone and links to /account#timezone; the guest siblings below print the
+// organizer's clock and never link to a page a guest cannot reach.
+//
+// Same categories as the invite ('meeting-invite' / 'meeting-guest-invite'): a
+// change to an invitation is part of the invitation, so the person who silenced
+// meeting invites is not mailed about it — the in-app notice still reaches them
+// (src/lib/meetingChangeNotices.ts).
+export async function sendMeetingRescheduledEmail({
+  to,
+  fullName,
+  title,
+  previousAt,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+  timeZone,
+  organizerTimeZone,
+  organizerName,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  title: string;
+  previousAt: Date | null;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  // The recipient's own row token, when the RSVP is theirs to give again: a move
+  // resets the answer to PENDING, so the invitee is asked again.
+  rsvpToken?: string | null;
+  timeZone?: string | null;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  userId?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const fmt = (at: Date) => formatInTimeZone(at, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved));
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject: C.movedSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(C.movedBody)}</p>
+        ${previousAt ? `<p style="color:#6b7280;"><strong>${esc(C.was)}</strong> <s>${fmt(previousAt)}</s></p>` : ''}
+        <p><strong>${esc(C.now)}</strong> ${fmt(scheduledAt)}</p>
+        ${organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName, resolved)}
+        ${meetLink ? `<p><strong>${esc(M.link)}</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
+        ${rsvpToken ? `
+        <p style="margin-top: 20px;">${esc(C.rsvpAsk)}</p>
+        <a href="${base}/rsvp/${rsvpToken}?r=yes" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
+        <a href="${base}/rsvp/${rsvpToken}?r=no" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
+        ` : ''}
+        ${timeZoneNote(timeZone, resolved, base)}
+      </div>
+    `,
+  });
+}
+
+export async function sendMeetingCancelledEmail({
+  to,
+  fullName,
+  title,
+  scheduledAt,
+  reason,
+  timeZone,
+  organizerTimeZone,
+  organizerName,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  title: string;
+  scheduledAt: Date | null;
+  reason?: string | null;
+  timeZone?: string | null;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  userId?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject: C.cancelledSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(C.cancelledBody)}</p>
+        ${scheduledAt ? `<p><strong>${esc(C.plannedFor)}</strong> <s>${formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))}</s></p>` : ''}
+        ${scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName, resolved) : ''}
+        ${reason ? `<p><strong>${esc(C.reason)}</strong> ${esc(reason)}</p>` : ''}
+        ${scheduledAt ? timeZoneNote(timeZone, resolved, base) : ''}
+      </div>
+    `,
+  });
+}
+
+// The guest siblings — see sendMeetingGuestInviteEmail for why they are separate
+// functions and not a flag: no saved zone (the organizer's clock, named), no
+// /account link, and the mail says who changed it.
+function guestZoneLine(zone: string, organizerName: string | null | undefined, locale: Locale): string {
+  const T = getDictionary(locale).notifications.emailTimes;
+  return `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+    ${organizerName ? esc(T.guestZoneNoteOrganizer.replace('{zone}', zone)).replace('{name}', esc(organizerName)) : esc(T.guestZoneNote.replace('{zone}', zone))}
+  </p>`;
+}
+
+export async function sendMeetingGuestRescheduledEmail({
+  to,
+  name,
+  title,
+  previousAt,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+  organizerTimeZone,
+  organizerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  previousAt: Date | null;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  rsvpToken: string;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  // The organizer's language and org, as for the guest invite.
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const url = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const zone = resolveTimeZone(organizerTimeZone);
+  const fmt = (at: Date) => `${formatInTimeZone(at, zone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))} (${zoneLabel(at, zone)})`;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId: orgId ?? null,
+    // no-user-row: a guest is an address, not an account (see the guest invite).
+    category: 'meeting-guest-invite',
+    locale: resolved,
+    subject: C.movedSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(title))}
+        ${name ? `<p>${esc(M.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${organizerName ? esc(C.guestMovedBody).replace('{organizer}', esc(organizerName)) : esc(C.movedBody)}</p>
+        ${previousAt ? `<p style="color:#6b7280;"><strong>${esc(C.was)}</strong> <s>${esc(fmt(previousAt))}</s></p>` : ''}
+        <p><strong>${esc(C.now)}</strong> ${esc(fmt(scheduledAt))}</p>
+        ${meetLink ? `<p><strong>${esc(M.link)}</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+        <p style="margin-top: 20px;">${esc(C.rsvpAsk)}</p>
+        <a href="${url}/rsvp/${rsvpToken}?r=yes" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
+        <a href="${url}/rsvp/${rsvpToken}?r=no" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
+        ${guestZoneLine(zone, organizerName, resolved)}
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;">${esc(M.guestFooter)}</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendMeetingGuestCancelledEmail({
+  to,
+  name,
+  title,
+  scheduledAt,
+  reason,
+  organizerTimeZone,
+  organizerName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  scheduledAt: Date | null;
+  reason?: string | null;
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const C = D.notifications.meetingChangeEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const zone = resolveTimeZone(organizerTimeZone);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    orgId: orgId ?? null,
+    // no-user-row: a guest is an address, not an account (see the guest invite).
+    category: 'meeting-guest-invite',
+    locale: resolved,
+    subject: C.cancelledSubject.replace('{title}', title),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(title))}
+        ${name ? `<p>${esc(M.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${organizerName ? esc(C.guestCancelledBody).replace('{organizer}', esc(organizerName)) : esc(C.cancelledBody)}</p>
+        ${scheduledAt ? `<p><strong>${esc(C.plannedFor)}</strong> <s>${esc(`${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`)}</s></p>` : ''}
+        ${reason ? `<p><strong>${esc(C.reason)}</strong> ${esc(reason)}</p>` : ''}
+        ${scheduledAt ? guestZoneLine(zone, organizerName, resolved) : ''}
       </div>
     `,
   });
@@ -3145,6 +3492,60 @@ export async function sendRoleChangeEmail({
   });
 }
 
+// An organization's IdP signing certificate is about to lapse (#1933). Sent by
+// the `sso-certificates` job (src/lib/jobs/ssoCertificateExpiry.ts), which owns
+// the decision — which org, which mark (30 or 7 days), claimed before sending;
+// this only renders. Category `sso-certificate`, in the essential
+// account_security group: a lapsed certificate locks the whole tenant out of
+// single sign-on, so no preference may mute the two warnings.
+export async function sendSsoCertificateExpiryEmail({
+  to,
+  fullName,
+  orgName,
+  notAfter,
+  daysLeft,
+  fingerprint,
+  locale,
+  orgId,
+  userId,
+}: {
+  to: string;
+  fullName?: string | null;
+  orgName: string;
+  notAfter: Date;
+  daysLeft: number;
+  fingerprint: string;
+  locale?: string | null;
+  orgId: string;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const loc = resolveLocale(locale);
+  const M = (await emailDictionary(loc, orgId)).ssoCertExpiryEmail;
+  const date = new Intl.DateTimeFormat(dateLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' }).format(notAfter);
+  const fill = (t: string) => t.replace('{org}', orgName).replace('{date}', date).replace('{days}', String(daysLeft));
+  return sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'sso-certificate',
+    locale,
+    fromName: brand.name,
+    subject: fill(M.subject),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(fullName ? M.greeting.replace('{name}', fullName) : M.greetingNoName)}</p>
+        <p>${esc(fill(M.body))}</p>
+        <p>${esc(M.action)}</p>
+        <p style="color:#666;font-size:12px;font-family:monospace;">${esc(M.fingerprint.replace('{fingerprint}', fingerprint))}</p>
+        ${ctaBlock(brand, `${base}/admin/organizations`, esc(M.cta))}
+      </div>
+    `,
+  });
+}
+
 // The account owner's copy of an admin 2FA reset (#1543). Sent from the reset
 // route, not left to a preference: their second factor is gone and somebody else
 // removed it, so this is a disclosure rather than a notification — the same
@@ -3491,18 +3892,28 @@ export async function sendProjectJoinRequestEmail({
 }
 
 export async function checkMentorInteractionReminders() {
-  // `reminderDays` is each relation's OWN org's (#2628): this job sweeps every
-  // tenant with none bound, and an unqualified read is the global row — not the
-  // number any tenant admin set on their settings form.
-  const reminderDaysOf = settingByOrg('reminderDays');
-  const staleCutoffFor = async (orgId: string | null) => {
+  return withSettingsCache(checkMentorInteractionRemindersInner);
+}
+
+async function checkMentorInteractionRemindersInner() {
+  // `reminderDays` is each relation's OWN org's (#2628) and, inside it, its own
+  // programme's (#1621): this job sweeps every tenant with none bound, and an
+  // unqualified read is the global row — not the number any tenant admin set.
+  // Resolved per relation, inside the loop; the bound settings cache makes that
+  // one query per distinct (org, programme), not one per relation.
+  const staleCutoffFor = async (orgId: string | null, programId: string | null) => {
+    const days = parseInt(
+      await resolveSettingRaw('reminderDays', { orgId: await settingsOrgOfRow(orgId), programId }),
+      10,
+    ) || 14;
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - (parseInt(await reminderDaysOf(orgId), 10) || 14));
+    cutoff.setDate(cutoff.getDate() - days);
     return cutoff;
   };
 
   const allActive = await prisma.mentorshipRelation.findMany({
-    where: { status: 'ACTIVE' },
+    // Not a paused pair (#1772): nobody is expected to log anything during a pause.
+    where: activeRelationWhere(),
     include: {
       mentor: true,
       mentee: true,
@@ -3544,7 +3955,7 @@ export async function checkMentorInteractionReminders() {
   for (const relation of activeRelations) {
     if (dormant.has(relation.id)) continue;
     const lastContact = lastContacts.get(relation.id);
-    const stale = !lastContact || lastContact.at < (await staleCutoffFor(relation.orgId));
+    const stale = !lastContact || lastContact.at < (await staleCutoffFor(relation.orgId, relation.cohortId));
     if (stale) {
       remindersToSend.push(relation);
       // In-app notification once per staleness episode (#573): only when we
@@ -3654,31 +4065,43 @@ export async function checkMentorInteractionReminders() {
   };
 }
 
-// Notify mentors about mentees whose current stage deadline has passed. Each
-// relation is reminded once per deadline (deadlineReminderSentAt guards it).
+// The stage-SLA escalation ladder (#1722). Every relation past its stage
+// deadline has ONE open SlaBreach for that deadline; this sweep opens it
+// (level 1: the mentor is told — the reminder this job always sent, still once
+// per deadline), climbs it (level 2: the org's administrators, once the stage's
+// `escalateAfterDays` have passed without a move, unless acknowledged or
+// snoozed) and closes the ones that no longer stand. The rule is
+// src/lib/slaLadderRule.ts; the table's only writer is src/lib/slaBreach.ts.
+// A stage move closes its breach on the spot (stageChangeEffects.ts) — this
+// sweep is the backstop for everything else that ends one.
+//
+// THE FIRST RUN AFTER THE DEPLOY sends nothing it already sent: a breach that
+// opens on a relation whose `deadlineReminderSentAt` is set adopts level 1
+// silently (`mentorAlreadyTold`). Every write of a new deadline clears that
+// stamp, so it can only mean "this deadline was reminded about". The stamp is
+// still written when level 1 is sent, so it keeps meaning that.
+//
+// Both channels of both rungs go through the same 'deadlines' gate: the bell
+// through notifyEvent() (category 'deadlines'), the mail inline through
+// sendEmail() under 'stage-deadline' after the same preference checks —
+// the router's e-mail channel only enqueues a job no worker consumes yet
+// (see src/lib/securityNotices.ts, which made the same call).
 //
 // PER RELATION HERE IS CORRECT, and that is a decision rather than an oversight
 // (#2287 asked for it to be settled rather than left ambiguous). The cap the
 // dormant and weekly-report sweeps had to fix was "one HUMAN, N identical
 // messages": a mentee with two ACTIVE mentorships received the same mail twice.
-// This sweep's recipient is the MENTOR, and each message is about a different
-// mentee of theirs — same person, different content, no duplicate. Collapsing
-// them would drop a deadline on the floor. The same reasoning covers
-// checkMentorInteractionReminders above, which already batches a mentor's
-// mentees into ONE mail with a list.
-//
-// The residual is a volume question, not a correctness one: a mentor with ten
-// overdue relations gets ten mails in one tick. If that ever needs fixing it is
-// a digest (batch this sweep by mentor the way the interaction reminder does),
-// not a per-person cap — a cap would silently drop deadlines.
+// This sweep's recipient is the MENTOR (or an admin), and each message is about
+// a different mentee — same person, different content, no duplicate.
+// Collapsing them would drop a deadline on the floor. If volume ever needs
+// fixing it is a digest, not a per-person cap.
 export async function checkStageDeadlineReminders() {
   const now = new Date();
   // Whether a deadline is still actionable is the ONE stage-clock rule every
   // surface reads (`isStageOverdue`, src/lib/stageClock.ts, #1724), fed the
-  // tenant's own stages (#1884) — not a list of three default keys that a
-  // renamed pipeline does not have, so every placed candidate on it was nagged
-  // forever. Stages are resolved once per org per run; the job has no session,
-  // so the relation's own orgId decides.
+  // tenant's own stages (#1884) and the re-engagement pool as `paused`.
+  // Stages and escalation settings are resolved once per org per run; the job
+  // has no session, so the relation's own orgId decides.
   const stagesByOrg = new Map<string, Promise<ResolvedStage[]>>();
   const stagesOf = (orgId: string | null) => {
     const key = orgId ?? '';
@@ -3689,19 +4112,26 @@ export async function checkStageDeadlineReminders() {
     }
     return hit;
   };
-  const capabilitiesOf = capabilitiesMemo();
+  const escalationsByOrg = new Map<string, Promise<Map<string, number>>>();
+  const escalationsOf = (orgId: string | null) => {
+    const key = orgId ?? '';
+    let hit = escalationsByOrg.get(key);
+    if (!hit) {
+      hit = resolveStageEscalations(orgId);
+      escalationsByOrg.set(key, hit);
+    }
+    return hit;
+  };
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
 
-  const overdue = await prisma.mentorshipRelation.findMany({
-    where: {
-      status: 'ACTIVE',
-      stageDeadline: { lt: now },
-      deadlineReminderSentAt: null,
-    },
+  const candidates = await prisma.mentorshipRelation.findMany({
+    // Not a paused pair (#1772): its clock is frozen (stageClockPatch), this is the second guard.
+    where: { ...activeRelationWhere(), stageDeadline: { lt: now } },
     include: {
       mentor: {
         select: {
+          id: true,
           email: true,
           fullName: true,
           emailNotifications: true,
@@ -3709,41 +4139,125 @@ export async function checkStageDeadlineReminders() {
           preferredLanguage: true,
         },
       },
-      mentee: { select: { fullName: true } },
+      mentee: { select: { id: true, fullName: true, reEngageAt: true } },
+      slaBreaches: {
+        where: { resolvedAt: null },
+        select: { id: true, dueAt: true, level: true, acknowledgedAt: true, snoozedUntil: true },
+      },
     },
   });
 
-  for (const rel of overdue) {
-    if (!isStageOverdue({ stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus }, await stagesOf(rel.orgId), now.getTime())) continue;
-    // The in-app half respects the same 'deadlines' preference the e-mail half
-    // does (#817) — opting out of deadline mail and still being pinged in-app
-    // for the identical event is not a preference anyone chose.
-    // A MARKETING rep's record is /sales/leads/<id> (#2580); notificationLink
-    // keeps /mentor/mentees/<id> for everyone else.
-    const stageLink = notificationLink('MENTOR', 'relation', { relationId: rel.id }, { capabilities: await capabilitiesOf(rel.orgId) });
-    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, stageLink);
-    if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
-      const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
+  let reminded = 0;
+  let adopted = 0;
+  let escalated = 0;
+  // The breaches that still stand after this pass; every other open one closes.
+  const standing = new Set<string>();
+
+  for (const rel of candidates) {
+    const overdue = isStageOverdue(
+      { stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus, paused: rel.mentee.reEngageAt != null },
+      await stagesOf(rel.orgId),
+      now.getTime()
+    );
+    if (!overdue || !rel.stageDeadline) continue;
+    const dueAt = rel.stageDeadline;
+
+    // The open breach for THIS deadline. One for an older deadline (moved by
+    // hand without a stage move) is not standing and closes below.
+    let breach = rel.slaBreaches.find((b) => b.dueAt.getTime() === dueAt.getTime()) ?? null;
+    if (!breach) {
+      const opened = await openBreach({ orgId: rel.orgId, relationId: rel.id, stageKey: rel.pipelineStatus, dueAt, now });
+      if (opened) {
+        if (mentorAlreadyTold(rel.deadlineReminderSentAt)) {
+          adopted++;
+        } else {
+          // A MARKETING rep's record is /sales/leads/<id> (#2580); notificationLink
+          // keeps /mentor/mentees/<id> for everyone else.
+          await notifyEvent(
+            rel.mentor,
+            'deadline.stagePassed',
+            { menteeName: rel.mentee.fullName, relationId: rel.id },
+            { channels: ['inApp'], orgId: rel.orgId, dedupeKey: `sla-breach:${opened.id}:1` }
+          );
+          if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
+            const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
+            const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
+            const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.deadlineEmail;
+            const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
+            const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
+            const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+            await brandOf(rel.orgId).then((brand) => sendEmail({
+              category: 'stage-deadline',
+              userId: rel.mentorId,
+              // The record's org — the same one that picks the bell's link above.
+              orgId: rel.orgId,
+              locale: rel.mentor.preferredLanguage,
+              to: rel.mentor.email,
+              subject,
+              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+            })).catch((error) => {
+              console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
+            });
+          }
+          await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
+          reminded++;
+        }
+        breach = { id: opened.id, dueAt, level: SLA_LEVEL_MENTOR, acknowledgedAt: null, snoozedUntil: null };
+      } else {
+        // Another tick opened it between our read and our insert; it is
+        // standing, and that tick owns its first rung.
+        const existing = await prisma.slaBreach.findFirst({
+          where: { relationId: rel.id, dueAt, resolvedAt: null },
+          select: { id: true, dueAt: true, level: true, acknowledgedAt: true, snoozedUntil: true },
+        });
+        if (!existing) continue;
+        breach = existing;
+      }
+    }
+    standing.add(breach.id);
+
+    const escalateAfterDays = (await escalationsOf(rel.orgId)).get(rel.pipelineStatus);
+    if (!escalationDue(breach, escalateAfterDays, now)) continue;
+    if (!(await claimEscalation(breach.id, breach.level, now))) continue;
+    escalated++;
+    const days = daysOverdue(dueAt, now);
+    const admins = await escalationRecipients(rel.orgId);
+    await notifyEvent(
+      admins,
+      'deadline.slaEscalated',
+      { menteeName: rel.mentee.fullName, mentorName: rel.mentor.fullName, days: String(days), relationId: rel.id, menteeId: rel.menteeId },
+      { channels: ['inApp'], orgId: rel.orgId, dedupeKey: `sla-breach:${breach.id}:${breach.level + 1}` }
+    );
+    for (const admin of admins) {
+      if (!emailAllowed(admin, 'deadlines') || !emailGroupAllowedForCategory(admin, 'stage-deadline')) continue;
+      const preferredLanguage = admin.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-      const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.deadlineEmail;
-      const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
-      const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
-      const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+      const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.slaEscalationEmail;
+      const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName).replace('{days}', String(days));
+      const greeting = emailText.greeting.replace('{admin}', esc(admin.fullName));
+      const body = emailText.body
+        .replace('{mentee}', `<strong>${esc(rel.mentee.fullName)}</strong>`)
+        .replace('{mentor}', esc(rel.mentor.fullName))
+        .replace('{days}', String(days));
       await brandOf(rel.orgId).then((brand) => sendEmail({
         category: 'stage-deadline',
-        userId: rel.mentorId,
-        // The record's org — the same one that picks the bell's link above.
+        userId: admin.id,
         orgId: rel.orgId,
-        locale: rel.mentor.preferredLanguage,
-        to: rel.mentor.email,
+        locale: admin.preferredLanguage,
+        to: admin.email,
         subject,
         html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
       })).catch((error) => {
-        console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
+        console.error('SLA escalation email failed:', { relationId: rel.id, adminId: admin.id, error });
       });
     }
-    await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
   }
+
+  // Close every open breach that did not stand this pass: the deadline was
+  // cleared or moved, the relation left ACTIVE, its stage stopped the clock,
+  // or the mentee went into the pool.
+  const open = await prisma.slaBreach.findMany({ where: { resolvedAt: null }, select: { id: true } });
+  const resolved = await resolveBreaches({ ids: open.filter((b) => !standing.has(b.id)).map((b) => b.id) }, now);
 
   // The owner's own follow-up dates (#2563) ride on this same job: the issue
   // asked for no second timer and no new notification category, and "a record
@@ -3751,7 +4265,7 @@ export async function checkStageDeadlineReminders() {
   // pair already means (the trial ladder made the same call, #2412).
   const nextActions = await checkNextActionReminders(now);
 
-  return { reminded: overdue.length, nextActions };
+  return { reminded, adopted, escalated, resolved, nextActions };
 }
 
 // Remind each owner once on the day of the next action they wrote on a record
@@ -3776,7 +4290,8 @@ export async function checkStageDeadlineReminders() {
 export async function checkNextActionReminders(now = new Date()) {
   const due = await prisma.mentorshipRelation.findMany({
     where: {
-      status: 'ACTIVE',
+      // Not a paused pair (#1772): the follow-up waits for the resume like everything else.
+      ...activeRelationWhere(),
       nextActionAt: { lt: nextActionDueBefore(now) },
       nextActionRemindedAt: null,
     },
@@ -3903,7 +4418,8 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
   const relations = await prisma.mentorshipRelation.findMany({
     where: {
       ...(options.relationIds ? { id: { in: options.relationIds } } : {}),
-      status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
+      // Not a paused pair (#1772): reports are still accepted, just never chased during a pause.
+      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
       weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
     },
     select: {
@@ -4029,7 +4545,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function sendDormantCheckIns(now = new Date()) {
   const flagged = await prisma.mentorshipRelation.findMany({
     where: {
-      status: 'ACTIVE',
+      // Not a paused pair (#1772): "still interested?" is the wrong question when the programme paused.
+      ...activeRelationWhere(),
       dormantSince: { not: null },
       dormantNudgeCount: { lt: DORMANT_MAX_NUDGES },
       mentee: { isActive: true },
@@ -4171,8 +4688,8 @@ export async function sendDormantCheckIns(now = new Date()) {
   return { checked, sent };
 }
 
-// How far ahead a meeting reminder fires. The cron ticks every 15 minutes
-// (see initCronJobs), so a meeting is reminded 45-60 minutes before it starts —
+// How far ahead a meeting reminder fires. The job ticks every 15 minutes
+// (`meetings.reminders` in src/lib/jobs/schedules.ts), so a meeting is reminded 45-60 minutes before it starts —
 // close enough to "one hour before" to be useful, and never late.
 export const MEETING_REMINDER_WINDOW_MINUTES = 60;
 
@@ -5502,7 +6019,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
           id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true,
           menteeRelations: {
             where: { status: 'ACTIVE', mentor: { isActive: true } },
-            select: { id: true, mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
+            select: { id: true, lifecycleState: true, mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
           },
         },
       });
@@ -5515,9 +6032,15 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
       for (const row of result.rows) {
         const mentee = byId.get(row.user.id);
         if (!mentee) continue;
+        // A paused pair is not chased (#1772): a mentee whose only live
+        // pairings are all paused gets no reminder, and a paused pairing's
+        // mentor is not copied. A mentee with no pairing at all still is —
+        // role-based requirements do not depend on one.
+        const unpaused = mentee.menteeRelations.filter((relation) => relation.lifecycleState !== PAUSED);
+        if (mentee.menteeRelations.length > 0 && unpaused.length === 0) continue;
         const recipients = [
           { ...mentee, relationId: null },
-          ...mentee.menteeRelations.map((relation) => ({ ...relation.mentor, relationId: relation.id })),
+          ...unpaused.map((relation) => ({ ...relation.mentor, relationId: relation.id })),
         ]
           .filter((recipient, index, all) => all.findIndex((candidate) => candidate.id === recipient.id) === index);
         for (const requirement of row.missing) {
@@ -5839,188 +6362,3 @@ export async function pruneEmailLog(
   return { deleted: processed, cutoff, capped };
 }
 
-const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
-
-export function initCronJobs() {
-  if (scheduledTasks.has('mentor-reminders')) return;
-
-  // Run every day at 9:00 AM
-  const task = cron.schedule('0 9 * * *', async () => {
-    console.log('[Cron] Running mentor interaction reminder check...');
-    try {
-      // Before the reminders, not after: the sweep is what decides who counts as
-      // a dormant first contact today, and the interaction reminder reads that
-      // same rule to leave them alone.
-      const dormant = await sweepDormantFirstContacts();
-      console.log(`[Cron] Dormant first contacts: flagged ${dormant.flagged}, cleared ${dormant.cleared}`);
-      const checkIns = await sendDormantCheckIns();
-      console.log(`[Cron] Dormant check-ins sent: ${checkIns.sent}`);
-      const result = await checkMentorInteractionReminders();
-      console.log(`[Cron] Done. Checked: ${result.checked}, Reminded: ${result.reminded}`);
-      const dl = await checkStageDeadlineReminders();
-      console.log(`[Cron] Stage deadline reminders: ${dl.reminded}`);
-      const rr = await checkRetentionReminders();
-      console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
-      const nm = await checkCompanyNeedMatches();
-      console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
-      // The EmailLog prune used to be the last line of this tick. It moved to
-      // the one retention job (#1678, `src/lib/retentionEntries.ts`, 03:20 UTC)
-      // together with the four other tables that need a window — housekeeping
-      // that happens to be about mail is still housekeeping, and the product
-      // should have exactly one place where rows are deleted on a clock.
-    } catch (error) {
-      console.error('[Cron] Error running reminder check:', error);
-    }
-  });
-
-  scheduledTasks.set('mentor-reminders', task);
-
-  // Meeting reminders — every 15 minutes. The reminder window is 60 minutes
-  // (MEETING_REMINDER_WINDOW_MINUTES); an hourly tick would fire anywhere from
-  // 0 to 60 minutes ahead, so a quarter-hourly tick is what actually delivers
-  // "about an hour before" (45-60 min). reminderSentAt keeps it single-shot.
-  const meetingTask = cron.schedule('*/15 * * * *', async () => {
-    try {
-      const r = await sendMeetingReminders();
-      if (r.reminded) {
-        console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}, in-app: ${r.notified}, emails: ${r.emailed}`);
-      }
-      // Recurring project meetings ride the same tick: their windows are 1h/24h
-      // wide, so a quarter-hourly check is what makes "an hour before" accurate.
-      const s = await sendProjectMeetingSeriesReminders();
-      if (s.reminded) {
-        console.log(`[Cron] Project meeting reminders. Occurrences: ${s.reminded}, in-app: ${s.notified}, emails: ${s.emailed}`);
-      }
-      // Meetings that took place get their interaction log written for them
-      // (#1489). Rides this tick because it watches the same rows: a meeting
-      // ended by hand is logged on the click, this catches the ones nobody
-      // ended, two hours after they started.
-      const a = await sweepMeetingInteractionLogs();
-      if (a.logged) {
-        console.log(`[Cron] Meeting interaction logs written: ${a.logged}`);
-        // …and their mentees get the one "how was it?" e-mail (#1896).
-        // Imported lazily: meetingFeedback imports this module's sendEmail.
-        const { askForMeetingFeedback } = await import('@/lib/meetingFeedback');
-        await askForMeetingFeedback(a.loggedIds);
-      }
-    } catch (e) {
-      console.error('[Cron] Meeting reminder error:', e);
-    }
-  });
-  scheduledTasks.set('meeting-reminders', meetingTask);
-
-  // Weekly mentor digest — Mondays 8:00.
-  const digestTask = cron.schedule('0 8 * * 1', async () => {
-    try {
-      const r = await sendWeeklyMentorDigests();
-      console.log(`[Cron] Weekly digests sent: ${r.sent}`);
-    } catch (e) {
-      console.error('[Cron] Digest error:', e);
-    }
-  });
-  scheduledTasks.set('weekly-digest', digestTask);
-
-
-  // Hourly e-mail delivery health check (#1190) — alerts when sends keep
-  // failing or the last success goes stale while attempts continue.
-  const emailHealthTask = cron.schedule('5 * * * *', async () => {
-    try {
-      await runEmailHealthCheck();
-    } catch (e) {
-      logger.error('Email health cron failed', { error: String(e) });
-    }
-    // Held drafts past their deadline (#2960): the same hourly mail tick.
-    try {
-      await expireDrafts();
-    } catch (e) {
-      logger.error('Outbound draft expiry failed', { error: String(e) });
-    }
-  });
-  scheduledTasks.set('email-health', emailHealthTask);
-
-  // Missing mandatory documents — Mondays 08:30, offset from the other weekly jobs.
-  const documentTask = cron.schedule('30 8 * * 1', async () => {
-    try {
-      const result = await sendWeeklyMissingDocumentReminders();
-      console.log(`[Cron] Missing document reminders: ${result.notified}`);
-    } catch (error) {
-      console.error('[Cron] Missing document reminder error:', error);
-    }
-  });
-  scheduledTasks.set('missing-document-reminders', documentTask);
-
-  // AI artefact retention (#2044) — daily at 03:20: nothing generated about a
-  // person outlives the org's retentionMonths.
-  const artifactRetention = cron.schedule('20 3 * * *', async () => {
-    try {
-      const r = await sweepAiArtifacts();
-      if (r.deleted) console.log(`[Cron] AI artefacts past retention removed: ${r.deleted}`);
-    } catch (e) {
-      console.error('[Cron] AI artefact retention error:', e);
-    }
-  });
-  scheduledTasks.set('ai-artifact-retention', artifactRetention);
-
-  // Daily mentee-activity digest — every day at 7:30.
-  const activityTask = cron.schedule('30 7 * * *', async () => {
-    try {
-      const r = await sendDailyActivityDigests();
-      console.log(`[Cron] Daily activity digests sent: ${r.sent}`);
-    } catch (e) {
-      console.error('[Cron] Activity digest error:', e);
-    }
-  });
-  scheduledTasks.set('activity-digest', activityTask);
-
-  const weeklyReportTask = cron.schedule('0 15 * * 5', async () => {
-    try {
-      const result = await sendWeeklyReportReminders();
-      console.log(`[Cron] Weekly report reminders: ${result.reminded}`);
-    } catch (error) {
-      console.error('[Cron] Weekly report reminder error:', error);
-    }
-  });
-  scheduledTasks.set('weekly-report-reminders', weeklyReportTask);
-
-  // Unread-message digest — hourly at :20 (offset from the other hourly jobs).
-  const unreadDigestTask = cron.schedule('20 * * * *', async () => {
-    try {
-      const r = await sendUnreadMessageDigests();
-      if (r.sent) console.log(`[Cron] Unread message digests sent: ${r.sent}`);
-    } catch (e) {
-      console.error('[Cron] Unread message digest error:', e);
-    }
-  });
-  scheduledTasks.set('unread-message-digest', unreadDigestTask);
-
-  // Housekeeping for "keep me signed in" (#1495) — nightly at 03:40. Expired
-  // device rows and the spent one-minute refresh grants have no further use;
-  // revoked devices are kept a month longer so a replayed cookie is still
-  // recognisable (see purgeExpiredTrustedDevices).
-  const trustedDeviceTask = cron.schedule('40 3 * * *', async () => {
-    try {
-      const r = await purgeExpiredTrustedDevices();
-      if (r.devices || r.grants) {
-        console.log(`[Cron] Trusted device purge: ${r.devices} devices, ${r.grants} grants`);
-      }
-      // Same nightly slot for the magic-link rows (#1959): spent and expired
-      // sign-in links can admit nothing and are not kept.
-      const links = await purgeExpiredLoginLinks();
-      if (links) console.log(`[Cron] Login link purge: ${links} links`);
-      // And the sign-in device memory (#1717): a browser not seen for half a
-      // year is forgotten, so its next sign-in is "new" again.
-      const devices = await purgeStaleSignInDevices();
-      if (devices) console.log(`[Cron] Sign-in device purge: ${devices} devices`);
-      // And the /api/v1 Idempotency-Key rows (#1994): past their 24h replay
-      // window they can answer nothing. The count is logged even when zero, so
-      // a sweep that silently stopped running is visible as a missing line.
-      const idem = await purgeExpiredIdempotencyKeys();
-      console.log(`[Cron] API idempotency key purge: ${idem} keys`);
-    } catch (e) {
-      console.error('[Cron] Trusted device purge error:', e);
-    }
-  });
-  scheduledTasks.set('trusted-device-purge', trustedDeviceTask);
-
-  console.log('[Cron] Scheduled jobs initialized');
-}

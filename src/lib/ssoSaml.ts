@@ -17,18 +17,32 @@ function appBase(): string {
   ).replace(/\/$/, '');
 }
 
+const trimBase = (base: string) => base.replace(/\/+$/, '');
+
 // The SP identifiers a tenant registers in its IdP. Per-org so one IdP can host
 // several of our tenants without audience collisions.
-export function spEntityId(slug: string): string {
-  return `${appBase()}/sso/${slug}`;
+//
+// `base` (#1661): a tenant on its own verified domain registers ITS host's
+// identifiers, so each builder takes an explicit origin. It defaults to
+// NEXTAUTH_URL's, so every IdP registration that exists today stays valid; a
+// caller passes a base only from a verified host (src/lib/hostOrg.ts), never
+// from a raw Host header.
+export function spEntityId(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/sso/${slug}`;
 }
-export function acsUrl(slug: string): string {
-  return `${appBase()}/api/auth/sso/${slug}/acs`;
+export function acsUrl(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/api/auth/sso/${slug}/acs`;
 }
 // The document a customer's identity team imports in one click (#1931), instead
 // of hand-copying the two identifiers above out of our docs.
-export function metadataUrl(slug: string): string {
-  return `${appBase()}/api/auth/sso/${slug}/metadata`;
+export function metadataUrl(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/api/auth/sso/${slug}/metadata`;
+}
+
+// Our Single Logout endpoint (#1952): where the IdP sends a LogoutRequest, and
+// the LogoutResponse to one we started. Published in the metadata below.
+export function sloUrl(slug: string, base: string = appBase()): string {
+  return `${trimBase(base)}/api/auth/sso/${slug}/slo`;
 }
 
 // The slug reaches spMetadataXml straight from the URL, so every interpolated
@@ -52,12 +66,28 @@ function escapeXml(value: string): string {
 // Element order is fixed by the metadata schema (SSODescriptorType's children
 // come before SPSSODescriptor's own): NameIDFormat must precede
 // AssertionConsumerService, or a strict validator rejects the document.
-export function spMetadataXml(slug: string): string {
+//
+// Single Logout (#1952) adds two things, in the schema's order (KeyDescriptor,
+// then SingleLogoutService, both before NameIDFormat): our signing certificate,
+// which the IdP verifies our LogoutRequest/LogoutResponse with, and the SLO
+// endpoint in both bindings we accept. AuthnRequestsSigned stays false — the
+// AuthnRequest is unchanged; only the logout messages are signed.
+export function spMetadataXml(slug: string, signingCertificatePem?: string | null): string {
   const entityId = escapeXml(spEntityId(slug));
   const acs = escapeXml(acsUrl(slug));
+  const slo = escapeXml(sloUrl(slug));
+  const certBody = (signingCertificatePem ?? '').replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+  const keyDescriptor = certBody
+    ? `
+    <md:KeyDescriptor use="signing">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>${escapeXml(certBody)}</ds:X509Certificate></ds:X509Data></ds:KeyInfo>
+    </md:KeyDescriptor>`
+    : '';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="${entityId}">
-  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="false" WantAssertionsSigned="true">
+  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="false" WantAssertionsSigned="true">${keyDescriptor}
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="${slo}"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${slo}"/>
     <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${acs}" index="0" isDefault="true"/>
   </md:SPSSODescriptor>
@@ -91,6 +121,35 @@ export function samlForOrg(slug: string, cfg: OrgSamlConfig): SAML {
     // We run stateless (serverless) with no shared AuthnRequest-id cache, so we
     // don't validate InResponseTo — this also allows IdP-initiated login. The
     // assertion signature + audience/recipient checks remain the security anchor.
+    validateInResponseTo: ValidateInResponseTo.never,
+  });
+}
+
+export interface OrgSamlLogoutConfig extends OrgSamlConfig {
+  ssoLogoutUrl: string | null;
+}
+
+// The node-saml instance for Single Logout (#1952) — separate from samlForOrg
+// on purpose: it carries OUR private key, and node-saml signs every message an
+// instance with a key sends, the AuthnRequest included. The sign-in path stays
+// exactly what it was; only logout messages are signed. `logoutUrl` is the
+// IdP's SingleLogoutService, where both our LogoutRequest and our
+// LogoutResponse go (HTTP-Redirect binding).
+export function samlLogoutForOrg(slug: string, cfg: OrgSamlLogoutConfig, privateKeyPem: string): SAML {
+  return new SAML({
+    callbackUrl: acsUrl(slug),
+    entryPoint: cfg.ssoEntryPoint ?? '',
+    logoutUrl: cfg.ssoLogoutUrl ?? undefined,
+    logoutCallbackUrl: sloUrl(slug),
+    issuer: spEntityId(slug),
+    idpCert: cfg.ssoCertificate ?? '',
+    audience: spEntityId(slug),
+    privateKey: privateKeyPem,
+    signatureAlgorithm: 'sha256',
+    wantAssertionsSigned: true,
+    wantAuthnResponseSigned: false,
+    acceptedClockSkewMs: 5000,
+    identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
     validateInResponseTo: ValidateInResponseTo.never,
   });
 }

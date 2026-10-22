@@ -164,6 +164,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     relationId: ID,
     requestedById: ID,
     topic: { limit: 'meetingTopic', files: ['src/app/api/meeting-requests/route.ts'] },
+    counterOfMeetingId: ID,
   },
   Document: {
     id: ID,
@@ -173,12 +174,19 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     filename: SERVER_SET,
     contentType: SERVER_SET,
     title: { limit: 'documentTitle', files: ['src/app/api/documents/route.ts'] },
+    reviewStatus: SERVER_SET,
   },
   User: {
+    deactivatedBy: {
+      exempt:
+        'written by the server only (#1966): "roster:<feedId>" (a cuid) by the roster-feed deprovisioning, or the acting admin\'s user id by /api/users/[id]. No request body supplies the value.',
+    },
     id: ID,
     orgId: ID,
     companyId: ID,
     sourceId: ID,
+    // The reporting line (#1781) — only ever a matched user id.
+    managerId: ID,
     referredById: ID,
     externalId: ID,
     password: SERVER_SET,
@@ -267,6 +275,8 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Organization: {
     id: ID,
     stripeCustomerId: ID,
+    // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
+    publicHostToken: SERVER_SET,
     name: { exempt: 'capped at 120 by the create schema; tenants are created by a super-admin only' },
     slug: { exempt: 'slugified and sliced to 60 by the route before it is written' },
     vertical: ENUMERATED,
@@ -277,6 +287,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     ssoIssuer: { limit: 'orgSsoIssuer', files: ORG_WRITERS },
     brandLogoUrl: { exempt: '@db.Text, capped at 2000 by the route' },
     ssoEntryPoint: { exempt: '@db.Text, capped at 2000 by the route' },
+    ssoCertWarnFp: { exempt: 'a SHA-256 fingerprint (95 chars) the expiry job writes, never a person (#1933)' },
+    ssoLogoutUrl: { exempt: '@db.Text, capped at 2000 by the route (#1952)' },
+    ssoSpKey: SERVER_SET,
+    ssoSpCert: SERVER_SET,
     ssoCertificate: { exempt: '@db.Text, capped at 20000 by the route' },
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },

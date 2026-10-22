@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import {
@@ -39,11 +38,9 @@ import {
 // run of a new month would otherwise leave the old one at whatever value the
 // last nightly tick of that month happened to see.
 //
-// `runUsageRollup()` is a PLAIN HANDLER on purpose: node-cron is the carrier
-// only until the leader-elected scheduler (#1676) lands, at which point this
-// becomes a `billing.usage-rollup` handler registered on the queue and the
-// timer below goes away with the other twelve. Nothing about the job's logic
-// changes when that happens.
+// `runUsageRollup()` is a PLAIN HANDLER on purpose: it runs as the queued job
+// `usage.rollup` (src/lib/jobs/schedules.ts, src/jobs/platform.ts, #1677), and
+// nothing about its logic depends on what carries it.
 
 export interface UsageRollupResult {
   orgs: number;
@@ -112,41 +109,4 @@ export async function runUsageRollup(opts: { now?: Date; orgIds?: string[] } = {
   return { orgs: orgs.length, periods: [...periods], rows, failed };
 }
 
-const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
-/**
- * Register the nightly usage rollup in this server process. Idempotent — a
- * retried call from `/api/cron/start` is harmless.
- *
- * Registered from `/api/cron/start` rather than from `initCronJobs()`, the same
- * way the newsletter cron (#1469), the dead-letter alert (#1674) and the
- * retention prune (#1678) are. Nothing here sends mail, and `initCronJobs`
- * lives in the mail service: the billing meter has no business being owned by
- * the module that talks to SMTP.
- *
- * 02:40 UTC — in the quiet hours and clear of every other slot (03:20 the
- * retention prune, 06:45 the dead-letter alert, 07:30 activity digests,
- * 08:15/08:30 the Monday weeklies, 09:00 the reminder batch). Ahead of the
- * prune rather than behind it, so a month's usage is counted before anything
- * starts deleting rows out of the window it counted.
- *
- * node-cron is the carrier only until the scheduler story (#1676) lands, when
- * this becomes a queue handler; `runUsageRollup()` is the handler either way.
- */
-export function initUsageRollupCron() {
-  if (tasks.has('usage-rollup')) return;
-
-  const task = cron.schedule('40 2 * * *', async () => {
-    try {
-      const result = await runUsageRollup();
-      // A rollup that wrote nothing, or skipped a tenant, is worth a line; a
-      // clean run is not — same discipline as the other scheduled jobs.
-      if (result.failed > 0 || result.rows === 0) {
-        logger.warning('Usage rollup ran', { ...result, periods: result.periods.join(',') });
-      }
-    } catch (e) {
-      logger.error('Usage rollup cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('usage-rollup', task);
-}

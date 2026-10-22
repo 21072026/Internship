@@ -18,6 +18,11 @@
 // lib/metering.ts so the two definitions sit next to each other and neither can
 // quietly become the other — `countActiveRelations` here, `activeMatchedPairs`
 // for anything commercial.
+//
+// A PAUSED pair holds no slot (#1772): both counts read billableRelationWhere()
+// from src/lib/relationLifecycle.ts — the one definition the pricing page and
+// the metering work (#1746, #1750, #1737) must use too — so pausing a pair
+// frees its seat under the cap, and resuming takes it back.
 
 import { countActiveRelations, countOrgProjects } from '@/lib/metering';
 import { prisma } from '@/lib/prisma';

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**MARKETING: close the last internship surfaces, drop dead landing copy:** `/mentors` (the mentor directory; its nav link is now tagged `mentorship` and the segment layout calls `gatePage`) and `/source` (the referral-partner portal, `sourcing`) answer 404 for a vertical without the module, and `GET /api/mentors` / `/api/source/mentees` refuse with `capability_unavailable`. `/stories` is `mentorship`-only (`requireVerticalCapability`). The metadata of `/for-companies`, `/apply-as-mentor` and `/stories` — which Next emits on the page's 404 too — is empty off their vertical, and their share cards and `/release-notes`' render the generic brand card instead of internship copy (`requestVerticalHas` / `requestIsDefaultVertical` in `src/lib/verticalPage.ts`). 128 `landing.*` keys that no code has read since the landing was slimmed are removed from all three locales and the MARKETING overlay."
+}

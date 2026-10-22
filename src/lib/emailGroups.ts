@@ -96,6 +96,9 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     categories: [
       'verification', 'password-reset', 'invitation', 'account', 'security',
       'ops-alert', 'test', 'retention-reminder', 'consent',
+      // The IdP certificate-expiry warning to an org's admins (#1933): a lapsed
+      // certificate locks the whole tenant out of single sign-on.
+      'sso-certificate',
     ],
     legacy: [],
   },
@@ -120,7 +123,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'pipeline_updates',
     essential: false,
     bulk: false,
-    categories: ['stage-update', 'offer', 'outcome'],
+    categories: ['stage-update', 'offer', 'outcome', 'document-review'],
     // 'mentorship' as well as 'stageUpdates': both offer mails (offerNotify.ts)
     // were gated on the coarse 'mentorship' key long before this taxonomy.
     legacy: ['stageUpdates', 'mentorship'],

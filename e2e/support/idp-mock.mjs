@@ -34,6 +34,7 @@ import { createServer } from 'node:http';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { SignedXml } from 'xml-crypto';
+import { derInt, selfSignedCertificate } from './x509.mjs';
 
 const PORT = Number(process.env.IDP_MOCK_PORT || 4600);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -42,107 +43,8 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const SAML_ISSUER = 'urn:e2e:stub-idp';
 const OIDC_ISSUER = `${ORIGIN}/oidc`;
 
-// --- Minimal DER / X.509 --------------------------------------------------
-//
-// Node can generate an RSA key pair but cannot wrap the public half in a
-// self-signed certificate, and IdPs hand out certificates, not bare public
-// keys. Shelling out to `openssl` would make the harness depend on a binary
-// that may not exist on a contributor's machine, and a certificate fixture on
-// disk is the thing we are refusing to commit. So: ~60 lines of DER, verified
-// by `new crypto.X509Certificate(pem)` at start-up, which throws if any of it
-// is malformed.
-
-function der(tag, body) {
-  const len = body.length;
-  let lenBytes;
-  if (len < 0x80) {
-    lenBytes = Buffer.from([len]);
-  } else {
-    const b = [];
-    let n = len;
-    while (n > 0) {
-      b.unshift(n & 0xff);
-      n >>>= 8;
-    }
-    lenBytes = Buffer.from([0x80 | b.length, ...b]);
-  }
-  return Buffer.concat([Buffer.from([tag]), lenBytes, body]);
-}
-const derSeq = (...parts) => der(0x30, Buffer.concat(parts));
-const derSet = (...parts) => der(0x31, Buffer.concat(parts));
-const derNull = () => der(0x05, Buffer.alloc(0));
-const derUtf8 = (s) => der(0x0c, Buffer.from(s, 'utf8'));
-const derBitString = (buf) => der(0x03, Buffer.concat([Buffer.from([0]), buf]));
-
-function derOid(dotted) {
-  const parts = dotted.split('.').map(Number);
-  const bytes = [parts[0] * 40 + parts[1]];
-  for (const part of parts.slice(2)) {
-    const stack = [part & 0x7f];
-    let rest = part >>> 7;
-    while (rest > 0) {
-      stack.unshift((rest & 0x7f) | 0x80);
-      rest >>>= 7;
-    }
-    bytes.push(...stack);
-  }
-  return der(0x06, Buffer.from(bytes));
-}
-
-function derInt(value) {
-  let b = Buffer.isBuffer(value) ? value : Buffer.from([value]);
-  // DER demands the MINIMAL two's-complement encoding, and the two rules below
-  // are not symmetric decoration — getting either wrong produces a certificate
-  // OpenSSL rejects outright with ERR_OSSL_ASN1_ILLEGAL_PADDING.
-  //
-  // 1. Strip redundant leading 0x00 bytes. A 0x00 is only legal when the byte
-  //    after it has its high bit set (there to carry the sign). The serial here
-  //    is `crypto.randomBytes(8)`, so roughly 1 run in 256 draws a first byte of
-  //    0x00 followed by a byte under 0x80 — and *that* run died at import,
-  //    before a single test body ran, taking the whole Playwright job with it.
-  //    It read as an unrelated infrastructure flake precisely because it is rare
-  //    and fires in the webServer rather than in a spec.
-  // 2. Only then pad for the sign bit.
-  let i = 0;
-  while (i + 1 < b.length && b[i] === 0 && !(b[i + 1] & 0x80)) i += 1;
-  if (i) b = b.subarray(i);
-  if (b[0] & 0x80) b = Buffer.concat([Buffer.from([0]), b]); // keep it positive
-  return der(0x02, b);
-}
-
-function derUtcTime(date) {
-  const p = (n) => String(n).padStart(2, '0');
-  const s =
-    `${p(date.getUTCFullYear() % 100)}${p(date.getUTCMonth() + 1)}${p(date.getUTCDate())}` +
-    `${p(date.getUTCHours())}${p(date.getUTCMinutes())}${p(date.getUTCSeconds())}Z`;
-  return der(0x17, Buffer.from(s, 'ascii'));
-}
-
-const OID_COMMON_NAME = '2.5.4.3';
-const OID_SHA256_RSA = '1.2.840.113549.1.1.11';
-const derName = (cn) => derSeq(derSet(derSeq(derOid(OID_COMMON_NAME), derUtf8(cn))));
-
-// `serial` is injectable so a test can pin the byte patterns that used to break
-// the encoder; production callers always let it be random.
-function selfSignedCertificate(publicKey, privateKey, commonName, serial = crypto.randomBytes(8)) {
-  const algorithm = derSeq(derOid(OID_SHA256_RSA), derNull());
-  const now = Date.now();
-  const tbs = derSeq(
-    der(0xa0, derInt(2)), // [0] EXPLICIT version, v3
-    derInt(serial),
-    algorithm,
-    derName(commonName), // issuer == subject (self-signed)
-    derSeq(derUtcTime(new Date(now - 60_000)), derUtcTime(new Date(now + 86_400_000))),
-    derName(commonName),
-    publicKey.export({ type: 'spki', format: 'der' })
-  );
-  const signature = crypto.sign('sha256', tbs, privateKey);
-  const body = derSeq(tbs, algorithm, derBitString(signature))
-    .toString('base64')
-    .match(/.{1,64}/g)
-    .join('\n');
-  return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`;
-}
+// --- Minimal DER / X.509 lives in ./x509.mjs (shared with the specs that need
+// a real, parseable certificate of a chosen lifetime — #1933).
 
 function makeKeyMaterial(commonName) {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -315,6 +217,49 @@ export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', 
   return Buffer.from(response, 'utf8').toString('base64');
 }
 
+// --- SAML Single Logout (#1952) -------------------------------------------
+
+let lastSlo = null;
+const SIG_ALG = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+
+export function buildLogoutRequest({ destination, email, relayState = '', mode = 'ok' }) {
+  const now = new Date();
+  const xml =
+    `<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ` +
+    `ID="${uid()}" Version="2.0" IssueInstant="${iso(now)}" Destination="${xmlEscape(destination)}" ` +
+    `NotOnOrAfter="${iso(new Date(now.getTime() + 5 * 60_000))}">` +
+    `<saml:Issuer>${xmlEscape(SAML_ISSUER)}</saml:Issuer>` +
+    `<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">${xmlEscape(email)}</saml:NameID>` +
+    `</samlp:LogoutRequest>`;
+
+  if (mode === 'post' || mode === 'post-unsigned') {
+    if (mode === 'post-unsigned') return { SAMLRequest: Buffer.from(xml, 'utf8').toString('base64') };
+    const sig = new SignedXml({
+      privateKey: signing.privateKey,
+      signatureAlgorithm: SIG_ALG,
+      canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
+    });
+    sig.addReference({
+      xpath: "//*[local-name(.)='LogoutRequest']",
+      transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/2001/10/xml-exc-c14n#'],
+      digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    });
+    sig.getKeyInfoContent = () => `<X509Data><X509Certificate>${bareCert(signing.certificate)}</X509Certificate></X509Data>`;
+    sig.computeSignature(xml, { location: { reference: "//*[local-name(.)='Issuer']", action: 'after' } });
+    return { SAMLRequest: Buffer.from(sig.getSignedXml(), 'utf8').toString('base64') };
+  }
+
+  // HTTP-Redirect binding: the signature covers the encoded query, in this order.
+  const enc = encodeURIComponent;
+  let signed = `SAMLRequest=${enc(zlib.deflateRawSync(Buffer.from(xml, 'utf8')).toString('base64'))}`;
+  if (relayState) signed += `&RelayState=${enc(relayState)}`;
+  if (mode === 'unsigned') return { query: signed };
+  signed += `&SigAlg=${enc(SIG_ALG)}`;
+  const key = mode === 'wrong-key' ? rogue.privateKey : signing.privateKey;
+  const signature = crypto.sign('sha256', Buffer.from(signed, 'utf8'), key).toString('base64');
+  return { query: `${signed}&Signature=${enc(signature)}` };
+}
+
 // --- OIDC (#1929 is not shipped yet; the endpoints are ready for it) --------
 
 const OIDC_KID = 'e2e-stub-idp-1';
@@ -476,6 +421,42 @@ const server = createServer(async (req, res) => {
         groups: Array.isArray(body.groups) ? body.groups.filter((g) => typeof g === 'string') : [],
       }),
     });
+  }
+
+  // --- SAML Single Logout (#1952) -----------------------------------------
+  // The IdP's SingleLogoutService: what the app's signed LogoutRequest (SP-
+  // initiated) and LogoutResponse (the answer to an IdP-initiated logout) land
+  // on. The stub only records what arrived, for the spec to read back.
+  if (url.pathname === '/saml/slo') {
+    const message = q.get('SAMLRequest') || q.get('SAMLResponse');
+    let xml = '';
+    try {
+      xml = message ? zlib.inflateRawSync(Buffer.from(message, 'base64')).toString('utf8') : '';
+    } catch {
+      xml = '';
+    }
+    lastSlo = {
+      kind: q.get('SAMLRequest') ? 'request' : q.get('SAMLResponse') ? 'response' : 'none',
+      xml,
+      signed: !!q.get('Signature') && !!q.get('SigAlg'),
+      rawQuery: url.search.replace(/^\?/, ''),
+    };
+    return html(res, 200, '<!doctype html><title>Stub IdP</title><p data-testid="stub-idp-signed-out">Signed out at the stub IdP.</p>');
+  }
+  if (url.pathname === '/saml/slo/last') return json(res, 200, lastSlo);
+
+  // Mint an IdP-initiated LogoutRequest for the spec to deliver to the app's
+  // SLO endpoint. `mode`: ok (signed, Redirect binding), unsigned, wrong-key,
+  // post (enveloped XML signature, POST binding), post-unsigned.
+  if (url.pathname === '/saml/logout-request' && req.method === 'POST') {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      return json(res, 400, { error: 'body must be JSON' });
+    }
+    if (!body.destination || !body.email) return json(res, 400, { error: 'destination and email are required' });
+    return json(res, 200, buildLogoutRequest(body));
   }
 
   // --- OIDC ---------------------------------------------------------------

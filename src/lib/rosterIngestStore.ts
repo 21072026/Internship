@@ -44,9 +44,15 @@ import {
   type RosterRunStatus,
   type RosterStore,
   type RosterTargetRow,
+  type FeedFile,
 } from './rosterIngest';
 import { ROSTER_FEED_SECRET_PURPOSE } from './rosterFeed';
 import { open } from './secretBox';
+import { logActivity } from './activity';
+import { revokeTrustedDevicesForUsers } from './trustedDevice';
+import { rosterActor, type DeprovisionSettings } from './rosterDeprovisionRule';
+import type { RosterDeprovisionPort } from './rosterIngest';
+import { alertRosterRun } from './rosterAlert';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -85,6 +91,11 @@ function toRosterRowStatus(status: RowStatus): $Enums.RosterRowStatus {
 }
 
 function fromRosterRowStatus(status: $Enums.RosterRowStatus): RowStatus {
+  // The deprovisioning phase's two (#1966) are not import rows: they live on
+  // negative row numbers, which `recordedRows` never reads.
+  if (status === 'DEACTIVATE' || status === 'REACTIVATE') {
+    throw new Error(`Roster row status ${status} is not an import row`);
+  }
   return status;
 }
 
@@ -299,7 +310,8 @@ export function prismaRosterStore(feed: RosterFeedConfig): RosterStore {
 
     async recordedRows(runId) {
       const rows = await prisma.rosterRowResult.findMany({
-        where: { runId },
+        // File rows only: the deprovisioning phase's rows sit below zero.
+        where: { runId, rowNumber: { gt: 0 } },
         orderBy: { rowNumber: 'asc' },
         select: { rowNumber: true, key: true, status: true, message: true, userId: true },
       });
@@ -357,7 +369,7 @@ export function prismaRosterStore(feed: RosterFeedConfig): RosterStore {
       });
     },
 
-    async finishRun({ run, status, counts, absent, error }) {
+    async finishRun({ run, status, counts, absent, error, safetyReason }) {
       await prisma.rosterRun.update({
         where: { id: run.id },
         data: {
@@ -370,8 +382,144 @@ export function prismaRosterStore(feed: RosterFeedConfig): RosterStore {
           errorCount: counts.ERROR,
           absentKeys: absent as Prisma.InputJsonValue,
           ...(error !== undefined ? { error } : {}),
+          ...(safetyReason !== undefined ? { safetyReason } : {}),
         },
       });
+    },
+  };
+}
+
+const CANDIDATE_SELECT = {
+  id: true,
+  role: true,
+  isActive: true,
+  ssoExempt: true,
+  rosterAbsentSince: true,
+  deactivatedBy: true,
+} as const;
+
+/**
+ * The deprovisioning port (#1966): reads the people the rules judge and writes
+ * what they decide. Every write is scoped by `(id, orgId)` on top of the tenant
+ * middleware, and re-checks the state it expects in its WHERE, so a person a
+ * human changed between plan and apply is left alone.
+ *
+ * Nothing here deletes or anonymises. Deactivation is reversible.
+ */
+export function prismaDeprovisionPort(
+  feed: RosterFeedConfig,
+  settings: DeprovisionSettings,
+): RosterDeprovisionPort {
+  const orgId = feed.orgId;
+  const actor = rosterActor(feed.id);
+  return {
+    settings,
+
+    async load({ absentIds, presentIds }) {
+      const [absent, present, coveredActiveCount, activeAdminCount] = await Promise.all([
+        absentIds.length
+          ? prisma.user.findMany({ where: { id: { in: absentIds }, orgId }, select: CANDIDATE_SELECT })
+          : [],
+        presentIds.length
+          ? prisma.user.findMany({ where: { id: { in: presentIds }, orgId }, select: CANDIDATE_SELECT })
+          : [],
+        // The ceiling's denominator: the active people this feed covers — the
+        // same population `loadRosterTarget` reads.
+        prisma.user.count({ where: { orgId, role: 'MENTEE', isActive: true } }),
+        prisma.user.count({ where: { orgId, role: 'ADMIN', isActive: true } }),
+      ]);
+      return { absent, present, coveredActiveCount, activeAdminCount };
+    },
+
+    async apply({ run, plan, keys }) {
+      const stamp = new Date();
+      let reactivated = 0;
+      if (plan.reactivate.length) {
+        // Only what a feed switched off — `deactivatedBy` in the WHERE is the
+        // guarantee that an admin's decision is never undone by a file.
+        ({ count: reactivated } = await prisma.user.updateMany({
+          where: { id: { in: plan.reactivate }, orgId, isActive: false, deactivatedBy: actor },
+          data: { isActive: true, deactivatedBy: null, rosterAbsentSince: null },
+        }));
+      }
+      if (plan.clearAbsent.length) {
+        await prisma.user.updateMany({
+          where: { id: { in: plan.clearAbsent }, orgId },
+          data: { rosterAbsentSince: null },
+        });
+      }
+      if (plan.markAbsent.length) {
+        await prisma.user.updateMany({
+          where: { id: { in: plan.markAbsent }, orgId, rosterAbsentSince: null },
+          data: { rosterAbsentSince: stamp },
+        });
+      }
+      let deactivated = 0;
+      if (plan.deactivate.length) {
+        ({ count: deactivated } = await prisma.user.updateMany({
+          where: { id: { in: plan.deactivate }, orgId, isActive: true, ssoExempt: false },
+          data: { isActive: false, sessionsValidFrom: stamp, deactivatedBy: actor },
+        }));
+        // HARD RULE (CLAUDE.md, docs/remember-me.md): the cutoff above without
+        // this line is a deprovisioning that does not deprovision — the
+        // remembered-device cookie mints a fresh session on the next page load.
+        await revokeTrustedDevicesForUsers(plan.deactivate);
+      }
+
+      // The run log: one row per person acted on, below zero (no file row
+      // describes somebody the file did not contain).
+      const rows = [
+        ...plan.deactivate.map((id) => ({ id, status: 'DEACTIVATE' as const, message: 'absent from the feed past the grace period' })),
+        ...plan.reactivate.map((id) => ({ id, status: 'REACTIVATE' as const, message: 'back in the feed' })),
+        ...plan.refused.map((r) => ({
+          id: r.id,
+          status: 'SKIP' as const,
+          message: r.reason === 'last_admin' ? 'not deactivated: last active admin' : 'not deactivated: SSO break-glass account',
+        })),
+      ];
+      if (rows.length) {
+        const lowest = await prisma.rosterRowResult.aggregate({ where: { runId: run.id }, _min: { rowNumber: true } });
+        const start = Math.min(0, lowest._min.rowNumber ?? 0);
+        await prisma.rosterRowResult.createMany({
+          data: rows.map((r, i) => ({
+            runId: run.id,
+            orgId,
+            rowNumber: start - 1 - i,
+            key: (keys.get(r.id) ?? r.id).slice(0, 255),
+            status: r.status,
+            message: r.message,
+            userId: r.id,
+          })),
+        });
+      }
+      if (deactivated || reactivated) {
+        await prisma.rosterRun.update({
+          where: { id: run.id },
+          data: { deactivatedCount: { increment: deactivated }, reactivatedCount: { increment: reactivated } },
+        });
+      }
+      if (deactivated) {
+        await logActivity({
+          action: 'roster.deprovisioned',
+          level: 'warning',
+          orgId,
+          targetType: 'roster_feed',
+          targetId: feed.id,
+          detail: `${feed.name ?? feed.id}: deactivated=${deactivated}`.slice(0, 191),
+        });
+      }
+      if (plan.refused.length) {
+        const admins = plan.refused.filter((r) => r.reason === 'last_admin').length;
+        await logActivity({
+          action: 'roster.deprovision_refused',
+          level: 'warning',
+          orgId,
+          targetType: 'roster_feed',
+          targetId: feed.id,
+          detail: `last_admin=${admins} sso_exempt=${plan.refused.length - admins}`,
+        });
+      }
+      return { deactivated, reactivated };
     },
   };
 }
@@ -450,6 +598,10 @@ const FEED_SELECT = {
   sftpHostKeyFingerprint: true,
   credentialEnvVar: true,
   secretEnc: true,
+  deprovision: true,
+  maxDeactivatePercent: true,
+  minRowCount: true,
+  deprovisionGraceDays: true,
   delimiter: true,
   keyField: true,
   columnMap: true,
@@ -468,6 +620,8 @@ const FEED_SELECT = {
 export async function runRosterFeed(
   feedId: string,
   options: RosterIngestOptions = {},
+  /** Test seam: replace the transport (the e2e suite has no HTTPS server). */
+  seams: { fetchFile?: (feed: RosterFeedConfig) => Promise<FeedFile> } = {},
 ): Promise<RosterIngestResult> {
   // Read the feed outside any tenant scope (there is none yet — the feed row is
   // what says which tenant this is), then bind that org for everything after.
@@ -477,19 +631,35 @@ export async function runRosterFeed(
   if (!row) throw new Error(`No roster feed ${feedId}`);
   const feed = toFeedConfig(row);
 
-  return runWithOrg(feed.orgId, () =>
-    ingestRoster(
+  return runWithOrg(feed.orgId, async () => {
+    const result = await ingestRoster(
       feed,
       {
         store: prismaRosterStore(feed),
         loadTarget: loadRosterTarget,
         // Resolved here, at fetch time, so the plaintext lives for one call and
         // never sits on the config object the run log is built from.
-        fetchFile: (f) => fetchFeedFile({ ...f, secret: resolveFeedSecret(row) }),
+        fetchFile:
+          seams.fetchFile ??
+          ((f) =>
+            fetchFeedFile(
+              { ...f, secret: resolveFeedSecret(row) },
+              // The e2e switch; see FetchFeedOptions.allowInsecureLoopback.
+              { allowInsecureLoopback: process.env.ROSTER_FEED_ALLOW_INSECURE_STUB === '1' },
+            )),
+        deprovision: prismaDeprovisionPort(feed, {
+          feedId: row.id,
+          deprovision: row.deprovision,
+          maxDeactivatePercent: row.maxDeactivatePercent,
+          minRowCount: row.minRowCount,
+          deprovisionGraceDays: row.deprovisionGraceDays,
+        }),
       },
       options,
-    ),
-  );
+    );
+    if (!options.dryRun) await alertRosterRun({ id: row.id, orgId: row.orgId, name: row.name }, result);
+    return result;
+  });
 }
 
 /**

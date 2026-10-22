@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -25,6 +26,9 @@ import {
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { stripNextActionFor } from '@/lib/nextActionRule';
 import { refuseForeignTargets } from '@/lib/relationTargets';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { agreementStatusesFor, agreementStatusWhere, getActiveAgreement } from '@/lib/mentoringAgreement';
+import { isAgreementStatus } from '@/lib/mentoringAgreementRule';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -32,6 +36,8 @@ const createRelationSchema = z.object({
   companyId: z.string().optional(),
   projectId: z.string().optional(),
   startDate: z.string().optional(),
+  // PLACEMENT (default) | COACHING (#1503); whitelisted below, never z.enum.
+  kind: z.string().max(16).optional(),
 });
 
 export async function GET(request: Request) {
@@ -55,6 +61,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const search = searchParams.get('search');
+    // The mentoring agreement column and filter (#1792) — ADMIN only, and only
+    // in a vertical with pairs. A report, never a gate on the relation.
+    const agreementParam = searchParams.get('agreement');
+    const showsAgreement = session.user.role === 'ADMIN' && (await shellCapabilities(session.user.orgId)).includes('mentorship');
+    const activeAgreement = showsAgreement ? await getActiveAgreement(resolveOrgId(session)) : null;
     // Pagination is opt-in: only applied when `page` is explicitly passed, so
     // the many callers that expect the full list (board views, mentee/mentor
     // dashboards, meeting/email composers) keep working unchanged.
@@ -95,7 +106,8 @@ export async function GET(request: Request) {
               { company: { name: { contains: search } } },
             ],
           }
-        : undefined
+        : undefined,
+      activeAgreement && isAgreementStatus(agreementParam) ? agreementStatusWhere(agreementParam, activeAgreement.version, activeAgreement.key) : undefined
     );
 
     const include = {
@@ -161,9 +173,15 @@ export async function GET(request: Request) {
         };
       });
 
+    const withAgreement = async <T extends { id: string; orgId: string | null }>(rows: T[]) => {
+      if (!showsAgreement) return rows;
+      const statuses = await agreementStatusesFor(rows);
+      return rows.map((r) => ({ ...r, agreementStatus: statuses.get(r.id) ?? null }));
+    };
+
     if (!pageParam) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
-      return NextResponse.json({ relations: withStageClock(relations) });
+      return NextResponse.json({ relations: await withAgreement(withStageClock(relations)) });
     }
 
     const [total, relations] = await Promise.all([
@@ -177,7 +195,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    return NextResponse.json({ relations: withStageClock(relations), total, page, pageSize });
+    return NextResponse.json({ relations: await withAgreement(withStageClock(relations)), total, page, pageSize });
     });
   } catch (error) {
     console.error('Get mentorships error:', error);
@@ -204,7 +222,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mentorId, menteeId, companyId, projectId, startDate } = parsed.data;
+    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind } = parsed.data;
+    if (rawKind !== undefined && !isRelationKind(rawKind)) {
+      return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
+    }
+    const kind = rawKind ?? DEFAULT_RELATION_KIND;
+    const start = startDate ? new Date(startDate) : new Date();
 
     // The company and project must be the admin's own tenant's (#2613, #2618):
     // unchecked, another tenant's id was attached and its name came back in
@@ -305,7 +328,10 @@ export async function POST(request: Request) {
             ...trialWindow,
             companyId: companyId || null,
             projectId: projectId || null,
-            startDate: startDate ? new Date(startDate) : new Date(),
+            startDate: start,
+            kind,
+            // A placement enters the funnel when it starts; coaching never does (#1503).
+            funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
           },
           include: {
             mentor: { select: { id: true, fullName: true, email: true } },
@@ -329,6 +355,12 @@ export async function POST(request: Request) {
     // email honors the `mentorship` opt-out and never fails the assignment.
     await notify(mentee.id, 'mentorship_request.mentorAssigned', { mentorName: mentor.fullName }, '/portal');
     await notify(mentor.id, 'mentorship_request.menteeAssigned', { menteeName: mentee.fullName }, '/mentor');
+    // The kickoff prompt (#1792): each side is asked to read the agreement.
+    // A prompt only — nothing waits on the answer.
+    if ((await shellCapabilities(relation.orgId)).includes('mentorship')) {
+      await notify(mentee.id, 'agreement.review', {}, '/portal');
+      await notify(mentor.id, 'agreement.review', {}, `/mentor/mentees/${relation.id}`);
+    }
 
     // Both halves of the pair are notified, so both `userId`s matter and they are
     // not interchangeable: the "you have a mentor" mail is addressed to the

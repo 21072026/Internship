@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security — every organization write is audited in the organization it changed (#1575):** plan, vertical, branding, SSO (incl. enforcement), pipeline stages (replace/reset — previously unlogged), brand mark, conferencing policy, SSO role mappings, starter pack, sample-data removal, admin invitations and tenant creation now go through `recordOrgWrite()` (`src/lib/orgAudit.ts`), which writes an `AuditLog` row with the TARGET org's `orgId` — so the tenant's audit drain receives it — and passes the same `orgId` to `logActivity()`. Before, the entry fell back to the actor's org: a super admin's change to another tenant was filed under the operator's home org, and creating a tenant put the new customer's name and first admin's address in a feed the operator org's other admins can read. Audit details name changed fields, never values, certificates or tokens; the `invite.created` audit row names role and channel, not the address.",
-  "notes": {
-    "en": ["Changes to an organization's settings now always appear in that organization's own audit log and audit stream."],
-    "tr": ["Bir organizasyonun ayarlarındaki değişiklikler artık her zaman o organizasyonun kendi denetim kaydında ve denetim akışında görünür."],
-    "de": ["Änderungen an den Einstellungen einer Organisation erscheinen jetzt immer im Audit-Protokoll und Audit-Stream genau dieser Organisation."]
-  }
-}

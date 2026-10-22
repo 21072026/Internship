@@ -22,11 +22,10 @@
 // Registered from /api/cron/start (it sends through emailService); runnable on
 // its own as GET /api/cron?job=evaluations.
 
-import cron from 'node-cron';
 import type { EvaluationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -73,9 +72,9 @@ async function createDueRows(orgId: string | null, now: Date, result: Evaluation
   const stages = await resolvePipelineStages(orgId);
   const schedule = resolveEvaluationSchedule(
     {
-      interimStage: await getSetting('evaluationInterimStage', orgId),
-      interimDays: await getSetting('evaluationInterimDays', orgId),
-      finalStage: await getSetting('evaluationFinalStage', orgId),
+      interimStage: await resolveSettingRaw('evaluationInterimStage', { orgId }),
+      interimDays: await resolveSettingRaw('evaluationInterimDays', { orgId }),
+      finalStage: await resolveSettingRaw('evaluationFinalStage', { orgId }),
     },
     new Set(stages.map((s) => s.key)),
   );
@@ -214,20 +213,4 @@ export { evaluationCoverage } from '@/lib/evaluationCoverage';
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
-let task: cron.ScheduledTask | null = null;
 
-/**
- * Daily at 08:15 UTC — morning in DE/TR, when a mentor plans the day. From
- * /api/cron/start, never initCronJobs: this module sends through emailService.
- */
-export function initEvaluationRemindersCron() {
-  if (task) return;
-  task = cron.schedule('15 8 * * *', async () => {
-    try {
-      const r = await sendEvaluationReminders();
-      if (r.created || r.reminded) logger.warning('Evaluation reminders ran', { ...r });
-    } catch (error) {
-      logger.error('Evaluation reminders failed', { error: String(error) });
-    }
-  });
-}

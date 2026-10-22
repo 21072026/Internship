@@ -16,6 +16,7 @@ import {
   sendDormantCheckIns,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
+import { expireDocuments } from '@/lib/documentReviewStore';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
@@ -32,6 +33,18 @@ import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
+import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
+import { enqueue } from '@/lib/jobs/queue';
+import { manualJobFor } from '@/lib/jobs/manualJobs';
+
+// The named jobs that are scoped to the CALLER's own organization (they read
+// it from the session, never from the request). Every other job — and the
+// batch, which is what an unnamed or unknown job falls through to — sweeps
+// every tenant and answers with instance-wide totals: the operator's trigger,
+// so it takes a super admin (#1575). A tenant ADMIN asking for one gets a 403
+// and an `authz.scope_denied` audit row, never a run.
+const OWN_ORG_JOBS = new Set(['relation-health', 'evaluations', 'program-journey', 'surveys', 'report-subscriptions']);
 
 export async function GET(request: Request) {
   try {
@@ -41,7 +54,39 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const job = new URL(request.url).searchParams.get('job');
+    const params = new URL(request.url).searchParams;
+    const job = params.get('job');
+    // trial-reminders with `orgId` names ONE tenant: the caller's own, or one a
+    // super admin of the caller's world reaches (super admin is per world,
+    // #2647). Anything else would let one tenant's ADMIN run another tenant's
+    // trial sweep — its mails, bells and TRIAL_ACTIVE → TRIAL_EXPIRED moves.
+    const targetOrgId = job === 'trial-reminders' ? params.get('orgId') : null;
+    if (targetOrgId) {
+      if (targetOrgId !== (await settingsOrgOf(session)) && !(await isSuperAdminFor(session, targetOrgId))) {
+        await logCrossTenantDenial(session, '/api/cron?job=trial-reminders', targetOrgId);
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else if (!OWN_ORG_JOBS.has(job ?? '') && !(await isSuperAdmin(session))) {
+      await logCrossTenantDenial(session, `/api/cron?job=${job ?? 'batch'}`, null);
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // `&enqueue=1` (#1677): hand the named job to the queue instead of running
+    // it in this request. The worker runs it with retries and a JobRun whose
+    // trigger is 'manual', so an operator's re-run reads apart from a scheduled
+    // one. Opt-in: without it the job runs inline and answers with its full
+    // result, exactly as before (every e2e spec reads that body).
+    if (params.get('enqueue') === '1') {
+      const plan = manualJobFor(job, {
+        orgId: OWN_ORG_JOBS.has(job ?? '') ? await settingsOrgOf(session) : targetOrgId,
+        at: params.get('at'),
+        batch: params.get('batch'),
+      });
+      if (!plan) return NextResponse.json({ error: 'not_enqueueable' }, { status: 400 });
+      const row = await enqueue(plan.name, plan.payload as never, { trigger: 'manual', orgId: plan.orgId });
+      return NextResponse.json({ message: 'Job queued', queued: true, jobs: [{ name: plan.name, id: row.id }] }, { status: 202 });
+    }
+
     if (job === 'weekly-reports') {
       return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
     }
@@ -104,7 +149,10 @@ export async function GET(request: Request) {
     // everything now" and an admin may click it several times while fixing
     // something, while this one deletes rows. Irreversible work asks to be
     // asked for.
-    if (job === 'retention') {
+    // `retention-prune`, not `retention`: it shared that name with the
+    // reminders branch above, which answered first, so the prune was
+    // unreachable from here (#1575).
+    if (job === 'retention-prune') {
       return NextResponse.json({ message: 'Retention prune ran', retentionPrune: await runRetentionPrune() });
     }
     // Usage rollup (#1750) — named only, and for the opposite reason to the two
@@ -170,15 +218,32 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Report subscriptions ran', reportSubscriptions: await runReportSubscriptions({ orgIds: [orgId], now }) });
     }
     if (job === 'trial-reminders') {
-      // `orgId` NARROWS the sweep to one tenant; it can never broaden it, and
-      // the route is already ADMIN-only. Two callers want it: an operator
+      // `orgId` NARROWS the sweep to one tenant, and only to one the caller
+      // may act on (checked above, #1575): their own org, or one a super admin
+      // of their world reaches. Without it the sweep is platform-wide, so it
+      // is a super admin's. Two callers want the narrow form: an operator
       // re-running one customer's sweep after fixing that customer's data, and
       // e2e/trial-reminders-job.spec.ts, which must assert exact counts without
       // being perturbed by whatever else is in the database — the same reason
       // `runUsageRollup()` takes `orgIds`.
-      const orgId = new URL(request.url).searchParams.get('orgId');
-      const trialReminders = await runTrialReminders(orgId ? { orgIds: [orgId] } : {});
+      const trialReminders = await runTrialReminders(targetOrgId ? { orgIds: [targetOrgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
+    }
+    // IdP certificate-expiry warnings alone (#1933). Not an own-org job: the
+    // gate above already refused anyone but a super admin. `orgId` narrows the
+    // sweep (never broadens it), and only to an org of the caller's own world
+    // (super admin is per world, #2647); `at` moves "now", for the same reason
+    // the trial job takes it: e2e/sso-metadata-import.spec.ts asserts exact mails.
+    if (job === 'sso-certificates') {
+      const orgId = params.get('orgId');
+      if (orgId && !(await isSuperAdminFor(session, orgId))) {
+        await logCrossTenantDenial(session, '/api/cron?job=sso-certificates', orgId);
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const at = params.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      const ssoCertificates = await runSsoCertificateExpiry({ ...(orgId ? { orgIds: [orgId] } : {}), now });
+      return NextResponse.json({ message: 'SSO certificate warnings ran', ssoCertificates });
     }
     // Recurring-meeting reminders alone (#2013) — the same function the batch
     // runs, and as safe to click twice: every occurrence is claimed in
@@ -197,6 +262,9 @@ export async function GET(request: Request) {
     // read the state it just wrote, not race it.
     const dormantSweep = await sweepDormantFirstContacts();
     const dormantCheckIns = await sendDormantCheckIns();
+    // Ahead of the batch for the same reason (#1859): a document that expires
+    // today must already be missing when the reminder below reads the gaps.
+    const documentExpiry = await expireDocuments();
 
     const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
@@ -221,6 +289,7 @@ export async function GET(request: Request) {
       message: 'Scheduled jobs ran',
       dormantSweep,
       dormantCheckIns,
+      documentExpiry,
       interactions,
       meetings,
       projectMeetings,

@@ -19,6 +19,7 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { JourneyView } from '@/components/JourneyView';
+import { AgreementCard, type AgreementBlock } from '@/components/AgreementCard';
 import { AgendaPanel } from '@/components/AgendaPanel';
 import { SessionNotePanel } from '@/components/SessionNotePanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
@@ -28,6 +29,8 @@ import { RelationRecurringMeeting } from '@/components/meeting/RelationRecurring
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
+import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
+import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { CertificateGenerator } from '@/components/CertificateGenerator';
@@ -40,6 +43,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
 import { apiErrorMessage } from '@/lib/apiErrorMessage';
+import { RelationHealthBadge, useRelationHealth } from '@/components/HealthBadge';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
@@ -127,6 +131,7 @@ export default function MenteeDetailPage() {
   const typeOptions = INTERACTION_TYPES.map((ty) => ({ value: ty, label: t.interactionTypes[ty] }));
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
+  const [agreement, setAgreement] = useState<AgreementBlock | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ date: '', subject: '', notes: '', type: 'Meeting' });
@@ -157,6 +162,7 @@ export default function MenteeDetailPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setRelation(data.relation);
+      setAgreement(data.agreement ?? null);
     } catch {
       setLoadError(true);
     } finally {
@@ -264,6 +270,9 @@ export default function MenteeDetailPage() {
     }
   };
 
+  // The pair's health (#1904): the same score and reasons as the attention queue.
+  const health = useRelationHealth(relation?.status === 'ACTIVE' ? [relation.id] : []);
+
   if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
   if (loadError && !relation) return <LoadErrorCard onRetry={() => { setLoading(true); fetchRelation(); }} testId="mentee-load-error" />;
   if (!relation) return <div className="text-center py-12 text-gray-400">{t.mentor.relationNotFound}</div>;
@@ -297,6 +306,7 @@ export default function MenteeDetailPage() {
           <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
             <div className="flex items-center gap-2">
               <StatusBadge status={relation.status} />
+              <RelationHealthBadge health={health[relation.id]} testId="relation-health" />
               <StageClockChip
                 testId="stage-clock-detail"
                 daysInStage={daysInStage(relation)}
@@ -348,6 +358,22 @@ export default function MenteeDetailPage() {
           onSaved={fetchRelation}
         />
       </div>
+
+      {/* Pause, resume or end this pairing with a reason, and its history (#1770). */}
+      <Card className="mb-6" data-testid="mentee-lifecycle-card">
+        <CardHeader>
+          <CardTitle>{t.relationLifecycle.actions}</CardTitle>
+        </CardHeader>
+        <RelationLifecycleControls
+          relationId={relation.id}
+          state={effectiveLifecycleState(relation)}
+          isAdmin={false}
+          menteeName={relation.mentee.fullName}
+          mentorName={relation.mentor.fullName}
+          showHistory
+          onChanged={fetchRelation}
+        />
+      </Card>
 
       {/* The pair's meeting rhythm (#2014). */}
       <div className="mb-6">
@@ -625,6 +651,9 @@ export default function MenteeDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* The mentoring agreement (#1792): a prompt, never a gate. */}
+          {agreement && relation.status === 'ACTIVE' && <AgreementCard relationId={id} agreement={agreement} onAccepted={fetchRelation} />}
 
           {/* The programme journey (#1855) — forward-looking, onboarding as its
               first milestone; the timeline right below is the record behind it. */}

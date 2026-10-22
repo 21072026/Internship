@@ -78,6 +78,14 @@ export interface WorkerOptions {
    * Its own failure is logged and swallowed: the job is already settled.
    */
   onDeadLetter?: (job: JobRecord, error: string) => Promise<void> | void;
+  /**
+   * Runs a handler for a job that carries an `orgId` inside that tenant's
+   * context (#1561/#1677) — the runtime passes `runWithOrg`. Only the handler
+   * is bound: the queue's own reads and writes (claim, ledger, settle) stay
+   * unbound, because they span every tenant by design. A job without an org
+   * runs unbound, as the cron always did. Omitted: never bound (tests).
+   */
+  bindOrg?: <T>(orgId: string, fn: () => T) => T;
 }
 
 export interface TickSummary {
@@ -181,7 +189,8 @@ export function createWorker(opts: WorkerOptions): JobWorker {
       }, timeoutMs);
     });
     // `.then` so a handler that throws synchronously is a rejection like any other.
-    const work = Promise.resolve().then(() => handler.run(job.payload, { job, attempt, signal: abort.signal }));
+    const call = () => handler.run(job.payload, { job, attempt, signal: abort.signal });
+    const work = Promise.resolve().then(() => (job.orgId && opts.bindOrg ? opts.bindOrg(job.orgId, call) : call()));
     // A handler that outlives its timeout keeps running (a promise cannot be
     // killed); its late rejection must not surface as an unhandled one.
     work.catch(() => {});

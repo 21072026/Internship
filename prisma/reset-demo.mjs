@@ -50,8 +50,20 @@ function assertDemoTarget() {
   return name;
 }
 
+// FOREIGN_KEY_CHECKS is a SESSION variable, and Prisma pools connections: the
+// SET below and the TRUNCATEs could run on different connections, the TRUNCATE
+// then meets the checks still on ("Cannot truncate a table referenced in a
+// foreign key constraint", the scheduled reset of 2026-10-22). One connection,
+// so every statement of this script runs in the session that switched them off.
+function singleConnectionUrl(url) {
+  if (/[?&]connection_limit=/.test(url)) return url.replace(/([?&]connection_limit=)[^&]*/, (_, key) => `${key}1`);
+  return `${url}${url.includes('?') ? '&' : '?'}connection_limit=1`;
+}
+
 const name = assertDemoTarget();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: { db: { url: singleConnectionUrl(process.env.DATABASE_URL) } },
+});
 
 try {
   const rows = await prisma.$queryRaw`
@@ -67,9 +79,11 @@ try {
   if (tables.length === 0) {
     console.log(`reset-demo: ${name} has no tables yet — nothing to wipe.`);
   } else {
-    await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
     try {
       for (const t of tables) {
+        // Again before EVERY truncate: if the one connection was dropped and
+        // re-opened mid-run, the new session starts with the checks back on.
+        await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
         await prisma.$executeRawUnsafe(`TRUNCATE TABLE \`${t}\``);
       }
     } finally {

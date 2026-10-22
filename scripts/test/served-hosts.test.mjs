@@ -212,3 +212,24 @@ test('servedOrigin on a dev (http) configured origin: its own port on its own ho
   assert.equal(servedOrigin('https://marketing.example.test'), 'https://marketing.example.test');
   assert.equal(servedOrigin('http://marketing.example.test:3143'), null, 'the configured port is not re-attached to another host');
 });
+
+// ── Verified tenant domains (#1661) ──────────────────────────────────────────
+
+test('extraHosts: a verified tenant domain is accepted by exact match — and only while passed in', () => {
+  setEnv({ NEXTAUTH_URL: 'https://app.example.test' });
+  const tenant = new Set(['careers.acme.example']);
+  const base = 'https://app.example.test';
+  // Without it, exactly as before.
+  assert.equal(resolveRedirectTarget('https://careers.acme.example/auth/signin', base), base);
+  assert.equal(servedOrigin('https://careers.acme.example'), null);
+  assert.equal(requestOrigin((n) => (n === 'x-forwarded-host' ? 'careers.acme.example' : null)), base);
+  // With it.
+  assert.equal(resolveRedirectTarget('https://careers.acme.example/auth/signin', base, tenant), 'https://careers.acme.example/auth/signin');
+  assert.equal(servedOrigin('https://careers.acme.example', tenant), 'https://careers.acme.example');
+  assert.equal(requestOrigin((n) => (n === 'x-forwarded-host' ? 'careers.acme.example' : n === 'x-forwarded-proto' ? 'https' : null), tenant), 'https://careers.acme.example');
+  // Still exact: no suffix, no userinfo trick, no sibling.
+  for (const evil of ['https://careers.acme.example.evil.test/', 'https://careers.acme.example@evil.test/', 'https://x.careers.acme.example/', 'https://acme.example/']) {
+    assert.equal(resolveRedirectTarget(evil, base, tenant), base, evil);
+  }
+  assert.equal(servedOrigin('https://careers.acme.example/next', tenant), null);
+});

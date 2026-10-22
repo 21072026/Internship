@@ -84,6 +84,25 @@ test('a MARKETING org has no mentor shell — /mentor redirects home', async ({ 
   }
 });
 
+test('a MARKETING org has no mentor directory and no referral-partner portal', async ({ page }) => {
+  const { org, email } = await makeAdmin('MARKETING');
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, email, 'NavPass123', '/admin');
+    // Choosing a mentor (`mentorship`) and the source portal (`sourcing`) are
+    // modules this vertical does not carry: the pages 404, the directory API refuses.
+    for (const path of ['/mentors', '/source']) {
+      expect((await page.goto(path))?.status(), `${path} on a MARKETING org`).toBe(404);
+    }
+    const api = await page.request.get('/api/mentors');
+    expect(api.status()).toBe(403);
+    expect((await api.json()).code).toBe('capability_unavailable');
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
 test('a MENTOR in a MARKETING org lands on the sales surface, not an infinite redirect', async ({ page }) => {
   // Until #2580 this MENTOR was parked on /account: the vertical has no
   // mentorship shell. The maintainer's role decision on #2580 (option b) makes

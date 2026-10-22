@@ -26,6 +26,7 @@
 
 import { prisma } from './prisma';
 import { createStartStageResolver } from './pipelineStages';
+import { activeRelationWhere } from './relationLifecycle';
 
 /**
  * How long the silence must have lasted before it counts as dormancy.
@@ -174,7 +175,9 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
  */
 export async function sweepDormantFirstContacts() {
   const relations = await prisma.mentorshipRelation.findMany({
-    where: { status: 'ACTIVE' },
+    // Not a paused pair (#1772): a pause is not silence, so it neither starts
+    // nor ends an episode here; the resume clears the stamps (stageClockPatch).
+    where: activeRelationWhere(),
     select: {
       id: true,
       orgId: true,

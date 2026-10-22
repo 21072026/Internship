@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Public demo reset no longer fails on foreign keys:** `prisma/reset-demo.mjs` switched `FOREIGN_KEY_CHECKS` off on one pooled connection and could run the `TRUNCATE`s on another (the scheduled reset of 2026-10-22 failed with MySQL 1701 on `SupportAttachment`). It now runs on a single connection (`connection_limit=1`) and re-issues the switch before every `TRUNCATE`, so a reconnect mid-run cannot bring the checks back."
+}

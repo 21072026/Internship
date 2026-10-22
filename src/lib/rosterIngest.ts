@@ -63,6 +63,16 @@ import {
 import { planFieldUpdates } from './externalSyncPolicy';
 import { assertPublicHttpsUrl } from './ssrfGuard';
 import {
+  canDeprovision,
+  checkRowFloor,
+  describeSafetyAbort,
+  planDeprovision,
+  type DeprovisionCandidate,
+  type DeprovisionPlan,
+  type DeprovisionSettings,
+  type SafetyAbort,
+} from './rosterDeprovisionRule';
+import {
   ROSTER_PROFILE_FIELDS,
   type RosterColumnMap,
   type RosterKeyField,
@@ -85,7 +95,7 @@ export {
   type RosterTransport,
 } from './rosterFeed';
 
-export const ROSTER_RUN_STATUSES = ['RUNNING', 'SUCCEEDED', 'FAILED', 'NOOP'] as const;
+export const ROSTER_RUN_STATUSES = ['RUNNING', 'SUCCEEDED', 'FAILED', 'NOOP', 'ABORTED_SAFETY'] as const;
 export type RosterRunStatus = (typeof ROSTER_RUN_STATUSES)[number];
 
 export interface RosterFeedConfig {
@@ -223,6 +233,22 @@ export function assertHostKeyFingerprint(presented: string, pinned: string | nul
 export interface FetchFeedOptions {
   fetchImpl?: typeof fetch;
   maxBytes?: number;
+  /**
+   * The e2e switch (ROSTER_FEED_ALLOW_INSECURE_STUB=1, set only by
+   * playwright.config.ts): a plain-http LOOPBACK URL skips the SSRF guard so the
+   * suite's local roster source can serve the file. Never set on a deployment.
+   */
+  allowInsecureLoopback?: boolean;
+}
+
+/** `http://127.0.0.1:<port>/…` — the only shape the e2e switch admits. */
+export function isLoopbackStubUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'http:' && u.hostname === '127.0.0.1' && !u.username && !u.password;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -260,7 +286,8 @@ export async function fetchFeedFile(
 
   const url = (feed.url ?? '').trim();
   if (!url) throw new RosterTransportError('This feed has no URL configured.');
-  const safeUrl = await assertPublicHttpsUrl(url);
+  const safeUrl =
+    options.allowInsecureLoopback && isLoopbackStubUrl(url) ? new URL(url) : await assertPublicHttpsUrl(url);
 
   const doFetch = options.fetchImpl ?? fetch;
   const response = await doFetch(safeUrl.toString(), {
@@ -608,6 +635,8 @@ export interface RosterStore {
     counts: Record<RowStatus, number>;
     absent: string[];
     error?: string | null;
+    /** Why a valve stopped the run (ABORTED_SAFETY only). */
+    safetyReason?: string | null;
   }): Promise<void>;
 }
 
@@ -617,7 +646,17 @@ export type RosterIngestOutcome =
   | 'APPLIED'
   | 'NOOP_UNCHANGED_FILE'
   | 'ALREADY_APPLIED'
-  | 'LOCKED';
+  | 'LOCKED'
+  /** A safety valve stopped the run before anything was written (#1966). */
+  | 'ABORTED_SAFETY';
+
+/** What the deprovisioning phase decided and did (#1966). */
+export interface RosterDeprovisionOutcome {
+  plan: DeprovisionPlan;
+  /** Accounts actually switched off / back on (0 on a dry run). */
+  deactivated: number;
+  reactivated: number;
+}
 
 export interface RosterIngestResult {
   outcome: RosterIngestOutcome;
@@ -629,6 +668,33 @@ export interface RosterIngestResult {
   absent: string[];
   resumedFromChunk: number;
   message?: string;
+  /** Set when a valve stopped the run. */
+  safety?: SafetyAbort;
+  /** Set when the deprovisioning phase ran. */
+  deprovision?: RosterDeprovisionOutcome;
+}
+
+/**
+ * The deprovisioning port (#1966). The rules are pure in
+ * rosterDeprovisionRule.ts; this is how the engine reads the people they judge
+ * and writes what they decide, without importing Prisma.
+ */
+export interface RosterDeprovisionPort {
+  settings: DeprovisionSettings;
+  /** Everything `planDeprovision` needs about these target ids. */
+  load(input: { absentIds: string[]; presentIds: string[] }): Promise<{
+    absent: DeprovisionCandidate[];
+    present: DeprovisionCandidate[];
+    coveredActiveCount: number;
+    activeAdminCount: number;
+  }>;
+  /** Apply a plan that carries no abort. Never called on a dry run. */
+  apply(input: {
+    run: RosterRunRecord;
+    plan: DeprovisionPlan;
+    now: Date;
+    keys: Map<string, string>;
+  }): Promise<{ deactivated: number; reactivated: number }>;
 }
 
 export interface RosterIngestDeps {
@@ -636,6 +702,19 @@ export interface RosterIngestDeps {
   /** The roster as it stands, for this feed's org only. */
   loadTarget: (feed: RosterFeedConfig) => Promise<RosterTargetRow[]>;
   fetchFile?: (feed: RosterFeedConfig) => Promise<FeedFile>;
+  /** Absent: the run only reports `absent`, exactly as before #1966. */
+  deprovision?: RosterDeprovisionPort;
+}
+
+/** Thrown from the resolve hook to stop a run before its first write. */
+export class RosterSafetyAbort extends Error {
+  // A plain field, not a parameter property: the unit suite runs this file
+  // under Node's type stripping, which refuses TS-only syntax.
+  readonly abort: SafetyAbort;
+  constructor(abort: SafetyAbort) {
+    super(describeSafetyAbort(abort));
+    this.abort = abort;
+  }
 }
 
 export interface RosterIngestOptions {
@@ -644,6 +723,38 @@ export interface RosterIngestOptions {
   now?: Date;
   /** A RUNNING run older than this is presumed dead and may be resumed. */
   staleRunMs?: number;
+  /**
+   * An admin approved a run the deactivation ceiling stopped (#1967). Skips
+   * that valve only: the row floor, the grace period, the last-admin and
+   * break-glass refusals all still apply.
+   */
+  approved?: boolean;
+  /**
+   * The file an approval was given for (#1967). A file that changed since the
+   * stopped run is a different file, and was not what the admin looked at.
+   */
+  expectFileHash?: string;
+}
+
+/**
+ * Judge a diff's absent and present people. Shared by the import path and the
+ * unchanged-file path, so the two can never apply different rules.
+ */
+async function planFromDiff(
+  port: RosterDeprovisionPort,
+  targets: RosterTargetRow[],
+  absentRows: RosterTargetRow[],
+  now: Date,
+  approved: boolean,
+): Promise<DeprovisionPlan> {
+  const absentIds = new Set(absentRows.map((t) => t.id));
+  const presentIds = targets.filter((t) => !absentIds.has(t.id)).map((t) => t.id);
+  const loaded = await port.load({ absentIds: [...absentIds], presentIds });
+  return planDeprovision({ settings: port.settings, ...loaded, now, approved });
+}
+
+function keysOf(targets: RosterTargetRow[]): Map<string, string> {
+  return new Map(targets.map((t) => [t.id, t.email]));
 }
 
 /** 30 minutes. Longer than any healthy run, shorter than the gap to the next one. */
@@ -666,6 +777,9 @@ export async function ingestRoster(
   const now = options.now ?? new Date();
   const fetchFile = deps.fetchFile ?? ((f: RosterFeedConfig) => fetchFeedFile(f));
   const file = await fetchFile(feed);
+  if (options.expectFileHash && options.expectFileHash !== file.fileHash) {
+    throw new RosterIngestError('The feed file has changed since this run was stopped; review the new run instead.');
+  }
 
   const base = { feedId: feed.id, fileHash: file.fileHash, dryRun };
 
@@ -687,9 +801,17 @@ export async function ingestRoster(
         absent: [],
         resumedFromChunk: 0,
         message: 'The file is byte-identical to the last successful run.',
+        ...(await deprovisionUnchanged(feed, deps, file, run, now, options.approved === true)),
       };
     }
   }
+
+  // Valve 1, before a run is even reopened: a file below the floor writes
+  // nothing at all (#1966). Recorded as its own ABORTED_SAFETY run so the
+  // console and the alert can say why.
+  const floor = deps.deprovision
+    ? checkRowFloor(parseRoster(file.text, feed).rows.length, deps.deprovision.settings.minRowCount)
+    : null;
 
   // (2) Idempotency and resume, both decided by `(feedId, fileHash)`.
   const existing = await deps.store.findRun(feed.id, file.fileHash, dryRun);
@@ -704,6 +826,7 @@ export async function ingestRoster(
         absent: [],
         resumedFromChunk: existing.nextChunkIndex,
         message: 'This exact file has already been applied for this feed.',
+        ...(await deprovisionUnchanged(feed, deps, file, existing, now, options.approved === true)),
       };
     }
     const staleAfter = options.staleRunMs ?? DEFAULT_STALE_RUN_MS;
@@ -736,14 +859,31 @@ export async function ingestRoster(
 
   const resumedFromChunk = run.nextChunkIndex;
   let absent: string[] = [];
+  let deprovisionPlan: DeprovisionPlan | null = null;
+  let targetKeys = new Map<string, string>();
 
   try {
+    if (floor) throw new RosterSafetyAbort(floor);
     const report = await runImport<RosterFeedRow, RosterRowPlan>({
       parse: () => parseRoster(file.text, feed),
       validate: (parsed, header) => validateRosterRow(feed, parsed, header),
       resolve: async (rows) => {
-        const diff = diffRoster(feed, rows, await deps.loadTarget(feed));
+        const targets = await deps.loadTarget(feed);
+        const diff = diffRoster(feed, rows, targets);
         absent = diff.absent;
+        if (deps.deprovision) {
+          // Planned BEFORE the first chunk is applied, so the ceiling can stop
+          // the whole run with nothing written (#1966).
+          deprovisionPlan = await planFromDiff(
+            deps.deprovision,
+            targets,
+            diff.absentRows,
+            now,
+            options.approved === true,
+          );
+          targetKeys = keysOf(targets);
+          if (deprovisionPlan.abort) throw new RosterSafetyAbort(deprovisionPlan.abort);
+        }
         return { plan: diff.plan, absent: diff.absent };
       },
       apply: (rows, context) =>
@@ -762,6 +902,17 @@ export async function ingestRoster(
 
     const status: RosterRunStatus = merged.counts.ERROR > 0 ? 'FAILED' : 'SUCCEEDED';
     await deps.store.finishRun({ run, status, counts: merged.counts, absent });
+
+    // The deprovisioning phase: only after a run whose every row was read. A
+    // row we could not read is a person who looks absent.
+    let deprovision: RosterDeprovisionOutcome | undefined;
+    const plan = deprovisionPlan as DeprovisionPlan | null;
+    if (deps.deprovision && plan && status === 'SUCCEEDED' && canDeprovision(merged.counts.ERROR)) {
+      const done = dryRun
+        ? { deactivated: 0, reactivated: 0 }
+        : await deps.deprovision.apply({ run, plan, now, keys: targetKeys });
+      deprovision = { plan, ...done };
+    }
     return {
       ...base,
       outcome: 'APPLIED',
@@ -769,8 +920,30 @@ export async function ingestRoster(
       report: merged,
       absent,
       resumedFromChunk,
+      ...(deprovision ? { deprovision } : {}),
     };
   } catch (error) {
+    if (error instanceof RosterSafetyAbort) {
+      // Nothing was written: the abort is thrown before the first chunk. The
+      // run is recorded, not thrown, so the caller can alert on it.
+      await deps.store.finishRun({
+        run,
+        status: 'ABORTED_SAFETY',
+        counts: countRows([]),
+        absent,
+        safetyReason: error.message,
+      });
+      return {
+        ...base,
+        outcome: 'ABORTED_SAFETY',
+        run: { ...run, status: 'ABORTED_SAFETY' },
+        report: null,
+        absent,
+        resumedFromChunk,
+        safety: error.abort,
+        message: error.message,
+      };
+    }
     // The run itself came apart (the transport, the store, the parse). Record it
     // as FAILED so the checkpoint survives and the next run resumes rather than
     // starting the file over.
@@ -785,6 +958,47 @@ export async function ingestRoster(
       ? error
       : new RosterIngestError(importErrorMessage(error));
   }
+}
+
+/**
+ * The deprovisioning phase for a file that was not re-imported (unchanged, or
+ * already applied). Without it, grace periods would stop counting whenever HR
+ * exports the same file two nights running — which is the usual case. The
+ * diff is produced by the same engine, as a dry run, so it cannot read the
+ * file differently from the run that imported it.
+ */
+async function deprovisionUnchanged(
+  feed: RosterFeedConfig,
+  deps: RosterIngestDeps,
+  file: FeedFile,
+  run: RosterRunRecord,
+  now: Date,
+  approved: boolean,
+): Promise<{ deprovision?: RosterDeprovisionOutcome; safety?: SafetyAbort; outcome?: 'ABORTED_SAFETY' }> {
+  const port = deps.deprovision;
+  if (!port) return {};
+  let targets: RosterTargetRow[] = [];
+  let absentRows: RosterTargetRow[] = [];
+  const report = await runImport<RosterFeedRow, RosterRowPlan>({
+    parse: () => parseRoster(file.text, feed),
+    validate: (parsed, header) => validateRosterRow(feed, parsed, header),
+    resolve: async (rows) => {
+      targets = await deps.loadTarget(feed);
+      const diff = diffRoster(feed, rows, targets);
+      absentRows = diff.absentRows;
+      return { plan: diff.plan, absent: diff.absent };
+    },
+    apply: (rows) => applyPlannedRows(rows, previewWriter),
+    dryRun: true,
+  });
+  if (!canDeprovision(report.counts.ERROR)) return {};
+  const plan = await planFromDiff(port, targets, absentRows, now, approved);
+  // The ceiling still holds: the roster may have changed under an unchanged
+  // file (people added by hand). Nothing is applied; the run is not re-marked,
+  // because the import itself did succeed — the alert carries the reason.
+  if (plan.abort) return { safety: plan.abort, outcome: 'ABORTED_SAFETY' };
+  const done = await port.apply({ run, plan, now, keys: keysOf(targets) });
+  return { deprovision: { plan, ...done } };
 }
 
 /** Fold rows a previous attempt committed into this attempt's report. */

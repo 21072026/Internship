@@ -68,6 +68,15 @@ export const ROSTER_FEED_LIMITS = {
   secret: 16_384, // a PEM private key fits with room to spare
   chunkMin: 10,
   chunkMax: 1000,
+  maxGraceDays: 30,
+  maxMinRowCount: 1_000_000,
+} as const;
+
+/** The valves' defaults — the schema's DB-side defaults, in one place for the API. */
+export const ROSTER_DEPROVISION_DEFAULTS = {
+  maxDeactivatePercent: 10,
+  minRowCount: 1,
+  deprovisionGraceDays: 1,
 } as const;
 
 // ── Cron ─────────────────────────────────────────────────────────────────────
@@ -237,6 +246,11 @@ export interface RosterFeedInput {
   authoritative: boolean;
   chunkSize: number | null;
   cronExpression: string | null;
+  /** Deprovisioning and its valves (#1966, docs/roster-feeds.md). */
+  deprovision: boolean;
+  maxDeactivatePercent: number;
+  minRowCount: number;
+  deprovisionGraceDays: number;
 }
 
 export type RosterFeedErrorCode =
@@ -290,7 +304,10 @@ function str(value: unknown): string | null {
  * `assertPublicHttpsUrl()`'s job, at save time in the route and again before
  * every fetch.
  */
-export function validateFeedConfig(raw: unknown): RosterFeedValidation {
+export function validateFeedConfig(
+  raw: unknown,
+  options: { allowInsecureLoopback?: boolean } = {},
+): RosterFeedValidation {
   const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const errors: RosterFeedError[] = [];
   const fail = (field: string, code: RosterFeedErrorCode) => errors.push({ field, code });
@@ -320,7 +337,9 @@ export function validateFeedConfig(raw: unknown): RosterFeedValidation {
     else {
       try {
         const parsed = new URL(url);
-        if (parsed.protocol !== 'https:') fail('url', 'not_https');
+        // The e2e switch admits exactly `http://127.0.0.1:…` (rosterIngest.ts).
+        const stub = options.allowInsecureLoopback && parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1';
+        if (parsed.protocol !== 'https:' && !stub) fail('url', 'not_https');
         else if (parsed.username || parsed.password) fail('url', 'invalid');
       } catch {
         fail('url', 'invalid');
@@ -387,6 +406,21 @@ export function validateFeedConfig(raw: unknown): RosterFeedValidation {
     else chunkSize = n;
   }
 
+  // ── Deprovisioning valves (#1966) ──
+  const int = (field: keyof typeof ROSTER_DEPROVISION_DEFAULTS, min: number, max: number): number => {
+    const raw = input[field];
+    if (raw === undefined || raw === null || raw === '') return ROSTER_DEPROVISION_DEFAULTS[field];
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < min || n > max) {
+      fail(field, 'invalid');
+      return ROSTER_DEPROVISION_DEFAULTS[field];
+    }
+    return n;
+  };
+  const maxDeactivatePercent = int('maxDeactivatePercent', 0, 100);
+  const minRowCount = int('minRowCount', 0, L.maxMinRowCount);
+  const deprovisionGraceDays = int('deprovisionGraceDays', 0, L.maxGraceDays);
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -407,6 +441,51 @@ export function validateFeedConfig(raw: unknown): RosterFeedValidation {
       authoritative: input.authoritative === true,
       chunkSize,
       cronExpression: cronExpression ? cronExpression.replace(/\s+/g, ' ') : null,
+      deprovision: input.deprovision === true,
+      maxDeactivatePercent,
+      minRowCount,
+      deprovisionGraceDays,
     },
   };
+}
+
+// ── Scheduling (#1967) ───────────────────────────────────────────────────────
+
+/** Three FAILED runs in a row pause a feed (`enabled = false` + `pausedReason`). */
+export const ROSTER_FAILURE_PAUSE_THRESHOLD = 3;
+
+/**
+ * How long a claim holds a feed. Longer than the engine's stale-run window
+ * (`DEFAULT_STALE_RUN_MS`, 30 minutes), so a claim never lapses under a run the
+ * engine still considers alive.
+ */
+export const ROSTER_CLAIM_MS = 35 * 60 * 1000;
+
+export interface ScheduledFeed {
+  enabled: boolean;
+  cronExpression: string | null;
+  lastRunAt: Date | null;
+  createdAt: Date;
+}
+
+/** When the feed is next due, or null when it has no (valid) schedule. */
+export function nextFeedRun(feed: ScheduledFeed): Date | null {
+  if (!feed.cronExpression) return null;
+  return nextCronRun(feed.cronExpression, feed.lastRunAt ?? feed.createdAt);
+}
+
+/**
+ * Is the feed due at `now`? A feed is due once the first scheduled minute after
+ * its last run (or its creation) has passed — so a waker that missed a tick
+ * (a redeploy, a slow run) catches up exactly once rather than once per missed
+ * slot, and a paused feed is never due.
+ */
+export function isFeedDue(feed: ScheduledFeed, now: Date): boolean {
+  if (!feed.enabled) return false;
+  const next = nextFeedRun(feed);
+  return next !== null && next.getTime() <= now.getTime();
+}
+
+export function shouldPauseFeed(consecutiveFailures: number): boolean {
+  return consecutiveFailures >= ROSTER_FAILURE_PAUSE_THRESHOLD;
 }

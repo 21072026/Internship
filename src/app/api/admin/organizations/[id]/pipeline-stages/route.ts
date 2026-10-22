@@ -4,11 +4,12 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isHexColor } from '@/lib/branding';
-import { resolvePipelineStages, defaultPipelineStages, replaceStages } from '@/lib/pipelineStages';
+import { resolvePipelineStages, defaultPipelineStages, replaceStages, stageUsage } from '@/lib/pipelineStages';
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
 import { recordOrgWrite } from '@/lib/orgAudit';
+import { isPipelinePhase, removedStagesInUse } from '@/lib/pipeline';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
 // stages require a paid plan). Phase A: label / order / color / on-path grouping
@@ -53,7 +54,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // admin's language — a locale-less resolve handed them English labels to save
   // back verbatim, freezing English for the whole tenant (#2268).
   const stages = await resolvePipelineStages(id, await getLocale());
-  return NextResponse.json({ stages, custom: count > 0, plan: gate.org.plan });
+  // Records per stage key (#1635): the editor disables "remove" on a stage in
+  // use and counts what a reset would strand. Only a hint — the PUT re-checks.
+  const usage = await stageUsage(id);
+  return NextResponse.json({ stages, custom: count > 0, plan: gate.org.plan, usage });
 }
 
 const stageSchema = z.object({
@@ -63,6 +67,10 @@ const stageSchema = z.object({
   isTerminal: z.boolean().optional(),
   isOffPath: z.boolean().optional(),
   color: z.string().optional().nullable(),
+  // Board phase (#1637): one of PIPELINE_PHASES, or null/omitted for "derive
+  // it" (canonical keys keep their built-in phase, others the custom group).
+  // z.string() + the whitelist below, never z.enum (repo convention).
+  phase: z.string().max(16).optional().nullable(),
 });
 const putSchema = z.object({ stages: z.array(stageSchema).min(1).max(50) });
 
@@ -89,6 +97,22 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (s.color && s.color.trim() && !isHexColor(s.color)) {
       return NextResponse.json({ error: `Color for "${s.key}" must be a hex value like #2563eb` }, { status: 400 });
     }
+    if (s.phase != null && s.phase !== '' && !isPipelinePhase(s.phase)) {
+      return NextResponse.json({ error: `Phase for "${s.key}" must be one of pre, internship, result` }, { status: 400 });
+    }
+  }
+
+  // A stage records still sit on cannot be dropped (#1635): the relation's
+  // stage is a free string, so a removed key would orphan every one of them —
+  // no board column, no funnel row, no label. The editor disables the control;
+  // this is the check, because a hidden button is not authorization.
+  const current = (await resolvePipelineStages(id)).map((s) => s.key);
+  const inUse = removedStagesInUse(current, keys, await stageUsage(id));
+  if (Object.keys(inUse).length > 0) {
+    return NextResponse.json(
+      { error: `Stages still in use: ${Object.entries(inUse).map(([k, n]) => `${k} (${n})`).join(', ')}`, code: 'stage_in_use', inUse },
+      { status: 409 }
+    );
   }
 
   // Replace the whole set through the shared writer (#2353) so org provisioning

@@ -71,10 +71,14 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'MentorshipRelation',
   'MentorApplication',
   'DocumentRequirement',
+  // A document's review chain (#1859); the sweep and the token route bind no context and pass orgId.
+  'DocumentReview',
   'WeeklyReport',
   // Org-defined segmentation attributes and their values (#1920).
   'OrgAttribute',
   'UserAttributeValue',
+  // Company → candidate message requests (#1840).
+  'CandidateOutreach',
   // Scheduled report delivery (#1905).
   'ReportSubscription',
   'ReportSubscriptionSend',
@@ -110,6 +114,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // are reached only through a scoped parent and are deliberately not listed
   // (schema comment).
   'AgendaTemplate',
+  // The mentoring agreement text (#1790). Its acceptances are reached through
+  // the relation, like StatusChange — deliberately unregistered.
+  'MentoringAgreement',
+  // Admin-defined forms (#1800). FormField is reached through its definition
+  // and carries no orgId — deliberately unregistered, like SurveyQuestion.
+  'FormDefinition',
+  'FormResponse',
   // Program journey steps (#1852). ProgramStepRun is reached through its step
   // and carries no orgId of its own — deliberately unregistered.
   'ProgramStep',
@@ -125,12 +136,19 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKeyUsage',
   // Idempotency keys of /api/v1 writes (#1994) — the key's tenant owns them.
   'ApiIdempotencyKey',
+  // Queued /api/v1 bulk imports (#3015) — one tenant's submitted rows and report.
+  'ApiImport',
+  // Async /api/v1 exports (#3002) — a snapshot of one tenant's data.
+  'ApiExport',
   // A mentee's practice interview transcript (#2051).
   'PracticeSession',
   // Safeguarding flags (#2056) — one org's review queue; stamped with the
   // sender's org at write time.
   'SafeguardingFlag',
   'MatchFeedback',
+  // Matching rule sets and their rules (#1781) — one org's weights.
+  'MatchRuleSet',
+  'MatchRule',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
   // readers — /api/health's counters and the daily dead-letter alert — run
@@ -170,6 +188,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // request scope, where the middleware does not engage, so it still sees every
   // tenant.
   'UsageRollup',
+  // A tenant's request to change its plan (#1743): one org reading another's
+  // would leak its plan, pair count and reasons. REQUIRED orgId. The operator
+  // queue reads across the orgs of its world outside any tenant scope, with
+  // an explicit world filter (src/app/api/admin/plan-requests).
+  'PlanChangeRequest',
   // Daily product usage per account (#2446). Commercially sensitive in the same
   // way UsageRollup is — one tenant reading another's merchant volumes is a
   // leak, and writing them would corrupt the churn signal the vertical sells
@@ -203,6 +226,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // operator CLI (prisma/register-integration-source.mjs) and the demo seed,
   // both sessionless, both passing it.
   'IntegrationSource',
+  // A tenant's pull connector to a third-party marketing platform (Klaviyo,
+  // docs/integrations/klaviyo.md) and the provider-profile ↔ account links it
+  // keeps. A sealed API key and one tenant's prospect list. Every writer is
+  // src/lib/klaviyoSync.ts: the admin routes run under the session's org, the
+  // scheduled sync has no session and passes `orgId` explicitly on every write.
+  'ExternalConnection',
+  'ExternalProfileLink',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was
@@ -256,6 +286,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // The backfill's review queue (#1819): one org's unresolved terms.
   'UnmappedSkillTerm',
   'StageSla',
+  // One passed stage deadline and how far its escalation ladder climbed (#1722).
+  'SlaBreach',
+  // An org's (later a programme's) wording of a notification event (#1718).
+  'NotificationTemplate',
   'PipelineStage',
   // The per-tenant competency framework (#822) — the questions a tenant decided
   // to score people on. REQUIRED orgId, so every create passes one explicitly.
@@ -287,6 +321,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // INTERNSHIP tenant's endpoint, and one global newsletter cadence reaches
   // both tenants' members.
   'Webhook',
+  // The domain-event record (#1691): one tenant's history of what happened.
+  // The outbox relay (#1680) and the retention sweep read it with no session,
+  // so once MT_ENFORCE_ISOLATION is on they must pass `orgId` themselves or
+  // run in an explicit context — otherwise they silently see zero rows.
+  'DomainEvent',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a
@@ -298,6 +337,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // receiver belongs to exactly one tenant.
   'AuditLog',
   'AuditDrain',
+  // Delegated admin scope (#1567): which programmes / companies a
+  // PROGRAM_ADMIN reaches. One tenant's delegation, never another's.
+  'AdminScopeGrant',
   // The public /for-companies enquiry (#1104). The form has no session and no
   // host→org resolution exists yet, so the submit stamps the default org
   // itself (the same one registration uses) rather than leaving NULL — a
@@ -323,6 +365,15 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // the default org's; the platform-level readers (retention health) run
   // outside any scope and still see them.
   'ActivityLog',
+  // Telemetry (#1556). A page view is the viewer's (the beacon stamps the
+  // session's org); a mail-ledger row is the RECIPIENT's — every EmailLog writer
+  // in src/services/emailService.ts and src/lib/mailQueueAdmin.ts passes it
+  // explicitly, null included, so a request scope never stamps the sender's org
+  // on another tenant's mail. The deployment-wide readers (the relay health,
+  // the operator queue, the super-admin mail view) run outside any scope; the
+  // erasure, which runs inside one, deletes by address with runUnscoped.
+  'PageView',
+  'EmailLog',
   // The goal-template pool (cross-world isolation). The shared half
   // (`projectId: null`) used to be one global pool offered to every tenant.
   // Every create stamps `orgId` explicitly — the admin pool from the session,
@@ -344,6 +395,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // its own `orgId` in every WHERE; the registration keeps every other reader
   // inside one tenant.
   'OutboundDraft',
+  // In-app bug / feedback reports (#3130): a screenshot of one tenant's screen
+  // must never reach another tenant's support inbox. POST /api/support/reports
+  // stamps the reporter's org explicitly; its files are reached through it.
+  'SupportReport',
   // A funnel record's estimated monthly value (#2422). Commercial data, like
   // Placement next door: one tenant must never read or sum another's pipeline
   // value. Every writer — the owner/ADMIN edit route, the marketing import and

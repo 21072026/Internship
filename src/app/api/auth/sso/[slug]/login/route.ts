@@ -5,6 +5,7 @@ import { samlForOrg } from '@/lib/ssoSaml';
 import { configuredOrigin, requestOrigin } from '@/lib/servedHosts';
 import { worldForHeaders } from '@/lib/hostWorld';
 import { worldOfOrg } from '@/lib/userWorld';
+import { verifiedTenantHosts } from '@/lib/hostOrg';
 
 // GET /api/auth/sso/[slug]/login — SP-initiated SSO. Resolve the tenant, and if
 // SSO is active build a SAML AuthnRequest and redirect the browser to the IdP.
@@ -15,7 +16,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   // The failure redirects stay on the host the browser is on (#2488): a
   // marketing visitor typing an unknown org code used to be bounced to the
   // internship host's sign-in page. The success path redirects to the IdP.
-  const origin = requestOrigin((n) => req.headers.get(n));
+  // A tenant's DNS-verified own domain counts as served too (#1661).
+  const origin = requestOrigin((n) => req.headers.get(n), await verifiedTenantHosts(req.headers.get('x-forwarded-host') ?? req.headers.get('host')));
   const org = await prisma.organization.findUnique({ where: { slug } });
   if (!org || !isSsoActive(org)) {
     return NextResponse.redirect(`${origin}/auth/signin?error=sso_unavailable`);

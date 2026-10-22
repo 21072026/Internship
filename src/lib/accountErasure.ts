@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { runUnscoped } from '@/lib/tenantAmbient';
@@ -10,10 +10,14 @@ import {
   accountlessTombstoneId,
   companyContactErasureData,
   erasedAddress,
+  erasureOrgId,
   erasureScoped,
   inquiryErasureData,
+  leadIsAccountContact,
   normalizeContactEmail,
 } from '@/lib/companyContactErasure';
+import { externalProfileErasureOp } from '@/lib/externalProfileErasure';
+import { leadStandInEmail } from '@/lib/marketingImport';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
 // - hardDeleteUser: same cascade cleanup as the existing self-service account
@@ -70,11 +74,18 @@ async function forgetEmailLog(userId: string): Promise<void> {
   const addressStillHeld =
     (await runUnscoped(() => prisma.user.count({ where: { email: user.email, id: { not: userId } } }))) > 0;
   if (addressStillHeld) {
+    // The other world's account keeps the mailbox, so only the rows stamped
+    // with THIS account's org go (#1556). Rows from before EmailLog carried an
+    // org (NULL) cannot be told apart and stay, as they always did.
+    if (user.orgId) await runUnscoped(() => prisma.emailLog.deleteMany({ where: { to: user.email, orgId: user.orgId } }));
     await prisma.newsletterSend.deleteMany({ where: { userId } });
     await forgetQueuedMail(user.email, { onlyUserId: userId });
     return;
   }
-  await prisma.emailLog.deleteMany({ where: { to: user.email } });
+  // Unscoped (#1556): EmailLog is a tenant model, and an erasure that runs in
+  // the admin's scope must still reach every row for the address — the NULL
+  // ones written before the column existed included.
+  await runUnscoped(() => prisma.emailLog.deleteMany({ where: { to: user.email } }));
   await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
   await forgetQueuedMail(user.email);
 }
@@ -98,9 +109,128 @@ async function forgetEmailLog(userId: string): Promise<void> {
 // that decides which rows are theirs, never an unfiltered match on the address,
 // which would also rewrite another tenant's lead that happens to carry it.
 async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, orgId: true, fullName: true, companyId: true },
+  });
   if (!user?.email) return [];
-  return contactScrubOps(user.email, user.orgId, userId, await defaultOrgId());
+  const fallbackOrgId = await defaultOrgId();
+  const { realAddresses, nameOnlyCompanyIds } = await leadAccountContacts(userId, user, fallbackOrgId);
+  return [
+    ...contactScrubOps(user.email, user.orgId, userId, fallbackOrgId),
+    // A lead on a stand-in address (#3136): the person's REAL address is on the
+    // account it is linked to. Forgotten through the same builder as any other
+    // contact address — the account, its address book and its enquiries.
+    ...realAddresses.flatMap((address) => contactScrubOps(address, user.orgId, userId, fallbackOrgId)),
+    ...(nameOnlyCompanyIds.length
+      ? [
+          prisma.company.updateMany({
+            where: erasureScoped({ id: { in: nameOnlyCompanyIds } }, user.orgId, fallbackOrgId),
+            data: companyContactErasureData(),
+          }),
+        ]
+      : []),
+    // A pull connector's profile of this person (as its lead, or by address)
+    // becomes a tombstone, or the next sync writes them back
+    // (src/lib/externalProfileErasure.ts).
+    externalProfileErasureOp({
+      orgId: erasureOrgId(user.orgId, fallbackOrgId),
+      emails: [user.email, ...realAddresses],
+      leadUserId: userId,
+    }),
+  ];
+}
+
+/**
+ * The accounts on which the erased person is the named contact although the
+ * address does not say so (#3136): a lead created on a generated stand-in. Read
+ * through the lead's LINKS to accounts — its own `companyId`, its relations',
+ * and a connector link's — inside the lead's tenant, then decided per account
+ * by `leadIsAccountContact()` (src/lib/companyContactErasure.ts). Returns the
+ * real addresses found (to forget everywhere the shared builder reaches) and
+ * the accounts that name the person without any address.
+ */
+async function leadAccountContacts(
+  userId: string,
+  user: { email: string; orgId: string | null; fullName: string | null; companyId: string | null },
+  fallbackOrgId: string,
+): Promise<{ realAddresses: string[]; nameOnlyCompanyIds: string[] }> {
+  const [relations, links] = await Promise.all([
+    prisma.mentorshipRelation.findMany({
+      where: { menteeId: userId, companyId: { not: null } },
+      select: { companyId: true },
+    }),
+    prisma.externalProfileLink.findMany({
+      where: { leadUserId: userId, erasedAt: null, companyId: { not: null } },
+      select: { companyId: true },
+    }),
+  ]);
+  const ids = [
+    ...new Set(
+      [user.companyId, ...relations.map((r) => r.companyId), ...links.map((l) => l.companyId)].filter(
+        (id): id is string => Boolean(id),
+      ),
+    ),
+  ];
+  if (!ids.length) return { realAddresses: [], nameOnlyCompanyIds: [] };
+  const companies = await runUnscoped(() =>
+    prisma.company.findMany({
+      where: erasureScoped({ id: { in: ids } }, user.orgId, fallbackOrgId),
+      select: { id: true, contactEmail: true, contactName: true },
+    }),
+  );
+  const realAddresses = new Set<string>();
+  const nameOnlyCompanyIds: string[] = [];
+  for (const company of companies) {
+    if (!leadIsAccountContact(user, company, leadStandInEmail)) continue;
+    const address = normalizeContactEmail(company.contactEmail ?? '');
+    if (!address) nameOnlyCompanyIds.push(company.id);
+    else if (address !== normalizeContactEmail(user.email)) realAddresses.add(address);
+  }
+  return { realAddresses: [...realAddresses], nameOnlyCompanyIds };
+}
+
+/**
+ * The roster-feed run log (#1964/#1966, docs/roster-feed.md) names people: a
+ * `RosterRowResult` carries the person's key (their e-mail, or the HR system's
+ * personnel number) and their `userId`, and a run's `absentKeys` lists the keys
+ * the feed did not mention. `RosterRowResult.userId` has NO foreign key, so a
+ * hard delete does not cascade it either. Both paths therefore forget the
+ * person here: their row results go (matched by id, and by key for a row the
+ * engine could not tie to an account), and their key is cut out of every run's
+ * `absentKeys` in their org. The run rows themselves — counts, hash, status —
+ * stay: they are the feed's record, not the person's. Pre-read (like
+ * `companyContactOps`) because the key is the address, which anonymise rewrites
+ * in the same transaction.
+ */
+async function rosterLogOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, externalId: true, orgId: true },
+  });
+  if (!user) return [];
+  // The engine stores keys trimmed and lower-cased (rosterRowKey in rosterIngest.ts).
+  const keys = [user.email, user.externalId]
+    .map((k) => (k ?? '').trim().toLowerCase())
+    .filter(Boolean);
+  const ops: Prisma.PrismaPromise<unknown>[] = [
+    prisma.rosterRowResult.deleteMany({
+      where: { OR: [{ userId }, ...(user.orgId && keys.length ? [{ orgId: user.orgId, key: { in: keys } }] : [])] },
+    }),
+  ];
+  if (!user.orgId || !keys.length) return ops;
+  const runs = await prisma.rosterRun.findMany({
+    where: { orgId: user.orgId, NOT: { absentKeys: { equals: Prisma.DbNull } } },
+    select: { id: true, absentKeys: true },
+  });
+  for (const run of runs) {
+    if (!Array.isArray(run.absentKeys)) continue;
+    const kept = run.absentKeys.filter((k) => !(typeof k === 'string' && keys.includes(k.trim().toLowerCase())));
+    if (kept.length !== run.absentKeys.length) {
+      ops.push(prisma.rosterRun.update({ where: { id: run.id }, data: { absentKeys: kept as Prisma.InputJsonValue } }));
+    }
+  }
+  return ops;
 }
 
 /**
@@ -154,9 +284,14 @@ export async function forgetCompanyContact(
   orgId: string | null,
   randomId: string,
 ): Promise<{ inquiries: number; companies: number; contacts: number }> {
-  const [inquiries, companies, contacts] = await prisma.$transaction(
-    contactScrubOps(normalizeContactEmail(email), orgId, accountlessTombstoneId(randomId), await defaultOrgId()),
-  );
+  const fallbackOrgId = await defaultOrgId();
+  const address = normalizeContactEmail(email);
+  const [inquiries, companies, contacts] = await prisma.$transaction([
+    ...contactScrubOps(address, orgId, accountlessTombstoneId(randomId), fallbackOrgId),
+    // The pull connector's profile of this address: a tombstone, so the next
+    // sync does not write the contact straight back onto the account.
+    externalProfileErasureOp({ orgId: erasureOrgId(orgId, fallbackOrgId), emails: [address] }),
+  ]);
   // A held mail to this contact (#2960) carries their address and the words
   // about them: it goes with them, inside the requesting org only.
   await forgetOutboundDrafts({ address: normalizeContactEmail(email), orgId: orgId ?? (await defaultOrgId()) });
@@ -190,7 +325,8 @@ export async function forgetCompanyContact(
 //      InteractionLog.notes + subject, RelationNote.body, any PersonalNote
 //      taken in a meeting that belongs to them, and — matched on their address,
 //      inside their own tenant only — CompanyInquiry.contactName/email/phone/
-//      note and Company.contactName/contactEmail/contactPhone (#2434).
+//      note and Company.contactName/contactEmail/contactPhone (#2434); for a
+//      lead on a stand-in address, through the accounts it is linked to (#3136).
 //
 // Scope of "about them": relation-scoped free text is scrubbed on relations
 // where the erased person is the MENTEE — the relation whose subject they are.
@@ -239,6 +375,9 @@ export async function forgetCompanyContact(
 //     row; `forgetCompanyContact()` below (#2559) forgets them by address
 //     through the SAME scrub builder, and unconverted enquiries age out through
 //     the `companyInquiry` retention entry.
+//   - the roster-feed run log (`RosterRowResult.key/message`, `RosterRun.absentKeys`)
+//     is not free text but names the person by key: forgotten by `rosterLogOps()`
+//     on both paths, and bounded by the `rosterRowResult` retention entry (90 days).
 // A new `@db.Text` column about a person belongs in BOTH lists — here and in
 // the sanitize-db header — or in this block with its reason.
 //
@@ -278,6 +417,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.supportAttachment.deleteMany({ where: { message: { senderId: userId } } }),
     prisma.supportMessage.updateMany({ where: { senderId: userId }, data: { body: '' } }),
     prisma.supportTicket.updateMany({ where: { requesterId: userId }, data: { subject: null } }),
+    // Their in-app bug reports (#3130): their words and a picture of their
+    // screen, theirs alone — deleted (the files cascade), not emptied.
+    prisma.supportReport.deleteMany({ where: { userId } }),
     // The person's own private notes: theirs alone, so deleted rather than kept
     // as an empty row. (A hard delete cascades these; anonymise does not.)
     prisma.personalNote.deleteMany({ where: { userId } }),
@@ -334,6 +476,7 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
     prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
     prisma.interviewRequest.updateMany({ where: { menteeId: userId }, data: { note: null, declineNote: null } }),
   ];
@@ -355,15 +498,17 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // Built while the row — and with it the address and the org — still exists.
   const companyContact = await companyContactOps(userId);
   const openText = await openTextArtifactOps(userId);
+  const rosterLog = await rosterLogOps(userId);
   // BEFORE the relations go: deleting a relation cascades to its meetings, and
   // `PersonalNote.meetingId` is SetNull — so a note taken in this person's
   // meeting would survive with its text intact and its only link to them
   // nulled, unreachable by any later query (#2052). One $transaction so a
   // partial scrub cannot happen; the deletes below keep their existing failure
   // mode (an FK that neither cascades nor is detached).
-  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText]);
+  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText, ...rosterLog]);
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
+  await prisma.relationLifecycleEvent.deleteMany({ where: { changedById: userId } });
   // Optional references without a DB-level cascade (FK restrict) would abort
   // the delete instead of cascading — and the rows themselves belong to the
   // org, not to the user, so they are detached rather than deleted. Without
@@ -383,8 +528,10 @@ export async function anonymizeUser(userId: string): Promise<void> {
   await forgetEmailLog(userId);
   const companyContact = await companyContactOps(userId);
   const openText = await openTextArtifactOps(userId);
+  const rosterLog = await rosterLogOps(userId);
   await prisma.$transaction([
     ...openText,
+    ...rosterLog,
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
     // What an AI wrote about the person (#2044): the row stays, the person's

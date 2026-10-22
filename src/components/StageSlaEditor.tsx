@@ -23,6 +23,9 @@ interface StageRow {
   // Board WIP limit for this stage (#1439): null = inherit the org-wide
   // number, 0 = never warn about this stage.
   wipLimit: number | null;
+  // The ladder's second rung (#1722): days after the breach before the org's
+  // administrators are told. null = only the mentor is reminded.
+  escalateAfterDays: number | null;
 }
 
 export function StageSlaEditor() {
@@ -56,7 +59,7 @@ export function StageSlaEditor() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit })),
+          slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit, escalateAfterDays: r.escalateAfterDays })),
         }),
       });
       const body = await res.json();
@@ -90,13 +93,19 @@ export function StageSlaEditor() {
           which box it belonged to. */}
       <div className="flex items-center gap-3 text-xs text-gray-500 mb-1 px-1">
         <span className="flex-1" />
-        <span className="w-16 sm:w-24">{t.stageSla.days}</span>
-        <span className="w-16 sm:w-24">{t.stageSla.wipLimit}</span>
+        <span className="w-20 sm:w-24">{t.stageSla.days}</span>
+        <span className="w-20 sm:w-24">{t.stageSla.escalateAfter}</span>
+        <span className="w-20 sm:w-24">{t.stageSla.wipLimit}</span>
       </div>
       <div className="space-y-2" data-testid="stage-sla-rows">
         {rows.map((r, i) => (
-          <div key={r.key} className="flex items-center gap-3 text-sm">
-            <span className="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
+          /* Three number inputs (days, escalation, WIP — #1722) leave a phone's
+             label ~50px, too narrow to say which stage it is: below sm the label
+             takes its own line and the inputs wrap under it, right-aligned under
+             their column headings (e2e/mobile-layout-coverage.spec.ts, the
+             stage-SLA row case). w-20 there: "Eskalieren nach" overflowed w-16. */
+          <div key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="basis-full sm:basis-auto flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
               {r.label}
               {r.isOffPath && <span className="ml-2 text-xs text-gray-400">({t.stageSla.offPath})</span>}
             </span>
@@ -113,7 +122,24 @@ export function StageSlaEditor() {
                 const days = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, days } : row)));
               }}
-              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="ml-auto w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+            />
+            <input
+              type="number"
+              min={0}
+              max={365}
+              value={r.escalateAfterDays ?? ''}
+              placeholder={t.stageSla.noRule}
+              /* Escalation hangs off the service level: no days, no breach. */
+              disabled={r.days == null || r.days <= 0}
+              aria-label={`${r.label} — ${t.stageSla.escalateAfter}`}
+              data-testid={`escalate-${r.key}`}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                const escalateAfterDays = v === '' ? null : Number(v);
+                setRows((p) => p.map((row, j) => (j === i ? { ...row, escalateAfterDays } : row)));
+              }}
+              className="w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm disabled:opacity-50"
             />
             <input
               type="number"
@@ -134,7 +160,7 @@ export function StageSlaEditor() {
                 const wipLimit = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, wipLimit } : row)));
               }}
-              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
             />
           </div>
         ))}
@@ -146,6 +172,7 @@ export function StageSlaEditor() {
         </Button>
       </div>
       <p className="mt-3 text-xs text-gray-500">{t.stageSla.calendarDays}</p>
+      <p className="mt-1 text-xs text-gray-500">{t.stageSla.escalateHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.wipLimitHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.appliesOnMove}</p>
     </Card>

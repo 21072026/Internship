@@ -6,8 +6,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
-import { resolveStageSlas, resolveStageWipLimits } from '@/lib/stageSla';
-import { getSetting } from '@/lib/settings';
+import { resolveStageEscalations, resolveStageSlas, resolveStageWipLimits } from '@/lib/stageSla';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
@@ -36,6 +36,10 @@ const schema = z.object({
         // an explicit null clears it back to "inherit the org-wide setting".
         // A 0 is kept as 0: "never warn about this stage".
         wipLimit: z.number().int().min(0).max(9999).nullable().optional(),
+        // The ladder's second rung (#1722): days after the breach before the
+        // org's administrators are told. Optional with the same meaning as
+        // wipLimit — omitted keeps what is stored, null (or 0) clears it.
+        escalateAfterDays: z.number().int().min(0).max(365).nullable().optional(),
       })
     )
     .max(60),
@@ -53,11 +57,12 @@ export async function GET() {
     const stages = await resolvePipelineStages(orgId, await getLocale());
     const slas = await resolveStageSlas(orgId);
     const wipLimits = await resolveStageWipLimits(orgId);
+    const escalations = await resolveStageEscalations(orgId);
     // The org-wide fallback the board applies to a stage with no limit of its
     // own (#1439). Served here rather than read from /api/admin/settings by the
     // board: this is already the one request that answers "what applies to each
     // column", and two sources for one number is how the hardcoded 8 survived.
-    const defaultWipLimit = resolveOrgWipLimit(await getSetting('boardWipLimit', await settingsOrgOf(session)));
+    const defaultWipLimit = resolveOrgWipLimit(await resolveSettingRaw('boardWipLimit', { orgId: await settingsOrgOf(session) }));
     // Every stage is listed, configured or not, so the form shows the whole
     // pipeline rather than only the rules that already exist.
     return NextResponse.json({
@@ -69,6 +74,7 @@ export async function GET() {
         isTerminal: s.isTerminal,
         days: slas.get(s.key) ?? null,
         wipLimit: wipLimits.get(s.key) ?? null,
+        escalateAfterDays: escalations.get(s.key) ?? null,
       })),
     });
   });
@@ -105,18 +111,23 @@ export async function PUT(request: Request) {
       (
         await prisma.stageSla.findMany({
           where: { orgId, stageKey: { in: parsed.data.slas.map((s) => s.stageKey) } },
-          select: { stageKey: true, wipLimit: true },
+          select: { stageKey: true, wipLimit: true, escalateAfterDays: true },
         })
-      ).map((r) => [r.stageKey, r.wipLimit])
+      ).map((r) => [r.stageKey, r])
     );
 
-    const keep: { stageKey: string; days: number | null; wipLimit: number | null }[] = [];
+    const keep: { stageKey: string; days: number | null; wipLimit: number | null; escalateAfterDays: number | null }[] = [];
     const drop: string[] = [];
     for (const s of parsed.data.slas) {
       const days = s.days != null && s.days > 0 ? s.days : null;
-      const wipLimit = s.wipLimit === undefined ? (current.get(s.stageKey) ?? null) : s.wipLimit;
+      const wipLimit = s.wipLimit === undefined ? (current.get(s.stageKey)?.wipLimit ?? null) : s.wipLimit;
+      const storedEscalation = current.get(s.stageKey)?.escalateAfterDays ?? null;
+      const asked = s.escalateAfterDays === undefined ? storedEscalation : s.escalateAfterDays;
+      // An escalation hangs off a service level: without `days` there is no
+      // breach to escalate, so it is cleared rather than kept dormant.
+      const escalateAfterDays = days != null && asked != null && asked > 0 ? asked : null;
       if (days == null && wipLimit == null) drop.push(s.stageKey);
-      else keep.push({ stageKey: s.stageKey, days, wipLimit });
+      else keep.push({ stageKey: s.stageKey, days, wipLimit, escalateAfterDays });
     }
 
     await prisma.$transaction([
@@ -126,14 +137,15 @@ export async function PUT(request: Request) {
       ...keep.map((s) =>
         prisma.stageSla.upsert({
           where: { orgId_stageKey: { orgId, stageKey: s.stageKey } },
-          update: { days: s.days, wipLimit: s.wipLimit },
-          create: { orgId, stageKey: s.stageKey, days: s.days, wipLimit: s.wipLimit },
+          update: { days: s.days, wipLimit: s.wipLimit, escalateAfterDays: s.escalateAfterDays },
+          create: { orgId, stageKey: s.stageKey, days: s.days, wipLimit: s.wipLimit, escalateAfterDays: s.escalateAfterDays },
         })
       ),
     ]);
 
     const withSla = keep.filter((s) => s.days != null).length;
     const withWip = keep.filter((s) => s.wipLimit != null).length;
+    const withEscalation = keep.filter((s) => s.escalateAfterDays != null).length;
 
     await logActivity({
       action: 'stage_sla.updated',
@@ -141,7 +153,7 @@ export async function PUT(request: Request) {
       actorEmail: session.user.email ?? null,
       targetType: 'organization',
       targetId: orgId,
-      detail: `${withSla} service levels, ${withWip} WIP limits, ${drop.length} cleared`,
+      detail: `${withSla} service levels, ${withEscalation} escalations, ${withWip} WIP limits, ${drop.length} cleared`,
       request,
     });
 

@@ -18,8 +18,8 @@
 //     its knowledge rate and nothing else — three answers name three people.
 
 import { getDictionary } from '@/i18n/dictionaries';
-import { getSurveyTemplate, renderSurveyTemplate } from '@/lib/surveyTemplates';
-import { SURVEY_MIN_RESPONSES } from '@/lib/surveyPrivacy';
+import { surveyInputFromTemplate } from '@/lib/surveyTemplateInput';
+import { applyResponseFloor, SURVEY_MIN_RESPONSES } from '@/lib/surveyPrivacy';
 
 export const OUTCOME_TEMPLATE_KEY = 'outcome_destination';
 
@@ -43,28 +43,9 @@ export const PLACED: readonly Destination[] = ['EMPLOYED_HERE', 'EMPLOYED_ELSEWH
  * `EMPLOYED_ELSEWHERE` whatever language it was given in.
  */
 export function outcomeSurveyInput() {
-  const template = getSurveyTemplate(OUTCOME_TEMPLATE_KEY)!;
-  const byLocale = { en: renderSurveyTemplate(template, 'en'), tr: renderSurveyTemplate(template, 'tr'), de: renderSurveyTemplate(template, 'de') };
-  const tri = (pick: (r: typeof byLocale.en) => string) => ({ en: pick(byLocale.en), tr: pick(byLocale.tr), de: pick(byLocale.de) });
-  return {
-    key: OUTCOME_TEMPLATE_KEY,
-    templateKey: OUTCOME_TEMPLATE_KEY,
-    title: tri((r) => r.title),
-    intro: tri((r) => r.description),
-    audience: 'MENTEE' as const,
-    anonymity: 'IDENTIFIED' as const,
-    questions: template.questions.map((q, i) => ({
-      key: q.key,
-      // The template's vocabulary → the form engine's (src/lib/forms/schema.ts).
-      type: q.type === 'SINGLE_CHOICE' ? 'SELECT' : q.type,
-      labels: tri((r) => r.questions[i].label),
-      ...(q.optionValues
-        ? { options: q.optionValues.map((value, j) => ({ value, labels: tri((r) => r.questions[i].options![j]) })) }
-        : {}),
-      required: q.required,
-      sortOrder: i,
-    })),
-  };
+  // The generic instantiation (src/lib/surveyTemplateInput.ts), pinned to the
+  // audience and the mode this report's rules depend on.
+  return surveyInputFromTemplate(OUTCOME_TEMPLATE_KEY, { audience: 'MENTEE', anonymity: 'IDENTIFIED' })!;
 }
 
 /** The destination labels in one language, for a report. */
@@ -160,9 +141,24 @@ export function summarizeOutcomes(people: EligibleParticipant[], answers: Map<st
   return {
     floor: f,
     overall: bucket(null, people, answers, f),
-    byCohort: groupBy(people, (p) => p.cohort).map(([label, ps]) => bucket(label, ps, answers, f)),
-    bySource: groupBy(people, (p) => p.source).map(([label, ps]) => bucket(label, ps, answers, f)),
+    byCohort: floorBreakdown(groupBy(people, (p) => p.cohort).map(([label, ps]) => bucket(label, ps, answers, f)), f),
+    bySource: floorBreakdown(groupBy(people, (p) => p.source).map(([label, ps]) => bucket(label, ps, answers, f)), f),
   };
+}
+
+/**
+ * The residual rule on a breakdown (#1906). Each bucket under the floor already
+ * hides its destinations, but next to the published overall the hidden ones
+ * TOGETHER come back by subtraction: overall − every shown cohort = the hidden
+ * cohort's destinations. applyResponseFloor (src/lib/surveyPrivacy.ts) hides
+ * the smallest shown buckets with them until the hidden ones add up to the
+ * floor — the same rule every other breakdown in the survey engine uses. A
+ * hidden bucket keeps its eligible/known/withheld counts and knowledge rate:
+ * those say how much we know, never where anybody went.
+ */
+function floorBreakdown(buckets: OutcomeBucket[], floor: number): OutcomeBucket[] {
+  const floored = applyResponseFloor(buckets.map((b, i) => ({ key: String(i), n: b.known })), floor);
+  return buckets.map((b, i) => (floored[i].suppressed ? { ...b, destinations: null, placedRate: null } : b));
 }
 
 /** Read one stored response into a DestinationAnswer, or null if it does not parse. */

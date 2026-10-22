@@ -15,7 +15,7 @@ along the way.
 - **Prisma 5** ORM → **MySQL**
 - **NextAuth 4** (Credentials provider, JWT sessions, bcrypt password hashing)
 - **Tailwind CSS**, **lucide-react**, **react-hook-form**, **zod**
-- **Nodemailer** (SMTP) + **node-cron** for interaction reminders
+- **Nodemailer** (SMTP) + a DB job queue and leased scheduler (`src/lib/jobs/`, `docs/job-worker.md`) for reminders and sweeps
 - Containerized (**Docker**); deployed to a **Caddy-fronted Docker host** (Oracle ARM,
   `interncrm.com`) by GitHub Actions through the box's **self-hosted runner** — the
   Plesk box was retired on 2026-09-06 (`docs/server-migration.md`)
@@ -99,7 +99,7 @@ flowchart LR
   subgraph Server[Next.js server]
     API[API routes /api/*]
     AUTH[NextAuth + JWT]
-    MAIL[emailService + node-cron]
+    MAIL[emailService + job queue]
   end
   DB[(MySQL via Prisma)]
   UI --> API --> DB
@@ -215,7 +215,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   weekly `schedule:`).
 - `topic-preview.yml` — per-PR isolated environment, torn down when the PR closes (#583).
   **Fork PRs get none** (their `GITHUB_TOKEN` can't push to ghcr, and unreviewed fork code
-  shouldn't run on the production host).
+  shouldn't run on the production host). A run whose PR **became conflicted while it was
+  building** (another PR landed on `main`) skips the server deploy — its `mergeable` job asks
+  GitHub between build and deploy, fails open, and the PR comment says why; the push that
+  resolves the conflict deploys again.
 - The Plesk-era `deploy.yml` ("Deploy to Plesk Server": hosted build + SSH into the old box)
   was **removed on 2026-09-15** — dead since 2026-07-17, superseded by the three workflows
   above, and its SSH target no longer exists. Don't reintroduce a GitHub→SSH deploy; the
@@ -232,7 +235,8 @@ marketing names redirect there, and their apex now serves **mail only**.
 
 - **Schema first**: change `prisma/schema.prisma`, run `prisma format && prisma validate &&
   prisma generate`. This project uses **`db push`**, there is **no `migrations/` folder** — do
-  not author SQL migrations.
+  not author SQL migrations. Expand/contract, rollback, a half-applied push and the
+  dangerous-change list: [`docs/migrations.md`](docs/migrations.md).
 - **"Additive" is not the same as "appliable"** (#2298): `db push` outright *refuses* — not
   warns, and `--accept-data-loss` does not cover it — a new **required** column whose default
   is client-side (`@default(cuid()/uuid()/nanoid())`) or absent, and any `@id`/`@@id` change,
@@ -346,8 +350,8 @@ marketing names redirect there, and their apex now serves **mail only**.
   undeletable**. Curated issues live in `src/lib/newsletterContent.ts` (EN/TR/DE, house
   style documented there). Full design in [`docs/newsletter.md`](docs/newsletter.md) — read
   it before extending: `lib/newsletter.ts` is client-safe on purpose (the HMAC token and
-  URL builders live in `lib/newsletterTokens.ts`), and the cron is registered from
-  `/api/cron/start`, never from `initCronJobs`, to keep the import graph one-way.
+  URL builders live in `lib/newsletterTokens.ts`), and its schedules are queued jobs
+  (`src/jobs/platform.ts`) that import it — `emailService` never imports it back.
 - **Staying signed in** (`docs/remember-me.md`, #1495): the session JWT is 12h and stays that
   way; "keep me signed in" is a separate rotating, hashed, revocable per-device token that
   silently mints a new session. Two rules to keep in mind when touching auth: anything that
@@ -452,6 +456,15 @@ marketing names redirect there, and their apex now serves **mail only**.
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Admin permissions are one rule and one guard** (`docs/role-access-matrix.md` § Admin tiers,
+  #1567/#1569): `User.adminLevel` (`ORG_ADMIN` · `PROGRAM_ADMIN` · `OBSERVER`, an empty column on an
+  ADMIN = `ORG_ADMIN`) + `AdminScopeGrant` rows; the catalogue, the tier table and every allow/deny
+  are pure in `src/lib/authzRule.ts`, and a route asks through `requirePermission(permission,
+  { subject, request })` in `src/lib/authz.ts` (server-only; reads the actor LIVE, writes an
+  `authz.capability_denied` row per refusal). Do not confuse it with `requireCapability()`
+  (`capabilityGate.ts`, the per-vertical product gate). `platform.*` is held only by the per-world
+  super admin (`isSuperAdmin`) — there is no SUPER_ADMIN tier — and no tenant permission crosses an
+  org, the super admin's included. A PROGRAM_ADMIN with no grant gets nothing.
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to
@@ -546,11 +559,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   through a handler registered in `src/jobs/index.ts`; every settle is one guarded
   `updateMany` on the claim, retries back off with jitter, and `maxAttempts` ends in
   `DEAD_LETTER`. Handlers are at-least-once — say in each one why a rerun is harmless.
-  The **cron is not leased yet**: its schedules are registered once at boot, so
-  a lease taken there would never be renewed. Until #1676 makes each tick take
-  the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
-  `CRON_ENABLED=0` — an interim pin, not an election, and the reason two
-  replicas cannot double-send today.
+  The **cron is leased per tick** (#1676/#1677): every schedule is declared in
+  `src/lib/jobs/schedules.ts` and enqueued by the 30 s `schedulerTick` on the `'scheduler'`
+  lease holder (idempotencyKey `<key>:<slotISO>`, missed-slot catch-up via `ScheduleState`);
+  each body runs as a handler in `src/jobs/` through the worker — so replica ≥2 no longer
+  runs with `CRON_ENABLED=0`. Never call `cron.schedule()`; a new schedule is a
+  `queue({ … })` entry plus a `registerJob()`.
 - **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
   that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
   retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a
@@ -563,6 +577,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   `mail` block are for a super admin (or the default organization's ADMIN, scoped to its own
   rows), never a tenant admin. A topic environment sends to a Mailpit sink unless every recipient
   is on `MAIL_RECIPIENT_ALLOWLIST`, and a sink that is down never falls back to the relay.
+  **Bounce/complaint suppression** (#1692, `docs/EMAIL_DELIVERABILITY.md` § 2e) is the one
+  rule that silences essential mail too: `prepareEmail()` and the drain refuse an address in
+  `EmailSuppression` (written only by `src/lib/emailSuppression.ts`, fed by
+  `POST /api/webhooks/email/[provider]`), recorded `SKIPPED` / `Suppressed: <REASON>`. The table
+  is deliberately not tenant-scoped (one shared sending domain); its admin list uses the mail
+  queue's scope. Never add a "send anyway" path — a delist is the admin's audited action.
 - **One billing meter** (`docs/metering.md`, #1750): the billable unit is *"a relation in
   ACTIVE state with any logged activity in the calendar month; paused, benched and completed
   pairs are not counted"* — the sentence we publish, and the header comment of
@@ -698,6 +718,15 @@ marketing names redirect there, and their apex now serves **mail only**.
   text. Schedules, future dates, date-only calendar fields and anything printed, signed or
   exported stay absolute. Don't hand-roll `relativeTime()` text in JSX: it loses the hover and
   the element's hydration guard (keyed on hydration, so a server's or a cache's "now" never sticks).
+- **In-app bug reports mask in ONE place** ([`docs/feedback-reports.md`](docs/feedback-reports.md),
+  #3130): the floating feedback button sends a `SupportReport` (tenant model) with a screenshot and
+  the console / failed-request context the browser kept **in memory only** until Send. What a report
+  may carry and how it is masked (query values, tokens, JWTs, `password=` pairs, e-mail addresses) is
+  `src/lib/feedbackContext.ts` — the collector masks before it keeps, and `POST /api/support/reports`
+  runs `sanitizeFeedbackContext()` again; never add a second masking path. Fields that must never be
+  in a screenshot get `data-private` (or `.rr-block`, which the Phase 2 replay will honour too).
+  A report is not a `SupportTicket` (a record to triage, not a conversation); the inbox is ADMIN-only
+  and org-scoped (another org's id is 404).
 - **Images open in the app, never in a new tab** (#2147): every user-supplied image
   (message and support attachments, announcement images) is a `<button>` that opens
   `ImageLightbox` (`src/components/ui/ImageLightbox.tsx`) via `useImageLightbox()` — never an

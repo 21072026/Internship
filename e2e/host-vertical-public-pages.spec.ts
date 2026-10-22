@@ -283,6 +283,14 @@ test('pages that belong to the internship product 404 on the marketing host and 
   expect((await page.request.get('/apply/some-mentor-id', { headers })).status()).toBe(404);
   // The release feed follows its page: no internship changelog on the marketing host.
   expect((await page.request.get('/release-notes/feed.xml', { headers })).status()).toBe(404);
+  // Mentees' and mentors' stories are the internship product's too, published or not.
+  expect((await page.request.get('/stories', { headers })).status()).toBe(404);
+  // Next emits a page's metadata on its 404 as well, so the head of each must
+  // not point a scraper at the internship share card.
+  for (const path of ['/for-companies', '/apply-as-mentor', '/stories']) {
+    const html = await (await page.request.get(path, { headers })).text();
+    expect(html, `${path} advertises its share card on the marketing host`).not.toContain(`${path}/opengraph-image`);
+  }
 
   await page.setExtraHTTPHeaders(headers);
   for (const path of ['/', '/auth/signin']) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withoutOrgCredentials } from '@/lib/orgCredentials';
 import { logActivity } from '@/lib/activity';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { z } from 'zod';
@@ -10,7 +11,9 @@ import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
-import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
+import { spEntityId, acsUrl, metadataUrl, sloUrl } from '@/lib/ssoSaml';
+import { certificateInfo } from '@/lib/ssoMetadata';
+import { certificateStatus } from '@/lib/ssoCertificateRule';
 import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { creatableVertical, orgInWorld, orgWorldWhere } from '@/lib/superAdminWorld';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -33,6 +36,20 @@ import { invalidateBrandCache } from '@/lib/hostBrand';
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
 // queries, so this screen lets an admin create tenants, set their plan, and see
 // usage vs. the plan's (advisory) limits. Query isolation lands in a later slice.
+
+// What the SSO card's expiry badge reads (#1933). `invalid` is a stored value
+// that no longer parses — written before the certificate was checked at save.
+function ssoCertificateSummary(pem: string | null, now: Date) {
+  if (!pem) return null;
+  const info = certificateInfo(pem);
+  if (!info) return { invalid: true as const };
+  return {
+    invalid: false as const,
+    notAfter: info.notAfter.toISOString(),
+    fingerprintSha256: info.fingerprintSha256,
+    ...certificateStatus(info.notAfter, now),
+  };
+}
 
 // GET — organizations with plan, limits and per-tenant usage.
 // A super admin sees every tenant OF ITS OWN WORLD (docs/worlds.md § Super
@@ -94,6 +111,7 @@ export async function GET() {
     : [[], []];
   const exemptAdmins = new Map(exemptAdminRows.map((r) => [r.orgId, r._count._all]));
   const sweepable = new Map(sweepableRows.map((r) => [r.orgId, r._count._all]));
+  const now = new Date();
 
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
@@ -134,8 +152,12 @@ export async function GET() {
           ssoProvider: o.ssoProvider,
           ssoIssuer: o.ssoIssuer,
           ssoEntryPoint: o.ssoEntryPoint,
+          ssoLogoutUrl: o.ssoLogoutUrl,
           // Never expose the raw certificate to the list view; just whether one is set.
           ssoCertificateSet: !!o.ssoCertificate,
+          // The stored certificate's expiry, for the card's badge (#1933) —
+          // dates and a status only, never the certificate body.
+          certificate: ssoCertificateSummary(o.ssoCertificate, now),
           active: isSsoActive(o),
           // The three values a customer's IT team registers in their IdP
           // (#1931). Computed here, not in the browser: they hang off
@@ -144,6 +166,7 @@ export async function GET() {
           spEntityId: spEntityId(o.slug),
           acsUrl: acsUrl(o.slug),
           metadataUrl: metadataUrl(o.slug),
+          sloUrl: sloUrl(o.slug),
           // Enforced SSO (#1950): the flag, plus the two numbers the admin
           // screen needs to name the consequence before anyone presses it.
           ssoEnforced: o.ssoEnforced,
@@ -245,7 +268,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: PROVISION_ERRORS[r.code], code: r.code }, { status: r.status });
   }
   const { organization, starterPack, invitation } = result.value;
-  return NextResponse.json({ organization, starterPack, invitation }, { status: 201 });
+  return NextResponse.json({ organization: withoutOrgCredentials(organization), starterPack, invitation }, { status: 201 });
 }
 
 const PROVISION_ERRORS: Record<Exclude<ProvisionRefusal['code'], 'feature_locked'>, string> = {
@@ -276,6 +299,8 @@ const patchSchema = z.object({
   ssoIssuer: z.string().max(TEXT_LIMITS.orgSsoIssuer).optional(),
   ssoEntryPoint: z.string().max(2000).optional(),
   ssoCertificate: z.string().max(20000).optional(),
+  // The IdP's SingleLogoutService (#1952) — part of the IdP trust, like the three above.
+  ssoLogoutUrl: z.string().max(2000).optional(),
   // Enforced SSO (#1950). Separate from ssoEnabled on purpose: "our IdP works"
   // and "nothing but our IdP may work" are different promises, and only the
   // second one ends live sessions.
@@ -337,7 +362,7 @@ export async function PATCH(request: Request) {
   const {
     id, plan, vertical, brandName, brandLogoUrl, brandColor, supportEmail,
     brandTileColor, brandAccent, brandPalette,
-    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced,
+    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
   } = parsed.data;
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
@@ -453,8 +478,8 @@ export async function PATCH(request: Request) {
 
   const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
     ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined ||
-    ssoEnforced !== undefined;
-  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced]);
+    ssoLogoutUrl !== undefined || ssoEnforced !== undefined;
+  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced]);
   if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
   }
@@ -476,6 +501,9 @@ export async function PATCH(request: Request) {
     [ssoIssuer, existing.ssoIssuer],
     [ssoEntryPoint, existing.ssoEntryPoint],
     [ssoCertificate, existing.ssoCertificate],
+    // Where we send a signed-out person (#1952): a tenant who could point it
+    // anywhere could route every sign-out through a page of their choosing.
+    [ssoLogoutUrl, existing.ssoLogoutUrl],
   ] as const).some(([next, current]) => {
     const value = orNull(next);
     return value !== undefined && value !== null && value !== (current ?? null);
@@ -557,6 +585,7 @@ export async function PATCH(request: Request) {
     const si = orNull(ssoIssuer); if (si !== undefined) data.ssoIssuer = si;
     const sep = orNull(ssoEntryPoint); if (sep !== undefined) data.ssoEntryPoint = sep;
     const sc = orNull(ssoCertificate); if (sc !== undefined) data.ssoCertificate = sc;
+    const slo = orNull(ssoLogoutUrl); if (slo !== undefined) data.ssoLogoutUrl = slo;
 
     const effective = {
       ssoEnabled: (data.ssoEnabled as boolean | undefined) ?? existing.ssoEnabled,
@@ -564,8 +593,14 @@ export async function PATCH(request: Request) {
       ssoIssuer: (data.ssoIssuer as string | null | undefined) ?? existing.ssoIssuer,
       ssoEntryPoint: (data.ssoEntryPoint as string | null | undefined) ?? existing.ssoEntryPoint,
       ssoCertificate: (data.ssoCertificate as string | null | undefined) ?? existing.ssoCertificate,
+      ssoLogoutUrl: (data.ssoLogoutUrl as string | null | undefined) ?? existing.ssoLogoutUrl,
     };
-    const err = validateSsoConfig(effective);
+    // The certificate is judged when this request writes one or switches SSO
+    // on (#1933) — never on a switch-off or an enforcement toggle, which a
+    // tenant with a lapsed certificate still needs.
+    const err = validateSsoConfig(effective, {
+      checkCertificate: (sc !== undefined && sc !== null) || (effective.ssoEnabled && !existing.ssoEnabled),
+    });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
 
     // The public demo shares ONE tenant between every visitor, and enforcing
@@ -665,5 +700,5 @@ export async function PATCH(request: Request) {
     detail: Object.keys(data).join(', '),
     request,
   });
-  return NextResponse.json({ organization, sessionsEnded, sweepPreview });
+  return NextResponse.json({ organization: withoutOrgCredentials(organization), sessionsEnded, sweepPreview });
 }

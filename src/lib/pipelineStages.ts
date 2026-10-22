@@ -9,6 +9,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import {
+  isPipelinePhase,
   CANONICAL_OUTCOME_KEYS,
   defaultPipelineStages,
   isDefaultLabel,
@@ -20,6 +21,7 @@ import {
   type ResolvedStage,
 } from './pipeline';
 import type { Locale } from '@/i18n/config';
+import { orgWhere } from './tenantFilter';
 import { defaultTemplateForVertical, localizeResolvedStageLabels, templateStagePayload } from './programTemplates';
 
 export { CANONICAL_OUTCOME_KEYS, defaultPipelineStages, isDefaultLabel, onPathKeys, outcomeStageKeysFrom, stageLabel, startStageKey, type OutcomeStageKeys, type ResolvedStage };
@@ -46,6 +48,7 @@ export async function resolvePipelineStages(
           isTerminal: r.isTerminal,
           isOffPath: r.isOffPath,
           color: r.color,
+          phase: r.phase,
         })),
         locale,
       );
@@ -72,6 +75,7 @@ export async function resolveCustomStages(
     isTerminal: r.isTerminal,
     isOffPath: r.isOffPath,
     color: r.color,
+    phase: r.phase,
   }));
 }
 
@@ -116,6 +120,20 @@ export function createStartStageResolver(locale: Locale = 'en'): StartStageResol
   };
 }
 
+/**
+ * How many relations of this org sit on each stage key (#1635), whatever their
+ * status: a completed pairing on a removed key loses its stage label in every
+ * report too. The default org also owns the org-less rows (`orgWhere`).
+ */
+export async function stageUsage(orgId: string): Promise<Record<string, number>> {
+  const rows = await prisma.mentorshipRelation.groupBy({
+    by: ['pipelineStatus'],
+    where: await orgWhere(orgId),
+    _count: { _all: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.pipelineStatus, r._count._all]));
+}
+
 // ── Writing a stage set ──────────────────────────────────────────────────────
 
 // The ONE function that replaces an org's PipelineStage rows (#2353). Both the
@@ -135,6 +153,8 @@ export interface StageWrite {
   isTerminal?: boolean;
   isOffPath?: boolean;
   color?: string | null;
+  /** Board phase (#1637); anything outside PIPELINE_PHASES is stored as null ("derive it"). */
+  phase?: string | null;
 }
 
 // `client` runs both writes inside a caller's interactive transaction (tenant
@@ -149,6 +169,7 @@ export async function replaceStages(orgId: string, stages: StageWrite[], client?
     isTerminal: s.isTerminal ?? false,
     isOffPath: s.isOffPath ?? false,
     color: s.color && s.color.trim() ? s.color.trim() : null,
+    phase: isPipelinePhase(s.phase) ? s.phase : null,
   }));
   if (client) {
     await client.pipelineStage.deleteMany({ where: { orgId } });

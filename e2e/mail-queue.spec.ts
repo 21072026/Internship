@@ -189,6 +189,60 @@ test.describe('mail queue', () => {
     expect(budget?.pauseLevel).toBeGreaterThan(0);
   });
 
+  test('a primary mail that keeps failing goes out on the bulk relay, under the bulk From (#1690)', async () => {
+    const to = addr('failover');
+    const bulk = await startFakeSmtp();
+    const keys = ['SMTP_BULK_HOST', 'SMTP_BULK_PORT', 'SMTP_BULK_USER', 'SMTP_BULK_PASS', 'SMTP_BULK_FROM', 'MAIL_FAILOVER_AFTER'];
+    const kept = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    try {
+      // The primary keeps answering "mailbox busy" — retryable, charged.
+      smtp.mode = { kind: 'refuse', stage: 'RCPT', reply: '452 4.2.2 Mailbox full' };
+      expect(await sendEmail({ to, subject: 'failover', html: '<p>failover</p>', category: 'message', fromName: 'Acme Sales' })).toBe('QUEUED');
+      const [job] = await jobsFor(to);
+
+      Object.assign(process.env, {
+        SMTP_BULK_HOST: '127.0.0.1',
+        SMTP_BULK_PORT: String(bulk.port),
+        SMTP_BULK_USER: 'mailq-bulk',
+        SMTP_BULK_PASS: 'mailq-bulk',
+        SMTP_BULK_FROM: 'bulk@bulk.example.test',
+        MAIL_FAILOVER_AFTER: '2',
+      });
+      resetMailTransportsForTests();
+
+      // One more charged failure on the primary: still below the threshold.
+      await dueNow(to);
+      await drainOnce({ maxMs: 5_000, deps: mailDrainDeps() });
+      expect((await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).attempts).toBe(1);
+      expect(bulk.to(to)).toHaveLength(0);
+
+      // A second charged failure reaches the threshold; the go after it leaves
+      // on the bulk relay.
+      await dueNow(to);
+      await drainOnce({ maxMs: 5_000, deps: mailDrainDeps() });
+      expect((await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).attempts).toBe(2);
+      await dueNow(to);
+      const summary = await drainOnce({ maxMs: 5_000, deps: mailDrainDeps() });
+      expect(summary.failedOver).toBe(1);
+      const after = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+      expect(after.status, `${after.lastError} ${JSON.stringify(summary)}`).toBe('SUCCEEDED');
+      const [delivered] = bulk.to(to);
+      expect(delivered).toBeDefined();
+      // The bulk relay's own identity, the brand's display name kept.
+      expect(delivered.data).toMatch(/^From: "?Acme Sales"? <bulk@bulk\.example\.test>/m);
+      expect(smtp.to(to)).toHaveLength(0);
+      const logs = await logFor(to);
+      expect(logs.at(-1)).toMatchObject({ status: 'SENT', transport: 'bulk' });
+    } finally {
+      for (const k of keys) {
+        if (kept[k] === undefined) delete process.env[k];
+        else process.env[k] = kept[k];
+      }
+      resetMailTransportsForTests();
+      await bulk.close();
+    }
+  });
+
   test('an open breaker queues critical mail without an SMTP attempt', async () => {
     const to = addr('breaker');
     await prisma.mailBudget.create({

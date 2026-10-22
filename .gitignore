@@ -203,3 +203,6 @@ playwright.repro.config.ts
 
 # Session handoff notes are local working notes, never project files.
 .HANDOFF-*
+
+# Local project introduction notes (personal working doc, not for the repo).
+/docs/proje-tanitimi.md

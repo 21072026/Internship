@@ -122,6 +122,19 @@ export function pipelineOptions(locale: Locale = 'en') {
 // the outcome. Every PipelineStatus belongs to exactly one group.
 export type PipelineGroupKey = 'pre' | 'internship' | 'result' | 'custom';
 
+/**
+ * The phases a stage may be filed under (#1637) — `PipelineStage.phase` is a
+ * free String validated against this list (repo convention: z.string() plus a
+ * whitelist, never z.enum). `custom` is not a phase anyone chooses: it is the
+ * trailing group for a stage nobody filed.
+ */
+export const PIPELINE_PHASES = ['pre', 'internship', 'result'] as const;
+export type PipelinePhase = (typeof PIPELINE_PHASES)[number];
+
+export function isPipelinePhase(value: unknown): value is PipelinePhase {
+  return typeof value === 'string' && (PIPELINE_PHASES as readonly string[]).includes(value);
+}
+
 export const PIPELINE_GROUPS: { key: PipelineGroupKey; statuses: PipelineStatus[] }[] = [
   {
     key: 'pre',
@@ -137,25 +150,36 @@ export const PIPELINE_GROUPS: { key: PipelineGroupKey; statuses: PipelineStatus[
   },
 ];
 
-// Group the VIEWER'S resolved stages rather than the enum constant above.
-// A tenant with a customized pipeline (#747) has stage keys that appear in no
-// PIPELINE_GROUPS entry, so iterating the constant made those stages invisible
-// on the desktop admin board — while the phone list, which reads the resolved
-// stages, showed them (#828). Unknown keys land in a trailing "custom" group in
-// the tenant's own stage order; empty groups drop out, so a tenant that only
-// renamed the defaults still sees the familiar three phases.
+/** The built-in phase of a canonical key, or null for any other key. */
+export function canonicalPhase(key: string): PipelinePhase | null {
+  const g = PIPELINE_GROUPS.find((grp) => (grp.statuses as string[]).includes(key));
+  return g && isPipelinePhase(g.key) ? g.key : null;
+}
+
+/**
+ * The group a resolved stage is shown under: the phase its tenant filed it
+ * under, else the canonical key's built-in phase, else the trailing `custom`
+ * group. One rule, so the board and anything else that groups cannot disagree.
+ */
+export function stageGroupKey(stage: Pick<ResolvedStage, 'key' | 'phase'>): PipelineGroupKey {
+  if (isPipelinePhase(stage.phase)) return stage.phase;
+  return canonicalPhase(stage.key) ?? 'custom';
+}
+
+// Group the VIEWER'S resolved stages rather than the enum constant above
+// (#828), by each stage's phase (#1637): a custom stage its admin filed under
+// `internship` sits in that column, in the tenant's own stage order. A stage
+// with no phase keeps what it always had — a canonical key its built-in phase,
+// anything else the trailing "custom" group — so a tenant that never set a
+// phase sees exactly the board it saw before. Empty groups drop out.
 export function groupResolvedStages(
   stages: ResolvedStage[],
 ): { key: PipelineGroupKey; statuses: string[] }[] {
-  const grouped = new Set<string>(PIPELINE_GROUPS.flatMap((g) => g.statuses as string[]));
   const byOrder = [...stages].sort((a, b) => a.order - b.order);
-  const out = PIPELINE_GROUPS.map((g) => ({
-    key: g.key,
-    statuses: byOrder.filter((s) => (g.statuses as string[]).includes(s.key)).map((s) => s.key),
-  })).filter((g) => g.statuses.length > 0);
-  const custom = byOrder.filter((s) => !grouped.has(s.key)).map((s) => s.key);
-  if (custom.length > 0) out.push({ key: 'custom' as PipelineGroupKey, statuses: custom });
-  return out;
+  const order: PipelineGroupKey[] = ['pre', 'internship', 'result', 'custom'];
+  return order
+    .map((key) => ({ key, statuses: byOrder.filter((s) => stageGroupKey(s) === key).map((s) => s.key) }))
+    .filter((g) => g.statuses.length > 0);
 }
 
 // Mentee-facing "what to do now" guidance per stage — turns the journey from a
@@ -219,6 +243,12 @@ export interface ResolvedStage {
   isTerminal: boolean;
   isOffPath: boolean;
   color: string | null;
+  /**
+   * The board phase the tenant filed this stage under (#1637), as stored — a
+   * value outside PIPELINE_PHASES, null or absent means "derive it"; read it
+   * only through `stageGroupKey()`.
+   */
+  phase?: string | null;
 }
 
 const DEFAULT_OFF_PATH = new Set<string>(['INTERNSHIP_DROPPED_460', 'INTERNSHIP_FOUND_ELSEWHERE_800']);
@@ -259,12 +289,84 @@ export function defaultPipelineStages(locale: Locale = 'en'): ResolvedStage[] {
     isTerminal: DEFAULT_TERMINAL.has(key),
     isOffPath: DEFAULT_OFF_PATH.has(key),
     color: null,
+    phase: canonicalPhase(key),
   }));
 }
 
 // The happy-path key sequence (excludes off-path), sorted by order.
 export function onPathKeys(stages: ResolvedStage[]): string[] {
   return stages.filter((s) => !s.isOffPath).sort((a, b) => a.order - b.order).map((s) => s.key);
+}
+
+/** The longest stage key the editor generates (the route accepts 60). */
+const STAGE_KEY_MAX = 50;
+
+/**
+ * A new stage's key, derived ONCE from the label an admin typed (#1635):
+ * uppercase `[A-Z0-9_]`, never starting with a digit, deduplicated against
+ * `taken` with a numeric suffix. The key is what every relation on the stage
+ * stores, so the editor generates it while the row is new and never rewrites
+ * it after the first save — a later label edit changes the label only.
+ */
+export function stageKeyFromLabel(label: string, taken: ReadonlySet<string>): string {
+  const base =
+    label
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, STAGE_KEY_MAX) || 'STAGE';
+  const safe = /^[0-9]/.test(base) ? `S_${base}`.slice(0, STAGE_KEY_MAX) : base;
+  if (!taken.has(safe)) return safe;
+  for (let n = 2; ; n++) {
+    const candidate = `${safe.slice(0, STAGE_KEY_MAX - String(n).length - 1)}_${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * The stages a replacement would drop while records still sit on them (#1635):
+ * key → count. The PUT refuses with 409 when this is non-empty; the editor
+ * uses the same rule to disable the remove control.
+ */
+export function removedStagesInUse(
+  currentKeys: readonly string[],
+  nextKeys: readonly string[],
+  usage: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const kept = new Set(nextKeys);
+  const out: Record<string, number> = {};
+  for (const key of currentKeys) {
+    const n = usage[key] ?? 0;
+    if (!kept.has(key) && n > 0) out[key] = n;
+  }
+  return out;
+}
+
+/** Why a bulk advance left a relation where it was (#1637). */
+export type AdvanceSkipReason = 'final_stage' | 'off_path' | 'unknown_stage';
+
+/**
+ * Where "advance one step" takes a relation on THIS tenant's stages (#1637):
+ * the next key of `onPathKeys(stages)` — the resolved order, not the canonical
+ * constant `nextOnPathStatus()` walks, which knows no custom key and so turned
+ * every advance on a custom pipeline into a silent no-op. Never lands on an
+ * off-path stage (they are not on the path), never moves anything off one or
+ * out of a terminal stage, and says why when it does not move.
+ */
+export function nextOnPathStage(
+  stages: ResolvedStage[],
+  current: string,
+): { to: string } | { skip: AdvanceSkipReason } {
+  const stage = stages.find((s) => s.key === current);
+  if (!stage) return { skip: 'unknown_stage' };
+  if (stage.isOffPath) return { skip: 'off_path' };
+  if (stage.isTerminal) return { skip: 'final_stage' };
+  const path = onPathKeys(stages);
+  const idx = path.indexOf(current);
+  const to = idx >= 0 ? path[idx + 1] : undefined;
+  return to ? { to } : { skip: 'final_stage' };
 }
 
 // The stage a brand-new relation must start on (#1634).

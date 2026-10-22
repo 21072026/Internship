@@ -12,6 +12,8 @@ import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
 import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
+import { KlaviyoCard } from '@/components/admin/KlaviyoCard';
+import { useVertical } from '@/lib/verticalClient';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key {
@@ -79,6 +81,8 @@ const CONNECTOR_LABEL: Record<string, string> = {
 export default function IntegrationsPage() {
   const t = useT();
   const locale = useLocale();
+  // The Klaviyo connector feeds the marketing funnel (docs/integrations/klaviyo.md).
+  const isMarketing = useVertical() === 'MARKETING';
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [keys, setKeys] = useState<Key[]>([]);
@@ -259,6 +263,12 @@ export default function IntegrationsPage() {
         </div>
       </Card>
 
+      {isMarketing && (
+        <div className="mb-6">
+          <KlaviyoCard />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>{t.integrations.webhooks}</CardTitle></CardHeader>
@@ -302,7 +312,7 @@ export default function IntegrationsPage() {
                       </Button>
                       <Button size="sm" variant="ghost" data-testid={`webhook-test-${h.id}`} onClick={() => sendTest(h.id)}>{t.integrations.sendTest}</Button>
                       <Button size="sm" variant="ghost" onClick={() => rotate(h.id)}>{t.integrations.rotateSecret}</Button>
-                      <button onClick={() => delHook(h.id)} aria-label="delete" className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => delHook(h.id)} aria-label={t.common.delete} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                   {editing === h.id && (

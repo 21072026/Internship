@@ -34,7 +34,7 @@ export const IMPERSONATION_SESSION_MAX_MS = 30 * 60 * 1000;
  * queued behind #1585 (see the header of `src/lib/retentionEntries.ts`). When
  * that lands, set this to the same window that entry uses and the card's copy
  * switches by itself. It is a literal rather than a registry lookup on purpose:
- * importing `retentionEntries` would drag node-cron and the mail service into
+ * importing `retentionEntries` would drag the retention registry and the mail service into
  * an account-page request just to read one number.
  */
 export const IMPERSONATION_HISTORY_RETENTION_DAYS: number | null = null;

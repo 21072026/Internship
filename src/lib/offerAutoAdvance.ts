@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
-import { getSetting } from '@/lib/settings';
+import { resolveSetting } from '@/lib/settingsResolver';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { DEFAULT_HIRED_STAGE_KEY } from '@/lib/offers';
 import { validateDropoffReason } from '@/lib/stageChange';
@@ -29,7 +29,7 @@ import { decideOfferAutoAdvance, type AutoAdvanceDecision } from '@/lib/offerAut
 export type AutoAdvanceResult = AutoAdvanceDecision | { move: false; reason: 'changed_meanwhile' | 'reason_required' };
 
 export async function advanceOnAcceptedOffer(offer: { id: string; relationId: string; orgId: string | null }): Promise<AutoAdvanceResult> {
-  const enabled = (await getSetting('autoAdvanceOnOfferAccept', offer.orgId)) === 'true';
+  const enabled = await resolveSetting('autoAdvanceOnOfferAccept', { orgId: offer.orgId });
   if (!enabled) return { move: false, reason: 'disabled' };
 
   const relation = await prisma.mentorshipRelation.findUnique({

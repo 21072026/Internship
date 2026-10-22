@@ -124,6 +124,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'ops-alert': { exempt: true, why: `${ESSENTIAL} — operator alerts go to staff addresses` },
   test: { exempt: true, why: `${ESSENTIAL} — the admin's own test mail` },
   consent: { exempt: true, why: `${ESSENTIAL} — the demo form's double-opt-in confirmation, triggered by the person` },
+  'sso-certificate': { exempt: true, why: `${ESSENTIAL} — the IdP certificate-expiry warning, addressed to the org's admins and support address` },
   // ── triggered by the person themselves ────────────────────────────────────
   'mentor-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own application' },
   // ── held although essential-grouped ───────────────────────────────────────
@@ -138,6 +139,8 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'interaction-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'weekly-report': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'document-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
+  // #1859: the account-less reviewer's link, sent when the programme names them.
+  'document-review': { exempt: false, trigger: 'request', why: 'a review request to a named external reviewer' },
   'meeting-feedback': { exempt: false, trigger: 'meeting', why: 'the automated "how was it?" ask' },
   'dormant-check-in': { exempt: false, trigger: 'check_in', why: 'the "are you still interested?" mail' },
   're-engagement': { exempt: false, trigger: 'win_back', why: 'a win-back / re-engagement mail' },
