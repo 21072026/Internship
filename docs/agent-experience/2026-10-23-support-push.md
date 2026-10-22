@@ -17,6 +17,15 @@
   `ESLINT_USE_FLAT_CONFIG=false npx eslint --no-eslintrc -c .eslintrc.json --ext .ts,.tsx src`.
 - **macOS'ta `gitignore-exports.test.mjs` kırmızı olabilir.** `core.ignorecase=true` büyük
   harfli `accounts.CSV`'yi Linux'tan farklı eşliyor; CI'da geçer, bir regresyon değildir.
+- **Yerel MariaDB 12'de bir `$transaction` içindeki yazma 1020 ile 500 dönebilir** ("Record
+  has changed since last read"): 11.6'dan beri `innodb_snapshot_isolation=1` varsayılan, CI'daki
+  MySQL 8'de bu yok. Support spec'leri buna takıldı. Koşu süresince
+  `mysql -e "SET GLOBAL innodb_snapshot_isolation=0"`, ardından `=1` ile geri aç.
+- **Paylaşılan yerel `internship_e2e` başka dalın şemasında kalabilir** (`db push`
+  "Cannot drop index … needed in a foreign key constraint" der). Onu sıfırlama: soket üzerinden
+  (`mysql -e …`, OS kullanıcısı yönetici) `internship_e2e_<issue>` aç, `e2e`'ye yetki ver,
+  oraya `db push` yap. Ayrıca `db push … | tail` çıkış kodunu yutar; Playwright o zaman eski
+  şemaya karşı koşar ve yanıltıcı biçimde düşer.
 - Worktree'nin `node_modules`'ı `main`'in gerisinde kalınca `tsc` yeni paketlerde (`@visx/*`,
   `modern-screenshot`) düşer: `npm install --ignore-scripts` + `npx prisma generate` +
   `rm -rf .next/types`.
