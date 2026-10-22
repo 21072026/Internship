@@ -31,7 +31,9 @@ const schema = z.object({
   description: z.string().trim().min(1).max(FEEDBACK_DESCRIPTION_MAX),
   contactAllowed: z.enum(['true', 'false']),
   url: z.string().max(4096).optional().default(''),
-  viewport: z.string().regex(/^\d{1,5}x\d{1,5}$/).optional().default(''),
+  // Empty allowed: the regex also judges the default, so a client that omits
+  // the field was refused with a bare 400.
+  viewport: z.string().regex(/^(\d{1,5}x\d{1,5})?$/).optional().default(''),
   context: z.string().max(FEEDBACK_CONTEXT_MAX_BYTES).optional().default('{}'),
 });
 
