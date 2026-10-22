@@ -40,6 +40,9 @@ starts 'one MB short → deferred'                     'deferred only 3071 MB' "
 eq     "a redeploy counts its own container's memory" 'ok' "$(topic_capacity_verdict 2500 700 3)"
 starts 'the cap is checked first, whatever the memory' 'deferred 8 topic environments' "$(topic_capacity_verdict 64000 0 8)"
 eq     'below the cap → ok'                          'ok' "$(topic_capacity_verdict 64000 0 7)"
+eq     'a redeploy is not a new environment, even over the cap' 'ok' "$(topic_capacity_verdict 64000 700 11 1)"
+starts 'a redeploy is still judged on memory'        'deferred only' "$(topic_capacity_verdict 1000 200 11 1)"
+starts 'a NEW environment over the cap stays deferred' 'deferred 11 topic' "$(topic_capacity_verdict 64000 0 11 0)"
 eq     'unknown memory admits (the container limit still caps it)' 'ok' "$(topic_capacity_verdict '' 0 0)"
 case "$(topic_capacity_verdict 1000 0 0)" in
   *"1024 MB for the container + 2048 MB kept free"*) ok 'the reason names both halves of the need' ;;
@@ -83,6 +86,9 @@ eq 'KiB usage rounds down'         '0'    "$(container_mem_mb internship-crm-pr1
 eq 'a missing container uses 0'    '0'    "$(container_mem_mb internship-crm-pr99)"
 eq 'only internship-crm-pr<N> counts, minus the PR itself' '1' "$(topic_containers_except internship-crm-pr10)"
 eq 'a new PR sees every topic container' '2' "$(topic_containers_except internship-crm-pr77)"
+eq 'its own running container is seen'   '1' "$(container_running internship-crm-pr10)"
+eq 'a name prefix is not a match'        '0' "$(container_running internship-crm-pr1)"
+eq 'a PR without a container'            '0' "$(container_running internship-crm-pr77)"
 docker() { [ "$1" = ps ] && return 0; return 1; }
 eq 'an empty box counts 0 (and survives pipefail)' '0' "$(set -o pipefail; topic_containers_except internship-crm-pr1)"
 

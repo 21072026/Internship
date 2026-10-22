@@ -743,6 +743,9 @@ which belongs to another repository). Three changes keep that from recurring:
   a `Restart=always` drop-in, and asks GitHub whether the runner drains its queue
   (`scripts/runner-queue.mjs`): jobs for its label waiting ≥ 30 min with nothing
   running on it → `systemctl restart`. "The service is active" is not "it takes jobs".
+  The box has the last word: while this runner has a live `bin/Runner.Worker` (a job in
+  flight) it is never restarted, whatever the API said — GitHub's filtered run listings
+  come back empty now and then, and a restart would cancel the job, a prod deploy included.
   It reaches the box through the `SSH_*` secrets, which must point at **the runner's box**
   (the Caddy host since the 2026-09 migration). Each run prints a `Box:` marker line
   (`plesk=yes` means the secrets still reach the retired Plesk box); until they are
@@ -753,7 +756,7 @@ which belongs to another repository). Three changes keep that from recurring:
 |---|---|---|---|
 | `TOPIC_MEMORY_MB` | repo variable | 1024 | hard memory limit of one topic container |
 | `TOPIC_HEADROOM_MB` | repo variable | 2048 | kept free for prod/preview deploys |
-| `TOPIC_MAX_ENVS` | repo variable | 8 | topic containers running at once, at most |
+| `TOPIC_MAX_ENVS` | repo variable | 8 | topic containers running at once, at most (a redeploy of a running one is not counted again) |
 | `DEPLOY_MIN_AVAILABLE_MB` | env of `deploy-prod.sh` | 768 | a prod/preview deploy needs this free (`0` = off) |
 | `RUNNER_NAME` | repo variable | `interncrm` | the runner the watchdog looks after |
 | `RUNNER_STUCK_AFTER_MIN` | repo variable | 30 | queue wait that counts as stuck |

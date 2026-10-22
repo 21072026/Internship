@@ -59,6 +59,12 @@ container_mem_mb() { # container_mem_mb <name>
     }'
 }
 
+# Is <name> itself running? "1" or "0". A redeploy replaces it, so it never
+# adds to the count of environments (topic_capacity_verdict's 4th argument).
+container_running() { # container_running <name>
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$1"; then echo 1; else echo 0; fi
+}
+
 # Running topic containers (internship-crm-pr<N>) other than <name>.
 topic_containers_except() { # topic_containers_except <name>
   # The grep pair matches nothing on an empty box; under `set -o pipefail` that
@@ -75,9 +81,15 @@ topic_containers_except() { # topic_containers_except <name>
 #   own        what this PR's current container uses (it is replaced, so its
 #              memory comes back), in MB
 #   others     topic containers running for OTHER PRs
-topic_capacity_verdict() { # topic_capacity_verdict <available> <own> <others>
-  local available="$1" own="${2:-0}" others="${3:-0}"
-  if [ "$others" -ge "$TOPIC_MAX_ENVS" ]; then
+#   replacing  1 when this PR's container is already running (a redeploy)
+#
+# The cap applies to NEW environments only. A redeploy replaces a container
+# that is already counted, so refusing it lowers no count and frees no memory —
+# it would only strand the PR on its old commit whenever the box is over the
+# cap (e.g. right after TOPIC_MAX_ENVS is lowered). Memory still judges it.
+topic_capacity_verdict() { # topic_capacity_verdict <available> <own> <others> [replacing]
+  local available="$1" own="${2:-0}" others="${3:-0}" replacing="${4:-0}"
+  if [ "$replacing" != 1 ] && [ "$others" -ge "$TOPIC_MAX_ENVS" ]; then
     echo "deferred ${others} topic environments are already running (the limit is ${TOPIC_MAX_ENVS})"
     return 0
   fi
