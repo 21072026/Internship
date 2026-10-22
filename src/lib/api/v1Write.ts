@@ -84,7 +84,11 @@ export async function apiWrite<T>(
   key: ApiKeyContext,
   schema: ZodType<T>,
   handler: (body: T) => Promise<NextResponse>,
+  // A bulk route (#3015) may take a larger body than one record; nothing else
+  // about the floor changes for it.
+  options: { maxBodyBytes?: number } = {},
 ): Promise<NextResponse> {
+  const maxBody = options.maxBodyBytes ?? WRITE_BODY_MAX;
   const limited = enforceRateLimit(request, 'v1-write', { ...WRITE_RATE_LIMIT, subject: `key:${key.id}` });
   if (limited) {
     return apiError(429, 'rate_limited', 'Too many requests', 'Too many write requests. Please try again later.', {
@@ -93,7 +97,7 @@ export async function apiWrite<T>(
   }
 
   const raw = await request.text();
-  if (Buffer.byteLength(raw, 'utf8') > WRITE_BODY_MAX) return bodyProblem(`must be at most ${WRITE_BODY_MAX} bytes`);
+  if (Buffer.byteLength(raw, 'utf8') > maxBody) return bodyProblem(`must be at most ${maxBody} bytes`);
   let json: unknown;
   try {
     json = raw ? JSON.parse(raw) : {};

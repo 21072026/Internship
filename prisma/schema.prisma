@@ -151,6 +151,11 @@ model Organization {
   ssoIssuer        String? // IdP entity ID / issuer
   ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
   ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  // The certificate-expiry warning already mailed (#1933, src/lib/ssoCertificateRule.ts):
+  // the SHA-256 fingerprint it was about and the mark (30 or 7 days). Keyed to the
+  // fingerprint so a rotated certificate starts afresh and a redeploy never re-sends.
+  ssoCertWarnFp    String?  @db.VarChar(100)
+  ssoCertWarnStage Int?
   // Enforced SSO (#1950): when true, NO password-derived path may mint a
   // session for this tenant's users — sign-in, remember-me silent re-auth,
   // password reset/SET_INITIAL, invitation registration and password change all
@@ -282,6 +287,7 @@ model Organization {
   contactSuppressions     ContactSuppression[]
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
+  domainEvents            DomainEvent[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
   externalProfileLinks    ExternalProfileLink[]
@@ -2944,6 +2950,39 @@ model Webhook {
   @@index([apiKeyId])
 }
 
+// THE event table (#1691): one append-only row per domain event the product
+// raised. The vocabulary — which names exist, at which version, with which
+// payload — is src/lib/events/catalog.ts and nowhere else; `name` + `version`
+// here always name an entry there. This is the ONE event table of the
+// programme: the transactional outbox (#1680) adds its relay columns
+// (status / relayedAt / attempts) to THIS model, there is no second
+// OutboxEvent table. Tenant data, registered in TENANT_MODELS; background
+// readers (the relay, the retention sweep) have no session and must pass
+// `orgId` / run in an explicit context. Pruned by the `domainEvent` entry of
+// the retention registry (`domainEventRetentionDays`). docs/domain-events.md.
+model DomainEvent {
+  id            String        @id @default(cuid())
+  orgId         String?
+  org           Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name          String        @db.VarChar(96)
+  version       Int           @default(1)
+  payload       Json
+  // 'user' | 'system' | 'apikey' (EVENT_ACTOR_TYPES)
+  actorId       String?
+  actorType     String?       @db.VarChar(16)
+  // A Prisma model name (the catalogue entry's subjectType) + that row's id.
+  subjectType   String?       @db.VarChar(64)
+  subjectId     String?
+  correlationId String?
+  createdAt     DateTime      @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([name, createdAt])
+  @@index([subjectType, subjectId, createdAt])
+  // The retention sweep's cross-tenant range (pruneDomainEvents).
+  @@index([createdAt])
+}
+
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
 // A minted programmatic credential for the public /api/v1 surface.
 //
@@ -2987,6 +3026,7 @@ model ApiKey {
   quotaPeriod     String?             @db.VarChar(10)
   quotaLimit      Int?
   usage           ApiKeyUsage[]
+  imports         ApiImport[]
   idempotencyKeys ApiIdempotencyKey[]
   webhooks        Webhook[]
   exports         ApiExport[]
@@ -3043,6 +3083,35 @@ model ApiIdempotencyKey {
   @@unique([apiKeyId, key])
   @@index([orgId])
   @@index([createdAt])
+}
+
+// A queued bulk candidate import from /api/v1 (#3015): POST
+// /api/v1/imports/candidates stores the rows and enqueues `api.import.candidates`;
+// the job runs them through the one import engine (runImport) and writes the
+// per-row report here. `input` holds the submitted rows only until the run
+// ends; the row itself is deleted after `expiresAt`.
+model ApiImport {
+  id         String    @id @default(cuid())
+  orgId      String
+  apiKeyId   String
+  apiKey     ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  kind       String    @db.VarChar(40)
+  dryRun     Boolean   @default(false)
+  // PENDING | RUNNING | DONE | FAILED
+  status     String    @default("PENDING") @db.VarChar(16)
+  total      Int
+  // The submitted rows (JSON); null once the run has ended.
+  input      String?   @db.LongText
+  // The per-row report (JSON); null until DONE.
+  report     String?   @db.LongText
+  error      String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  expiresAt  DateTime
+
+  @@index([orgId])
+  @@index([apiKeyId, status])
+  @@index([expiresAt])
 }
 
 // An asynchronous snapshot of one /api/v1 resource (#3002): queued by
@@ -5695,6 +5764,10 @@ model Requisition {
   openings            Int
   filled              Int       @default(0)
   requiredSkills      Json      @default("[]")
+  // Up to 8 questions a candidate answers when applying (#1832):
+  // [{ id, type: TEXT|BOOLEAN|SELECT, label: { en, tr, de }, options?, required }],
+  // validated by src/lib/screeningQuestions.ts on write and on every answer.
+  screeningQuestions  Json      @default("[]")
   city                String?
   workMode            String?
   startDate           DateTime?

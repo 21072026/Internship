@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { parseSkills, REQUISITION_SKILL_LIMITS } from '@/lib/skills';
+import { screeningQuestionsSchema } from '@/lib/screeningQuestions';
 
 export const REQUISITION_STATUSES = ['DRAFT', 'OPEN', 'ON_HOLD', 'FILLED', 'CANCELLED'] as const;
 export type RequisitionStatus = (typeof REQUISITION_STATUSES)[number];
@@ -33,6 +34,8 @@ export const requisitionInputSchema = z.object({
   workMode: nullableText(REQUISITION_LIMITS.workMode),
   startDate: isoDate,
   ownerId: z.string().min(1).nullable().optional(),
+  // The questions a candidate answers when applying (#1832).
+  screeningQuestions: screeningQuestionsSchema.optional(),
 }).strict();
 
 export const requisitionPatchSchema = requisitionInputSchema.partial().omit({ companyId: true });

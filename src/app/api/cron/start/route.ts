@@ -12,6 +12,7 @@ import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
 import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
 import { initEvaluationRemindersCron } from '@/lib/evaluationDue';
 import { initProgramJourneyCron } from '@/lib/programJourney';
+import { initSsoCertificateExpiryCron } from '@/lib/jobs/ssoCertificateExpiry';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -71,6 +72,8 @@ export async function POST(request: Request) {
   // Program journey steps (#1852), daily 07:10 — in-app only, but registered
   // here with the other daily sweeps so #1676 finds every schedule in one place.
   initProgramJourneyCron();
+  // IdP certificate-expiry warnings (#1933), daily 06:40 — they mail through emailService too.
+  initSsoCertificateExpiryCron();
   // The Klaviyo pull connector (docs/integrations/klaviyo.md), every fifteen
   // minutes through scheduleLeased() (a 'node-cron' entry in
   // src/lib/jobs/schedules.ts). Imports leads; never mails one.

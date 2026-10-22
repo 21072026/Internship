@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**The mentee apply flow (#1832):** `Requisition.screeningQuestions` (additive, `@default(\"[]\")`) holds up to 8 questions — `{ id, type: TEXT | BOOLEAN | SELECT, label: { en, tr, de }, options?, required }`, validated by `src/lib/screeningQuestions.ts` on write (ADMIN and the owning COMPANY edit them in the requisition form) and on every answer. `POST /api/applications` (MENTEE only, rate-limited per user, free core) applies to a role that is visible on the job board (OPEN with a free seat, own org — else 404), checks the answers server-side (`required_missing`, `unknown_question`, `invalid_answer`), creates the `Application` at `APPLIED` with source `SELF` and its first `ApplicationEvent`, refuses a second application through `@@unique([requisitionId, menteeId])` as `409 already_applied`, and notifies the company's users, the requisition owner and the mentee's active mentor (`job_application.received` / `job_application.mentee_applied`). `GET /api/applications` is role-branched through `visibleApplicationsWhere()`. `PATCH /api/applications/[id]` `{ action: 'withdraw' }` goes through `canPerformApplicationAction()` and `moveApplicationStage()` (withdrawnAt, one event, 409 on a race; terminal). The job detail page gets the apply form; new `/portal/applications` lists the mentee's applications with a stage badge and a confirmed withdraw.",
+  "notes": {
+    "en": ["Candidates can apply to open roles from the Jobs page — answering the company's screening questions — follow their applications and withdraw them."],
+    "tr": ["Adaylar İlanlar sayfasından açık pozisyonlara başvurabilir — şirketin ön eleme sorularını yanıtlayarak —, başvurularını izleyebilir ve geri çekebilir."],
+    "de": ["Kandidat:innen können sich auf der Stellenseite auf offene Stellen bewerben – mit den Vorauswahlfragen des Unternehmens –, ihre Bewerbungen verfolgen und zurückziehen."]
+  }
+}
