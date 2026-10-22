@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security: Next.js 15.5.28.** 15.5.27 is affected by GHSA-2464-fhr4-w9xw (critical — unauthenticated remote code execution in the Image Optimization API when SVG files are used) and GHSA-p3m5-59mp-jv5r (high — denial of service in the App Router via Server Actions). `next` and `eslint-config-next` move to 15.5.28; nothing else in the lockfile changes."
+}
