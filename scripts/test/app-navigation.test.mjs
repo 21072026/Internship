@@ -8,23 +8,25 @@ import { register } from 'node:module';
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 const { appNavLinks } = await import('../../src/lib/appNavigation.ts');
 const { ADMIN_NAV_LINKS, MENTOR_NAV_LINKS, PORTAL_NAV_LINKS, SALES_NAV_LINKS } = await import('../../src/lib/navLinks.ts');
-const { verticalCapabilities } = await import('../../src/lib/verticals.ts');
+const { verticalCapabilities, MARKETING_ONLY_CAPABILITIES } = await import('../../src/lib/verticals.ts');
 
 const INTERNSHIP = verticalCapabilities('INTERNSHIP');
 const MARKETING = verticalCapabilities('MARKETING');
 const hrefs = (l) => l.map((x) => x.href);
+// A marketing-only link is absent from INTERNSHIP on purpose (verticals.ts, MARKETING_ONLY_CAPABILITIES).
+const internshipLink = (l) => !l.withoutCapability && !MARKETING_ONLY_CAPABILITIES.includes(l.capability);
 
 test('internship: every role gets its full web sidebar', () => {
   // Less the links that exist only where a module is absent (the sales
   // vertical's outbox, #2960) — INTERNSHIP carries every module.
   assert.deepEqual(
     hrefs(appNavLinks('ADMIN', INTERNSHIP)),
-    hrefs(ADMIN_NAV_LINKS.filter((l) => !l.withoutCapability && !l.superAdminOnly)),
+    hrefs(ADMIN_NAV_LINKS.filter((l) => internshipLink(l) && !l.superAdminOnly)),
   );
   // The deployment-wide destinations (#1575) only for a super admin.
   assert.deepEqual(
     hrefs(appNavLinks('ADMIN', INTERNSHIP, { superAdmin: true })),
-    hrefs(ADMIN_NAV_LINKS.filter((l) => !l.withoutCapability)),
+    hrefs(ADMIN_NAV_LINKS.filter(internshipLink)),
   );
   assert.ok(!hrefs(appNavLinks('ADMIN', INTERNSHIP)).includes('/admin/api-explorer'));
   assert.deepEqual(hrefs(appNavLinks('MENTOR', INTERNSHIP)), hrefs(MENTOR_NAV_LINKS));

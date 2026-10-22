@@ -42,7 +42,8 @@ export type VerticalCapability =
   | 'companies' // companies, needs, requisitions
   | 'pipeline' // the stage board itself — every vertical has one
   | 'messaging' // threads, announcements (the newsletter is `mentorship`: its audiences are mentees/mentors)
-  | 'documents'; // document requirements and uploads
+  | 'documents' // document requirements and uploads
+  | 'affiliate'; // the partner programme: partners, commissions, payouts (docs/affiliate-module.md)
 
 export interface VerticalDefinition {
   key: VerticalKey;
@@ -87,7 +88,9 @@ export const VERTICALS: readonly VerticalDefinition[] = [
     // intern projects (#2499): "Projects" is the internship product's team/task
     // workspace, so a marketing tenant must not see the nav entry or be able to
     // write through its APIs.
-    capabilities: ['companies', 'pipeline', 'messaging', 'documents'],
+    // `affiliate` is the marketing CRM's partner programme. INTERNSHIP does not
+    // carry it, so the mentoring product never shows or serves those screens.
+    capabilities: ['companies', 'pipeline', 'messaging', 'documents', 'affiliate'],
   },
 ];
 
@@ -97,6 +100,13 @@ export const VERTICALS: readonly VerticalDefinition[] = [
 // was. Falling back to "no product" would blank a tenant's UI; falling back to
 // the full set can only ever show something that already worked.
 export const DEFAULT_VERTICAL: VerticalKey = 'INTERNSHIP';
+
+// Capabilities that exist only in MARKETING by design. The "INTERNSHIP carries
+// everything" guards (scripts/test/verticals, nav-capabilities, app-navigation)
+// would otherwise read them as a live feature being switched off. Each entry is
+// a deliberate exception with its reason here; a new one needs the same review.
+//   affiliate — the marketing CRM's partner programme (docs/affiliate-module.md).
+export const MARKETING_ONLY_CAPABILITIES: readonly VerticalCapability[] = ['affiliate'];
 
 VERTICALS.forEach((v) => {
   Object.freeze(v.capabilities);

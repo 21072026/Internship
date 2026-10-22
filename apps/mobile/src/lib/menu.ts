@@ -49,6 +49,7 @@ const ICONS: Record<string, string> = {
   feedback: 'chatbox-ellipses',
   settings: 'settings',
   acquisition: 'mail',
+  affiliates: 'wallet',
   activity: 'pulse',
   audit: 'finger-print',
   agreements: 'document-lock',
