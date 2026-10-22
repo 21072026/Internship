@@ -299,6 +299,15 @@ export default defineConfig({
         // — the hole #2470 closed; at `0` every request is now one shared
         // bucket and the helpers' isolation would silently do nothing.
         env: {
+          // Required by Prisma and NextAuth even when the test suite never touches a
+          // real MySQL server: the app boots before the first spec and crashes with
+          // `Environment variable not found: DATABASE_URL` / `NEXTAUTH_SECRET` when
+          // they are unset. The URL must be a valid MySQL DSN so Prisma accepts the
+          // schema at process boot; the DB-specific specs provision their own fixture
+          // database at runtime.
+          DATABASE_URL: 'mysql://127.0.0.1:3306/internship_e2e',
+          NEXTAUTH_SECRET: 'e2e-nextauth-secret',
+          NEXTAUTH_URL: localURL,
           TRUSTED_PROXY_COUNT: '1',
           // E2E must never deliver real mail from a developer's loaded .env;
           // synchronous route mail would otherwise wait on that external SMTP.
