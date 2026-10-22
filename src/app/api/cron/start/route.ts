@@ -1,32 +1,28 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { initCronJobs } from '@/services/emailService';
-import { initAuditDrainCron } from '@/lib/auditDrain';
-import { initNewsletterCron } from '@/lib/newsletterDispatch';
-import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
-import { initRetentionCron } from '@/lib/retentionEntries';
-import { initUsageRollupCron } from '@/lib/jobs/usageRollup';
-import { initTrialRemindersCron } from '@/lib/jobs/trialReminders';
-import { initReportSubscriptionsCron } from '@/lib/jobs/reportSubscriptions';
-import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
-import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
-import { initEvaluationRemindersCron } from '@/lib/evaluationDue';
-import { initProgramJourneyCron } from '@/lib/programJourney';
+import { startScheduler } from '@/lib/jobs/schedulerRuntime';
 
-// node-cron timers live in this process; nothing about them works on the edge.
+// The scheduler tick lives in this process and needs Prisma — never the edge.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// POST — register the node-cron schedules in this server process. Called once at
-// boot by src/instrumentation.ts, which cannot import emailService directly:
+// POST — start the queue scheduler in this server process (#1676/#1677).
+// Called once at boot by src/instrumentation.ts, which must stay import-free:
 // middleware.ts makes Next compile instrumentation for the edge runtime too,
-// where Prisma/nodemailer fail to resolve (the same constraint the mail bridge
-// works around).
+// where Prisma/nodemailer fail to resolve.
 //
-// initCronJobs() is idempotent — it returns early once 'mentor-reminders' is
-// registered — so a retried call is harmless.
+// Every scheduled job in the product is declared in src/lib/jobs/schedules.ts.
+// Every 30 s the 'scheduler' lease holder enqueues the due slots (with
+// missed-slot catch-up), and the job worker — ticked separately by
+// instrumentation on every replica — runs them through the handlers in
+// src/jobs/. No node-cron timer is registered any more.
 //
-// Distinct from `GET /api/cron`, which runs every job once, right now, for an
+// Only reached where CRON_SECRET is set and CRON_ENABLED is not 0 (the
+// instrumentation gate): the preview DB holds real addresses, so a scheduler
+// there would mail real people. startScheduler() is idempotent, so a retried
+// call is harmless.
+//
+// Distinct from `GET /api/cron`, which runs or enqueues one job now, for an
 // authenticated ADMIN. This only starts the schedule.
 export async function POST(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -37,46 +33,6 @@ export async function POST(request: Request) {
     && (() => { try { return timingSafeEqual(Buffer.from(got), Buffer.from(expected)); } catch { return false; } })();
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  initCronJobs();
-  // Registered here rather than inside initCronJobs so the dependency stays
-  // one-way (newsletterDispatch imports emailService, never the reverse, #1469).
-  initNewsletterCron();
-  // Same reason as above (#1674): the dead-letter alert imports emailService to
-  // send its mail, so registering it inside initCronJobs would close the import
-  // graph into a cycle.
-  initDeadLetterAlertCron();
-  // The one retention schedule in the product (#1678). Registered here for the
-  // same reason as the two above — it imports emailService for the EmailLog
-  // window it took over — and because the mail service should not be the owner
-  // of the product's data-retention policy.
-  initRetentionCron();
-  // The nightly billing rollup (#1750). Registered here for the same reason as
-  // the three above — and because the meter must not be owned by the mail
-  // service. It ports to the leader-elected scheduler (#1676) as a plain
-  // handler, timer and all.
-  initUsageRollupCron();
-  // The daily trial sweep (#2415, story #2392). Registered here for the same
-  // reason as the four above: it imports emailService to send the reminder, so
-  // registering it inside initCronJobs would close a one-way import into a
-  // cycle. It also expires the trials that ran out overnight, which is why it
-  // runs early (05:20 UTC) rather than behind the mail-heavy slots.
-  initTrialRemindersCron();
-  // Scheduled report delivery (#1905), hourly. Here for the same reason as the
-  // five above: it sends through emailService.
-  initReportSubscriptionsCron();
-  // The nightly relationship-health sweep (#1901), 02:00 — it mails the
-  // at-risk digest through emailService, so it is registered here too.
-  initRelationHealthCron();
-  // Survey campaigns (#1887), daily 10:00 — they mail through emailService too.
-  initSurveyCampaignsCron();
-  // Evaluation due reminders (#1891), daily 08:15 — they mail through emailService too.
-  initEvaluationRemindersCron();
-  // Program journey steps (#1852), daily 07:10 — in-app only, but registered
-  // here with the other daily sweeps so #1676 finds every schedule in one place.
-  initProgramJourneyCron();
-  // The audit stream (#2012), every five minutes. Not a mail job, but it sits
-  // here with the others so every schedule in the product is registered from
-  // one place until #1676 leases the scheduler.
-  initAuditDrainCron();
+  startScheduler();
   return NextResponse.json({ ok: true, started: true });
 }

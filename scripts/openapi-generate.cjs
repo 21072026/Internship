@@ -90,6 +90,8 @@ const VERIFY_EXEMPT = [
   '/api/register',
   '/api/impersonate/stop',
   '/api/rsvp',
+  // An external document reviewer's link (#1859): the token is the credential.
+  '/api/document-review/',
   '/api/apply',
   '/api/profile-view',
   '/api/inbound-email',
@@ -464,7 +466,8 @@ function classifyAuth(text, ctx = {}) {
   const classes = [];
   const notes = [];
 
-  const hasSession = /getServerSession\s*\(/.test(text);
+  // requirePermission() (src/lib/authz.ts, #1569) reads the session itself.
+  const hasSession = /\b(?:getServerSession|requirePermission)\s*\(/.test(text);
 
   // Identifiers that hold the session role.
   const anchors = ['session\\s*[?.]*\\s*\\.\\s*user\\s*[?.]*\\s*\\.\\s*role'];
@@ -618,8 +621,10 @@ function classifyAuth(text, ctx = {}) {
   // in.
 
   // A helper named requireAdmin*/adminSession is decisive even where its body
-  // was not resolvable (an imported guard, a re-export).
-  if (/\b(?:requireAdmin[A-Za-z]*|adminSession)\s*\(/.test(text)) allow.add('ADMIN');
+  // was not resolvable (an imported guard, a re-export). So is
+  // requirePermission(): every permission it grants needs an admin tier, which
+  // only an ADMIN holds (src/lib/authzRule.ts, adminTierFor).
+  if (/\b(?:requireAdmin[A-Za-z]*|adminSession|requirePermission)\s*\(/.test(text)) allow.add('ADMIN');
 
   for (const r of deny) {
     allow.delete(r);

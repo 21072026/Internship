@@ -1,6 +1,7 @@
 import {
+  Scale,
   BookOpenCheck,
-  Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
+  Activity, AlarmClock, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
   Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
@@ -13,8 +14,10 @@ import {
   ArrowRightLeft,
   SlidersHorizontal,
   Table2,
+  RefreshCw,
   type LucideIcon,
   ShieldAlert,
+  FileSearch,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -74,6 +77,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  // Matching rule sets and their dry run (#1783).
+  { href: '/admin/matching', icon: Scale, key: 'matching', capability: 'mentorship' },
   // The org-wide at-risk queue (#1902): every pair, worst first, one next action.
   { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
@@ -126,6 +131,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Safeguarding review queue (#2056). Untagged: every vertical has messaging.
   { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
+  // The privileged-action trail (#1583) — gated on the `audit.read` permission
+  // server-side; untagged, every vertical has admins and impersonation.
+  { href: '/admin/audit', icon: FileSearch, key: 'audit' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
   { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },
@@ -136,6 +144,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // from another platform — internship records, hence `mentorship`.
   { href: '/admin/migrate', icon: ArrowRightLeft, key: 'migrate', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
+  // Stage-SLA breach queue and compliance rate (#1723). Untagged: every
+  // vertical has a pipeline and may set service levels on it.
+  { href: '/admin/sla', icon: AlarmClock, key: 'slaQueue' },
   // AI spend, failures, quota and provider status (#2030). Untagged: every
   // vertical has AI tasks and a quota.
   { href: '/admin/ai', icon: Sparkles, key: 'aiConsole' },
@@ -146,11 +157,15 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/reports', icon: Table2, key: 'reportsExplorer' },
   { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
+  // Scheduled HR roster sync (#1967): config, runs, row-level outcomes.
+  { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
+  // The mentoring agreement both sides accept at kickoff (#1790).
+  { href: '/admin/agreements', icon: FileSignature, key: 'agreements', capability: 'mentorship' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
   // The tenant's own bill (#1739): plan, active-pair meter, history. The meter
   // and the price list are the internship product's (src/lib/plans.ts); a
@@ -193,6 +208,8 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   { href: '/portal/profile', icon: User, key: 'myProfile' },
   // Their own projects, not the public showcase at /projects (#1114).
   { href: '/portal/projects', icon: FolderKanban, key: 'projects', capability: 'projects' },
+  // The open roles of the programme's employers (#1830).
+  { href: '/portal/jobs', icon: BriefcaseBusiness, key: 'jobs', capability: 'placements' },
   // Opted-in mentors only (#938) — consent-gated, see /api/mentors.
   { href: '/mentors', icon: Users, key: 'mentorDirectory' },
   { href: '/todos', icon: ListChecks, key: 'todos' },

@@ -639,7 +639,14 @@ export async function runRosterFeed(
         loadTarget: loadRosterTarget,
         // Resolved here, at fetch time, so the plaintext lives for one call and
         // never sits on the config object the run log is built from.
-        fetchFile: seams.fetchFile ?? ((f) => fetchFeedFile({ ...f, secret: resolveFeedSecret(row) })),
+        fetchFile:
+          seams.fetchFile ??
+          ((f) =>
+            fetchFeedFile(
+              { ...f, secret: resolveFeedSecret(row) },
+              // The e2e switch; see FetchFeedOptions.allowInsecureLoopback.
+              { allowInsecureLoopback: process.env.ROSTER_FEED_ALLOW_INSECURE_STUB === '1' },
+            )),
         deprovision: prismaDeprovisionPort(feed, {
           feedId: row.id,
           deprovision: row.deprovision,

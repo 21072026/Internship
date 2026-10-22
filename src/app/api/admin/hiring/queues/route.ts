@@ -7,7 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import {
   ACCEPTANCE_WINDOW_DAYS,
@@ -44,11 +44,18 @@ export async function GET(request: Request) {
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const orgId = resolveOrgId(session);
+    // The sidebar badge asks on every admin page. An admin with no organization
+    // (a platform admin) has no hiring desk, so there is nothing to act on —
+    // answered as zero rather than as a failed request on every navigation
+    // (e2e/analytics-gate-no-probe.spec.ts). The desk itself still refuses.
+    if (!orgId && new URL(request.url).searchParams.get('summary') === '1') {
+      return NextResponse.json({ actionable: 0 });
+    }
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
 
     return withTenantScope(session, async () => {
       const now = new Date();
-      const stall = stallDays(await getSetting('hiringStallDays', await settingsOrgOf(session)));
+      const stall = stallDays(await resolveSettingRaw('hiringStallDays', { orgId: await settingsOrgOf(session) }));
       const stallCutoff = daysAgo(now, stall);
 
       const pendingWhere: Prisma.InterviewRequestWhereInput = { orgId, status: 'PENDING' };

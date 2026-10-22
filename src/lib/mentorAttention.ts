@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
-import { getSetting } from '@/lib/settings';
+import { reminderDaysReader } from '@/lib/relationHealthLive';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { scoreRelation } from '@/lib/relationHealth';
 import { menteesWithOpenTodo } from '@/lib/openWork';
@@ -74,7 +74,9 @@ export async function getAttentionItems(
     orgId?: string;
   } = {},
 ): Promise<AttentionQueue> {
-  const reminderDays = parseInt(await getSetting('reminderDays', options.orgId), 10) || 14;
+  // Per relation's programme (#1621): one mentor can hold mentees of two
+  // programmes with different cadences. Read once per programme.
+  const reminderDaysFor = reminderDaysReader();
   const now = Date.now();
   // Not a paused pair (#1772): nothing on a pause is late, so nothing belongs in the queue.
   const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, ...activeRelationWhere() };
@@ -84,6 +86,7 @@ export async function getAttentionItems(
     select: {
       id: true,
       orgId: true,
+      cohortId: true,
       pipelineStatus: true,
       startDate: true,
       stageDeadline: true,
@@ -152,7 +155,7 @@ export async function getAttentionItems(
     // loaded, and its flag is dropped by the filter below.
     const health = scoreRelation({
       now,
-      reminderDays,
+      reminderDays: await reminderDaysFor(options.orgId ?? null, r.cohortId),
       status: 'ACTIVE',
       dormant: false,
       startDate: r.startDate,

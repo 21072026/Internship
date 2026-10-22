@@ -149,6 +149,7 @@ check before merge.
 
 - **Schema first:** change `prisma/schema.prisma`, then
   `npx prisma format && npx prisma validate && npx prisma generate`. Sync with `db push`.
+  How to change a table that already has rows: [docs/migrations.md](docs/migrations.md).
 - **Branch + PR per change.** Branch names: `feat/<issue>-slug`, `fix/<issue>-slug`,
   `docs/...`. Reference the issue with `Closes #N`.
 - **Never commit secrets** — real values live only in server env / GitHub secrets.

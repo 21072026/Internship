@@ -14,6 +14,7 @@ import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPl
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
 
 interface Organization {
@@ -42,6 +43,7 @@ interface Organization {
     ssoLogoutUrl: string | null;
     sloUrl: string;
     ssoCertificateSet: boolean;
+    certificate: CertificateSummary;
     active: boolean;
     spEntityId: string;
     acsUrl: string;
@@ -883,8 +885,25 @@ export default function AdminOrganizationsPage() {
                   <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
                   <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoLogoutUrl} value={ssoLogoutUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoLogoutUrl(e.target.value)} placeholder="https://idp.example.com/slo" data-testid="sso-logout-url" /></div>
                 </div>
+                {!ssoTrustLocked && (
+                  <SsoMetadataImport
+                    key={`import-${ssoOrgId}`}
+                    orgId={ssoOrgId}
+                    onApply={(v) => {
+                      setSsoProvider(v.ssoProvider);
+                      setSsoIssuer(v.ssoIssuer);
+                      setSsoEntryPoint(v.ssoEntryPoint);
+                      if (v.ssoCertificate) setSsoCertificate(v.ssoCertificate);
+                      // The IdP's SingleLogoutService, when its metadata names one (#1952).
+                      if (v.sloUrl) setSsoLogoutUrl(v.sloUrl);
+                    }}
+                  />
+                )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoCertificate}</label>
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700">{t.organizations.ssoCertificate}</label>
+                    <SsoCertificateBadge certificate={ssoOrg?.sso.certificate ?? null} />
+                  </div>
                   <textarea
                     value={ssoCertificate}
                     disabled={ssoTrustLocked}
@@ -900,6 +919,7 @@ export default function AdminOrganizationsPage() {
                   {t.organizations.ssoEnable}
                 </label>
                 <Button type="submit" loading={saving} disabled={ssoLocked} data-testid="sso-save">{t.common.save}</Button>
+                {!ssoLocked && <SsoTestConnection key={`test-${ssoOrgId}`} orgId={ssoOrgId} />}
                 {/* Enforcement is not part of the form above: it is saved on
                     its own, immediately, because it ends live sessions. */}
                 <div data-testid="sso-enforce-block" className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">

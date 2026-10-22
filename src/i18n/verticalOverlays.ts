@@ -60,7 +60,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       // Document requirements: the role picker names the seats, not the enum.
-      documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' } },
+      documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Sales rep' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
       // example the base dictionary used to carry, and who reads the note.
       followUp: {
@@ -126,6 +126,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Invite a lead',
         menteeActivity: 'Lead Activity',
         mentorApplications: 'Sales Rep Applications',
+        agreements: 'Engagement agreement',
       },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -803,6 +804,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           aiPackage: {
             d: 'CV feedback and interview prep for leads, interaction-log summaries for sales reps, AI-assisted assignment, and themes across evaluation comments and weekly-report blockers for admins — each theme linked to the rows behind it. All consent- and quota-gated.',
           },
+          matchingRules: {
+            d: 'Decide what makes a good sales rep assignment — skills, language, field, city, time zone, capacity — and how much each counts, mark the non-negotiables, and never assign a person to their own manager or a past contact person. A dry run shows who would be assigned to whom before you commit, and names the rule that is too tight. Every score explains itself rule by rule.',
+          },
           matchQuality: {
             d: 'Every sales rep suggestion the platform makes is recorded with the position it was shown at, and a one-click dismissal asks why — wrong field, no capacity, language, already assigned. The analytics page then answers the question every team owner eventually asks: how often is the suggestion actually taken, and does the top-ranked rep really get picked? The suggestion stays a suggestion — a person always decides.',
           },
@@ -891,6 +895,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'What a deal is scored on. Leave these as they are and the built-in criteria stay in force; define your own and they replace them everywhere evaluations are written and read.',
         onMentee: 'What a rep scores a lead on',
         onMentor: 'What a lead scores a rep on',
+      },
+      slaQueue: {
+        colOwner: 'Rep',
+        levelMentor: 'Rep told',
+        complianceDefinition: 'Of the stage moves made in the period out of a stage that has a service level, the share made before that service level elapsed — measured from when the lead entered the stage, in calendar days, against the service levels configured today. Leads in the re-engagement pool and stages whose clock is stopped are not counted.',
       },
       stageSla: {
         escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the rep is reminded, as before.',
@@ -1228,7 +1237,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
-      documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' } },
+      documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' }, reviewerRoles: { MENTOR: 'Satış temsilcisi' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
       followUp: {
@@ -1291,6 +1300,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Müşteri adayı davet et',
         menteeActivity: 'Müşteri Adayı Etkinliği',
         mentorApplications: 'Satış Temsilcisi Başvuruları',
+        agreements: 'Çalışma sözleşmesi',
       },
       invite: {
         subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
@@ -1845,6 +1855,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           aiPackage: {
             d: 'Müşteri adaylarına CV geri bildirimi ve mülakat hazırlığı, satış temsilcilerine etkileşim özeti, AI destekli atama ve yöneticilere değerlendirme yorumlarıyla haftalık rapor engellerindeki temalar — her tema arkasındaki satırlara bağlı. Hepsi rıza ve kota kapılı.',
           },
+          matchingRules: {
+            d: 'İyi bir satış temsilcisi atamasını neyin belirlediğine — beceri, dil, alan, şehir, saat dilimi, kapasite — ve her birinin ne kadar önemli olduğuna karar ver; pazarlıksız kuralları işaretle, kimse kendi yöneticisine ya da eski muhatabına atanmasın. Deneme çalıştırması bağlamadan önce kimin kime atanacağını gösterir ve fazla sıkı kuralı adıyla söyler. Her skor kendini kural kural açıklar.',
+          },
           matchQuality: {
             d: 'Platformun yaptığı her satış temsilcisi önerisi, listede kaçıncı sırada gösterildiğiyle birlikte kaydediliyor; tek tıkla kapatma ise nedenini soruyor — yanlış alan, kapasite yok, dil, zaten atanmış. Analiz sayfası da her ekip sorumlusunun bir gün sorduğu soruyu yanıtlıyor: öneriler gerçekte ne sıklıkla kabul ediliyor ve ilk sıradaki temsilci cidden seçiliyor mu? Öneri yine sadece öneri kalıyor — kararı her zaman bir insan veriyor.',
           },
@@ -1926,6 +1939,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Bir fırsatın neye göre puanlandığı. Dokunmazsan yerleşik kriterler geçerli kalır; kendi kriterlerini tanımlarsan değerlendirmelerin yazıldığı ve okunduğu her yerde onların yerini alır.',
         onMentee: 'Temsilcinin müşteri adayını puanladığı kriterler',
         onMentor: 'Müşteri adayının temsilciyi puanladığı kriterler',
+      },
+      slaQueue: {
+        colOwner: 'Temsilci',
+        levelMentor: 'Temsilciye bildirildi',
+        complianceDefinition: 'Dönem içinde, hizmet seviyesi tanımlı bir aşamadan yapılan geçişlerin, o süre dolmadan yapılanlarının oranı — müşteri adayının aşamaya girdiği andan itibaren, takvim günüyle ve bugün tanımlı hizmet seviyelerine göre ölçülür. Yeniden etkileşim havuzundaki müşteri adayları ve saati durmuş aşamalar sayılmaz.',
       },
       stageSla: {
         escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca temsilciye hatırlatılır.',
@@ -2256,7 +2274,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
-      documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' } },
+      documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Vertriebsmitarbeiter' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
       // Notiz liest.
@@ -2318,6 +2336,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         inviteMentee: 'Lead einladen',
         menteeActivity: 'Lead-Aktivität',
         mentorApplications: 'Bewerbungen als Vertriebsmitarbeiter',
+        agreements: 'Zusammenarbeitsvereinbarung',
       },
       invite: {
         subtitle: 'Vertriebsmitarbeiter und Leads einladen',
@@ -2868,6 +2887,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           aiPackage: {
             d: 'Lebenslauf-Feedback und Interviewvorbereitung für Leads, Interaktionszusammenfassungen für Vertriebsmitarbeiter, KI-gestützte Zuordnung und Themen aus Bewertungskommentaren und Wochenbericht-Hindernissen für Admins — jedes Thema mit den Zeilen dahinter verknüpft. Alles einwilligungs- und kontingentgesteuert.',
           },
+          matchingRules: {
+            d: 'Lege fest, was eine gute Zuordnung zu Vertriebsmitarbeitern ausmacht — Skills, Sprache, Fachgebiet, Stadt, Zeitzone, Kapazität — und wie stark es zählt, markiere die nicht verhandelbaren Regeln, und niemand wird der eigenen Führungskraft oder einer früheren Ansprechperson zugeordnet. Ein Probelauf zeigt, wer wem zugeordnet würde, bevor du dich festlegst, und nennt die Regel, die zu streng ist. Jeder Score erklärt sich Regel für Regel.',
+          },
           matchQuality: {
             d: 'Jeder Vorschlag eines Vertriebsmitarbeiters durch die Plattform wird mit der Position erfasst, auf der er gezeigt wurde, und ein Verwerfen per Klick fragt nach dem Grund — falsches Fachgebiet, keine Kapazität, Sprache, bereits zugeordnet. Die Analyseseite beantwortet damit die Frage, die jede Teamleitung irgendwann stellt: Wie oft wird der Vorschlag tatsächlich übernommen, und wird der erstplatzierte Vertriebsmitarbeiter wirklich gewählt? Ein Vorschlag bleibt ein Vorschlag — entschieden wird immer von einem Menschen.',
           },
@@ -2949,6 +2971,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Wonach ein Deal bewertet wird. Rührst du nichts an, bleiben die eingebauten Kriterien in Kraft; definierst du eigene, ersetzen sie diese überall, wo Bewertungen geschrieben und gelesen werden.',
         onMentee: 'Wonach ein Vertriebsmitarbeiter einen Lead bewertet',
         onMentor: 'Wonach ein Lead einen Vertriebsmitarbeiter bewertet',
+      },
+      slaQueue: {
+        colOwner: 'Vertrieb',
+        levelMentor: 'Vertrieb informiert',
+        complianceDefinition: 'Von den Phasenwechseln im Zeitraum aus einer Phase mit Servicelevel der Anteil, der vor Ablauf dieses Servicelevels stattfand — gemessen ab dem Eintritt des Leads in die Phase, in Kalendertagen, gegen die heute eingestellten Servicelevel. Leads im Wiederansprache-Pool und Phasen mit angehaltener Uhr zählen nicht.',
       },
       stageSla: {
         escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur die Vertriebsperson erinnert.',

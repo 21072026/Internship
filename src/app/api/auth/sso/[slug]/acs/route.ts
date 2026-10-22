@@ -9,6 +9,7 @@ import { verticalCapabilities } from '@/lib/verticals';
 import { worldOfOrg } from '@/lib/userWorld';
 import { originForWorld, worldForHostHeader } from '@/lib/hostWorld';
 import { servedOrigin } from '@/lib/servedHosts';
+import { verifiedTenantHosts } from '@/lib/hostOrg';
 
 const base = () => (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
 
@@ -30,9 +31,19 @@ const base = () => (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace
 // world; anything else falls back to the world's origin as before. With no
 // organization at all (an unknown slug) there is only a refusal to show and no
 // grant to strand, so any served origin will do.
+// The host a RelayState names, for the verified-domain lookup only — the value
+// itself is still judged by servedOrigin().
+function relayHost(relayState: string | null): string | null {
+  try {
+    return relayState ? new URL(relayState).hostname : null;
+  } catch {
+    return null;
+  }
+}
+
 async function landingOrigin(orgId: string | null | undefined, relayState: string | null): Promise<string> {
   const world = await worldOfOrg(orgId);
-  const started = servedOrigin(relayState);
+  const started = servedOrigin(relayState, await verifiedTenantHosts(relayHost(relayState)));
   if (started && (!orgId || worldForHostHeader(new URL(started).host) === world)) return started;
   if (world === 'MARKETING') return originForWorld('MARKETING');
   return base();

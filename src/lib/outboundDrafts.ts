@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { seal, open } from '@/lib/secretBox';
 import { runUnscoped } from '@/lib/tenantAmbient';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { verticalFor } from '@/lib/verticalContext';
 import { verticalCapabilities } from '@/lib/verticals';
 import { logActivity } from '@/lib/activity';
@@ -73,7 +73,7 @@ async function approvalAppliesTo(orgId: string): Promise<boolean> {
 export async function outboundApprovalOn(orgId: string | null | undefined): Promise<boolean> {
   if (!orgId) return false;
   if (!(await approvalAppliesTo(orgId))) return false;
-  return parseOutboundApprovalMode(await getSetting('outboundApproval', orgId)) === 'lead_mail';
+  return parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId })) === 'lead_mail';
 }
 
 // ── The hook ─────────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ export async function holdIfRequired(prepared: PreparedEmail, opts: HoldOptions 
   }
   if (!orgId) return { held: false, code: 'no_org' };
   if (!(await approvalAppliesTo(orgId))) return { held: false, code: 'approval_off' };
-  const mode = parseOutboundApprovalMode(await getSetting('outboundApproval', orgId));
+  const mode = parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId }));
   if (mode === 'off') return { held: false, code: 'approval_off' };
 
   const facts = await recipientFacts({ ...prepared, orgId: prepared.orgId ?? orgId });

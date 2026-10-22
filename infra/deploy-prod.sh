@@ -18,8 +18,8 @@
 #   3. back up the database (infra/backup-db.sh), refuse a data-destroying
 #      schema diff (infra/schema-guard.sh), then prisma db push
 #      --accept-data-loss (schema sync, same as CI)
-#   4. seed-templates + seed-goal-templates + seed-agenda-templates + backfill-project-members
-#      + backfill-sso-plan (all idempotent)
+#   4. the data migrations: prisma/run-backfills.mjs over prisma/backfills/registry.mjs
+#      (#1540), then the read-only reports
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — the same flags the retired deploy.yml used. With
 #      REPLICAS>1 the replicas are swapped ONE AT A TIME, each drained out of
@@ -137,7 +137,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS ANDROID_APP_LINKS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY \
            MAIL_RATE_PER_MIN MAIL_BURST MAIL_URGENT_RESERVE MAIL_BULK_RATE_PER_MIN MAIL_BULK_BURST MAIL_BULK_URGENT_RESERVE \
            MAIL_METER_MODE MAIL_THROTTLE_LADDER_SEC MAIL_QUEUE_LANES MAIL_WORKER_ENABLED MAIL_INLINE_TIMEOUT_MS \
-           MAIL_DAILY_CAP MAIL_BULK_DAILY_CAP JOBS_WORKER_ENABLED JOBS_CONCURRENCY; do
+           MAIL_DAILY_CAP MAIL_BULK_DAILY_CAP JOBS_WORKER_ENABLED JOBS_CONCURRENCY MAIL_FAILOVER_AFTER; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -234,26 +234,21 @@ replica_net_args() { # replica_net_args <port>
   fi
 }
 
-# The interim scheduler guard (#1701, removed by #1676).
+# Per-replica extra env — empty for every replica since #1676.
 #
-# The IMAP bridge is protected by a real lease: every replica polls and the ones
-# that do not hold `'imap-bridge'` quietly do nothing. The in-process CRON is
-# not, yet — its schedules are registered once at boot by
-# src/instrumentation.ts, so a lease taken at registration would be held by
-# whoever booted first and never renewed. Making each scheduled tick take the
-# `'scheduler'` lease needs the schedule registry, which is #1676's job.
-#
-# Until then the second replica runs with CRON_ENABLED=0 — the documented kill
-# switch, exactly as the canary already uses it, and NOT a second election
-# mechanism. The cost is honest and worth writing down: the scheduler is pinned
-# to replica 1, so while replica 1 is down (or mid-swap) reminders wait rather
-# than being sent by replica 2. Waiting is recoverable; sending every reminder
-# twice is not.
+# Replica ≥2 used to run with CRON_ENABLED=0 (#1701): the cron was registered
+# once at boot and not leased, so a second replica would have sent every
+# reminder twice. Every scheduled tick now takes the `'scheduler'` JobLease
+# (src/lib/jobs/leasedCron.ts, src/lib/jobs/schedulerRuntime.ts), so every
+# replica runs the cron and only the lease holder does the work — the scheduler
+# is no longer pinned to replica 1, and while replica 1 is down or mid-swap,
+# replica 2 takes the lease within one TTL (90 s). The hook stays so a future
+# per-replica switch has one place to live.
 replica_extra_env() { # replica_extra_env <index>
   if [ "$1" = 1 ]; then
     printf ''
   else
-    printf '%s\0' -e CRON_ENABLED=0
+    printf ''
   fi
 }
 
@@ -343,6 +338,7 @@ app_env_args() {
     -e MAIL_BULK_URGENT_RESERVE="${MAIL_BULK_URGENT_RESERVE:-}" \
     -e MAIL_METER_MODE="${MAIL_METER_MODE:-}" \
     -e MAIL_THROTTLE_LADDER_SEC="${MAIL_THROTTLE_LADDER_SEC:-}" \
+    -e MAIL_FAILOVER_AFTER="${MAIL_FAILOVER_AFTER:-}" \
     -e MAIL_QUEUE_LANES="${MAIL_QUEUE_LANES:-}" \
     -e MAIL_WORKER_ENABLED="${MAIL_WORKER_ENABLED:-}" \
     -e MAIL_INLINE_TIMEOUT_MS="${MAIL_INLINE_TIMEOUT_MS:-}" \
@@ -648,6 +644,24 @@ case "$CONTAINER" in
   *) ENV_LABEL="${CONTAINER#internship-crm-}" ;;
 esac
 
+# ── Memory preflight (infra/server/capacity.sh) ─────────────────────────────
+# Before the backup and the schema sync, never in the middle of them: on
+# 2026-10-21 a preview deploy was OOM-killed inside `prisma db push` (exit 137)
+# and the runner took no job for a day. A box too full to deploy now stops
+# HERE with the reason and the biggest consumers, and the schema is untouched.
+MEM_VERDICT=ok
+if [ -f "$REPO_DIR/infra/server/capacity.sh" ]; then
+  # shellcheck source=infra/server/capacity.sh
+  . "$REPO_DIR/infra/server/capacity.sh"
+  MEM_VERDICT=$(deploy_memory_verdict "$(mem_available_mb || true)")
+fi
+if [ "${MEM_VERDICT%% *}" = "refused" ]; then
+  warn "Deploy stopped before the backup and the schema sync: ${MEM_VERDICT#refused }"
+  log "Biggest memory consumers"
+  docker stats --no-stream --format '{{.MemUsage}}\t{{.Name}}' 2>/dev/null | sort -h -r | head -15 || true
+  exit 1
+fi
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_TAKEN=0
 if [ "$ENV_LABEL" != "prod" ] && [ "$ENV_LABEL" != "preview" ]; then
@@ -715,6 +729,9 @@ run_tool node prisma/push-setting-id-expand.mjs
 log "backfill Setting surrogate ids"
 run_tool node prisma/backfill-setting-id.mjs
 
+log "prisma db push (Setting programme-index expand phase, #1619)"
+run_tool node prisma/push-setting-program-expand.mjs
+
 # ALSO before the push, not only after (#1288): when a previous half-applied
 # push has left a Json column filled with '' (the MariaDB longtext fill, see
 # the note below), the NEXT push can die before the post-push repair ever
@@ -727,7 +744,10 @@ log "repair invalid Json column values (pre-push, idempotent)"
 run_tool node prisma/backfill-json-columns.mjs --repair || true
 
 log "prisma db push (final contract phase)"
-run_tool npx prisma db push --accept-data-loss
+# --skip-generate: the image carries the client generated from this very schema
+# (Dockerfile, builder stage); regenerating it in a throwaway container is the
+# memory spike the 2026-10-21 OOM killed.
+run_tool npx prisma db push --accept-data-loss --skip-generate
 
 # Immediately after the push, because the push itself is what breaks these
 # (#1150). Prisma DROPS `@default` when it emits DDL for a `Json` field, so a
@@ -743,43 +763,43 @@ run_tool npx prisma db push --accept-data-loss
 log "repair invalid Json column values (idempotent)"
 run_tool node prisma/backfill-json-columns.mjs --repair || true
 
-# ── 4. Idempotent seeds / backfills ──────────────────────────────────────────
-log "seed-templates + project-member backfill (idempotent)"
-run_tool node prisma/seed-templates.mjs || true
-# The shared project-goal template pool (#51) — every project sees these on top
-# of its own. Only ever adds missing titles.
-run_tool node prisma/seed-goal-templates.mjs || true
-# The guided-conversation library (#1841) — the six starter session agendas
-# of the default org. Only ever adds missing titles and missing items.
-run_tool node prisma/seed-agenda-templates.mjs || true
-# Contributor terms v1.0 (#1025) — versioned rows; never edits an existing one.
-run_tool node prisma/seed-contributor-terms.mjs || true
-run_tool node prisma/backfill-project-members.mjs || true
-# Tenant backfill (#1557): the script now exits non-zero when a nullable orgId
-# column still holds NULLs after its retry passes. `|| true` stays for now — a
-# deploy must not abort on it, and #1540 is replacing this whole `|| true`
-# pattern with a backfill registry — but the failure is announced instead of
-# swallowed, because an incomplete backfill is the one thing that must block
-# MT_ENFORCE_ISOLATION. The warning describes the exit code, not the database:
-# the script also exits non-zero when the DB is unreachable or the run never
-# got as far as counting anything.
-# Attribute ActivityLog / ProjectTaskTemplate / AiUsage rows to their own tenant FIRST
-# (cross-world isolation): backfill-organization.mjs below fills every NULL
-# orgId with the default org, which would hand a MARKETING tenant's audit trail
-# and goal pool to the INTERNSHIP admin. Only fills NULLs — idempotent.
-run_tool node prisma/backfill-activity-log-org.mjs || true
-# Same shape for the audit trail (#2012): the actor's org, then the target
-# user's; system rows fall to the default org below.
-run_tool node prisma/backfill-audit-log-org.mjs || true
-run_tool node prisma/backfill-task-template-org.mjs || true
-run_tool node prisma/backfill-ai-usage-org.mjs || true
-run_tool node prisma/backfill-ai-usage-task.mjs || true
-run_tool node prisma/backfill-organization.mjs \
-  || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
-run_tool node scripts/backfill-requisitions.mjs || true
-# One Application per CompanyInterest that names a requisition (#1828). Only
-# ever adds rows; a second run reports created=0.
-run_tool node scripts/backfill-applications.mjs || true
+# ── 4. Data migrations (seeds and backfills) ─────────────────────────────────
+# One runner, one ordered registry (#1540): prisma/backfills/registry.mjs lists
+# every seed/backfill with its reason, whether it is one-shot (`once`, skipped
+# after a recorded success) and whether a failure may let the deploy go on
+# (`optional`). The ledger is the BackfillRun table. The runner prints one line
+# per entry and a summary (`backfills: N registered, …`). Ordering constraints
+# — tenant attribution before backfill-organization, api-key-lifecycle after
+# it, skill-lists before skill-taxonomy — live in the registry and are pinned
+# by scripts/test/backfill-registry.test.mjs. A NEW backfill is an entry there,
+# never a new line here.
+# The policy (#1540, #3043): a REQUIRED entry that fails stops the deploy HERE,
+# before the swap — the running release keeps serving, so a failed data
+# migration never takes prod down, it only keeps the new release out. An
+# OPTIONAL entry that fails lets the deploy go on, but the runner exits 3 and
+# every failed id is raised as a ::warning (annotation + step summary) instead
+# of disappearing behind `|| true`.
+log "data migrations (prisma/backfills/registry.mjs)"
+BACKFILL_LOG="$(mktemp)"
+set +e
+run_tool node prisma/run-backfills.mjs 2>&1 | tee "$BACKFILL_LOG"
+BACKFILL_RC=${PIPESTATUS[0]}
+set -e
+case "$BACKFILL_RC" in
+  0) ;;
+  3)
+    FAILED_BACKFILLS="$(grep -oE '\[backfills\] WARNING: [0-9]{4}-[a-z0-9-]+ FAILED' "$BACKFILL_LOG" | awk '{print $3}' | paste -sd, -)"
+    warn "optional data migration(s) FAILED: ${FAILED_BACKFILLS:-see the [backfills] lines} — the deploy continued; fix and redeploy (#1540)"
+    ;;
+  *)
+    rm -f "$BACKFILL_LOG"
+    echo "ERROR: a required data migration failed (runner exit $BACKFILL_RC) — see the [backfills] lines above. The running release is untouched." >&2
+    exit "$BACKFILL_RC"
+    ;;
+esac
+rm -f "$BACKFILL_LOG"
+
+# ── Reports (read only; after the backfills so they read the converged state) ─
 # Detector, NOT a gate (#419): reports mentees holding more than one ACTIVE
 # mentorship. Exits 0 by design, and `|| true` on top — this must never be the
 # reason a deploy fails. The DB-level @@unique([activeMenteeKey]) backstop lands
@@ -798,109 +818,6 @@ run_tool node prisma/set-public-host.mjs --list || true
 # database connection. Never fails a deploy, never writes, no PII.
 log "marketing org readiness (report only)"
 run_tool node prisma/check-marketing-orgs.mjs || true
-# API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
-# default org and the 'candidates:read' scope they already had in practice.
-# Must run AFTER backfill-organization.mjs, which creates the default org.
-run_tool node prisma/backfill-api-key-lifecycle.mjs || true
-# Admin tiers (#1567): every ADMIN without a recorded tier gets ORG_ADMIN —
-# exactly the power the role already carried. Only fills NULLs on ADMIN rows,
-# never touches a tier an operator set, never grants the platform tier (that
-# is User.isSuperAdmin). Converges to a no-op.
-run_tool node prisma/backfill-admin-level.mjs || true
-# One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
-# email out history. Self-skips once applied (Setting 'cronBaselineAt').
-run_tool node prisma/backfill-cron-baseline.mjs || true
-# Stamp completedAt on relations that were COMPLETED before the column existed,
-# so the post-mentorship CV access window (#854) has an anchor instead of
-# revoking access outright. Only ever fills NULLs — idempotent.
-run_tool node prisma/backfill-relation-completed-at.mjs || true
-# Fill MentorshipRelation.lifecycleState from `status` (#1768) — the backfill
-# half of expand → backfill → contract: the column is nullable with a DB default
-# of 'ACTIVE', and the meter tells a paused pair from a live one by it. Only
-# matches rows that disagree with `status` — idempotent.
-run_tool node prisma/backfill-relation-lifecycle.mjs || true
-# Remove the Meeting rows the old recurring-meeting generator materialised. A
-# series is a rule now; those rows outlived their cancelled series and haunted
-# the calendar (#1110). Nothing writes them any more, so this converges to a
-# no-op on the next deploy.
-run_tool node prisma/backfill-series-meetings.mjs || true
-# Grandfather tenants whose SAML SSO was live BEFORE it became a paid feature
-# (#1742). plan defaults to FREE, so the new entitlement in isSsoActive() would
-# otherwise take them offline on this very deploy — and their users are
-# provisioned with no usable password, so there is no fallback to sign in with.
-# Converges to a no-op once every such tenant sits on ENTERPRISE.
-run_tool node prisma/backfill-sso-plan.mjs || true
-
-# Move pre-#1806 review notes out of MentorApplication.rejectReason into the
-# new adminNote column — non-rejected rows only, where the value can only be a
-# note. Only ever fills NULLs — idempotent.
-run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
-
-# Fill WeeklyReportReminder.recipientId for rows written before #2287, so the
-# weekly reminder can be capped per PERSON rather than per relation. The column
-# ships nullable because db push refuses a required one on a populated table
-# (#2298); this is the expand half. It also PRINTS how many (recipient, week)
-# pairs still hold more than one row — the number the @@unique contract step is
-# gated on. Only ever fills NULLs — idempotent.
-run_tool node prisma/backfill-weekly-report-reminder-recipient.mjs || true
-
-# Move relations that were created on the schema default (APPLICATION_100) in a
-# tenant whose custom stage set does not contain that key (#1634). They render
-# in no board column and count in no funnel row; each move writes a StatusChange
-# so it is auditable.
-#
-# It moves ONLY rows that can just be the bug: still on APPLICATION_100, still
-# ACTIVE, and never moved (zero StatusChange rows). It deliberately does NOT
-# repair every relation whose key is outside the org's current set — renaming a
-# stage in the editor puts a tenant's whole in-flight pipeline in that state for
-# a moment, and sweeping it would drag placed and completed mentees back to
-# stage 1 unattended. The script is dry-run by default; `--apply` is this line's
-# deliberate choice. Converges to a no-op after the first deploy.
-run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
-
-# Give every Organization a Subscription row matching the plan it already had
-# (#1731). The commercial state moved from the `Organization.plan` enum to its
-# own table on this deploy; an org without a row would be read as the free tier.
-# Creates only what is missing and never edits an existing subscription, so it
-# converges to a no-op — and the app's own getOrCreateSubscription() covers any
-# org created after this ran.
-run_tool node prisma/backfill-org-subscription.mjs || true
-
-# Retire the premiumAnalytics setting into ADVANCED_ANALYTICS org grants (#1740).
-# Analytics gating moved to entitled(orgId, …); an org that had the tier on gets
-# a permanent grant, then the dead setting rows are deleted so a re-run grants
-# nothing (a global 'true' row would otherwise leak the tier to every new org).
-run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
-
-# Grandfather every org that exists when the REPORT_EXPORT gate goes live
-# (#1740): exports were free until now. Runs ONCE — its grants carry a marker
-# note and a later run that finds one does nothing, so orgs created after the
-# gate do not inherit it.
-run_tool node prisma/backfill-report-export-grandfather.mjs || true
-
-# Same for the admin AI tools (AI_PACKAGE, #1738): every org that exists keeps them, ONCE (marker note).
-run_tool node prisma/backfill-ai-package-grandfather.mjs || true
-
-# Grandfather every org already running an integration when the
-# INTEGRATIONS_API gate goes live (#1744): a live public-API key or an active
-# webhook. Runs ONCE (marker note), for the same reason as the one above.
-run_tool node prisma/backfill-integrations-api-grandfather.mjs || true
-
-# Re-split skill lists stored as one blob before anything split them (#2314).
-# Every form used to write `skills.split(',')` from a single-line input, and a
-# browser drops the line breaks out of a multi-line paste — so a pasted CV list
-# landed as ONE 300-character "skill" that filled half the dashboard card it
-# rendered in. The rule is a fixed point, so this converges to a no-op; the
-# blobs whose separators were already gone are truncated to the cap and counted
-# in the output rather than guessed at.
-run_tool node prisma/backfill-skill-lists.mjs --apply || true
-
-# Map the free-text skills onto the canonical taxonomy (#1819): seeds each
-# org's starter vocabulary (insert-missing only, so curation is never undone),
-# creates UserSkill / RequisitionSkill rows for what resolves and queues the
-# rest in UnmappedSkillTerm for /admin/skills. Runs AFTER the re-split above so
-# it maps the split entries; skipDuplicates makes a re-run a no-op.
-run_tool node prisma/backfill-skill-taxonomy.mjs --apply || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it

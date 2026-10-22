@@ -8,6 +8,7 @@
 // Safe to import from the server; no client-only concerns.
 
 import { orgPlanHasFeature, type OrgPlan } from '@/lib/orgPlans';
+import { certificateInfo } from '@/lib/ssoMetadata';
 
 export type SsoProvider = 'saml' | 'oidc';
 
@@ -84,10 +85,30 @@ export function isSsoActive(c: SsoActivation | null | undefined): boolean {
     && orgPlanHasFeature(c.plan, 'SSO_SAML');
 }
 
+// A SAML signing certificate that does not parse, or has already expired, would
+// save cleanly and then fail at the first real assertion — in front of the
+// whole tenant (#1933). Refused at save time instead, naming the problem.
+export function validateSsoCertificate(pem: string, now: Date = new Date()): string | null {
+  const info = certificateInfo(pem);
+  if (!info) return 'SSO certificate could not be parsed — paste the IdP\'s X.509 signing certificate (PEM)';
+  if (info.notAfter.getTime() <= now.getTime()) {
+    return `SSO certificate expired on ${info.notAfter.toISOString().slice(0, 10)} — ask the IdP for its current signing certificate`;
+  }
+  return null;
+}
+
 // Validate an admin's incoming config before persisting. Returns an error
 // message, or null when valid. Enabling requires a complete config. This is the
 // single write boundary — every current and future write path inherits it.
-export function validateSsoConfig(c: Partial<SsoConfig>): string | null {
+//
+// `checkCertificate` is set by the caller when the request writes a new
+// certificate or switches SSO on: only then is the stored certificate judged.
+// Switching SSO off, enforcing it or clearing the config must keep working for
+// a tenant whose certificate has already lapsed — that is how they get out.
+export function validateSsoConfig(
+  c: Partial<SsoConfig>,
+  opts: { checkCertificate?: boolean; now?: Date } = {},
+): string | null {
   if (c.ssoProvider != null && c.ssoProvider !== '' && !isSsoProvider(c.ssoProvider)) {
     return 'SSO provider must be "saml" or "oidc"';
   }
@@ -106,6 +127,9 @@ export function validateSsoConfig(c: Partial<SsoConfig>): string | null {
   }
   if (c.ssoEnabled && !isSsoConfigComplete(c)) {
     return 'Cannot enable SSO until the provider, issuer, entry point (and certificate for SAML) are all set';
+  }
+  if (opts.checkCertificate && c.ssoProvider === 'saml' && c.ssoCertificate?.trim()) {
+    return validateSsoCertificate(c.ssoCertificate, opts.now);
   }
   return null;
 }

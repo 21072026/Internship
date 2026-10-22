@@ -65,3 +65,56 @@ SIGKILL still strands is reaped by the clock.
 2. `registerJob('<name>', handler, { timeoutMs?, backoff? })` in `src/jobs/`.
 3. Say in its comment why a second run is harmless.
 4. Who enqueues it on a schedule is the scheduler's registry (#1676).
+
+## The scheduler (#1676, #1677)
+
+Every schedule is a **queue** entry in `src/lib/jobs/schedules.ts`: key, cron
+expression, why that cadence, job name, payload and `catchUp`. Every 30 s
+(`src/lib/jobs/schedulerRuntime.ts`, started from `/api/cron/start`) the
+`'scheduler'` lease holder runs `schedulerTick()` (`src/lib/jobs/scheduler.ts`):
+for each schedule, the latest slot after `ScheduleState.lastEnqueuedSlot` is
+enqueued with `idempotencyKey = <key>:<slotISO>` and `trigger: 'schedule'`, then
+the state advances in one conditional write. `catchUp: 'latest'` enqueues only
+the newest missed slot; `'none'` skips any slot more than 2 min old. A schedule
+seen for the first time baselines instead of firing.
+
+The bodies are handlers in `src/jobs/` (#1677), grouped by area — `reminders.ts`
+(the 09:00 batch), `meetings.ts`, `digests.ts`, `housekeeping.ts`, `platform.ts`.
+Each file states why a rerun of each handler is harmless. They call the domain
+functions where they live (`emailService`, `newsletterDispatch`, …); `src/jobs/`
+imports those, never the reverse.
+
+**The dormancy chain.** The 09:00 sweep `dormancy.sweep` decides who is a dormant
+first contact today; `dormancy.checkIn` and `reminders.mentorInteraction` read
+that state. So they have no schedule: the sweep enqueues both on success (keyed
+on its own job id, so a retried sweep enqueues them once), and a failing sweep
+enqueues nothing. The other 09:00 jobs are independent schedules — one failing
+no longer skips the rest.
+
+Never call `cron.schedule()` — `e2e/job-scheduler.unit.spec.ts` fails on it. A
+new schedule is a `queue({ … })` entry plus a `registerJob()`.
+
+Slots are computed in process local time (`src/lib/jobs/cronSlot.ts`), exactly
+like node-cron without a `timezone` option: UTC in the containers.
+
+The lease TTL is 90 s (three ticks). A SIGTERM stops this process from taking
+the lease again and releases it, so a rolling deploy hands over in seconds; a
+SIGKILLed holder loses it by expiry. `CRON_ENABLED=0` or a missing `CRON_SECRET`
+keeps `/api/cron/start` from being called at all, so nothing is scheduled —
+the preview/topic safety property is unchanged.
+
+## Manual runs: `GET /api/cron?job=…`
+
+Unchanged by default: the named job runs inline and the response carries its
+full result (about 80 e2e call sites read it). Add `&enqueue=1` and the route
+instead enqueues the job with `trigger: 'manual'` and answers
+`{ queued: true, jobs: [{ name, id }] }` — the worker runs it, with retries and a
+`JobRun` an operator can tell apart from a scheduled one. The authorization
+(#1575) is the same either way: `OWN_ORG_JOBS` for a tenant ADMIN, scoped to
+their org in the payload; everything else a super admin.
+
+## Tenant binding
+
+A job enqueued with an `orgId` runs inside `runWithOrg(job.orgId, …)`; a job
+without one runs unbound, as the cron always did (the sweeps scope themselves
+per tenant). Per-tenant binding of each sweep is #1561's.

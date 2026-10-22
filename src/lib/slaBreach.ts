@@ -14,6 +14,7 @@ import { logActivity } from '@/lib/activity';
 import { notifyEvent } from '@/lib/notifications/router';
 import { SLA_LEVEL_ADMIN, SLA_LEVEL_MENTOR } from '@/lib/slaLadderRule';
 import type { HeaderSource } from '@/lib/clientIp';
+import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 
 function isUniqueViolation(e: unknown): boolean {
   return !!e && typeof e === 'object' && (e as { code?: string }).code === 'P2002';
@@ -140,37 +141,43 @@ export async function resolveBreaches(
 type Actor = { id: string; email?: string | null };
 
 /**
- * Acknowledge an open breach: somebody has it in hand, so it climbs no further.
- * It stays open — the stage still has not moved. `orgId` comes from the
- * caller's session and is part of the WHERE, so another tenant's id is simply
- * not found. Audited.
+ * Acknowledge open breaches: somebody has them in hand, so they climb no
+ * further. They stay open — the stage still has not moved. `tenant` is the
+ * caller's own fragment (`tenantWhere(session)`) and is part of every WHERE,
+ * so another tenant's id is simply not found. Each newly acknowledged row is
+ * audited. Returns the ids that are now acknowledged (an already-acknowledged
+ * one counts: clicking twice is not an error) — anything missing was not found.
  */
-export async function acknowledgeBreach(
-  id: string,
-  orgId: string,
+export async function acknowledgeBreaches(
+  ids: string[],
+  tenant: TenantWhere,
   actor: Actor,
   request?: HeaderSource | null,
   now: Date = new Date()
-): Promise<'ok' | 'missing'> {
-  const { count } = await prisma.slaBreach.updateMany({
-    where: { id, orgId, resolvedAt: null, acknowledgedAt: null },
-    data: { acknowledgedAt: now, acknowledgedById: actor.id },
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const visible = await prisma.slaBreach.findMany({
+    where: withinTenant({ id: { in: ids }, resolvedAt: null }, tenant),
+    select: { id: true, orgId: true, acknowledgedAt: true },
   });
-  if (count !== 1) {
-    // Already acknowledged is not an error for the person who clicked twice.
-    const exists = await prisma.slaBreach.count({ where: { id, orgId, resolvedAt: null } });
-    return exists ? 'ok' : 'missing';
+  for (const b of visible) {
+    if (b.acknowledgedAt) continue;
+    const { count } = await prisma.slaBreach.updateMany({
+      where: { id: b.id, resolvedAt: null, acknowledgedAt: null },
+      data: { acknowledgedAt: now, acknowledgedById: actor.id },
+    });
+    if (count !== 1) continue;
+    await logActivity({
+      ...(b.orgId ? { orgId: b.orgId } : {}),
+      action: 'sla.breach_acknowledged',
+      actorId: actor.id,
+      actorEmail: actor.email ?? null,
+      targetType: 'sla_breach',
+      targetId: b.id,
+      request,
+    });
   }
-  await logActivity({
-    orgId,
-    action: 'sla.breach_acknowledged',
-    actorId: actor.id,
-    actorEmail: actor.email ?? null,
-    targetType: 'sla_breach',
-    targetId: id,
-    request,
-  });
-  return 'ok';
+  return visible.map((b) => b.id);
 }
 
 /**
@@ -181,19 +188,24 @@ export async function acknowledgeBreach(
  */
 export async function snoozeBreach(
   id: string,
-  orgId: string,
+  tenant: TenantWhere,
   actor: Actor,
   until: Date,
   reason: string,
   request?: HeaderSource | null
 ): Promise<'ok' | 'missing'> {
+  const found = await prisma.slaBreach.findFirst({
+    where: withinTenant({ id, resolvedAt: null }, tenant),
+    select: { id: true, orgId: true },
+  });
+  if (!found) return 'missing';
   const { count } = await prisma.slaBreach.updateMany({
-    where: { id, orgId, resolvedAt: null },
+    where: { id, resolvedAt: null },
     data: { snoozedUntil: until },
   });
   if (count !== 1) return 'missing';
   await logActivity({
-    orgId,
+    ...(found.orgId ? { orgId: found.orgId } : {}),
     action: 'sla.breach_snoozed',
     actorId: actor.id,
     actorEmail: actor.email ?? null,

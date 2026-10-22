@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession, type Session } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { reviewChainSchema, storedReviewerRoles } from '@/lib/documentReview';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -27,6 +28,8 @@ const bodySchema = z.object({
   mandatory: z.boolean().optional(),
   order: z.number().int().min(0).max(10000).optional(),
   active: z.boolean().optional(),
+  // The review chain (#1859).
+  ...reviewChainSchema,
 }).strict();
 
 async function adminSession() {
@@ -78,6 +81,7 @@ export async function POST(request: Request) {
         mandatory: parsed.data.mandatory ?? true,
         order: parsed.data.order ?? 0,
         active: parsed.data.active ?? true,
+        ...(parsed.data.reviewerRoles ? { reviewerRoles: storedReviewerRoles(parsed.data.reviewerRoles) } : {}),
       },
     });
     await logActivity({ action: 'document_requirement.create', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'document_requirement', targetId: requirement.id, detail: requirement.key, request });

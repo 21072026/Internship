@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The invitation landing wears the inviting organization's brand (#1663):** `/auth/register?token=` on any host now shows the inviting organization's tile and generated mark. The register page is split into a server wrapper (`src/app/auth/register/page.tsx`) and the unchanged client form (`RegisterClient.tsx`); the wrapper asks the new `invitationBrand()` (`src/lib/invitationBrand.ts`) and, for a live invitation of this host's world, overrides the request's `BrandProvider` for that page. No token, an unknown, used, expired or revoked one, and an invitation of the other world (which `/api/register` refuses like an unknown token) all leave the request's brand, so the page never tells a token's existence apart from its absence; only the brand leaves the lookup. The product name follows #2936's rule (the default vertical always prints its default name), so the sign-in subtitle needs no change. `e2e/invitation-brand.spec.ts` pins the live case and every refusal with a non-vacuous other-world mark, and `e2e/host-brand.spec.ts` now checks register, forgot and reset on a mapped host too; the hostVertical TRUST NOTE lists the new use under #3, docs/white-label.md the new row.",
-  "notes": {
-    "en": ["Invitation links now open a sign-up page in the inviting organization's own colours and logo."],
-    "tr": ["Davet bağlantıları artık kayıt sayfasını davet eden kurumun kendi renkleri ve logosuyla açıyor."],
-    "de": ["Einladungslinks öffnen die Registrierungsseite jetzt in den Farben und mit dem Logo der einladenden Organisation."]
-  }
-}

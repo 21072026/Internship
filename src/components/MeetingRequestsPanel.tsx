@@ -21,6 +21,9 @@ interface MReq {
   topic: string;
   proposedAt: string;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  // Set when this is a counter-proposal (#1982): the invitee declined that
+  // meeting from the RSVP page and suggested `proposedAt` instead.
+  counterOfMeeting?: { id: string; title: string; scheduledAt: string | null; status: string } | null;
 }
 
 // mode='request' → the mentee proposes meetings + sees status.
@@ -130,6 +133,22 @@ export function MeetingRequestsPanel({
   const handle = async (id: string, action: 'accept' | 'decline') => {
     setBusy(true);
     try {
+      // Accepting a counter-proposal MOVES the meeting it counters, through the
+      // one reschedule route (#1980) — conflicts and booking rules included —
+      // and only then records the answer. Never a second meeting.
+      const counter = reqs.find((r) => r.id === id)?.counterOfMeeting;
+      if (action === 'accept' && counter) {
+        const proposedAt = reqs.find((r) => r.id === id)!.proposedAt;
+        const moved = await fetch(`/api/meetings/${encodeURIComponent(counter.id)}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduledAt: proposedAt }),
+        });
+        if (!moved.ok) {
+          const body = moved.status === 409 ? await moved.json().catch(() => null) : null;
+          setConflict(readConflict(body));
+          setRefusal(readPolicy(body));
+          return;
+        }
+      }
       const res = await fetch(`/api/meeting-requests/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
       });
@@ -272,6 +291,11 @@ export function MeetingRequestsPanel({
             <div key={r.id} data-testid={`mreq-${r.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-2.5">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{r.topic}</p>
+                {r.counterOfMeeting?.scheduledAt && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`mreq-counter-${r.id}`}>
+                    {t.portal.meetingRequests.counterOf.replace('{when}', formatDateTime(r.counterOfMeeting.scheduledAt, locale))}
+                  </p>
+                )}
                 <p className="text-xs text-gray-400">
                   {formatDateTime(r.proposedAt, locale)}
                   {/* Derived, never stored: the request keeps only an instant,

@@ -48,6 +48,11 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # check:i18n sees key PARITY, not copy that never became a key: the
+      # per-tenant pipeline-stage editor shipped English end to end on a
+      # trilingual product (#1613). Pinned per file and shrink-only.
+      - name: no new hardcoded user-facing strings (#1613)
+        run: npm run check:hardcoded-strings
       # Report registry (#1903): label keys in all three dictionaries, a loader
       # per definition, and a privacy floor that can actually suppress.
       - name: Report registry
@@ -317,6 +322,12 @@ jobs:
       # sendMail() anywhere else compiles and delivers while skipping all four.
       - name: mail leaves through one door (#2944)
         run: npm run check:direct-sendmail
+      # Settings are read through ONE accessor, src/lib/settingsResolver.ts
+      # (#1621): a direct prisma.setting read skips the org/programme chain
+      # and reads the global row for every tenant. Legacy getSetting() readers
+      # are a pinned ratchet in the script.
+      - name: settings are read through the accessor (#1621)
+        run: npm run check:settings-accessor
       # The admin API explorer publishes what scripts/openapi-generate.cjs
       # derives from src/app/api. A static analyser degrades silently: a route
       # in a shape it does not recognise simply vanishes from the document, and
@@ -375,6 +386,13 @@ jobs:
       # test also pins that it never prints a host, a title or a brand (#2919).
       - name: marketing host title check (#2579, #2919)
         run: bash infra/test/marketing-title-check.test.sh
+      # The memory admission rules of the shared box (infra/server/capacity.sh):
+      # a topic environment is deferred, and a prod/preview deploy refused
+      # before its schema sync, when the server is short — instead of an OOM
+      # kill mid-deploy, which on 2026-10-21 left the runner dead for a day.
+      # They only ever run on the server, so their arithmetic is pinned here.
+      - name: topic capacity gate + deploy memory preflight
+        run: bash infra/test/capacity.test.sh
       # The steps above each run ONE unit suite because each was added by the
       # incident it names. Nothing held the set together, so a suite whose rule
       # got refactored away could lose its assertions and stay green — the test

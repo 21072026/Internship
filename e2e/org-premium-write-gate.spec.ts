@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { testCertificate } from './support/x509.mjs';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 // Premium write gate (#1742). White-label branding and SAML SSO are the two
@@ -15,7 +16,8 @@ const SAML = {
   ssoProvider: 'saml',
   ssoIssuer: 'https://idp.gate.test/metadata',
   ssoEntryPoint: 'https://idp.gate.test/sso',
-  ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBgate\n-----END CERTIFICATE-----',
+  // A real certificate: switching SSO on parses it since #1933.
+  ssoCertificate: testCertificate(365, 'gate-idp'),
 };
 
 test('the plan, not the admin role, decides who may write branding and SSO', async ({ page }) => {
@@ -145,7 +147,7 @@ test('the plan, not the admin role, decides who may write branding and SSO', asy
     const afterDowngrade = await row();
     expect(afterDowngrade?.brandName).toBe('Gate Brand');
     expect(afterDowngrade?.ssoEntryPoint).toBe(SAML.ssoEntryPoint);
-    expect(afterDowngrade?.ssoCertificate).toContain('MIIBgate');
+    expect(afterDowngrade?.ssoCertificate).toBe(SAML.ssoCertificate);
     expect(afterDowngrade?.ssoEnabled).toBe(true); // the switch is still on…
     expect((await listed()).sso.active).toBe(false); // …but the tenant is not live
 
