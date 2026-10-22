@@ -225,6 +225,8 @@ function Vocabulary() {
             </option>
           ))}
         </select>
+        {/* Full width at phone width: the fixed input + button were ~350px in a
+            328px box (e2e/mobile-layout-coverage.spec.ts); sm+ keeps the row. */}
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <input
             value={newLabel}

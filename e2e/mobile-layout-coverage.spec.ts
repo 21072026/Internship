@@ -125,6 +125,9 @@ const SETUP: Route[] = [
     '/admin/tags',
     // The canonical skill vocabulary (#1817).
     '/admin/skills',
+    // Mentoring agreements (#1790) — in the sidebar without an entry here,
+    // which turned this gate red on main.
+    '/admin/agreements',
     '/admin/sources',
     '/admin/invite'
   ),
@@ -159,6 +162,11 @@ const OPERATIONS: Route[] = shell(
   // The safeguarding review queue (#2056).
   '/admin/safeguarding',
   '/admin/integrations',
+  // Billing — in the sidebar without an entry here, the same miss as the
+  // agreements line above.
+  '/admin/billing',
+  // The stage-SLA breach queue (#1723) — the same miss.
+  '/admin/sla',
   '/admin/api-explorer',
   '/admin/retention',
   '/admin/re-engagement',
