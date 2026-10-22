@@ -73,6 +73,7 @@ test.afterAll(async () => {
     await prisma.affiliateCustomer.deleteMany({ where }).catch(() => {});
     await prisma.affiliatePartner.deleteMany({ where }).catch(() => {});
     await prisma.affiliateProgramSettings.deleteMany({ where }).catch(() => {});
+    await prisma.auditLog.deleteMany({ where }).catch(() => {});
     await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
   }
   await prisma.$disconnect();
@@ -102,6 +103,8 @@ test('refusals carry their codes', { tag: '@smoke' }, async () => {
   expect(await codeOf(recordAffiliatePayment({ ...base(), currency: 'XXX', partnerId, customerExternalRef: 'c-a', amountMinor: 800, receivedAt: at, externalPaymentRef: 'inv-6' }))).toBe('currency_mismatch');
   expect(await codeOf(recordAffiliatePayment({ ...base(), partnerId: 'nope', customerExternalRef: 'c-q', amountMinor: 800, receivedAt: at, externalPaymentRef: 'inv-5' }))).toBe('partner_not_found');
   expect(await prisma.affiliatePayment.count({ where: { orgId } })).toBe(3);
+  // One audit row per recorded payment, none for a refusal.
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payment.record' } })).toBe(3);
 });
 
 test('a back-dated customer re-orders the partner and moves PENDING rows', { tag: '@smoke' }, async () => {
@@ -119,6 +122,7 @@ test('a plan change freezes what exists and pays nothing retroactively', { tag: 
   });
   const rs = await resyncPartnerCommissions(orgId, partnerId);
   expect([rs.created, rs.updated, rs.removed]).toEqual([0, 0, 0]);
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.commissions.resync' } })).toBe(1);
   expect(rs.drift.map((x) => `${x.status}:${x.expected?.amountMinor}`).sort()).toEqual(['APPROVED:333', 'PENDING:160', 'PENDING:160', 'PENDING:160']);
   expect(await commissions()).toEqual(['inv-0:TIER:300:APPROVED:v1', 'inv-1:PERCENT:80:PENDING:v1', 'inv-2:PERCENT:80:PENDING:v1', 'inv-3:PERCENT:80:PENDING:v1']);
 

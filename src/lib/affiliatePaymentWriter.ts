@@ -23,7 +23,8 @@
 //      write must hit exactly the rows it planned, or the transaction is undone.
 //
 // Every query names orgId itself, so the writer is right with or without a bound
-// tenant context (an import script, a cron).
+// tenant context (an import script, a cron). Every write leaves one AuditLog row
+// in the same transaction (`affiliate.payment.record`, `affiliate.commissions.resync`).
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -181,6 +182,12 @@ async function syncLocked(tx: Tx, orgId: string, partner: LockedPartner, loaded:
   };
 }
 
+/** The audit row's detail: counts and ids only — drift is summarised, never a person's data. */
+function auditDetail(fields: Record<string, unknown> & { drift?: CommissionDrift[] }): string {
+  const { drift, ...rest } = fields;
+  return JSON.stringify({ ...rest, ...(drift ? { drift: drift.length } : {}) });
+}
+
 /** Prisma errors a caller can act on, mapped to our codes; anything else is rethrown as is. */
 function mapPrismaError(e: unknown): unknown {
   if (!(e instanceof Prisma.PrismaClientKnownRequestError)) return e;
@@ -258,6 +265,22 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput): Promise<R
       });
 
       const sync = await syncLocked(tx, input.orgId, partner, loaded);
+      await tx.auditLog.create({
+        data: {
+          orgId: input.orgId,
+          actorId: input.enteredById ?? 'system',
+          action: 'affiliate.payment.record',
+          targetId: payment.id,
+          detail: auditDetail({
+            partnerId: partner.id,
+            customerId,
+            amountMinor: input.amountMinor,
+            currency: input.currency,
+            source: input.source,
+            ...sync,
+          }),
+        },
+      });
       return { paymentId: payment.id, customerId, partnerId: partner.id, ...sync };
     }, TX_OPTIONS);
   } catch (e) {
@@ -266,11 +289,15 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput): Promise<R
 }
 
 /** Re-evaluates a partner after a plan or termination change. */
-export async function resyncPartnerCommissions(orgId: string, partnerId: string): Promise<SyncResult> {
+export async function resyncPartnerCommissions(orgId: string, partnerId: string, actorId: string = 'system'): Promise<SyncResult> {
   try {
     return await prisma.$transaction(async (tx) => {
       const partner = await lockPartner(tx, orgId, partnerId);
-      return syncLocked(tx, orgId, partner, await loadPlan(tx, orgId));
+      const sync = await syncLocked(tx, orgId, partner, await loadPlan(tx, orgId));
+      await tx.auditLog.create({
+        data: { orgId, actorId, action: 'affiliate.commissions.resync', targetId: partner.id, detail: auditDetail({ partnerId: partner.id, ...sync }) },
+      });
+      return sync;
     }, TX_OPTIONS);
   } catch (e) {
     throw mapPrismaError(e);

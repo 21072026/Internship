@@ -20,6 +20,8 @@ import { saveContract } from '../src/lib/affiliateContract';
 const PW = 'AffGate123!';
 const host = asHost(MARKETING_HOST);
 let orgId = '';
+let partnerUserId = '';
+let partnerId = '';
 let partnerEmail = '';
 let orphanEmail = '';
 let leadEmail = '';
@@ -45,10 +47,11 @@ test.beforeAll(async () => {
   leadEmail = uniqueEmail('aff-lead');
   strayEmail = uniqueEmail('aff-stray');
   const partnerUser = await seedUser(partnerEmail, PW, 'AFFILIATE', 'Gate Partner', { orgId });
+  partnerUserId = partnerUser.id;
   await seedUser(orphanEmail, PW, 'AFFILIATE', 'No Partner Record', { orgId });
   await seedUser(leadEmail, PW, 'MENTEE', 'Marketing Lead', { orgId });
   await seedUser(strayEmail, PW, 'AFFILIATE', 'Internship Affiliate');
-  await prisma.affiliatePartner.create({ data: { orgId, userId: partnerUser.id, code: 'gate-1', displayName: 'Gate Partner' } });
+  partnerId = (await prisma.affiliatePartner.create({ data: { orgId, userId: partnerUser.id, code: 'gate-1', displayName: 'Gate Partner' } })).id;
 });
 
 test.afterAll(async () => {
@@ -57,7 +60,9 @@ test.afterAll(async () => {
     await prisma.affiliateContractAcceptance.deleteMany({ where: { orgId } }).catch(() => {});
     await prisma.affiliatePartner.deleteMany({ where: { orgId } }).catch(() => {});
     await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.auditLog.deleteMany({ where: { orgId } }).catch(() => {});
   }
+  if (partnerUserId) await prisma.notification.deleteMany({ where: { userId: partnerUserId } }).catch(() => {});
   for (const e of [partnerEmail, orphanEmail, leadEmail, strayEmail]) if (e) await cleanupByEmail(e);
   if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
@@ -87,7 +92,7 @@ test('only a partner with a record reaches the partner API', { tag: '@smoke' }, 
 
 test('a published contract holds the partner API until the current version is accepted', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
   const partner = await signedIn(playwright, baseURL, partnerEmail);
-  expect(await saveContract(orgId, { en: 'Synthetic terms v1', de: 'Synthetische Bedingungen v1' })).toEqual({ changed: true, version: 1 });
+  expect(await saveContract(orgId, { en: 'Synthetic terms v1', de: 'Synthetische Bedingungen v1' }, 'e2e-admin')).toEqual({ changed: true, version: 1 });
 
   expect((await partner.get('/api/affiliate/me', { headers: host })).status()).toBe(409);
   // The contract route is the one partner route that answers before acceptance.
@@ -103,10 +108,50 @@ test('a published contract holds the partner API until the current version is ac
   expect((await partner.get('/api/affiliate/me', { headers: host })).status()).toBe(200);
 
   // The same texts in another key order: no new version, nobody re-accepts.
-  expect(await saveContract(orgId, { de: 'Synthetische Bedingungen v1', en: 'Synthetic terms v1' })).toEqual({ changed: false, version: 1 });
+  expect(await saveContract(orgId, { de: 'Synthetische Bedingungen v1', en: 'Synthetic terms v1' }, 'e2e-admin')).toEqual({ changed: false, version: 1 });
   expect((await partner.get('/api/affiliate/me', { headers: host })).status()).toBe(200);
 
   // A changed text: version 2, the partner is held again.
-  expect(await saveContract(orgId, { en: 'Synthetic terms v2', de: 'Synthetische Bedingungen v1' })).toEqual({ changed: true, version: 2 });
+  expect(await saveContract(orgId, { en: 'Synthetic terms v2', de: 'Synthetische Bedingungen v1' }, 'e2e-admin')).toEqual({ changed: true, version: 2 });
   expect((await partner.get('/api/affiliate/me', { headers: host })).status()).toBe(409);
+});
+
+test('payout details: validated, sealed, masked on the way out, audited and announced', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const partner = await signedIn(playwright, baseURL, partnerEmail);
+  expect((await partner.post('/api/affiliate/contract', { headers: host, data: { version: 2 } })).status()).toBe(200);
+
+  // Contract publish/accept were audited once each, the idempotent repeat included.
+  const actions = async (action: string) => prisma.auditLog.count({ where: { orgId, action } });
+  expect(await actions('affiliate.contract.publish')).toBe(2);
+  expect(await actions('affiliate.contract.accept')).toBe(2);
+
+  const bad = await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban: 'DE89 3704 0044 0532 0130 01', holder: '' } });
+  expect(bad.status()).toBe(400);
+  expect(await bad.json()).toMatchObject({ code: 'invalid_input', issues: ['iban', 'holder'] });
+
+  // A published example IBAN (ISO 13616), never a real account.
+  const iban = 'DE89370400440532013000';
+  const put = await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban: 'de89 3704 0044 0532 0130 00', holder: 'Gate Partner' } });
+  expect(put.status()).toBe(200);
+  const putText = await put.text();
+  expect(putText).not.toContain(iban);
+  expect(JSON.parse(putText)).toEqual({ details: { iban: '•••• 3000', holder: 'Gate Partner' } });
+
+  const get = await partner.get('/api/affiliate/me/payout-details', { headers: host });
+  expect(await get.text()).not.toContain(iban);
+
+  const row = await prisma.affiliatePartner.findUniqueOrThrow({ where: { id: partnerId }, select: { payoutDetailsCipher: true } });
+  expect(row.payoutDetailsCipher).toBeTruthy();
+  expect(row.payoutDetailsCipher).not.toContain(iban);
+
+  const audit = await prisma.auditLog.findMany({ where: { orgId, action: 'affiliate.payout_details.update' } });
+  expect(audit).toHaveLength(1);
+  expect(audit[0].actorId).toBe(partnerUserId);
+  expect(audit[0].detail).not.toContain(iban);
+  expect(await prisma.notification.count({ where: { userId: partnerUserId, type: 'security.payoutDetailsChanged' } })).toBe(1);
+
+  // A suspended partner's details are frozen.
+  await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'SUSPENDED' } });
+  expect((await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Someone Else' } })).status()).toBe(409);
+  await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'ACTIVE' } });
 });

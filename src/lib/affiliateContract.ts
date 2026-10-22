@@ -32,7 +32,7 @@ const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownR
  * again. The bump is a guarded update on the version that was read: two saves at
  * once cannot both write the same next version with different texts.
  */
-export async function saveContract(orgId: string, texts: ContractTexts): Promise<{ changed: boolean; version: number }> {
+export async function saveContract(orgId: string, texts: ContractTexts, actorId: string): Promise<{ changed: boolean; version: number }> {
   try {
     return await prisma.$transaction(async (tx) => {
       const current = await tx.affiliateProgramSettings.findUnique({
@@ -42,8 +42,13 @@ export async function saveContract(orgId: string, texts: ContractTexts): Promise
       if (!contractChanged(current?.contract ?? null, texts)) return { changed: false, version: current?.contractVersion ?? 0 };
 
       const value = texts as Prisma.InputJsonValue;
+      const audit = (version: number) =>
+        tx.auditLog.create({
+          data: { orgId, actorId, action: 'affiliate.contract.publish', detail: JSON.stringify({ version, locales: Object.keys(texts).sort() }) },
+        });
       if (!current) {
         await tx.affiliateProgramSettings.create({ data: { orgId, contract: value, contractVersion: 1 } });
+        await audit(1);
         return { changed: true, version: 1 };
       }
       const next = current.contractVersion + 1;
@@ -52,6 +57,7 @@ export async function saveContract(orgId: string, texts: ContractTexts): Promise
         data: { contract: value, contractVersion: next },
       });
       if (count !== 1) throw new AffiliateContractError('conflict');
+      await audit(next);
       return { changed: true, version: next };
     });
   } catch (e) {
@@ -61,16 +67,21 @@ export async function saveContract(orgId: string, texts: ContractTexts): Promise
   }
 }
 
-/** Records that a partner accepted `version`. Idempotent for the current version. */
-export async function acceptContract(orgId: string, partnerId: string, version: number): Promise<ContractState> {
+/** Records that a partner accepted `version`. Idempotent for the current version; audited once. */
+export async function acceptContract(orgId: string, partnerId: string, version: number, actorId: string): Promise<ContractState> {
   const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { contractVersion: true } });
   const current = settings?.contractVersion ?? 0;
   if (current === 0) throw new AffiliateContractError('nothing_to_accept');
   if (version !== current) throw new AffiliateContractError('stale_version');
   try {
-    await prisma.affiliateContractAcceptance.create({ data: { orgId, partnerId, version } });
+    await prisma.$transaction([
+      prisma.affiliateContractAcceptance.create({ data: { orgId, partnerId, version } }),
+      prisma.auditLog.create({
+        data: { orgId, actorId, action: 'affiliate.contract.accept', targetId: partnerId, detail: JSON.stringify({ version }) },
+      }),
+    ]);
   } catch (e) {
-    if (!isUniqueViolation(e)) throw e; // already accepted: the same answer
+    if (!isUniqueViolation(e)) throw e; // already accepted: the same answer, no second audit row
   }
   return contractState(orgId, partnerId);
 }

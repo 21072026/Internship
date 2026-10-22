@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
 
   try {
-    return NextResponse.json(await acceptContract(gate.partner.orgId, gate.partner.id, parsed.data.version));
+    return NextResponse.json(await acceptContract(gate.partner.orgId, gate.partner.id, parsed.data.version, session.user.id));
   } catch (e) {
     if (e instanceof AffiliateContractError) return NextResponse.json({ code: e.code }, { status: STATUS[e.code] });
     throw e;

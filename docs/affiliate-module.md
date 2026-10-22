@@ -117,8 +117,18 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner
   shell carries the same server-side 2FA gate as every role shell.
-- Changing payout details sends a security notice (`sendSecurityNotice`) and writes
-  an `AuditLog` row. So do payment entries, commission status changes and payouts.
+- Payout details (`src/lib/affiliatePayoutDetails.ts`, the one writer and reader)
+  are validated by the ISO 13616 IBAN check (`src/lib/payoutDetailsRule.ts`),
+  sealed with `secretBox`, frozen while the partner is SUSPENDED, and every change
+  sends the `payoutDetailsChanged` security notice (essential `account_security`
+  group: no preference silences it) to the partner. The partner's API answers the
+  last four characters only.
+- Every money or contract write leaves one `AuditLog` row with its `orgId`, in the
+  same transaction where there is one: `affiliate.payment.record`,
+  `affiliate.commissions.resync`, `affiliate.contract.publish`,
+  `affiliate.contract.accept`, `affiliate.payout_details.update`. No row carries
+  an IBAN (the masked last four at most) or a person's data beyond ids.
+  Commission status changes and payouts will add theirs with the admin screens.
 - Every partner API goes through `affiliatePartnerGate()` (`src/lib/affiliateContract.ts`):
   AFFILIATE only (403), inside a vertical with the `affiliate` module (403), the
   session's OWN partner record (404 without one — never taken from the request),
