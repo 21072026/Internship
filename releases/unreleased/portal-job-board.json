@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The mentee job board, `/portal/jobs` (#1830):** a \"Jobs\" entry in the portal sidebar (capability `placements`) opens the open roles of the programme's employers. New `GET /api/portal/requisitions` (MENTEE, or ADMIN for support; COMPANY and MENTOR get 403) returns only requisitions of the caller's org that are `OPEN` with a free seat — `filled < openings` as a column comparison inside the WHERE, so the total is a `count()` over the same filter — with search (`q`: title or company name), `city`, `workMode` and `skill` (inside the required-skills JSON) all run in SQL, paged up to `REQUISITION_LIMITS.pageSize`. The select is the card's fields only (no `ownerId`). `GET /api/portal/requisitions/[id]` applies the same rule and answers 404 for anything not visible. List and detail pages with locale-formatted dates; free core, no entitlement. Rule in `src/lib/portalJobs.ts`.",
-  "notes": {
-    "en": ["Mentees get a Jobs page: the open roles of the programme's companies, searchable by role, company, city, work mode and skill."],
-    "tr": ["Menteeler için İlanlar sayfası: programdaki şirketlerin açık pozisyonları; pozisyona, şirkete, şehre, çalışma şekline ve yetkinliğe göre aranabilir."],
-    "de": ["Mentees erhalten eine Stellenseite: die offenen Stellen der Unternehmen im Programm, durchsuchbar nach Stelle, Unternehmen, Stadt, Arbeitsmodell und Kompetenz."]
-  }
-}
