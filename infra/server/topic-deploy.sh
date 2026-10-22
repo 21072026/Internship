@@ -146,7 +146,7 @@ CAPACITY_SH="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)/capac
 if [ -f "$CAPACITY_SH" ]; then
   # shellcheck source=infra/server/capacity.sh
   . "$CAPACITY_SH"
-  VERDICT=$(topic_capacity_verdict "$(mem_available_mb || true)" "$(container_mem_mb "$CONTAINER")" "$(topic_containers_except "$CONTAINER")")
+  VERDICT=$(topic_capacity_verdict "$(mem_available_mb || true)" "$(container_mem_mb "$CONTAINER")" "$(topic_containers_except "$CONTAINER")" "$(container_running "$CONTAINER")")
   if [ "${VERDICT%% *}" = "deferred" ]; then
     REASON="${VERDICT#deferred }"
     echo "==> NOT deploying ${TOPIC} — the server is busy: ${REASON}"

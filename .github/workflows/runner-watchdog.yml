@@ -21,7 +21,8 @@ name: Runner Watchdog (self-hosted health)
 # "Active" is not "working", either: before SSHing in, scripts/runner-queue.mjs
 # asks GitHub whether jobs for the runner's label have been queued for more than
 # vars.RUNNER_STUCK_AFTER_MIN (30) minutes with nothing running on it. If so,
-# the service is restarted even though systemd calls it active. And the unit
+# the service is restarted even though systemd calls it active — unless the box
+# shows a job in flight (a live Runner.Worker), which always wins over the API. And the unit
 # gets a `Restart=always` drop-in, so a runner the OOM killer takes down comes
 # back on its own instead of waiting for the next watchdog tick.
 
@@ -96,6 +97,30 @@ jobs:
             if sudo -n true 2>/dev/null; then SUDO="sudo -n"; fi
           fi
 
+          # A job in flight always has a Runner.Worker under the runner's own
+          # directory. The STUCK verdict is a GitHub read — not a snapshot, and
+          # its filtered run listings come back empty now and then — so the box
+          # has the last word: a runner executing a job is never restarted (that
+          # would cancel it, a prod deploy included). A Worker older than any
+          # job may run (WORKER_MAX_AGE_MIN) counts as wedged, not busy. An
+          # unknown directory reads as busy: never restart blind.
+          job_in_flight() { # job_in_flight <runner dir>
+            local dir="$1" pid age
+            [ -n "$dir" ] || return 0
+            for pid in $(pgrep -f "${dir}/bin/Runner[.]Worker" 2>/dev/null); do
+              age=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
+              if [ -n "$age" ] && [ "$age" -lt $(( ${WORKER_MAX_AGE_MIN:-360} * 60 )) ]; then return 0; fi
+            done
+            return 1
+          }
+          # Idle on two looks 20s apart: a runner between two jobs spawns the
+          # next Worker within a second or two.
+          idle_twice() { # idle_twice <runner dir>
+            job_in_flight "$1" && return 1
+            sleep 20
+            ! job_in_flight "$1"
+          }
+
           # Which box did SSH_HOST land on? Markers only — no host, user or
           # other repository's runner name reaches this public log.
           echo "Box: plesk=$([ -d /usr/local/psa ] && echo yes || echo no)" \
@@ -103,7 +128,7 @@ jobs:
             "prod-container=$($SUDO docker ps --format '{{.Names}}' 2>/dev/null | grep -cx internship-crm || true)" \
             "privileged=$([ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] && echo yes || echo no)" \
             "runner-units=$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | wc -l)" \
-            "listeners=$(pgrep -fc 'bin/Runner[.]Listener' 2>/dev/null || echo 0)"
+            "listeners=$(pgrep -fc 'bin/Runner[.]Listener' 2>/dev/null || true)"
 
           # 1) THIS runner's systemd unit: actions.runner.<scope>.<name>.service.
           UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend "actions.runner.*.${WATCHED_RUNNER}.service" 2>/dev/null | awk '{print $1}' | head -1)"
@@ -125,6 +150,12 @@ jobs:
             if $SUDO systemctl is-active --quiet "$UNIT"; then
               if [ "$STUCK" != "true" ]; then
                 echo "OK: runner service active and taking jobs."
+                exit 0
+              fi
+              RDIR="$($SUDO systemctl show -p WorkingDirectory --value "$UNIT" 2>/dev/null)"
+              [ -n "$RDIR" ] || RDIR="$($SUDO systemctl show -p ExecStart --value "$UNIT" 2>/dev/null | sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -1 | xargs -r dirname)"
+              if ! idle_twice "$RDIR"; then
+                echo "BUSY: a job is running on ${WATCHED_RUNNER} (Runner.Worker alive) — the queue reading was stale; not restarting."
                 exit 0
               fi
               echo "Runner service is active but has not taken a job (see the queue step) — restarting..."
@@ -174,6 +205,10 @@ jobs:
           if pgrep -f "$LISTENER" >/dev/null 2>&1; then
             if [ "$STUCK" != "true" ]; then
               echo "OK: runner process (Runner.Listener) running and taking jobs."
+              exit 0
+            fi
+            if ! idle_twice "$RUNNER_DIR"; then
+              echo "BUSY: a job is running on ${WATCHED_RUNNER} (Runner.Worker alive) — the queue reading was stale; not restarting."
               exit 0
             fi
             echo "Runner process running but not taking jobs — stopping it to restart..."

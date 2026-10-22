@@ -28,3 +28,8 @@
   (and `RUNNER_OS`, `RUNNER_TEMP`, …) itself in every step, *after* the job `env:` — the log's
   env dump still shows your value, but the shell sees the hosted runner's "GitHub Actions 1000…".
   The first run of the rewritten watchdog refused to touch the box over exactly that.
+- **A filtered GitHub run listing is not proof of absence.** `GET /actions/runs?status=in_progress`
+  answered an empty list on ~1 in 5 calls while two runs were in progress (same token, real
+  responses). Anything destructive decided from such a read — a runner restart — needs a check
+  on the box itself first (`pgrep -f "<runner dir>/bin/Runner.Worker"`: a job in flight always
+  has one).
