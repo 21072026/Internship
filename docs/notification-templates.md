@@ -39,7 +39,9 @@ through:
   `{{brand.name}}`, `{{brand.url}}`, `{{recipient.firstName}}`. A value is
   escaped into the body (sanitising runs first, so a value can never become
   markup); any other tag renders literally and reads nothing.
-- **Subject** — plain text: tags removed, line breaks collapsed, ≤ 255 chars.
+- **Subject** — plain text: entities decoded first, then tags removed until none
+  is left (`stripTags()` — one pass over `<<b>script>` would leave `<script>`) and
+  any stray `<`/`>` dropped, line breaks collapsed, ≤ 255 chars.
 
 ## Fail safe
 

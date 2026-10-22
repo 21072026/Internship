@@ -243,7 +243,9 @@ so only a super admin of the org's world sets it — #1575).
   one RSA-2048 key **per organization**, generated on first use (the first
   metadata fetch or logout), its private half sealed with secretBox (purpose
   `sso-sp-signing-key`, AES-256-GCM under NEXTAUTH_SECRET) in
-  `Organization.ssoSpKey`, its self-signed 10-year certificate in `ssoSpCert`
+  `Organization.ssoSpKey` (a credential column: `withoutOrgCredentials()` in
+  `src/lib/orgCredentials.ts` keeps it out of every organization response), its
+  self-signed 10-year certificate in `ssoSpCert`
   and in the metadata as a signing `KeyDescriptor`. Per org so no tenant's IdP
   ever trusts a key another tenant's configuration makes us use; no new env
   secret to provision. Only logout messages are signed (a separate node-saml

@@ -21,6 +21,7 @@ import {
   safeHref,
   sanitizeBody,
   sanitizeSubject,
+  stripTags,
   tagsIn,
 } from '../../src/lib/notifications/templateRender.ts';
 
@@ -103,6 +104,24 @@ test('a subject is plain text on one line', () => {
   assert.equal(sanitizeSubject('x'.repeat(400)).length, 255);
 });
 
+test('no markup survives into a subject: nested, encoded or half a tag', () => {
+  // One pass of a tag pattern leaves the outer tag of a nested one standing.
+  assert.equal(sanitizeSubject('<<b>script>alert(1)<</b>/script>Hi'), 'alert(1)Hi');
+  // Entities are decoded before the tags go, so an encoded tag is removed too.
+  assert.equal(sanitizeSubject('&lt;img src=x onerror=alert(1)&gt;Hi'), 'Hi');
+  assert.equal(sanitizeSubject('&#60;script&#62;x&#60;/script&#62; done'), 'x done');
+  // A stray angle bracket never reaches the subject.
+  assert.equal(sanitizeSubject('5 < 6'), '5 6');
+  assert.equal(sanitizeSubject('7 > 3'), '7 3');
+  for (const s of HOSTILE) assert.doesNotMatch(sanitizeSubject(s), /[<>]/, s);
+});
+
+test('stripTags removes tags until none is left', () => {
+  assert.equal(stripTags('<p><<b>i>x</i></p>'), 'x');
+  assert.equal(stripTags('<<<b>b>b>y'), 'y');
+  assert.doesNotMatch(stripTags('<scr<b>ipt>'), /[<>]/);
+});
+
 test('merge tags: the event params plus the brand set, nothing else', () => {
   const allowed = allowedTags(['menteeName']);
   assert.deepEqual([...allowed].sort(), ['menteeName', ...BRAND_TAGS].sort());
@@ -134,6 +153,7 @@ test('a template that cannot be used is refused, so the caller falls back', () =
   assert.deepEqual(renderStoredTemplate({ subject: '<b></b>', body: '<p>x</p>' }, [], {}), { ok: false, reason: 'empty_subject' });
   assert.deepEqual(renderStoredTemplate({ subject: '{{offerAmount}}', body: '<p>x</p>' }, [], {}), { ok: false, reason: 'unknown_subject_tag' });
   assert.deepEqual(renderStoredTemplate({ subject: 'Hi', body: '<script>x</script>' }, [], {}), { ok: false, reason: 'empty_body' });
+  assert.deepEqual(renderStoredTemplate({ subject: 'Hi', body: '<p><b></b></p><br>' }, [], {}), { ok: false, reason: 'empty_body' });
   // A subject that is only an allowed tag with no value is empty too.
   assert.deepEqual(renderStoredTemplate({ subject: '{{name}}', body: '<p>x</p>' }, ['name'], {}), { ok: false, reason: 'empty_subject' });
 });

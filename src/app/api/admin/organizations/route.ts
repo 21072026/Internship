@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withoutOrgCredentials } from '@/lib/orgCredentials';
 import { logActivity } from '@/lib/activity';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { z } from 'zod';
@@ -267,7 +268,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: PROVISION_ERRORS[r.code], code: r.code }, { status: r.status });
   }
   const { organization, starterPack, invitation } = result.value;
-  return NextResponse.json({ organization, starterPack, invitation }, { status: 201 });
+  return NextResponse.json({ organization: withoutOrgCredentials(organization), starterPack, invitation }, { status: 201 });
 }
 
 const PROVISION_ERRORS: Record<Exclude<ProvisionRefusal['code'], 'feature_locked'>, string> = {
@@ -699,5 +700,5 @@ export async function PATCH(request: Request) {
     detail: Object.keys(data).join(', '),
     request,
   });
-  return NextResponse.json({ organization, sessionsEnded, sweepPreview });
+  return NextResponse.json({ organization: withoutOrgCredentials(organization), sessionsEnded, sweepPreview });
 }

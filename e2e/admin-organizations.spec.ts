@@ -383,3 +383,38 @@ test('a tenant admin can only reach their own organization', async ({ page }) =>
     await cleanupByEmail(adminEmail);
   }
 });
+
+test('no organization response carries a credential column', { tag: '@smoke' }, async ({ page }) => {
+  // ORG_CREDENTIAL_FIELDS (src/lib/orgCredentials.ts): the sealed private half
+  // of our SP signing key is read on the server only. The PATCH and POST
+  // handlers answer with the Organization row, so they are the two doors.
+  const tag = Date.now();
+  const ownSlug = `e2e-cred-${tag}`;
+  const createdSlug = `e2e-cred-new-${tag}`;
+  createdSlugs.push(ownSlug, createdSlug);
+  const own = await prisma.organization.create({
+    data: { slug: ownSlug, name: `Cred Tenant ${tag}`, plan: 'ENTERPRISE', ssoSpKey: 'sealed-e2e-sp-key', ssoSpCert: 'e2e-sp-cert' },
+  });
+  const adminEmail = uniqueEmail('cred-admin');
+  const admin = await seedUser(adminEmail, 'CredPass123', 'ADMIN', 'Cred Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: own.id } });
+
+  try {
+    await signInAndSettle(page, adminEmail, 'CredPass123', '/admin');
+    const patched = await page.request.patch('/api/admin/organizations', { data: { id: own.id, brandName: 'Cred Brand' } });
+    expect(patched.ok()).toBeTruthy();
+    const body = await patched.json();
+    expect(body.organization.brandName).toBe('Cred Brand');
+    expect(body.organization).not.toHaveProperty('ssoSpKey');
+    expect(JSON.stringify(body)).not.toContain('sealed-e2e-sp-key');
+
+    // A super admin creating a tenant gets the new row without it too.
+    await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
+    await signInAndSettle(page, adminEmail, 'CredPass123', '/admin');
+    const created = await page.request.post('/api/admin/organizations', { data: { name: `Cred New ${tag}`, slug: createdSlug, vertical: 'INTERNSHIP' } });
+    expect(created.status()).toBe(201);
+    expect((await created.json()).organization).not.toHaveProperty('ssoSpKey');
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
