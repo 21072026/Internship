@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Forecast and capacity panel on the executive dashboard (#1897):** `GET /api/admin/analytics/forecast?horizon=YYYY-MM-DD` (ADMIN, `ADVANCED_ANALYTICS`, tenant-scoped) carries the current conversion forward with the arithmetic returned alongside the result, in the pure `src/lib/forecast.ts` (`projectPlacements`, `capacityRequirement`, `resolvedConversions`; unit test `scripts/test/forecast.test.mjs`). The step rates come from journeys started in the last year, and an open journey counts only for the stages it has left. Dwell is the aging report's median. Placements count today's ACTIVE records × the remaining step rates when the summed dwell fits the horizon, with a ±1-standard-error sensitivity band. Below 10 journeys on any stage multiplied through, the panel refuses and names the stage. Mentor capacity (mentorship verticals only) compares mentee-days needed per stage, in pipeline order, against stated seats × horizon days, and names the first stage that overflows and the mentors to add. It is not a prediction model, and no UI string calls it one. Details in `docs/executive-dashboard.md` § Forecast and capacity.",
-  "notes": {
-    "en": ["The executive dashboard now shows how many people in your pipeline reach the finish line by a date you choose, at your current conversion rate, and which stage needs more mentors. The arithmetic is shown."],
-    "tr": ["Yönetici panosu artık, mevcut dönüşüm oranınızla hattınızdaki kaç kişinin seçtiğiniz tarihe kadar hedefe ulaştığını ve hangi aşamada daha fazla mentor gerektiğini gösteriyor. Hesap da açıkça görülüyor."],
-    "de": ["Das Executive-Dashboard zeigt jetzt, wie viele Personen in Ihrer Pipeline bei der aktuellen Konversionsrate bis zu einem gewählten Datum das Ziel erreichen und auf welcher Stufe mehr Mentorinnen und Mentoren gebraucht werden. Die Rechnung ist sichtbar."]
-  }
-}

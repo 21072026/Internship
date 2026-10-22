@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Pipeline phases and bulk advance over the resolved order (#1637):** `PipelineStage` gains a nullable `phase` (`pre` | `internship` | `result`, whitelisted by `PIPELINE_PHASES` in `src/lib/pipeline.ts`; NULL = derive it, so every existing row renders exactly where it did). `groupResolvedStages()` groups by `stageGroupKey()` — the filed phase, else a canonical key's built-in phase, else the trailing custom group — and the stage editor and its PUT accept the phase. Bulk advance walks the relation's own org's on-path order through the new `nextOnPathStage()` instead of the canonical `nextOnPathStatus()`, which knew no custom key and skipped every row on a custom pipeline behind a success response; it now writes through the shared stage path (`stageMoveData()` + `recordStageMove()`, which gains a `skipNotify` passthrough) and answers `{ advanced, skipped, reasons }` (`updated` kept), which the candidates screen prints.",
-  "notes": {
-    "en": ["Custom pipeline stages can be placed in a board phase, and “advance selected” now works on custom pipelines — and tells you which candidates did not move and why."],
-    "tr": ["Özel pipeline aşamaları panoda bir evreye yerleştirilebilir; “seçilenleri ilerlet” artık özel pipeline'larda da çalışıyor ve hangi adayların neden yerinde kaldığını söylüyor."],
-    "de": ["Eigene Pipeline-Phasen lassen sich einem Board-Abschnitt zuordnen, und „Auswahl weiterschieben“ funktioniert jetzt auch bei eigenen Pipelines — und sagt, wer nicht bewegt wurde und warum."]
-  }
-}

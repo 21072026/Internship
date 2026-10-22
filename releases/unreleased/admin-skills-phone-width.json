@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fixed:** `/admin/skills` no longer overflows at phone width — the search and \"add skill\" inputs take the full row below `sm`; `e2e/mobile-layout-coverage.spec.ts` now measures both tabs of the page at 360px in EN, TR and DE.",
-  "notes": {
-    "en": ["The skill vocabulary page now fits on a phone screen."],
-    "tr": ["Beceri sözlüğü sayfası artık telefon ekranına sığıyor."],
-    "de": ["Die Seite mit dem Kompetenz-Vokabular passt jetzt auf einen Handybildschirm."]
-  }
-}
