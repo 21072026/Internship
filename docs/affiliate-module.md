@@ -120,6 +120,22 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   text and `contractVersion`. Without a valid plan the writer refuses payments.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 
+## Admin screens
+
+`/admin/affiliates` has one sidebar entry and its own tabs:
+
+- **Settings** — the plan and the contract (above).
+- **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
+  the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
+  a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
+  case-insensitively, permanent), and the state changes. Suspend / reactivate /
+  terminate go through `changePartnerState()` in the payment writer: under the
+  partner lock, re-evaluating the partner's commissions, audited
+  (`affiliate.partner.state`). A termination needs its effective date (a calendar
+  date, UTC midnight); reactivating clears it. The full IBAN is revealed to an
+  `affiliate.write` admin only, and every reveal is audited
+  (`affiliate.payout_details.read`).
+
 ## Security
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner

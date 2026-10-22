@@ -3,7 +3,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
 import { prisma as appPrisma } from '../src/lib/prisma';
-import { recordAffiliatePayment } from '../src/lib/affiliatePaymentWriter';
+import { recordAffiliatePayment, AffiliateWriteError } from '../src/lib/affiliatePaymentWriter';
+import { setPayoutDetails } from '../src/lib/affiliatePayoutDetails';
 
 /**
  * The programme settings API (docs/affiliate-module.md, #3116): who may read and
@@ -125,4 +126,50 @@ test('the contract is published through the API', { tag: '@smoke' }, async ({ pl
   expect(await (await put({ de: 'Synthetische Bedingungen', en: 'Synthetic terms' })).json()).toEqual({ changed: false, version: 1 });
   const s = await (await owner.get('/api/admin/affiliate/settings', { headers: host })).json();
   expect(s).toMatchObject({ contractVersion: 1, contract: { en: 'Synthetic terms', de: 'Synthetische Bedingungen' } });
+});
+
+test('partners: create, codes unique, state changes under the lock, IBAN reveal audited', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const post = (ctx: APIRequestContext, data: unknown) => ctx.post('/api/admin/affiliate/partners', { headers: host, data });
+
+  expect((await post(observer, { code: 'obs-1', displayName: 'Nope' })).status()).toBe(403);
+  const bad = await post(owner, { code: 'has space', displayName: '', contactEmail: 'not-an-email' });
+  expect(bad.status()).toBe(400);
+  expect((await bad.json()).issues.sort()).toEqual(['code', 'contactEmail', 'displayName']);
+  const created = await post(owner, { code: 'new-1', displayName: 'New Partner', contactEmail: 'New.Partner@Example.test' });
+  expect(created.status()).toBe(201);
+  const newId = (await created.json()).id;
+  expect((await post(owner, { code: 'NEW-1', displayName: 'Same code, other case' })).status()).toBe(409);
+
+  const list = await (await observer.get('/api/admin/affiliate/partners', { headers: host })).json();
+  expect(list.canWrite).toBe(false);
+  const row = list.partners.find((p: { id: string }) => p.id === newId);
+  expect(row).toMatchObject({ code: 'new-1', contactEmail: 'new.partner@example.test', status: 'ACTIVE', hasAccount: false, customers: 0 });
+  // The earlier spec's partner carries its PENDING commission in the totals, summed in SQL.
+  expect(list.partners.find((p: { id: string }) => p.id === partnerId).totals).toEqual({ PENDING: 300, APPROVED: 0, PAID: 0 });
+
+  // Suspension: no new payments. Termination needs a date and re-evaluates.
+  const patch = (id: string, data: unknown) => owner.patch(`/api/admin/affiliate/partners/${id}`, { headers: host, data });
+  expect((await patch(partnerId, { status: 'SUSPENDED' })).status()).toBe(200);
+  await expect(
+    recordAffiliatePayment({ orgId, partnerId, customerExternalRef: 'c-1', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-05T00:00:00Z'), externalPaymentRef: 'inv-2', source: 'MANUAL' }),
+  ).rejects.toBeInstanceOf(AffiliateWriteError);
+  expect((await patch(partnerId, { status: 'TERMINATED' })).status()).toBe(400);
+  expect((await patch(partnerId, { status: 'TERMINATED', noticeEffectiveAt: '2026-04-01T00:00:00.000Z' })).status()).toBe(200);
+  expect((await prisma.affiliatePartner.findUniqueOrThrow({ where: { id: partnerId } })).noticeEffectiveAt?.toISOString()).toBe('2026-04-01T00:00:00.000Z');
+  expect((await patch(partnerId, { status: 'ACTIVE' })).status()).toBe(200);
+  expect((await prisma.affiliatePartner.findUniqueOrThrow({ where: { id: partnerId } })).noticeEffectiveAt).toBeNull();
+  expect((await observer.patch(`/api/admin/affiliate/partners/${partnerId}`, { headers: host, data: { status: 'SUSPENDED' } })).status()).toBe(403);
+  expect((await patch('no-such-partner', { status: 'ACTIVE' })).status()).toBe(404);
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.partner.state' } })).toBe(3); // suspend, terminate, reactivate — refusals leave none
+
+  // The full IBAN: the paying admin only, and every reveal audited. (A published example IBAN.)
+  await setPayoutDetails({ orgId, partnerId, details: { iban: 'DE89370400440532013000', holder: 'Admin Spec Partner' }, actor: { id: 'e2e', role: 'ADMIN' } });
+  expect((await observer.get(`/api/admin/affiliate/partners/${partnerId}/payout-details`, { headers: host })).status()).toBe(403);
+  const revealed = await owner.get(`/api/admin/affiliate/partners/${partnerId}/payout-details`, { headers: host });
+  expect(await revealed.json()).toEqual({ details: { iban: 'DE89370400440532013000', holder: 'Admin Spec Partner' } });
+  const audit = await prisma.auditLog.findMany({ where: { orgId, action: 'affiliate.payout_details.read' } });
+  expect(audit).toHaveLength(1);
+  expect(audit[0].detail).not.toContain('DE89370400440532013000');
 });

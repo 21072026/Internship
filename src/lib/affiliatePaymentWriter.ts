@@ -303,3 +303,47 @@ export async function resyncPartnerCommissions(orgId: string, partnerId: string,
     throw mapPrismaError(e);
   }
 }
+
+export interface PartnerStatePatch {
+  status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
+  /** Required for TERMINATED (when the termination takes effect); cleared otherwise. */
+  noticeEffectiveAt?: Date | null;
+}
+
+/**
+ * Changes a partner's status and termination date — they decide what accrues,
+ * so they move under the same partner lock as a payment, and the partner's
+ * commissions are re-evaluated in the same transaction (when a plan exists).
+ * TERMINATED needs a date; any other status clears it (a reinstatement).
+ */
+export async function changePartnerState(orgId: string, partnerId: string, patch: PartnerStatePatch, actorId: string): Promise<SyncResult | null> {
+  if (patch.status === 'TERMINATED' && !(patch.noticeEffectiveAt instanceof Date && !Number.isNaN(patch.noticeEffectiveAt.getTime()))) {
+    throw new AffiliateWriteError('invalid_input');
+  }
+  const noticeEffectiveAt = patch.status === 'TERMINATED' ? patch.noticeEffectiveAt! : null;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const before = await lockPartner(tx, orgId, partnerId);
+      await tx.affiliatePartner.updateMany({ where: { id: partnerId, orgId }, data: { status: patch.status, noticeEffectiveAt } });
+      const settings = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true } });
+      const sync = settings?.plan ? await syncLocked(tx, orgId, { ...before, status: patch.status, noticeEffectiveAt }, await loadPlan(tx, orgId)) : null;
+      await tx.auditLog.create({
+        data: {
+          orgId,
+          actorId,
+          action: 'affiliate.partner.state',
+          targetId: partnerId,
+          detail: auditDetail({
+            from: before.status,
+            to: patch.status,
+            noticeEffectiveAt: noticeEffectiveAt?.toISOString() ?? null,
+            ...(sync ?? {}),
+          }),
+        },
+      });
+      return sync;
+    }, TX_OPTIONS);
+  } catch (e) {
+    throw mapPrismaError(e);
+  }
+}

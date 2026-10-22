@@ -103,3 +103,24 @@ export async function maskedPayoutDetails(orgId: string, partnerId: string): Pro
   const full = await readPayoutDetails(orgId, partnerId);
   return full ? { iban: maskIban(full.iban), holder: full.holder } : null;
 }
+
+/**
+ * The full details for the admin who makes the transfer by hand. Every reveal is
+ * audited (`affiliate.payout_details.read`), so "who looked at this IBAN" has an
+ * answer; the row carries the masked value only.
+ */
+export async function revealPayoutDetails(orgId: string, partnerId: string, actorId: string): Promise<PayoutDetails | null> {
+  const details = await readPayoutDetails(orgId, partnerId);
+  if (details) {
+    await prisma.auditLog.create({
+      data: {
+        orgId,
+        actorId,
+        action: 'affiliate.payout_details.read',
+        targetId: partnerId,
+        detail: JSON.stringify({ partnerId, iban: maskIban(details.iban) }),
+      },
+    });
+  }
+  return details;
+}
