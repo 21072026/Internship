@@ -42,3 +42,18 @@ export async function requireVerticalCapability(capability: VerticalCapability):
 export async function requireDefaultVertical(): Promise<void> {
   if ((await resolveRequestVertical()) !== DEFAULT_VERTICAL) notFound();
 }
+
+/**
+ * The boolean twin of the two gates above, for what must not 404 itself: a
+ * page's `generateMetadata` (Next still emits it on the page's 404) and its
+ * share card (an image route). A gated page answers `{}` / the generic brand
+ * card where this is false, so its copy never reaches the other product's host.
+ */
+export async function requestVerticalHas(capability: VerticalCapability): Promise<boolean> {
+  return verticalHasCapability(await resolveRequestVertical(), capability);
+}
+
+/** `requestVerticalHas` for the pages gated by `requireDefaultVertical`. */
+export async function requestIsDefaultVertical(): Promise<boolean> {
+  return (await resolveRequestVertical()) === DEFAULT_VERTICAL;
+}

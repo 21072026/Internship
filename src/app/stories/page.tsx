@@ -6,8 +6,11 @@ import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { listPublishedStories } from '@/lib/testimonials';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { requestVerticalHas, requireVerticalCapability } from '@/lib/verticalPage';
 
 export async function generateMetadata(): Promise<Metadata> {
+  // Emitted on the page's 404 too (see /for-companies).
+  if (!(await requestVerticalHas('mentorship'))) return {};
   return pageMetadata((t) => ({ title: t.landing.stories.pageTitle, description: t.landing.stories.pageSubtitle }), '/stories/opengraph-image');
 }
 
@@ -19,6 +22,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export const dynamic = 'force-dynamic';
 
 export default async function StoriesPage() {
+  // Mentees' and mentors' stories, read from every organization — the
+  // `mentorship` module's page (src/lib/verticalPage.ts); the marketing host's
+  // sitemap and landing already leave it out, and so does its URL now.
+  await requireVerticalCapability('mentorship');
   const stories = await listPublishedStories(50);
   if (stories.length === 0) notFound();
   const { t, locale } = await getServerDictionary();

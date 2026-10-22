@@ -214,7 +214,7 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   // The open roles of the programme's employers (#1830).
   { href: '/portal/jobs', icon: BriefcaseBusiness, key: 'jobs', capability: 'placements' },
   // Opted-in mentors only (#938) — consent-gated, see /api/mentors.
-  { href: '/mentors', icon: Users, key: 'mentorDirectory' },
+  { href: '/mentors', icon: Users, key: 'mentorDirectory', capability: 'mentorship' },
   { href: '/todos', icon: ListChecks, key: 'todos' },
   // The shared inbox, not a portal-only copy of it (#1156).
   { href: '/messages', icon: MessageSquare, key: 'messages' },
