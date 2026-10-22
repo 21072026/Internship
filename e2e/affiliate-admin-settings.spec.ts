@@ -200,3 +200,37 @@ test('payments: recorded by the one writer through the admin API, refusals carry
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payment.record', actorId: { not: 'system' } } })).toBe(2);
 });
 
+test('commissions: approve / reject / un-approve under the lock, PAID untouchable, drift read only', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const move = (ctx: APIRequestContext, ids: string[], transition: string) =>
+    ctx.post('/api/admin/affiliate/commissions/transition', { headers: host, data: { ids, transition } });
+  const byRef = async (ref: string) =>
+    prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, payment: { externalPaymentRef: ref } }, select: { id: true, status: true } });
+
+  const pending = await (await observer.get('/api/admin/affiliate/commissions?status=PENDING', { headers: host })).json();
+  expect(pending.canWrite).toBe(false);
+  expect(pending.totals.PENDING.count).toBe(pending.total);
+  const v1 = await byRef('inv-1'); // the v1 tier, frozen by the plan change but still PENDING
+  const p90 = await byRef('inv-90');
+  expect((await move(observer, [v1.id], 'APPROVE')).status()).toBe(403);
+
+  expect(await (await move(owner, [v1.id, 'not-a-commission'], 'APPROVE')).json()).toEqual({ moved: 1, skipped: ['not-a-commission'] });
+  expect((await byRef('inv-1')).status).toBe('APPROVED');
+  expect(await (await move(owner, [v1.id], 'REJECT')).json()).toEqual({ moved: 0, skipped: [v1.id] }); // not PENDING any more
+  expect(await (await move(owner, [v1.id], 'UNAPPROVE')).json()).toMatchObject({ moved: 1 });
+  expect(await (await move(owner, [p90.id], 'REJECT')).json()).toMatchObject({ moved: 1 });
+
+  // A PAID row never moves.
+  await prisma.affiliateCommission.update({ where: { id: v1.id }, data: { status: 'PAID', paidAt: new Date() } });
+  for (const tr of ['APPROVE', 'REJECT', 'UNAPPROVE']) expect((await (await move(owner, [v1.id], tr)).json()).moved).toBe(0);
+  await prisma.affiliateCommission.update({ where: { id: v1.id }, data: { status: 'PENDING', paidAt: null } });
+
+  expect(await prisma.auditLog.count({ where: { orgId, action: { startsWith: 'affiliate.commission.' } } })).toBe(3);
+
+  // The v1 tier (300) disagrees with plan v2 (450): reported, not changed.
+  const drift = (await (await observer.get('/api/admin/affiliate/commissions/drift', { headers: host })).json()).drift;
+  expect(drift).toEqual(expect.arrayContaining([expect.objectContaining({ commissionId: v1.id, planVersion: 1, expected: { kind: 'TIER', amountMinor: 450 } })]));
+  expect((await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: v1.id } })).amountMinor).toBe(300);
+});
+

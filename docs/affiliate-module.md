@@ -142,6 +142,16 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   UTC is still "today"). A new customer number needs its partner; a known one
   keeps its own. The list is newest first, paged, with the commission each
   payment got.
+- **Commissions** (`/api/admin/affiliate/commissions`, list in
+  `src/lib/affiliateCommissions.ts`) — by status, oldest due first, totals per
+  status in SQL. `transitionCommissions()` (payment writer) approves
+  (PENDING → APPROVED), rejects (PENDING → REJECTED) or un-approves
+  (APPROVED → PENDING), at most 200 at a time, each partner's rows under that
+  partner's lock by a guarded update on the expected status; anything else — a
+  PAID row above all, another organisation's id — comes back as `skipped`. One
+  audit row per partner (`affiliate.commission.approve|reject|unapprove`).
+  `driftReport()` lists the frozen rows the current plan would calculate
+  differently — read only, nothing written.
 
 ## Security
 

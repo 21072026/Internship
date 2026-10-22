@@ -3,9 +3,10 @@
 // Manual entry by an ADMIN today and an API import later both call
 // recordAffiliatePayment(); a plan or termination change calls
 // resyncPartnerCommissions(). Nothing else creates a payment or creates, changes
-// the amount of, or removes a commission. Status changes (approve, reject, pay)
-// come later and must take the same partner lock (lockPartner below), so they
-// cannot interleave with a reconciliation.
+// the amount of, or removes a commission. Status changes — approve, reject,
+// un-approve (transitionCommissions) and a partner's state (changePartnerState) —
+// live here too and take the same partner lock (lockPartner below), so they
+// cannot interleave with a reconciliation; a payout takes it as well.
 //
 // How a write runs:
 //   1. Shape checks (pure, src/lib/affiliateCommissionSync.ts) before any lock;
@@ -346,4 +347,98 @@ export async function changePartnerState(orgId: string, partnerId: string, patch
   } catch (e) {
     throw mapPrismaError(e);
   }
+}
+
+export type CommissionTransition = 'APPROVE' | 'REJECT' | 'UNAPPROVE';
+
+const TRANSITION: Record<CommissionTransition, { from: 'PENDING' | 'APPROVED'; to: 'PENDING' | 'APPROVED' | 'REJECTED' }> = {
+  APPROVE: { from: 'PENDING', to: 'APPROVED' },
+  REJECT: { from: 'PENDING', to: 'REJECTED' },
+  // Back to PENDING before a payout: a row of the current plan version becomes a
+  // projection again; an older version's stays as it is.
+  UNAPPROVE: { from: 'APPROVED', to: 'PENDING' },
+};
+
+export const MAX_COMMISSIONS_PER_ACTION = 200;
+
+/**
+ * Approves, rejects or un-approves commissions. Each partner's rows move under
+ * that partner's lock (so a reconciliation cannot interleave), by one guarded
+ * update with the expected status in the WHERE: a row in any other state — PAID
+ * above all — is never touched, and is reported as skipped. One audit row per
+ * partner touched.
+ */
+export async function transitionCommissions(
+  orgId: string,
+  ids: string[],
+  transition: CommissionTransition,
+  actorId: string,
+): Promise<{ moved: number; skipped: string[] }> {
+  const unique = [...new Set(ids)].slice(0, MAX_COMMISSIONS_PER_ACTION);
+  const { from, to } = TRANSITION[transition];
+  const rows = await prisma.affiliateCommission.findMany({ where: { orgId, id: { in: unique } }, select: { id: true, partnerId: true } });
+  const byPartner = new Map<string, string[]>();
+  for (const r of rows) byPartner.set(r.partnerId, [...(byPartner.get(r.partnerId) ?? []), r.id]);
+
+  let moved = 0;
+  const movedIds = new Set<string>();
+  try {
+    for (const [partnerId, partnerIds] of byPartner) {
+      await prisma.$transaction(async (tx) => {
+        await lockPartner(tx, orgId, partnerId);
+        const eligible = await tx.affiliateCommission.findMany({
+          where: { orgId, partnerId, id: { in: partnerIds }, status: from },
+          select: { id: true },
+        });
+        if (eligible.length === 0) return;
+        const { count } = await tx.affiliateCommission.updateMany({
+          where: { orgId, partnerId, id: { in: eligible.map((e) => e.id) }, status: from },
+          data: { status: to },
+        });
+        if (count !== eligible.length) throw new AffiliateWriteError('conflict');
+        await tx.auditLog.create({
+          data: {
+            orgId,
+            actorId,
+            action: `affiliate.commission.${transition.toLowerCase()}`,
+            targetId: partnerId,
+            detail: JSON.stringify({ partnerId, count, commissionIds: eligible.map((e) => e.id) }),
+          },
+        });
+        moved += count;
+        for (const e of eligible) movedIds.add(e.id);
+      }, TX_OPTIONS);
+    }
+  } catch (e) {
+    throw mapPrismaError(e);
+  }
+  return { moved, skipped: unique.filter((id) => !movedIds.has(id)) };
+}
+
+/**
+ * What the engine would say today about every partner's frozen commissions —
+ * read only, no lock, nothing written. The admin's "drift" list.
+ */
+export async function driftReport(orgId: string): Promise<(CommissionDrift & { partnerId: string })[]> {
+  const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true, planVersion: true, planEffectiveAt: true } });
+  const parsed = settings?.plan ? parseCommissionPlan(settings.plan) : null;
+  if (!settings || !parsed?.ok) return [];
+  const partners = await prisma.affiliatePartner.findMany({ where: { orgId }, select: { id: true, noticeEffectiveAt: true } });
+  const out: (CommissionDrift & { partnerId: string })[] = [];
+  for (const partner of partners) {
+    const paymentRows = await prisma.affiliatePayment.findMany({
+      where: { orgId, customer: { partnerId: partner.id } },
+      select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true },
+    });
+    const stored: StoredCommission[] = await prisma.affiliateCommission.findMany({
+      where: { orgId, partnerId: partner.id },
+      select: { id: true, paymentId: true, kind: true, amountMinor: true, currency: true, dueAt: true, windowEndsAt: true, planVersion: true, status: true },
+    });
+    const effective = settings.planEffectiveAt;
+    const recordedBeforePlan = new Set(effective === null ? [] : paymentRows.filter((p) => p.createdAt < effective).map((p) => p.id));
+    const evaluation = evaluatePartner(parsed.plan, { noticeEffectiveAt: partner.noticeEffectiveAt }, paymentRows);
+    const changes = planCommissionChanges({ evaluation, payments: paymentRows, stored, planVersion: settings.planVersion, recordedBeforePlan });
+    for (const d of changes.drift) out.push({ ...d, partnerId: partner.id });
+  }
+  return out;
 }
