@@ -273,10 +273,10 @@ export default defineConfig({
           // Required by Prisma and NextAuth even when the test suite never touches a
           // real MySQL server: the app boots before the first spec and crashes with
           // `Environment variable not found: DATABASE_URL` / `NEXTAUTH_SECRET` when
-          // they are unset. A synthetic local value is enough for smoke startup; the
-          // suite never mutates production data and the DB-specific tests create their
-          // own transactional fixtures against the app's test database setup.
-          DATABASE_URL: '******127.0.0.1:3306/internship_e2e',
+          // they are unset. The URL must be a valid MySQL DSN so Prisma accepts the
+          // schema at process boot; the DB-specific specs provision their own fixture
+          // database at runtime.
+          DATABASE_URL: 'mysql://127.0.0.1:3306/internship_e2e',
           NEXTAUTH_SECRET: 'e2e-nextauth-secret',
           NEXTAUTH_URL: localURL,
           TRUSTED_PROXY_COUNT: '1',
