@@ -87,10 +87,61 @@ jobs:
       tag: topic-pr${{ github.event.pull_request.number }}
       app_env: preview
 
+  # ── Still mergeable? (GitHub-hosted, seconds) ───────────────────────────────
+  # GitHub starts no pull_request run for a PR that is already in conflict, but
+  # a run that started clean keeps going when another PR lands on main mid-build
+  # and makes this one conflict. Its deploy (image pull, db push, seed, swap on
+  # the shared box) is then pure waste: the conflict can only be resolved by a
+  # new push, and that push builds and deploys again. So the box is skipped when
+  # GitHub says the head conflicts with its base right now.
+  #
+  # FAILS OPEN: `conflicted` is 'true' only for an explicit `mergeable: false`
+  # with `mergeable_state: dirty`. Mergeability still being computed (null), an
+  # API error or anything else deploys exactly as before.
+  mergeable:
+    name: Check the PR is still mergeable
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      conflicted: ${{ steps.check.outputs.conflicted }}
+    steps:
+      - name: Ask GitHub for the PR's merge state
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          conflicted=false
+          # Mergeability is computed lazily after a push to the base; give it a
+          # short while instead of reading the first `null` as an answer.
+          for i in 1 2 3 4 5 6; do
+            state=$(gh api "repos/${REPO}/pulls/${PR}" --jq '"\(.mergeable) \(.mergeable_state)"' 2>/dev/null || echo "error error")
+            echo "attempt ${i}: mergeable mergeable_state = ${state}"
+            case "$state" in
+              "false dirty") conflicted=true; break ;;
+              null*|*unknown) sleep 5 ;;
+              *) break ;;
+            esac
+          done
+          echo "conflicted=${conflicted}" >> "$GITHUB_OUTPUT"
+          if [ "$conflicted" = true ]; then
+            echo "::notice::PR #${PR} conflicts with its base — skipping the topic deploy; the push that resolves it deploys again."
+          fi
+
   # ── Deploy / update (PR opened, pushed to, or reopened) ──────────────────────
   deploy:
     name: Deploy topic environment
-    needs: build
+    needs: [build, mergeable]
+    # Skipped while the head conflicts with main (see `mergeable` above). The
+    # always() keeps that check fail-open: a `mergeable` job that died for any
+    # reason leaves `conflicted` empty and the deploy runs as before.
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      needs.mergeable.outputs.conflicted != 'true'
     # Both hosts run a self-hosted runner during the #2166 migration, and a bare
     # `self-hosted` label would send this job to whichever one happens to be
     # online — at random, mid-cutover. vars.DEPLOY_RUNNER names the intended box.
@@ -187,10 +238,14 @@ jobs:
   # box has to download from codeload — which is exactly what 429s.
   comment:
     name: Comment topic URL on the PR
-    needs: deploy
+    needs: [mergeable, deploy]
+    # Also after a deploy skipped for a conflict, so the comment stops pointing
+    # at an environment built from an older commit.
     if: >-
+      always() &&
       github.event.action != 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (needs.deploy.result == 'success' || needs.mergeable.outputs.conflicted == 'true')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -198,6 +253,7 @@ jobs:
       - uses: actions/github-script@v9
         env:
           DEPLOYED: ${{ needs.deploy.outputs.deployed }}
+          CONFLICTED: ${{ needs.mergeable.outputs.conflicted }}
           REASON: ${{ needs.deploy.outputs.reason }}
         with:
           script: |
@@ -209,7 +265,13 @@ jobs:
             // environment that was not deployed. An older "ready" comment is
             // replaced, because what it points at may be an older commit.
             const deferred = process.env.DEPLOYED === 'false';
-            const body = deferred
+            const conflicted = process.env.CONFLICTED === 'true';
+            const body = conflicted
+              ? `${marker}\n### ⏸ Topic preview not deployed — this branch conflicts with \`main\`\n\n` +
+                `Another change landed on \`main\` while this push was building, and the branch can no longer ` +
+                `be merged as is. Deploying it would only be replaced again, so the server was left alone.\n\n` +
+                `> Resolve the conflict and push — that push builds and deploys the environment again.`
+              : deferred
               ? `${marker}\n### ⏸ Topic preview not deployed — the server is busy\n\n` +
                 `${process.env.REASON || 'The shared server has no room for another environment right now.'}\n\n` +
                 `> Nothing is wrong with this PR, and CI is not affected. The environment is deployed on the next ` +
