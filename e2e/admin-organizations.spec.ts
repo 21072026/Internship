@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { testCertificate } from './support/x509.mjs';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 // Multi-tenancy (#544): super-admin Organizations screen — create a tenant and
 // see it listed with per-tenant counts. Phase 1 is additive (orgId nullable,
@@ -409,8 +409,11 @@ test('no organization response carries a credential column', { tag: '@smoke' }, 
     expect(JSON.stringify(body)).not.toContain('sealed-e2e-sp-key');
 
     // A super admin creating a tenant gets the new row without it too.
+    // The flag lives in the session token, so sign in again — through the
+    // helper made for a mid-test switch (a second signInAndSettle races the
+    // signed-in redirect and clicks a detached button).
     await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
-    await signInAndSettle(page, adminEmail, 'CredPass123', '/admin');
+    await signInAsFreshUser(page, adminEmail, 'CredPass123', '/admin');
     const created = await page.request.post('/api/admin/organizations', { data: { name: `Cred New ${tag}`, slug: createdSlug, vertical: 'INTERNSHIP' } });
     expect(created.status()).toBe(201);
     expect((await created.json()).organization).not.toHaveProperty('ssoSpKey');
