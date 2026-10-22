@@ -34,6 +34,7 @@ const PUBLISHED = [
   'offer.accepted',
   'offer.declined',
   'requisition.filled',
+  'mentorship.lifecycle_changed',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Pause, resume and end a pairing with a reason (#1770):** `POST /api/mentorship/[id]/lifecycle` is the one writer of a relation's lifecycle state — who may make which move and which reason an end needs is `checkLifecycleMove()` in `src/lib/relationLifecycle.ts` (ADMIN any legal move incl. reopen; the pair's own mentor pause/resume/end; mentee 403; another mentor's pairing 404). `status` is derived with `statusForLifecycle()`, never read from the body, and every move writes one `RelationLifecycleEvent` in the same guarded transaction (concurrent move → 409). A new terminal state `ENDED_EARLY` records an end that is not a success; the reason (`LIFECYCLE_END_REASON_CODES`) decides between it and `COMPLETED`, and certificates now refuse every end that is not a completion (`endedWithoutCompleting`). `PUT /api/mentorship/[id]` refuses `status` with `use_lifecycle_endpoint`; the reopen's one-active-mentor 409 moved with it. Both participants get an in-app notice (`relation.lifecycle_*`, never the reason); `mentorship.lifecycle_changed` is registered in the webhook catalogue (not yet dispatched, per `check:events`). `/admin/mentorship` replaces \"Mark complete\" with Pause / Resume / End… / Reopen, and `/mentor/mentees/[id]` gets the same controls plus the state history.",
+  "notes": {
+    "en": ["Pairings can now be paused and resumed, and ending one asks why — an early end is no longer recorded as a completion."],
+    "tr": ["Eşleşmeler artık duraklatılıp devam ettirilebiliyor; bir eşleşmeyi sonlandırırken sebebi soruluyor — erken bitiş artık tamamlanma olarak kaydedilmiyor."],
+    "de": ["Zusammenarbeiten lassen sich jetzt pausieren und fortsetzen, und beim Beenden wird nach dem Grund gefragt — ein vorzeitiges Ende zählt nicht mehr als Abschluss."]
+  }
+}

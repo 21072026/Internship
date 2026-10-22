@@ -401,6 +401,7 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
     prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
     prisma.interviewRequest.updateMany({ where: { menteeId: userId }, data: { note: null, declineNote: null } }),
   ];
@@ -432,6 +433,7 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText, ...rosterLog]);
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
+  await prisma.relationLifecycleEvent.deleteMany({ where: { changedById: userId } });
   // Optional references without a DB-level cascade (FK restrict) would abort
   // the delete instead of cascading — and the rows themselves belong to the
   // org, not to the user, so they are detached rather than deleted. Without

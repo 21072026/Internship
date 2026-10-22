@@ -840,6 +840,7 @@ model User {
   mentorRelations                   MentorshipRelation[]           @relation("MentorRelations")
   menteeRelations                   MentorshipRelation[]           @relation("MenteeRelations")
   statusChanges                     StatusChange[]                 @relation("StatusChangedBy")
+  relationLifecycleEvents           RelationLifecycleEvent[]       @relation("RelationLifecycleChangedBy")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                      @relation("UserTags")
@@ -3771,6 +3772,7 @@ model MentorshipRelation {
   cohort                Cohort?                        @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
+  lifecycleEvents       RelationLifecycleEvent[]
   agreementAcceptances  MentoringAgreementAcceptance[]
   slaBreaches           SlaBreach[]
   meetings              Meeting[]
@@ -4763,6 +4765,35 @@ model StatusChange {
   // person's moves explicitly (accountErasure.ts), and an implicit SET NULL
   // would silently relabel them as the system's.
   changedBy User?              @relation("StatusChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+}
+
+// One row per move between lifecycle states (#1770) — who paused, resumed,
+// ended or reopened a pairing, when, and why. Written ONLY by
+// POST /api/mentorship/[id]/lifecycle, in the same transaction as the move.
+// Tenant data reached through its relation, like StatusChange: no orgId and no
+// TENANT_MODELS entry (only parents are registered).
+model RelationLifecycleEvent {
+  id          String   @id @default(cuid())
+  relationId  String
+  // Lifecycle keys from src/lib/relationLifecycle.ts — free Strings, like the
+  // column they mirror.
+  fromState   String
+  toState     String
+  // A code from LIFECYCLE_END_REASON_CODES; required for an end, null otherwise.
+  reasonCode  String?
+  // Free-text elaboration. Admin- and mentor-written; scrubbed on the mentee's
+  // erasure like StatusChange.reasonNote (accountErasure.ts).
+  reasonNote  String?  @db.Text
+  changedById String
+  createdAt   DateTime @default(now())
+
+  relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // Restrict, like StatusChange.changedBy: erasure deletes a person's own moves
+  // explicitly rather than relabelling them.
+  changedBy User               @relation("RelationLifecycleChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([relationId])
+  @@index([changedById])
 }
 
 model InvitationToken {

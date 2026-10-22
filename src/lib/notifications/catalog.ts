@@ -265,6 +265,13 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship_request.rematchMentorNotice', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   { key: 'mentorship.mentorChanged', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentorship.reassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  // A pairing paused, resumed, ended or reopened through the lifecycle endpoint
+  // (#1770). In-app only: the send site notifies the pair with `notify()` and
+  // mails nobody. `name` is the OTHER participant; the reason is never a param.
+  { key: 'relation.lifecycle_paused', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'relation.lifecycle_resumed', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'relation.lifecycle_ended', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'relation.lifecycle_reopened', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   // In-app ONLY, and that is the send site's deliberate choice rather than an
   // omission: a corrected mis-assignment never was a mentorship, so there is no
   // ending to mail anybody about (src/lib/mentorTransfer.ts). Its sibling

@@ -80,7 +80,8 @@ test('a mis-assignment is corrected in place — no closed relation left behind'
     expect(rows[0].mentorId).toBe(rightMentor.id);
     expect(rows[0].status).toBe('ACTIVE');
     expect(rows[0].completedAt).toBeNull();
-    expect(rows[0].lifecycleState).toBeNull();
+    // Still live: the lifecycle column's default since #1768, never an end state.
+    expect(rows[0].lifecycleState).toBe('ACTIVE');
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { menteeId: mentee.id } });
     await cleanupByEmail(adminEmail);

@@ -32,13 +32,15 @@ test('mentorship rows do not overflow the viewport on mobile', async ({ page }) 
     const row = page.getByTestId(`mentorship-row-${rel.id}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
 
-    // The "Mark complete" button sits fully within the viewport width (would be
+    // The row's end-of-line actions — the lifecycle controls that replaced
+    // "Mark complete" in #1770 — sit fully within the viewport width (they were
     // clipped off the right edge with the old non-wrapping row layout).
-    const btn = row.getByRole('button', { name: /Mark complete|Tamamland|Abgeschlossen/i });
-    const box = await btn.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(W + 1);
+    for (const testId of ['lifecycle-pause', 'lifecycle-end']) {
+      const box = await row.getByTestId(testId).boundingBox();
+      expect(box, testId).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(W + 1);
+    }
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);
