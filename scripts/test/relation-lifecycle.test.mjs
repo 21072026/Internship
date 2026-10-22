@@ -19,7 +19,9 @@ const {
   LEGAL_TRANSITIONS,
   billableRelationWhere,
   canTransition,
+  activeRelationWhere,
   checkLifecycleMove,
+  stageClockPatch,
   endStateForReason,
   endedWithoutCompleting,
   lifecycleNotificationType,
@@ -166,4 +168,41 @@ test('each move names its notification', () => {
   assert.equal(lifecycleNotificationType('PAUSED', 'ACTIVE'), 'relation.lifecycle_resumed');
   assert.equal(lifecycleNotificationType('COMPLETED', 'ACTIVE'), 'relation.lifecycle_reopened');
   assert.equal(lifecycleNotificationType('PAUSED', 'ENDED_EARLY'), 'relation.lifecycle_ended');
+});
+
+// ── A pause freezes the clock (#1772) ───────────────────────────────────────
+
+const DAY = 24 * 60 * 60 * 1000;
+const NOW = new Date('2026-10-21T10:00:00Z');
+
+test('activeRelationWhere: live and not paused, one definition', () => {
+  assert.deepEqual(activeRelationWhere(), { status: 'ACTIVE', lifecycleState: 'ACTIVE' });
+});
+
+test('pause keeps the remaining days and clears the deadline', () => {
+  const p = stageClockPatch('ACTIVE', 'PAUSED', { stageDeadline: new Date(NOW.getTime() + 5 * DAY), stageDeadlineRemainingDays: null }, NOW);
+  assert.deepEqual(p, { stageDeadlineRemainingDays: 5, stageDeadline: null });
+  const overdue = stageClockPatch('ACTIVE', 'PAUSED', { stageDeadline: new Date(NOW.getTime() - 2 * DAY), stageDeadlineRemainingDays: null }, NOW);
+  assert.equal(overdue.stageDeadlineRemainingDays, -2);
+  assert.deepEqual(stageClockPatch('ACTIVE', 'PAUSED', { stageDeadline: null, stageDeadlineRemainingDays: null }, NOW), { stageDeadlineRemainingDays: null });
+});
+
+test('resume restores the same days, re-arms only a window with days left, and ends the dormancy episode', () => {
+  const r = stageClockPatch('PAUSED', 'ACTIVE', { stageDeadline: null, stageDeadlineRemainingDays: 5 }, NOW);
+  assert.equal(r.stageDeadline.getTime(), NOW.getTime() + 5 * DAY);
+  assert.equal(r.deadlineReminderSentAt, null);
+  assert.equal(r.stageDeadlineRemainingDays, null);
+  assert.deepEqual([r.dormantSince, r.dormantNudgeCount, r.dormantNudgeSentAt], [null, 0, null]);
+  // Already overdue at the pause: the clock comes back overdue, its reminder stamp untouched.
+  const late = stageClockPatch('PAUSED', 'ACTIVE', { stageDeadline: null, stageDeadlineRemainingDays: -2 }, NOW);
+  assert.equal(late.stageDeadline.getTime(), NOW.getTime() - 2 * DAY);
+  assert.equal('deadlineReminderSentAt' in late, false);
+  // A stage move during the pause set a new deadline: it wins.
+  const moved = stageClockPatch('PAUSED', 'ACTIVE', { stageDeadline: new Date(NOW.getTime() + DAY), stageDeadlineRemainingDays: 5 }, NOW);
+  assert.equal('stageDeadline' in moved, false);
+});
+
+test('an end drops the kept days; a reopen does not touch the dormancy stamps', () => {
+  assert.deepEqual(stageClockPatch('PAUSED', 'ENDED_EARLY', { stageDeadline: null, stageDeadlineRemainingDays: 3 }, NOW), { stageDeadlineRemainingDays: null });
+  assert.deepEqual(stageClockPatch('COMPLETED', 'ACTIVE', { stageDeadline: null, stageDeadlineRemainingDays: null }, NOW), { stageDeadlineRemainingDays: null });
 });

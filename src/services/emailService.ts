@@ -99,6 +99,7 @@ import { notifyEvent } from '@/lib/notifications/router';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
 import { holdIfRequired } from '@/lib/outboundDrafts';
+import { PAUSED, activeRelationWhere } from '@/lib/relationLifecycle';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -3911,7 +3912,8 @@ async function checkMentorInteractionRemindersInner() {
   };
 
   const allActive = await prisma.mentorshipRelation.findMany({
-    where: { status: 'ACTIVE' },
+    // Not a paused pair (#1772): nobody is expected to log anything during a pause.
+    where: activeRelationWhere(),
     include: {
       mentor: true,
       mentee: true,
@@ -4124,7 +4126,8 @@ export async function checkStageDeadlineReminders() {
   const dictionaryOf = emailDictionaryMemo();
 
   const candidates = await prisma.mentorshipRelation.findMany({
-    where: { status: 'ACTIVE', stageDeadline: { lt: now } },
+    // Not a paused pair (#1772): its clock is frozen (stageClockPatch), this is the second guard.
+    where: { ...activeRelationWhere(), stageDeadline: { lt: now } },
     include: {
       mentor: {
         select: {
@@ -4287,7 +4290,8 @@ export async function checkStageDeadlineReminders() {
 export async function checkNextActionReminders(now = new Date()) {
   const due = await prisma.mentorshipRelation.findMany({
     where: {
-      status: 'ACTIVE',
+      // Not a paused pair (#1772): the follow-up waits for the resume like everything else.
+      ...activeRelationWhere(),
       nextActionAt: { lt: nextActionDueBefore(now) },
       nextActionRemindedAt: null,
     },
@@ -4414,7 +4418,8 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
   const relations = await prisma.mentorshipRelation.findMany({
     where: {
       ...(options.relationIds ? { id: { in: options.relationIds } } : {}),
-      status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
+      // Not a paused pair (#1772): reports are still accepted, just never chased during a pause.
+      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
       weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
     },
     select: {
@@ -4540,7 +4545,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function sendDormantCheckIns(now = new Date()) {
   const flagged = await prisma.mentorshipRelation.findMany({
     where: {
-      status: 'ACTIVE',
+      // Not a paused pair (#1772): "still interested?" is the wrong question when the programme paused.
+      ...activeRelationWhere(),
       dormantSince: { not: null },
       dormantNudgeCount: { lt: DORMANT_MAX_NUDGES },
       mentee: { isActive: true },
@@ -6013,7 +6019,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
           id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true,
           menteeRelations: {
             where: { status: 'ACTIVE', mentor: { isActive: true } },
-            select: { id: true, mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
+            select: { id: true, lifecycleState: true, mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
           },
         },
       });
@@ -6026,9 +6032,15 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
       for (const row of result.rows) {
         const mentee = byId.get(row.user.id);
         if (!mentee) continue;
+        // A paused pair is not chased (#1772): a mentee whose only live
+        // pairings are all paused gets no reminder, and a paused pairing's
+        // mentor is not copied. A mentee with no pairing at all still is —
+        // role-based requirements do not depend on one.
+        const unpaused = mentee.menteeRelations.filter((relation) => relation.lifecycleState !== PAUSED);
+        if (mentee.menteeRelations.length > 0 && unpaused.length === 0) continue;
         const recipients = [
           { ...mentee, relationId: null },
-          ...mentee.menteeRelations.map((relation) => ({ ...relation.mentor, relationId: relation.id })),
+          ...unpaused.map((relation) => ({ ...relation.mentor, relationId: relation.id })),
         ]
           .filter((recipient, index, all) => all.findIndex((candidate) => candidate.id === recipient.id) === index);
         for (const requirement of row.missing) {

@@ -3613,67 +3613,67 @@ model CompanyNeed {
 }
 
 model MentorshipRelation {
-  orgId                   String?
-  org                     Organization?    @relation(fields: [orgId], references: [id])
-  id                      String           @id @default(cuid())
+  orgId                      String?
+  org                        Organization?    @relation(fields: [orgId], references: [id])
+  id                         String           @id @default(cuid())
   // A row of the starter pack's sample programme (#2066): synthetic, labelled,
   // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
-  sampleData              Boolean          @default(false)
-  mentorId                String
-  menteeId                String
-  companyId               String?
-  projectId               String?
-  cohortId                String?
-  startDate               DateTime         @default(now())
-  status                  MentorshipStatus @default(ACTIVE)
+  sampleData                 Boolean          @default(false)
+  mentorId                   String
+  menteeId                   String
+  companyId                  String?
+  projectId                  String?
+  cohortId                   String?
+  startDate                  DateTime         @default(now())
+  status                     MentorshipStatus @default(ACTIVE)
   // When the relation was marked COMPLETED. Anchors the post-mentorship CV and
   // document access window (#854) — without it, "access ended six months ago"
   // is unanswerable and mentors keep reading a former mentee's CV forever.
   // Cleared if the relation is reopened as ACTIVE.
-  completedAt             DateTime?
+  completedAt                DateTime?
   // The /api/v1 keyset (#1990). @default(now()) so db push can add it to a
   // table with rows; existing rows start at the deploy instant.
-  updatedAt               DateTime         @default(now()) @updatedAt
+  updatedAt                  DateTime         @default(now()) @updatedAt
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
   // them), so single-tenant behaviour is identical.
-  pipelineStatus          String           @default("APPLICATION_100")
+  pipelineStatus             String           @default("APPLICATION_100")
   // WHY the relation exists (#1503): PLACEMENT (the person is in the hiring
   // funnel — every placement count reads only these) or COACHING (mentoring
   // with no placement goal; its stage means nothing to a funnel). Free String,
   // not an enum, for the same reason as pipelineStatus (#747): changing an
   // enum under `db push` is an ENUM→VARCHAR migration. Vocabulary and guard:
   // src/lib/placementKind.ts.
-  kind                    String           @default("PLACEMENT") @db.VarChar(16)
+  kind                       String           @default("PLACEMENT") @db.VarChar(16)
   // WHOSE outcome a hire is (#1503): THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED.
   // NULL = not stated; never backfilled, and read as THROUGH_US for rows from
   // before the column (the UNSPECIFIED pattern of #810).
-  employmentAttribution   String?          @db.VarChar(24)
+  employmentAttribution      String?          @db.VarChar(24)
   // When the relation (re-)entered the placement funnel: the start for a
   // PLACEMENT, the moment of a COACHING → PLACEMENT switch. NULL → readers fall
   // back to startDate.
-  funnelEnteredAt         DateTime?
+  funnelEnteredAt            DateTime?
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
-  stageDeadline           DateTime?
+  stageDeadline              DateTime?
   // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
-  deadlineReminderSentAt  DateTime?
+  deadlineReminderSentAt     DateTime?
   // Set when a stale-mentee in-app notification was last sent; cleared once the
   // mentee has a recent interaction again, so each staleness episode notifies the
   // mentor only once (#573).
-  stalenessReminderSentAt DateTime?
+  stalenessReminderSentAt    DateTime?
   // Dormant first contact (#1501). Stamped by the daily sweep when the relation
   // is still parked in the pipeline's FIRST stage, an outreach already went out
   // and nothing came back (lib/dormantFirstContact.ts). Cleared the moment any
   // sign of life appears, so a later silence can flag — and nudge — again.
-  dormantSince            DateTime?
+  dormantSince               DateTime?
   // "Still interested?" check-ins sent to the MENTEE for the current dormancy
   // episode: how many (capped at DORMANT_MAX_NUDGES) and when the last one went
   // out. Both reset with dormantSince, so a person who comes back and goes quiet
   // months later is written to again rather than being silently written off.
-  dormantNudgeCount       Int              @default(0)
-  dormantNudgeSentAt      DateTime?
+  dormantNudgeCount          Int              @default(0)
+  dormantNudgeSentAt         DateTime?
   // The contractual trial window of a MARKETING funnel record (#2413, story
   // #2392). Both nullable and both additive: a mentorship relation never has a
   // trial, and a marketing record only has one once it reaches the TRIAL_ACTIVE
@@ -3687,18 +3687,18 @@ model MentorshipRelation {
   // every stage change, and it is the thing the reminders are counted back
   // from. Storing it in `stageDeadline` would make an SLA edit move a
   // contractual date, and moving the record to another stage would erase it.
-  trialStartedAt          DateTime?
-  trialEndsAt             DateTime?
+  trialStartedAt             DateTime?
+  trialEndsAt                DateTime?
   // A won customer's notice period (#2841): the day
   // their contract ends after they gave notice. Same class of date as
   // `trialEndsAt` — agreed, contractual, survives every stage change — so the
   // same reasoning against `stageDeadline` applies. Set only on a DEAL_WON
   // record (src/lib/contractEndRule.ts); cleared when the customer withdraws
   // the notice. The record stays DEAL_WON until a human moves it to DEAL_LOST.
-  contractEndsAt          DateTime?
+  contractEndsAt             DateTime?
   // When the end-day bell went out, so a re-run never rings twice. Cleared
   // with the date.
-  contractEndRemindedAt   DateTime?
+  contractEndRemindedAt      DateTime?
   // The owner's own "next step" on this record (#2563): a date and a short
   // line — "call Thursday about pricing". All three nullable and additive, so
   // `db push` adds them over a populated table and an untouched row means what
@@ -3715,12 +3715,12 @@ model MentorshipRelation {
   // before it is already the InteractionLog. The note is owner/ADMIN prose, so
   // the read paths that hand relation scalars to the MENTEE strip all three
   // (stripNextActionFor in the same module).
-  nextActionAt            DateTime?
-  nextActionNote          String?          @db.VarChar(280)
+  nextActionAt               DateTime?
+  nextActionNote             String?          @db.VarChar(280)
   // Set when the due-day reminder for the CURRENT nextActionAt went out, by a
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.
-  nextActionRemindedAt    DateTime?
+  nextActionRemindedAt       DateTime?
   // The state the pairing is in (#1768): ACTIVE | PAUSED | COMPLETED |
   // ENDED_REMATCHED | ENDED_REASSIGNED | ENDED_CHURNED — keys, transitions and
   // the one derivation of `status` live in src/lib/relationLifecycle.ts. It
@@ -3737,10 +3737,16 @@ model MentorshipRelation {
   // get 'ACTIVE'; rows written before #1768 hold NULL until
   // prisma/backfill-relation-lifecycle.mjs fills them on deploy. Making it
   // required is a later, separate contract step.
-  lifecycleState          String?          @default("ACTIVE")
+  lifecycleState             String?          @default("ACTIVE")
   // When the pairing was paused (#1768); cleared on resume. Never on a live,
   // unpaused row.
-  pausedAt                DateTime?
+  pausedAt                   DateTime?
+  // The stage clock, frozen (#1772): whole days that were left to
+  // `stageDeadline` when the pairing was paused (negative = already overdue).
+  // `stageDeadline` is cleared while paused and re-derived from this on resume,
+  // so a pause neither runs the clock out nor hands back a fresh full window.
+  // Written only by stageClockPatch() through the lifecycle endpoint.
+  stageDeadlineRemainingDays Int?
   // Why the pairing ended, as picked by the person who ended it (#2289): a code
   // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
   // never backfilled — a relation closed before this column existed, or closed
@@ -3754,7 +3760,7 @@ model MentorshipRelation {
   // read back. A coarse code is the same kind of fact `StatusChange.reasonCode`
   // already exposes on those paths; the admin's free-text elaboration lives in
   // the ActivityLog entry, which only admins read.
-  endReasonCode           String?
+  endReasonCode              String?
   // The pairing this one continues (#2289). Set on the relation CREATED by a
   // mentor transfer, pointing at the one that was closed as ENDED_REASSIGNED —
   // so the incoming mentor's blank page has a readable predecessor and the
@@ -3763,7 +3769,7 @@ model MentorshipRelation {
   // evaluations, notes, messages) stays on the relation it was written under,
   // because re-pointing `relationId` would re-attribute the outgoing mentor's
   // work to the incoming one — InteractionLog has no author column of its own.
-  previousRelationId      String?
+  previousRelationId         String?
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])

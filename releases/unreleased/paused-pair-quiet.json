@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**A paused pair leaves every nudge, queue and the active-pair count (#1772):** one shared `activeRelationWhere()` in `src/lib/relationLifecycle.ts` (live and not paused) now feeds the interaction reminder, the stage-deadline and next-action reminders, the weekly-report chase, the dormant sweep and check-in and the mentor attention queue; the weekly missing-document chase skips a mentee whose live pairings are all paused. The plan gate's capacity count and the meter already read `billableRelationWhere()` (#1768), so a paused pair frees its plan seat. Pausing freezes the stage clock — the remaining days go to the new `stageDeadlineRemainingDays`, `stageDeadline` is cleared — and resuming re-derives the deadline from the same days and clears the dormancy episode (`stageClockPatch()`, through the lifecycle endpoint only). Messaging, meetings, goals, weekly reports, the portal and the board keep reading `status = ACTIVE` and are untouched.",
+  "notes": {
+    "en": ["A paused pairing gets no reminders and does not count as active until it is resumed; its stage deadline picks up where it left off."],
+    "tr": ["Duraklatılmış bir eşleşmeye hatırlatma gitmez ve devam ettirilene kadar aktif sayılmaz; aşama süresi kaldığı yerden devam eder."],
+    "de": ["Eine pausierte Zusammenarbeit bekommt keine Erinnerungen und zählt bis zur Fortsetzung nicht als aktiv; ihre Phasenfrist läuft danach dort weiter, wo sie stand."]
+  }
+}
