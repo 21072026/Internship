@@ -103,6 +103,8 @@ export async function GET(request: Request) {
       where.OR = [
         { fullName: { contains: search } },
         { email: { contains: search } },
+        // A marketing lead's real address is on its account (src/lib/leadEmail.ts).
+        { company: { contactEmail: { contains: search } } },
         { university: { contains: search } },
         { department: { contains: search } },
       ];
@@ -125,6 +127,8 @@ export async function GET(request: Request) {
       // The candidate list is where you pick who to write to, so it says which
       // language each of them reads (#1164).
       preferredLanguage: true,
+      // The real address of a marketing lead whose row holds a stand-in (src/lib/leadEmail.ts).
+      company: { select: { contactEmail: true } },
       source: { select: { id: true, name: true } },
       // Tag chips on the row, so a filtered list shows WHY each person matched.
       tags: { select: { tag: { select: { id: true, name: true, color: true } } } },

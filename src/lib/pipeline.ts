@@ -298,6 +298,52 @@ export function onPathKeys(stages: ResolvedStage[]): string[] {
   return stages.filter((s) => !s.isOffPath).sort((a, b) => a.order - b.order).map((s) => s.key);
 }
 
+/** The longest stage key the editor generates (the route accepts 60). */
+const STAGE_KEY_MAX = 50;
+
+/**
+ * A new stage's key, derived ONCE from the label an admin typed (#1635):
+ * uppercase `[A-Z0-9_]`, never starting with a digit, deduplicated against
+ * `taken` with a numeric suffix. The key is what every relation on the stage
+ * stores, so the editor generates it while the row is new and never rewrites
+ * it after the first save — a later label edit changes the label only.
+ */
+export function stageKeyFromLabel(label: string, taken: ReadonlySet<string>): string {
+  const base =
+    label
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, STAGE_KEY_MAX) || 'STAGE';
+  const safe = /^[0-9]/.test(base) ? `S_${base}`.slice(0, STAGE_KEY_MAX) : base;
+  if (!taken.has(safe)) return safe;
+  for (let n = 2; ; n++) {
+    const candidate = `${safe.slice(0, STAGE_KEY_MAX - String(n).length - 1)}_${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * The stages a replacement would drop while records still sit on them (#1635):
+ * key → count. The PUT refuses with 409 when this is non-empty; the editor
+ * uses the same rule to disable the remove control.
+ */
+export function removedStagesInUse(
+  currentKeys: readonly string[],
+  nextKeys: readonly string[],
+  usage: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const kept = new Set(nextKeys);
+  const out: Record<string, number> = {};
+  for (const key of currentKeys) {
+    const n = usage[key] ?? 0;
+    if (!kept.has(key) && n > 0) out[key] = n;
+  }
+  return out;
+}
+
 /** Why a bulk advance left a relation where it was (#1637). */
 export type AdvanceSkipReason = 'final_stage' | 'off_path' | 'unknown_stage';
 

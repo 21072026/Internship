@@ -22,7 +22,6 @@
 // Registered from /api/cron/start (it sends through emailService); runnable on
 // its own as GET /api/cron?job=evaluations.
 
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import type { EvaluationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -214,20 +213,4 @@ export { evaluationCoverage } from '@/lib/evaluationCoverage';
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
-let task: ReturnType<typeof scheduleLeased> | null = null;
 
-/**
- * Daily at 08:15 UTC — morning in DE/TR, when a mentor plans the day. From
- * /api/cron/start, never initCronJobs: this module sends through emailService.
- */
-export function initEvaluationRemindersCron() {
-  if (task) return;
-  task = scheduleLeased('15 8 * * *', async () => {
-    try {
-      const r = await sendEvaluationReminders();
-      if (r.created || r.reminded) logger.warning('Evaluation reminders ran', { ...r });
-    } catch (error) {
-      logger.error('Evaluation reminders failed', { error: String(error) });
-    }
-  });
-}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
@@ -16,6 +17,9 @@ export async function GET(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // The skill vocabulary feeds mentor and requisition matching — an internship module.
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ skills: [], total: 0 });
@@ -43,6 +47,9 @@ export async function POST(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // The skill vocabulary feeds mentor and requisition matching — an internship module.
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization', code: 'no_org' }, { status: 400 });

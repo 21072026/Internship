@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**Erasure reaches a stand-in lead's account contact (#3136):** erasing a MARKETING lead created on a generated `@import.local` stand-in (import, account events, pull connector) now also clears the real name, address, phone and position on the account it is linked to. `companyContactOps()` reads the lead's linked accounts (`User.companyId`, its relations', a live connector link's) and `leadIsAccountContact()` (`src/lib/companyContactErasure.ts`, unit-tested) decides per account — the stored address is the lead's own or the one its stand-in was derived from, else the stored name; an account whose contact is someone else is never touched. The real address goes through the shared `contactScrubOps()` and into the connector tombstone. Pinned by `e2e/erasure-stand-in-lead.spec.ts` (@smoke).",
+  "notes": {
+    "en": [
+      "Erasing a lead now also removes that person's name, e-mail address and phone number from the account they were the contact of."
+    ],
+    "tr": [
+      "Bir lead silindiğinde, muhatabı olduğu hesaptaki adı, e-posta adresi ve telefonu da artık siliniyor."
+    ],
+    "de": [
+      "Beim Löschen eines Leads werden jetzt auch Name, E-Mail-Adresse und Telefonnummer der Person beim Account entfernt, dessen Kontakt sie war."
+    ]
+  }
+}

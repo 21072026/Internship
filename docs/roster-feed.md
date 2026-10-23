@@ -164,6 +164,61 @@ remote credential.
 (`rosterRowResult` in `src/lib/retentionEntries.ts`) deletes row-level results older than
 **90 days**; `RosterRun` summaries are kept indefinitely.
 
+## The console and the schedule (#1967)
+
+`/admin/roster-feeds` lists each feed with its schedule, its next run (computed in UTC,
+shown in the viewer's zone), its last run and whether it is on, off or paused. From there an
+admin can:
+
+- create or edit a feed. The **column mapper** reads a pasted or uploaded sample, offers the
+  file's own header names, and reads them with the parser the run uses;
+- **Run now (dry run)**: the same run with a writer that does not write;
+- **Run now**;
+- open a feed's **run history**, and from it a **run detail** whose per-row outcomes
+  (`RosterRowResult`) can be filtered by action, paged, and exported as CSV
+  (`?format=csv`; cells starting with `= + - @` are neutralised);
+- **Approve and apply** a run the deactivation ceiling stopped (#1966). Approval lifts that
+  valve only, and only for the file the admin looked at: the run is fetched again with the
+  stopped run's hash expected. It is audited (`roster.run_approved`) and stamped
+  (`RosterRun.approvedById`). A row-floor stop cannot be approved; fix the export instead.
+
+A failed or stopped last run shows a banner until an admin dismisses it
+(`RosterRun.acknowledgedAt`).
+
+Every route under `/api/admin/roster-feeds/*` is ADMIN-only and runs in the tenant scope with
+the org in every `where`. Another org's feed or run answers **404** to read, run, approve
+and acknowledge alike (`e2e/roster-feeds-console.spec.ts` checks this through the API).
+
+### Running exactly once: the claim
+
+`src/lib/rosterFeedRunner.ts` runs a feed only under its **claim**. The claim is one
+conditional UPDATE (`RosterFeed.claimedUntil`: empty or expired, set to now + 35 minutes).
+Whoever's UPDATE matched runs; everyone else gets `claimed_elsewhere`, which the console shows
+as a 409 "already running". The claim covers the waker on two replicas, a waker tick racing a
+click, and two admins clicking at once. It is cleared when the run ends and expires on its own
+when a process dies.
+
+### The waker
+
+There is **one** queued job, `roster.sweep`, every five minutes (`src/lib/jobs/schedules.ts`,
+run by #1676's scheduler under the `'scheduler'` lease, handler in `src/jobs/index.ts`). It
+runs each enabled feed whose `cronExpression` is due (`isFeedDue`: the first scheduled minute
+after `lastRunAt`, or after creation, has passed). A late tick therefore runs a due feed once,
+not once per missed slot. There is no timer per feed.
+
+### Failures pause a feed
+
+A run that throws (a transport error, a credential) or ends `FAILED` increments
+`consecutiveFailures`. A successful run resets it. A safety stop neither counts nor resets:
+there the file was wrong, not the feed. On the **third** failure in a row the feed is
+switched off with `pausedReason`, so a broken credential does not retry forever against a
+customer's server. A failure alert goes to `ALERT_EMAIL_TO` and the org's `supportEmail`.
+Switching the feed back on clears the reason and the streak.
+
+The e2e suite reaches a local HR-export stub (`e2e/support/roster-source.mjs`) through the
+real transport. `ROSTER_FEED_ALLOW_INSECURE_STUB=1` admits exactly `http://127.0.0.1:…` for
+it. That switch is set only by `playwright.config.ts` and never on a deployment.
+
 ## Not in this engine
 
 - **Deprovisioning** (#1966) is a separate phase after the import, with its own rules and
@@ -171,10 +226,7 @@ remote credential.
   diff's `absent` people. It runs only after a run whose every row was read, and its
   ceiling is checked before the first chunk is applied, so a valve that fires leaves
   nothing written.
-- **The console and the scheduler** (#1967): the `/admin/roster-feeds` screen, the column
-  mapper, the run log and running a feed on its `cronExpression`. The configuration API
-  exists (#1964) and the engine is callable from a route handler and a scheduled job
-  (`runRosterFeed`, `sweepRosterFeeds`); nothing schedules it yet.
+
 - **Row-level retry.** A row that throws is recorded `ERROR` and its chunk still commits, so
   the checkpoint moves past it. Re-running the *same* file therefore resumes at the end and
   changes nothing: the errored row is retried when the file next changes (the plan is

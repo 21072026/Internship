@@ -229,9 +229,9 @@ and Outlook render their own native unsubscribe control.
 
 ### Schedules
 
-Registered by `initNewsletterCron()`, called from `POST /api/cron/start`
-alongside `initCronJobs()` — deliberately *not* from inside `initCronJobs`, so
-`newsletterDispatch` imports `emailService` and never the reverse.
+The queued jobs `newsletter.dispatch` and `newsletter.queue` (`src/lib/jobs/schedules.ts`,
+handlers in `src/jobs/platform.ts`, #1677). The handlers import `newsletterDispatch`, which
+imports `emailService` — never the reverse.
 
 | Cron | Job |
 |------|-----|

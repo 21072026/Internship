@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Queued bulk candidate import on `/api/v1` (#3015).** `POST /api/v1/imports/candidates { candidates: [≤500], dryRun? }` (scope `candidates:write`, write floor with a 1 MB body through the new `apiWrite(…, { maxBodyBytes })` option) answers `202` and enqueues `api.import.candidates` on the #1673 worker. The job runs the rows through the one import engine, `runImport`: a one-column table, with the dry run being the same call through a non-writing `apply`. Each row is judged by the single POST's rules (`createCandidateSchema`, the skill limits, the world e-mail check, the shared duplicate rule with the org pool loaded once) and reported on its own as CREATE, SKIP (`duplicate_email` / `duplicate_in_batch` / `possible_duplicate`, with matches) or ERROR. A row is created whole or not at all (chunk size 1). New: `ApiImport` (`orgId`, in `TENANT_MODELS`; the submitted rows are cleared when the run ends, the row is purged after 7 days) and `findUsersInWorldByEmails()` in `src/lib/userWorld.ts`. `GET /api/v1/imports/{id}` is visible only to the key that queued the import; any other id is 404. A key can have at most 2 imports in flight. OpenAPI and `docs/public-api.md` are updated.",
-  "notes": {
-    "en": ["Integrations can now send up to 500 candidates in one API call; each one is checked for duplicates and reported back individually, with an optional dry run that changes nothing."],
-    "tr": ["Entegrasyonlar artık tek bir API çağrısıyla 500'e kadar aday gönderebiliyor; her biri mükerrer kayıt için kontrol edilip tek tek raporlanıyor, hiçbir şeyi değiştirmeyen isteğe bağlı bir deneme çalıştırması da var."],
-    "de": ["Integrationen können jetzt bis zu 500 Kandidat:innen in einem API-Aufruf senden; jede:r wird auf Dubletten geprüft und einzeln zurückgemeldet, mit einem optionalen Probelauf, der nichts verändert."]
-  }
-}

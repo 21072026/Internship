@@ -14,6 +14,7 @@ import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { capSkills } from '@/lib/skills';
 import { syncUserSkills } from '@/lib/skillsResolve';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // The source a SOURCE user represents (their own sourceId).
 async function ownSourceId(userId: string): Promise<string | null> {
@@ -25,6 +26,8 @@ async function ownSourceId(userId: string): Promise<string | null> {
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'SOURCE') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const denied = await requireCapability(resolveOrgId(session), 'sourcing');
+  if (denied) return denied;
   return await withTenantScope(session, async () => {
     const sourceId = await ownSourceId(session.user.id);
     if (!sourceId) return NextResponse.json({ error: 'No source' }, { status: 403 });
@@ -68,6 +71,8 @@ const schema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'SOURCE') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const denied = await requireCapability(resolveOrgId(session), 'sourcing');
+  if (denied) return denied;
   return await withTenantScope(session, async () => {
     const sourceId = await ownSourceId(session.user.id);
     if (!sourceId) return NextResponse.json({ error: 'No source' }, { status: 403 });

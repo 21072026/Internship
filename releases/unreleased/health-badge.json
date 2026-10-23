@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Relationship health badge (#1904):** `src/components/HealthBadge.tsx` — band chip, score, a 30-day CSS-bar sparkline and the reasons on hover/focus, purely from props — now sits on the mentor's mentee page, the admin candidate page and every active row of `/admin/mentorship`. Its data comes from the new `GET /api/relation-health?ids=` (≤ 100 ids), which runs the same `assessRelations()` + `healthTrendFrom()` as `/admin/health` (#1902): an ADMIN reads their tenant's relations, a MENTOR only the pairs they mentor, anyone else 403; an id the caller may not read is simply absent. Reason labels reuse the attention queue's strings; no new dependency, no new copy.",
-  "notes": {
-    "en": ["Each active mentorship now shows its health score, a 30-day trend and the reasons behind it wherever the pair is opened."],
-    "tr": ["Her aktif mentorluk, eşleşmenin açıldığı her yerde artık sağlık puanını, 30 günlük eğilimini ve bunun gerekçelerini gösteriyor."],
-    "de": ["Jede aktive Mentoring-Beziehung zeigt jetzt überall, wo das Paar geöffnet wird, ihren Gesundheitswert, den 30-Tage-Verlauf und die Gründe dafür."]
-  }
-}

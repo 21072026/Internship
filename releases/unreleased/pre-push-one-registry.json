@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**One list of pre-push steps for every schema push:** the expand/backfill steps that let `prisma db push` succeed against existing tables were hand-copied into `infra/deploy-prod.sh`, `infra/server/topic-deploy.sh` and `infra/server/demo-refresh.sh`, and the copies had drifted (the demo first lacked the Setting re-key expand and died on `Setting_orgId_key_key`, then lacked the pre-push Json repair). They are now one ordered registry, `prisma/pre-push/registry.mjs`, run by `prisma/run-pre-push.mjs` on all three paths, and `scripts/test/pre-push-registry.test.mjs` fails on a direct line or an unregistered `prisma/push-*-expand.mjs`. The demo refresh also checks that its image carries the runner before it wipes anything (#3144)."
+}

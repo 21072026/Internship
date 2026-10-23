@@ -1,16 +1,19 @@
 # Native push for the mobile app (#2775)
 
 When a message arrives, the phone shows a notification even while the app is closed.
-A tap opens the **native thread** in the product the message belongs to. Android ships
-first; nothing in the design is Android-specific, and the missing iOS steps are listed
-at the end.
+A tap opens the **native thread** in the product the message belongs to. The support
+line pushes too (#3154): a support message reaches the admins, an admin's reply reaches
+the requester. Android ships first; nothing in the design is Android-specific, and the
+missing iOS steps are listed at the end.
 
 ## The shape
 
 ```mermaid
 flowchart LR
   M[POST /api/messages] --> P[sendNewMessagePush]
+  SU[POST /api/support<br/>POST /api/admin/support] --> SP[sendSupportPush]
   P --> S[sendPushToUser<br/>category check once]
+  SP --> S
   S -->|VAPID set| W[Web Push<br/>PushSubscription]
   S --> N[sendNativePushToUser<br/>NativePushToken]
   N -->|fetch, ≤100/batch| E[Expo push service]
@@ -25,6 +28,26 @@ flowchart LR
   `sendNewMessagePush` no longer returns early on `pushConfigured()`.
 - **Never throws.** Like web push, every path is best-effort. A push service that is down
   cannot fail the message that triggered it.
+- **Which events push.** Only conversations, the channel people expect to interrupt
+  them. Every other event writes its bell row and stays quiet.
+  - Messages (`sendNewMessagePush`, `src/lib/messagePush.ts`): `message.new`,
+    `message.newGeneric` and `message.newByEmail`.
+  - The support line (#3154, rules in `src/lib/supportPushRule.ts`):
+    - A user's support message (`support.new`, `support.newMessage` and their
+      `…Generic` forms) goes to the active ADMINs of the requester's org, the same
+      `orgWhere(ticketOrgId)` list as the bell. Its `url` is `/admin/support`.
+    - An admin's reply (`support.replied`) goes to the requester. Its `url` is
+      `notificationLink(role, 'support', {})`, i.e. `/messages/support`.
+    - The writer never gets a push of their own message: an admin can open a ticket
+      and can answer their own ticket from the queue.
+    - `support.closed` does **not** push. A closure is bookkeeping nobody waits on,
+      it usually follows a reply that already buzzed, and the bell keeps it.
+    - Category `messages`, because `src/lib/notifications/catalog.ts` files every
+      support event there; the /account "Messages" switch silences the tray as it
+      silences the bell. The title is the bell's own template, so no i18n key was
+      added. The `tag` is `support:<ticketId>`, one tray entry per ticket.
+    - The app needs no change. Neither path is native (`nativeRouteFor`), so a tap
+      opens them in the web view, as the Support row of the Messages tab already does.
 - **Expo is only the delivery hop.** One HTTPS endpoint fronts FCM and APNs, so the server
   never knows which platform a token is on. It is called with plain `fetch`; the SDK would
   add a dependency for two POSTs.
@@ -217,6 +240,12 @@ Nobody but the maintainer handles key material, and none of it goes into the rep
     2. Close the app.
     3. Send a message to that account from a second account in a browser.
     4. Expect a notification. A tap opens the native thread.
+    5. Support, user side: sign in to the app as an ADMIN and close it. From a browser,
+       write to Support as a non-admin user of the same org. Expect a notification;
+       a tap opens `/admin/support` in the web view.
+    6. Support, admin side: sign in to the app as that user and close it. Reply to the
+       ticket from `/admin/support` in a browser. Expect a notification; a tap opens
+       `/messages/support` in the web view.
   - With both products signed in, sign out of one; only that product's messages stop.
   - The EAS `preview` APK talks to **production** hosts.
 
@@ -257,7 +286,11 @@ The code is platform-neutral. What is missing is account work:
 
 ## Known gaps
 
-- Only **messages** push today: `sendNewMessagePush` is the one caller, as on the web.
+- Only **messages** and the **support line** push (§ The shape, *Which events push*).
+  Meetings, stage changes and the rest reach the bell and e-mail only; making any of
+  them buzz a phone is a product decision of its own, not a missing wire.
+- A support push opens the web view, not a native screen: the app has no native
+  support thread yet.
 - The app icon and the status-bar glyph are still the Expo template's. The notification
   icon is the launcher's monochrome layer, so it follows when the brand icons land.
 - No server-side badge count.

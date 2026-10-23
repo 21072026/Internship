@@ -19,6 +19,13 @@ const {
   LEGAL_TRANSITIONS,
   billableRelationWhere,
   canTransition,
+  activeRelationWhere,
+  checkLifecycleMove,
+  stageClockPatch,
+  endStateForReason,
+  endedWithoutCompleting,
+  lifecycleNotificationType,
+  LIFECYCLE_END_REASON_CODES,
   effectiveLifecycleState,
   isBillable,
   isLive,
@@ -29,7 +36,7 @@ const {
 const { BILLABLE_RELATION_STATES, isBillablePair } = await import('../../src/lib/meteringRules.ts');
 
 test('every state is known, and the pre-#1768 end states are kept', () => {
-  for (const s of ['ACTIVE', 'PAUSED', 'COMPLETED', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED']) {
+  for (const s of ['ACTIVE', 'PAUSED', 'COMPLETED', 'ENDED_EARLY', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED']) {
     assert.ok(isRelationLifecycleState(s), s);
   }
   for (const s of ['', null, undefined, 'active', 'BENCHED']) assert.equal(isRelationLifecycleState(s), false);
@@ -102,4 +109,100 @@ test('a paused pair is not billable, through the one allowlist', () => {
 
 test('billableRelationWhere is the SQL twin: live by status, billable by lifecycle', () => {
   assert.deepEqual(billableRelationWhere(), { status: 'ACTIVE', lifecycleState: { in: ['ACTIVE'] } });
+});
+
+// ── The lifecycle endpoint's rule (#1770) ────────────────────────────────────
+
+const live = { status: 'ACTIVE', lifecycleState: 'ACTIVE' };
+const paused = { status: 'ACTIVE', lifecycleState: 'PAUSED' };
+const ended = { status: 'COMPLETED', lifecycleState: 'ENDED_EARLY' };
+const move = (over) => checkLifecycleMove({ role: 'MENTOR', isOwnMentor: true, relation: live, ...over });
+
+test('who may move: admin anything legal, own mentor pause/resume/end, nobody else', () => {
+  assert.equal(move({ to: 'PAUSED' }).ok, true);
+  assert.equal(move({ relation: paused, to: 'ACTIVE' }).ok, true, 'resume');
+  assert.deepEqual(move({ role: 'MENTEE', to: 'PAUSED' }), { ok: false, status: 403, code: 'forbidden' });
+  assert.deepEqual(move({ isOwnMentor: false, to: 'PAUSED' }), { ok: false, status: 403, code: 'forbidden' });
+  assert.deepEqual(move({ role: 'COMPANY', to: 'PAUSED' }), { ok: false, status: 403, code: 'forbidden' });
+  // A reopen is a fresh assignment: admin only.
+  assert.deepEqual(move({ relation: ended, to: 'ACTIVE' }), { ok: false, status: 403, code: 'forbidden' });
+  assert.equal(move({ role: 'ADMIN', isOwnMentor: false, relation: ended, to: 'ACTIVE' }).ok, true);
+});
+
+test('illegal moves are 409 naming both states; successor-creating ends have their own doors', () => {
+  assert.deepEqual(move({ role: 'ADMIN', relation: { status: 'COMPLETED', lifecycleState: 'COMPLETED' }, to: 'PAUSED' }), {
+    ok: false, status: 409, code: 'illegal_transition', from: 'COMPLETED', to: 'PAUSED',
+  });
+  assert.equal(move({ role: 'ADMIN', to: 'ACTIVE' }).code, 'illegal_transition', 'ACTIVE → ACTIVE is no move');
+  for (const to of ['ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED', 'BENCHED', 42]) {
+    assert.deepEqual(move({ role: 'ADMIN', to, reasonCode: 'no_fit' }), { ok: false, status: 400, code: 'invalid_state' });
+  }
+});
+
+test('an end needs a reason whose end state matches, and "other" needs a note', () => {
+  assert.equal(move({ to: 'ENDED_EARLY' }).code, 'reason_required');
+  assert.equal(move({ to: 'ENDED_EARLY', reasonCode: 'bogus' }).code, 'invalid_reason');
+  assert.equal(move({ to: 'COMPLETED', reasonCode: 'no_fit' }).code, 'reason_mismatch', 'no fit is never a completion');
+  assert.equal(move({ to: 'ENDED_EARLY', reasonCode: 'finished' }).code, 'reason_mismatch');
+  assert.equal(move({ to: 'ENDED_EARLY', reasonCode: 'other' }).code, 'note_required');
+  assert.equal(move({ to: 'ENDED_EARLY', reasonCode: 'other', reasonNote: '  ' }).code, 'note_required');
+  assert.equal(move({ to: 'ENDED_EARLY', reasonCode: 'other', reasonNote: 'why' }).ok, true);
+  assert.equal(move({ relation: paused, to: 'COMPLETED', reasonCode: 'finished' }).ok, true);
+  for (const code of LIFECYCLE_END_REASON_CODES) {
+    assert.ok(['COMPLETED', 'ENDED_EARLY'].includes(endStateForReason(code)), code);
+  }
+  assert.equal(endStateForReason('programme_ended'), 'COMPLETED');
+});
+
+test('only COMPLETED reads as a completion', () => {
+  assert.equal(endedWithoutCompleting({ lifecycleState: 'COMPLETED' }), false);
+  assert.equal(endedWithoutCompleting({ lifecycleState: 'PAUSED' }), false);
+  assert.equal(endedWithoutCompleting({ lifecycleState: null }), false);
+  for (const s of ['ENDED_EARLY', 'ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED']) {
+    assert.equal(endedWithoutCompleting({ lifecycleState: s }), true, s);
+  }
+});
+
+test('each move names its notification', () => {
+  assert.equal(lifecycleNotificationType('ACTIVE', 'PAUSED'), 'relation.lifecycle_paused');
+  assert.equal(lifecycleNotificationType('PAUSED', 'ACTIVE'), 'relation.lifecycle_resumed');
+  assert.equal(lifecycleNotificationType('COMPLETED', 'ACTIVE'), 'relation.lifecycle_reopened');
+  assert.equal(lifecycleNotificationType('PAUSED', 'ENDED_EARLY'), 'relation.lifecycle_ended');
+});
+
+// ── A pause freezes the clock (#1772) ───────────────────────────────────────
+
+const DAY = 24 * 60 * 60 * 1000;
+const NOW = new Date('2026-10-21T10:00:00Z');
+
+test('activeRelationWhere: live and not paused, one definition', () => {
+  assert.deepEqual(activeRelationWhere(), { status: 'ACTIVE', lifecycleState: 'ACTIVE' });
+});
+
+test('pause keeps the remaining days and clears the deadline', () => {
+  const p = stageClockPatch('ACTIVE', 'PAUSED', { stageDeadline: new Date(NOW.getTime() + 5 * DAY), stageDeadlineRemainingDays: null }, NOW);
+  assert.deepEqual(p, { stageDeadlineRemainingDays: 5, stageDeadline: null });
+  const overdue = stageClockPatch('ACTIVE', 'PAUSED', { stageDeadline: new Date(NOW.getTime() - 2 * DAY), stageDeadlineRemainingDays: null }, NOW);
+  assert.equal(overdue.stageDeadlineRemainingDays, -2);
+  assert.deepEqual(stageClockPatch('ACTIVE', 'PAUSED', { stageDeadline: null, stageDeadlineRemainingDays: null }, NOW), { stageDeadlineRemainingDays: null });
+});
+
+test('resume restores the same days, re-arms only a window with days left, and ends the dormancy episode', () => {
+  const r = stageClockPatch('PAUSED', 'ACTIVE', { stageDeadline: null, stageDeadlineRemainingDays: 5 }, NOW);
+  assert.equal(r.stageDeadline.getTime(), NOW.getTime() + 5 * DAY);
+  assert.equal(r.deadlineReminderSentAt, null);
+  assert.equal(r.stageDeadlineRemainingDays, null);
+  assert.deepEqual([r.dormantSince, r.dormantNudgeCount, r.dormantNudgeSentAt], [null, 0, null]);
+  // Already overdue at the pause: the clock comes back overdue, its reminder stamp untouched.
+  const late = stageClockPatch('PAUSED', 'ACTIVE', { stageDeadline: null, stageDeadlineRemainingDays: -2 }, NOW);
+  assert.equal(late.stageDeadline.getTime(), NOW.getTime() - 2 * DAY);
+  assert.equal('deadlineReminderSentAt' in late, false);
+  // A stage move during the pause set a new deadline: it wins.
+  const moved = stageClockPatch('PAUSED', 'ACTIVE', { stageDeadline: new Date(NOW.getTime() + DAY), stageDeadlineRemainingDays: 5 }, NOW);
+  assert.equal('stageDeadline' in moved, false);
+});
+
+test('an end drops the kept days; a reopen does not touch the dormancy stamps', () => {
+  assert.deepEqual(stageClockPatch('PAUSED', 'ENDED_EARLY', { stageDeadline: null, stageDeadlineRemainingDays: 3 }, NOW), { stageDeadlineRemainingDays: null });
+  assert.deepEqual(stageClockPatch('COMPLETED', 'ACTIVE', { stageDeadline: null, stageDeadlineRemainingDays: null }, NOW), { stageDeadlineRemainingDays: null });
 });

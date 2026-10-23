@@ -8,6 +8,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { applyScanCap, matchesTextFilters, pageSlice, toStringArray } from '@/lib/mentorDirectory';
 import { skillTermWhere } from '@/lib/skillFilter';
 import type { Prisma } from '@prisma/client';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Upper bound on the rows the in-memory filter branch is allowed to scan
 // (#1820). The skill filter is SQL now (`skillTermWhere`, over the taxonomy
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
   if (!['MENTEE', 'MENTOR', 'ADMIN'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  // The directory belongs to the `mentorship` module, like its page (/mentors).
+  const denied = await requireCapability(resolveOrgId(session), 'mentorship');
+  if (denied) return denied;
 
   return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);

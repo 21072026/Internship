@@ -14,13 +14,16 @@ import { KLAVIYO_REQUIRED_SCOPES } from '@/lib/klaviyoRule';
 
 // The Klaviyo connector's console on /admin/integrations, MARKETING only
 // (docs/integrations/klaviyo.md): paste a read-only key, test it, save it,
-// pause/resume, sync now, preview the first profiles (a dry run), disconnect.
+// pause/resume, sync now, preview the first profiles (a dry run), disconnect —
+// and the status of every other resource it reads (lists, segments and their
+// members, metrics, events, campaigns + statistics, flows), one line each.
 // Talks to /api/admin/integrations/klaviyo. The key is a password field and is
 // never shown again after saving — the server returns its last four only.
 
 interface Connection {
   enabled: boolean;
   keyLast4: string;
+  keySource: 'env' | 'db';
   initialSyncDoneAt: string | null;
   lastSyncAt: string | null;
   lastStatus: 'ok' | 'partial' | 'error' | null;
@@ -32,12 +35,33 @@ interface Connection {
   lastSkipped: number;
   lastErrors: number;
   totalCreated: number;
+  ignoredPhones: string | null;
+}
+
+interface ResetPreview {
+  remove: number;
+  keep: number;
+  kept: { id: string; name: string; reasons: string[] }[];
+}
+
+type ResourceName = 'lists' | 'segments' | 'members' | 'metrics' | 'events' | 'campaigns' | 'campaign_stats' | 'flows';
+
+interface ResourceStatus {
+  resource: ResourceName;
+  parts: number;
+  lastOkAt: string | null;
+  status: 'ok' | 'partial' | 'error' | null;
+  errorCode: string | null;
+  failing: number;
+  rows: number;
+  nextAttemptAt: string | null;
 }
 
 interface View {
   connected: boolean;
   connection: Connection | null;
   linkedProfiles: number;
+  resources: ResourceStatus[];
 }
 
 interface PreviewRow {
@@ -63,6 +87,9 @@ export function KlaviyoCard() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [phones, setPhones] = useState<string | null>(null);
+  const [reset, setReset] = useState<ResetPreview | null>(null);
+  const [resetConfirm, setResetConfirm] = useState('');
 
   const errorText = useCallback(
     (code: string | null | undefined) => {
@@ -117,14 +144,17 @@ export function KlaviyoCard() {
     if (res.ok) setView(data);
   };
 
-  const syncNow = async () => {
-    const { res, data } = await call('sync', '/api/admin/integrations/klaviyo/sync', { method: 'POST' });
+  const syncNow = async (scope: 'profiles' | 'all' = 'profiles') => {
+    const { res, data } = await call(scope === 'all' ? 'syncAll' : 'sync', '/api/admin/integrations/klaviyo/sync', {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    });
     if (res.status === 409) {
       setMessage({ ok: false, text: data.code === 'busy' ? k.busy : k.disabled });
       return;
     }
     if (res.ok) {
-      setView({ connected: data.connected, connection: data.connection, linkedProfiles: data.linkedProfiles });
+      setView({ connected: data.connected, connection: data.connection, linkedProfiles: data.linkedProfiles, resources: data.resources ?? [] });
       if (data.outcome === 'error') setMessage({ ok: false, text: errorText(data.code) });
     }
   };
@@ -133,6 +163,54 @@ export function KlaviyoCard() {
     const { data } = await call('preview', '/api/admin/integrations/klaviyo/preview', { method: 'POST' });
     if (data.ok) setPreview(data.rows);
     else setMessage({ ok: false, text: errorText(data.code) });
+  };
+
+  const savePhones = async () => {
+    const { res, data } = await call('phones', '/api/admin/integrations/klaviyo', {
+      method: 'PATCH',
+      body: JSON.stringify({ ignoredPhones: phones ?? '' }),
+    });
+    if (res.ok) {
+      setView(data);
+      setPhones(null);
+      setMessage({ ok: true, text: k.phones.saved });
+    } else setMessage({ ok: false, text: errorText(data.code) });
+  };
+
+  const previewReset = async () => {
+    setBusy('resetPreview');
+    setMessage(null);
+    try {
+      const res = await fetch('/api/admin/integrations/klaviyo/reset');
+      if (res.ok) {
+        setReset(await res.json());
+        setResetConfirm('');
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const applyReset = async () => {
+    if (!reset) return;
+    const { res, data } = await call('reset', '/api/admin/integrations/klaviyo/reset', {
+      method: 'POST',
+      body: JSON.stringify({ expectRemove: reset.remove }),
+    });
+    if (res.status === 409 && data.preview) {
+      setReset(data.preview);
+      setResetConfirm('');
+      setMessage({ ok: false, text: k.reset.changed });
+      return;
+    }
+    if (res.ok) {
+      setReset(null);
+      setView({ connected: data.connected, connection: data.connection, linkedProfiles: data.linkedProfiles, resources: data.resources ?? [] });
+      setMessage({
+        ok: true,
+        text: interpolate(k.reset.done, { removed: String(data.removed), kept: String(data.kept + data.changed) }),
+      });
+    } else setMessage({ ok: false, text: errorText(data.code) });
   };
 
   const disconnect = async () => {
@@ -159,6 +237,11 @@ export function KlaviyoCard() {
             <span className="font-mono text-gray-700 dark:text-gray-300" data-testid="klaviyo-key-last4">
               {interpolate(k.keySaved, { last4: c.keyLast4 })}
             </span>
+            {c.keySource === 'env' && (
+              <Badge variant="info" data-testid="klaviyo-key-source-env">
+                {k.keySourceEnv}
+              </Badge>
+            )}
             <Badge variant={c.enabled ? 'success' : 'default'}>{c.enabled ? k.enabled : k.disabled}</Badge>
             {c.lastStatus && (
               <Badge variant={STATUS_VARIANT[c.lastStatus]} data-testid="klaviyo-last-status">
@@ -219,8 +302,11 @@ export function KlaviyoCard() {
           </Button>
           {c && (
             <>
-              <Button type="button" variant="secondary" onClick={syncNow} loading={busy === 'sync'} disabled={!c.enabled} data-testid="klaviyo-sync-now">
+              <Button type="button" variant="secondary" onClick={() => syncNow()} loading={busy === 'sync'} disabled={!c.enabled} data-testid="klaviyo-sync-now">
                 {busy === 'sync' ? k.syncing : k.syncNow}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => syncNow('all')} loading={busy === 'syncAll'} disabled={!c.enabled} data-testid="klaviyo-sync-all">
+                {busy === 'syncAll' ? k.syncing : k.syncAll}
               </Button>
               <Button type="button" variant="outline" onClick={runPreview} loading={busy === 'preview'} data-testid="klaviyo-preview">
                 {k.preview}
@@ -240,6 +326,123 @@ export function KlaviyoCard() {
           </p>
         )}
       </div>
+
+      {c && view && view.resources.length > 0 && (
+        <div className="mt-6" data-testid="klaviyo-resources">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{k.resources.title}</h3>
+          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{k.resources.hint}</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-gray-500">
+                <tr>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.resource}</th>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.status}</th>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.rows}</th>
+                  <th className="py-1 pr-3 font-medium">{k.resources.columns.lastOk}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {view.resources.map((r) => (
+                  <tr key={r.resource} data-testid={`klaviyo-resource-${r.resource}`}>
+                    <td className="py-1 pr-3">{k.resources.names[r.resource]}</td>
+                    <td className="py-1 pr-3">
+                      {r.status ? (
+                        <Badge variant={STATUS_VARIANT[r.status]}>{k.status[r.status]}</Badge>
+                      ) : (
+                        <span className="text-gray-500">{k.resources.pending}</span>
+                      )}
+                      {r.status === 'error' || r.failing > 0 ? (
+                        <span className="ml-2 text-red-600 dark:text-red-400" data-testid={`klaviyo-resource-error-${r.resource}`}>
+                          {r.parts > 1 ? `${interpolate(k.resources.failing, { count: String(r.failing) })} · ` : ''}
+                          {errorText(r.errorCode)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="py-1 pr-3 tabular-nums">{r.rows}</td>
+                    <td className="py-1 pr-3">{r.lastOkAt ? <RelativeTime date={r.lastOkAt} /> : k.never}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {c && (
+        <div className="mt-6 space-y-2" data-testid="klaviyo-phones">
+          <label htmlFor="klaviyo-ignored-phones" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {k.phones.title}
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{k.phones.hint}</p>
+          <textarea
+            id="klaviyo-ignored-phones"
+            rows={3}
+            className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+            value={phones ?? c.ignoredPhones ?? ''}
+            onChange={(e) => setPhones(e.target.value)}
+            placeholder="+49 30 1234567"
+            data-testid="klaviyo-ignored-phones"
+          />
+          <Button type="button" variant="outline" size="sm" onClick={savePhones} loading={busy === 'phones'} disabled={phones === null} data-testid="klaviyo-phones-save">
+            {k.phones.save}
+          </Button>
+        </div>
+      )}
+
+      {c && (
+        <div className="mt-6 space-y-2 rounded-lg border border-red-200 p-4 dark:border-red-900" data-testid="klaviyo-reset">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{k.reset.title}</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{k.reset.hint}</p>
+          {!reset ? (
+            <Button type="button" variant="outline" size="sm" onClick={previewReset} loading={busy === 'resetPreview'} data-testid="klaviyo-reset-preview">
+              {k.reset.preview}
+            </Button>
+          ) : (
+            <div className="space-y-2 text-sm" data-testid="klaviyo-reset-plan">
+              <p>{interpolate(k.reset.plan, { remove: String(reset.remove), keep: String(reset.keep) })}</p>
+              {reset.kept.length > 0 && (
+                <ul className="list-disc pl-5 text-xs text-gray-600 dark:text-gray-300">
+                  {reset.kept.map((a) => (
+                    <li key={a.id}>
+                      {a.name} — {a.reasons.join(', ')}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {reset.remove > 0 && (
+                <>
+                  <label htmlFor="klaviyo-reset-confirm" className="block text-xs text-gray-600 dark:text-gray-300">
+                    {interpolate(k.reset.confirmLabel, { remove: String(reset.remove) })}
+                  </label>
+                  <Input
+                    id="klaviyo-reset-confirm"
+                    inputMode="numeric"
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                    data-testid="klaviyo-reset-confirm"
+                  />
+                </>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={applyReset}
+                  loading={busy === 'reset'}
+                  disabled={reset.remove > 0 && resetConfirm.trim() !== String(reset.remove)}
+                  data-testid="klaviyo-reset-apply"
+                >
+                  {reset.remove > 0 ? k.reset.apply : k.reset.restartOnly}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setReset(null)}>
+                  {t.common.cancel}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {preview && (
         <div className="mt-6" data-testid="klaviyo-preview-table">

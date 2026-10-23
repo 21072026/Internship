@@ -12,6 +12,7 @@ import { settingByOrg } from '@/lib/settingsOrg';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 import { isCancellationPending } from '@/lib/contractEndRule';
+import { activeRelationWhere } from '@/lib/relationLifecycle';
 
 export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending' | 'decision_window_closing';
 
@@ -77,7 +78,8 @@ export async function getAttentionItems(
   // programmes with different cadences. Read once per programme.
   const reminderDaysFor = reminderDaysReader();
   const now = Date.now();
-  const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, status: 'ACTIVE' };
+  // Not a paused pair (#1772): nothing on a pause is late, so nothing belongs in the queue.
+  const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, ...activeRelationWhere() };
 
   const relations = await prisma.mentorshipRelation.findMany({
     where: options.relationWhere ? { AND: [ownerWhere, options.relationWhere] } : ownerWhere,

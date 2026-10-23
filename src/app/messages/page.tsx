@@ -10,6 +10,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
 import { MessagesLiveRefresh } from '@/components/MessagesLiveRefresh';
 import { MessageSearch } from '@/components/MessageSearch';
+import { CandidateOutreachPanel } from '@/components/CandidateOutreachPanel';
 import { loadInbox } from '@/lib/inbox';
 import { ThreadStateMenu } from '@/components/ThreadStateMenu';
 import { INBOX_FILTERS, filterInbox, parseInboxFilter } from '@/lib/conversationState';
@@ -59,6 +60,9 @@ export default async function MessagesInboxPage({ searchParams }: { searchParams
       </div>
       {/* Search across the viewer's own threads (#1609). */}
       <MessageSearch />
+      {/* Company → candidate message requests (#1840): the deciders' queue, the
+          candidate's open channels, the company's own requests. Empty → nothing. */}
+      <CandidateOutreachPanel role={session.user.role} />
       <Card>
         <CardHeader><CardTitle>{t.messages.threads}</CardTitle></CardHeader>
         {/* Pinned support conversation (#593) — every role's line to the admins. */}

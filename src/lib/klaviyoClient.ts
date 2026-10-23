@@ -1,4 +1,5 @@
-// The Klaviyo HTTP client: GET only, one fixed host, bounded in time and size
+// The Klaviyo HTTP client: GET only (plus the reporting API's read-only
+// queries, klaviyoQuery), one fixed host, bounded in time and size
 // (docs/integrations/klaviyo.md). The rules it applies — headers, paths, what a
 // status means, how long a 429 is waited out — are the pure ones in
 // src/lib/klaviyoRule.ts.
@@ -17,15 +18,15 @@ import { logger } from '@/lib/logger';
 import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
 import {
   KLAVIYO_API_BASE,
-  KLAVIYO_INLINE_WAIT_MAX_MS,
   KLAVIYO_LIST_MAX_PAGES,
   errorCodeForStatus,
-  isRetryableStatus,
   klaviyoHeaders,
   listsPath,
   nextPageCursor,
   profilesPath,
+  resolveKlaviyoRevision,
   retryAfterMs,
+  retryDelayMs,
   type KlaviyoErrorCode,
 } from '@/lib/klaviyoRule';
 
@@ -86,13 +87,62 @@ async function readBody(res: Response): Promise<unknown> {
   return JSON.parse(Buffer.concat(parts).toString('utf8'));
 }
 
+let warnedRevision = false;
+
+/** The revision every request names: `KLAVIYO_REVISION` when it is a GA date, else the default. */
+export function klaviyoRevision(): string {
+  const r = resolveKlaviyoRevision(process.env.KLAVIYO_REVISION);
+  if (!r.ok && !warnedRevision) {
+    warnedRevision = true;
+    // The value itself is config, not a secret, but it is not echoed either:
+    // the default in use is what matters to whoever reads the log.
+    logger.warning('Klaviyo connector: KLAVIYO_REVISION is not a supported GA revision; using the default', { revision: r.revision });
+  }
+  return r.revision;
+}
+
 /**
- * One GET with at most one retry: a 5xx after a second's pause, a 429 after the
- * `Retry-After` it names when that is short (KLAVIYO_INLINE_WAIT_MAX_MS).
- * Anything longer is the RUN's backoff, not this request's — the caller records
- * it as `nextAttemptAt` and the scheduler moves on to the next tenant.
+ * The provider's per-endpoint steady limits are far apart (events 3 500/min,
+ * flows 60/min, the reporting API 2/min). One process never sends two
+ * requests of one family closer than this — the in-run pace, on top of the
+ * strictly sequential requests of a run. A 429 is still handled per request.
  */
-export async function klaviyoGet(path: string, key: string, opts: KlaviyoClientOptions = {}): Promise<KlaviyoResult<unknown>> {
+const lastRequestAt = new Map<string, number>();
+async function pace(family: string | undefined, minIntervalMs: number | undefined, sleep: (ms: number) => Promise<void>) {
+  if (!family || !minIntervalMs) return;
+  const last = lastRequestAt.get(family) ?? 0;
+  const wait = last + minIntervalMs - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastRequestAt.set(family, Date.now());
+}
+
+/**
+ * The only POSTs this connector sends: the reporting API's read-only QUERIES
+ * (a report is asked for with a JSON body; nothing is created, changed or
+ * deleted — the key is read-only anyway). Any other path is refused before a
+ * request is made, so no write endpoint can be reached through the client.
+ */
+export const KLAVIYO_QUERY_POST_PATHS = ['/api/campaign-values-reports'] as const;
+
+export interface KlaviyoRequestOptions extends KlaviyoClientOptions {
+  /** Pace key + minimum gap between two requests of that family (see pace()). */
+  family?: string;
+  minIntervalMs?: number;
+}
+
+/**
+ * One request with up to KLAVIYO_MAX_ATTEMPTS tries (retryDelayMs: a short
+ * `Retry-After` is waited out, a 5xx or a network failure backs off
+ * exponentially with jitter). A longer wait is the RUN's backoff, not this
+ * request's — the caller records it as `nextAttemptAt` and moves on.
+ */
+async function klaviyoRequest(
+  method: 'GET' | 'POST',
+  path: string,
+  key: string,
+  body: unknown,
+  opts: KlaviyoRequestOptions = {},
+): Promise<KlaviyoResult<unknown>> {
   const fetchImpl = opts.fetchImpl ?? (fetch as FetchLike);
   const sleep = opts.sleep ?? defaultSleep;
   const url = `${klaviyoBaseUrl()}${path}`;
@@ -104,22 +154,30 @@ export async function klaviyoGet(path: string, key: string, opts: KlaviyoClientO
       return { ok: false, code: 'network' };
     }
   }
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const headers: Record<string, string> = klaviyoHeaders(key, klaviyoRevision());
+  if (method === 'POST') headers['Content-Type'] = 'application/vnd.api+json';
+  // What is logged: method, the path WITHOUT its query (a filter can carry an
+  // id), status and duration. Never the key, never a body.
+  const logPath = path.split('?')[0];
+  for (let attempt = 1; ; attempt++) {
+    await pace(opts.family, opts.minIntervalMs, sleep);
+    const started = Date.now();
     let res: Response;
     try {
       res = await fetchImpl(url, {
-        method: 'GET',
-        headers: klaviyoHeaders(key),
+        method,
+        headers,
+        ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
         redirect: 'error',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         cache: 'no-store',
       });
     } catch {
-      if (attempt === 0) {
-        await sleep(1000);
-        continue;
-      }
-      return { ok: false, code: 'network' };
+      const wait = retryDelayMs(attempt, {});
+      logger.debug('klaviyo request failed', { method, path: logPath, attempt, ms: Date.now() - started });
+      if (wait === null) return { ok: false, code: 'network' };
+      await sleep(wait);
+      continue;
     }
     if (res.ok) {
       try {
@@ -130,19 +188,45 @@ export async function klaviyoGet(path: string, key: string, opts: KlaviyoClientO
     }
     // Drain without reading it into anything that is kept.
     await res.body?.cancel().catch(() => {});
-    const wait = res.status === 429 ? retryAfterMs(res.headers.get('retry-after')) : 1000;
-    if (attempt === 0 && isRetryableStatus(res.status) && wait !== null && wait <= KLAVIYO_INLINE_WAIT_MAX_MS) {
-      await sleep(Math.max(wait, 250));
+    const retryAfter = res.status === 429 ? retryAfterMs(res.headers.get('retry-after')) : null;
+    logger.debug('klaviyo request refused', { method, path: logPath, status: res.status, attempt, ms: Date.now() - started });
+    const wait = retryDelayMs(attempt, { status: res.status, retryAfterMs: retryAfter });
+    if (wait !== null) {
+      await sleep(wait);
       continue;
     }
-    return {
-      ok: false,
-      code: errorCodeForStatus(res.status),
-      status: res.status,
-      retryAfterMs: res.status === 429 ? retryAfterMs(res.headers.get('retry-after')) : null,
-    };
+    return { ok: false, code: errorCodeForStatus(res.status), status: res.status, retryAfterMs: retryAfter };
   }
-  return { ok: false, code: 'upstream_error' };
+}
+
+/** One GET (klaviyoRequest). Every read of the connector goes through here. */
+export async function klaviyoGet(path: string, key: string, opts: KlaviyoRequestOptions = {}): Promise<KlaviyoResult<unknown>> {
+  return klaviyoRequest('GET', path, key, undefined, opts);
+}
+
+/** A reporting-API query — the only POST, and only to KLAVIYO_QUERY_POST_PATHS. */
+export async function klaviyoQuery(path: string, key: string, body: unknown, opts: KlaviyoRequestOptions = {}): Promise<KlaviyoResult<unknown>> {
+  const bare = path.split('?')[0];
+  if (!(KLAVIYO_QUERY_POST_PATHS as readonly string[]).includes(bare)) throw new Error(`klaviyoQuery: ${bare} is not a read-only query endpoint`);
+  return klaviyoRequest('POST', path, key, body, opts);
+}
+
+export interface ResourcePage {
+  data: unknown[];
+  included: unknown[];
+  nextCursor: string | null;
+}
+
+/** One JSON:API collection page: `data[]`, `included[]`, and the cursor of `links.next`. */
+export async function fetchResourcePage(path: string, key: string, opts: KlaviyoRequestOptions = {}): Promise<KlaviyoResult<ResourcePage>> {
+  const res = await klaviyoGet(path, key, opts);
+  if (!res.ok) return res;
+  const body = res.data as { data?: unknown; included?: unknown } | null;
+  if (!Array.isArray(body?.data)) return { ok: false, code: 'bad_response' };
+  return {
+    ok: true,
+    data: { data: body.data, included: Array.isArray(body.included) ? body.included : [], nextCursor: nextPageCursor(res.data) },
+  };
 }
 
 export interface ProfilesPage {

@@ -7,9 +7,12 @@ import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
-import { requireVerticalCapability } from '@/lib/verticalPage';
+import { requestVerticalHas, requireVerticalCapability } from '@/lib/verticalPage';
 
 export async function generateMetadata(): Promise<Metadata> {
+  // Next emits this on the page's 404 too — no placement pitch in the head of
+  // a host whose product does not place anyone.
+  if (!(await requestVerticalHas('placements'))) return {};
   return pageMetadata((t) => ({ title: t.landing.audCompanyTitle, description: t.landing.audCompanySubtitle }), '/for-companies/opengraph-image');
 }
 

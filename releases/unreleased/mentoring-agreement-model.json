@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Mentoring agreement — model and admin editor (#1790):** `MentoringAgreement` (per org, key, version, locale; one binding locale; markdown body; effective date) and `MentoringAgreementAcceptance` (relation, user, version, side, hashed IP/UA; written once), shaped like `ContributorTerms`. `src/lib/mentoringAgreement.ts` is the only writer: `publishAgreementVersion()` always creates a new server-numbered version, `acceptAgreement()` accepts only the version in force (409 `stale_version`) and only for a party of the pairing, `agreementStateForRelation()` and `acceptanceReport()` read it back. A fresh org gets the starter template (`src/lib/mentoringAgreementDefault.ts`, EN binding + TR/DE, marked as a template) as v1. `/admin/agreements` (+ nav entry, `mentorship` capability) edits and lists versions; `PATCH`/`PUT`/`DELETE /api/admin/agreements` answer `405 immutable`. `MentoringAgreement` is in `TENANT_MODELS`. Design: `docs/mentoring-agreement.md`.",
-  "notes": {
-    "en": ["Programme admins can now write a mentoring agreement in English, Turkish and German — every change is saved as a new version, so what someone accepted never changes."],
-    "tr": ["Program yöneticileri artık İngilizce, Türkçe ve Almanca bir mentorluk sözleşmesi yazabiliyor — her değişiklik yeni bir sürüm olarak kaydedilir, böylece birinin kabul ettiği metin asla değişmez."],
-    "de": ["Programmverantwortliche können jetzt eine Mentoring-Vereinbarung auf Englisch, Türkisch und Deutsch verfassen — jede Änderung wird als neue Version gespeichert, damit sich nie ändert, was jemand angenommen hat."]
-  }
-}

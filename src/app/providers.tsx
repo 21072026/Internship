@@ -5,6 +5,7 @@ import { LocaleProvider } from '@/i18n/client';
 import { ToastProvider } from '@/components/ui/Toast';
 import { LiveRegionProvider } from '@/components/ui/LiveRegion';
 import { CookieConsent } from '@/components/CookieConsent';
+import { FeedbackWidget } from '@/components/FeedbackWidget';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import { TimezoneSync } from '@/components/TimezoneSync';
@@ -16,6 +17,7 @@ import type { VerticalKey } from '@/lib/verticals';
 import { VerticalProvider } from '@/lib/verticalClient';
 import { BrandProvider } from '@/lib/brandClient';
 import type { ClientBrand } from '@/lib/brandRule';
+import type { ReplayConfig } from '@/lib/feedbackReplayRule';
 
 export function Providers({
   children,
@@ -23,6 +25,7 @@ export function Providers({
   dict,
   vertical,
   brand = null,
+  feedbackReplay,
 }: {
   children: React.ReactNode;
   locale: Locale;
@@ -31,6 +34,8 @@ export function Providers({
   vertical: VerticalKey;
   /** The request's organization brand (#2922); null = the vertical default. */
   brand?: ClientBrand | null;
+  /** Session replay for bug reports (#3131), resolved per request by the root layout. */
+  feedbackReplay?: ReplayConfig;
 }) {
   return (
     <SessionProvider>
@@ -52,6 +57,8 @@ export function Providers({
               <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
             </FloatingNotesProvider>
             <CookieConsent />
+            {/* Signed-in only; renders nothing otherwise (#3130). */}
+            <FeedbackWidget replay={feedbackReplay} />
             <ActivityTracker />
             <TimezoneSync />
           </ToastProvider>

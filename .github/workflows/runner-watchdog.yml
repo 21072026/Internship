@@ -11,6 +11,30 @@ name: Runner Watchdog (self-hosted health)
 # Requires the same SSH_* secrets the deploy workflow uses:
 #   SSH_PRIVATE_KEY, SSH_HOST, SSH_USER, SSH_PORT
 # The SSH user must be root, or have (passwordless) sudo for systemctl.
+#
+# THIS runner, by name (vars.RUNNER_NAME, default `interncrm`). The box also
+# runs runners for other repositories, and this watchdog used to check the
+# FIRST `actions.runner.*` unit it found — another repository's. On 2026-10-21
+# a deploy was OOM-killed, this runner stopped taking jobs for a day, and the
+# watchdog reported "OK" every run about a runner that was not ours.
+#
+# "Active" is not "working", either: before SSHing in, scripts/runner-queue.mjs
+# asks GitHub whether jobs for the runner's label have been queued for more than
+# vars.RUNNER_STUCK_AFTER_MIN (30) minutes with nothing running on it. If so,
+# the service is restarted even though systemd calls it active — unless the box
+# shows a job in flight (a live Runner.Worker), which always wins over the API. And the unit
+# gets a `Restart=always` drop-in, so a runner the OOM killer takes down comes
+# back on its own instead of waiting for the next watchdog tick.
+#
+# And it TELLS someone. On 2026-10-21 every self-hosted job sat queued for ~29
+# hours and no alert fired: a queued job never fails, so the deploys' own alert
+# jobs never ran, and this watchdog had none. Now a stall (stuck=true, even when
+# this run restarted the runner), an unreachable box, a missing runner or a
+# failed restart opens one `ci-alert` issue (scripts/ci-alert-issue.mjs, key
+# `runner-watchdog`, the SMTP-free trail of #2322 — its cc is the e-mail), and
+# the next healthy run closes it. The red/green rule is
+# scripts/runner-watchdog-alert.mjs. GitHub starts this `*/15` schedule late,
+# often hours apart, so the alert is best-effort and can lag the stall.
 
 on:
   schedule:
@@ -23,12 +47,43 @@ concurrency:
 
 permissions:
   contents: read
+  # scripts/runner-queue.mjs reads the queued and running jobs.
+  actions: read
 
 jobs:
   watchdog:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # What the alert job decides on. Any of these can come back empty (a step
+    # that never ran, or an output the runner dropped because it happened to
+    # contain a secret's value); scripts/runner-watchdog-alert.mjs copes.
+    outputs:
+      stuck: ${{ steps.queue.outputs.stuck }}
+      queued: ${{ steps.queue.outputs.queued }}
+      waited_min: ${{ steps.queue.outputs.waited_min }}
+      outcome: ${{ steps.recover.outputs.outcome }}
+      detail: ${{ steps.recover.outputs.detail }}
+      exit_code: ${{ steps.recover.outputs.exit_code }}
+    env:
+      # Not RUNNER_NAME: the runner sets that variable itself in every step (to
+      # the HOSTED runner's name, "GitHub Actions 1000…"), overriding the job
+      # env — the first run of this watchdog refused to touch the box over it.
+      WATCHED_RUNNER: ${{ vars.RUNNER_NAME || 'interncrm' }}
+      # The label the deploy jobs ask for — the same expression as their runs-on.
+      WATCHED_LABEL: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/runner-queue.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Is the runner draining its queue?
+        id: queue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STUCK_AFTER_MIN: ${{ vars.RUNNER_STUCK_AFTER_MIN || '30' }}
+        run: node scripts/runner-queue.mjs
+
       - name: Setup SSH key
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -44,37 +99,131 @@ jobs:
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Check & (re)start the self-hosted runner service
+        id: recover
+        # A box too busy to answer must end as a failed STEP (the alert reads it
+        # as red), well inside the job's own timeout. ConnectTimeout makes an
+        # unreachable box fail in 30 s with ssh's exit 255 instead.
+        timeout-minutes: 3
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
+          STUCK: ${{ steps.queue.outputs.stuck || 'false' }}
         run: |
-          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
-            "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+          # The alert job needs this step's verdict on EVERY exit path — the
+          # box's last OK:/RECOVERED:/BUSY:/ERROR: line, ssh failing to connect
+          # (exit 255, no line at all), the name check below — so the outputs
+          # are written by an EXIT trap from what the step printed. Only those
+          # verdict lines are recorded: never the Box: line or anything else.
+          VERDICT_LOG="${RUNNER_TEMP:-/tmp}/runner-watchdog.log"
+          : > "$VERDICT_LOG"
+          record_outcome() {
+            local rc=$? line outcome
+            set +e # a grep that finds no verdict line must not end the trap early
+            line="$(grep -aE '^(OK|RECOVERED|BUSY|ERROR)\b' "$VERDICT_LOG" | tail -1 | tr -d '\r' | cut -c1-300)"
+            case "$line" in
+              OK*) outcome=ok ;;
+              RECOVERED*) outcome=recovered ;;
+              BUSY*) outcome=busy ;;
+              ERROR*) outcome=error ;;
+              *) if [ "$rc" -eq 0 ]; then outcome=unknown; else outcome=error; fi ;;
+            esac
+            {
+              echo "outcome=${outcome}"
+              echo "detail=${line}"
+              echo "exit_code=${rc}"
+            } >> "$GITHUB_OUTPUT"
+            exit "$rc"
+          }
+          trap record_outcome EXIT
+          set -o pipefail
+
+          # The name travels into a remote shell: letters, digits, . _ - only.
+          [[ "$WATCHED_RUNNER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ERROR: unexpected WATCHED_RUNNER '$WATCHED_RUNNER'" | tee -a "$VERDICT_LOG"; exit 1; }
+          [ "$STUCK" = true ] || STUCK=false
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+            "${SSH_USER}@${SSH_HOST}" "WATCHED_RUNNER=${WATCHED_RUNNER} STUCK=${STUCK} bash -s" <<'REMOTE' | tee -a "$VERDICT_LOG"
           set -uo pipefail
 
-          # Use sudo only when we're not already root and it's available non-interactively.
           SUDO=""
           if [ "$(id -u)" -ne 0 ]; then
             if sudo -n true 2>/dev/null; then SUDO="sudo -n"; fi
           fi
 
-          # 1) Preferred path: the systemd unit created by `svc.sh install`
-          #    (named actions.runner.<org>-<repo>.<name>.service).
-          UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | awk '{print $1}' | head -1)"
+          # A job in flight always has a Runner.Worker under the runner's own
+          # directory. The STUCK verdict is a GitHub read — not a snapshot, and
+          # its filtered run listings come back empty now and then — so the box
+          # has the last word: a runner executing a job is never restarted (that
+          # would cancel it, a prod deploy included). A Worker older than any
+          # job may run (WORKER_MAX_AGE_MIN) counts as wedged, not busy. An
+          # unknown directory reads as busy: never restart blind.
+          job_in_flight() { # job_in_flight <runner dir>
+            local dir="$1" pid age
+            [ -n "$dir" ] || return 0
+            for pid in $(pgrep -f "${dir}/bin/Runner[.]Worker" 2>/dev/null); do
+              age=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
+              if [ -n "$age" ] && [ "$age" -lt $(( ${WORKER_MAX_AGE_MIN:-360} * 60 )) ]; then return 0; fi
+            done
+            return 1
+          }
+          # Idle on two looks 20s apart: a runner between two jobs spawns the
+          # next Worker within a second or two.
+          idle_twice() { # idle_twice <runner dir>
+            job_in_flight "$1" && return 1
+            sleep 20
+            ! job_in_flight "$1"
+          }
+
+          # Which box did SSH_HOST land on? Markers only — no host, user or
+          # other repository's runner name reaches this public log.
+          echo "Box: plesk=$([ -d /usr/local/psa ] && echo yes || echo no)" \
+            "opt-internship-crm=$([ -d /opt/internship-crm ] && echo yes || echo no)" \
+            "prod-container=$($SUDO docker ps --format '{{.Names}}' 2>/dev/null | grep -cx internship-crm || true)" \
+            "privileged=$([ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] && echo yes || echo no)" \
+            "runner-units=$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | wc -l)" \
+            "listeners=$(pgrep -fc 'bin/Runner[.]Listener' 2>/dev/null || true)"
+
+          # 1) THIS runner's systemd unit: actions.runner.<scope>.<name>.service.
+          UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend "actions.runner.*.${WATCHED_RUNNER}.service" 2>/dev/null | awk '{print $1}' | head -1)"
           if [ -z "$UNIT" ]; then
-            UNIT="$($SUDO systemctl list-units --type=service --all --no-legend 'actions.runner.*' 2>/dev/null | awk '{print $1}' | head -1)"
+            UNIT="$($SUDO systemctl list-units --type=service --all --no-legend "actions.runner.*.${WATCHED_RUNNER}.service" 2>/dev/null | awk '{print $1}' | head -1)"
           fi
 
           if [ -n "$UNIT" ]; then
             echo "Runner service: $UNIT"
+            # Self-healing between ticks: the generated unit has no Restart=, so
+            # a runner killed by the OOM killer stayed dead until someone looked.
+            DROPIN="/etc/systemd/system/${UNIT}.d/10-restart.conf"
+            if ! $SUDO test -f "$DROPIN"; then
+              $SUDO mkdir -p "$(dirname "$DROPIN")" \
+                && printf '[Service]\nRestart=always\nRestartSec=15\n' | $SUDO tee "$DROPIN" >/dev/null \
+                && $SUDO systemctl daemon-reload \
+                && echo "Installed $DROPIN (Restart=always)"
+            fi
             if $SUDO systemctl is-active --quiet "$UNIT"; then
-              echo "OK: runner service already active."
-              exit 0
+              if [ "$STUCK" != "true" ]; then
+                echo "OK: runner service active and taking jobs."
+                exit 0
+              fi
+              RDIR="$($SUDO systemctl show -p WorkingDirectory --value "$UNIT" 2>/dev/null)"
+              [ -n "$RDIR" ] || RDIR="$($SUDO systemctl show -p ExecStart --value "$UNIT" 2>/dev/null | sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -1 | xargs -r dirname)"
+              if ! idle_twice "$RDIR"; then
+                echo "BUSY: a job is running on ${WATCHED_RUNNER} (Runner.Worker alive) — the queue reading was stale; not restarting."
+                exit 0
+              fi
+              echo "Runner service is active but has not taken a job (see the queue step) — restarting..."
+              $SUDO systemctl restart "$UNIT" || { echo "ERROR: restart of $UNIT failed"; $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20; exit 1; }
+              sleep 5
+              if $SUDO systemctl is-active --quiet "$UNIT"; then
+                echo "RECOVERED: stuck runner restarted."
+                exit 0
+              fi
+              echo "ERROR: runner not active after the restart."
+              $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20
+              exit 1
             fi
             echo "Runner service NOT active — starting..."
             $SUDO systemctl start "$UNIT" || { echo "ERROR: failed to start $UNIT"; $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20; exit 1; }
-            # Enable so a future server reboot brings it back automatically (root cause fix).
             $SUDO systemctl enable "$UNIT" 2>/dev/null || true
             sleep 3
             if $SUDO systemctl is-active --quiet "$UNIT"; then
@@ -86,32 +235,49 @@ jobs:
             exit 1
           fi
 
-          # 2) No systemd unit found. Locate the runner dir and recover it.
-          echo "No systemd unit found; locating the runner directory..."
-          SVC="$(find /root /home /opt -maxdepth 5 -name svc.sh -path '*actions-runner*' 2>/dev/null | head -1)"
-          if [ -z "$SVC" ]; then
-            echo "ERROR: could not locate the runner (no actions.runner.* unit, no svc.sh)."
+          # 2) No systemd unit. Find THIS runner's directory by the name in its
+          #    .runner file — never just the first actions-runner on the box.
+          echo "No systemd unit for ${WATCHED_RUNNER}; locating its runner directory..."
+          RUNNER_DIR=""
+          while IFS= read -r f; do
+            if $SUDO grep -qE "\"agentName\"[[:space:]]*:[[:space:]]*\"${WATCHED_RUNNER}\"" "$f" 2>/dev/null; then
+              RUNNER_DIR="$(dirname "$f")"
+              break
+            fi
+          done < <($SUDO find /root /home /opt /srv /var/lib /usr/local -maxdepth 5 -name .runner -type f 2>/dev/null)
+          if [ -z "$RUNNER_DIR" ]; then
+            echo "ERROR: no runner named ${WATCHED_RUNNER} on this box (no unit, no .runner file)."
+            echo "       The SSH_* secrets reach a box that does not host it — check the 'Box:' line"
+            echo "       above, and point SSH_HOST/SSH_USER/SSH_PORT/SSH_PRIVATE_KEY at the runner's box."
             exit 1
           fi
-          RUNNER_DIR="$(dirname "$SVC")"
           echo "Runner dir: $RUNNER_DIR"
           cd "$RUNNER_DIR"
+          LISTENER="${RUNNER_DIR}/bin/Runner.Listener"
 
-          # Already up (e.g. run.sh started manually)? Then nothing to do.
-          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
-            echo "OK: runner process (Runner.Listener) already running."
-            exit 0
+          if pgrep -f "$LISTENER" >/dev/null 2>&1; then
+            if [ "$STUCK" != "true" ]; then
+              echo "OK: runner process (Runner.Listener) running and taking jobs."
+              exit 0
+            fi
+            if ! idle_twice "$RUNNER_DIR"; then
+              echo "BUSY: a job is running on ${WATCHED_RUNNER} (Runner.Worker alive) — the queue reading was stale; not restarting."
+              exit 0
+            fi
+            echo "Runner process running but not taking jobs — stopping it to restart..."
+            $SUDO pkill -f "$LISTENER" || true
+            sleep 3
           fi
 
-          # The runner was running UNMANAGED (no service) and died on reboot. Install
-          # it as a systemd service so it survives future reboots, then start it.
+          # The runner was running UNMANAGED (no service) and died, or was stuck.
+          # Install it as a systemd service so it survives reboots, then start it.
           # RUNNER_ALLOW_RUNASROOT=1 because this runner lives under /root.
           echo "Runner down and not installed as a service — installing + starting..."
           $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh install 2>&1 | tail -5 || true
           $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh start   2>&1 | tail -5 || true
           sleep 4
           if $SUDO ./svc.sh status 2>/dev/null | grep -qiE 'active \(running\)|is running' \
-             || pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+             || pgrep -f "$LISTENER" >/dev/null 2>&1; then
             echo "RECOVERED: runner installed as a service and started (survives reboot)."
             exit 0
           fi
@@ -120,7 +286,7 @@ jobs:
           echo "Service route failed — launching run.sh detached as a fallback..."
           $SUDO bash -c "cd '$RUNNER_DIR' && RUNNER_ALLOW_RUNASROOT=1 setsid nohup ./run.sh >/tmp/gha-runner.log 2>&1 </dev/null &"
           sleep 6
-          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+          if pgrep -f "$LISTENER" >/dev/null 2>&1; then
             echo "RECOVERED (unmanaged): runner launched via run.sh. NOTE: reboot persistence still needs the service."
             exit 0
           fi
@@ -128,3 +294,85 @@ jobs:
           tail -25 /tmp/gha-runner.log 2>/dev/null || true
           exit 1
           REMOTE
+
+  # The SMTP-free trail (#2322), the same as every other net's: one `ci-alert`
+  # issue while the runner is stalled or out of reach (its cc to the maintainer
+  # is the e-mail), refreshed by every red run — one comment per UTC day and
+  # condition at most — and closed by the next healthy run. Its own job on a
+  # hosted runner, never the self-hosted one it is watching, and `always()`
+  # rather than `!cancelled()`, so the decision is taken whatever became of the
+  # watchdog job; the helper itself leaves the issue alone for a run that ended
+  # cancelled without any verdict (stopped by hand).
+  alert:
+    name: Record the result as an issue (no SMTP)
+    needs: [watchdog]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      mode: ${{ steps.verdict.outputs.mode }}
+      title: ${{ steps.verdict.outputs.title }}
+      summary: ${{ steps.verdict.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Red or green?
+        id: verdict
+        env:
+          JOB_RESULT: ${{ needs.watchdog.result }}
+          STUCK: ${{ needs.watchdog.outputs.stuck }}
+          QUEUED: ${{ needs.watchdog.outputs.queued }}
+          WAITED_MIN: ${{ needs.watchdog.outputs.waited_min }}
+          OUTCOME: ${{ needs.watchdog.outputs.outcome }}
+          DETAIL: ${{ needs.watchdog.outputs.detail }}
+          EXIT_CODE: ${{ needs.watchdog.outputs.exit_code }}
+          WATCHED_RUNNER: ${{ vars.RUNNER_NAME || 'interncrm' }}
+          WATCHED_LABEL: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
+          STUCK_AFTER_MIN: ${{ vars.RUNNER_STUCK_AFTER_MIN || '30' }}
+        run: node scripts/runner-watchdog-alert.mjs
+      - name: Open, refresh or close the runner alert
+        if: steps.verdict.outputs.mode == 'red' || steps.verdict.outputs.mode == 'green'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: runner-watchdog
+          ALERT_SIGNATURE: ${{ steps.verdict.outputs.signature }}
+          ALERT_TITLE: ${{ steps.verdict.outputs.title }}
+          ALERT_SUMMARY: ${{ steps.verdict.outputs.summary }}
+        run: node scripts/ci-alert-issue.mjs ${{ steps.verdict.outputs.mode == 'green' && 'green' || 'red' }}
+
+  notify:
+    name: Email alert when the runner is stalled or out of reach
+    needs: [alert]
+    if: ${{ always() && needs.alert.outputs.mode == 'red' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Send alert email
+        # Best effort (#2322): from a GitHub-hosted runner the SMTP connect
+        # times out (~2 min, ETIMEDOUT on CONN), and the `ci-alert` issue is the
+        # alert of record. Bounded, and never a second red job on top of it.
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: ${{ needs.alert.outputs.title }}
+          ALERT_BODY: |
+            ${{ needs.alert.outputs.summary }}
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs

@@ -6,7 +6,8 @@
 // half is src/lib/klaviyoClient.ts; the Prisma half, and the only writer, is
 // src/lib/klaviyoSync.ts.
 //
-// ── WHAT WAS VERIFIED AGAINST THE PROVIDER'S REFERENCE (2026-10-20) ──────────
+// ── WHAT WAS VERIFIED AGAINST THE PROVIDER'S REFERENCE (2026-10-20; revision
+//    moved to 2026-10-15 and re-checked 2026-10-22 — no profiles/lists change) ──
 //   • base URL https://a.klaviyo.com, server-side endpoints under /api;
 //   • auth header `Authorization: Klaviyo-API-Key <private key>`;
 //   • a `revision` header on every request (date-named API versions);
@@ -23,8 +24,9 @@
 //     carries `Retry-After` in whole seconds.
 //
 // ── ONE-WAY ──────────────────────────────────────────────────────────────────
-//   Every request this connector can build is a GET. There is no function in
-//   this file or the client that produces a write to the provider.
+//   Every request this connector can build is a GET, except the reporting
+//   API's read-only query (klaviyoQuery, KLAVIYO_QUERY_POST_PATHS). There is no
+//   function in this file or the client that produces a write to the provider.
 
 export const KLAVIYO_PROVIDER = 'klaviyo';
 export const EXTERNAL_PROVIDERS = [KLAVIYO_PROVIDER] as const;
@@ -32,14 +34,47 @@ export type ExternalProvider = (typeof EXTERNAL_PROVIDERS)[number];
 
 export const KLAVIYO_API_BASE = 'https://a.klaviyo.com';
 /**
- * The pinned API revision. Klaviyo versions its API by date and answers every
+ * The default API revision. Klaviyo versions its API by date and answers every
  * request in the revision it names; pinning one means a field we read cannot
  * change shape under us. Moving it is a reviewed change — re-read the
- * profiles reference for the new date first.
+ * references of every endpoint in docs/integrations/klaviyo.md § Version for
+ * the new date first. A deployment may pin another GA date with
+ * `KLAVIYO_REVISION` (resolveKlaviyoRevision); a `.pre` (beta) one is refused.
+ * Each revision is supported for two years after its release.
  */
-export const KLAVIYO_REVISION = '2026-07-15';
-/** The scopes a read-only private key needs for this connector — nothing else. */
-export const KLAVIYO_REQUIRED_SCOPES = ['profiles:read', 'lists:read'] as const;
+export const KLAVIYO_REVISION = '2026-10-15';
+
+/**
+ * The revision a request names: a GA date (`YYYY-MM-DD`) from the environment,
+ * else the default. A beta revision (`2026-10-15.pre`), junk, or a date before
+ * the oldest revision this code was checked against falls back to the default
+ * — `ok: false` tells the caller to log that once.
+ */
+export const KLAVIYO_OLDEST_REVISION = '2025-01-15';
+export function resolveKlaviyoRevision(raw: string | null | undefined): { revision: string; ok: boolean } {
+  const v = (raw ?? '').trim();
+  if (!v) return { revision: KLAVIYO_REVISION, ok: true };
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m || Number.isNaN(Date.parse(`${v}T00:00:00Z`)) || v < KLAVIYO_OLDEST_REVISION) {
+    return { revision: KLAVIYO_REVISION, ok: false };
+  }
+  return { revision: v, ok: true };
+}
+
+/**
+ * The scopes a read-only private key needs for this connector — nothing else.
+ * Only `profiles:read` is required for the leads; without one of the others,
+ * that resource alone records `forbidden` and the rest keep syncing.
+ */
+export const KLAVIYO_REQUIRED_SCOPES = [
+  'profiles:read',
+  'lists:read',
+  'segments:read',
+  'metrics:read',
+  'events:read',
+  'campaigns:read',
+  'flows:read',
+] as const;
 /** The provider's maximum for GET /api/profiles. */
 export const KLAVIYO_PROFILE_PAGE_SIZE = 100;
 /** GET /api/lists answers at most 10 per page. */
@@ -114,12 +149,23 @@ export function keyLast4(key: string): string {
   return key.slice(-4);
 }
 
-export function klaviyoHeaders(key: string): Record<string, string> {
+export function klaviyoHeaders(key: string, revision: string = KLAVIYO_REVISION): Record<string, string> {
   return {
     Authorization: `Klaviyo-API-Key ${key}`,
-    revision: KLAVIYO_REVISION,
+    revision,
     Accept: 'application/vnd.api+json',
   };
+}
+
+/**
+ * The key a server-side environment supplies (`KLAVIYO_PRIVATE_API_KEY`) is
+ * never stored: its connection row carries this prefix plus a sha256 of the
+ * key instead of a sealed copy, so a rotated environment key is noticed (the
+ * fingerprint changes) without the key ever reaching the database.
+ */
+export const KLAVIYO_ENV_KEY_PREFIX = 'env:';
+export function isEnvKeyRef(sealedKey: string | null | undefined): boolean {
+  return typeof sealedKey === 'string' && sealedKey.startsWith(KLAVIYO_ENV_KEY_PREFIX);
 }
 
 // ── Requests ─────────────────────────────────────────────────────────────────
@@ -177,9 +223,42 @@ export function errorCodeForStatus(status: number): KlaviyoErrorCode {
   return 'upstream_error';
 }
 
-/** A status worth one immediate retry inside the same request. */
+/** A status worth a retry inside the same request. */
 export function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
+}
+
+/** One request is tried at most this many times (the first try + 3 retries). */
+export const KLAVIYO_MAX_ATTEMPTS = 4;
+const RETRY_BASE_MS = 1000;
+
+/**
+ * How long to wait before retry number `attempt` (1-based), or null when the
+ * request should give up and leave it to the run's backoff.
+ *
+ *   • a 429 waits what its `Retry-After` says — when that is at most
+ *     KLAVIYO_INLINE_WAIT_MAX_MS; a longer one (or none at all, after the
+ *     first retry) is the run's backoff, not this request's;
+ *   • a 5xx or a network failure waits 1 s, 2 s, 4 s … with ±25 % jitter, so
+ *     several replicas never retry in lock-step.
+ *
+ * `random` is injected by the unit test.
+ */
+export function retryDelayMs(
+  attempt: number,
+  failure: { status?: number; retryAfterMs?: number | null },
+  random: () => number = Math.random,
+): number | null {
+  if (attempt >= KLAVIYO_MAX_ATTEMPTS) return null;
+  const { status } = failure;
+  if (status !== undefined && !isRetryableStatus(status)) return null;
+  if (status === 429) {
+    const wait = failure.retryAfterMs;
+    if (wait === null || wait === undefined) return attempt === 1 ? RETRY_BASE_MS : null;
+    return wait <= KLAVIYO_INLINE_WAIT_MAX_MS ? Math.max(wait, 250) : null;
+  }
+  const base = RETRY_BASE_MS * 2 ** (attempt - 1);
+  return Math.round(base * (0.75 + random() * 0.5));
 }
 
 /** `Retry-After` (whole seconds, or an HTTP date) in ms, or null when absent/unreadable. */
@@ -592,4 +671,66 @@ export function profileInfo(link: {
     properties,
     updatedAt: link.profileUpdatedAt,
   };
+}
+
+// ── Phones that are not a person's (docs/integrations/klaviyo.md § Phones) ───
+//
+// A profile's `phone_number` is copied as the lead's phone — unless it is not
+// that person's: the organization's own switchboard that a form or a shop
+// integration wrote onto every profile, or one number many different people
+// carry. Such a number would make every one of them look like the same person
+// (the duplicate finder pairs them as "same phone") and would put the company's
+// own line on the lead. Two rules, both pure:
+//   • the connection's IGNORED numbers (the admin types them on the card);
+//   • a number SHARED by at least KLAVIYO_SHARED_PHONE_MIN different people.
+
+/** At least this many different people carry one number → it is nobody's own. */
+export const KLAVIYO_SHARED_PHONE_MIN = 3;
+/** Numbers are compared on their last digits: `+49 176 …`, `0049176…` and `0176…` are one number. */
+const PHONE_KEY_DIGITS = 9;
+
+/** The comparison key of a phone number, or '' when it carries too few digits to be one. */
+export function phoneKey(raw: string | null | undefined): string {
+  const digits = (raw ?? '').replace(/\D/g, '');
+  return digits.length >= 6 ? digits.slice(-PHONE_KEY_DIGITS) : '';
+}
+
+/** The admin's ignored-number list (one per line or comma-separated) as keys. */
+export function parseIgnoredPhones(text: string | null | undefined): Set<string> {
+  return new Set(
+    (text ?? '')
+      .split(/[\n,;]+/)
+      .map((s) => phoneKey(s))
+      .filter(Boolean),
+  );
+}
+
+/** The ignored list as it is stored: normalized for display, one per line, bounded. */
+export function normalizeIgnoredPhonesText(text: string | null | undefined): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of (text ?? '').split(/[\n,;]+/)) {
+    const shown = part.trim().slice(0, 40);
+    const key = phoneKey(shown);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(shown);
+    if (out.length >= 50) break;
+  }
+  return out.join('\n');
+}
+
+/**
+ * The phone keys a page must not write as a person's phone: the ignored ones
+ * that occur, and those that `holders` (key → the distinct people already
+ * known to carry it, this page's profiles included) shows at the threshold.
+ */
+export function nonPersonalPhoneKeys(
+  holders: ReadonlyMap<string, ReadonlySet<string>>,
+  ignored: ReadonlySet<string>,
+  min: number = KLAVIYO_SHARED_PHONE_MIN,
+): Set<string> {
+  const out = new Set<string>();
+  for (const [key, people] of holders) if (ignored.has(key) || people.size >= min) out.add(key);
+  return out;
 }

@@ -32,6 +32,10 @@ import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { sameTenant } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { acquireLease, releaseLease, replicaId } from '@/lib/jobs/lease';
+// The store is passed in, not left to `lease.ts`'s lazy `import('./leaseStore')`:
+// the Playwright spec runner transforms static imports only, so under it that
+// dynamic import fails, the lease reads as held, and the run is refused (#3145).
+import { prismaLeaseStore } from '@/lib/jobs/leaseStore';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import type { Locale } from '@/i18n/config';
 import {
@@ -137,14 +141,14 @@ export async function runMigration(input: MigrationInput, opts: MigrationOptions
   if (opts.dryRun) return runLocked(input, opts);
   const lease = `migration:${opts.orgId}`;
   const holder = `${replicaId().slice(0, 150)}:${randomUUID()}`;
-  if (!(await acquireLease(lease, holder, MIGRATION_LEASE_TTL_MS))) {
+  if (!(await acquireLease(lease, holder, MIGRATION_LEASE_TTL_MS, { store: prismaLeaseStore() }))) {
     throw new MigrationError('migration_running', 'Another migration is being applied in this organization; wait for it to finish');
   }
   try {
     return await runLocked(input, opts);
   } finally {
     // An optimisation only: expiry is what frees a lease a crashed run held.
-    await releaseLease(lease, holder);
+    await releaseLease(lease, holder, { store: prismaLeaseStore() });
   }
 }
 

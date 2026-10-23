@@ -1,4 +1,3 @@
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -47,9 +46,9 @@ import {
  * emailService owns the transport (two SMTP channels, the delivery log, the
  * health alerts). This file is a *consumer* of it. Keeping the dependency
  * one-way means the newsletter can import `sendEmail` without emailService
- * importing anything back — no import cycle, and the cron here is registered
- * next to the others from `/api/cron/start` rather than from inside
- * `initCronJobs`.
+ * importing anything back — no import cycle. The schedules are the queued jobs
+ * `newsletter.dispatch` / `newsletter.queue` (src/jobs/platform.ts, #1677),
+ * which import this file; nothing here imports src/jobs.
  *
  * ── WHY A PER-RECIPIENT ROW ────────────────────────────────────────────────
  * `NewsletterSend` is written before the counters are updated and is unique per
@@ -848,42 +847,4 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   return { queued: true, newsletterId: created.id, templateKey: template.key, scheduledAt };
 }
 
-const tasks = new Map<string, ReturnType<typeof scheduleLeased>>();
 
-/**
- * Registers the two newsletter schedules in this server process. Idempotent —
- * a retried call from `/api/cron/start` is harmless.
- */
-export function initNewsletterCron() {
-  if (tasks.has('newsletter-dispatch')) return;
-
-  // Every 15 minutes: sends whatever has come due. Not hourly, because an admin
-  // who schedules an issue for 14:30 means 14:30, and not every minute because
-  // the query is pointless 59 times out of 60.
-  const dispatch = scheduleLeased('*/15 * * * *', async () => {
-    try {
-      const { dispatched } = await dispatchDueNewsletters();
-      if (dispatched > 0) logger.info('Newsletter dispatch ran', { dispatched });
-    } catch (e) {
-      logger.error('Newsletter dispatch cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('newsletter-dispatch', dispatch);
-
-  // Daily at 06:00: decides whether this cycle's issue should be queued. Early
-  // enough that the default 09:00 send still leaves three hours of review.
-  const queue = scheduleLeased('0 6 * * *', async () => {
-    try {
-      const result = await queueScheduledNewsletter();
-      if (result.queued) logger.info('Newsletter queued by schedule', { ...result });
-      else if (result.reason === 'library_exhausted') {
-        logger.warning('Newsletter cadence is on but the curated library is exhausted');
-      }
-    } catch (e) {
-      logger.error('Newsletter queue cron failed', { error: String(e) });
-    }
-  });
-  tasks.set('newsletter-queue', queue);
-
-  logger.info('Newsletter cron jobs registered');
-}

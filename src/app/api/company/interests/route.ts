@@ -132,7 +132,8 @@ export async function POST(request: Request) {
     // The candidate hears the signal too (#1101) — with three hard limits:
     // PASS is never relayed (rejection communication is #830's job, a raw
     // "you were passed on" harms), the company's identity and note stay
-    // hidden (no direct company↔candidate channel exists yet, #807), and a
+    // hidden (the company↔candidate channel is the mentor-gated outreach,
+    // #1840, docs/candidate-outreach.md), and a
     // mentee without an active TALENT_POOL_VISIBILITY consent is not told
     // "you were seen" — that would hollow out what the consent means.
     if ((status === 'INTERESTED' || status === 'SHORTLISTED') && (await hasConsent(menteeId, 'TALENT_POOL_VISIBILITY'))) {

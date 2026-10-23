@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { sendSupportPush } from '@/lib/messagePush';
+import { supportPushRecipients } from '@/lib/supportPushRule';
 import { notificationLink } from '@/lib/notificationLink';
 import { tenantWhere } from '@/lib/tenantFilter';
 import {
@@ -164,7 +166,16 @@ export async function POST(request: Request) {
     data: { readAt: new Date() },
   });
 
-  await notify(ticket.requesterId, 'support.replied', {}, notificationLink(ticket.requester.role, 'support', {}));
+  // The bell and, unless the admin is answering their own ticket, a push to the
+  // requester's phone (#3154). A closure below writes the bell row only:
+  // supportPushRule.ts says why.
+  const link = notificationLink(ticket.requester.role, 'support', {});
+  await Promise.all([
+    notify(ticket.requesterId, 'support.replied', {}, link),
+    ...supportPushRecipients([ticket.requesterId], session.user.id).map((requesterId) =>
+      sendSupportPush(requesterId, { type: 'support.replied', params: {}, link, preview: body, ticketId: ticket.id }),
+    ),
+  ]);
 
   return NextResponse.json({ messageId: message.id }, { status: 201 });
 }
