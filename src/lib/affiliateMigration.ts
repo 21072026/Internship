@@ -13,7 +13,9 @@
 //   written; the transaction re-checks the reconciliation and the payouts against
 //   what it actually wrote and rolls back on a difference.
 // - ONCE, INTO AN EMPTY PROGRAMME. A programme with any partner or payment refuses
-//   it (decided: no partial merge), checked again inside the transaction.
+//   it (decided: no partial merge), checked again inside the transaction under a
+//   lock on the organisation row — the same lock createPartner() takes, so neither
+//   a second migration nor a partner added by hand can slip in between.
 //
 // What is written: partners (codes verbatim, no account — they are invited
 // afterwards), customers, payments (source IMPORT), payouts and commissions (kind
@@ -41,6 +43,7 @@ import {
   type ReconciliationRow,
 } from '@/lib/affiliateMigrationRule';
 import { AFFILIATE_CURRENCIES } from '@/lib/affiliateProgramSettings';
+import { lockOrganization } from '@/lib/affiliatePartners';
 
 /** Each file's size limit, in characters. */
 export const MIGRATION_MAX_CHARS = 10_000_000;
@@ -55,7 +58,12 @@ export interface MigrationCounts {
   payouts: number;
 }
 
-export type MigrationBlock = 'issues' | 'not_empty' | 'reconciliation_failed';
+export type MigrationBlock =
+  | 'issues' // the files: fix them and check again
+  | 'not_empty' // the programme already holds partners or payments
+  | 'reconciliation_failed' // what was written did not reconcile; rolled back
+  | 'duplicate_ref' // two references the database treats as one; rolled back
+  | 'failed'; // the database did not finish (timeout, lock); rolled back, nothing to fix in the files
 
 export interface MigrationResult {
   dryRun: boolean;
@@ -111,6 +119,7 @@ async function writeMigration(
 ): Promise<MigrationCounts> {
   const currency = AFFILIATE_CURRENCIES[0];
   return prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, orgId);
     if (await programHasData(orgId, tx)) throw new MigrationAbort('not_empty');
 
     await inBatches(set.partners, (batch) =>
@@ -184,17 +193,22 @@ async function writeMigration(
 
     // Re-check against what was WRITTEN: per partner paid / unpaid, and every payout.
     const sums = await tx.affiliateCommission.groupBy({ by: ['partnerId', 'status'], where: { orgId }, _sum: { amountMinor: true } });
-    const sumOf = (pid: string, statuses: string[]) => sums.filter((s) => s.partnerId === pid && statuses.includes(s.status)).reduce((n, s) => n + (s._sum.amountMinor ?? 0), 0);
-    for (const r of set.reconciliation) {
-      const pid = partnerId.get(sameKey(r.code))!;
-      if (sumOf(pid, ['PAID']) !== r.expectedPaidMinor || sumOf(pid, ['PENDING', 'APPROVED']) !== r.expectedUnpaidMinor) {
-        throw new MigrationAbort('reconciliation_failed');
-      }
+    const written = new Map<string, { paid: number; unpaid: number }>();
+    for (const g of sums) {
+      const t = written.get(g.partnerId) ?? { paid: 0, unpaid: 0 };
+      if (g.status === 'PAID') t.paid += g._sum.amountMinor ?? 0;
+      else if (g.status === 'PENDING' || g.status === 'APPROVED') t.unpaid += g._sum.amountMinor ?? 0;
+      written.set(g.partnerId, t);
     }
-    const payoutSums = await tx.affiliateCommission.groupBy({ by: ['payoutId'], where: { orgId, payoutId: { not: null } }, _sum: { amountMinor: true } });
+    for (const r of set.reconciliation) {
+      const t = written.get(partnerId.get(sameKey(r.code))!) ?? { paid: 0, unpaid: 0 };
+      if (t.paid !== r.expectedPaidMinor || t.unpaid !== r.expectedUnpaidMinor) throw new MigrationAbort('reconciliation_failed');
+    }
+    const payoutSums = new Map(
+      (await tx.affiliateCommission.groupBy({ by: ['payoutId'], where: { orgId, payoutId: { not: null } }, _sum: { amountMinor: true } })).map((g) => [g.payoutId, g._sum.amountMinor ?? 0]),
+    );
     for (const p of set.payouts) {
-      const id = payoutOf.get(sameKey(p.ref))!.id;
-      if ((payoutSums.find((s) => s.payoutId === id)?._sum.amountMinor ?? 0) !== p.amountMinor) throw new MigrationAbort('reconciliation_failed');
+      if ((payoutSums.get(payoutOf.get(sameKey(p.ref))!.id) ?? 0) !== p.amountMinor) throw new MigrationAbort('reconciliation_failed');
     }
 
     const counts: MigrationCounts = { ...countsOf(set.partners, set.commissions, set.payouts), customers: customers.size };
@@ -206,7 +220,7 @@ async function writeMigration(
 /** A row the engine rejected (`<column>:<code>`), as a migration issue. */
 function rowIssue(row: ImportReport<MigrationCommission>['rows'][number]): MigrationIssue {
   const [subject, code] = (row.reason ?? '').split(':');
-  return { file: 'commissions', row: row.row, code: (code || 'required') as MigrationIssueCode, subject };
+  return { file: 'commissions', row: row.row, code: (code || 'required') as MigrationIssueCode, ...(subject ? { subject } : {}) };
 }
 
 export async function runAffiliateMigration(input: {
@@ -269,8 +283,15 @@ export async function runAffiliateMigration(input: {
       });
     } catch (e) {
       if (e instanceof MigrationAbort) blocked = e.block;
-      else if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') blocked = 'not_empty'; // a concurrent migration won
-      else throw e;
+      // A unique index refused a row: either data arrived meanwhile, or two
+      // references the database calls equal got past the rule's key.
+      else if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') blocked = (await programHasData(input.orgId)) ? 'not_empty' : 'duplicate_ref';
+      else {
+        // Not the files' fault (a timeout, a lock wait): reported as such, never
+        // as row issues. The transaction rolled back; nothing was written.
+        console.error('Affiliate migration failed:', e instanceof Prisma.PrismaClientKnownRequestError ? e.code : e instanceof Error ? e.name : 'unknown');
+        blocked = 'failed';
+      }
     }
   }
 

@@ -41,9 +41,19 @@ export class PartnerCodeTakenError extends Error {
   }
 }
 
+/**
+ * The organisation-row lock that a migration (src/lib/affiliateMigration.ts) and
+ * createPartner() share: a migration writes only into an empty programme, and a
+ * partner added by hand must not slip in between its check and its write.
+ */
+export async function lockOrganization(tx: Prisma.TransactionClient, orgId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM \`Organization\` WHERE id = ${orgId} FOR UPDATE`;
+}
+
 export async function createPartner(orgId: string, input: PartnerInput, actorId: string): Promise<{ id: string }> {
   try {
     return await prisma.$transaction(async (tx) => {
+      await lockOrganization(tx, orgId);
       const partner = await tx.affiliatePartner.create({
         data: { orgId, code: input.code, displayName: input.displayName, contactEmail: input.contactEmail },
         select: { id: true },

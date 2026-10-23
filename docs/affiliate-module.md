@@ -293,8 +293,14 @@ run only after a clean dry run of exactly the files it checked.
   `partner_code, customer_ref, payment_ref, payment_amount, payment_date,
   commission_amount, status` (+ `due_date, payout_ref`). Payouts:
   `payout_ref, partner_code, amount, paid_date` (+ `bank_reference`). Amounts in
-  euros as written, days `YYYY-MM-DD`. Clicks are not migrated.
-- **As recorded** — codes verbatim (compared case-insensitively); commissions keep
+  euros in an unambiguous shape only (`1234`, `19,99`, `19.99`, `1.234,56`,
+  `1,234.56`, `1 234,56`; three digits after a mark are a thousands group) —
+  four decimals, an exponent, a sign or a letter is refused, because a wrong
+  reading on both sides would still reconcile. Days `YYYY-MM-DD`. Files must be
+  UTF-8 (the screen decodes strictly, the rule refuses U+FFFD): a Windows-1252
+  export would collapse different names into one customer. Clicks are not migrated.
+- **As recorded** — codes verbatim (compared like the database does: case- and
+  accent-insensitive, ß = ss — `sameKey`); commissions keep
   their amount, status, due day and payout and are never recalculated: they are
   stored with kind `IMPORTED`, plan version 0, and their payments with source
   `IMPORT`, which the payment writer skips entirely (no update, no removal, no
@@ -307,10 +313,14 @@ run only after a clean dry run of exactly the files it checked.
   equal `paid_total` / `unpaid_total` from the source, to the cent. Any issue
   blocks the whole migration.
 - **All or nothing, once** — the set is one chunk and one transaction. It is
-  refused into a programme that already holds partners or payments (checked again
-  inside the transaction), and after writing, the transaction re-checks the
+  refused into a programme that already holds partners or payments, checked again
+  inside the transaction under a lock on the organisation row that
+  `createPartner()` takes too; after writing, the transaction re-checks the
   reconciliation and every payout against what it wrote and rolls back on a
-  difference. Audited (`affiliate.migration.run`, counts only).
+  difference. A refusal says why: `issues` (the files), `not_empty`,
+  `reconciliation_failed`, `duplicate_ref` (two references the database treats
+  as one) or `failed` (a timeout or lock wait — nothing to fix in the files).
+  Audited (`affiliate.migration.run`, counts only).
 - Partners are created without an account; the admin invites them afterwards
   (see "The partner's account").
 

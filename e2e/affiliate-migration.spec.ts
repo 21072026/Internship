@@ -226,3 +226,31 @@ test('the import screen checks first and imports only what it checked', async ({
   await expect(page.getByTestId('migration-status')).toContainText('Imported', { timeout: 30_000 });
   expect(await writtenRows(org)).toEqual({ partners: 2, payments: 5, commissions: 5, payouts: 1 });
 });
+
+test('two different migrations at once: exactly one is written', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const org = await newOrg('race');
+  const owner = await signedIn(playwright, baseURL, await adminOf(org));
+  // A second, fully disjoint set (other codes and references), so no unique index can decide it.
+  const other = {
+    partners: 'code,name,paid_total,unpaid_total\nzz-9,Other,0,"1,00"\n',
+    commissions: 'partner_code,customer_ref,payment_ref,payment_amount,payment_date,commission_amount,status\nzz-9,CUST-Z,PAY-Z,10.00,2026-01-10,1.00,PENDING\n',
+    payouts: '',
+  };
+  const [a, b] = await Promise.all([migrate(owner, { dryRun: false }), migrate(owner, { dryRun: false, ...other })]);
+  const results = [await a.json(), await b.json()];
+  expect(results.filter((r) => r.written)).toHaveLength(1);
+  expect(results.find((r) => !r.written).blocked).toBe('not_empty');
+  const partners = await prisma.affiliatePartner.findMany({ where: { orgId: org }, select: { code: true } });
+  expect(partners.length === 2 || partners.length === 1).toBe(true);
+  expect(new Set(partners.map((p) => p.code.startsWith('zz')))).toHaveProperty('size', 1);
+});
+
+test('an ambiguous amount or a non-UTF-8 cell is refused, not guessed', async ({ playwright, baseURL }) => {
+  const org = await newOrg('strict');
+  const owner = await signedIn(playwright, baseURL, await adminOf(org));
+  const amount = await (await migrate(owner, { commissions: COMMISSIONS.replace('100.00,2026-01-10', '100.0000,2026-01-10') })).json();
+  expect(amount.issues).toContainEqual({ file: 'commissions', row: 1, code: 'invalid_amount', subject: 'payment_amount' });
+  const encoding = await (await migrate(owner, { partners: PARTNERS.replace('Synthetic One', 'M�ller') })).json();
+  expect(encoding.issues).toContainEqual({ file: 'partners', row: 1, code: 'encoding' });
+  expect(await writtenRows(org)).toEqual({ partners: 0, payments: 0, commissions: 0, payouts: 0 });
+});

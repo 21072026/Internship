@@ -58,7 +58,17 @@ export default function AffiliateMigrationPage() {
 
   async function pick(file: MigrationFile, list: FileList | null) {
     const f = list?.[0];
-    setTexts({ ...texts, [file]: f ? { name: f.name, text: await f.text() } : null });
+    let text: string | null = null;
+    if (f) {
+      try {
+        // Strict: a Windows-1252 export read as UTF-8 would turn every accented
+        // letter into U+FFFD, and two different names into one.
+        text = new TextDecoder('utf-8', { fatal: true }).decode(await f.arrayBuffer());
+      } catch {
+        toast(interpolate(L.notUtf8, { file: f.name }), 'error');
+      }
+    }
+    setTexts({ ...texts, [file]: f && text !== null ? { name: f.name, text } : null });
     setResult(null);
   }
 

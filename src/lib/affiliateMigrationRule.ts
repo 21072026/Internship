@@ -17,11 +17,15 @@
 //   sum must equal the totals the source reports in the partners file, to the
 //   cent. A difference blocks the whole migration.
 //
-// Amounts are euros as written in the source ("19,99", "1.234,50", "19.99");
-// days are YYYY-MM-DD. Clicks are not part of a migration.
+// Amounts are euros in one of a few unambiguous shapes ("19,99", "19.99",
+// "1.234,56", "1,234.56", "1 234,56", "1234"); anything else — four decimals, an
+// exponent, a sign, a stray letter — is refused rather than guessed, because a
+// wrong reading on BOTH sides of the reconciliation would still reconcile. Days
+// are YYYY-MM-DD. Files must be UTF-8: a cell holding U+FFFD (what a Windows-1252
+// export becomes when read as UTF-8) is refused, since two different names would
+// otherwise collapse into one. Clicks are not part of a migration.
 
 import { headerIndex, type ParsedRow, type ParsedTable, type ValidatedRow } from './importPreview';
-import { parseMinorUnits } from './money';
 import { parseCalendarDay } from './calendarDay';
 
 export const MIGRATION_MAX_ROWS = { partners: 5_000, commissions: 50_000, payouts: 20_000 } as const;
@@ -46,6 +50,7 @@ export const MIGRATION_COLUMNS: Record<MigrationFile, { required: readonly strin
 export type MigrationIssueCode =
   | 'missing_column'
   | 'too_many_rows'
+  | 'encoding'
   | 'required'
   | 'too_long'
   | 'invalid_code'
@@ -124,8 +129,22 @@ const PARTNER_STATUSES: readonly PartnerStatus[] = ['ACTIVE', 'SUSPENDED', 'TERM
 const COMMISSION_STATUSES: readonly CommissionStatus[] = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'];
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
-/** The key two values are the same under (the database compares case-insensitively). */
-export const sameKey = (value: string) => value.trim().toLowerCase();
+/**
+ * The key two values are the same under. The database compares references with
+ * utf8mb4_unicode_ci — case- AND accent-insensitive, ß = ss — so two values it
+ * would call equal must be one key here, or a set that passes this check fails
+ * the unique index on write.
+ */
+export const sameKey = (value: string) =>
+  value
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/ß/g, 'ss')
+    .toLowerCase();
+
+/** A row read from a non-UTF-8 file (see the header). */
+export const hasEncodingDamage = (row: ParsedRow) => row.values.some((v) => v.includes('\uFFFD'));
 
 export function missingColumns(file: MigrationFile, header: string[]): string[] {
   return MIGRATION_COLUMNS[file].required.filter((c) => headerIndex(header, c) < 0);
@@ -141,10 +160,37 @@ function cells(header: string[], row: ParsedRow) {
 
 type Field<T> = { ok: true; value: T } | { ok: false; code: MigrationIssueCode };
 
+// Plain ("1234", "19,99", "19.99") or grouped by thousands ("1.234,56",
+// "1,234.56", "1 234,56", "1'234.56") — the group and the decimal mark differ.
+const PLAIN_AMOUNT = /^(\d+)(?:[.,](\d{1,2}))?$/;
+const GROUPED_AMOUNT = /^(\d{1,3}(?:([.,\u00A0\u202F' ])\d{3})+)(?:([.,])(\d{1,2}))?$/;
+
+/** Minor units of an amount in one of the shapes above; null for anything else. */
+export function parseMigrationAmount(raw: string): number | null {
+  const text = raw.trim();
+  let whole: string;
+  let fraction = '';
+  const plain = PLAIN_AMOUNT.exec(text);
+  const grouped = plain ? null : GROUPED_AMOUNT.exec(text);
+  if (plain) {
+    whole = plain[1];
+    fraction = plain[2] ?? '';
+  } else if (grouped) {
+    const [, digits, group, decimal, frac] = grouped;
+    if (decimal && decimal === group) return null; // "1.234.56": no decimal mark left
+    whole = digits.split(group).join('');
+    fraction = frac ?? '';
+  } else {
+    return null;
+  }
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0') || '0');
+  return Number.isSafeInteger(minor) ? minor : null;
+}
+
 function amount(raw: string, allowZero: boolean): Field<number> {
   if (!raw) return { ok: false, code: 'required' };
-  const minor = parseMinorUnits(raw);
-  if (minor === null || Number.isNaN(minor) || minor < 0 || (!allowZero && minor === 0) || minor > MAX_MINOR) return { ok: false, code: 'invalid_amount' };
+  const minor = parseMigrationAmount(raw);
+  if (minor === null || (!allowZero && minor === 0) || minor > MAX_MINOR) return { ok: false, code: 'invalid_amount' };
   return { ok: true, value: minor };
 }
 
@@ -176,6 +222,10 @@ export function readPartners(table: ParsedTable): { partners: MigrationPartner[]
 
   const partners: MigrationPartner[] = [];
   for (const r of table.rows) {
+    if (hasEncodingDamage(r)) {
+      issues.push({ file: 'partners', row: r.row, code: 'encoding' });
+      continue;
+    }
     const get = cells(table.header, r);
     const bad = (subject: string, c: MigrationIssueCode) => issues.push({ file: 'partners', row: r.row, code: c, subject });
     const c = code(get('code'));
@@ -221,6 +271,10 @@ export function readPayouts(table: ParsedTable, now: Date): { payouts: Migration
 
   const payouts: MigrationPayout[] = [];
   for (const r of table.rows) {
+    if (hasEncodingDamage(r)) {
+      issues.push({ file: 'payouts', row: r.row, code: 'encoding' });
+      continue;
+    }
     const get = cells(table.header, r);
     const bad = (subject: string, c: MigrationIssueCode) => issues.push({ file: 'payouts', row: r.row, code: c, subject });
     const ref = text(get('payout_ref'), MAX_REF);
@@ -255,6 +309,7 @@ export function validateCommissionRow(row: ParsedRow, header: string[], now: Dat
   const get = cells(header, row);
   const key = get('payment_ref') || `row-${row.row}`;
   const fail = (subject: string, c: MigrationIssueCode): ValidatedRow<MigrationCommission> => ({ ok: false, row: row.row, key, status: 'ERROR', reason: `${subject}:${c}` });
+  if (hasEncodingDamage(row)) return fail('', 'encoding');
 
   const partner = code(get('partner_code'));
   if (!partner.ok) return fail('partner_code', partner.code);

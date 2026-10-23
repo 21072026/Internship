@@ -12,7 +12,7 @@ import { register } from 'node:module';
 // affiliateMigrationRule.ts imports its siblings without an extension; see ts-extensionless-resolve.mjs.
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 const { parseDelimited } = await import('../../src/lib/importPreview.ts');
-const { readPartners, readPayouts, validateCommissionRow, checkMigration, missingColumns } = await import('../../src/lib/affiliateMigrationRule.ts');
+const { readPartners, readPayouts, validateCommissionRow, checkMigration, missingColumns, parseMigrationAmount, sameKey } = await import('../../src/lib/affiliateMigrationRule.ts');
 
 const NOW = new Date('2026-10-01T12:00:00Z');
 
@@ -132,4 +132,50 @@ test('missing columns and bad partner rows stop the file', () => {
     [2, 'code', 'required'],
     [3, 'code', 'invalid_code'],
   ]);
+});
+
+test('amounts: only unambiguous shapes are read; anything else is refused, never guessed', () => {
+  const ok = {
+    '1234': 123_400,
+    '19,99': 1_999,
+    '19.99': 1_999,
+    '19,9': 1_990,
+    '0': 0,
+    '1.234,56': 123_456,
+    '1,234.56': 123_456,
+    '1 234,56': 123_456,
+    "1'234.56": 123_456,
+    '1.234': 123_400,
+    '12.345.678,90': 1_234_567_890,
+    '19,999': 1_999_900, // three digits after a mark are a thousands group, as in 1.234
+  };
+  for (const [raw, minor] of Object.entries(ok)) assert.equal(parseMigrationAmount(raw), minor, raw);
+  for (const raw of ['100.0000', '1e3', '−5', '-5', '+5', '12abc', '1.234.56', '1,234,5', '1.23.456', '€19', '']) {
+    assert.equal(parseMigrationAmount(raw), null, raw);
+  }
+});
+
+test('keys compare like the database: case, accents and ß', () => {
+  assert.equal(sameKey(' Müller '), sameKey('MULLER'));
+  assert.equal(sameKey('Straße'), sameKey('strasse'));
+  assert.equal(sameKey('pay-é'), sameKey('PAY-E'));
+  assert.notEqual(sameKey('pay-1'), sameKey('pay-2'));
+  // So an accent-only variant is the same customer — under two partners it is an issue.
+  const commissions = COMMISSIONS.replace('SPARK-CO,CUST-C,', 'SPARK-CO,cust-á,') + '1042,CUST-A,PAY-6,1.00,2026-01-10,0,REJECTED,,\n';
+  const variant = commissions.replace('1042,CUST-A,PAY-6', '1042,cust-a,PAY-6').replace('SPARK-CO,cust-á,', 'SPARK-CO,CUST-A,');
+  const { p, o, valid } = read(undefined, variant);
+  const codes = checkMigration({ partners: p.partners, commissions: valid, payouts: o.payouts }).issues.map((i) => [i.code, i.subject]);
+  assert.deepEqual(codes, [['customer_two_partners', 'CUST-A']]);
+});
+
+test('a row read from a non-UTF-8 file is refused in every file', () => {
+  const broken = 'M\uFFFDller';
+  const { p, o, rows } = read(
+    PARTNERS.replace('Synthetic One', broken),
+    COMMISSIONS.replace('CUST-B,PAY-3', `${broken},PAY-3`),
+    PAYOUTS.replace('TRX 0001', broken),
+  );
+  assert.deepEqual(p.issues, [{ file: 'partners', row: 1, code: 'encoding' }]);
+  assert.deepEqual(o.issues, [{ file: 'payouts', row: 1, code: 'encoding' }]);
+  assert.equal(rows[2].ok ? 'ok' : rows[2].reason, ':encoding');
 });
