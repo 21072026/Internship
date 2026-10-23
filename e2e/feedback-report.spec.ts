@@ -88,6 +88,7 @@ test('feedback widget: send with screenshot + masked context, admin triages it',
     await detail.getByTestId('report-tab-network').click();
     await expect(detail.getByTestId('report-network')).toContainText('/api/feedback-e2e-missing?token=***');
     await detail.getByTestId('report-status-select').selectOption('RESOLVED');
+    await detail.getByTestId('report-status-save').click();
     await expect
       .poll(async () => (await prisma.supportReport.findUnique({ where: { id: report.id } }))?.status, { timeout: 10_000 })
       .toBe('RESOLVED');

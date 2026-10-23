@@ -25,3 +25,16 @@
   regex with a bare 400 — make the pattern accept `''` (`/^(…)?$/`).
 - **On `next dev` the first POST to a route includes its compile.** A 10 s first report and a 0.5 s
   second one are the same code; measure the second before calling anything slow.
+
+## 2026-10-23 — bug reports phase 3 (#3132)
+
+- **Stacked PRs here are squash-merged, so the next phase must be re-based by content, not by
+  history.** Merging `main` into a branch stacked on a squashed PR conflicts on every shared file
+  (add/add). What worked: take `main`'s copy of each conflicted file and re-apply only this branch's
+  own diff (`git diff <old-base> <tip> -- <files> | git apply -3`), then check that the remaining
+  diff against `main` lists exactly the branch's own files.
+- **`scripts/test/outbound-approval-rule.test.mjs` pins the exempt category set.** A new mail
+  category that a human triggers to a lead is still held like `message`; widening the exemption
+  means changing that test on purpose, with a reason.
+- **A doc edit that replaces a heading with "new section + heading" must keep the heading** — the
+  Phase 2 replay section swallowed `## Storage` and it shipped that way.

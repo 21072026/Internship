@@ -235,6 +235,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'pageView',
         'pushSubscription',
         'rosterRowResult',
+        'supportReport',
         'trialReminder',
       ].sort()
     );

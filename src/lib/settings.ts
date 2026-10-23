@@ -159,6 +159,8 @@ export const SETTING_DEFAULTS = {
   // The domain-event record (#1691, DomainEvent). Held only as long as a
   // receiver could still ask for a replay or a timeline could still read it.
   domainEventRetentionDays: '90',
+  // In-app bug reports (#3132, SupportReport + its screenshot / replay files).
+  supportReportRetentionDays: '90',
   // Company enquiries (#2559): an unconverted one is deleted after this many
   // days, a converted one keeps its row and loses its personal columns.
   companyInquiryRetentionDays: '730',
@@ -405,6 +407,7 @@ export const SETTING_SCHEMA = {
   pushSubscriptionStaleDays: { type: 'number', scopes: G },
   jobRetentionDays: { type: 'number', scopes: G },
   domainEventRetentionDays: { type: 'number', scopes: G },
+  supportReportRetentionDays: { type: 'number', scopes: G },
   companyInquiryRetentionDays: { type: 'number', scopes: O },
   viewLogWindowMinutes: { type: 'number', scopes: G },
   notificationRetentionDays: { type: 'number', scopes: O },
