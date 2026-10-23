@@ -34,10 +34,12 @@
 //     default org to exist);
 //   - backfill-skill-lists BEFORE backfill-skill-taxonomy (map the split lists).
 //
-// The schema-bracketing steps stay in infra/deploy-prod.sh, around the push
-// they belong to: backfill-company-interest-scope, backfill-setting-id and both
-// backfill-json-columns --repair runs. They are part of making the push
-// itself succeed, not data migrations that follow it.
+// The schema-bracketing steps are not here: the ones before the push
+// (backfill-company-interest-scope, backfill-setting-id, the expand pushes and
+// the pre-push backfill-json-columns --repair) are prisma/pre-push/registry.mjs
+// (#3144), and the post-push --repair stays in infra/deploy-prod.sh right after
+// the push. They make the push itself succeed; they are not data migrations
+// that follow it.
 //
 // Plain ESM, no imports: the runner and the unit test both read it, and the
 // server's Node 20 runs it without a TypeScript step.

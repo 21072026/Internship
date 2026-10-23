@@ -77,6 +77,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Org-defined segmentation attributes and their values (#1920).
   'OrgAttribute',
   'UserAttributeValue',
+  // Company → candidate message requests (#1840).
+  'CandidateOutreach',
   // Scheduled report delivery (#1905).
   'ReportSubscription',
   'ReportSubscriptionSend',
@@ -231,6 +233,20 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // scheduled sync has no session and passes `orgId` explicitly on every write.
   'ExternalConnection',
   'ExternalProfileLink',
+  // The same connector's other resources — the per-resource cursor, the
+  // provider's lists/segments and their members, metrics, events, campaigns
+  // (+ messages, statistics) and flows. One tenant's marketing data; the only
+  // writer is src/lib/klaviyoResources.ts (scheduled, sessionless, `orgId`
+  // passed on every write) plus the erasure purge in externalProfileErasure.ts.
+  'ExternalSyncState',
+  'ExternalAudience',
+  'ExternalAudienceMember',
+  'ExternalMetric',
+  'ExternalEvent',
+  'ExternalCampaign',
+  'ExternalCampaignMessage',
+  'ExternalCampaignStat',
+  'ExternalFlow',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was
@@ -393,6 +409,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // its own `orgId` in every WHERE; the registration keeps every other reader
   // inside one tenant.
   'OutboundDraft',
+  // In-app bug / feedback reports (#3130): a screenshot of one tenant's screen
+  // must never reach another tenant's support inbox. POST /api/support/reports
+  // stamps the reporter's org explicitly; its files are reached through it.
+  'SupportReport',
   // A funnel record's estimated monthly value (#2422). Commercial data, like
   // Placement next door: one tenant must never read or sum another's pipeline
   // value. Every writer — the owner/ADMIN edit route, the marketing import and

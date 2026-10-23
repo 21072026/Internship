@@ -86,3 +86,44 @@ export async function alertRosterRun(
   }
   return sent;
 }
+
+/**
+ * A run that failed (the transport, the credential, a row that would not
+ * import). Same recipients and category as above; says whether the failure
+ * just paused the feed. Never throws.
+ */
+export async function alertRosterFailure(
+  feed: { id: string; orgId: string; name: string },
+  message: string,
+  paused: boolean,
+): Promise<void> {
+  const org = await prisma.organization
+    .findUnique({ where: { id: feed.orgId }, select: { supportEmail: true } })
+    .catch(() => null);
+  const recipients = [...new Set([process.env.ALERT_EMAIL_TO, org?.supportEmail].filter((a): a is string => Boolean(a)))];
+  const subject = paused
+    ? `Roster feed "${feed.name}" was paused after repeated failures`
+    : `Roster feed "${feed.name}" failed`;
+  const html =
+    `<p>The roster feed <strong>${escape(feed.name)}</strong> did not complete.</p>` +
+    `<p>${escape(message)}</p>` +
+    (paused
+      ? '<p>It has failed several times in a row and has been <strong>paused</strong>. Fix the cause (often the address or the credential), then switch the feed back on in the roster feeds console.</p>'
+      : '<p>It will be tried again at its next scheduled time.</p>');
+  for (const [i, to] of recipients.entries()) {
+    try {
+      await sendEmail({
+        to,
+        subject,
+        html,
+        category: ALERT_CATEGORY,
+        orgId: feed.orgId,
+        dedupeKey: dedupeKeyFor({ kind: 'ops', alert: `roster-fail-${feed.id}-${i}`, at: new Date() }),
+        // no-user-row: ALERT_EMAIL_TO is an operator address from the server
+        // env and supportEmail is the tenant's configured contact address.
+      });
+    } catch (e) {
+      logger.error('Roster feed failure alert could not be delivered', { feedId: feed.id, error: String(e) });
+    }
+  }
+}

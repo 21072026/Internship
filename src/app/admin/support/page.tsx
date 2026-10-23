@@ -20,6 +20,7 @@ import {
   validateSupportFile,
 } from '@/lib/supportAttachments';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { SupportTabs } from '@/components/SupportTabs';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
@@ -173,6 +174,7 @@ export default function AdminSupportPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{a.title}</h1>
       </div>
       <p className="text-gray-500 mb-6">{a.subtitle}</p>
+      <SupportTabs />
 
       {/* Filter chips wrap: in German the four labels ran 14px past the screen
           and put the whole page into horizontal scroll (#1305). */}

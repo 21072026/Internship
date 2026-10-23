@@ -29,6 +29,8 @@ import { RelationRecurringMeeting } from '@/components/meeting/RelationRecurring
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
+import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
+import { effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { CertificateGenerator } from '@/components/CertificateGenerator';
@@ -356,6 +358,22 @@ export default function MenteeDetailPage() {
           onSaved={fetchRelation}
         />
       </div>
+
+      {/* Pause, resume or end this pairing with a reason, and its history (#1770). */}
+      <Card className="mb-6" data-testid="mentee-lifecycle-card">
+        <CardHeader>
+          <CardTitle>{t.relationLifecycle.actions}</CardTitle>
+        </CardHeader>
+        <RelationLifecycleControls
+          relationId={relation.id}
+          state={effectiveLifecycleState(relation)}
+          isAdmin={false}
+          menteeName={relation.mentee.fullName}
+          mentorName={relation.mentor.fullName}
+          showHistory
+          onChanged={fetchRelation}
+        />
+      </Card>
 
       {/* The pair's meeting rhythm (#2014). */}
       <div className="mb-6">

@@ -6,9 +6,9 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// #2635: the outbound delivery log is installation-wide — EmailLog has no
-// orgId, so every row is some tenant's recipient and subject. A tenant admin
-// used to read all of them from /admin/settings. Only a super admin may now.
+// #2635: the outbound delivery log holds every tenant's recipients and
+// subjects. A tenant admin used to read all of them from /admin/settings. Only
+// a super admin may now, and only its own world's rows (the row's orgId).
 test('the delivery log is the super admin\'s: a tenant admin gets 403 and no section', async ({ page }) => {
   const stamp = Date.now();
   const tenantAdminEmail = uniqueEmail('elog-tenant-admin');
@@ -36,6 +36,17 @@ test('the delivery log is the super admin\'s: a tenant admin gets 403 and no sec
   const mktRow = await prisma.emailLog.create({
     data: { to: marketingRecipient, subject: `Marketing subject ${stamp}`, category: 'message', status: 'SENT' },
   });
+  // One mailbox, an account in each world: its mail belongs to the world of the
+  // account it went to (the row's orgId), not to every world the address is in.
+  const bothWorlds = uniqueEmail('elog-both-worlds');
+  await seedUser(bothWorlds, pw, 'MENTOR', 'Both Worlds Intern', otherOrg.id);
+  await seedUser(bothWorlds, pw, 'MENTOR', 'Both Worlds Rep', mktOrg.id);
+  const [bothIntern, bothMkt, bothUnknown] = await Promise.all([
+    prisma.emailLog.create({ data: { orgId: otherOrg.id, to: bothWorlds, subject: `Intern reminder ${stamp}`, category: 'interaction-reminder', status: 'SENT' } }),
+    prisma.emailLog.create({ data: { orgId: mktOrg.id, to: bothWorlds, subject: `Rep reminder ${stamp}`, category: 'interaction-reminder', status: 'SENT' } }),
+    // No orgId and an address in both worlds: whose it was cannot be told.
+    prisma.emailLog.create({ data: { to: bothWorlds, subject: `Unattributed ${stamp}`, category: 'message', status: 'SENT' } }),
+  ]);
 
   try {
     await signInAsFreshUser(page, tenantAdminEmail, pw, '/admin');
@@ -56,11 +67,17 @@ test('the delivery log is the super admin\'s: a tenant admin gets 403 and no sec
     expect(body.entries.some((e) => e.id === row.id && e.to === otherTenantRecipient)).toBe(true);
     // The other world's mail is not this operator's.
     expect(body.entries.some((e) => e.id === mktRow.id)).toBe(false);
+    // The two-world mailbox: only the row sent to its internship account.
+    const ids = new Set(body.entries.map((e) => e.id));
+    expect(ids.has(bothIntern.id)).toBe(true);
+    expect(ids.has(bothMkt.id)).toBe(false);
+    expect(ids.has(bothUnknown.id)).toBe(false);
 
     await gotoSettled(page, '/admin/settings');
     await expect(page.getByTestId('email-log-section')).toBeVisible({ timeout: 20_000 });
   } finally {
-    await prisma.emailLog.deleteMany({ where: { id: { in: [row.id, mktRow.id] } } });
+    await prisma.emailLog.deleteMany({ where: { id: { in: [row.id, mktRow.id, bothIntern.id, bothMkt.id, bothUnknown.id] } } });
+    await cleanupByEmail(bothWorlds);
     await cleanupByEmail(tenantAdminEmail);
     await cleanupByEmail(otherTenantRecipient);
     await cleanupByEmail(marketingRecipient);

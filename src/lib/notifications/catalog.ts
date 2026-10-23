@@ -200,6 +200,13 @@ export const NOTIFICATION_EVENTS = [
   { key: 'company_interest.shortlisted', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
   { key: 'company_interest.passed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
   { key: 'company_interest.generic', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['mentee'] },
+  // Company → candidate message requests (#1840): in-app only — a mentor's
+  // queue, the candidate's new channel, and the company's answer (never why).
+  { key: 'outreach.requested', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['company', 'name'] },
+  { key: 'outreach.approvedCandidate', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['company'] },
+  { key: 'outreach.approvedCompany', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'outreach.declinedCompany', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'outreach.revokedCompany', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 
   // The mentorship relationship itself.
   { key: 'mentorship_request.new', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
@@ -258,6 +265,13 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship_request.rematchMentorNotice', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   { key: 'mentorship.mentorChanged', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentorship.reassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  // A pairing paused, resumed, ended or reopened through the lifecycle endpoint
+  // (#1770). In-app only: the send site notifies the pair with `notify()` and
+  // mails nobody. `name` is the OTHER participant; the reason is never a param.
+  { key: 'relation.lifecycle_paused', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'relation.lifecycle_resumed', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'relation.lifecycle_ended', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'relation.lifecycle_reopened', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   // In-app ONLY, and that is the send site's deliberate choice rather than an
   // omission: a corrected mis-assignment never was a mentorship, so there is no
   // ending to mail anybody about (src/lib/mentorTransfer.ts). Its sibling

@@ -1,4 +1,3 @@
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
@@ -124,17 +123,5 @@ export async function runSsoCertificateExpiry(
   return result;
 }
 
-let task: ReturnType<typeof scheduleLeased> | null = null;
-
-/** Daily at 06:40 UTC. From /api/cron/start, never initCronJobs: this sends through emailService. */
-export function initSsoCertificateExpiryCron() {
-  if (task) return;
-  task = scheduleLeased('40 6 * * *', async () => {
-    try {
-      const r = await runSsoCertificateExpiry();
-      if (r.warned) logger.warning('SSO certificate expiry warnings sent', { ...r });
-    } catch (error) {
-      logger.error('SSO certificate expiry sweep failed', { error: String(error) });
-    }
-  });
-}
+// Scheduled as the queued job `sso.certificateExpiry` (src/lib/jobs/schedules.ts,
+// handler in src/jobs/platform.ts, #1677), daily 06:40 UTC.

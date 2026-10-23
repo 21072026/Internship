@@ -43,12 +43,15 @@
 //   own backoff and the tick catches per connection.
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import { scheduleLeased } from '@/lib/jobs/leasedCron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { seal, open } from '@/lib/secretBox';
+import { seal } from '@/lib/secretBox';
 import { runWithOrg } from '@/lib/orgContext';
 import { acquireLease, releaseLease, replicaId } from '@/lib/jobs/lease';
+// The store is passed in, not left to `lease.ts`'s lazy `import('./leaseStore')`:
+// the Playwright spec runner transforms static imports only, so under it that
+// dynamic import fails, the lease reads as held, and the run is refused (#3145).
+import { prismaLeaseStore } from '@/lib/jobs/leaseStore';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
@@ -63,14 +66,21 @@ import { normalizeNameKey } from '@/lib/duplicateDetection';
 import { profileEmailHash } from '@/lib/externalProfileErasure';
 import { createMarketingAccountsBatch, type MarketingImportOwner } from '@/lib/marketingImportStore';
 import { runImport, emptyCounts, importErrorMessage, type ImportReport, type PlannedRow, type RowResult, type RowStatus } from '@/lib/importPreview';
-import { fetchListNames, fetchProfilesPage, testKlaviyoKey, type KlaviyoClientOptions } from '@/lib/klaviyoClient';
+import { fetchListNames, fetchProfilesPage, klaviyoRevision, testKlaviyoKey, type KlaviyoClientOptions } from '@/lib/klaviyoClient';
+import { envKeyRef, envKlaviyoKey, envKlaviyoOrgRef, keySourceOf, openConnectionKey } from '@/lib/klaviyoKey';
+import {
+  KLAVIYO_LEASE_TTL_MS,
+  klaviyoLeaseName,
+  klaviyoResourceStatus,
+  resourceDataResetOps,
+  runKlaviyoResources,
+} from '@/lib/klaviyoResources';
 import {
   KLAVIYO_PAGES_PER_MANUAL_RUN,
   KLAVIYO_PAGES_PER_RUN,
   KLAVIYO_PREVIEW_MAX,
   KLAVIYO_PROVIDER,
   KLAVIYO_REQUIRED_SCOPES,
-  KLAVIYO_REVISION,
   KLAVIYO_SECRET_PURPOSE,
   afterPage,
   beginQuery,
@@ -79,6 +89,10 @@ import {
   keyLast4,
   mapProfile,
   nextAttemptDelayMs,
+  nonPersonalPhoneKeys,
+  normalizeIgnoredPhonesText,
+  parseIgnoredPhones,
+  phoneKey,
   restartQuery,
   type KlaviyoErrorCode,
   type KlaviyoLead,
@@ -88,19 +102,17 @@ import {
 /** `Company.createdBySource` of an account this connector created (the rollback CLI reads it). */
 export const KLAVIYO_CREATED_BY = KLAVIYO_PROVIDER;
 /** One run holds its connection's lease at most this long; expiry frees a crashed run's. */
-export const KLAVIYO_LEASE_TTL_MS = 10 * 60 * 1000;
+export { KLAVIYO_LEASE_TTL_MS, klaviyoLeaseName };
 /** A run stops starting new pages after this long, whatever its page budget. */
 const RUN_TIME_BUDGET_MS = 4 * 60 * 1000;
-
-export function klaviyoLeaseName(connectionId: string): string {
-  return `klaviyo-sync:${connectionId}`;
-}
 
 // ── The connection row ───────────────────────────────────────────────────────
 
 const VIEW_SELECT = {
   id: true,
   enabled: true,
+  sealedKey: true,
+  ignoredPhones: true,
   keyLast4: true,
   initialSyncDoneAt: true,
   lastSyncAt: true,
@@ -123,19 +135,26 @@ const VIEW_SELECT = {
  * the same way an API key is shown after creation.
  */
 export async function klaviyoConnectionView(orgId: string) {
-  const row = await prisma.externalConnection.findFirst({
+  const found = await prisma.externalConnection.findFirst({
     where: { orgId, provider: KLAVIYO_PROVIDER },
     select: VIEW_SELECT,
   });
-  const linkedProfiles = row
-    ? await prisma.externalProfileLink.count({ where: { orgId, connectionId: row.id, erasedAt: null } })
+  return viewOf(orgId, found);
+}
+
+async function viewOf(orgId: string, found: Prisma.ExternalConnectionGetPayload<{ select: typeof VIEW_SELECT }> | null) {
+  // The sealed key (or the environment key's fingerprint) never leaves this function.
+  const { sealedKey, ...row } = found ?? { sealedKey: null };
+  const linkedProfiles = found
+    ? await prisma.externalProfileLink.count({ where: { orgId, connectionId: found.id, erasedAt: null } })
     : 0;
   return {
-    connected: Boolean(row),
-    connection: row,
+    connected: Boolean(found),
+    connection: found ? { ...row, keySource: keySourceOf(sealedKey!) } : null,
     linkedProfiles,
+    resources: found ? await klaviyoResourceStatus(orgId, found.id) : [],
     requiredScopes: [...KLAVIYO_REQUIRED_SCOPES],
-    revision: KLAVIYO_REVISION,
+    revision: klaviyoRevision(),
   };
 }
 
@@ -149,13 +168,24 @@ export async function klaviyoConnectionView(orgId: string) {
  * comes back UNCHANGED. The links stay either way.
  */
 export async function saveKlaviyoKey(orgId: string, key: string, actorId: string) {
+  return bindKlaviyoKey(orgId, key, seal(key, KLAVIYO_SECRET_PURPOSE), actorId);
+}
+
+/**
+ * Store a connection's key reference — a sealed key, or an environment key's
+ * fingerprint (klaviyoKey.ts) — with the reset rule above. A changed key also
+ * drops everything the connector kept beyond the profile links (lists,
+ * segments, events, campaigns …): it may be another account's, and a full
+ * re-read rebuilds it.
+ */
+async function bindKlaviyoKey(orgId: string, key: string, sealedKey: string, actorId: string | null) {
   const existing = await prisma.externalConnection.findFirst({
     where: { orgId, provider: KLAVIYO_PROVIDER },
-    select: { sealedKey: true },
+    select: { id: true, sealedKey: true },
   });
-  const keyChanged = !existing || open(existing.sealedKey, KLAVIYO_SECRET_PURPOSE) !== key;
+  const keyChanged = !existing || openConnectionKey(existing.sealedKey) !== key;
   const data = {
-    sealedKey: seal(key, KLAVIYO_SECRET_PURPOSE),
+    sealedKey,
     keyLast4: keyLast4(key),
     connectedById: actorId,
     enabled: true,
@@ -173,11 +203,72 @@ export async function saveKlaviyoKey(orgId: string, key: string, actorId: string
         }
       : {}),
   };
-  return prisma.externalConnection.upsert({
-    where: { orgId_provider: { orgId, provider: KLAVIYO_PROVIDER } },
-    create: { orgId, provider: KLAVIYO_PROVIDER, ...data },
-    update: data,
-    select: VIEW_SELECT,
+  return prisma.$transaction(async (tx) => {
+    if (existing && keyChanged) for (const op of resourceDataResetOps(tx, orgId, existing.id)) await op;
+    const { sealedKey: _sealed, ...row } = await tx.externalConnection.upsert({
+      where: { orgId_provider: { orgId, provider: KLAVIYO_PROVIDER } },
+      create: { orgId, provider: KLAVIYO_PROVIDER, ...data },
+      update: data,
+      select: VIEW_SELECT,
+    });
+    return row;
+  });
+}
+
+let warnedEnv: string | null = null;
+function warnEnvOnce(reason: string) {
+  if (warnedEnv === reason) return;
+  warnedEnv = reason;
+  logger.warning('Klaviyo connector: KLAVIYO_PRIVATE_API_KEY is set but not used', { reason });
+}
+
+/**
+ * The server-supplied key (`KLAVIYO_PRIVATE_API_KEY` + `KLAVIYO_ORG_ID`, an id
+ * or a slug of a MARKETING organization): bound to that organization's
+ * connection at the start of every tick. It creates the connection when there
+ * is none, and re-binds an environment-backed one whose key was rotated (the
+ * fingerprint differs → the query starts over, like any changed key). A key an
+ * admin saved in the app is never replaced by it — the admin's choice wins
+ * until they disconnect. Nothing about the key itself is ever stored.
+ */
+export async function ensureEnvKlaviyoConnection(): Promise<'none' | 'created' | 'rebound' | 'unchanged' | 'admin_key' | 'misconfigured'> {
+  const raw = (process.env.KLAVIYO_PRIVATE_API_KEY || '').trim();
+  if (!raw) return 'none';
+  const key = envKlaviyoKey();
+  const orgRef = envKlaviyoOrgRef();
+  if (!key) {
+    warnEnvOnce('not a private key (pk_…)');
+    return 'misconfigured';
+  }
+  if (!orgRef) {
+    warnEnvOnce('KLAVIYO_ORG_ID is not set');
+    return 'misconfigured';
+  }
+  const org = await runWithOrg(null, () =>
+    prisma.organization.findFirst({ where: { OR: [{ id: orgRef }, { slug: orgRef }] }, select: { id: true } }),
+  );
+  if (!org || (await verticalFor(org.id)) !== 'MARKETING') {
+    warnEnvOnce('KLAVIYO_ORG_ID names no MARKETING organization');
+    return 'misconfigured';
+  }
+  const ref = envKeyRef(key);
+  return runWithOrg(org.id, async () => {
+    const existing = await prisma.externalConnection.findFirst({
+      where: { orgId: org.id, provider: KLAVIYO_PROVIDER },
+      select: { sealedKey: true, connectedById: true },
+    });
+    if (existing && keySourceOf(existing.sealedKey) === 'db') return 'admin_key';
+    if (existing?.sealedKey === ref) return 'unchanged';
+    await bindKlaviyoKey(org.id, key, ref, existing?.connectedById ?? null);
+    await logActivity({
+      action: 'integration.klaviyo.connected',
+      level: 'warning',
+      orgId: org.id,
+      actorId: null,
+      targetType: 'ExternalConnection',
+      detail: existing ? 'environment key rotated' : 'environment key',
+    });
+    return existing ? 'rebound' : 'created';
   });
 }
 
@@ -186,6 +277,15 @@ export async function setKlaviyoEnabled(orgId: string, enabled: boolean): Promis
     where: { orgId, provider: KLAVIYO_PROVIDER },
     // Switching back on clears the backoff so the next tick tries at once.
     data: enabled ? { enabled, failures: 0, nextAttemptAt: null } : { enabled },
+  });
+  return count > 0;
+}
+
+/** The connection's ignored-number list (normalized, ≤ 50 numbers). False when not connected. */
+export async function setKlaviyoIgnoredPhones(orgId: string, text: string): Promise<boolean> {
+  const { count } = await prisma.externalConnection.updateMany({
+    where: { orgId, provider: KLAVIYO_PROVIDER },
+    data: { ignoredPhones: normalizeIgnoredPhonesText(text) || null },
   });
   return count > 0;
 }
@@ -211,7 +311,7 @@ export async function savedKlaviyoKey(orgId: string): Promise<string | null> {
     where: { orgId, provider: KLAVIYO_PROVIDER },
     select: { sealedKey: true },
   });
-  return row ? open(row.sealedKey, KLAVIYO_SECRET_PURPOSE) : null;
+  return row ? openConnectionKey(row.sealedKey) : null;
 }
 
 export { testKlaviyoKey };
@@ -262,6 +362,60 @@ interface PageContext {
   owner: MarketingImportOwner;
   startStage: string;
   listNames: ReadonlyMap<string, string>;
+  /** The connection's ignored numbers as phone keys (parseIgnoredPhones). */
+  ignoredPhones?: ReadonlySet<string>;
+}
+
+/**
+ * Blank the phone of every profile on this page whose number is not a person's
+ * (docs/integrations/klaviyo.md § Phones): an ignored number, or one that at
+ * least KLAVIYO_SHARED_PHONE_MIN different people carry — the people on this
+ * page (by address) plus the accounts of this org that already hold it (by
+ * account, not counting an account whose contact is one of this page's
+ * holders, so a re-synced profile is not counted twice). Returns how many
+ * phones were dropped.
+ */
+async function dropNonPersonalPhones(ctx: PageContext, rows: { value: KlaviyoLead }[]): Promise<number> {
+  const holders = new Map<string, Set<string>>();
+  const raws = new Set<string>();
+  for (const r of rows) {
+    const key = phoneKey(r.value.phone);
+    if (!key) continue;
+    raws.add(r.value.phone);
+    const people = holders.get(key) ?? new Set<string>();
+    people.add(`p:${r.value.email || r.value.profileId}`);
+    holders.set(key, people);
+  }
+  if (!holders.size) return 0;
+  const [leads, companies] = await Promise.all([
+    prisma.user.findMany({
+      where: { orgId: ctx.orgId, role: 'MENTEE', phone: { in: [...raws] } },
+      select: { phone: true, companyId: true, company: { select: { contactEmail: true } } },
+    }),
+    prisma.company.findMany({
+      where: { orgId: ctx.orgId, contactPhone: { in: [...raws] } },
+      select: { id: true, contactPhone: true, contactEmail: true },
+    }),
+  ]);
+  const add = (phone: string | null, companyId: string | null, contactEmail: string | null | undefined) => {
+    const key = phoneKey(phone);
+    const people = key ? holders.get(key) : undefined;
+    if (!people || !companyId) return;
+    const email = (contactEmail ?? '').toLowerCase();
+    if (email && people.has(`p:${email}`)) return;
+    people.add(`c:${companyId}`);
+  };
+  for (const l of leads) add(l.phone, l.companyId, l.company?.contactEmail);
+  for (const c of companies) add(c.contactPhone, c.id, c.contactEmail);
+  const drop = nonPersonalPhoneKeys(holders, ctx.ignoredPhones ?? new Set());
+  let dropped = 0;
+  for (const r of rows) {
+    if (drop.has(phoneKey(r.value.phone))) {
+      r.value.phone = '';
+      dropped += 1;
+    }
+  }
+  return dropped;
 }
 
 function sourceNameOf(lead: KlaviyoLead): string | null {
@@ -656,6 +810,10 @@ async function applyCreates(
       owner: ctx.owner,
       rows: batch.map((p) => accountFields(p.row.value, ctx.startStage, p.name)),
       createdBySource: KLAVIYO_CREATED_BY,
+      // Unassigned (docs/integrations/klaviyo.md § Who owns a new lead): the
+      // account and the lead person, no funnel record — a rep takes it from the
+      // pool, or an admin assigns it.
+      leadOnly: true,
       dryRun,
     });
     const leadIds = await standInLeads(
@@ -781,7 +939,10 @@ export async function syncProfilesPage(
       if (!mapped.ok) return { ok: false, row: row.row, key: mapped.key, status: 'SKIP', reason: mapped.reason };
       return { ok: true, row: row.row, key: mapped.lead.profileId, value: mapped.lead };
     },
-    resolve: (rows) => resolvePage(ctx, rows),
+    resolve: async (rows) => {
+      await dropNonPersonalPhones(ctx, rows);
+      return resolvePage(ctx, rows);
+    },
     // ONE writer for the run and the preview (#1432): creates go through the
     // same account writer in its preview mode, so a profile that the real run
     // would link to an existing account by name previews as that UPDATE too.
@@ -844,9 +1005,22 @@ function oldestErrored(rows: RowResult<KlaviyoPlan>[]): Date | null {
   return oldest;
 }
 
-/** Who owns a new lead: the org's default lead owner, else the admin who connected. */
+/**
+ * The user the import writer plans the run as. NOT an owner of the leads: the
+ * connector opens no funnel record (`leadOnly`), so a new lead belongs to
+ * nobody until a rep takes it or an admin assigns it. The writer still needs a
+ * user of the org for its plan and its activity actor: the default lead owner,
+ * else the admin who connected, else any active admin of the org.
+ */
 async function leadOwnerFor(orgId: string, connectedById: string | null): Promise<MarketingImportOwner | null> {
-  return (await resolveDefaultLeadOwner(orgId)) ?? (connectedById ? await findLeadOwner(orgId, connectedById) : null);
+  const known = (await resolveDefaultLeadOwner(orgId)) ?? (connectedById ? await findLeadOwner(orgId, connectedById) : null);
+  if (known) return known;
+  const admin = await prisma.user.findFirst({
+    where: { orgId, role: 'ADMIN', isActive: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  return admin ? findLeadOwner(orgId, admin.id) : null;
 }
 
 /**
@@ -863,7 +1037,7 @@ export async function runKlaviyoSync(
   const empty = (outcome: KlaviyoRunOutcome): KlaviyoRunResult => ({ outcome, pages: 0, counts, initial: false, initialCompleted: false });
   const lease = klaviyoLeaseName(connectionId);
   const holder = `${replicaId().slice(0, 150)}:${randomUUID()}`;
-  if (!(await acquireLease(lease, holder, KLAVIYO_LEASE_TTL_MS))) return empty('busy');
+  if (!(await acquireLease(lease, holder, KLAVIYO_LEASE_TTL_MS, { store: prismaLeaseStore() }))) return empty('busy');
   try {
     const row = await runWithOrg(null, () =>
       prisma.externalConnection.findUnique({
@@ -882,6 +1056,7 @@ export async function runKlaviyoSync(
           initialSyncDoneAt: true,
           failures: true,
           totalCreated: true,
+          ignoredPhones: true,
         },
       }),
     );
@@ -889,7 +1064,7 @@ export async function runKlaviyoSync(
     if (!row.enabled) return empty('disabled');
     return await runWithOrg(row.orgId, () => runLocked(row, opts, counts));
   } finally {
-    await releaseLease(lease, holder);
+    await releaseLease(lease, holder, { store: prismaLeaseStore() });
   }
 }
 
@@ -907,6 +1082,7 @@ async function runLocked(
     initialSyncDoneAt: Date | null;
     failures: number;
     totalCreated: number;
+    ignoredPhones: string | null;
   },
   opts: { trigger: 'schedule' | 'manual'; maxPages?: number; now?: () => Date; client?: KlaviyoClientOptions },
   counts: Record<RowStatus, number>,
@@ -945,7 +1121,7 @@ async function runLocked(
   // vertical keeps its row but imports nothing.
   if ((await verticalFor(orgId)) !== 'MARKETING') return { outcome: 'disabled', pages: 0, counts, initial, initialCompleted };
 
-  const key = open(row.sealedKey, KLAVIYO_SECRET_PURPOSE);
+  const key = openConnectionKey(row.sealedKey);
   if (!key) return fail('key_unreadable');
   const owner = await leadOwnerFor(orgId, row.connectedById);
   if (!owner) return fail('no_owner');
@@ -953,7 +1129,14 @@ async function runLocked(
   try {
     const stages = await resolvePipelineStages(orgId);
     const listNames = await fetchListNames(key, opts.client);
-    const ctx: PageContext = { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames };
+    const ctx: PageContext = {
+      orgId,
+      connectionId: row.id,
+      owner,
+      startStage: startStageKey(stages),
+      listNames,
+      ignoredPhones: parseIgnoredPhones(row.ignoredPhones),
+    };
     let cursor: ProfilesCursor = beginQuery(
       {
         since: row.profilesSince,
@@ -1047,12 +1230,18 @@ async function runLocked(
         : `trigger=${opts.trigger} pages=${pages} ${Object.entries(counts).map(([s, n]) => `${s}=${n}`).join(' ')}`,
     });
   }
-  // The owner's bell, once per run — never during the silent first import.
+  // One bell per run for everyone who can take a lead — never during the silent
+  // first import. The new leads are unassigned: an ADMIN reads the filtered
+  // accounts list, a sales rep (MENTOR) the pool on /sales.
   if (!initial && counts.CREATE > 0) {
-    // An ADMIN reads the filtered accounts list; a sales rep (MENTOR, the other
-    // lead-owner role) has no admin shell — their door is their own accounts.
-    const href = owner.role === 'ADMIN' ? '/admin/companies?source=klaviyo' : '/sales/accounts';
-    await notify(owner.id, 'integration.newLeads', { count: counts.CREATE, provider: 'Klaviyo' }, href);
+    const people = await prisma.user.findMany({
+      where: { orgId, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+      select: { id: true, role: true },
+    });
+    for (const p of people) {
+      const href = p.role === 'ADMIN' ? '/admin/companies?source=klaviyo' : '/sales#lead-pool';
+      await notify(p.id, 'integration.newLeads', { count: counts.CREATE, provider: 'Klaviyo' }, href);
+    }
   }
   return { outcome, pages, counts, initial, initialCompleted };
 }
@@ -1062,10 +1251,10 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
   return runWithOrg(orgId, async () => {
     const row = await prisma.externalConnection.findFirst({
       where: { orgId, provider: KLAVIYO_PROVIDER },
-      select: { id: true, sealedKey: true, connectedById: true },
+      select: { id: true, sealedKey: true, connectedById: true, ignoredPhones: true },
     });
     if (!row) return { ok: false as const, code: 'not_connected' };
-    const key = open(row.sealedKey, KLAVIYO_SECRET_PURPOSE);
+    const key = openConnectionKey(row.sealedKey);
     if (!key) return { ok: false as const, code: 'key_unreadable' };
     const owner = await leadOwnerFor(orgId, row.connectedById);
     if (!owner) return { ok: false as const, code: 'no_owner' };
@@ -1074,7 +1263,7 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
     const stages = await resolvePipelineStages(orgId);
     const listNames = await fetchListNames(key, opts.client);
     const report = await syncProfilesPage(
-      { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames },
+      { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames, ignoredPhones: parseIgnoredPhones(row.ignoredPhones) },
       page.data.profiles,
       { dryRun: true },
     );
@@ -1105,6 +1294,11 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
  */
 export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoClientOptions } = {}) {
   const clock = opts.now ?? (() => new Date());
+  try {
+    await ensureEnvKlaviyoConnection();
+  } catch (e) {
+    logger.error('klaviyo environment key binding failed', { error: e instanceof Error ? e.name : 'unknown' });
+  }
   const rows = await runWithOrg(null, () =>
     prisma.externalConnection.findMany({
       where: { provider: KLAVIYO_PROVIDER, enabled: true },
@@ -1112,19 +1306,29 @@ export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoC
       orderBy: { lastSyncAt: 'asc' },
     }),
   );
-  const tick = { connections: rows.length, due: 0, ok: 0, failed: 0, busy: 0, created: 0 };
+  const tick = { connections: rows.length, due: 0, ok: 0, failed: 0, busy: 0, created: 0, resourcesFailed: 0 };
   const started = clock().getTime();
+  const pass = { ...(opts.now ? { now: opts.now } : {}), ...(opts.client ? { client: opts.client } : {}) };
   for (const row of rows) {
-    if (!isDue(row.nextAttemptAt, clock())) continue;
     // Bounded tick: what does not fit runs on the next one.
     if (clock().getTime() - started > 10 * 60 * 1000) break;
-    tick.due += 1;
     try {
-      const r = await runKlaviyoSync(row.id, { trigger: 'schedule', ...(opts.now ? { now: opts.now } : {}), ...(opts.client ? { client: opts.client } : {}) });
-      if (r.outcome === 'busy') tick.busy += 1;
-      else if (r.outcome === 'error') tick.failed += 1;
-      else tick.ok += 1;
-      tick.created += r.counts.CREATE;
+      let busy = false;
+      if (isDue(row.nextAttemptAt, clock())) {
+        tick.due += 1;
+        const r = await runKlaviyoSync(row.id, { trigger: 'schedule', ...pass });
+        busy = r.outcome === 'busy';
+        if (busy) tick.busy += 1;
+        else if (r.outcome === 'error') tick.failed += 1;
+        else tick.ok += 1;
+        tick.created += r.counts.CREATE;
+      }
+      // Then everything else. Each resource keeps its own schedule and backoff,
+      // so a profile run that failed or is backed off holds nothing else back.
+      if (!busy) {
+        const res = await runKlaviyoResources(row.id, { trigger: 'schedule', ...pass });
+        tick.resourcesFailed += res.failed;
+      }
     } catch (e) {
       tick.failed += 1;
       logger.error('klaviyo sync crashed', { connectionId: row.id, error: e instanceof Error ? e.name : 'unknown' });
@@ -1133,26 +1337,8 @@ export async function runKlaviyoTick(opts: { now?: () => Date; client?: KlaviyoC
   return tick;
 }
 
-let cronStarted = false;
-
-/**
- * Registers the 15-minute schedule in this process. Idempotent. One tick per
- * environment because replica ≥ 2 runs with CRON_ENABLED=0 (CLAUDE.md §
- * Single-owner background work) — and the per-connection lease makes a second
- * runner harmless anyway: it answers `busy` and moves on.
- */
-export function initKlaviyoSyncCron(): void {
-  if (cronStarted) return;
-  cronStarted = true;
-  // The expression is a literal on purpose: src/lib/jobs/schedules.ts names
-  // it and the registry test reads it from this call (KLAVIYO_SYNC_CRON).
-  scheduleLeased('*/15 * * * *', async () => {
-    try {
-      const tick = await runKlaviyoTick();
-      if (tick.due > 0) logger.info('klaviyo sync tick', { ...tick });
-    } catch (e) {
-      logger.error('klaviyo sync cron failed', { error: e instanceof Error ? e.name : 'unknown' });
-    }
-  });
-}
+// Scheduled as the queued job `klaviyo.sync` (src/lib/jobs/schedules.ts,
+// handler in src/jobs/platform.ts, #1677): only the 'scheduler' lease holder
+// enqueues it, and the per-connection lease makes a second runner harmless
+// anyway — it answers `busy` and moves on.
 

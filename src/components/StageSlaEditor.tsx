@@ -93,14 +93,19 @@ export function StageSlaEditor() {
           which box it belonged to. */}
       <div className="flex items-center gap-3 text-xs text-gray-500 mb-1 px-1">
         <span className="flex-1" />
-        <span className="w-16 sm:w-24">{t.stageSla.days}</span>
-        <span className="w-16 sm:w-24">{t.stageSla.escalateAfter}</span>
-        <span className="w-16 sm:w-24">{t.stageSla.wipLimit}</span>
+        <span className="w-20 sm:w-24">{t.stageSla.days}</span>
+        <span className="w-20 sm:w-24">{t.stageSla.escalateAfter}</span>
+        <span className="w-20 sm:w-24">{t.stageSla.wipLimit}</span>
       </div>
       <div className="space-y-2" data-testid="stage-sla-rows">
         {rows.map((r, i) => (
-          <div key={r.key} className="flex items-center gap-3 text-sm">
-            <span className="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
+          /* Three number inputs (days, escalation, WIP — #1722) leave a phone's
+             label ~50px, too narrow to say which stage it is: below sm the label
+             takes its own line and the inputs wrap under it, right-aligned under
+             their column headings (e2e/mobile-layout-coverage.spec.ts, the
+             stage-SLA row case). w-20 there: "Eskalieren nach" overflowed w-16. */
+          <div key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="basis-full sm:basis-auto flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
               {r.label}
               {r.isOffPath && <span className="ml-2 text-xs text-gray-400">({t.stageSla.offPath})</span>}
             </span>
@@ -117,7 +122,7 @@ export function StageSlaEditor() {
                 const days = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, days } : row)));
               }}
-              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="ml-auto w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
             />
             <input
               type="number"
@@ -134,7 +139,7 @@ export function StageSlaEditor() {
                 const escalateAfterDays = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, escalateAfterDays } : row)));
               }}
-              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm disabled:opacity-50"
+              className="w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm disabled:opacity-50"
             />
             <input
               type="number"
@@ -155,7 +160,7 @@ export function StageSlaEditor() {
                 const wipLimit = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, wipLimit } : row)));
               }}
-              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
             />
           </div>
         ))}

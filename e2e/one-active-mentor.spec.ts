@@ -172,7 +172,8 @@ test('reopening a completed mentorship is refused while another one is active', 
   try {
     await signIn(page, adminEmail, '/admin');
 
-    const res = await page.request.put(`/api/mentorship/${relA.id}`, { data: { status: 'ACTIVE' } });
+    // The reopen lives on the lifecycle endpoint since #1770 (PUT no longer takes `status`).
+    const res = await page.request.post(`/api/mentorship/${relA.id}/lifecycle`, { data: { to: 'ACTIVE' } });
     expect(res.status()).toBe(409);
     expect((await res.json()).code).toBe('already_mentored');
 

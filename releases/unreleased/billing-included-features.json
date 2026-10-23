@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Included features on /admin/billing, and org grants move to one super-admin endpoint (#1734):** a second tab lists what the tenant may use, each feature marked *plan* or *override* (with a time-boxed grant's end date), plus the trial banner, the cancel-at-period-end notice and a placeholder \"Manage billing\" slot. `GET /api/org/billing` now carries `features` (from `resolveOrgEntitlements()` — the same resolver `entitled()` asks, via the pure `billingFeatureRows()`) and `canGrant`; the page fetches it ONCE (`OrgBillingProvider`) and every tab reads that payload. New `POST /api/admin/billing/entitlements` grants or revokes an `OrgEntitlement` (`note`, future `expiresAt`, `KNOWN_GRANTABLE_FEATURES` only) for a **super admin of the target org's world** only (`isSuperAdminFor`; tenant admin 403, other world 404), audited as `admin.org_entitlement.grant|revoke`; it takes effect on the next `entitled()` call. The per-company grid (`CompanyEntitlements`) is read-only — it shows where each feature comes from and links to Billing — and its `PUT` (and `setCompanyFeature()`) is removed: a tenant admin could switch a paid feature on for one company. Legacy `CompanyEntitlement` rows are still honoured for grandfathering.",
-  "notes": {
-    "en": ["Billing now shows which features your plan includes and which were granted on top, with the end date of any time-limited grant."],
-    "tr": ["Faturalandırma artık planınızın hangi özellikleri içerdiğini ve hangilerinin ek olarak tanımlandığını, süreli tanımların bitiş tarihiyle birlikte gösteriyor."],
-    "de": ["Die Abrechnung zeigt jetzt, welche Funktionen Ihr Plan enthält und welche zusätzlich freigeschaltet wurden, samt Enddatum befristeter Freischaltungen."]
-  }
-}

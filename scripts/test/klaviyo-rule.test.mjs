@@ -5,6 +5,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   KLAVIYO_ATTRIBUTES_MAX,
+  KLAVIYO_MAX_ATTEMPTS,
+  KLAVIYO_REQUIRED_SCOPES,
+  isEnvKeyRef,
+  resolveKlaviyoRevision,
+  retryDelayMs,
   KLAVIYO_ERROR_RETRY_QUERIES,
   KLAVIYO_PROPERTY_LIMIT,
   KLAVIYO_REVISION,
@@ -53,6 +58,43 @@ test('every request carries the private-key header and the pinned revision', () 
   assert.equal(h.Authorization, 'Klaviyo-API-Key pk_test1234567890');
   assert.equal(h.revision, KLAVIYO_REVISION);
   assert.match(KLAVIYO_REVISION, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('the revision: a GA date from the environment, else the default; never a beta one', () => {
+  assert.equal(KLAVIYO_REVISION, '2026-10-15');
+  assert.deepEqual(resolveKlaviyoRevision(undefined), { revision: KLAVIYO_REVISION, ok: true });
+  assert.deepEqual(resolveKlaviyoRevision(' 2026-07-15 '), { revision: '2026-07-15', ok: true });
+  assert.deepEqual(resolveKlaviyoRevision('2026-10-15.pre'), { revision: KLAVIYO_REVISION, ok: false });
+  assert.deepEqual(resolveKlaviyoRevision('2024-10-15'), { revision: KLAVIYO_REVISION, ok: false });
+  assert.deepEqual(resolveKlaviyoRevision('2026-13-45'), { revision: KLAVIYO_REVISION, ok: false });
+  assert.equal(klaviyoHeaders('pk_test1234567890', '2026-07-15').revision, '2026-07-15');
+});
+
+test('scopes: read-only, one per resource, and never a write scope', () => {
+  assert.ok(KLAVIYO_REQUIRED_SCOPES.includes('profiles:read'));
+  for (const s of ['lists', 'segments', 'metrics', 'events', 'campaigns', 'flows']) assert.ok(KLAVIYO_REQUIRED_SCOPES.includes(`${s}:read`));
+  assert.ok(KLAVIYO_REQUIRED_SCOPES.every((s) => s.endsWith(':read')));
+});
+
+test('retry: a short Retry-After is waited out, a long one is the run\'s; 5xx doubles with jitter; 4xx never retries', () => {
+  const mid = () => 0.5;
+  assert.equal(retryDelayMs(1, { status: 429, retryAfterMs: 2000 }, mid), 2000);
+  assert.equal(retryDelayMs(1, { status: 429, retryAfterMs: 0 }, mid), 250);
+  assert.equal(retryDelayMs(1, { status: 429, retryAfterMs: 60_000 }, mid), null);
+  assert.equal(retryDelayMs(1, { status: 429, retryAfterMs: null }, mid), 1000);
+  assert.equal(retryDelayMs(2, { status: 429, retryAfterMs: null }, mid), null);
+  assert.deepEqual([1, 2, 3].map((n) => retryDelayMs(n, { status: 502 }, mid)), [1000, 2000, 4000]);
+  assert.equal(retryDelayMs(1, { status: 502 }, () => 0), 750);
+  assert.equal(retryDelayMs(1, { status: 502 }, () => 1), 1250);
+  assert.equal(retryDelayMs(KLAVIYO_MAX_ATTEMPTS, { status: 502 }, mid), null);
+  assert.equal(retryDelayMs(1, {}, mid), 1000); // network
+  for (const status of [400, 401, 403, 404]) assert.equal(retryDelayMs(1, { status }, mid), null);
+});
+
+test('an environment key is referenced by its fingerprint, never sealed', () => {
+  assert.equal(isEnvKeyRef('env:0123abcd'), true);
+  assert.equal(isEnvKeyRef('v1.abc.def.ghi'), false);
+  assert.equal(isEnvKeyRef(null), false);
 });
 
 test('the profiles query: page size 100, sorted by updated, subscriptions, updated filter, cursor', () => {
@@ -294,4 +336,43 @@ test('a batch of import rows: one header for the union, blank cells for what a r
   assert.equal(table.rows[0].values[col('country')], '');
   assert.equal(table.rows[1].values[col('contact_email')], '');
   assert.equal(table.rows[1].values[col('country')], 'DE');
+});
+
+// ── Phones that are not a person's ───────────────────────────────────────────
+
+import {
+  KLAVIYO_SHARED_PHONE_MIN,
+  nonPersonalPhoneKeys,
+  normalizeIgnoredPhonesText,
+  parseIgnoredPhones,
+  phoneKey,
+} from '../../src/lib/klaviyoRule.ts';
+
+test('a phone key compares numbers by their last digits, whatever the formatting', () => {
+  assert.equal(phoneKey('+49 176 84708200'), phoneKey('0049 17684708200'));
+  assert.equal(phoneKey('+4917684708200'), phoneKey('0176 84708200'));
+  assert.equal(phoneKey('+49 (30) 123-4567'), phoneKey('030 1234567'));
+  assert.equal(phoneKey('12345'), '');
+  assert.equal(phoneKey(''), '');
+  assert.equal(phoneKey(null), '');
+});
+
+test('the ignored list: one per line or comma, junk dropped, stored normalized and de-duplicated', () => {
+  const keys = parseIgnoredPhones('+49 30 1234567\n0176 84708200, x, 12');
+  assert.ok(keys.has(phoneKey('030 1234567')));
+  assert.ok(keys.has(phoneKey('+4917684708200')));
+  assert.equal(keys.size, 2);
+  assert.equal(normalizeIgnoredPhonesText(' +49 30 1234567 \n030 1234567\nfoo\n0176 84708200'), '+49 30 1234567\n0176 84708200');
+  assert.equal(parseIgnoredPhones(null).size, 0);
+});
+
+test('a number is not a person\'s when it is ignored or at least N different people carry it', () => {
+  const holders = new Map([
+    ['111111111', new Set(['p:a', 'p:b', 'c:x'])],
+    ['222222222', new Set(['p:a', 'p:b'])],
+    ['333333333', new Set(['p:c'])],
+  ]);
+  assert.equal(KLAVIYO_SHARED_PHONE_MIN, 3);
+  assert.deepEqual([...nonPersonalPhoneKeys(holders, new Set())], ['111111111']);
+  assert.deepEqual([...nonPersonalPhoneKeys(holders, new Set(['333333333']))].sort(), ['111111111', '333333333']);
 });

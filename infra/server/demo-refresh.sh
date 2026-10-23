@@ -106,8 +106,29 @@ for i in $(seq 1 20); do
   sleep 1
 done
 
+# The pre-push steps below come from the image. Check it carries their runner
+# BEFORE wiping: a --data-only reset on a container older than the runner stops
+# here with the data still in place (the next --image refresh brings it),
+# instead of wiping and then dying on the push.
+if ! run test -f prisma/run-pre-push.mjs; then
+  echo "ERROR: ${CONTAINER} runs an image without prisma/run-pre-push.mjs (#3144)." >&2
+  echo "Refresh it with --image (the next preview deploy does). Nothing was wiped." >&2
+  exit 1
+fi
+
 log "Wiping (refuses anything not named *_demo)"
 run node prisma/reset-demo.mjs
+# The wipe TRUNCATEs, it does not drop: the tables keep whatever schema the demo
+# last ran, which can be many releases old (the demo refresh failed on every
+# deploy from the 2026-10-21 runner outage until #3127). So the steps prod and
+# topic envs run before their push must run here too, from the SAME list
+# (prisma/pre-push/registry.mjs, #3144). A plain push from an older schema dies
+# on, e.g., "Cannot drop index 'Setting_orgId_key_key': needed in a foreign key
+# constraint" (#1619). The tables are empty here, so the backfills are no-ops.
+# Wiping first is deliberate: empty tables accept every contract step, even one
+# whose backfill (prisma/backfills/registry.mjs) never ran on the demo.
+log "Pre-push steps (prisma/pre-push/registry.mjs, the list prod runs)"
+run node prisma/run-pre-push.mjs
 log "Re-applying the schema"
 run npx prisma db push --accept-data-loss --skip-generate
 log "Seeding the first admin"

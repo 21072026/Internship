@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**Skill vocabulary is an internship module (#3150):** `/admin/skills` and every `/api/admin/skills/*` handler are now gated on the `mentorship` capability — its only consumers are mentor suggestion and candidate ↔ requisition matching. A MARKETING tenant no longer sees the sidebar entry, the URL answers 404 and the APIs refuse; INTERNSHIP is unchanged.",
+  "notes": {
+    "en": [
+      "The sales CRM no longer shows the Skills screen — it only fed mentor and candidate matching."
+    ],
+    "tr": [
+      "Satış CRM'inde Beceriler ekranı artık görünmüyor — yalnızca mentor ve aday eşleştirmesini besliyordu."
+    ],
+    "de": [
+      "Im Vertriebs-CRM erscheint der Bildschirm „Fähigkeiten“ nicht mehr — er diente nur dem Mentoren- und Kandidaten-Matching."
+    ]
+  }
+}

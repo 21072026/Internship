@@ -20,6 +20,8 @@ import { loadSalesTargetView } from '@/lib/salesTarget';
 import { SalesTargetCards } from '@/components/SalesTargetCards';
 import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
 import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
+import { verticalFor } from '@/lib/verticalContext';
+import { LeadPoolCard } from '@/components/sales/LeadPoolCard';
 
 // The sales rep's dashboard (#2580): their own attention queue and their own
 // records. Every read is the rep's rows only (`mentorId = self`) AND the rep's
@@ -74,6 +76,8 @@ export default async function SalesDashboard() {
   const stages = await resolvePipelineStages(session.user.orgId, locale);
   const date = (value: Date) => formatDate(value, locale, { timeZone: 'UTC' });
   const canCreateLead = await salesLeadCreateAvailable(session.user.orgId, capabilities);
+  // The unassigned lead pool (src/lib/leadClaim.ts): marketing only.
+  const showPool = (await verticalFor(session.user.orgId ?? '')) === 'MARKETING';
 
   return (
     <div data-testid="sales-dashboard">
@@ -84,6 +88,8 @@ export default async function SalesDashboard() {
         </div>
         {canCreateLead && <NewSalesLeadButton />}
       </div>
+
+      {showPool && <LeadPoolCard />}
 
       <MentorAttentionQueue items={attention.items} usage={attention.usage} t={t} locale={locale} hrefBase="/sales/leads" />
 

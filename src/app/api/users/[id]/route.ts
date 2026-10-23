@@ -6,7 +6,8 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
-import { isPendingActivation, isErasedAccount, isUnusableEmail } from '@/lib/menteeAccount';
+import { isPendingActivation, isErasedAccount, isUnusableEmail, isPlaceholderEmail } from '@/lib/menteeAccount';
+import { verticalFor } from '@/lib/verticalContext';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { notify } from '@/lib/notify';
 import { roleHome } from '@/lib/roleHome';
@@ -64,6 +65,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           cvUrl: true,
           createdAt: true,
           mentorCapacity: true,
+          // A lead record's real address lives on its account (the user row
+          // holds a generated stand-in) — shown instead of the stand-in.
+          company: { select: { contactEmail: true } },
           // For mentor detail: their active mentees, pipeline stage, and the raw
           // evaluation scores (averaged on the client for a workload/quality view).
           mentorRelations: {
@@ -102,7 +106,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       // A mentee record typed in by a mentor (or imported) has a sentinel where
       // the hash goes and can never sign in — the candidate page offers to fix
       // the address and send the activation link (#1123).
-      const { password, ...rest } = user;
+      const { password, company, ...rest } = user;
+      // A marketing lead is a RECORD on the org's follow-up list, never a login
+      // (docs/integrations/klaviyo.md § Who owns a new lead): no activation
+      // offer, no password reset — and the address shown is the real one from
+      // its account, not the generated stand-in the row carries.
+      const standIn = isPlaceholderEmail(rest.email);
+      const leadRecord =
+        rest.role === 'MENTEE' && standIn && (await verticalFor(session.user.orgId ?? '')) === 'MARKETING';
+      const contactEmail = standIn ? (company?.contactEmail ?? null) : rest.email;
 
       // "Next action" on the candidate page counts from the last CONTACT, which
       // includes the 1:1 message thread and not only the interaction log — the
@@ -124,6 +136,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
             ),
           })),
           pendingActivation: isPendingActivation({ password }),
+          leadRecord,
+          contactEmail,
         },
       });
     });
