@@ -245,6 +245,32 @@ A partner exists before its account (the admin creates it, or a migration does).
 - The invitation is world-bound like every other (`docs/worlds.md`): a token of a
   MARKETING organisation is unknown on any other host.
 
+## The partner portal
+
+`/affiliate` and its pages are server-rendered from the session: the partner is
+never taken from the request. Every page except `/affiliate/contract` calls
+`requirePortalPartner()` (`src/lib/affiliatePortal.ts`), which sends a partner who
+has not accepted the current contract to the contract page; the API refuses the
+same partner with 409 `contract_not_accepted`, so the page is a convenience, not
+the check.
+
+- **Home:** the referral link, the customer count and the totals per commission
+  status, and a notice while the partnership is suspended or ending.
+- **Referral link:** organisation data. `AffiliateProgramSettings.referralUrl`
+  (admin settings, `PUT /api/admin/affiliate/settings/referral-url`, audited
+  `affiliate.referral_url.update`) is an https base URL without credentials,
+  fragment or its own `ref`; the link is that URL with `ref=<code>` set
+  (`src/lib/affiliateReferralRule.ts`, unit-tested). Without one the portal shows
+  the code alone.
+- **Customers, commissions, payouts:** read through `src/lib/affiliatePartnerView.ts`,
+  narrowed by `affiliateRowScope()` to the partner's own rows. A partner sees its
+  customers' opaque references, payment amounts and dates, commissions and payouts
+  (with the transfer reference) — never a payment's own reference, who entered a
+  row, or another partner's rows. Another partner's payout page is 404.
+- **Bank details:** entered on `/affiliate/payout-details` through the existing
+  partner API (2FA policy, impersonation refusal, sealed, audited, announced); the
+  stored IBAN is shown masked and never read back into the form.
+
 ## Migration from a previous system
 
 A one-off script under `prisma/`, dry-run by default, developed against synthetic

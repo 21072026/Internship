@@ -8073,6 +8073,9 @@ model AffiliateProgramSettings {
   // When the current plan version took effect. Payments RECORDED before it never
   // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
   planEffectiveAt DateTime?
+  // The base URL a partner's referral link is built on (src/lib/affiliateReferralRule.ts):
+  // https, the partner's code set as ?ref=. Null: the portal shows the code alone.
+  referralUrl     String?      @db.VarChar(500)
   // Locale maps ({ en, tr, de }): the public programme page and the partner contract.
   landing         Json?
   contract        Json?

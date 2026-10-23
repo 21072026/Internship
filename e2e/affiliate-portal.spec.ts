@@ -1,0 +1,169 @@
+import crypto from 'node:crypto';
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
+import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
+
+/**
+ * The partner portal (docs/affiliate-module.md, #3117).
+ *
+ * A partner reads its own referral link, totals, customers, commissions and
+ * payouts — and nothing of another partner's: another partner's payout page is
+ * 404, like one that does not exist. Bank details are entered in the portal and
+ * shown masked. The referral base URL is the admin's setting, validated.
+ * @smoke: a data-isolation boundary.
+ *
+ * SYNTHETIC ONLY: a throwaway MARKETING org per run, example hosts, XTS-free EUR amounts.
+ */
+
+const PW = 'AffPortal123!';
+const host = asHost(MARKETING_HOST);
+let orgId = '';
+let adminEmail = '';
+let mineEmail = '';
+let theirsEmail = '';
+const ids = { mine: '', theirs: '', myPayout: '', theirPayout: '' };
+const contexts: APIRequestContext[] = [];
+
+test.describe.configure({ mode: 'serial' });
+
+/** A customer with one paid payment and its commission, inside a payout. */
+async function seedPartnerData(partnerId: string, ref: string, paymentMinor: number, commissionMinor: number) {
+  const customer = await prisma.affiliateCustomer.create({ data: { orgId, partnerId, externalRef: ref } });
+  const receivedAt = new Date('2026-03-02T00:00:00Z');
+  const payment = await prisma.affiliatePayment.create({
+    data: { orgId, customerId: customer.id, amountMinor: paymentMinor, currency: 'EUR', receivedAt, externalPaymentRef: `${ref}-INV-SECRET` },
+  });
+  const payout = await prisma.affiliatePayout.create({
+    data: { orgId, partnerId, amountMinor: commissionMinor, currency: 'EUR', paidAt: new Date('2026-04-15T00:00:00Z'), reference: `TRX-${ref}` },
+  });
+  await prisma.affiliateCommission.create({
+    data: {
+      orgId,
+      partnerId,
+      customerId: customer.id,
+      paymentId: payment.id,
+      kind: 'TIER',
+      amountMinor: commissionMinor,
+      currency: 'EUR',
+      accruedAt: receivedAt,
+      dueAt: new Date('2026-04-01T00:00:00Z'),
+      planVersion: 1,
+      status: 'PAID',
+      payoutId: payout.id,
+      paidAt: payout.paidAt,
+    },
+  });
+  return payout.id;
+}
+
+test.beforeAll(async () => {
+  const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  orgId = (await prisma.organization.create({ data: { name: `Acme Sales ${stamp}`, slug: `aff-portal-${stamp}`, vertical: 'MARKETING' } })).id;
+  adminEmail = uniqueEmail('aff-portal-admin');
+  mineEmail = uniqueEmail('aff-portal-mine');
+  theirsEmail = uniqueEmail('aff-portal-theirs');
+  await seedUser(adminEmail, PW, 'ADMIN', 'Portal Admin', { orgId });
+  const mineUser = await seedUser(mineEmail, PW, 'AFFILIATE', 'Mine Partner', { orgId });
+  const theirsUser = await seedUser(theirsEmail, PW, 'AFFILIATE', 'Their Partner', { orgId });
+  ids.mine = (await prisma.affiliatePartner.create({ data: { orgId, userId: mineUser.id, code: 'mine-7', displayName: 'Mine' } })).id;
+  ids.theirs = (await prisma.affiliatePartner.create({ data: { orgId, userId: theirsUser.id, code: 'theirs-9', displayName: 'Theirs' } })).id;
+  await prisma.affiliateProgramSettings.create({ data: { orgId, contract: { en: 'Synthetic terms' }, contractVersion: 1 } });
+  await prisma.affiliateContractAcceptance.createMany({
+    data: [
+      { orgId, partnerId: ids.mine, version: 1 },
+      { orgId, partnerId: ids.theirs, version: 1 },
+    ],
+  });
+  ids.myPayout = await seedPartnerData(ids.mine, 'CUST-MINE', 10_000, 2_500);
+  ids.theirPayout = await seedPartnerData(ids.theirs, 'CUST-THEIRS', 20_000, 7_700);
+});
+
+test.afterAll(async () => {
+  for (const ctx of contexts) await ctx.dispose();
+  if (orgId) {
+    await prisma.affiliateCommission.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.affiliatePayout.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.affiliatePayment.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.affiliateCustomer.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.affiliateContractAcceptance.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.affiliatePartner.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.auditLog.deleteMany({ where: { orgId } }).catch(() => {});
+  }
+  for (const e of [adminEmail, mineEmail, theirsEmail]) if (e) await cleanupByEmail(e);
+  if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
+  await prisma.$disconnect();
+});
+
+test('the referral base URL is validated, stored and audited', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const admin = await playwright.request.newContext({ baseURL });
+  contexts.push(admin);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const put = (referralUrl: unknown) => admin.put('/api/admin/affiliate/settings/referral-url', { headers: host, data: { referralUrl } });
+
+  for (const [url, issue] of [
+    ['http://shop.example/', 'not_https'],
+    ['https://shop.example/?ref=x', 'has_ref'],
+    ['javascript:alert(1)', 'not_https'],
+  ] as const) {
+    const res = await put(url);
+    expect(res.status(), url).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'invalid_referral_url', issue });
+  }
+  const saved = await put(' https://shop.example/start ');
+  expect(saved.status()).toBe(200);
+  expect(await saved.json()).toMatchObject({ referralUrl: 'https://shop.example/start', changed: true });
+  expect((await (await put('https://shop.example/start')).json()).changed).toBe(false);
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.referral_url.update' } })).toBe(1);
+
+  // A partner cannot write it.
+  const partner = await playwright.request.newContext({ baseURL });
+  contexts.push(partner);
+  expect((await signInViaApi(partner, mineEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  expect((await partner.put('/api/admin/affiliate/settings/referral-url', { headers: host, data: { referralUrl: null } })).status()).toBe(403);
+});
+
+test('a partner sees its own rows only; another partner’s payout is 404', { tag: '@smoke' }, async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+
+  await expect(page.getByTestId('affiliate-referral-link')).toHaveText('https://shop.example/start?ref=mine-7');
+  await expect(page.getByTestId('affiliate-total-customers')).toContainText('1');
+  await expect(page.getByTestId('affiliate-total-PAID')).toContainText('25');
+
+  await gotoSettled(page, '/affiliate/customers');
+  const customers = page.getByTestId('affiliate-customers-table');
+  await expect(customers).toContainText('CUST-MINE');
+  await expect(customers).not.toContainText('CUST-THEIRS');
+
+  await gotoSettled(page, '/affiliate/commissions');
+  const commissions = page.getByTestId('affiliate-commissions-table');
+  await expect(commissions).toContainText('CUST-MINE');
+  await expect(commissions).not.toContainText('CUST-THEIRS');
+  // The payment's own reference stays on the admin side.
+  await expect(page.locator('body')).not.toContainText('INV-SECRET');
+
+  await gotoSettled(page, '/affiliate/payouts');
+  await expect(page.getByTestId('affiliate-payouts-table')).toContainText('TRX-CUST-MINE');
+  await expect(page.getByTestId('affiliate-payouts-table')).not.toContainText('TRX-CUST-THEIRS');
+
+  const mine = await page.goto(`/affiliate/payouts/${ids.myPayout}`);
+  expect(mine?.status()).toBe(200);
+  await expect(page.getByTestId('affiliate-payout-amount')).toContainText('25');
+  const theirs = await page.goto(`/affiliate/payouts/${ids.theirPayout}`);
+  expect(theirs?.status()).toBe(404);
+  await expect(page.locator('body')).not.toContainText('TRX-CUST-THEIRS');
+});
+
+test('bank details are entered in the portal and shown masked', { tag: '@smoke' }, async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+  await gotoSettled(page, '/affiliate/payout-details');
+
+  await page.getByTestId('affiliate-iban').fill('DE89 3704 0044 0532 0130 00');
+  await page.getByTestId('affiliate-holder').fill('Mine Partner');
+  await page.getByTestId('affiliate-save-details').click();
+  await expect(page.getByTestId('affiliate-payout-current')).toContainText('3000', { timeout: 20_000 });
+  await expect(page.getByTestId('affiliate-payout-current')).not.toContainText('370400440532');
+  await expect(page.getByTestId('affiliate-iban')).toHaveValue('');
+});

@@ -1,5 +1,6 @@
-// The programme's settings: the commission plan (docs/affiliate-module.md, #3116).
-// The ONE writer of AffiliateProgramSettings.plan / planVersion / planEffectiveAt.
+// The programme's settings: the commission plan (docs/affiliate-module.md, #3116)
+// and the referral base URL (#3117). The ONE writer of
+// AffiliateProgramSettings.plan / planVersion / planEffectiveAt / referralUrl.
 // The contract half has its own writer (src/lib/affiliateContract.ts).
 //
 // A plan change:
@@ -19,6 +20,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { parseCommissionPlan, type CommissionPlan, type PlanIssue } from '@/lib/affiliateCommissionRule';
 import { resyncPartnerCommissions } from '@/lib/affiliatePaymentWriter';
+import { parseReferralUrl, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -133,11 +135,42 @@ export async function savePlan(orgId: string, raw: unknown, actorId: string): Pr
   return { changed: true, planVersion: version, partnersResynced: resynced, resyncFailed, drift };
 }
 
+/**
+ * Sets the base URL partners' referral links are built on (null clears it). An
+ * unchanged value writes nothing; a change is audited with the old and new value
+ * (a URL of the organisation's own site, not a person's data).
+ */
+export async function saveReferralUrl(
+  orgId: string,
+  raw: unknown,
+  actorId: string,
+): Promise<{ ok: true; referralUrl: string | null; changed: boolean } | { ok: false; issue: ReferralUrlIssue }> {
+  const parsed = parseReferralUrl(raw);
+  if (!parsed.ok) return parsed;
+  const referralUrl = parsed.url;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { referralUrl: true } });
+      if ((current?.referralUrl ?? null) === referralUrl) return { ok: true as const, referralUrl, changed: false };
+      if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: { referralUrl } });
+      else await tx.affiliateProgramSettings.create({ data: { orgId, referralUrl } });
+      await tx.auditLog.create({
+        data: { orgId, actorId, action: 'affiliate.referral_url.update', detail: JSON.stringify({ from: current?.referralUrl ?? null, to: referralUrl }) },
+      });
+      return { ok: true as const, referralUrl, changed: true };
+    });
+  } catch (e) {
+    // Two first saves of one organisation: the loser hits the unique orgId; the value is the winner's.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
+    throw e;
+  }
+}
+
 export async function programSettings(orgId: string) {
   const [settings, payments] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({
       where: { orgId },
-      select: { plan: true, planVersion: true, planEffectiveAt: true, contract: true, contractVersion: true, updatedAt: true },
+      select: { plan: true, planVersion: true, planEffectiveAt: true, referralUrl: true, contract: true, contractVersion: true, updatedAt: true },
     }),
     prisma.affiliatePayment.count({ where: { orgId } }),
   ]);
@@ -146,6 +179,7 @@ export async function programSettings(orgId: string) {
     plan: parsed?.ok ? parsed.plan : null,
     planVersion: settings?.planVersion ?? 0,
     planEffectiveAt: settings?.planEffectiveAt ?? null,
+    referralUrl: settings?.referralUrl ?? null,
     contract: settings?.contract ?? null,
     contractVersion: settings?.contractVersion ?? 0,
     currencyLocked: payments > 0,

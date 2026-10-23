@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
 import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
+import { referralLink, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
 import { AffiliateTabs } from '../AffiliateTabs';
 
 // The programme's settings (docs/affiliate-module.md, #3116): the commission plan
@@ -36,6 +37,7 @@ interface Settings {
   planVersion: number;
   contract: Record<string, string>;
   contractVersion: number;
+  referralUrl: string | null;
   currencies: string[];
   canWrite: boolean;
 }
@@ -115,7 +117,9 @@ export default function AffiliateSettingsPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [issues, setIssues] = useState<Set<string>>(new Set());
   const [contract, setContract] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<'plan' | 'contract' | null>(null);
+  const [referralUrl, setReferralUrl] = useState('');
+  const [referralIssue, setReferralIssue] = useState<ReferralUrlIssue | null>(null);
+  const [busy, setBusy] = useState<'plan' | 'contract' | 'referral' | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/affiliate/settings');
@@ -131,6 +135,7 @@ export default function AffiliateSettingsPage() {
     setSettings(s);
     setForm(formFrom(s.plan, s.currencies[0] ?? 'EUR', locale));
     setContract(s.contract ?? {});
+    setReferralUrl(s.referralUrl ?? '');
   }, [locale]);
 
   useEffect(() => {
@@ -197,6 +202,30 @@ export default function AffiliateSettingsPage() {
       setBusy(null);
     }
   }
+
+  async function saveReferral() {
+    setBusy('referral');
+    setReferralIssue(null);
+    try {
+      const res = await fetch('/api/admin/affiliate/settings/referral-url', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referralUrl }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast(body.changed ? L.referralSaved : L.referralUnchanged);
+        setReferralUrl(body.referralUrl ?? '');
+      } else if (body.code === 'invalid_referral_url') {
+        setReferralIssue(body.issue);
+        toast(L.errorInvalid, 'error');
+      } else toast(body.code === 'conflict' ? L.errorConflict : L.loadFailed, 'error');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const referralPreview = referralLink(referralUrl, L.referralSampleCode);
 
   const localeLabel: Record<(typeof LOCALES)[number], string> = { en: L.localeEn, tr: L.localeTr, de: L.localeDe };
 
@@ -273,6 +302,31 @@ export default function AffiliateSettingsPage() {
           {!readOnly && (
             <Button type="button" onClick={() => void savePlan()} disabled={busy !== null} data-testid="affiliate-save-plan">
               {L.savePlan}
+            </Button>
+          )}
+        </fieldset>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{L.referralTitle}</CardTitle>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{L.referralHint}</p>
+        </CardHeader>
+        <fieldset disabled={readOnly} className="space-y-3">
+          <Input
+            label={L.referralLabel}
+            type="url"
+            inputMode="url"
+            placeholder="https://"
+            value={referralUrl}
+            error={referralIssue ? L.referralErrors[referralIssue] : undefined}
+            hint={referralPreview ? interpolate(L.referralExample, { code: L.referralSampleCode, link: referralPreview }) : undefined}
+            onChange={(e) => setReferralUrl(e.target.value)}
+            data-testid="affiliate-referral-url"
+          />
+          {!readOnly && (
+            <Button type="button" onClick={() => void saveReferral()} disabled={busy !== null} data-testid="affiliate-save-referral">
+              {L.saveReferral}
             </Button>
           )}
         </fieldset>

@@ -167,7 +167,7 @@ test('the invited partner accepts the contract before the portal opens', { tag: 
   await page.getByTestId('affiliate-contract-agree').check();
   await accept.click();
   await page.waitForURL((u) => u.pathname === '/affiliate', { timeout: 20_000 });
-  await expect(page.getByTestId('empty-affiliate-portal')).toBeVisible();
+  await expect(page.getByTestId('affiliate-portal')).toBeVisible();
   expect(await prisma.affiliateContractAcceptance.count({ where: { orgId, partnerId, version: 1 } })).toBe(1);
 
   // A new version holds the portal again, and says which version was accepted.
