@@ -29,6 +29,8 @@ let partnerEmail = '';
 let noEmailPartnerId = '';
 let suspendedPartnerId = '';
 let otherPartnerId = '';
+let heldPartnerId = '';
+let observerEmail = '';
 const extraEmails: string[] = [];
 const contexts: APIRequestContext[] = [];
 
@@ -61,6 +63,9 @@ test.beforeAll(async () => {
   suspendedPartnerId = (
     await prisma.affiliatePartner.create({ data: { orgId, code: 'inv-3', displayName: 'Suspended', contactEmail: uniqueEmail('aff-inv-s'), status: 'SUSPENDED' } })
   ).id;
+  observerEmail = uniqueEmail('aff-inv-observer');
+  await prisma.user.update({ where: { id: (await seedUser(observerEmail, PW, 'ADMIN', 'Invite Observer', { orgId })).id }, data: { adminLevel: 'OBSERVER' } });
+  heldPartnerId = (await prisma.affiliatePartner.create({ data: { orgId, code: 'inv-4', displayName: 'Held', contactEmail: uniqueEmail('aff-inv-held') } })).id;
   otherPartnerId = (
     await prisma.affiliatePartner.create({ data: { orgId: otherOrgId, code: 'inv-1', displayName: 'Elsewhere', contactEmail: uniqueEmail('aff-inv-o') } })
   ).id;
@@ -75,7 +80,7 @@ test.afterAll(async () => {
     await prisma.invitationToken.deleteMany({ where: { orgId: id } }).catch(() => {});
     await prisma.auditLog.deleteMany({ where: { orgId: id } }).catch(() => {});
   }
-  for (const e of [adminEmail, partnerEmail, ...extraEmails]) if (e) await cleanupByEmail(e);
+  for (const e of [adminEmail, observerEmail, partnerEmail, ...extraEmails]) if (e) await cleanupByEmail(e);
   for (const id of [orgId, otherOrgId].filter(Boolean)) await prisma.organization.deleteMany({ where: { id } }).catch(() => {});
   await prisma.$disconnect();
 });
@@ -176,4 +181,38 @@ test('the invited partner accepts the contract before the portal opens', { tag: 
   await page.waitForURL((u) => u.pathname === '/affiliate/contract', { timeout: 20_000 });
   await expect(page.getByTestId('affiliate-contract-text')).toContainText('second');
   await expect(page.getByTestId('affiliate-contract-intro')).toBeVisible();
+});
+
+test('a partner invitation stays behind affiliate.write and dies with a suspension', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const admin = await context(playwright, baseURL);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const invite = () => admin.post(`/api/admin/affiliate/partners/${heldPartnerId}/invite`, { headers: host });
+
+  // Two invitations at once leave exactly one live link.
+  const both = await Promise.all([invite(), invite()]);
+  expect(both.map((r) => r.status())).toEqual([201, 201]);
+  const live = await prisma.invitationToken.findMany({ where: { orgId, partnerId: heldPartnerId, revokedAt: null } });
+  expect(live).toHaveLength(1);
+  const token = live[0];
+
+  // The generic board does not resend it (it would hand the live link to any admin tier).
+  const observer = await context(playwright, baseURL);
+  expect((await signInViaApi(observer, observerEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const single = await observer.post(`/api/invite/${token.id}`, { headers: host });
+  expect(single.status()).toBe(409);
+  expect((await single.json()).code).toBe('partner_invitation');
+  const bulk = await admin.post('/api/admin/invitations/bulk', { headers: host, data: { ids: [token.id], action: 'resend' } });
+  expect(bulk.status()).toBe(200);
+  expect((await bulk.json()).results[0].outcome).toBe('skippedPartner');
+
+  // Suspending withdraws it; reactivating does not bring it back.
+  const state = (status: string) => admin.patch(`/api/admin/affiliate/partners/${heldPartnerId}`, { headers: host, data: { status } });
+  expect((await state('SUSPENDED')).status()).toBe(200);
+  expect((await prisma.invitationToken.findUnique({ where: { id: token.id } }))?.revokedAt).not.toBeNull();
+  expect((await state('ACTIVE')).status()).toBe(200);
+  const anon = await context(playwright, baseURL);
+  const email = token.email!;
+  extraEmails.push(email);
+  expect((await register(anon, token.token, email)).status()).toBe(400);
+  expect(await prisma.user.count({ where: { email } })).toBe(0);
 });

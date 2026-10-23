@@ -110,10 +110,14 @@ test('the referral base URL is validated, stored and audited', { tag: '@smoke' }
     expect(res.status(), url).toBe(400);
     expect(await res.json()).toMatchObject({ code: 'invalid_referral_url', issue });
   }
+  // A body without the key is refused, never read as "clear".
+  expect((await admin.put('/api/admin/affiliate/settings/referral-url', { headers: host, data: {} })).status()).toBe(400);
   const saved = await put(' https://shop.example/start ');
   expect(saved.status()).toBe(200);
   expect(await saved.json()).toMatchObject({ referralUrl: 'https://shop.example/start', changed: true });
   expect((await (await put('https://shop.example/start')).json()).changed).toBe(false);
+  expect((await admin.put('/api/admin/affiliate/settings/referral-url', { headers: host, data: {} })).status()).toBe(400);
+  expect((await prisma.affiliateProgramSettings.findUnique({ where: { orgId } }))?.referralUrl).toBe('https://shop.example/start');
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.referral_url.update' } })).toBe(1);
 
   // A partner cannot write it.

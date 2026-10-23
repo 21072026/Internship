@@ -335,6 +335,15 @@ export async function changePartnerState(orgId: string, partnerId: string, patch
       const before = await lockPartner(tx, orgId, partnerId);
       if (before.status === 'TERMINATED') throw new AffiliateWriteError('invalid_transition');
       await tx.affiliatePartner.updateMany({ where: { id: partnerId, orgId }, data: { status: patch.status, noticeEffectiveAt } });
+      // A partner that is no longer ACTIVE has no live invitation (#3117): a link
+      // mailed before a suspension must not open the account after a reactivation.
+      const { count: invitationsWithdrawn } =
+        patch.status === 'ACTIVE'
+          ? { count: 0 }
+          : await tx.invitationToken.updateMany({
+              where: { orgId, partnerId, used: false, revokedAt: null },
+              data: { revokedAt: new Date() },
+            });
       const settings = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true } });
       const sync = settings?.plan ? await syncLocked(tx, orgId, { ...before, status: patch.status, noticeEffectiveAt }, await loadPlan(tx, orgId)) : null;
       await tx.auditLog.create({
@@ -347,6 +356,7 @@ export async function changePartnerState(orgId: string, partnerId: string, patch
             from: before.status,
             to: patch.status,
             noticeEffectiveAt: noticeEffectiveAt?.toISOString() ?? null,
+            ...(invitationsWithdrawn > 0 ? { invitationsWithdrawn } : {}),
             ...(sync ?? {}),
           }),
         },

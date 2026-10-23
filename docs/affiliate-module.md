@@ -234,8 +234,15 @@ A partner exists before its account (the admin creates it, or a migration does).
   carrying `InvitationToken.partnerId`. Only an ACTIVE partner without an account
   is invited (409 `already_linked` / `partner_inactive`, 400 `no_contact_email`,
   409 `email_taken` when the address already has an account in this product).
-  A new invitation withdraws the partner's open ones (`revokedAt`), so the newest
-  mail holds the only live link. Audited (`affiliate.partner.invite`).
+  A new invitation withdraws the partner's open ones (`revokedAt`) under the
+  partner's row lock, in the transaction that mints it, so the newest mail holds
+  the only live link; a partner leaving ACTIVE (`changePartnerState`) withdraws
+  them too. The register link is returned to the admin only when the mail could
+  not be sent. Audited (`affiliate.partner.invite`).
+- The generic invitation board never resends a partner's invitation
+  (`POST /api/invite/[id]` 409 `partner_invitation`, bulk `skippedPartner`): it
+  answers any ADMIN tier with the live link, and that link opens an account that
+  receives payouts — so it stays behind `affiliate.write`.
 - `/api/register` accepts an `AFFILIATE` token only when it names a partner and an
   address. The account and `linkPartnerAccount()` run in ONE transaction; the link
   is a guarded write (`userId: null`, status ACTIVE), so a second token for the

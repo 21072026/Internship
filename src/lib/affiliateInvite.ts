@@ -9,14 +9,17 @@
 //
 // - Only an ACTIVE partner without an account can be invited, and only to its
 //   own contact address: a named invitation is what proves the mailbox.
-// - A new invitation withdraws the partner's open ones, so exactly one link is
-//   live — the one in the newest mail.
+// - A new invitation withdraws the partner's open ones, under the partner's row
+//   lock, so exactly one link is live — the one in the newest mail. A partner
+//   leaving ACTIVE withdraws them too (changePartnerState).
+// - The register link is handed back to the admin only when the mail could not
+//   be sent; the generic invitation board never resends a partner's invitation.
 // - The link is a guarded write (`userId: null`): two registrations racing on
 //   one partner cannot both own it, and the loser's account is rolled back.
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { createInvitation } from '@/lib/inviteCreate';
+import { deliverInvitation, invitationRegisterUrl, logInvitationCreated, persistInvitation, type CreateInvitationInput } from '@/lib/inviteCreate';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 export type PartnerInviteErrorCode =
@@ -40,45 +43,61 @@ export async function invitePartner(input: {
   partnerId: string;
   actor: { id: string; email?: string | null };
   request?: Request;
-}): Promise<{ invitationId: string; emailSent: boolean; registerUrl: string; withdrawn: number }> {
+}): Promise<{ invitationId: string; emailSent: boolean; registerUrl: string | null; withdrawn: number }> {
   const { orgId, partnerId } = input;
-  const partner = await prisma.affiliatePartner.findFirst({
-    where: { id: partnerId, orgId },
-    select: { id: true, code: true, userId: true, status: true, contactEmail: true },
-  });
-  if (!partner) throw new PartnerInviteError('partner_not_found');
-  if (partner.userId) throw new PartnerInviteError('already_linked');
-  if (partner.status !== 'ACTIVE') throw new PartnerInviteError('partner_inactive');
-  if (!partner.contactEmail) throw new PartnerInviteError('no_contact_email');
-  if (await emailTakenInOrgWorld(partner.contactEmail, orgId)) throw new PartnerInviteError('email_taken');
-
-  const { count: withdrawn } = await prisma.invitationToken.updateMany({
-    where: { orgId, partnerId: partner.id, used: false, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
-
   // The mail's language is the inviter's (#1720), as on every other invitation.
   const inviter = await prisma.user.findUnique({ where: { id: input.actor.id }, select: { preferredLanguage: true } });
-  const created = await createInvitation({
-    actor: input.actor,
-    orgId,
-    email: partner.contactEmail,
-    label: partner.code,
-    role: 'AFFILIATE',
-    locale: inviter?.preferredLanguage ?? null,
-    partnerId: partner.id,
-    request: input.request,
-  });
-  await prisma.auditLog.create({
-    data: {
+
+  // Withdraw and mint under the partner's row lock, in one transaction: two
+  // clicks at once leave exactly one live link, and a suspension committed
+  // meanwhile wins. The mail goes out after the commit (no SMTP inside a lock).
+  const { invitation, persisted, withdrawn } = await prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM \`AffiliatePartner\` WHERE id = ${partnerId} AND orgId = ${orgId} FOR UPDATE`;
+    if (locked.length === 0) throw new PartnerInviteError('partner_not_found');
+    const partner = await tx.affiliatePartner.findFirst({
+      where: { id: partnerId, orgId },
+      select: { id: true, code: true, userId: true, status: true, contactEmail: true },
+    });
+    if (!partner) throw new PartnerInviteError('partner_not_found');
+    if (partner.userId) throw new PartnerInviteError('already_linked');
+    if (partner.status !== 'ACTIVE') throw new PartnerInviteError('partner_inactive');
+    if (!partner.contactEmail) throw new PartnerInviteError('no_contact_email');
+    if (await emailTakenInOrgWorld(partner.contactEmail, orgId)) throw new PartnerInviteError('email_taken');
+
+    const { count } = await tx.invitationToken.updateMany({
+      where: { orgId, partnerId: partner.id, used: false, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    const invitation: CreateInvitationInput = {
+      actor: input.actor,
       orgId,
-      actorId: input.actor.id,
-      action: 'affiliate.partner.invite',
-      targetId: partner.id,
-      detail: JSON.stringify({ invitationId: created.invitationId, withdrawn, emailSent: created.emailSent }),
-    },
+      email: partner.contactEmail,
+      label: partner.code,
+      role: 'AFFILIATE',
+      locale: inviter?.preferredLanguage ?? null,
+      partnerId: partner.id,
+      request: input.request,
+    };
+    const minted = await persistInvitation(invitation, tx);
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorId: input.actor.id,
+        action: 'affiliate.partner.invite',
+        targetId: partner.id,
+        detail: JSON.stringify({ invitationId: minted.invitationId, withdrawn: count }),
+      },
+    });
+    return { invitation, persisted: minted, withdrawn: count };
   });
-  return { invitationId: created.invitationId, emailSent: created.emailSent, registerUrl: created.registerUrl, withdrawn };
+
+  await logInvitationCreated(invitation, persisted.invitationId);
+  const { emailSent } = await deliverInvitation(invitation, persisted);
+  // The live link goes back only when the mail did not go out, for the admin to
+  // pass on by hand; otherwise the partner's mailbox is the only place it lives.
+  const registerUrl = emailSent ? null : await invitationRegisterUrl(persisted.token, orgId);
+  return { invitationId: persisted.invitationId, emailSent, registerUrl, withdrawn };
 }
 
 /**
