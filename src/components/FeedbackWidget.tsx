@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { MessageSquareWarning, Star, X, Camera, Paperclip } from 'lucide-react';
+import { MessageSquareWarning, Star, X, Camera, Paperclip, Square } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -11,8 +11,23 @@ import { PendingAttachmentList } from '@/components/MessageThread';
 import { installFeedbackCollector, snapshotFeedbackContext } from '@/lib/feedbackCollector';
 import { captureViewport, FEEDBACK_UI_ATTR } from '@/lib/feedbackScreenshot';
 import { FEEDBACK_DESCRIPTION_MAX } from '@/lib/feedbackContext';
-import { exportReplay, startFeedbackRecorder, stopFeedbackRecorder } from '@/lib/feedbackRecorder';
-import type { ReplayConfig } from '@/lib/feedbackReplayRule';
+import {
+  freezeRollingWindow,
+  manualElapsedMs,
+  packReplay,
+  startFeedbackRecorder,
+  startManualRecording,
+  stopFeedbackRecorder,
+  stopManualRecording,
+} from '@/lib/feedbackRecorder';
+import {
+  FEEDBACK_REPLAY_MAX_BYTES,
+  formatReplayDuration,
+  formatReplaySize,
+  type ReplayConfig,
+} from '@/lib/feedbackReplayRule';
+import { FeedbackReplaySection, type FrozenReplay } from '@/components/FeedbackReplaySection';
+import { useLocale } from '@/i18n/client';
 import {
   SUPPORT_ATTACHMENT_ACCEPT,
   appendSupportAttachments,
@@ -24,6 +39,11 @@ import {
 // panel is never in the picture — which makes a report two clicks plus the
 // two required answers: open, describe, choose contact, Send. Nothing leaves
 // the tab before Send (docs/feedback-reports.md).
+//
+// With replay on (#3131) the panel can also START a recording: it closes,
+// a red "Recording 1:23 · Stop" pill replaces the button, and Stop reopens
+// the panel — description kept, a fresh screenshot of where it ended — with
+// that recording attached and previewable.
 
 type Shot = { blob: Blob; url: string };
 
@@ -44,6 +64,14 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [attachReplay, setAttachReplay] = useState(true);
+  const [frozen, setFrozen] = useState<FrozenReplay | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [replayNotice, setReplayNotice] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [packing, setPacking] = useState(false);
+  const locale = useLocale();
   const replayOn = !!replay?.enabled;
   const ids = useId();
 
@@ -70,6 +98,10 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
     setError('');
     setCaptureError(false);
     setAttachReplay(true);
+    setFrozen(null);
+    setPreviewing(false);
+    setPreviewFailed(false);
+    setReplayNotice('');
     setShot((s) => { if (s) URL.revokeObjectURL(s.url); return null; });
     setFiles((list) => { list.forEach((a) => URL.revokeObjectURL(a.url)); return []; });
   }, []);
@@ -99,6 +131,64 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
     void capture(false);
   };
 
+  // ── Recording (#3131) ────────────────────────────────────────────────────
+  const stopRecording = useCallback(async (reachedLimit: boolean) => {
+    const events = stopManualRecording();
+    setRecording(false);
+    setPreviewing(false);
+    setPreviewFailed(false);
+    setReplayNotice(reachedLimit ? f.recordingFull : '');
+    if (events) {
+      setPacking(true);
+      const blob = await packReplay(events).catch(() => null);
+      setPacking(false);
+      if (blob) {
+        setFrozen({ kind: 'manual', events, blob });
+        setAttachReplay(true);
+      }
+    }
+    // Back to the report, with a screenshot of where the recording ended.
+    void capture(false);
+  }, [capture, f.recordingFull]);
+
+  const stopRef = useRef(stopRecording);
+  stopRef.current = stopRecording;
+
+  const startRecording = () => {
+    if (!startManualRecording(() => void stopRef.current(true))) return;
+    setFrozen(null);
+    setPreviewing(false);
+    setReplayNotice('');
+    setElapsed(0);
+    setRecording(true);
+    setOpen(false);
+  };
+
+  useEffect(() => {
+    if (!recording) return;
+    const tick = setInterval(() => setElapsed(manualElapsedMs() ?? 0), 1000);
+    // A reload or a typed address throws the in-memory recording away: ask first.
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => { clearInterval(tick); window.removeEventListener('beforeunload', warn); };
+  }, [recording]);
+
+  const togglePreview = async () => {
+    if (previewing) { setPreviewing(false); return; }
+    setPreviewFailed(false);
+    if (!frozen) {
+      // Freeze the rolling window now: the preview and the send are one recording.
+      const events = freezeRollingWindow();
+      if (!events) { setPreviewFailed(true); setPreviewing(true); return; }
+      setPacking(true);
+      const blob = await packReplay(events).catch(() => null);
+      setPacking(false);
+      if (!blob) { setPreviewFailed(true); setPreviewing(true); return; }
+      setFrozen({ kind: 'window', events, blob });
+    }
+    setPreviewing(true);
+  };
+
   const addFiles = async (selected: FileList | File[]) => {
     const { attachments, error: rejected } = await appendSupportAttachments(files, selected, t.support);
     setFiles(attachments);
@@ -123,13 +213,21 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
       if (shot) form.append('screenshot', new File([shot.blob], 'screenshot.jpg', { type: 'image/jpeg' }));
       files.forEach(({ file }) => form.append('files', file));
       if (replayOn && attachReplay) {
-        // Time-boxed: a recording that cannot be packed in time is left out
-        // rather than holding the report hostage.
-        const recording = await Promise.race([
-          exportReplay().catch(() => null),
+        // The recording the person previewed (or made) is the one sent. Without
+        // one, the window is frozen now — time-boxed, so a recording that
+        // cannot be packed in time is left out rather than holding the report.
+        const blob = frozen?.blob ?? await Promise.race([
+          (async () => { const ev = freezeRollingWindow(); return ev ? packReplay(ev) : null; })().catch(() => null),
           new Promise<null>((r) => setTimeout(() => r(null), 8000)),
         ]);
-        if (recording) form.append('replay', new File([recording], 'replay.json.gz', { type: 'application/gzip' }));
+        if (blob && blob.size > FEEDBACK_REPLAY_MAX_BYTES) {
+          setError(f.replayTooLarge
+            .replace('{size}', formatReplaySize(blob.size, locale))
+            .replace('{max}', formatReplaySize(FEEDBACK_REPLAY_MAX_BYTES, locale)));
+          setSending(false);
+          return;
+        }
+        if (blob) form.append('replay', new File([blob], 'replay.json.gz', { type: 'application/gzip' }));
       }
       const res = await fetch('/api/support/reports', { method: 'POST', body: form });
       if (!res.ok) throw new Error(String(res.status));
@@ -147,7 +245,27 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
 
   return (
     <div {...{ [FEEDBACK_UI_ATTR]: '' }}>
-      {!open && (
+      {recording && (
+        <div
+          role="status"
+          data-testid="feedback-recording"
+          className="fixed right-4 bottom-[calc(1rem+var(--fixed-bottom-inset,0px))] z-[150] flex items-center gap-3 rounded-full bg-gray-900 py-2 pl-4 pr-2 text-sm text-white shadow-lg print:hidden"
+        >
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
+          <span className="tabular-nums">{f.recordingNow.replace('{time}', formatReplayDuration(elapsed))}</span>
+          <button
+            type="button"
+            onClick={() => void stopRecording(false)}
+            aria-label={f.recordingStopLabel}
+            data-testid="feedback-record-stop"
+            className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1 font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> {f.recordingStop}
+          </button>
+        </div>
+      )}
+
+      {!open && !recording && (
         <button
           type="button"
           onClick={openPanel}
@@ -284,13 +402,20 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
               </div>
 
               {replayOn && (
-                <div>
-                  <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
-                    <input type="checkbox" className="mt-0.5" checked={attachReplay} onChange={(e) => setAttachReplay(e.target.checked)} data-testid="feedback-replay" />
-                    <span>{f.replayLabel.replace('{seconds}', String(replay!.seconds))}</span>
-                  </label>
-                  <p className="ml-6 text-xs text-gray-600 dark:text-gray-400">{f.replayHint}</p>
-                </div>
+                <FeedbackReplaySection
+                  seconds={replay!.seconds}
+                  attach={attachReplay}
+                  onAttachChange={setAttachReplay}
+                  frozen={frozen}
+                  previewing={previewing}
+                  previewFailed={previewFailed}
+                  onPreviewToggle={() => void togglePreview()}
+                  onPreviewFailed={() => setPreviewFailed(true)}
+                  onStartRecording={startRecording}
+                  onDiscard={() => { setFrozen(null); setPreviewing(false); setReplayNotice(''); }}
+                  notice={replayNotice}
+                  busy={packing || sending}
+                />
               )}
 
               <fieldset>
@@ -308,7 +433,7 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
               <p className="text-xs text-gray-600 dark:text-gray-400">{f.privacy}</p>
               {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-              <Button type="submit" disabled={sending || capturing} className="w-full" data-testid="feedback-send">
+              <Button type="submit" disabled={sending || capturing || packing} className="w-full" data-testid="feedback-send">
                 {sending ? f.sending : f.send}
               </Button>
             </form>

@@ -83,6 +83,47 @@ export class ReplayBuffer {
   }
 }
 
+/** The longest recording a person may start by hand (#3131 follow-up). */
+export const FEEDBACK_MANUAL_MAX_MS = 20 * 60 * 1000;
+
+/**
+ * A recording the person started and stops themselves: every event from its
+ * own full snapshot on, nothing trimmed, until `maxMs` — past that it reports
+ * `full` and takes no more (the widget then stops it). In memory only.
+ */
+export class ManualRecording {
+  private events: ReplayEvent[] = [];
+  readonly startedAt: number;
+  private fullAt: number | null = null;
+  constructor(now: number, private readonly maxMs: number = FEEDBACK_MANUAL_MAX_MS) {
+    this.startedAt = now;
+  }
+
+  /** false once the recording is full; the event is then dropped. */
+  push(event: ReplayEvent): boolean {
+    if (this.fullAt !== null) return false;
+    if (event.timestamp - this.startedAt > this.maxMs) {
+      this.fullAt = event.timestamp;
+      return false;
+    }
+    this.events.push(event);
+    return true;
+  }
+
+  get full(): boolean {
+    return this.fullAt !== null;
+  }
+
+  elapsed(now: number): number {
+    return Math.min(this.maxMs, Math.max(0, now - this.startedAt));
+  }
+
+  /** The events, frozen — later pushes do not change the returned array. */
+  freeze(): ReplayEvent[] {
+    return [...this.events];
+  }
+}
+
 export type ReplayRefusal = 'not_array' | 'too_few' | 'bad_event' | 'no_snapshot';
 
 /** Shape check of a decoded upload: rrweb events, with something to render. */
@@ -122,4 +163,21 @@ export function withTimelineMarks(events: ReplayEvent[], marks: TimelineMark[]):
     .filter((m) => Number.isFinite(m.at) && m.at >= first && m.at <= last)
     .map((m) => ({ type: RR_CUSTOM, timestamp: m.at, data: { tag: m.tag, payload: { label: m.label } } }));
   return [...events, ...extra].sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/** m:ss for a recording's length. */
+export function formatReplayDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** KB / MB for a recording's compressed size. */
+export function formatReplaySize(bytes: number, locale: string): string {
+  const fmt = (n: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(n);
+  return bytes >= 1024 * 1024 ? `${fmt(bytes / 1024 / 1024)} MB` : `${fmt(bytes / 1024)} KB`;
+}
+
+/** First-to-last timestamp of a recording. */
+export function replayDurationMs(events: ReplayEvent[]): number {
+  return events.length > 1 ? events[events.length - 1].timestamp - events[0].timestamp : 0;
 }
