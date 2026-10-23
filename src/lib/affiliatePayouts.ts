@@ -17,7 +17,9 @@ export interface PayoutRow {
 
 /** Newest transfer first, paged. */
 export async function listPayouts(orgId: string, opts: { partnerId?: string | null; page?: number } = {}): Promise<{ rows: PayoutRow[]; total: number; page: number; perPage: number }> {
-  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  // Bounded: a huge or non-finite page would overflow Prisma's `skip`.
+  const raw = Math.floor(opts.page ?? 1);
+  const page = Number.isFinite(raw) ? Math.min(10_000, Math.max(1, raw)) : 1;
   const where = { orgId, ...(opts.partnerId ? { partnerId: opts.partnerId } : {}) };
   const [rows, total] = await Promise.all([
     prisma.affiliatePayout.findMany({

@@ -61,10 +61,15 @@ export default function AffiliateCommissionsPage() {
   const [drift, setDrift] = useState<Drift[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [failed, setFailed] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [c, d] = await Promise.all([fetch(`/api/admin/affiliate/commissions?status=${status}&page=${page}`), fetch('/api/admin/affiliate/commissions/drift')]);
+    if (c.status === 403 || d.status === 403) {
+      setForbidden(true);
+      return;
+    }
     if (!c.ok || !d.ok) {
       setFailed(true);
       return;
@@ -92,6 +97,7 @@ export default function AffiliateCommissionsPage() {
       if (res.ok) {
         toast(interpolate(L.moved, { n: String(body.moved) }));
         if (body.skipped?.length > 0) toast(interpolate(L.skipped, { n: String(body.skipped.length) }), 'error');
+        if (body.failedPartners > 0) toast(interpolate(L.failedPartners, { n: String(body.failedPartners) }), 'error');
         await load();
       } else toast(L.failed, 'error');
     } finally {
@@ -99,6 +105,7 @@ export default function AffiliateCommissionsPage() {
     }
   }
 
+  if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{t.affiliateAdmin.noAccess}</p>;
   if (failed) return <p className="text-sm text-red-600" role="alert">{L.failed}</p>;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.perPage)) : 1;
   const toggle = (id: string) => {
@@ -116,15 +123,14 @@ export default function AffiliateCommissionsPage() {
       <AffiliateTabs />
       {data && !data.canWrite && <p className="text-sm text-gray-600 dark:text-gray-400">{L.readOnly}</p>}
 
-      <div className="flex flex-wrap gap-2" role="tablist">
+      <div className="flex flex-wrap gap-2" role="group">
         {STATUSES.map((s) => (
           <Button
             key={s}
             type="button"
             size="sm"
             variant={s === status ? 'primary' : 'outline'}
-            role="tab"
-            aria-selected={s === status}
+            aria-pressed={s === status}
             onClick={() => {
               setStatus(s);
               setPage(1);
@@ -179,7 +185,7 @@ export default function AffiliateCommissionsPage() {
                   <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
                     {data.canWrite && actions.length > 0 && (
                       <td className="px-4 py-2">
-                        <input type="checkbox" aria-label={L.select} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
+                        <input type="checkbox" aria-label={`${L.select}: ${r.payment.externalPaymentRef}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                       </td>
                     )}
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.dueAt, locale, { timeZone: 'UTC' })}</td>

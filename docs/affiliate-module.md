@@ -29,9 +29,11 @@ per organisation, and every number in tests and examples here is synthetic.
 
 One plan per organisation, stored on `AffiliateProgramSettings` and edited at
 `/admin/affiliates/settings` (`src/lib/affiliateProgramSettings.ts`, the one writer;
-`PUT /api/admin/affiliate/settings/plan`). Reading the settings takes
-`affiliate.read` (every admin tier), changing them `affiliate.write` (ORG_ADMIN
-only, never while impersonating). **The currency is EUR only for now** — a product
+`PUT /api/admin/affiliate/settings/plan`). Reading takes `affiliate.read`
+(ORG_ADMIN and OBSERVER), changing `affiliate.write` (ORG_ADMIN only, never while
+impersonating). A PROGRAM_ADMIN has no access at all: its reach is its cohort and
+company grants, and affiliate data belongs to neither — opening it would open the
+whole organisation. The screens tell such an admin so instead of failing. **The currency is EUR only for now** — a product
 decision for the first release; the engine is currency-agnostic and widening is
 the one list `AFFILIATE_CURRENCIES`. A real plan change bumps `planVersion`, stamps
 `planEffectiveAt`, is audited (`affiliate.plan.update`) and re-evaluates every
@@ -81,6 +83,9 @@ reconciliation.
   A frozen row is never changed; when the engine disagrees, the writer returns the
   difference as **drift** for the admin to look at. A correction is a separate,
   explicit admin action.
+- A PENDING row of an older plan version whose payment was recorded AFTER the
+  current plan took effect (a payment that raced a plan change) is live too: the
+  next reconciliation recomputes it under the current plan.
 - **A plan change is not retroactive.** `AffiliateProgramSettings.planEffectiveAt`
   stamps when the current version took effect. A payment *recorded* before it never
   gets a commission created by the new plan (what it would give is drift); a
@@ -131,8 +136,13 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   case-insensitively, permanent), and the state changes. Suspend / reactivate /
   terminate go through `changePartnerState()` in the payment writer: under the
   partner lock, re-evaluating the partner's commissions, audited
-  (`affiliate.partner.state`). A termination needs its effective date (a calendar
-  date, UTC midnight); reactivating clears it. The full IBAN is revealed to an
+  (`affiliate.partner.state`). ACTIVE ↔ SUSPENDED freely; a termination needs its
+  effective date (a calendar day, UTC midnight). **TERMINATED is final** (decided):
+  no change leaves it, because clearing the date would pay the termination
+  period's payments retroactively — a partner who returns gets a new record and
+  code. Every calendar day the API takes (payment, payout, termination) goes
+  through `parseCalendarDay()`, which refuses an impossible day (31 February)
+  instead of rolling it into the next month. The full IBAN is revealed to an
   `affiliate.write` admin only, and every reveal is audited
   (`affiliate.payout_details.read`).
 - **Payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
@@ -148,12 +158,16 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   (PENDING → APPROVED), rejects (PENDING → REJECTED) or un-approves
   (APPROVED → PENDING), at most 200 at a time, each partner's rows under that
   partner's lock by a guarded update on the expected status; anything else — a
-  PAID row above all, another organisation's id — comes back as `skipped`. One
+  PAID row above all, another organisation's id — comes back as `skipped`. Each
+  partner is its own transaction: one that fails (its lock busy) is reported in
+  `failedPartners` and does not undo the others. One
   audit row per partner (`affiliate.commission.approve|reject|unapprove`).
   `driftReport()` lists the frozen rows the current plan would calculate
   differently — read only, nothing written.
 - **Payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
-  recorded after the manual bank transfer. `createPayout()` (payment writer)
+  recorded after the manual bank transfer. The screen lists a partner's approved
+  commissions unpaged (`/payouts/candidates`, up to the 200 a payout can take) and
+  says when there are more, so the sum shown is always the rows selected. `createPayout()` (payment writer)
   takes ONE partner's selected commissions under its lock: all APPROVED, all that
   partner's, one currency — or nothing is written (`payout_mismatch`). The payout
   row carries their sum, the transfer day (a calendar day, not in the future) and

@@ -58,6 +58,8 @@ export interface PlanSaveResult {
   changed: boolean;
   planVersion: number;
   partnersResynced: number;
+  /** Partners whose re-evaluation failed (lock busy); their next payment write re-evaluates them. */
+  resyncFailed: number;
   drift: number;
 }
 
@@ -104,7 +106,7 @@ export async function savePlan(orgId: string, raw: unknown, actorId: string): Pr
       });
       return { changed: true, version: next };
     });
-    if (!outcome.changed) return { changed: false, planVersion: outcome.version, partnersResynced: 0, drift: 0 };
+    if (!outcome.changed) return { changed: false, planVersion: outcome.version, partnersResynced: 0, resyncFailed: 0, drift: 0 };
     version = outcome.version;
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
@@ -115,9 +117,20 @@ export async function savePlan(orgId: string, raw: unknown, actorId: string): Pr
   // purpose: a programme has few partners, and one lock at a time keeps the
   // database quiet for the payments being entered meanwhile.
   const partners = await prisma.affiliatePartner.findMany({ where: { orgId }, select: { id: true } });
+  // The plan is already committed: a partner whose re-evaluation fails is counted
+  // and reported, never turned into an error for a save that did happen.
   let drift = 0;
-  for (const p of partners) drift += (await resyncPartnerCommissions(orgId, p.id, actorId)).drift.length;
-  return { changed: true, planVersion: version, partnersResynced: partners.length, drift };
+  let resynced = 0;
+  let resyncFailed = 0;
+  for (const p of partners) {
+    try {
+      drift += (await resyncPartnerCommissions(orgId, p.id, actorId)).drift.length;
+      resynced += 1;
+    } catch {
+      resyncFailed += 1;
+    }
+  }
+  return { changed: true, planVersion: version, partnersResynced: resynced, resyncFailed, drift };
 }
 
 export async function programSettings(orgId: string) {

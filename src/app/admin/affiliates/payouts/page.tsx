@@ -56,14 +56,20 @@ export default function AffiliatePayoutsPage() {
   const [payouts, setPayouts] = useState<{ rows: Payout[]; canWrite: boolean } | null>(null);
   const [partnerId, setPartnerId] = useState('');
   const [approved, setApproved] = useState<Commission[] | null>(null);
+  const [approvedAll, setApprovedAll] = useState<{ totalCount: number; totalAmountMinor: number } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [paidOn, setPaidOn] = useState(today());
   const [reference, setReference] = useState('');
   const [failed, setFailed] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [p, q] = await Promise.all([fetch('/api/admin/affiliate/payouts'), fetch('/api/admin/affiliate/partners')]);
+    if (p.status === 403 || q.status === 403) {
+      setForbidden(true);
+      return;
+    }
     if (!p.ok || !q.ok) {
       setFailed(true);
       return;
@@ -75,9 +81,13 @@ export default function AffiliatePayoutsPage() {
   const loadApproved = useCallback(async (id: string) => {
     setApproved(null);
     if (!id) return;
-    const res = await fetch(`/api/admin/affiliate/commissions?status=APPROVED&partnerId=${encodeURIComponent(id)}`);
-    const rows: Commission[] = res.ok ? (await res.json()).rows : [];
+    // Not paged: everything a payout can take (up to the writer's limit), with the
+    // totals of all approved rows — the sum shown is always the rows listed.
+    const res = await fetch(`/api/admin/affiliate/payouts/candidates?partnerId=${encodeURIComponent(id)}`);
+    const body = res.ok ? await res.json() : { rows: [], totalCount: 0, totalAmountMinor: 0 };
+    const rows: Commission[] = body.rows;
     setApproved(rows);
+    setApprovedAll({ totalCount: body.totalCount, totalAmountMinor: body.totalAmountMinor });
     setSelected(new Set(rows.map((r) => r.id)));
   }, []);
 
@@ -111,6 +121,7 @@ export default function AffiliatePayoutsPage() {
     }
   }
 
+  if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{t.affiliateAdmin.noAccess}</p>;
   if (failed) return <p className="text-sm text-red-600" role="alert">{L.failed}</p>;
 
   return (
@@ -145,6 +156,11 @@ export default function AffiliatePayoutsPage() {
             {approved && approved.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-400">{L.noApproved}</p>}
             {approved && approved.length > 0 && (
               <>
+                {approvedAll && approvedAll.totalCount > approved.length && (
+                  <p className="text-sm text-amber-700 dark:text-amber-300" role="status" data-testid="affiliate-payout-truncated">
+                    {interpolate(L.truncated, { shown: String(approved.length), total: String(approvedAll.totalCount), amount: money(approvedAll.totalAmountMinor) })}
+                  </p>
+                )}
                 <ul className="space-y-1 text-sm" data-testid="affiliate-payout-commissions">
                   {approved.map((c) => (
                     <li key={c.id} className="flex items-center gap-2">

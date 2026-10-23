@@ -20,7 +20,9 @@ export interface PaymentRow {
 
 /** Newest received first; one page, plus the total for the pager. */
 export async function listPayments(orgId: string, opts: { partnerId?: string | null; page?: number } = {}): Promise<{ rows: PaymentRow[]; total: number; page: number; perPage: number }> {
-  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  // Bounded: a huge or non-finite page would overflow Prisma's `skip`.
+  const raw = Math.floor(opts.page ?? 1);
+  const page = Number.isFinite(raw) ? Math.min(10_000, Math.max(1, raw)) : 1;
   const where = { orgId, ...(opts.partnerId ? { customer: { partnerId: opts.partnerId } } : {}) };
   const [rows, total] = await Promise.all([
     prisma.affiliatePayment.findMany({

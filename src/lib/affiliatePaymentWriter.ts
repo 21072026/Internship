@@ -50,6 +50,7 @@ export type AffiliateWriteErrorCode =
   | 'customer_of_another_partner'
   | 'duplicate_payment' // the external payment reference is already recorded in this organisation
   | 'payout_mismatch' // a payout's commissions are not all APPROVED, of this partner, in one currency
+  | 'invalid_transition' // a terminated partner is final: no state change leaves TERMINATED
   | 'busy' // the partner is locked by long-running work or a deadlock was resolved; retry
   | 'conflict'; // a guarded commission write found a row in another state than it read — an invariant broke
 
@@ -164,16 +165,17 @@ async function syncLocked(tx: Tx, orgId: string, partner: LockedPartner, loaded:
     });
   }
   for (const u of changes.update) {
-    // Guarded: only a still-PENDING row of this plan version moves.
+    // Guarded: only a still-PENDING row moves (which ones are live is the pure
+    // reconciliation's decision; we hold the partner lock).
     const { count } = await tx.affiliateCommission.updateMany({
-      where: { id: u.id, orgId, status: 'PENDING', planVersion },
+      where: { id: u.id, orgId, status: 'PENDING' },
       data: u.data,
     });
     if (count !== 1) throw new AffiliateWriteError('conflict');
   }
   if (changes.remove.length > 0) {
     const { count } = await tx.affiliateCommission.deleteMany({
-      where: { id: { in: changes.remove }, orgId, status: 'PENDING', planVersion },
+      where: { id: { in: changes.remove }, orgId, status: 'PENDING' },
     });
     if (count !== changes.remove.length) throw new AffiliateWriteError('conflict');
   }
@@ -317,7 +319,11 @@ export interface PartnerStatePatch {
  * Changes a partner's status and termination date — they decide what accrues,
  * so they move under the same partner lock as a payment, and the partner's
  * commissions are re-evaluated in the same transaction (when a plan exists).
- * TERMINATED needs a date; any other status clears it (a reinstatement).
+ *
+ * ACTIVE ↔ SUSPENDED freely; either → TERMINATED with its effective date.
+ * TERMINATED is FINAL (decided, docs/affiliate-module.md): no change leaves it,
+ * because clearing the date would pay the termination period's payments
+ * retroactively. A partner who comes back gets a new partner record.
  */
 export async function changePartnerState(orgId: string, partnerId: string, patch: PartnerStatePatch, actorId: string): Promise<SyncResult | null> {
   if (patch.status === 'TERMINATED' && !(patch.noticeEffectiveAt instanceof Date && !Number.isNaN(patch.noticeEffectiveAt.getTime()))) {
@@ -327,6 +333,7 @@ export async function changePartnerState(orgId: string, partnerId: string, patch
   try {
     return await prisma.$transaction(async (tx) => {
       const before = await lockPartner(tx, orgId, partnerId);
+      if (before.status === 'TERMINATED') throw new AffiliateWriteError('invalid_transition');
       await tx.affiliatePartner.updateMany({ where: { id: partnerId, orgId }, data: { status: patch.status, noticeEffectiveAt } });
       const settings = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true } });
       const sync = settings?.plan ? await syncLocked(tx, orgId, { ...before, status: patch.status, noticeEffectiveAt }, await loadPlan(tx, orgId)) : null;
@@ -375,24 +382,28 @@ export async function transitionCommissions(
   ids: string[],
   transition: CommissionTransition,
   actorId: string,
-): Promise<{ moved: number; skipped: string[] }> {
+): Promise<{ moved: number; skipped: string[]; failedPartners: number }> {
   const unique = [...new Set(ids)].slice(0, MAX_COMMISSIONS_PER_ACTION);
   const { from, to } = TRANSITION[transition];
   const rows = await prisma.affiliateCommission.findMany({ where: { orgId, id: { in: unique } }, select: { id: true, partnerId: true } });
   const byPartner = new Map<string, string[]>();
   for (const r of rows) byPartner.set(r.partnerId, [...(byPartner.get(r.partnerId) ?? []), r.id]);
 
+  // One transaction per partner: a partner that fails (its lock busy, a guard
+  // that found another state) does not undo the others. The counts are taken
+  // from what COMMITTED, and the failed partners are reported, never hidden.
   let moved = 0;
+  let failedPartners = 0;
   const movedIds = new Set<string>();
-  try {
-    for (const [partnerId, partnerIds] of byPartner) {
-      await prisma.$transaction(async (tx) => {
+  for (const [partnerId, partnerIds] of byPartner) {
+    try {
+      const done = await prisma.$transaction(async (tx) => {
         await lockPartner(tx, orgId, partnerId);
         const eligible = await tx.affiliateCommission.findMany({
           where: { orgId, partnerId, id: { in: partnerIds }, status: from },
           select: { id: true },
         });
-        if (eligible.length === 0) return;
+        if (eligible.length === 0) return [] as string[];
         const { count } = await tx.affiliateCommission.updateMany({
           where: { orgId, partnerId, id: { in: eligible.map((e) => e.id) }, status: from },
           data: { status: to },
@@ -407,14 +418,17 @@ export async function transitionCommissions(
             detail: JSON.stringify({ partnerId, count, commissionIds: eligible.map((e) => e.id) }),
           },
         });
-        moved += count;
-        for (const e of eligible) movedIds.add(e.id);
+        return eligible.map((e) => e.id);
       }, TX_OPTIONS);
+      moved += done.length;
+      for (const id of done) movedIds.add(id);
+    } catch (e) {
+      const mapped = mapPrismaError(e);
+      if (!(mapped instanceof AffiliateWriteError)) throw mapped;
+      failedPartners += 1;
     }
-  } catch (e) {
-    throw mapPrismaError(e);
   }
-  return { moved, skipped: unique.filter((id) => !movedIds.has(id)) };
+  return { moved, skipped: unique.filter((id) => !movedIds.has(id)), failedPartners };
 }
 
 /**

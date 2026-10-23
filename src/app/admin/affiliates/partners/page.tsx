@@ -43,6 +43,7 @@ export default function AffiliatePartnersPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [canWrite, setCanWrite] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const [form, setForm] = useState({ code: '', displayName: '', contactEmail: '' });
   const [issues, setIssues] = useState<Set<string>>(new Set());
   const [terminating, setTerminating] = useState<{ id: string; date: string } | null>(null);
@@ -51,6 +52,10 @@ export default function AffiliatePartnersPage() {
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/affiliate/partners');
+    if (res.status === 403) {
+      setForbidden(true);
+      return;
+    }
     if (!res.ok) {
       setFailed(true);
       return;
@@ -92,13 +97,13 @@ export default function AffiliatePartnersPage() {
     }
   }
 
-  async function setState(id: string, status: Status, noticeEffectiveAt: string | null = null) {
+  async function setState(id: string, status: Status, noticeEffectiveOn: string | null = null) {
     setBusy(true);
     try {
       const res = await fetch(`/api/admin/affiliate/partners/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, noticeEffectiveAt }),
+        body: JSON.stringify({ status, noticeEffectiveOn }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -106,7 +111,7 @@ export default function AffiliatePartnersPage() {
         if (body.drift > 0) toast(interpolate(L.drift, { n: String(body.drift) }), 'error');
         setTerminating(null);
         await load();
-      } else toast(L.failed, 'error');
+      } else toast(body.code === 'invalid_transition' ? t.affiliatePayments.errors.invalid_transition : L.failed, 'error');
     } finally {
       setBusy(false);
     }
@@ -119,6 +124,7 @@ export default function AffiliatePartnersPage() {
     else toast(L.failed, 'error');
   }
 
+  if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{t.affiliateAdmin.noAccess}</p>;
   if (failed) return <p className="text-sm text-red-600" role="alert">{L.failed}</p>;
 
   return (
@@ -174,7 +180,7 @@ export default function AffiliatePartnersPage() {
                           {L.suspend}
                         </Button>
                       )}
-                      {p.status !== 'ACTIVE' && (
+                      {p.status === 'SUSPENDED' && (
                         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void setState(p.id, 'ACTIVE')}>
                           {L.reactivate}
                         </Button>
@@ -188,13 +194,14 @@ export default function AffiliatePartnersPage() {
                   )}
                   {terminating?.id === p.id && (
                     <div className="flex flex-wrap items-end gap-2">
+                      <p className="w-full text-xs text-gray-600 dark:text-gray-400">{L.terminateFinal}</p>
                       <Input type="date" label={L.terminateDate} value={terminating.date} onChange={(e) => setTerminating({ id: p.id, date: e.target.value })} />
                       <Button
                         type="button"
                         size="sm"
                         variant="danger"
                         disabled={busy || !terminating.date}
-                        onClick={() => void setState(p.id, 'TERMINATED', new Date(`${terminating.date}T00:00:00Z`).toISOString())}
+                        onClick={() => void setState(p.id, 'TERMINATED', terminating.date)}
                       >
                         {L.confirmTerminate}
                       </Button>

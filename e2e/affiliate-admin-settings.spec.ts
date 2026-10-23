@@ -52,11 +52,13 @@ async function as(playwright: RequestFactory, baseURL: string | undefined, email
 test.beforeAll(async () => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   orgId = (await prisma.organization.create({ data: { name: `Acme Sales ${stamp}`, slug: `aff-admin-${stamp}`, vertical: 'MARKETING' } })).id;
-  for (const label of ['owner', 'observer', 'rep']) emails.push(uniqueEmail(`aff-${label}`));
+  for (const label of ['owner', 'observer', 'rep', 'progadmin']) emails.push(uniqueEmail(`aff-${label}`));
   await seedUser(emails[0], PW, 'ADMIN', 'Org Admin', { orgId });
   const observer = await seedUser(emails[1], PW, 'ADMIN', 'Observer Admin', { orgId });
   await prisma.user.update({ where: { id: observer.id }, data: { adminLevel: 'OBSERVER' } });
   await seedUser(emails[2], PW, 'MENTOR', 'Sales Rep', { orgId });
+  const prog = await seedUser(emails[3], PW, 'ADMIN', 'Program Admin', { orgId });
+  await prisma.user.update({ where: { id: prog.id }, data: { adminLevel: 'PROGRAM_ADMIN' } });
   partnerId = (await prisma.affiliatePartner.create({ data: { orgId, code: 'adm-1', displayName: 'Admin Spec Partner' } })).id;
 });
 
@@ -94,6 +96,11 @@ test('read for every admin tier, write for the organisation admin only', { tag: 
   expect((await observer.put('/api/admin/affiliate/settings/contract', { headers: host, data: { texts: { en: 'x' } } })).status()).toBe(403);
 
   expect((await rep.get('/api/admin/affiliate/settings', { headers: host })).status()).toBe(403);
+  // A PROGRAM_ADMIN's reach is its cohort/company grants; affiliate data is neither (docs).
+  const prog = await as(playwright, baseURL, emails[3]);
+  for (const path of ['settings', 'partners', 'payments', 'commissions', 'payouts']) {
+    expect((await prog.get(`/api/admin/affiliate/${path}`, { headers: host })).status(), path).toBe(403);
+  }
 });
 
 test('a plan is validated, versioned only on a real change, and re-evaluates partners', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
@@ -157,13 +164,19 @@ test('partners: create, codes unique, state changes under the lock, IBAN reveal 
     recordAffiliatePayment({ orgId, partnerId, customerExternalRef: 'c-1', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-05T00:00:00Z'), externalPaymentRef: 'inv-2', source: 'MANUAL' }),
   ).rejects.toBeInstanceOf(AffiliateWriteError);
   expect((await patch(partnerId, { status: 'TERMINATED' })).status()).toBe(400);
-  expect((await patch(partnerId, { status: 'TERMINATED', noticeEffectiveAt: '2026-04-01T00:00:00.000Z' })).status()).toBe(200);
-  expect((await prisma.affiliatePartner.findUniqueOrThrow({ where: { id: partnerId } })).noticeEffectiveAt?.toISOString()).toBe('2026-04-01T00:00:00.000Z');
   expect((await patch(partnerId, { status: 'ACTIVE' })).status()).toBe(200);
-  expect((await prisma.affiliatePartner.findUniqueOrThrow({ where: { id: partnerId } })).noticeEffectiveAt).toBeNull();
+  // Termination: a real calendar day only, and final.
+  const other = await prisma.affiliatePartner.findFirstOrThrow({ where: { orgId, code: 'new-1' } });
+  expect((await patch(other.id, { status: 'TERMINATED', noticeEffectiveOn: '2026-02-31' })).status()).toBe(400);
+  expect((await patch(other.id, { status: 'TERMINATED', noticeEffectiveOn: '2026-04-01' })).status()).toBe(200);
+  expect((await prisma.affiliatePartner.findUniqueOrThrow({ where: { id: other.id } })).noticeEffectiveAt?.toISOString()).toBe('2026-04-01T00:00:00.000Z');
+  for (const status of ['ACTIVE', 'SUSPENDED', 'TERMINATED']) {
+    const res = await patch(other.id, { status, noticeEffectiveOn: '2026-05-01' });
+    expect([res.status(), (await res.json()).code], status).toEqual([409, 'invalid_transition']);
+  }
   expect((await observer.patch(`/api/admin/affiliate/partners/${partnerId}`, { headers: host, data: { status: 'SUSPENDED' } })).status()).toBe(403);
   expect((await patch('no-such-partner', { status: 'ACTIVE' })).status()).toBe(404);
-  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.partner.state' } })).toBe(3); // suspend, terminate, reactivate — refusals leave none
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.partner.state' } })).toBe(3); // suspend, reactivate, terminate — refusals leave none
 
   // The full IBAN: the paying admin only, and every reveal audited. (A published example IBAN.)
   await setPayoutDetails({ orgId, partnerId, details: { iban: 'DE89370400440532013000', holder: 'Admin Spec Partner' }, actor: { id: 'e2e', role: 'ADMIN' } });
@@ -190,6 +203,7 @@ test('payments: recorded by the one writer through the admin API, refusals carry
   expect(await code({ ...base, externalPaymentRef: 'inv-91', receivedOn: '2999-01-01' })).toBe('invalid_input');
   expect(await code({ ...base, partnerId: null, customerExternalRef: 'c-new', externalPaymentRef: 'inv-92' })).toBe('unknown_customer');
   expect(await code({ ...base, amountMinor: 0, externalPaymentRef: 'inv-93' })).toBe('invalid_input');
+  expect(await code({ ...base, receivedOn: '2026-02-31', externalPaymentRef: 'inv-95' })).toBe('invalid_input'); // never rolled into March
 
   // A known customer needs no partner; the list shows the commission the plan gave.
   expect((await post(owner, { ...base, partnerId: null, externalPaymentRef: 'inv-94', receivedOn: '2026-03-11' })).status()).toBe(201);
@@ -216,9 +230,9 @@ test('commissions: approve / reject / un-approve under the lock, PAID untouchabl
   const p90 = await byRef('inv-90');
   expect((await move(observer, [v1.id], 'APPROVE')).status()).toBe(403);
 
-  expect(await (await move(owner, [v1.id, 'not-a-commission'], 'APPROVE')).json()).toEqual({ moved: 1, skipped: ['not-a-commission'] });
+  expect(await (await move(owner, [v1.id, 'not-a-commission'], 'APPROVE')).json()).toEqual({ moved: 1, skipped: ['not-a-commission'], failedPartners: 0 });
   expect((await byRef('inv-1')).status).toBe('APPROVED');
-  expect(await (await move(owner, [v1.id], 'REJECT')).json()).toEqual({ moved: 0, skipped: [v1.id] }); // not PENDING any more
+  expect(await (await move(owner, [v1.id], 'REJECT')).json()).toEqual({ moved: 0, skipped: [v1.id], failedPartners: 0 }); // not PENDING any more
   expect(await (await move(owner, [v1.id], 'UNAPPROVE')).json()).toMatchObject({ moved: 1 });
   expect(await (await move(owner, [p90.id], 'REJECT')).json()).toMatchObject({ moved: 1 });
 
@@ -254,6 +268,13 @@ test('payouts: all or nothing under the lock, only APPROVED rows of that partner
   const other = await prisma.affiliatePartner.findFirstOrThrow({ where: { orgId, code: 'new-1' } });
   expect(await (await pay(owner, { partnerId: other.id, commissionIds: [v1.id] })).json()).toEqual({ code: 'payout_mismatch' });
   expect((await pay(owner, { commissionIds: [v1.id], paidOn: '2999-01-01' })).status()).toBe(400);
+  expect((await pay(owner, { commissionIds: [v1.id], paidOn: '2026-04-31' })).status()).toBe(400);
+
+  // The payer's list is unpaged, with the totals of all approved rows.
+  const cand = await (await owner.get(`/api/admin/affiliate/payouts/candidates?partnerId=${partnerId}`, { headers: host })).json();
+  expect(cand).toMatchObject({ totalCount: 2, totalAmountMinor: v1.amountMinor + p94.amountMinor, max: 200 });
+  expect(cand.rows.map((r: { id: string }) => r.id).sort()).toEqual([v1.id, p94.id].sort());
+  expect((await observer.get(`/api/admin/affiliate/payouts/candidates?partnerId=${partnerId}`, { headers: host })).status()).toBe(403);
 
   const ok = await pay(owner, { commissionIds: [v1.id, p94.id] });
   expect(ok.status()).toBe(201);

@@ -51,11 +51,16 @@ export default function AffiliatePaymentsPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [page, setPage] = useState(1);
   const [failed, setFailed] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', receivedOn: today(), externalPaymentRef: '' });
 
   const load = useCallback(async () => {
     const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?page=${page}`), fetch('/api/admin/affiliate/partners')]);
+    if (p.status === 403 || q.status === 403) {
+      setForbidden(true);
+      return;
+    }
     if (!p.ok || !q.ok) {
       setFailed(true);
       return;
@@ -106,8 +111,12 @@ export default function AffiliatePaymentsPage() {
     }
   }
 
+  if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{t.affiliateAdmin.noAccess}</p>;
   if (failed) return <p className="text-sm text-red-600" role="alert">{L.failed}</p>;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.perPage)) : 1;
+  // What the server will receive, before saving: "1.000" is a thousand euro.
+  const parsedAmount = parseMinorUnits(form.amount);
+  const amountPreview = parsedAmount === null || Number.isNaN(parsedAmount) ? undefined : interpolate(L.amountPreview, { amount: money(parsedAmount) });
 
   return (
     <div className="space-y-6">
@@ -133,7 +142,7 @@ export default function AffiliatePaymentsPage() {
               data-testid="affiliate-payment-partner"
             />
             <Input label={L.customerRef} hint={L.customerRefHint} value={form.customerExternalRef} onChange={(e) => setForm({ ...form, customerExternalRef: e.target.value })} data-testid="affiliate-payment-customer" />
-            <Input label={L.amount} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="affiliate-payment-amount" />
+            <Input label={L.amount} hint={amountPreview} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="affiliate-payment-amount" />
             <Input label={L.receivedOn} type="date" max={today()} value={form.receivedOn} onChange={(e) => setForm({ ...form, receivedOn: e.target.value })} data-testid="affiliate-payment-date" />
             <Input label={L.paymentRef} hint={L.paymentRefHint} value={form.externalPaymentRef} onChange={(e) => setForm({ ...form, externalPaymentRef: e.target.value })} data-testid="affiliate-payment-ref" />
           </div>

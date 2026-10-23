@@ -109,6 +109,15 @@ test('a new plan never creates commissions for payments recorded before it took 
   assert.deepEqual(ch.drift.map((d) => [d.paymentId, d.commissionId, d.expected]), [['p2', null, { kind: 'PERCENT', amountMinor: 80 }]]);
 });
 
+test('an older-version PENDING row of a payment recorded AFTER the plan is live (a payment that raced the plan change)', () => {
+  // p1 was recorded before the current plan (frozen); p2 after it but got the old version's answer.
+  const ps = [pay('p1', 'a', 0, 800), pay('p2', 'a', 5, 800)];
+  const rows = [stored('p1', 'TIER', 250, 0, { planVersion: 2 }), stored('p2', 'PERCENT', 80, 5, { planVersion: 2 })];
+  const ch = run(ps, rows, 3, new Set(['p1']));
+  assert.deepEqual(ch.remove, ['c-p2']); // the current plan pays nothing there (one customer, no switch)
+  assert.deepEqual(ch.drift.map((d) => d.commissionId), ['c-p1']); // p1 stays frozen and is reported
+});
+
 test('a changed due date alone is an update', () => {
   const ch = run([pay('p1', 'a', 0, 800)], [stored('p1', 'TIER', 300, 0, { dueAt: at(1) })]);
   assert.deepEqual(ch.update.map((u) => u.id), ['c-p1']);

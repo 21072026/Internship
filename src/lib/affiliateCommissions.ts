@@ -26,7 +26,9 @@ export async function listCommissions(
   orgId: string,
   opts: { status?: CommissionStatus | null; partnerId?: string | null; page?: number } = {},
 ): Promise<{ rows: CommissionRow[]; total: number; page: number; perPage: number; totals: Record<CommissionStatus, { count: number; amountMinor: number }> }> {
-  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  // Bounded: a huge or non-finite page would overflow Prisma's `skip`.
+  const raw = Math.floor(opts.page ?? 1);
+  const page = Number.isFinite(raw) ? Math.min(10_000, Math.max(1, raw)) : 1;
   const scope = { orgId, ...(opts.partnerId ? { partnerId: opts.partnerId } : {}) };
   const where = { ...scope, ...(opts.status ? { status: opts.status } : {}) };
   const [rows, total, sums] = await Promise.all([
@@ -79,5 +81,43 @@ export async function listCommissions(
     page,
     perPage: COMMISSIONS_PER_PAGE,
     totals,
+  };
+}
+
+/**
+ * What a payout can take for one partner: its APPROVED commissions, oldest due
+ * first, up to MAX (the writer's per-payout limit) — and the totals of ALL of
+ * them, so a screen can say when it shows fewer than there are. The amount a
+ * payer transfers must be the sum of the rows they actually select.
+ */
+export async function approvedForPayout(orgId: string, partnerId: string, max: number) {
+  const where = { orgId, partnerId, status: 'APPROVED' as const };
+  const [rows, all] = await Promise.all([
+    prisma.affiliateCommission.findMany({
+      where,
+      orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
+      take: max,
+      select: {
+        id: true,
+        amountMinor: true,
+        currency: true,
+        dueAt: true,
+        customer: { select: { externalRef: true } },
+        payment: { select: { externalPaymentRef: true } },
+      },
+    }),
+    prisma.affiliateCommission.aggregate({ where, _count: { _all: true }, _sum: { amountMinor: true } }),
+  ]);
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      amountMinor: r.amountMinor,
+      currency: r.currency,
+      dueAt: r.dueAt.toISOString(),
+      customerRef: r.customer.externalRef,
+      payment: { externalPaymentRef: r.payment.externalPaymentRef },
+    })),
+    totalCount: all._count._all,
+    totalAmountMinor: all._sum.amountMinor ?? 0,
   };
 }

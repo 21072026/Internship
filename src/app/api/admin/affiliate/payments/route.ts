@@ -5,6 +5,7 @@ import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { listPayments } from '@/lib/affiliatePayments';
+import { parseCalendarDay } from '@/lib/calendarDay';
 import { AffiliateWriteError, recordAffiliatePayment, type AffiliateWriteErrorCode } from '@/lib/affiliatePaymentWriter';
 
 // The programme's customer payments (docs/affiliate-module.md, #3116).
@@ -29,7 +30,7 @@ const schema = z.object({
   partnerId: z.string().min(1).nullable().optional(),
   customerExternalRef: z.string(),
   amountMinor: z.number(),
-  receivedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  receivedOn: z.string(),
   externalPaymentRef: z.string(),
 });
 
@@ -43,6 +44,7 @@ const STATUS: Record<AffiliateWriteErrorCode, number> = {
   customer_of_another_partner: 409,
   duplicate_payment: 409,
   payout_mismatch: 409,
+  invalid_transition: 409,
   busy: 503,
   conflict: 409,
 };
@@ -57,6 +59,8 @@ export async function POST(request: Request) {
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ code: 'invalid_input', issues: [] }, { status: 400 });
+  const receivedAt = parseCalendarDay(parsed.data.receivedOn);
+  if (!receivedAt) return NextResponse.json({ code: 'invalid_input', issues: ['received_at'] }, { status: 400 });
   const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true } });
   const currency = (settings?.plan as { currency?: string } | null)?.currency;
   if (!currency) return NextResponse.json({ code: 'no_plan' }, { status: 409 });
@@ -68,7 +72,7 @@ export async function POST(request: Request) {
       customerExternalRef: parsed.data.customerExternalRef,
       amountMinor: parsed.data.amountMinor,
       currency,
-      receivedAt: new Date(`${parsed.data.receivedOn}T00:00:00Z`),
+      receivedAt,
       externalPaymentRef: parsed.data.externalPaymentRef,
       source: 'MANUAL',
       enteredById: auth.session.user.id,

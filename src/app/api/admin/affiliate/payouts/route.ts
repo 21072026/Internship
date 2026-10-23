@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/authz';
 import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
 import { listPayouts } from '@/lib/affiliatePayouts';
+import { parseCalendarDay } from '@/lib/calendarDay';
 import { AffiliateWriteError, MAX_COMMISSIONS_PER_ACTION, createPayout } from '@/lib/affiliatePaymentWriter';
 
 // Payouts (docs/affiliate-module.md, #3116). GET: `affiliate.read`, newest first.
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
 const schema = z.object({
   partnerId: z.string().min(1),
   commissionIds: z.array(z.string().min(1)).min(1).max(MAX_COMMISSIONS_PER_ACTION),
-  paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  paidOn: z.string(),
   reference: z.string().nullable().optional(),
 });
 
@@ -39,13 +40,15 @@ export async function POST(request: Request) {
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ code: 'invalid_input' }, { status: 400 });
+  const paidAt = parseCalendarDay(parsed.data.paidOn);
+  if (!paidAt) return NextResponse.json({ code: 'invalid_input' }, { status: 400 });
   try {
     const result = await createPayout(
       orgId,
       {
         partnerId: parsed.data.partnerId,
         commissionIds: parsed.data.commissionIds,
-        paidAt: new Date(`${parsed.data.paidOn}T00:00:00Z`),
+        paidAt,
         reference: parsed.data.reference ?? null,
       },
       auth.session.user.id,

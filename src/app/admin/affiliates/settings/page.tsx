@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
-import { parseMinorUnits } from '@/lib/money';
+import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
 
@@ -111,6 +111,7 @@ export default function AffiliateSettingsPage() {
   const toast = useToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [failed, setFailed] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
   const [issues, setIssues] = useState<Set<string>>(new Set());
   const [contract, setContract] = useState<Record<string, string>>({});
@@ -118,6 +119,10 @@ export default function AffiliateSettingsPage() {
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/affiliate/settings');
+    if (res.status === 403) {
+      setForbidden(true);
+      return;
+    }
     if (!res.ok) {
       setFailed(true);
       return;
@@ -132,12 +137,19 @@ export default function AffiliateSettingsPage() {
     void load();
   }, [load]);
 
+  if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{t.affiliateAdmin.noAccess}</p>;
   if (failed) return <p className="text-sm text-red-600" role="alert">{L.loadFailed}</p>;
   if (!settings || !form) return <SkeletonRows rows={6} />;
 
   const readOnly = !settings.canWrite;
   const err = (field: string) => (issues.has(field) ? L.errorInvalid : undefined);
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
+  // What the server will receive, shown under every money field: "1.000" is a
+  // thousand, "0,005" is not half a cent — the person sees it before saving.
+  const preview = (text: string) => {
+    const minor = parseMinorUnits(text);
+    return minor === null || Number.isNaN(minor) ? undefined : interpolate(L.amountPreview, { amount: formatMinorAmount(minor, form.currency, locale) });
+  };
 
   async function savePlan() {
     if (!form) return;
@@ -155,6 +167,7 @@ export default function AffiliateSettingsPage() {
         else {
           toast(interpolate(L.planSaved, { n: String(body.planVersion), partners: String(body.partnersResynced) }));
           if (body.drift > 0) toast(interpolate(L.planDrift, { n: String(body.drift) }), 'error');
+          if (body.resyncFailed > 0) toast(interpolate(L.resyncFailed, { n: String(body.resyncFailed) }), 'error');
           await load();
         }
       } else if (body.code === 'invalid_plan') {
@@ -212,6 +225,7 @@ export default function AffiliateSettingsPage() {
                   label={L.tierUpTo}
                   inputMode="decimal"
                   value={tier.upTo}
+                  hint={preview(tier.upTo)}
                   error={err(`tiers.${i}.upToMinor`)}
                   onChange={(e) => set({ tiers: form.tiers.map((x, j) => (j === i ? { ...x, upTo: e.target.value } : x)) })}
                 />
@@ -219,6 +233,7 @@ export default function AffiliateSettingsPage() {
                   label={L.tierCommission}
                   inputMode="decimal"
                   value={tier.commission}
+                  hint={preview(tier.commission)}
                   error={err(`tiers.${i}.commissionMinor`)}
                   onChange={(e) => set({ tiers: form.tiers.map((x, j) => (j === i ? { ...x, commission: e.target.value } : x)) })}
                 />
@@ -232,7 +247,7 @@ export default function AffiliateSettingsPage() {
             </Button>
           </div>
 
-          <Input label={L.topCommission} inputMode="decimal" value={form.top} error={err('topCommissionMinor')} onChange={(e) => set({ top: e.target.value })} />
+          <Input label={L.topCommission} hint={preview(form.top)} inputMode="decimal" value={form.top} error={err('topCommissionMinor')} onChange={(e) => set({ top: e.target.value })} />
           <Input label={L.percent} hint={L.percentHint} inputMode="decimal" value={form.percent} error={err('percentBps')} onChange={(e) => set({ percent: e.target.value })} />
           <Input label={L.switchAtCustomer} hint={L.switchHint} inputMode="numeric" value={form.switchAt} error={err('switchAtCustomer')} onChange={(e) => set({ switchAt: e.target.value })} />
           <Select
