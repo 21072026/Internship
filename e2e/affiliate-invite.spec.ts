@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
+import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
 import { freshIp } from './helpers/rateLimit';
 
 /**
@@ -11,7 +11,9 @@ import { freshIp } from './helpers/rateLimit';
  * invitation creates an AFFILIATE account linked to the partner in the same
  * transaction. A new invitation withdraws the open one; a partner that already
  * has an account cannot be linked twice; an AFFILIATE token that names no
- * partner creates nothing. @smoke: an account-creation boundary.
+ * partner creates nothing. The new partner then meets the contract page before
+ * anything else, and again whenever a new version is published.
+ * @smoke: an account-creation boundary.
  *
  * SYNTHETIC ONLY: throwaway MARKETING orgs per run.
  */
@@ -67,6 +69,8 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   for (const ctx of contexts) await ctx.dispose();
   for (const id of [orgId, otherOrgId].filter(Boolean)) {
+    await prisma.affiliateContractAcceptance.deleteMany({ where: { orgId: id } }).catch(() => {});
+    await prisma.affiliateProgramSettings.deleteMany({ where: { orgId: id } }).catch(() => {});
     await prisma.affiliatePartner.deleteMany({ where: { orgId: id } }).catch(() => {});
     await prisma.invitationToken.deleteMany({ where: { orgId: id } }).catch(() => {});
     await prisma.auditLog.deleteMany({ where: { orgId: id } }).catch(() => {});
@@ -143,4 +147,33 @@ test('a token for a partner that is already linked creates no account', { tag: '
   const forgedToken = await mint(forged, null);
   expect((await register(anon, forgedToken.token, forged)).status()).toBe(400);
   expect(await prisma.user.count({ where: { email: forged } })).toBe(0);
+});
+
+test('the invited partner accepts the contract before the portal opens', { tag: '@smoke' }, async ({ page }) => {
+  const publish = (version: number, marker: string) =>
+    prisma.affiliateProgramSettings.upsert({
+      where: { orgId },
+      create: { orgId, contract: { en: `Partner terms ${marker}`, tr: `Şartlar ${marker}`, de: `Bedingungen ${marker}` }, contractVersion: version },
+      update: { contract: { en: `Partner terms ${marker}`, tr: `Şartlar ${marker}`, de: `Bedingungen ${marker}` }, contractVersion: version },
+    });
+  await publish(1, 'first');
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, partnerEmail, PW, '/affiliate');
+  await page.waitForURL((u) => u.pathname === '/affiliate/contract', { timeout: 20_000 });
+  await expect(page.getByTestId('affiliate-contract-text')).toContainText('first');
+  const accept = page.getByTestId('affiliate-contract-accept');
+  await expect(accept).toBeDisabled();
+  await page.getByTestId('affiliate-contract-agree').check();
+  await accept.click();
+  await page.waitForURL((u) => u.pathname === '/affiliate', { timeout: 20_000 });
+  await expect(page.getByTestId('empty-affiliate-portal')).toBeVisible();
+  expect(await prisma.affiliateContractAcceptance.count({ where: { orgId, partnerId, version: 1 } })).toBe(1);
+
+  // A new version holds the portal again, and says which version was accepted.
+  await publish(2, 'second');
+  await gotoSettled(page, '/affiliate');
+  await page.waitForURL((u) => u.pathname === '/affiliate/contract', { timeout: 20_000 });
+  await expect(page.getByTestId('affiliate-contract-text')).toContainText('second');
+  await expect(page.getByTestId('affiliate-contract-intro')).toBeVisible();
 });
