@@ -58,6 +58,10 @@ export const PERMISSIONS = [
   'company.read',
   'company.write',
   'company.entitlements.write',
+  // The affiliate programme (docs/affiliate-module.md): settings, partners,
+  // payments, commissions, payouts. Writes move money, so ORG_ADMIN only.
+  'affiliate.read',
+  'affiliate.write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
