@@ -9,7 +9,7 @@ export type CommissionStatus = (typeof COMMISSION_STATUSES)[number];
 
 export interface CommissionRow {
   id: string;
-  kind: 'TIER' | 'PERCENT';
+  kind: 'TIER' | 'PERCENT' | 'IMPORTED';
   amountMinor: number;
   currency: string;
   status: CommissionStatus;

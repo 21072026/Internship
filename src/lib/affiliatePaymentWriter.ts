@@ -135,12 +135,13 @@ async function syncLocked(tx: Tx, orgId: string, partner: LockedPartner, loaded:
   const { plan, planVersion, planEffectiveAt } = loaded;
   const paymentRows = await tx.affiliatePayment.findMany({
     where: { orgId, customer: { partnerId: partner.id } },
-    select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true },
+    select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true, source: true },
   });
   const payments: PaymentFact[] = paymentRows;
   const recordedBeforePlan = new Set(
     planEffectiveAt === null ? [] : paymentRows.filter((p) => p.createdAt.getTime() < planEffectiveAt.getTime()).map((p) => p.id),
   );
+  const imported = new Set(paymentRows.filter((p) => p.source === 'IMPORT').map((p) => p.id));
   const stored: StoredCommission[] = await tx.affiliateCommission.findMany({
     where: { orgId, partnerId: partner.id },
     select: {
@@ -157,7 +158,7 @@ async function syncLocked(tx: Tx, orgId: string, partner: LockedPartner, loaded:
   });
 
   const evaluation = evaluatePartner(plan, { noticeEffectiveAt: partner.noticeEffectiveAt }, payments);
-  const changes = planCommissionChanges({ evaluation, payments, stored, planVersion, recordedBeforePlan });
+  const changes = planCommissionChanges({ evaluation, payments, stored, planVersion, recordedBeforePlan, imported });
 
   if (changes.create.length > 0) {
     await tx.affiliateCommission.createMany({
@@ -454,7 +455,7 @@ export async function driftReport(orgId: string): Promise<(CommissionDrift & { p
   for (const partner of partners) {
     const paymentRows = await prisma.affiliatePayment.findMany({
       where: { orgId, customer: { partnerId: partner.id } },
-      select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true },
+      select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true, source: true },
     });
     const stored: StoredCommission[] = await prisma.affiliateCommission.findMany({
       where: { orgId, partnerId: partner.id },
@@ -463,7 +464,8 @@ export async function driftReport(orgId: string): Promise<(CommissionDrift & { p
     const effective = settings.planEffectiveAt;
     const recordedBeforePlan = new Set(effective === null ? [] : paymentRows.filter((p) => p.createdAt < effective).map((p) => p.id));
     const evaluation = evaluatePartner(parsed.plan, { noticeEffectiveAt: partner.noticeEffectiveAt }, paymentRows);
-    const changes = planCommissionChanges({ evaluation, payments: paymentRows, stored, planVersion: settings.planVersion, recordedBeforePlan });
+    const imported = new Set(paymentRows.filter((p) => p.source === 'IMPORT').map((p) => p.id));
+    const changes = planCommissionChanges({ evaluation, payments: paymentRows, stored, planVersion: settings.planVersion, recordedBeforePlan, imported });
     for (const d of changes.drift) out.push({ ...d, partnerId: partner.id });
   }
   return out;

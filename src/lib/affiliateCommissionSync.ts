@@ -14,6 +14,9 @@
 //   A frozen row is never changed; when the engine disagrees with it, the
 //   difference is reported as DRIFT for the admin to look at.
 // - Only the engine's outcome is compared, never a row's status or payout.
+// - A payment imported from a previous system (#3118) counts for the customer
+//   order, but its commission is taken as recorded: nothing is created, changed,
+//   removed or reported as drift for it.
 
 import { MAX_AMOUNT_MINOR, type PartnerEvaluation, type PaymentFact } from './affiliateCommissionRule';
 
@@ -33,7 +36,7 @@ export type CommissionStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED';
 export interface StoredCommission {
   id: string;
   paymentId: string;
-  kind: 'TIER' | 'PERCENT';
+  kind: 'TIER' | 'PERCENT' | 'IMPORTED';
   amountMinor: number;
   currency: string;
   dueAt: Date;
@@ -87,12 +90,15 @@ export function planCommissionChanges(input: {
    * creates a commission for them retroactively; what it would give is drift.
    */
   recordedBeforePlan?: ReadonlySet<string>;
+  /** Payments imported from a previous system: never acted on, never drift. */
+  imported?: ReadonlySet<string>;
 }): CommissionChanges {
   const paymentById = new Map(input.payments.map((p) => [p.id, p]));
   const storedByPayment = new Map(input.stored.map((c) => [c.paymentId, c]));
   const out: CommissionChanges = { create: [], update: [], remove: [], drift: [] };
 
   for (const ev of input.evaluation.payments) {
+    if (input.imported?.has(ev.paymentId)) continue;
     const existing = storedByPayment.get(ev.paymentId);
     const payment = paymentById.get(ev.paymentId);
     const earns = ev.outcome.kind !== 'NONE' && payment !== undefined && ev.dueAt !== null;

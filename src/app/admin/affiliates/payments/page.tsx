@@ -27,7 +27,7 @@ interface Row {
   externalPaymentRef: string;
   customerRef: string;
   partner: { id: string; code: string; displayName: string };
-  commission: { kind: 'TIER' | 'PERCENT'; amountMinor: number; status: string } | null;
+  commission: { kind: 'TIER' | 'PERCENT' | 'IMPORTED'; amountMinor: number; status: string } | null;
 }
 interface Partner {
   id: string;

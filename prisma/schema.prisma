@@ -8039,6 +8039,8 @@ enum AffiliatePartnerStatus {
 enum AffiliateCommissionKind {
   TIER
   PERCENT
+  // Taken over from a previous system as recorded (#3118); never recomputed.
+  IMPORTED
 }
 
 enum AffiliateCommissionStatus {
@@ -8053,6 +8055,10 @@ enum AffiliateCommissionStatus {
 enum AffiliatePaymentSource {
   MANUAL
   API
+  // A previous system's history (#3118). Counts for the customer order, but its
+  // commission is frozen as imported: the writer never creates, changes or
+  // reports drift for it.
+  IMPORT
 }
 
 enum AffiliatePayoutMethod {

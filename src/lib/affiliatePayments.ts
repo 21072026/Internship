@@ -12,10 +12,10 @@ export interface PaymentRow {
   amountMinor: number;
   currency: string;
   externalPaymentRef: string;
-  source: 'MANUAL' | 'API';
+  source: 'MANUAL' | 'API' | 'IMPORT';
   customerRef: string;
   partner: { id: string; code: string; displayName: string };
-  commission: { kind: 'TIER' | 'PERCENT'; amountMinor: number; status: string; planVersion: number } | null;
+  commission: { kind: 'TIER' | 'PERCENT' | 'IMPORTED'; amountMinor: number; status: string; planVersion: number } | null;
 }
 
 /** Newest received first; one page, plus the total for the pager. */

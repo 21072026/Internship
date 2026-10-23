@@ -23,7 +23,7 @@ type Transition = 'APPROVE' | 'REJECT' | 'UNAPPROVE';
 
 interface Row {
   id: string;
-  kind: 'TIER' | 'PERCENT';
+  kind: 'TIER' | 'PERCENT' | 'IMPORTED';
   amountMinor: number;
   currency: string;
   status: Status;
