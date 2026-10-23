@@ -109,6 +109,15 @@ test('a new plan never creates commissions for payments recorded before it took 
   assert.deepEqual(ch.drift.map((d) => [d.paymentId, d.commissionId, d.expected]), [['p2', null, { kind: 'PERCENT', amountMinor: 80 }]]);
 });
 
+test('an older-version PENDING row of a payment recorded AFTER the plan is live (a payment that raced the plan change)', () => {
+  // p1 was recorded before the current plan (frozen); p2 after it but got the old version's answer.
+  const ps = [pay('p1', 'a', 0, 800), pay('p2', 'a', 5, 800)];
+  const rows = [stored('p1', 'TIER', 250, 0, { planVersion: 2 }), stored('p2', 'PERCENT', 80, 5, { planVersion: 2 })];
+  const ch = run(ps, rows, 3, new Set(['p1']));
+  assert.deepEqual(ch.remove, ['c-p2']); // the current plan pays nothing there (one customer, no switch)
+  assert.deepEqual(ch.drift.map((d) => d.commissionId), ['c-p1']); // p1 stays frozen and is reported
+});
+
 test('a changed due date alone is an update', () => {
   const ch = run([pay('p1', 'a', 0, 800)], [stored('p1', 'TIER', 300, 0, { dueAt: at(1) })]);
   assert.deepEqual(ch.update.map((u) => u.id), ['c-p1']);
@@ -138,4 +147,24 @@ test('every malformed field is named', () => {
   assert.deepEqual(checkPaymentInput({ ...good, receivedAt: new Date('nope') }, NOW), ['received_at']);
   assert.deepEqual(checkPaymentInput({ ...good, externalPaymentRef: '   ' }, NOW), ['payment_ref']);
   assert.deepEqual(checkPaymentInput({ ...good, customerExternalRef: 'x'.repeat(121) }, NOW), ['customer_ref']);
+});
+
+test('an imported payment counts for the customer order but is never acted on (#3118)', () => {
+  // `old` was imported (PENDING, an amount the plan would not give, plan version 0);
+  // `new` arrives after the migration and is the partner's 2nd customer → percent.
+  const ps = [pay('imp', 'old', 0, 800), pay('p2', 'new', 3, 800)];
+  const rows = [stored('imp', 'IMPORTED', 555, 0, { planVersion: 0 })];
+  const ch = planCommissionChanges({
+    evaluation: evaluatePartner(PLAN, { noticeEffectiveAt: null }, ps),
+    payments: ps,
+    stored: rows,
+    planVersion: 3,
+    imported: new Set(['imp']),
+  });
+  assert.deepEqual(ch.create.map((c) => [c.paymentId, c.kind, c.amountMinor]), [['p2', 'PERCENT', 80]]);
+  assert.deepEqual([ch.update, ch.remove, ch.drift], [[], [], []]);
+
+  // Without the marker the same row would be recomputed — the trap the marker closes.
+  const unmarked = planCommissionChanges({ evaluation: evaluatePartner(PLAN, { noticeEffectiveAt: null }, ps), payments: ps, stored: rows, planVersion: 3, recordedBeforePlan: new Set() });
+  assert.equal(unmarked.update.length, 1);
 });
