@@ -366,6 +366,7 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.twoFactorEnabled', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.twoFactorDisabled', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.recoveryCodesRegenerated', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.payoutDetailsChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },

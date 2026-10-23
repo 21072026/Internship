@@ -33,6 +33,12 @@ test('internship: every role gets its full web sidebar', () => {
   assert.deepEqual(hrefs(appNavLinks('MENTEE', INTERNSHIP)), hrefs(PORTAL_NAV_LINKS));
 });
 
+test('an affiliate partner gets the partner menu only — never the portal (#3115)', () => {
+  assert.deepEqual(hrefs(appNavLinks('AFFILIATE', MARKETING)), ['/affiliate']);
+  // The internship product carries no affiliate module: nothing at all.
+  assert.deepEqual(hrefs(appNavLinks('AFFILIATE', INTERNSHIP)), []);
+});
+
 test('marketing: a mentor gets the sales sidebar, and nothing mentorship-only survives', () => {
   assert.deepEqual(hrefs(appNavLinks('MENTOR', MARKETING)), hrefs(SALES_NAV_LINKS.filter((l) => !l.capability || MARKETING.includes(l.capability))));
   for (const role of ['ADMIN', 'MENTOR', 'MENTEE']) {

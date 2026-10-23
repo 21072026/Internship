@@ -1,7 +1,7 @@
 import type { VerticalCapability } from '@/lib/verticals';
 import { salesRecordLink } from '@/lib/salesSurface';
 
-export type NotificationRole = 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
+export type NotificationRole = 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' | 'AFFILIATE';
 
 export type LinkKind =
   | 'relation'
@@ -23,6 +23,8 @@ const ROOTS: Record<NotificationRole, string> = {
   MENTEE: '/portal',
   COMPANY: '/company',
   SOURCE: '/source',
+  // The partner portal (docs/affiliate-module.md).
+  AFFILIATE: '/affiliate',
 };
 
 function validId(value?: string): string | null {

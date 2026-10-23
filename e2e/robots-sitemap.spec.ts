@@ -49,6 +49,7 @@ const PRIVATE_PREFIXES = [
   '/contact-permission',
   '/security-setup',
   '/source',
+  '/affiliate',
   '/offline',
   '/rsvp',
   '/m',

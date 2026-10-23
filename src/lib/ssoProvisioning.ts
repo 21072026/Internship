@@ -111,14 +111,17 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
 //     a missing claim is not evidence of a demotion;
 //   - an ADMIN row is never re-evaluated. ADMIN is not mappable yet (#1575),
 //     so every ADMIN is a locally granted one, and turning sync on must not
-//     lock a tenant's own administrators out.
+//     lock a tenant's own administrators out;
+//   - nor an AFFILIATE row (#3115): a partner of the affiliate programme is
+//     not staff, is not mappable, and a sync must never turn one into a
+//     MENTOR or MENTEE with its partner record still attached.
 // Every change is written to the activity log at warning level, old -> new.
 async function syncReturningRole<U extends { id: string; email: string; role: string; orgId: string | null }>(
   user: U,
   identity: SsoIdentity,
 ): Promise<U> {
   const next = identity.role;
-  if (!identity.syncRole || !next || next === user.role || user.role === 'ADMIN') return user;
+  if (!identity.syncRole || !next || next === user.role || user.role === 'ADMIN' || user.role === 'AFFILIATE') return user;
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: { role: next },

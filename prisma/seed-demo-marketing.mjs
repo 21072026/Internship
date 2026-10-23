@@ -109,6 +109,38 @@ export const MARKETING_DEMO_SOURCE = { slug: 'demo-feed', label: 'Demo feed' };
 export const MARKETING_ADMIN = { local: 'admin.marketing', fullName: 'Marketing Admin Demo' };
 
 /**
+ * The affiliate programme's demo partner (docs/affiliate-module.md): an AFFILIATE
+ * account that signs in to /affiliate with the shared demo password.
+ */
+export const MARKETING_DEMO_PARTNER = { local: 'partner.marketing', fullName: 'Partner Demo', code: 'demo-partner' };
+
+/**
+ * A SYNTHETIC commission plan and contract for the demo programme. Round numbers
+ * chosen to resemble no real contract — a real organisation's plan is its own
+ * data, entered on /admin/affiliates/settings, never in this repository.
+ */
+export const MARKETING_DEMO_AFFILIATE_PLAN = {
+  currency: 'EUR',
+  tiers: [
+    { upToMinor: 3_000, commissionMinor: 4_000 },
+    { upToMinor: 8_000, commissionMinor: 9_000 },
+  ],
+  topCommissionMinor: 16_000,
+  percentBps: 1_500,
+  switchAtCustomer: 5,
+  boundaryCustomer: 'PERCENT',
+  windowMonths: 12,
+  payoutDays: 30,
+  afterNotice: 'RUN_OUT',
+};
+
+export const MARKETING_DEMO_AFFILIATE_CONTRACT = {
+  en: 'Demo partner terms. This is sample text for a test environment, not a real agreement.',
+  tr: 'Demo partner koşulları. Bu, test ortamı için örnek bir metindir, gerçek bir sözleşme değildir.',
+  de: 'Demo-Partnerbedingungen. Dies ist ein Beispieltext für eine Testumgebung, kein echter Vertrag.',
+};
+
+/**
  * The owners. `mentorId` on a marketing record means "who owns this account",
  * so these are ordinary MENTOR-role users of the org — the vertical does not
  * carry the `mentorship` capability, so nothing ever shows them as mentors.
@@ -344,6 +376,35 @@ export async function seedMarketingDemo({ prisma, passwordHash, domain, log = co
   for (const owner of MARKETING_DEMO_OWNERS) {
     owners.push(await upsertUser({ ...owner, role: 'MENTOR' }));
   }
+
+  // The affiliate programme: settings (plan + contract v1) and one partner with
+  // an account. `update: {}` on purpose: a re-seed never overwrites a plan or a
+  // contract somebody edited on the topic environment. No payments or
+  // commissions here — those are written only by src/lib/affiliatePaymentWriter.ts.
+  await prisma.affiliateProgramSettings.upsert({
+    where: { orgId: org.id },
+    update: {},
+    create: {
+      orgId: org.id,
+      plan: MARKETING_DEMO_AFFILIATE_PLAN,
+      planVersion: 1,
+      planEffectiveAt: new Date(),
+      contract: MARKETING_DEMO_AFFILIATE_CONTRACT,
+      contractVersion: 1,
+    },
+  });
+  const partnerUser = await upsertUser({ local: MARKETING_DEMO_PARTNER.local, fullName: MARKETING_DEMO_PARTNER.fullName, role: 'AFFILIATE' });
+  await prisma.affiliatePartner.upsert({
+    where: { orgId_code: { orgId: org.id, code: MARKETING_DEMO_PARTNER.code } },
+    update: {},
+    create: {
+      orgId: org.id,
+      userId: partnerUser.id,
+      code: MARKETING_DEMO_PARTNER.code,
+      displayName: MARKETING_DEMO_PARTNER.fullName,
+      contactEmail: `${MARKETING_DEMO_PARTNER.local}@${domain}`,
+    },
+  });
 
   // Looked up by (org, slug) first, so a re-seed creates nothing and never
   // switches back on a demo source somebody disabled.

@@ -51,13 +51,43 @@ One plan per organisation, stored on `AffiliateProgramSettings` and edited at
   instant earns `percentBps` — for all of the partner's customers, the earlier ones
   included — inside each customer's window. Nothing is recomputed retroactively.
 - A customer's ordinal is decided by **first-payment date**, not by entry order.
-  When a back-dated first payment changes the order, the writer re-evaluates the
-  affected partner's not-yet-paid commissions in the same transaction; a commission
-  already `PAID` is never changed (a correction is a separate adjustment the admin
-  records).
+  The engine therefore judges a partner's **whole** history in one pass, and a
+  back-dated entry is answered by running it again.
 - A first payment of zero does not make a paying customer.
-- Each commission records the plan version it was computed under. A plan change
-  applies to payments received after it.
+- Each commission records the plan version it was computed under.
+
+## The writer and the reconciliation
+
+`src/lib/affiliatePaymentWriter.ts` is the only code that creates a payment, or
+creates, changes the amount of, or removes a commission (`recordAffiliatePayment`,
+and `resyncPartnerCommissions` after a plan or termination change). It locks the
+partner row first (`SELECT … FOR UPDATE`), reads the customer again under the lock,
+runs the engine over the partner's whole history, and lets the pure
+`src/lib/affiliateCommissionSync.ts` decide the changes. Status changes (approve,
+reject, pay) must take the same partner lock, so they never interleave with a
+reconciliation.
+
+- A commission that is `PENDING` **and** of the current plan version is a
+  projection: it is created, updated or removed to match the engine.
+- Everything else is **frozen**: `APPROVED`, `PAID`, `REJECTED`, and a `PENDING`
+  row of an older plan version (so a plan change applies to what comes after it).
+  A frozen row is never changed; when the engine disagrees, the writer returns the
+  difference as **drift** for the admin to look at. A correction is a separate,
+  explicit admin action.
+- **A plan change is not retroactive.** `AffiliateProgramSettings.planEffectiveAt`
+  stamps when the current version took effect. A payment *recorded* before it never
+  gets a commission created by the new plan (what it would give is drift); a
+  payment recorded after it is judged by the new plan, whatever its `receivedAt`.
+- A payment must be in the plan's currency (`currency_mismatch` otherwise), so a
+  mistyped currency never shifts a customer's first payment.
+- A `SUSPENDED` partner gets no new payments; a terminated one is judged by
+  `noticeEffectiveAt` and the plan's `afterNotice`.
+- External references are stored trimmed and compared **case-insensitively** (the
+  database collation): `INV-1` and `inv-1` are the same payment. Revisit before an
+  API import whose ids differ only by case.
+- Every guarded write must hit exactly the rows it planned, or the transaction is
+  undone (`conflict`). Waiting too long for the lock, or a deadlock, answers `busy`
+  (retry). Amounts are capped at the signed 32-bit column (`MAX_AMOUNT_MINOR`).
 
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
@@ -66,35 +96,67 @@ unit-tested with synthetic plans.
 
 All models carry `orgId` and are registered in `TENANT_MODELS`.
 
-- **AffiliatePartner** — `userId` (1:1), `code`, `status` (ACTIVE / SUSPENDED /
-  TERMINATED), `noticeEffectiveAt`, sealed payout details (IBAN, holder). A partner
-  that is not ACTIVE accrues nothing new, and a SUSPENDED one cannot change payout
-  details.
-- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org),
-  `firstPaymentAt`, `firstPaymentMinor`, `payingCustomerOrdinal`.
+- **AffiliatePartner** — `userId` (1:1, null until the invitation is accepted),
+  `code`, `displayName`, `contactEmail`, `status` (ACTIVE / SUSPENDED / TERMINATED),
+  `noticeEffectiveAt`, sealed payout details (IBAN, holder).
+- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org). Ordinals are
+  not stored: the engine derives them from the payments every time.
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
   future), `source`, `externalPaymentRef` (**required, unique per organisation**, so a
   double entry is caught even under a mistyped customer).
-- **AffiliateCommission** — `kind` (TIER / PERCENT), `amountMinor`, `accruedAt`,
-  `windowEndsAt`, `planVersion`, `status` (PENDING / APPROVED / PAID / REJECTED),
-  `payoutId`. Never edited once PAID.
+- **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT),
+  `amountMinor`, `accruedAt`, `dueAt`, `windowEndsAt`, `planVersion`, `status`
+  (PENDING / APPROVED / PAID / REJECTED), `payoutId`.
 - **AffiliatePayout** — a batch that marks commissions PAID; all-or-nothing.
-- **AffiliateProgramSettings** — landing copy, contract text, `contractVersion`, the
-  commission plan and its `planVersion`.
+- **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
+  validated by `parseCommissionPlan`) and its `planVersion`, landing copy, contract
+  text and `contractVersion`. Without a valid plan the writer refuses payments.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 
 ## Security
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner
-  shell carries the same server-side 2FA gate as every role shell.
-- Changing payout details sends a security notice (`sendSecurityNotice`) and writes
-  an `AuditLog` row. So do payment entries, commission status changes and payouts.
-- The contract-acceptance check runs in the API handlers, not only in the layout.
-- Contract version: texts are compared locale by locale in a fixed order (the JSON
-  column's key order is not stable), and the bump is a guarded update on the
-  version that was read.
-- One visibility rule for every read; a partner asking for another partner's row
-  gets 404.
+  shell carries the same server-side 2FA gate as every role shell. That gate is a
+  page redirect and does not protect an API (true of every role today), so the one
+  write that redirects money — `PUT /api/affiliate/me/payout-details` — checks the
+  policy itself and answers `403 two_factor_required` to an un-enrolled partner.
+  A step-up (password or code on every IBAN change) is a separate, later task.
+- While an admin impersonates a partner, the partner's own declarations and money
+  writes are refused (400 `impersonating`): accepting the contract and changing
+  payout details — the same rule as `/api/account`.
+- A partner never falls through to the mentee portal: `AFFILIATE_NAV_LINKS` is the
+  web and native-app menu, the shared shell (`RoleShell`: /messages, /todos, …)
+  sends a partner home, and `/mentors` admits the mentoring roles only.
+- SSO: a returning user's role sync never touches an AFFILIATE (like ADMIN). In an
+  organisation that enforces SSO, an external partner without an IdP account needs
+  a password exemption to sign in — a product decision per organisation.
+- Payout details (`src/lib/affiliatePayoutDetails.ts`, the one writer and reader)
+  are validated by the ISO 13616 IBAN check (`src/lib/payoutDetailsRule.ts`),
+  sealed with `secretBox` under a purpose bound to the organisation and the
+  partner (a sealed value copied to another partner's row does not open), frozen
+  while the partner is SUSPENDED (a guarded write, so a concurrent suspension wins), and every change
+  sends the `payoutDetailsChanged` security notice (essential `account_security`
+  group: no preference silences it) to the partner. The partner's API answers the
+  last four characters only.
+- Every money or contract write leaves one `AuditLog` row with its `orgId`, in the
+  same transaction where there is one: `affiliate.payment.record`,
+  `affiliate.commissions.resync`, `affiliate.contract.publish`,
+  `affiliate.contract.accept`, `affiliate.payout_details.update`. No row carries
+  an IBAN (the masked last four at most) or a person's data beyond ids.
+  Commission status changes and payouts will add theirs with the admin screens.
+- Every partner API goes through `affiliatePartnerGate()` (`src/lib/affiliateContract.ts`):
+  AFFILIATE only (403), inside a vertical with the `affiliate` module (403), the
+  session's OWN partner record (404 without one — never taken from the request),
+  and the current contract accepted (409 `contract_not_accepted`). Only
+  `/api/affiliate/contract` (read the text, accept a version) skips the last check.
+- Contract version (`saveContract`): texts are compared locale by locale in a fixed
+  order (`src/lib/affiliateContractRule.ts`; the JSON column's key order is not
+  stable, and line endings are normalised), so an unchanged save keeps the
+  version. A change bumps it by a guarded update on the version that was read.
+  Accepting needs the current version; accepting it twice is the same answer.
+- One visibility rule for every read (`affiliateRowScope`): ADMIN the programme of
+  their organisation, AFFILIATE their own partner's rows, anyone else nothing; a
+  row outside it answers 404, never 403.
 - Payout details: ADMIN reads them in full (manual transfers); the partner sees the
   last four characters.
 

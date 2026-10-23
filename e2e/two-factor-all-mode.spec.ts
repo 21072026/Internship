@@ -129,6 +129,41 @@ test("'all' holds a MARKETING lead on its sign-in path, ahead of the bounce to /
   }
 });
 
+test("'all' holds an affiliate partner at its shell; the shell is 404 outside the marketing vertical", { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  // The partner portal (docs/affiliate-module.md) carries the same server-side gate
+  // as every role shell (#1644): a partner edits the bank account commissions go to.
+  const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  const mkt = await prisma.organization.create({
+    data: { name: `TFA AFF ${stamp}`, slug: `tfa-aff-${stamp}`, vertical: 'MARKETING' },
+  });
+  const partnerEmail = uniqueEmail('tfa-affiliate');
+  const strayEmail = uniqueEmail('tfa-affiliate-internship');
+  const host = asHost(MARKETING_HOST);
+  const partner = await playwright.request.newContext({ baseURL });
+  const stray = await playwright.request.newContext({ baseURL });
+  try {
+    await seedUser(partnerEmail, PW, 'AFFILIATE', 'Affiliate Partner', { orgId: mkt.id });
+    expect((await signInViaApi(partner, partnerEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+
+    await setOrgPolicy(mkt.id, 'off');
+    expect(await landing(partner, '/affiliate', host), 'off: the portal').toBe('/affiliate');
+    await setOrgPolicy(mkt.id, 'all');
+    expect(await landing(partner, '/affiliate', host), 'all: held at the gate').toBe('/security-setup');
+
+    // An AFFILIATE account in the internship product (no affiliate module) gets no portal.
+    await seedUser(strayEmail, PW, 'AFFILIATE', 'Stray Affiliate');
+    expect((await signInViaApi(stray, strayEmail, PW)).ok).toBe(true);
+    expect((await stray.get('/affiliate', { maxRedirects: 0 })).status()).toBe(404);
+  } finally {
+    await partner.dispose();
+    await stray.dispose();
+    await prisma.setting.deleteMany({ where: { orgId: mkt.id } });
+    await cleanupByEmail(partnerEmail);
+    await cleanupByEmail(strayEmail);
+    await prisma.organization.deleteMany({ where: { id: mkt.id } });
+  }
+});
+
 test('two orgs hold different policies, and the coverage report is org-scoped and admin-only', async ({ playwright, baseURL }) => {
   const seeded = await seedCustomPipelineOrg('tfa-cov', PW);
   const [adminEmail, mentorEmail, menteeEmail] = seeded.emails;
@@ -167,6 +202,7 @@ test('two orgs hold different policies, and the coverage report is org-scoped an
     expect(byRole.MENTEE).toMatchObject({ total: 1, enabled: 0, percentage: 0 });
     expect(byRole.COMPANY).toMatchObject({ total: 0, enabled: 0, percentage: 100 });
     expect(byRole.SOURCE).toMatchObject({ total: 0, enabled: 0, percentage: 100 });
+    expect(byRole.AFFILIATE).toMatchObject({ total: 0, enabled: 0, percentage: 100 });
     expect(body.overall).toMatchObject({ total: 3, enabled: 0, percentage: 0 });
     expect(body.inScope).toMatchObject({ total: 3, enabled: 0 });
     expect(body.missing.total).toBe(3);

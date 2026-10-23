@@ -1,6 +1,7 @@
 ﻿import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { roleHome } from '@/lib/roleHome';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
 import { getServerDictionary } from '@/i18n/server';
@@ -40,6 +41,10 @@ export async function RoleShell({
   if (!session) {
     redirect('/auth/signin');
   }
+  // A partner of the affiliate programme has its own shell (src/app/affiliate)
+  // and none of the pages this one wears (/messages, /todos, /mentors, …);
+  // without this it would get the mentee's sidebar and palette (#3115).
+  if (!forcedRole && session.user.role === 'AFFILIATE') redirect(roleHome(session.user.role));
 
   const role = forcedRole ?? (session.user.role as 'ADMIN' | 'MENTOR' | 'MENTEE');
 

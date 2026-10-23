@@ -44,6 +44,8 @@ export const SECURITY_NOTICE_KINDS = [
   'recoveryCodesRegenerated',
   'sessionsRevoked',
   'adminSignedOutAll',
+  // An affiliate partner's IBAN/holder changed (src/lib/affiliatePayoutDetails.ts).
+  'payoutDetailsChanged',
 ] as const;
 export type SecurityNoticeKind = (typeof SECURITY_NOTICE_KINDS)[number];
 

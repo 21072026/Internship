@@ -21,6 +21,9 @@ enum Role {
   MENTEE
   COMPANY
   SOURCE
+  // A partner of an organisation's affiliate programme (docs/affiliate-module.md).
+  // Lands on /affiliate; never falls through to the mentee portal.
+  AFFILIATE
 }
 
 // The admin tier of an ADMIN account (#1567). Additive on purpose: `Role` is
@@ -302,6 +305,14 @@ model Organization {
   agendaTemplates         AgendaTemplate[]
   safeguardingFlags       SafeguardingFlag[]
   brandAssets             BrandAsset[]
+  // The affiliate module (docs/affiliate-module.md, MARKETING only).
+  affiliateSettings       AffiliateProgramSettings?
+  affiliatePartners       AffiliatePartner[]
+  affiliateCustomers      AffiliateCustomer[]
+  affiliatePayments       AffiliatePayment[]
+  affiliateCommissions    AffiliateCommission[]
+  affiliatePayouts        AffiliatePayout[]
+  affiliateAcceptances    AffiliateContractAcceptance[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -942,6 +953,8 @@ model User {
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]              @relation("PracticeSessions")
   safeguardingReviews               SafeguardingFlag[]             @relation("SafeguardingReviewer")
+  // The partner record when this account is an affiliate (docs/affiliate-module.md).
+  affiliatePartner                  AffiliatePartner?
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -8002,4 +8015,192 @@ model SafeguardingFlag {
   // The queue: one org's open flags, newest first.
   @@index([orgId, reviewedAt, createdAt])
   @@index([reviewedById])
+}
+
+// ── Affiliate module (docs/affiliate-module.md, #3114) ──────────────────────
+// Every model carries orgId and is registered in TENANT_MODELS. Money is integer
+// minor units + ISO currency. ONE WRITER for payments and commissions:
+// src/lib/affiliatePaymentWriter.ts; the arithmetic is the pure
+// src/lib/affiliateCommissionRule.ts, the reconciliation src/lib/affiliateCommissionSync.ts.
+
+enum AffiliatePartnerStatus {
+  ACTIVE
+  // Nothing new is recorded for a suspended partner; it can be reactivated.
+  SUSPENDED
+  // Termination: noticeEffectiveAt says when it takes effect.
+  TERMINATED
+}
+
+enum AffiliateCommissionKind {
+  TIER
+  PERCENT
+}
+
+enum AffiliateCommissionStatus {
+  // A projection of the engine: recomputed freely while PENDING.
+  PENDING
+  // Frozen from here on: the writer never changes or removes it.
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum AffiliatePaymentSource {
+  MANUAL
+  API
+}
+
+enum AffiliatePayoutMethod {
+  BANK_TRANSFER
+}
+
+model AffiliateProgramSettings {
+  id              String       @id @default(cuid())
+  orgId           String       @unique
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // The commission plan (src/lib/affiliateCommissionRule.ts, parseCommissionPlan).
+  // Organisation data: no default mirrors a real contract. Null until configured;
+  // the writer refuses payments without a plan.
+  plan            Json?
+  // Bumped on every plan change. A commission records the version it was computed
+  // under; one of an older version is never recomputed.
+  planVersion     Int          @default(0)
+  // When the current plan version took effect. Payments RECORDED before it never
+  // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
+  planEffectiveAt DateTime?
+  // Locale maps ({ en, tr, de }): the public programme page and the partner contract.
+  landing         Json?
+  contract        Json?
+  // Bumped on every contract text change; partners re-accept the current version.
+  contractVersion Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model AffiliatePartner {
+  id                  String                        @id @default(cuid())
+  orgId               String
+  org                 Organization                  @relation(fields: [orgId], references: [id])
+  // Null until the partner accepts the invitation (a migrated partner exists first).
+  userId              String?                       @unique
+  user                User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // The ?ref= value, copied verbatim on migration. Permanent once issued.
+  code                String                        @db.VarChar(100)
+  displayName         String                        @db.VarChar(160)
+  // Where the invitation goes before an account exists.
+  contactEmail        String?                       @db.VarChar(191)
+  status              AffiliatePartnerStatus        @default(ACTIVE)
+  // When a termination takes effect (src/lib/affiliateCommissionRule.ts, afterNotice).
+  noticeEffectiveAt   DateTime?
+  // IBAN and account holder, sealed by src/lib/secretBox.ts. ADMIN reads them for
+  // the manual transfer; the partner sees the last four characters.
+  payoutDetailsCipher String?                       @db.Text
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  customers           AffiliateCustomer[]
+  commissions         AffiliateCommission[]
+  payouts             AffiliatePayout[]
+  contractAcceptances AffiliateContractAcceptance[]
+
+  @@unique([orgId, code])
+  @@index([orgId, status])
+}
+
+model AffiliateCustomer {
+  id          String                @id @default(cuid())
+  orgId       String
+  org         Organization          @relation(fields: [orgId], references: [id])
+  partnerId   String
+  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id])
+  // The customer's id on the product side. Opaque here; one partner per customer.
+  externalRef String                @db.VarChar(120)
+  createdAt   DateTime              @default(now())
+  payments    AffiliatePayment[]
+  commissions AffiliateCommission[]
+
+  @@unique([orgId, externalRef])
+  @@index([partnerId])
+}
+
+model AffiliatePayment {
+  id                 String                 @id @default(cuid())
+  orgId              String
+  org                Organization           @relation(fields: [orgId], references: [id])
+  customerId         String
+  customer           AffiliateCustomer      @relation(fields: [customerId], references: [id])
+  amountMinor        Int
+  currency           String                 @db.VarChar(3)
+  // Never in the future (the writer refuses it).
+  receivedAt         DateTime
+  source             AffiliatePaymentSource @default(MANUAL)
+  // Required, manual entries included, and unique per ORGANISATION: a double
+  // entry is caught even when typed under the wrong customer.
+  externalPaymentRef String                 @db.VarChar(120)
+  enteredById        String?
+  createdAt          DateTime               @default(now())
+  commission         AffiliateCommission?
+
+  @@unique([orgId, externalPaymentRef])
+  @@index([customerId, receivedAt])
+}
+
+model AffiliateCommission {
+  id           String                    @id @default(cuid())
+  orgId        String
+  org          Organization              @relation(fields: [orgId], references: [id])
+  partnerId    String
+  partner      AffiliatePartner          @relation(fields: [partnerId], references: [id])
+  customerId   String
+  customer     AffiliateCustomer         @relation(fields: [customerId], references: [id])
+  // At most one commission per payment.
+  paymentId    String                    @unique
+  payment      AffiliatePayment          @relation(fields: [paymentId], references: [id])
+  kind         AffiliateCommissionKind
+  amountMinor  Int
+  currency     String                    @db.VarChar(3)
+  // The payment's receivedAt.
+  accruedAt    DateTime
+  dueAt        DateTime
+  windowEndsAt DateTime?
+  planVersion  Int
+  status       AffiliateCommissionStatus @default(PENDING)
+  payoutId     String?
+  payout       AffiliatePayout?          @relation(fields: [payoutId], references: [id])
+  paidAt       DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@index([orgId, partnerId, status])
+  @@index([payoutId])
+}
+
+model AffiliatePayout {
+  id          String                @id @default(cuid())
+  orgId       String
+  org         Organization          @relation(fields: [orgId], references: [id])
+  partnerId   String
+  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id])
+  amountMinor Int
+  currency    String                @db.VarChar(3)
+  method      AffiliatePayoutMethod @default(BANK_TRANSFER)
+  reference   String?               @db.VarChar(120)
+  paidAt      DateTime
+  paidById    String?
+  createdAt   DateTime              @default(now())
+  commissions AffiliateCommission[]
+
+  @@index([orgId, partnerId, paidAt])
+}
+
+model AffiliateContractAcceptance {
+  id         String           @id @default(cuid())
+  orgId      String
+  org        Organization     @relation(fields: [orgId], references: [id])
+  partnerId  String
+  partner    AffiliatePartner @relation(fields: [partnerId], references: [id])
+  version    Int
+  acceptedAt DateTime         @default(now())
+
+  @@unique([partnerId, version])
+  @@index([orgId])
 }

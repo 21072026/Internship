@@ -46,6 +46,7 @@ const ROLE_VARIANT: Record<string, BadgeProps['variant']> = {
   MENTEE: 'info',
   COMPANY: 'purple',
   SOURCE: 'default',
+  AFFILIATE: 'default',
 };
 
 export function RoleBadge({ role }: { role: string }) {
