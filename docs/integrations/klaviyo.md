@@ -43,8 +43,71 @@ ever e-mailed by it.
    by the same code a sync runs, with a writer that writes nothing.
 4. **Sync now**, or wait for the next 15-minute tick.
 
-Who owns the new leads: the organization's **default lead owner** (Settings), else the
-admin who saved the key. With neither, the run records `no_owner` and imports nothing.
+### Who owns a new lead
+
+**Nobody, until somebody takes it.** The connector writes the account, the lead person
+and the provider link, but it opens **no funnel record**: `createMarketingAccountsBatch`
+runs with `leadOnly`. A machine does not decide whose book a lead lands on.
+
+- **The pool.** Every sales rep of the org sees the unassigned leads on `/sales`, newest
+  first (`GET /api/sales/pool`, `src/lib/leadClaim.ts`). **Take it**
+  (`POST /api/sales/pool/[id]/claim`) puts one on the taker's own book at the org's first
+  stage. A pool lead is a stand-in lead of the org, linked to an account, with no record
+  at all. A lead whose record somebody closed is not in the pool: re-opening it is an
+  admin's transfer.
+- **One owner under a race (#419).** The claim locks the lead's row before it asks
+  whether a record exists, so of two simultaneous takers one gets the record and the
+  other gets `409 taken`. A lead of another org answers 404.
+- **Admins** still assign through the usual assignment, and the admin candidate list
+  shows the lead as unassigned.
+- After the quiet first import, a run that created leads rings every active ADMIN and
+  MENTOR of the org once. Admins are linked to the filtered accounts list, reps to the
+  pool.
+- The writer still plans the run as a user of the org (its activity actor): the default
+  lead owner, else the admin who connected, else any active admin. None of them owns the
+  leads. With no admin at all the run records `no_owner`.
+
+**A lead is a record, never a login.** Its user row keeps the generated stand-in address
+(`import.local`, never mailed, no password), and the real address is the account's
+contact e-mail. The admin candidate page and list show the real one
+(`src/lib/leadEmail.ts`; `GET /api/users/[id]` returns `leadRecord` + `contactEmail`).
+A marketing lead gets no activation panel and no password-reset button. On top of that,
+the customer-mail lock (`docs/mail-queue.md`) stops every mail to it during the test
+phase.
+
+### Phones
+
+A profile's `phone_number` is the lead's phone unless it is not that person's
+(`dropNonPersonalPhones` in `klaviyoSync.ts`, rules in `klaviyoRule.ts`):
+
+- **Ignored numbers**: the org's own switchboard and the like, typed on the card (one per
+  line, at most 50, stored on `ExternalConnection.ignoredPhones`).
+- **Shared numbers**: a number carried by at least `KLAVIYO_SHARED_PHONE_MIN` (3) different
+  people. People are counted from the page's profiles by address and from this org's
+  existing accounts by account; a re-synced profile is not counted twice.
+
+Numbers are compared on their last 9 digits (`phoneKey`), so `+49 176 …`, `0049176…` and
+`0176…` are the same number. A dropped phone is written nowhere: not on the lead, not on
+the account. A number that only becomes shared later stays on the first two people who
+carried it; *Starting over* below re-reads everyone under the rule.
+
+### Starting over
+
+**Delete what Klaviyo brought in and read it again** on the card
+(`GET|POST /api/admin/integrations/klaviyo/reset`, `src/lib/klaviyoReset.ts`).
+
+1. **Preview.** Shows how many accounts would go and which are kept, and why.
+2. **Confirm.** The admin types that number. The POST carries it as `expectRemove`, and a
+   plan that changed in between deletes nothing and answers 409 with the new preview.
+3. **What goes.** It runs the operator rollback (`prisma/wipe-integration-source.mjs
+   --source klaviyo`, #2959) on the caller's org. Only accounts the connector created
+   (`createdBySource = 'klaviyo'`) are candidates. Any account with a person's work on it
+   is kept: a note, a stage move, a follow-up, a value, a claim, contact-permission
+   evidence, another user. Each account's verdict is re-read inside its own transaction.
+   A deleted account takes its records, its own stand-in leads (unassigned ones included)
+   and its provider links.
+4. **Re-import.** The profile cursor goes back to a quiet first import, and the next run
+   re-reads every profile under today's rules. Nothing is mailed.
 
 ### The key from the server environment (optional)
 

@@ -89,6 +89,10 @@ import {
   keyLast4,
   mapProfile,
   nextAttemptDelayMs,
+  nonPersonalPhoneKeys,
+  normalizeIgnoredPhonesText,
+  parseIgnoredPhones,
+  phoneKey,
   restartQuery,
   type KlaviyoErrorCode,
   type KlaviyoLead,
@@ -108,6 +112,7 @@ const VIEW_SELECT = {
   id: true,
   enabled: true,
   sealedKey: true,
+  ignoredPhones: true,
   keyLast4: true,
   initialSyncDoneAt: true,
   lastSyncAt: true,
@@ -276,6 +281,15 @@ export async function setKlaviyoEnabled(orgId: string, enabled: boolean): Promis
   return count > 0;
 }
 
+/** The connection's ignored-number list (normalized, ≤ 50 numbers). False when not connected. */
+export async function setKlaviyoIgnoredPhones(orgId: string, text: string): Promise<boolean> {
+  const { count } = await prisma.externalConnection.updateMany({
+    where: { orgId, provider: KLAVIYO_PROVIDER },
+    data: { ignoredPhones: normalizeIgnoredPhonesText(text) || null },
+  });
+  return count > 0;
+}
+
 /**
  * Disconnect: the key and the live links go; the accounts and leads stay. An
  * erasure tombstone stays too (its connection is set null), so a later
@@ -348,6 +362,60 @@ interface PageContext {
   owner: MarketingImportOwner;
   startStage: string;
   listNames: ReadonlyMap<string, string>;
+  /** The connection's ignored numbers as phone keys (parseIgnoredPhones). */
+  ignoredPhones?: ReadonlySet<string>;
+}
+
+/**
+ * Blank the phone of every profile on this page whose number is not a person's
+ * (docs/integrations/klaviyo.md § Phones): an ignored number, or one that at
+ * least KLAVIYO_SHARED_PHONE_MIN different people carry — the people on this
+ * page (by address) plus the accounts of this org that already hold it (by
+ * account, not counting an account whose contact is one of this page's
+ * holders, so a re-synced profile is not counted twice). Returns how many
+ * phones were dropped.
+ */
+async function dropNonPersonalPhones(ctx: PageContext, rows: { value: KlaviyoLead }[]): Promise<number> {
+  const holders = new Map<string, Set<string>>();
+  const raws = new Set<string>();
+  for (const r of rows) {
+    const key = phoneKey(r.value.phone);
+    if (!key) continue;
+    raws.add(r.value.phone);
+    const people = holders.get(key) ?? new Set<string>();
+    people.add(`p:${r.value.email || r.value.profileId}`);
+    holders.set(key, people);
+  }
+  if (!holders.size) return 0;
+  const [leads, companies] = await Promise.all([
+    prisma.user.findMany({
+      where: { orgId: ctx.orgId, role: 'MENTEE', phone: { in: [...raws] } },
+      select: { phone: true, companyId: true, company: { select: { contactEmail: true } } },
+    }),
+    prisma.company.findMany({
+      where: { orgId: ctx.orgId, contactPhone: { in: [...raws] } },
+      select: { id: true, contactPhone: true, contactEmail: true },
+    }),
+  ]);
+  const add = (phone: string | null, companyId: string | null, contactEmail: string | null | undefined) => {
+    const key = phoneKey(phone);
+    const people = key ? holders.get(key) : undefined;
+    if (!people || !companyId) return;
+    const email = (contactEmail ?? '').toLowerCase();
+    if (email && people.has(`p:${email}`)) return;
+    people.add(`c:${companyId}`);
+  };
+  for (const l of leads) add(l.phone, l.companyId, l.company?.contactEmail);
+  for (const c of companies) add(c.contactPhone, c.id, c.contactEmail);
+  const drop = nonPersonalPhoneKeys(holders, ctx.ignoredPhones ?? new Set());
+  let dropped = 0;
+  for (const r of rows) {
+    if (drop.has(phoneKey(r.value.phone))) {
+      r.value.phone = '';
+      dropped += 1;
+    }
+  }
+  return dropped;
 }
 
 function sourceNameOf(lead: KlaviyoLead): string | null {
@@ -742,6 +810,10 @@ async function applyCreates(
       owner: ctx.owner,
       rows: batch.map((p) => accountFields(p.row.value, ctx.startStage, p.name)),
       createdBySource: KLAVIYO_CREATED_BY,
+      // Unassigned (docs/integrations/klaviyo.md § Who owns a new lead): the
+      // account and the lead person, no funnel record — a rep takes it from the
+      // pool, or an admin assigns it.
+      leadOnly: true,
       dryRun,
     });
     const leadIds = await standInLeads(
@@ -867,7 +939,10 @@ export async function syncProfilesPage(
       if (!mapped.ok) return { ok: false, row: row.row, key: mapped.key, status: 'SKIP', reason: mapped.reason };
       return { ok: true, row: row.row, key: mapped.lead.profileId, value: mapped.lead };
     },
-    resolve: (rows) => resolvePage(ctx, rows),
+    resolve: async (rows) => {
+      await dropNonPersonalPhones(ctx, rows);
+      return resolvePage(ctx, rows);
+    },
     // ONE writer for the run and the preview (#1432): creates go through the
     // same account writer in its preview mode, so a profile that the real run
     // would link to an existing account by name previews as that UPDATE too.
@@ -930,9 +1005,22 @@ function oldestErrored(rows: RowResult<KlaviyoPlan>[]): Date | null {
   return oldest;
 }
 
-/** Who owns a new lead: the org's default lead owner, else the admin who connected. */
+/**
+ * The user the import writer plans the run as. NOT an owner of the leads: the
+ * connector opens no funnel record (`leadOnly`), so a new lead belongs to
+ * nobody until a rep takes it or an admin assigns it. The writer still needs a
+ * user of the org for its plan and its activity actor: the default lead owner,
+ * else the admin who connected, else any active admin of the org.
+ */
 async function leadOwnerFor(orgId: string, connectedById: string | null): Promise<MarketingImportOwner | null> {
-  return (await resolveDefaultLeadOwner(orgId)) ?? (connectedById ? await findLeadOwner(orgId, connectedById) : null);
+  const known = (await resolveDefaultLeadOwner(orgId)) ?? (connectedById ? await findLeadOwner(orgId, connectedById) : null);
+  if (known) return known;
+  const admin = await prisma.user.findFirst({
+    where: { orgId, role: 'ADMIN', isActive: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  return admin ? findLeadOwner(orgId, admin.id) : null;
 }
 
 /**
@@ -968,6 +1056,7 @@ export async function runKlaviyoSync(
           initialSyncDoneAt: true,
           failures: true,
           totalCreated: true,
+          ignoredPhones: true,
         },
       }),
     );
@@ -993,6 +1082,7 @@ async function runLocked(
     initialSyncDoneAt: Date | null;
     failures: number;
     totalCreated: number;
+    ignoredPhones: string | null;
   },
   opts: { trigger: 'schedule' | 'manual'; maxPages?: number; now?: () => Date; client?: KlaviyoClientOptions },
   counts: Record<RowStatus, number>,
@@ -1039,7 +1129,14 @@ async function runLocked(
   try {
     const stages = await resolvePipelineStages(orgId);
     const listNames = await fetchListNames(key, opts.client);
-    const ctx: PageContext = { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames };
+    const ctx: PageContext = {
+      orgId,
+      connectionId: row.id,
+      owner,
+      startStage: startStageKey(stages),
+      listNames,
+      ignoredPhones: parseIgnoredPhones(row.ignoredPhones),
+    };
     let cursor: ProfilesCursor = beginQuery(
       {
         since: row.profilesSince,
@@ -1133,12 +1230,18 @@ async function runLocked(
         : `trigger=${opts.trigger} pages=${pages} ${Object.entries(counts).map(([s, n]) => `${s}=${n}`).join(' ')}`,
     });
   }
-  // The owner's bell, once per run — never during the silent first import.
+  // One bell per run for everyone who can take a lead — never during the silent
+  // first import. The new leads are unassigned: an ADMIN reads the filtered
+  // accounts list, a sales rep (MENTOR) the pool on /sales.
   if (!initial && counts.CREATE > 0) {
-    // An ADMIN reads the filtered accounts list; a sales rep (MENTOR, the other
-    // lead-owner role) has no admin shell — their door is their own accounts.
-    const href = owner.role === 'ADMIN' ? '/admin/companies?source=klaviyo' : '/sales/accounts';
-    await notify(owner.id, 'integration.newLeads', { count: counts.CREATE, provider: 'Klaviyo' }, href);
+    const people = await prisma.user.findMany({
+      where: { orgId, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+      select: { id: true, role: true },
+    });
+    for (const p of people) {
+      const href = p.role === 'ADMIN' ? '/admin/companies?source=klaviyo' : '/sales#lead-pool';
+      await notify(p.id, 'integration.newLeads', { count: counts.CREATE, provider: 'Klaviyo' }, href);
+    }
   }
   return { outcome, pages, counts, initial, initialCompleted };
 }
@@ -1148,7 +1251,7 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
   return runWithOrg(orgId, async () => {
     const row = await prisma.externalConnection.findFirst({
       where: { orgId, provider: KLAVIYO_PROVIDER },
-      select: { id: true, sealedKey: true, connectedById: true },
+      select: { id: true, sealedKey: true, connectedById: true, ignoredPhones: true },
     });
     if (!row) return { ok: false as const, code: 'not_connected' };
     const key = openConnectionKey(row.sealedKey);
@@ -1160,7 +1263,7 @@ export async function previewKlaviyo(orgId: string, opts: { client?: KlaviyoClie
     const stages = await resolvePipelineStages(orgId);
     const listNames = await fetchListNames(key, opts.client);
     const report = await syncProfilesPage(
-      { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames },
+      { orgId, connectionId: row.id, owner, startStage: startStageKey(stages), listNames, ignoredPhones: parseIgnoredPhones(row.ignoredPhones) },
       page.data.profiles,
       { dryRun: true },
     );

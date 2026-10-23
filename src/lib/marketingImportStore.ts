@@ -245,6 +245,14 @@ interface WriterContext {
    */
   createdBySource?: string | null;
   /**
+   * Write the account and its lead person, but open NO funnel record: the lead
+   * stays unassigned until a rep takes it (`claimLead`, src/lib/leadClaim.ts)
+   * or an admin assigns it. The Klaviyo connector sets it — a machine has no
+   * business deciding whose book a lead lands on. An existing lead is updated
+   * as usual; an existing record is never touched.
+   */
+  leadOnly?: boolean;
+  /**
    * The moment the written rows are dated (a historic account event replays
    * the past, docs/integrations/account-events.md § Historic mode). Omitted:
    * the wall clock, and every timestamp keeps its database default — exactly
@@ -438,6 +446,10 @@ async function placeOnFunnel(
       await tx.user.updateMany({ where: { id: leadId, sourceId: null, referredById: null }, data: { sourceId } });
     }
   }
+
+  // An unassigned lead (WriterContext.leadOnly): the person and the account
+  // exist, nobody's book holds them yet.
+  if (context.leadOnly) return;
 
   // ONE mentee, at most one ACTIVE mentor (#419) — asked through the shared
   // helper inside the transaction, never a hand-rolled findFirst.
@@ -707,6 +719,8 @@ interface MarketingRunCore {
   leadSource?: LeadSourceBinding;
   /** See `WriterContext.createdBySource`. */
   createdBySource?: string | null;
+  /** See `WriterContext.leadOnly`. */
+  leadOnly?: boolean;
   /** The moment the written rows are dated (WriterContext.now); omitted = the wall clock. */
   now?: Date;
   /** The handle reads and writes go through (WriterContext.db); omitted = the root client. */
@@ -735,6 +749,7 @@ async function runMarketingRows(core: MarketingRunCore) {
       offPathStages,
       trialLengthDays,
       createdBySource: core.createdBySource ?? null,
+      leadOnly: core.leadOnly === true,
       ...(core.now ? { now: core.now } : {}),
       ...(core.db ? { db: core.db } : {}),
     });
@@ -817,6 +832,8 @@ export async function createMarketingAccountsBatch(input: {
   owner: MarketingImportOwner;
   rows: ManualAccountFields[];
   createdBySource?: string | null;
+  /** See `WriterContext.leadOnly`: accounts + leads, no funnel record. */
+  leadOnly?: boolean;
   dryRun?: boolean;
 }): Promise<ImportReport<MarketingPlanValue>> {
   if (input.rows.length === 0) {
@@ -828,6 +845,7 @@ export async function createMarketingAccountsBatch(input: {
     mode: input.dryRun ? 'preview' : 'createOnly',
     leadSource: { kind: 'typed' },
     createdBySource: input.createdBySource ?? null,
+    leadOnly: input.leadOnly === true,
   });
   return report;
 }

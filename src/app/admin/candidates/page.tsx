@@ -22,11 +22,14 @@ import { TagFilter, TagChips, type TagOption } from '@/components/TagFilter';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { clipSkillLabel } from '@/lib/skills';
 import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
+import { shownEmail } from '@/lib/leadEmail';
 
 interface Candidate {
   id: string;
   fullName: string;
   email: string;
+  // A marketing lead's real address (its row holds a stand-in) — src/lib/leadEmail.ts.
+  company?: { contactEmail: string | null } | null;
   university?: string;
   department?: string;
   graduationYear?: number;
@@ -799,7 +802,7 @@ export default function CandidatesPage() {
                         {candidate.fullName}
                       </Link>
                       <p className="flex items-center gap-1.5 text-sm text-gray-500">
-                        <span className="truncate">{candidate.email}</span>
+                        <span className="truncate">{shownEmail(candidate.email, candidate.company?.contactEmail)}</span>
                         {/* Which language to write to them in (#1164). */}
                         <LanguageBadge language={candidate.preferredLanguage} />
                       </p>

@@ -35,6 +35,13 @@ interface Connection {
   lastSkipped: number;
   lastErrors: number;
   totalCreated: number;
+  ignoredPhones: string | null;
+}
+
+interface ResetPreview {
+  remove: number;
+  keep: number;
+  kept: { id: string; name: string; reasons: string[] }[];
 }
 
 type ResourceName = 'lists' | 'segments' | 'members' | 'metrics' | 'events' | 'campaigns' | 'campaign_stats' | 'flows';
@@ -80,6 +87,9 @@ export function KlaviyoCard() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [phones, setPhones] = useState<string | null>(null);
+  const [reset, setReset] = useState<ResetPreview | null>(null);
+  const [resetConfirm, setResetConfirm] = useState('');
 
   const errorText = useCallback(
     (code: string | null | undefined) => {
@@ -153,6 +163,54 @@ export function KlaviyoCard() {
     const { data } = await call('preview', '/api/admin/integrations/klaviyo/preview', { method: 'POST' });
     if (data.ok) setPreview(data.rows);
     else setMessage({ ok: false, text: errorText(data.code) });
+  };
+
+  const savePhones = async () => {
+    const { res, data } = await call('phones', '/api/admin/integrations/klaviyo', {
+      method: 'PATCH',
+      body: JSON.stringify({ ignoredPhones: phones ?? '' }),
+    });
+    if (res.ok) {
+      setView(data);
+      setPhones(null);
+      setMessage({ ok: true, text: k.phones.saved });
+    } else setMessage({ ok: false, text: errorText(data.code) });
+  };
+
+  const previewReset = async () => {
+    setBusy('resetPreview');
+    setMessage(null);
+    try {
+      const res = await fetch('/api/admin/integrations/klaviyo/reset');
+      if (res.ok) {
+        setReset(await res.json());
+        setResetConfirm('');
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const applyReset = async () => {
+    if (!reset) return;
+    const { res, data } = await call('reset', '/api/admin/integrations/klaviyo/reset', {
+      method: 'POST',
+      body: JSON.stringify({ expectRemove: reset.remove }),
+    });
+    if (res.status === 409 && data.preview) {
+      setReset(data.preview);
+      setResetConfirm('');
+      setMessage({ ok: false, text: k.reset.changed });
+      return;
+    }
+    if (res.ok) {
+      setReset(null);
+      setView({ connected: data.connected, connection: data.connection, linkedProfiles: data.linkedProfiles, resources: data.resources ?? [] });
+      setMessage({
+        ok: true,
+        text: interpolate(k.reset.done, { removed: String(data.removed), kept: String(data.kept + data.changed) }),
+      });
+    } else setMessage({ ok: false, text: errorText(data.code) });
   };
 
   const disconnect = async () => {
@@ -307,6 +365,82 @@ export function KlaviyoCard() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {c && (
+        <div className="mt-6 space-y-2" data-testid="klaviyo-phones">
+          <label htmlFor="klaviyo-ignored-phones" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {k.phones.title}
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{k.phones.hint}</p>
+          <textarea
+            id="klaviyo-ignored-phones"
+            rows={3}
+            className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+            value={phones ?? c.ignoredPhones ?? ''}
+            onChange={(e) => setPhones(e.target.value)}
+            placeholder="+49 30 1234567"
+            data-testid="klaviyo-ignored-phones"
+          />
+          <Button type="button" variant="outline" size="sm" onClick={savePhones} loading={busy === 'phones'} disabled={phones === null} data-testid="klaviyo-phones-save">
+            {k.phones.save}
+          </Button>
+        </div>
+      )}
+
+      {c && (
+        <div className="mt-6 space-y-2 rounded-lg border border-red-200 p-4 dark:border-red-900" data-testid="klaviyo-reset">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{k.reset.title}</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{k.reset.hint}</p>
+          {!reset ? (
+            <Button type="button" variant="outline" size="sm" onClick={previewReset} loading={busy === 'resetPreview'} data-testid="klaviyo-reset-preview">
+              {k.reset.preview}
+            </Button>
+          ) : (
+            <div className="space-y-2 text-sm" data-testid="klaviyo-reset-plan">
+              <p>{interpolate(k.reset.plan, { remove: String(reset.remove), keep: String(reset.keep) })}</p>
+              {reset.kept.length > 0 && (
+                <ul className="list-disc pl-5 text-xs text-gray-600 dark:text-gray-300">
+                  {reset.kept.map((a) => (
+                    <li key={a.id}>
+                      {a.name} — {a.reasons.join(', ')}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {reset.remove > 0 && (
+                <>
+                  <label htmlFor="klaviyo-reset-confirm" className="block text-xs text-gray-600 dark:text-gray-300">
+                    {interpolate(k.reset.confirmLabel, { remove: String(reset.remove) })}
+                  </label>
+                  <Input
+                    id="klaviyo-reset-confirm"
+                    inputMode="numeric"
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                    data-testid="klaviyo-reset-confirm"
+                  />
+                </>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={applyReset}
+                  loading={busy === 'reset'}
+                  disabled={reset.remove > 0 && resetConfirm.trim() !== String(reset.remove)}
+                  data-testid="klaviyo-reset-apply"
+                >
+                  {reset.remove > 0 ? k.reset.apply : k.reset.restartOnly}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setReset(null)}>
+                  {t.common.cancel}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

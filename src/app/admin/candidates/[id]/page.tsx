@@ -96,6 +96,9 @@ interface MenteeDetail {
   cvUrl?: string;
   // No password set yet → the candidate cannot sign in (#1123).
   pendingActivation?: boolean;
+  // A marketing lead record (never a login) and its real address (#lead-pool).
+  leadRecord?: boolean;
+  contactEmail?: string | null;
   tags?: { tag: { id: string; name: string; color?: string | null } }[];
   menteeRelations: Relation[];
 }
@@ -358,7 +361,9 @@ export default function AdminMenteeDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{user.fullName}</h1>
-            <p className="text-gray-500 break-words">{user.email}</p>
+            <p className="text-gray-500 break-words" data-testid="candidate-email">
+              {user.leadRecord ? (user.contactEmail ?? user.email) : user.email}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
@@ -367,10 +372,12 @@ export default function AdminMenteeDetailPage() {
             <UserQuickActions userId={user.id} role={user.role} />
             {/* Convert right where the person is looked at (#1252). */}
             {user.role && <RoleConvertButton userId={user.id} fullName={user.fullName} role={user.role} onDone={load} />}
-            <Button variant="outline" size="sm" loading={resetting} onClick={resetPassword}>
-              <KeyRound className="h-4 w-4 mr-1" />
-              {t.candidateDetail.resetPassword}
-            </Button>
+            {!user.leadRecord && (
+              <Button variant="outline" size="sm" loading={resetting} onClick={resetPassword}>
+                <KeyRound className="h-4 w-4 mr-1" />
+                {t.candidateDetail.resetPassword}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -381,7 +388,7 @@ export default function AdminMenteeDetailPage() {
       <MenteeActivationPanel
         menteeId={user.id}
         email={user.email}
-        pending={user.role === 'MENTEE' && !!user.pendingActivation}
+        pending={user.role === 'MENTEE' && !!user.pendingActivation && !user.leadRecord}
         onUpdated={load}
       />
 

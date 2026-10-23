@@ -5556,6 +5556,9 @@ model ExternalConnection {
   lastSkipped            Int                    @default(0)
   lastErrors             Int                    @default(0)
   totalCreated           Int                    @default(0)
+  // Numbers that are never a person's phone (the org's own switchboard …),
+  // one per line, typed on the card (docs/integrations/klaviyo.md § Phones).
+  ignoredPhones          String?                @db.Text
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
   profileLinks           ExternalProfileLink[]

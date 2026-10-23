@@ -304,7 +304,14 @@ async function inspectAccount(db, orgId, slug, company) {
     select: { id: true, menteeId: true, startDate: true },
   });
   const relationIds = relations.map((r) => r.id);
-  const menteeIds = [...new Set(relations.map((r) => r.menteeId))];
+  // A lead the source placed with NO funnel record (an unassigned pull-connector
+  // lead, src/lib/leadClaim.ts) hangs on the account by `companyId` only: it is
+  // one of the account's own stand-ins all the same, never "another user".
+  const attached = await db.user.findMany({
+    where: { companyId: company.id, orgId, role: 'MENTEE', password: LEAD_NO_LOGIN_PASSWORD, email: { endsWith: `@${STAND_IN_EMAIL_DOMAIN}` } },
+    select: { id: true },
+  });
+  const menteeIds = [...new Set([...relations.map((r) => r.menteeId), ...attached.map((u) => u.id)])];
   const leadsRaw = menteeIds.length
     ? await db.user.findMany({
         where: { id: { in: menteeIds } },
@@ -366,7 +373,8 @@ async function externalIdsOf(db, orgId, companyIds) {
   return rows.map((r) => r.externalId);
 }
 
-async function buildPlan(db, org, slug) {
+/** The rollback plan of one source in one org (also used by the Klaviyo card's reset, src/lib/klaviyoReset.ts). */
+export async function buildPlan(db, org, slug) {
   const source = await db.integrationSource.findFirst({ where: { orgId: org.id, slug }, select: { slug: true, enabled: true } });
   const companies = await db.company.findMany({
     where: { orgId: org.id, createdBySource: slug },
@@ -407,7 +415,8 @@ async function buildPlan(db, org, slug) {
 
 class AccountChangedError extends Error {}
 
-async function wipeAccount(prisma, orgId, slug, planned) {
+/** Delete ONE planned account, re-checking its verdict inside the transaction. Throws when it changed. */
+export async function wipeAccount(prisma, orgId, slug, planned) {
   const { company } = planned;
   return prisma.$transaction(async (tx) => {
     // The verdict again, inside the transaction: work a person added since the
