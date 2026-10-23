@@ -47,9 +47,11 @@ export interface CreateInvitationInput {
    * COMPANY is reachable only from the inquiry→company conversion (#1863):
    * `/api/invite` and the bulk board both validate against their own, narrower
    * enum, so no admin can mint a company login from the generic invite form
-   * without a company to attach it to.
+   * without a company to attach it to. AFFILIATE likewise comes only from the
+   * affiliate programme's own invitation (src/lib/affiliateInvite.ts), which
+   * names the partner the account is linked to.
    */
-  role: 'MENTOR' | 'MENTEE' | 'ADMIN' | 'COMPANY';
+  role: 'MENTOR' | 'MENTEE' | 'ADMIN' | 'COMPANY' | 'AFFILIATE';
   /**
    * Which language the invitation mail is written in (#1720).
    *
@@ -69,6 +71,8 @@ export interface CreateInvitationInput {
    * Meaningless for any other role and simply carried through as null.
    */
   companyId?: string | null;
+  /** The affiliate partner an invited AFFILIATE account is linked to (#3117). */
+  partnerId?: string | null;
   /** Passed through to the activity log for IP/UA attribution. */
   request?: Request;
   /**
@@ -163,6 +167,7 @@ export async function persistInvitation(
       menteeId: input.menteeId ?? null,
       projectId: input.projectId ?? null,
       companyId: input.companyId ?? null,
+      partnerId: input.partnerId ?? null,
     },
     select: { id: true, locale: true },
   });

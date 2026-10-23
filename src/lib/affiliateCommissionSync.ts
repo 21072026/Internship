@@ -5,8 +5,10 @@
 // (src/lib/affiliateCommissionRule.ts, evaluatePartner) over the WHOLE history and
 // asks this module what to change. Three rules decide it:
 //
-// - A commission is a projection while it is PENDING and was computed under the
-//   CURRENT plan version: it is created, updated or removed to match the engine.
+// - A commission is a projection while it is PENDING and either was computed
+//   under the CURRENT plan version, or belongs to a payment recorded after the
+//   current plan took effect (a payment that raced a plan change and got the
+//   old version's answer): it is created, updated or removed to match the engine.
 // - Anything else is frozen: APPROVED, PAID and REJECTED rows, and a PENDING row of
 //   an older plan version ("a plan change applies to payments received after it").
 //   A frozen row is never changed; when the engine disagrees with it, the
@@ -94,7 +96,9 @@ export function planCommissionChanges(input: {
     const existing = storedByPayment.get(ev.paymentId);
     const payment = paymentById.get(ev.paymentId);
     const earns = ev.outcome.kind !== 'NONE' && payment !== undefined && ev.dueAt !== null;
-    const live = existing !== undefined && existing.status === 'PENDING' && existing.planVersion === input.planVersion;
+    const recordedAfterPlan = input.recordedBeforePlan !== undefined && !input.recordedBeforePlan.has(ev.paymentId);
+    const live =
+      existing !== undefined && existing.status === 'PENDING' && (existing.planVersion === input.planVersion || recordedAfterPlan);
 
     if (earns) {
       const outcome = ev.outcome as { kind: 'TIER' | 'PERCENT'; amountMinor: number };

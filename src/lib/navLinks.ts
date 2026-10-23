@@ -253,6 +253,11 @@ export const SALES_NAV_LINKS: NavLink[] = [
  */
 export const AFFILIATE_NAV_LINKS: NavLink[] = [
   { href: '/affiliate', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'affiliate' },
+  { href: '/affiliate/customers', icon: Users, key: 'affiliateCustomers', capability: 'affiliate' },
+  { href: '/affiliate/commissions', icon: Receipt, key: 'affiliateCommissions', capability: 'affiliate' },
+  { href: '/affiliate/payouts', icon: Wallet, key: 'affiliatePayouts', capability: 'affiliate' },
+  { href: '/affiliate/payout-details', icon: Lock, key: 'affiliatePayoutDetails', capability: 'affiliate' },
+  { href: '/affiliate/contract', icon: FileSignature, key: 'affiliateContract', capability: 'affiliate' },
 ];
 
 /** Roles that get a sidebar (and therefore a "Go to" group in the palette). */

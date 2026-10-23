@@ -28,7 +28,16 @@ per organisation, and every number in tests and examples here is synthetic.
 ## The commission plan
 
 One plan per organisation, stored on `AffiliateProgramSettings` and edited at
-`/admin/affiliates/settings`. Money is **integer minor units** with an ISO currency
+`/admin/affiliates/settings` (`src/lib/affiliateProgramSettings.ts`, the one writer;
+`PUT /api/admin/affiliate/settings/plan`). Reading takes `affiliate.read`
+(ORG_ADMIN and OBSERVER), changing `affiliate.write` (ORG_ADMIN only, never while
+impersonating). A PROGRAM_ADMIN has no access at all: its reach is its cohort and
+company grants, and affiliate data belongs to neither — opening it would open the
+whole organisation. The screens tell such an admin so instead of failing. **The currency is EUR only for now** — a product
+decision for the first release; the engine is currency-agnostic and widening is
+the one list `AFFILIATE_CURRENCIES`. A real plan change bumps `planVersion`, stamps
+`planEffectiveAt`, is audited (`affiliate.plan.update`) and re-evaluates every
+partner; an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
 (same rule as `Offer` / `ProgramCost`). Shape:
 
 | Field | Meaning |
@@ -74,6 +83,9 @@ reconciliation.
   A frozen row is never changed; when the engine disagrees, the writer returns the
   difference as **drift** for the admin to look at. A correction is a separate,
   explicit admin action.
+- A PENDING row of an older plan version whose payment was recorded AFTER the
+  current plan took effect (a payment that raced a plan change) is live too: the
+  next reconciliation recomputes it under the current plan.
 - **A plan change is not retroactive.** `AffiliateProgramSettings.planEffectiveAt`
   stamps when the current version took effect. A payment *recorded* before it never
   gets a commission created by the new plan (what it would give is drift); a
@@ -113,6 +125,55 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   text and `contractVersion`. Without a valid plan the writer refuses payments.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 
+## Admin screens
+
+`/admin/affiliates` has one sidebar entry and its own tabs:
+
+- **Settings** — the plan and the contract (above).
+- **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
+  the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
+  a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
+  case-insensitively, permanent), and the state changes. Suspend / reactivate /
+  terminate go through `changePartnerState()` in the payment writer: under the
+  partner lock, re-evaluating the partner's commissions, audited
+  (`affiliate.partner.state`). ACTIVE ↔ SUSPENDED freely; a termination needs its
+  effective date (a calendar day, UTC midnight). **TERMINATED is final** (decided):
+  no change leaves it, because clearing the date would pay the termination
+  period's payments retroactively — a partner who returns gets a new record and
+  code. Every calendar day the API takes (payment, payout, termination) goes
+  through `parseCalendarDay()`, which refuses an impossible day (31 February)
+  instead of rolling it into the next month. The full IBAN is revealed to an
+  `affiliate.write` admin only, and every reveal is audited
+  (`affiliate.payout_details.read`).
+- **Payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
+  a manual entry goes straight to `recordAffiliatePayment()`; the currency is the
+  plan's, the amount is typed as people write it (`19,99`) and sent as minor
+  units, the received date is a calendar day (UTC midnight, up to +14 h ahead of
+  UTC is still "today"). A new customer number needs its partner; a known one
+  keeps its own. The list is newest first, paged, with the commission each
+  payment got.
+- **Commissions** (`/api/admin/affiliate/commissions`, list in
+  `src/lib/affiliateCommissions.ts`) — by status, oldest due first, totals per
+  status in SQL. `transitionCommissions()` (payment writer) approves
+  (PENDING → APPROVED), rejects (PENDING → REJECTED) or un-approves
+  (APPROVED → PENDING), at most 200 at a time, each partner's rows under that
+  partner's lock by a guarded update on the expected status; anything else — a
+  PAID row above all, another organisation's id — comes back as `skipped`. Each
+  partner is its own transaction: one that fails (its lock busy) is reported in
+  `failedPartners` and does not undo the others. One
+  audit row per partner (`affiliate.commission.approve|reject|unapprove`).
+  `driftReport()` lists the frozen rows the current plan would calculate
+  differently — read only, nothing written.
+- **Payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
+  recorded after the manual bank transfer. The screen lists a partner's approved
+  commissions unpaged (`/payouts/candidates`, up to the 200 a payout can take) and
+  says when there are more, so the sum shown is always the rows selected. `createPayout()` (payment writer)
+  takes ONE partner's selected commissions under its lock: all APPROVED, all that
+  partner's, one currency — or nothing is written (`payout_mismatch`). The payout
+  row carries their sum, the transfer day (a calendar day, not in the future) and
+  an optional bank reference; the commissions become PAID with `payoutId` and
+  `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
+
 ## Security
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner
@@ -143,7 +204,9 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   `affiliate.commissions.resync`, `affiliate.contract.publish`,
   `affiliate.contract.accept`, `affiliate.payout_details.update`. No row carries
   an IBAN (the masked last four at most) or a person's data beyond ids.
-  Commission status changes and payouts will add theirs with the admin screens.
+  The admin screens add `affiliate.plan.update`, `affiliate.partner.create`,
+  `affiliate.partner.state`, `affiliate.payout_details.read`,
+  `affiliate.commission.approve|reject|unapprove` and `affiliate.payout.create`.
 - Every partner API goes through `affiliatePartnerGate()` (`src/lib/affiliateContract.ts`):
   AFFILIATE only (403), inside a vertical with the `affiliate` module (403), the
   session's OWN partner record (404 without one — never taken from the request),
@@ -159,6 +222,61 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   row outside it answers 404, never 403.
 - Payout details: ADMIN reads them in full (manual transfers); the partner sees the
   last four characters.
+
+## The partner's account
+
+A partner exists before its account (the admin creates it, or a migration does).
+`src/lib/affiliateInvite.ts` is the one writer of the link between the two:
+
+- `POST /api/admin/affiliate/partners/[id]/invite` (`affiliate.write`) mints an
+  `AFFILIATE` invitation through the shared `createInvitation()` — addressed to the
+  partner's **contact e-mail** (a named invitation is what proves the mailbox) and
+  carrying `InvitationToken.partnerId`. Only an ACTIVE partner without an account
+  is invited (409 `already_linked` / `partner_inactive`, 400 `no_contact_email`,
+  409 `email_taken` when the address already has an account in this product).
+  A new invitation withdraws the partner's open ones (`revokedAt`) under the
+  partner's row lock, in the transaction that mints it, so the newest mail holds
+  the only live link; a partner leaving ACTIVE (`changePartnerState`) withdraws
+  them too. The register link is returned to the admin only when the mail could
+  not be sent. Audited (`affiliate.partner.invite`).
+- The generic invitation board never resends a partner's invitation
+  (`POST /api/invite/[id]` 409 `partner_invitation`, bulk `skippedPartner`): it
+  answers any ADMIN tier with the live link, and that link opens an account that
+  receives payouts — so it stays behind `affiliate.write`.
+- `/api/register` accepts an `AFFILIATE` token only when it names a partner and an
+  address. The account and `linkPartnerAccount()` run in ONE transaction; the link
+  is a guarded write (`userId: null`, status ACTIVE), so a second token for the
+  same partner, or a partner suspended since the mail, rolls the account back and
+  answers 400. Audited (`affiliate.partner.account_linked`). The partner chooses
+  their own password under the org's policy — nothing is imported.
+- The invitation is world-bound like every other (`docs/worlds.md`): a token of a
+  MARKETING organisation is unknown on any other host.
+
+## The partner portal
+
+`/affiliate` and its pages are server-rendered from the session: the partner is
+never taken from the request. Every page except `/affiliate/contract` calls
+`requirePortalPartner()` (`src/lib/affiliatePortal.ts`), which sends a partner who
+has not accepted the current contract to the contract page; the API refuses the
+same partner with 409 `contract_not_accepted`, so the page is a convenience, not
+the check.
+
+- **Home:** the referral link, the customer count and the totals per commission
+  status, and a notice while the partnership is suspended or ending.
+- **Referral link:** organisation data. `AffiliateProgramSettings.referralUrl`
+  (admin settings, `PUT /api/admin/affiliate/settings/referral-url`, audited
+  `affiliate.referral_url.update`) is an https base URL without credentials,
+  fragment or its own `ref`; the link is that URL with `ref=<code>` set
+  (`src/lib/affiliateReferralRule.ts`, unit-tested). Without one the portal shows
+  the code alone.
+- **Customers, commissions, payouts:** read through `src/lib/affiliatePartnerView.ts`,
+  narrowed by `affiliateRowScope()` to the partner's own rows. A partner sees its
+  customers' opaque references, payment amounts and dates, commissions and payouts
+  (with the transfer reference) — never a payment's own reference, who entered a
+  row, or another partner's rows. Another partner's payout page is 404.
+- **Bank details:** entered on `/affiliate/payout-details` through the existing
+  partner API (2FA policy, impersonation refusal, sealed, audited, announced); the
+  stored IBAN is shown masked and never read back into the form.
 
 ## Migration from a previous system
 
