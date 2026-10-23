@@ -1031,6 +1031,16 @@ const en = {
   // mentorship module shows it, so the base copy is vertical-neutral; the
   // MARKETING overlay (verticalOverlays.ts) says "lead" and "account".
   sales: {
+    pool: {
+      title: 'Unassigned leads',
+      hint: '{count} leads nobody has taken yet. Take one and it lands on your board at the first stage.',
+      empty: 'No unassigned leads right now.',
+      take: 'Take it',
+      taken: 'A colleague took that lead first.',
+      failed: 'That did not work — try again.',
+      none: '—',
+      columns: { person: 'Person', email: 'E-mail', phone: 'Phone', source: 'Source', created: 'Arrived' },
+    },
     dashboard: { title: 'Your pipeline', subtitle: 'Your own records, and what needs you today.' },
     target: {
       title: 'Won this month',
@@ -5790,6 +5800,23 @@ const en = {
       },
       previewColumns: { status: 'Result', account: 'Account', contact: 'Contact', email: 'E-mail', source: 'Source', consent: 'Klaviyo consent' },
       statuses: { CREATE: 'New', UPDATE: 'Update', UNCHANGED: 'Unchanged', SKIP: 'Skipped', ERROR: 'Error' },
+      phones: {
+        title: 'Numbers that are never a person\'s phone',
+        hint: 'Your own switchboard or any number Klaviyo put on many profiles. One per line. These are never written as a lead\'s phone; a number that at least 3 different people carry is skipped automatically too.',
+        save: 'Save numbers',
+        saved: 'Numbers saved — the next sync applies them.',
+      },
+      reset: {
+        title: 'Delete what Klaviyo brought in and read it again',
+        hint: 'Deletes the accounts and leads the connector created that nobody has worked on, then re-imports every profile with today\'s rules (unassigned, real address, personal phones only). An account with a note, a follow-up, a stage move or other work is kept. No e-mail is sent.',
+        preview: 'Show what would be deleted',
+        plan: '{remove} accounts would be deleted; {keep} are kept because someone worked on them.',
+        confirmLabel: 'Type {remove} to confirm the deletion:',
+        apply: 'Delete and re-import',
+        restartOnly: 'Re-import from the start',
+        changed: 'Something changed in the meantime — check the new numbers and confirm again.',
+        done: '{removed} accounts deleted, {kept} kept. The re-import starts with the next sync.',
+      },
       keySourceEnv: 'Server key (environment)',
       syncAll: 'Sync everything',
       resources: {
@@ -6492,7 +6519,7 @@ const en = {
     items: {
       candidateOutreach: { t: 'Companies can write — after review', d: 'A company that shortlisted a candidate can ask to send them a message. The candidate’s programme team approves or declines before anything is delivered, the company has a monthly request limit, and the candidate can close the conversation at any time — after which the company cannot ask again for 90 days.' },
       mentoringAgreement: { t: 'An agreement both sides accept', d: 'Write your programme’s agreement in English, Turkish and German; every change is a new version, so what someone accepted never changes. Each pairing sees it at kickoff and both sides accept their own side — and an unsigned pairing is a line on your report, never a locked account.' },
-      klaviyo: { t: 'Klaviyo leads, kept in sync', d: 'Connect a read-only Klaviyo key and every profile becomes a lead on the default owner\u2019s pipeline — with phone, location, custom properties and the form or list it came from. It re-syncs every 15 minutes, fills gaps without overwriting what your team typed, and never writes back to Klaviyo or e-mails a lead. Lists, segments, engagement and order events, campaigns with their results and flows come along too.' },
+      klaviyo: { t: 'Klaviyo leads, kept in sync', d: 'Connect a read-only Klaviyo key and every profile becomes a lead in an unassigned pool your reps take from — with phone, location, custom properties and the form or list it came from. It re-syncs every 15 minutes, fills gaps without overwriting what your team typed, and never writes back to Klaviyo or e-mails a lead. Lists, segments, engagement and order events, campaigns with their results and flows come along too.' },
       feedbackReports: { t: 'Report a problem in one click', d: 'A feedback button on every screen takes a screenshot of what the person sees and attaches the page address and the last errors the page logged — with tokens, passwords and e-mail addresses removed before anything leaves the browser. Admins filter the reports, read the console and network context, and track each one from new to resolved.' },
       reportSegments: { t: 'Reports sliced your way', d: 'Define your own attributes — department, level, location, a start date read as tenure — import them by CSV, and slice the pipeline, cohort, source, workload, placement and weekly-report reports by them, side by side or one segment at a time. Segments under five people are always combined into one named row, so no one can be singled out and the totals still add up.' },
       programJourney: { t: 'A programme journey, day by day', d: 'Lay out what happens when: a nudge on day 3, a first goal on day 7, reading for week 6 — counted from the pairing’s start or from the day a stage is reached, in three languages. Preview any pair’s dates before publishing; each step reaches the pair once, in the app, and one that is already done is skipped.' },
@@ -10025,6 +10052,16 @@ const tr: Dict = {
     },
   },
   sales: {
+    pool: {
+      title: 'Atanmamış lead\'ler',
+      hint: 'Henüz kimsenin almadığı {count} lead. Birini alırsan ilk aşamada senin panona düşer.',
+      empty: 'Şu an atanmamış lead yok.',
+      take: 'Üzerime al',
+      taken: 'Bu lead\'i bir çalışma arkadaşın senden önce aldı.',
+      failed: 'Olmadı — tekrar dene.',
+      none: '—',
+      columns: { person: 'Kişi', email: 'E-posta', phone: 'Telefon', source: 'Kaynak', created: 'Geliş' },
+    },
     dashboard: { title: 'Pipeline\'ın', subtitle: 'Kendi kayıtların ve bugün seni bekleyenler.' },
     target: {
       title: 'Bu ay kazanılan',
@@ -14658,6 +14695,23 @@ const tr: Dict = {
       },
       previewColumns: { status: 'Sonuç', account: 'Hesap', contact: 'İlgili kişi', email: 'E-posta', source: 'Kaynak', consent: 'Klaviyo onayı' },
       statuses: { CREATE: 'Yeni', UPDATE: 'Güncelleme', UNCHANGED: 'Değişmedi', SKIP: 'Atlandı', ERROR: 'Hata' },
+      phones: {
+        title: 'Hiçbir kişinin telefonu olmayan numaralar',
+        hint: 'Kendi santral numaranız ya da Klaviyo\'nun birçok profile yazdığı bir numara. Her satıra bir numara. Bunlar lead\'in telefonu olarak yazılmaz; en az 3 farklı kişide görünen bir numara da otomatik atlanır.',
+        save: 'Numaraları kaydet',
+        saved: 'Numaralar kaydedildi — bir sonraki eşitlemede uygulanır.',
+      },
+      reset: {
+        title: 'Klaviyo\'dan gelenleri sil ve yeniden çek',
+        hint: 'Connector\'ın oluşturduğu ve üzerinde kimsenin çalışmadığı hesapları ve lead\'leri siler, sonra tüm profilleri bugünkü kurallarla (atamasız, gerçek adres, yalnızca kişisel telefon) yeniden aktarır. Not, takip, aşama değişikliği gibi bir iş olan hesap korunur. E-posta gönderilmez.',
+        preview: 'Neyin silineceğini göster',
+        plan: '{remove} hesap silinecek; {keep} hesap üzerinde iş yapıldığı için korunacak.',
+        confirmLabel: 'Silmeyi onaylamak için {remove} yazın:',
+        apply: 'Sil ve yeniden çek',
+        restartOnly: 'Baştan yeniden çek',
+        changed: 'Bu arada bir şey değişti — yeni sayıları kontrol edip tekrar onaylayın.',
+        done: '{removed} hesap silindi, {kept} korundu. Yeniden aktarım bir sonraki eşitlemede başlar.',
+      },
       keySourceEnv: 'Sunucu anahtarı (ortam değişkeni)',
       syncAll: 'Her şeyi eşitle',
       resources: {
@@ -15350,7 +15404,7 @@ const tr: Dict = {
     items: {
       candidateOutreach: { t: 'Firmalar yazabilir — incelemeden sonra', d: 'Bir adayı kısa listeye alan firma ona mesaj göndermek için talepte bulunabilir. Adayın program ekibi, hiçbir şey iletilmeden önce onaylar veya reddeder; firmanın aylık talep sınırı vardır ve aday sohbeti istediği an kapatabilir — ardından firma 90 gün boyunca yeniden talepte bulunamaz.' },
       mentoringAgreement: { t: 'İki tarafın da kabul ettiği sözleşme', d: 'Programının sözleşmesini İngilizce, Türkçe ve Almanca yaz; her değişiklik yeni bir sürümdür, böylece birinin kabul ettiği metin asla değişmez. Her eşleşme onu başlangıçta görür ve iki taraf da kendi tarafını kabul eder — imzalanmamış bir eşleşme raporunda bir satırdır, asla kilitli bir hesap değil.' },
-      klaviyo: { t: 'Klaviyo potansiyel müşterileri, sürekli eşitli', d: 'Salt okunur bir Klaviyo anahtarı bağlayın; her profil varsayılan sahibin satış hattında bir potansiyel müşteri olur — telefon, konum, özel alanlar ve geldiği form ya da listeyle. 15 dakikada bir yeniden eşitlenir, ekibinizin yazdıklarının üzerine yazmadan yalnızca boşlukları doldurur; Klaviyo’ya hiçbir şey geri yazmaz ve potansiyel müşterilere e-posta göndermez. Listeler, segmentler, etkileşim ve sipariş olayları, sonuçlarıyla kampanyalar ve akışlar da gelir.' },
+      klaviyo: { t: 'Klaviyo potansiyel müşterileri, sürekli eşitli', d: 'Salt okunur bir Klaviyo anahtarı bağlayın; her profil temsilcilerinizin üzerine aldığı atanmamış bir havuzda potansiyel müşteri olur — telefon, konum, özel alanlar ve geldiği form ya da listeyle. 15 dakikada bir yeniden eşitlenir, ekibinizin yazdıklarının üzerine yazmadan yalnızca boşlukları doldurur; Klaviyo’ya hiçbir şey geri yazmaz ve potansiyel müşterilere e-posta göndermez. Listeler, segmentler, etkileşim ve sipariş olayları, sonuçlarıyla kampanyalar ve akışlar da gelir.' },
       feedbackReports: { t: 'Tek tıkla sorun bildirimi', d: 'Her ekrandaki geri bildirim butonu, kişinin gördüğünün ekran görüntüsünü alır; sayfa adresini ve sayfanın kaydettiği son hataları ekler — token’lar, parolalar ve e-posta adresleri tarayıcıdan çıkmadan önce temizlenir. Adminler bildirimleri filtreler, konsol ve ağ bağlamını okur ve her birini “yeni”den “çözüldü”ye kadar takip eder.' },
       reportSegments: { t: 'Raporları kendi kırılımınızla görün', d: 'Kendi özniteliklerinizi tanımlayın — bölüm, seviye, konum, kıdem olarak okunan bir başlangıç tarihi — CSV ile içe aktarın ve pipeline, dönem, kaynak, iş yükü, yerleştirme ve haftalık rapor raporlarını bunlara göre yan yana ya da tek tek kırın. Beş kişiden küçük segmentler her zaman tek bir adlandırılmış satırda birleştirilir; kimse tek başına ayırt edilemez ve toplamlar tutar.' },
       programJourney: { t: 'Gün gün program akışı', d: 'Ne zaman ne olacağını kurgula: 3. günde bir hatırlatma, 7. günde ilk hedef, 6. hafta için okuma — eşleşmenin başlangıcından ya da bir aşamaya girildiği günden sayılır, üç dilde. Yayınlamadan önce herhangi bir ikilinin tarihlerini önizle; her adım ikiliye uygulama içinde bir kez ulaşır, zaten yapılmış olan atlanır.' },
@@ -18844,6 +18898,16 @@ const de: Dict = {
     },
   },
   sales: {
+    pool: {
+      title: 'Nicht zugewiesene Leads',
+      hint: '{count} Leads, die noch niemand übernommen hat. Übernimm einen, und er landet in der ersten Stufe auf deinem Board.',
+      empty: 'Gerade gibt es keine nicht zugewiesenen Leads.',
+      take: 'Übernehmen',
+      taken: 'Eine Kollegin oder ein Kollege hat diesen Lead schon übernommen.',
+      failed: 'Das hat nicht geklappt — bitte noch einmal.',
+      none: '—',
+      columns: { person: 'Person', email: 'E-Mail', phone: 'Telefon', source: 'Quelle', created: 'Eingang' },
+    },
     dashboard: { title: 'Deine Pipeline', subtitle: 'Deine eigenen Datensätze und was heute ansteht.' },
     target: {
       title: 'Diesen Monat gewonnen',
@@ -23479,6 +23543,23 @@ const de: Dict = {
       },
       previewColumns: { status: 'Ergebnis', account: 'Account', contact: 'Kontakt', email: 'E-Mail', source: 'Quelle', consent: 'Klaviyo-Einwilligung' },
       statuses: { CREATE: 'Neu', UPDATE: 'Aktualisierung', UNCHANGED: 'Unverändert', SKIP: 'Übersprungen', ERROR: 'Fehler' },
+      phones: {
+        title: 'Nummern, die nie die Telefonnummer einer Person sind',
+        hint: 'Ihre eigene Zentrale oder eine Nummer, die Klaviyo auf viele Profile geschrieben hat. Eine pro Zeile. Diese werden nie als Telefon eines Leads geschrieben; eine Nummer, die mindestens 3 verschiedene Personen tragen, wird ebenfalls automatisch übersprungen.',
+        save: 'Nummern speichern',
+        saved: 'Nummern gespeichert — die nächste Synchronisierung wendet sie an.',
+      },
+      reset: {
+        title: 'Aus Klaviyo Übernommenes löschen und neu einlesen',
+        hint: 'Löscht die Accounts und Leads, die der Connector angelegt hat und an denen niemand gearbeitet hat, und liest dann alle Profile nach den heutigen Regeln neu ein (nicht zugewiesen, echte Adresse, nur persönliche Telefonnummern). Ein Account mit Notiz, Wiedervorlage, Stufenwechsel oder anderer Arbeit bleibt. Es wird keine E-Mail versendet.',
+        preview: 'Zeigen, was gelöscht würde',
+        plan: '{remove} Accounts würden gelöscht; {keep} bleiben, weil jemand daran gearbeitet hat.',
+        confirmLabel: 'Geben Sie {remove} ein, um das Löschen zu bestätigen:',
+        apply: 'Löschen und neu einlesen',
+        restartOnly: 'Von vorn neu einlesen',
+        changed: 'Inzwischen hat sich etwas geändert — prüfen Sie die neuen Zahlen und bestätigen Sie erneut.',
+        done: '{removed} Accounts gelöscht, {kept} behalten. Das Neueinlesen beginnt mit der nächsten Synchronisierung.',
+      },
       keySourceEnv: 'Server-Schlüssel (Umgebungsvariable)',
       syncAll: 'Alles synchronisieren',
       resources: {
@@ -24171,7 +24252,7 @@ const de: Dict = {
     items: {
       candidateOutreach: { t: 'Unternehmen dürfen schreiben — nach Prüfung', d: 'Ein Unternehmen, das eine Person in die engere Wahl genommen hat, kann anfragen, ihr eine Nachricht zu senden. Das Programmteam der Person gibt frei oder lehnt ab, bevor etwas zugestellt wird; das Unternehmen hat ein monatliches Anfragekontingent, und die Person kann das Gespräch jederzeit schließen — danach ist 90 Tage lang keine neue Anfrage möglich.' },
       mentoringAgreement: { t: 'Eine Vereinbarung, die beide Seiten annehmen', d: 'Verfasse die Vereinbarung deines Programms auf Englisch, Türkisch und Deutsch; jede Änderung ist eine neue Version, damit sich nie ändert, was jemand angenommen hat. Jedes Paar sieht sie zum Start und beide Seiten nehmen ihre Seite an — ein Paar ohne Unterschrift ist eine Zeile in deinem Bericht, nie ein gesperrtes Konto.' },
-      klaviyo: { t: 'Klaviyo-Leads, laufend synchron', d: 'Verbinden Sie einen nur lesenden Klaviyo-Schlüssel, und jedes Profil wird ein Lead in der Pipeline des Standard-Zuständigen — mit Telefon, Ort, eigenen Feldern und dem Formular oder der Liste, über die es kam. Alle 15 Minuten neu synchronisiert, füllt nur Lücken, ohne zu überschreiben, was Ihr Team eingetragen hat, und schreibt nie nach Klaviyo zurück oder mailt einen Lead an. Listen, Segmente, Interaktions- und Bestell-Events, Kampagnen mit Ergebnissen und Flows kommen mit.' },
+      klaviyo: { t: 'Klaviyo-Leads, laufend synchron', d: 'Verbinden Sie einen nur lesenden Klaviyo-Schlüssel, und jedes Profil wird ein Lead in einem Pool ohne Zuständigen, aus dem Ihr Vertrieb übernimmt — mit Telefon, Ort, eigenen Feldern und dem Formular oder der Liste, über die es kam. Alle 15 Minuten neu synchronisiert, füllt nur Lücken, ohne zu überschreiben, was Ihr Team eingetragen hat, und schreibt nie nach Klaviyo zurück oder mailt einen Lead an. Listen, Segmente, Interaktions- und Bestell-Events, Kampagnen mit Ergebnissen und Flows kommen mit.' },
       feedbackReports: { t: 'Probleme mit einem Klick melden', d: 'Ein Feedback-Button auf jedem Bildschirm nimmt einen Screenshot dessen auf, was die Person sieht, und hängt die Seitenadresse und die letzten Fehler der Seite an — Tokens, Passwörter und E-Mail-Adressen werden entfernt, bevor etwas den Browser verlässt. Admins filtern die Meldungen, lesen den Konsolen- und Netzwerkkontext und verfolgen jede von neu bis gelöst.' },
       reportSegments: { t: 'Berichte nach Ihren Kriterien', d: 'Legen Sie eigene Attribute an — Abteilung, Ebene, Standort, ein Eintrittsdatum als Betriebszugehörigkeit —, importieren Sie sie per CSV und schlüsseln Sie Pipeline-, Kohorten-, Quellen-, Auslastungs-, Vermittlungs- und Wochenberichte danach auf, nebeneinander oder einzeln. Segmente unter fünf Personen werden immer in einer benannten Zeile zusammengefasst — niemand wird erkennbar, und die Summen stimmen.' },
       programJourney: { t: 'Ein Programmablauf, Tag für Tag', d: 'Leg fest, was wann passiert: eine Erinnerung an Tag 3, ein erstes Ziel an Tag 7, Lesestoff für Woche 6 — gezählt ab dem Start des Paares oder ab dem Tag, an dem eine Phase erreicht ist, in drei Sprachen. Sieh dir vor dem Veröffentlichen die Termine jedes Paares an; jeder Schritt erreicht das Paar einmal in der App, und was schon erledigt ist, wird übersprungen.' },

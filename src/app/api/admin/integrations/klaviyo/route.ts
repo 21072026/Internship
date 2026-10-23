@@ -11,6 +11,7 @@ import {
   klaviyoConnectionView,
   saveKlaviyoKey,
   setKlaviyoEnabled,
+  setKlaviyoIgnoredPhones,
   testKlaviyoKey,
 } from '@/lib/klaviyoSync';
 
@@ -62,7 +63,11 @@ export async function PUT(request: Request) {
   });
 }
 
-const patchSchema = z.object({ enabled: z.boolean() });
+// `enabled` pauses/resumes; `ignoredPhones` sets the numbers that are never a
+// person's phone (docs/integrations/klaviyo.md § Phones). Either or both.
+const patchSchema = z
+  .object({ enabled: z.boolean().optional(), ignoredPhones: z.string().max(4000).optional() })
+  .refine((v) => v.enabled !== undefined || v.ignoredPhones !== undefined);
 
 export async function PATCH(request: Request) {
   return withRequestScope(request, async () => {
@@ -73,16 +78,31 @@ export async function PATCH(request: Request) {
     if (!g.ok) return g.response;
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-    if (!(await setKlaviyoEnabled(g.orgId, parsed.data.enabled))) {
-      return NextResponse.json({ error: 'Not connected', code: 'not_connected' }, { status: 404 });
+    const { enabled, ignoredPhones } = parsed.data;
+    if (ignoredPhones !== undefined) {
+      if (!(await setKlaviyoIgnoredPhones(g.orgId, ignoredPhones))) {
+        return NextResponse.json({ error: 'Not connected', code: 'not_connected' }, { status: 404 });
+      }
+      await logActivity({
+        action: 'integration.klaviyo.ignored_phones',
+        orgId: g.orgId,
+        actorId: g.userId,
+        targetType: 'ExternalConnection',
+        request,
+      });
     }
-    await logActivity({
-      action: parsed.data.enabled ? 'integration.klaviyo.resumed' : 'integration.klaviyo.paused',
-      orgId: g.orgId,
-      actorId: g.userId,
-      targetType: 'ExternalConnection',
-      request,
-    });
+    if (enabled !== undefined) {
+      if (!(await setKlaviyoEnabled(g.orgId, enabled))) {
+        return NextResponse.json({ error: 'Not connected', code: 'not_connected' }, { status: 404 });
+      }
+      await logActivity({
+        action: enabled ? 'integration.klaviyo.resumed' : 'integration.klaviyo.paused',
+        orgId: g.orgId,
+        actorId: g.userId,
+        targetType: 'ExternalConnection',
+        request,
+      });
+    }
     return NextResponse.json(await klaviyoConnectionView(g.orgId));
   });
 }

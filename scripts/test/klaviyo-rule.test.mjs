@@ -337,3 +337,42 @@ test('a batch of import rows: one header for the union, blank cells for what a r
   assert.equal(table.rows[1].values[col('contact_email')], '');
   assert.equal(table.rows[1].values[col('country')], 'DE');
 });
+
+// ── Phones that are not a person's ───────────────────────────────────────────
+
+import {
+  KLAVIYO_SHARED_PHONE_MIN,
+  nonPersonalPhoneKeys,
+  normalizeIgnoredPhonesText,
+  parseIgnoredPhones,
+  phoneKey,
+} from '../../src/lib/klaviyoRule.ts';
+
+test('a phone key compares numbers by their last digits, whatever the formatting', () => {
+  assert.equal(phoneKey('+49 176 84708200'), phoneKey('0049 17684708200'));
+  assert.equal(phoneKey('+4917684708200'), phoneKey('0176 84708200'));
+  assert.equal(phoneKey('+49 (30) 123-4567'), phoneKey('030 1234567'));
+  assert.equal(phoneKey('12345'), '');
+  assert.equal(phoneKey(''), '');
+  assert.equal(phoneKey(null), '');
+});
+
+test('the ignored list: one per line or comma, junk dropped, stored normalized and de-duplicated', () => {
+  const keys = parseIgnoredPhones('+49 30 1234567\n0176 84708200, x, 12');
+  assert.ok(keys.has(phoneKey('030 1234567')));
+  assert.ok(keys.has(phoneKey('+4917684708200')));
+  assert.equal(keys.size, 2);
+  assert.equal(normalizeIgnoredPhonesText(' +49 30 1234567 \n030 1234567\nfoo\n0176 84708200'), '+49 30 1234567\n0176 84708200');
+  assert.equal(parseIgnoredPhones(null).size, 0);
+});
+
+test('a number is not a person\'s when it is ignored or at least N different people carry it', () => {
+  const holders = new Map([
+    ['111111111', new Set(['p:a', 'p:b', 'c:x'])],
+    ['222222222', new Set(['p:a', 'p:b'])],
+    ['333333333', new Set(['p:c'])],
+  ]);
+  assert.equal(KLAVIYO_SHARED_PHONE_MIN, 3);
+  assert.deepEqual([...nonPersonalPhoneKeys(holders, new Set())], ['111111111']);
+  assert.deepEqual([...nonPersonalPhoneKeys(holders, new Set(['333333333']))].sort(), ['111111111', '333333333']);
+});

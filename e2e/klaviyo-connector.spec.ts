@@ -277,14 +277,27 @@ test('first import is paged and silent; re-syncs update without duplicating or o
     expect(acmeLink.sourceName).toBe('klaviyo:list/Newsletter DE');
     expect(acmeLink.attributes).not.toContain('203.0.113.7');
     expect(JSON.parse(acmeLink.consent as string).email.consent).toBe('SUBSCRIBED');
-    const relation = await prisma.mentorshipRelation.findFirstOrThrow({
-      where: { companyId: acme.id },
-      include: { mentee: { select: { email: true, source: { select: { name: true } } } } },
+    // Unassigned: the account and its lead person, but nobody's funnel record.
+    expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id } })).toBe(0);
+    const acmeLead = await prisma.user.findFirstOrThrow({
+      where: { orgId: org.id, companyId: acme.id, role: 'MENTEE' },
+      select: { id: true, email: true, source: { select: { name: true } } },
     });
+    expect(acmeLead.email).not.toBe(`buyer@${domain}`); // a stand-in, never the mailbox
+    expect(acmeLead.source?.name).toBe('klaviyo:list/Newsletter DE');
+    // The pool lists it; taking it puts it on the taker's book at the first stage, once.
+    const pool = await (await api.get('/api/sales/pool')).json();
+    expect(pool.total).toBe(103);
+    expect(pool.leads.length).toBe(50); // one page, the newest first
+    expect(pool.leads.every((l: { company: { contactEmail: string | null } | null }) => Boolean(l.company?.contactEmail))).toBe(true);
+    const claim = await api.post(`/api/sales/pool/${acmeLead.id}/claim`);
+    expect(claim.status()).toBe(201);
+    const relation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { id: (await claim.json()).relationId } });
     expect(relation.pipelineStatus).toBe(firstStage);
     expect(relation.mentorId).toBe(admin.id);
-    expect(relation.mentee.email).not.toBe(`buyer@${domain}`); // a stand-in, never the mailbox
-    expect(relation.mentee.source?.name).toBe('klaviyo:list/Newsletter DE');
+    expect(relation.companyId).toBe(acme.id);
+    expect((await api.post(`/api/sales/pool/${acmeLead.id}/claim`)).status()).toBe(409);
+    expect((await (await api.get('/api/sales/pool')).json()).total).toBe(102);
     const janeLink = await prisma.externalProfileLink.findFirstOrThrow({ where: { orgId: org.id, externalId: janeId } });
     expect(janeLink.sourceName).toBe('utm:partner/referral/-');
     // No contact permission beyond the machine's NONE.
@@ -393,9 +406,15 @@ test('the admin card connects, syncs and shows the profile on the account; the c
     await gotoSettled(page, '/admin/integrations');
     const card = page.getByTestId('klaviyo-card');
     await expect(card).toBeVisible();
-    await card.getByTestId('klaviyo-key-input').fill(key);
+    // Filled until the card has hydrated: a value typed before React takes the
+    // input over leaves its state empty and the button disabled.
+    await expect(async () => {
+      await card.getByTestId('klaviyo-key-input').fill(key);
+      await expect(card.getByTestId('klaviyo-save')).toBeEnabled({ timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
     await card.getByTestId('klaviyo-save').click();
-    await expect(card.getByTestId('klaviyo-key-last4')).toContainText(key.slice(-4));
+    // Saving tests the key against the provider first: allow a slow first request.
+    await expect(card.getByTestId('klaviyo-key-last4')).toContainText(key.slice(-4), { timeout: 45_000 });
     await expect(card.getByTestId('klaviyo-key-input')).toHaveValue('');
     await card.getByTestId('klaviyo-sync-now').click();
     await expect(card.getByTestId('klaviyo-last-status')).toBeVisible({ timeout: 30_000 });
@@ -778,6 +797,100 @@ test('beyond profiles: lists, segments + members, metrics, allow-listed events, 
     expect((await api.delete('/api/admin/integrations/klaviyo')).status()).toBe(200);
     expect(await counts()).toEqual({ audiences: 0, members: 0, metrics: 0, events: 0, campaigns: 0, messages: 0, stats: 0, flows: 0 });
     expect(await prisma.externalSyncState.count({ where: { orgId: org.id } })).toBe(0);
+  } finally {
+    await api.dispose();
+    await cleanupOrg(org.id, [adminEmail]);
+  }
+});
+
+test('unassigned leads: the real address shows, shared and ignored phones are dropped, a rep takes one, and the reset deletes only untouched accounts and re-imports them', async ({ playwright }) => {
+  test.setTimeout(240_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const n = stamp.replace(/\D/g, '');
+  const { org, firstStage } = await marketingOrg(`pool-${stamp}`);
+  const adminEmail = uniqueEmail('kl-pool-admin');
+  const admin = await seedUser(adminEmail, PW, 'ADMIN', 'Klaviyo Pool Admin', org.id);
+  const key = `pk_e2eP${n}`;
+  const domain = `pool-${n}.example.test`;
+  const shared = '+49176000' + n.slice(-5);
+  const switchboard = '+49 30 9' + n.slice(-6);
+  const personal = '+49171' + n.slice(-7);
+  const people = [1, 2, 3, 4].map((i) =>
+    profile(`S${i}-${n}`, { email: `shared${i}@${domain}`, first_name: `Shared${i}`, organization: `Acme Sales Shared ${i} ${stamp}`, phone_number: shared }),
+  );
+  await mock('/__account', {
+    key,
+    profiles: [
+      ...people,
+      profile(`B-${n}`, { email: `board@${domain}`, first_name: 'Board', organization: `Acme Sales Board ${stamp}`, phone_number: switchboard.replace(/\s/g, '') }),
+      profile(`O-${n}`, { email: `own@${domain}`, first_name: 'Own', organization: `Acme Sales Own ${stamp}`, phone_number: personal }),
+    ],
+  });
+  const api = await apiAs(playwright, adminEmail, MARKETING_HOST);
+  const sync = async () => {
+    const res = await api.post('/api/admin/integrations/klaviyo/sync', { timeout: 120_000 });
+    expect(res.status()).toBe(200);
+    return res.json();
+  };
+  try {
+    expect((await api.put('/api/admin/integrations/klaviyo', { data: { key } })).status()).toBe(200);
+    const saved = await api.patch('/api/admin/integrations/klaviyo', { data: { ignoredPhones: `${switchboard}\n${switchboard}\njunk` } });
+    expect(saved.status()).toBe(200);
+    expect((await saved.json()).connection.ignoredPhones).toBe(switchboard);
+
+    const first = await sync();
+    expect(first.counts.CREATE).toBe(6);
+    expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id } })).toBe(0);
+    const leads = await prisma.user.findMany({
+      where: { orgId: org.id, role: 'MENTEE' },
+      select: { id: true, phone: true, company: { select: { contactEmail: true, contactPhone: true } } },
+    });
+    const byEmail = new Map(leads.map((l) => [l.company?.contactEmail, l]));
+    // Four people with one number: nobody's own. The switchboard: ignored. The personal one: kept.
+    for (let i = 1; i <= 4; i++) {
+      expect(byEmail.get(`shared${i}@${domain}`)?.phone ?? null).toBeNull();
+      expect(byEmail.get(`shared${i}@${domain}`)?.company?.contactPhone ?? null).toBeNull();
+    }
+    expect(byEmail.get(`board@${domain}`)?.phone ?? null).toBeNull();
+    expect(byEmail.get(`own@${domain}`)?.phone).toBe(personal);
+
+    // The candidate page reads the real address and offers no activation: a lead never signs in.
+    const own = byEmail.get(`own@${domain}`)!;
+    const detail = (await (await api.get(`/api/users/${own.id}`)).json()).user;
+    expect(detail.leadRecord).toBe(true);
+    expect(detail.contactEmail).toBe(`own@${domain}`);
+    expect(detail.email).not.toBe(`own@${domain}`);
+
+    // A rep (here: the admin in sales mode) takes one.
+    const claim = await api.post(`/api/sales/pool/${own.id}/claim`);
+    expect(claim.status()).toBe(201);
+    const rel = await prisma.mentorshipRelation.findFirstOrThrow({ where: { menteeId: own.id } });
+    expect(rel.mentorId).toBe(admin.id);
+    expect(rel.pipelineStatus).toBe(firstStage);
+
+    // The reset: the five untouched accounts go, the taken one stays — with its reason.
+    const preview = await (await api.get('/api/admin/integrations/klaviyo/reset')).json();
+    expect(preview.remove).toBe(5);
+    expect(preview.keep).toBe(1);
+    expect(preview.kept[0].name).toBe(`Acme Sales Own ${stamp}`);
+    expect((await api.post('/api/admin/integrations/klaviyo/reset', { data: { expectRemove: 4 } })).status()).toBe(409);
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(6);
+    const applied = await api.post('/api/admin/integrations/klaviyo/reset', { data: { expectRemove: 5 } });
+    expect(applied.status()).toBe(200);
+    expect((await applied.json()).removed).toBe(5);
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(1);
+    expect(await prisma.user.count({ where: { orgId: org.id, role: 'MENTEE' } })).toBe(1);
+    expect(await prisma.externalProfileLink.count({ where: { orgId: org.id } })).toBe(1);
+    const conn = await prisma.externalConnection.findFirstOrThrow({ where: { orgId: org.id } });
+    expect(conn.initialSyncDoneAt).toBeNull();
+    expect(conn.profilesSince).toBeNull();
+
+    // …and the next sync reads them all again, unassigned, under the same rules.
+    const again = await sync();
+    expect(again.counts.CREATE).toBe(5);
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(6);
+    expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id } })).toBe(1);
+    expect(await prisma.user.count({ where: { orgId: org.id, role: 'MENTEE', phone: shared } })).toBe(0);
   } finally {
     await api.dispose();
     await cleanupOrg(org.id, [adminEmail]);

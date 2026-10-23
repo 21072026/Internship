@@ -672,3 +672,65 @@ export function profileInfo(link: {
     updatedAt: link.profileUpdatedAt,
   };
 }
+
+// ── Phones that are not a person's (docs/integrations/klaviyo.md § Phones) ───
+//
+// A profile's `phone_number` is copied as the lead's phone — unless it is not
+// that person's: the organization's own switchboard that a form or a shop
+// integration wrote onto every profile, or one number many different people
+// carry. Such a number would make every one of them look like the same person
+// (the duplicate finder pairs them as "same phone") and would put the company's
+// own line on the lead. Two rules, both pure:
+//   • the connection's IGNORED numbers (the admin types them on the card);
+//   • a number SHARED by at least KLAVIYO_SHARED_PHONE_MIN different people.
+
+/** At least this many different people carry one number → it is nobody's own. */
+export const KLAVIYO_SHARED_PHONE_MIN = 3;
+/** Numbers are compared on their last digits: `+49 176 …`, `0049176…` and `0176…` are one number. */
+const PHONE_KEY_DIGITS = 9;
+
+/** The comparison key of a phone number, or '' when it carries too few digits to be one. */
+export function phoneKey(raw: string | null | undefined): string {
+  const digits = (raw ?? '').replace(/\D/g, '');
+  return digits.length >= 6 ? digits.slice(-PHONE_KEY_DIGITS) : '';
+}
+
+/** The admin's ignored-number list (one per line or comma-separated) as keys. */
+export function parseIgnoredPhones(text: string | null | undefined): Set<string> {
+  return new Set(
+    (text ?? '')
+      .split(/[\n,;]+/)
+      .map((s) => phoneKey(s))
+      .filter(Boolean),
+  );
+}
+
+/** The ignored list as it is stored: normalized for display, one per line, bounded. */
+export function normalizeIgnoredPhonesText(text: string | null | undefined): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of (text ?? '').split(/[\n,;]+/)) {
+    const shown = part.trim().slice(0, 40);
+    const key = phoneKey(shown);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(shown);
+    if (out.length >= 50) break;
+  }
+  return out.join('\n');
+}
+
+/**
+ * The phone keys a page must not write as a person's phone: the ignored ones
+ * that occur, and those that `holders` (key → the distinct people already
+ * known to carry it, this page's profiles included) shows at the threshold.
+ */
+export function nonPersonalPhoneKeys(
+  holders: ReadonlyMap<string, ReadonlySet<string>>,
+  ignored: ReadonlySet<string>,
+  min: number = KLAVIYO_SHARED_PHONE_MIN,
+): Set<string> {
+  const out = new Set<string>();
+  for (const [key, people] of holders) if (ignored.has(key) || people.size >= min) out.add(key);
+  return out;
+}
