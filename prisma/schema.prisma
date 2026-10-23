@@ -4940,6 +4940,11 @@ model InvitationToken {
   // the fact is known when the invitation is minted and must survive until it is
   // consumed, possibly days later. Only ever set on a `role = COMPANY` row.
   companyId    String?
+  // The affiliate partner an invited AFFILIATE account is linked to on
+  // registration (docs/affiliate-module.md, #3117) — the same write-once pointer
+  // as `companyId`. Only ever set on a `role = AFFILIATE` row, and only by the
+  // programme's own invitation (src/lib/affiliateInvite.ts).
+  partnerId    String?
   // The project the invitee should join on registration, if any.
   projectId    String?
   // Lifecycle timestamps (nullable — each set once, the first time it happens):

@@ -48,6 +48,8 @@ export default function AffiliatePartnersPage() {
   const [issues, setIssues] = useState<Set<string>>(new Set());
   const [terminating, setTerminating] = useState<{ id: string; date: string } | null>(null);
   const [revealed, setRevealed] = useState<Record<string, { iban: string; holder: string }>>({});
+  // The register link of an invitation whose mail could not be sent, to pass on by hand.
+  const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -117,6 +119,23 @@ export default function AffiliatePartnersPage() {
     }
   }
 
+  async function invite(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/affiliate/partners/${id}/invite`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (body.emailSent) toast(L.invited);
+        else setInviteLinks({ ...inviteLinks, [id]: body.registerUrl });
+      } else {
+        const code = body.code as keyof typeof L.inviteErrors | undefined;
+        toast(code && code in L.inviteErrors ? L.inviteErrors[code] : L.failed, 'error');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function reveal(id: string) {
     const res = await fetch(`/api/admin/affiliate/partners/${id}/payout-details`);
     const body = await res.json().catch(() => ({}));
@@ -169,12 +188,30 @@ export default function AffiliatePartnersPage() {
                       </>
                     )}
                   </p>
+                  {inviteLinks[p.id] && (
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{L.inviteLink}</p>
+                      <Input readOnly value={inviteLinks[p.id]} aria-label={L.inviteLink} data-testid={`affiliate-invite-link-${p.code}`} />
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge variant={STATUS_VARIANT[p.status]}>{L[`status${p.status}`]}</Badge>
                   {p.noticeEffectiveAt && <span className="text-xs text-gray-500">{interpolate(L.noticeFrom, { date: formatDate(p.noticeEffectiveAt, locale, { timeZone: 'UTC' }) })}</span>}
                   {canWrite && (
                     <div className="flex flex-wrap justify-end gap-2">
+                      {p.status === 'ACTIVE' && !p.hasAccount && p.contactEmail && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={busy}
+                          title={L.inviteHint}
+                          onClick={() => void invite(p.id)}
+                          data-testid={`affiliate-invite-${p.code}`}
+                        >
+                          {L.invite}
+                        </Button>
+                      )}
                       {p.status === 'ACTIVE' && (
                         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void setState(p.id, 'SUSPENDED')}>
                           {L.suspend}

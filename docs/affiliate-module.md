@@ -223,6 +223,28 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - Payout details: ADMIN reads them in full (manual transfers); the partner sees the
   last four characters.
 
+## The partner's account
+
+A partner exists before its account (the admin creates it, or a migration does).
+`src/lib/affiliateInvite.ts` is the one writer of the link between the two:
+
+- `POST /api/admin/affiliate/partners/[id]/invite` (`affiliate.write`) mints an
+  `AFFILIATE` invitation through the shared `createInvitation()` — addressed to the
+  partner's **contact e-mail** (a named invitation is what proves the mailbox) and
+  carrying `InvitationToken.partnerId`. Only an ACTIVE partner without an account
+  is invited (409 `already_linked` / `partner_inactive`, 400 `no_contact_email`,
+  409 `email_taken` when the address already has an account in this product).
+  A new invitation withdraws the partner's open ones (`revokedAt`), so the newest
+  mail holds the only live link. Audited (`affiliate.partner.invite`).
+- `/api/register` accepts an `AFFILIATE` token only when it names a partner and an
+  address. The account and `linkPartnerAccount()` run in ONE transaction; the link
+  is a guarded write (`userId: null`, status ACTIVE), so a second token for the
+  same partner, or a partner suspended since the mail, rolls the account back and
+  answers 400. Audited (`affiliate.partner.account_linked`). The partner chooses
+  their own password under the org's policy — nothing is imported.
+- The invitation is world-bound like every other (`docs/worlds.md`): a token of a
+  MARKETING organisation is unknown on any other host.
+
 ## Migration from a previous system
 
 A one-off script under `prisma/`, dry-run by default, developed against synthetic
