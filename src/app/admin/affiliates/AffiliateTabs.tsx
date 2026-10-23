@@ -16,10 +16,11 @@ export function AffiliateTabs() {
     { href: '/admin/affiliates/payments', label: t.affiliatePayments.tab, exact: false },
     { href: '/admin/affiliates/commissions', label: t.affiliateCommissions.tab, exact: false },
     { href: '/admin/affiliates/payouts', label: t.affiliatePayouts.tab, exact: false },
+    { href: '/admin/affiliates/migration', label: t.affiliateMigration.tab, exact: false },
     { href: '/admin/affiliates/settings', label: L.settings, exact: false },
   ];
   return (
-    <nav className="flex gap-1 border-b border-gray-200 dark:border-gray-800" aria-label={t.affiliateAdmin.title}>
+    <nav className="flex gap-1 overflow-x-auto whitespace-nowrap border-b border-gray-200 dark:border-gray-800" aria-label={t.affiliateAdmin.title}>
       {tabs.map((tab) => {
         const active = tab.exact ? pathname === tab.href : pathname?.startsWith(tab.href);
         return (

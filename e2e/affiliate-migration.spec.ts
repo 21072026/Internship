@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
+import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
 import { prisma as appPrisma } from '../src/lib/prisma';
 import { recordAffiliatePayment } from '../src/lib/affiliatePaymentWriter';
 
@@ -195,4 +195,34 @@ test('a one-cent difference or a bad row writes nothing', { tag: '@smoke' }, asy
   expect(badRow.issues).toContainEqual({ file: 'commissions', row: 5, code: 'invalid_date', subject: 'payment_date' });
 
   expect(await writtenRows(other)).toEqual({ partners: 0, payments: 0, commissions: 0, payouts: 0 });
+});
+
+test('the import screen checks first and imports only what it checked', async ({ page }) => {
+  const org = await newOrg('ui');
+  const email = await adminOf(org);
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, email, PW, '/admin');
+  await gotoSettled(page, '/admin/affiliates/migration');
+
+  const file = (name: string, text: string) => ({ name, mimeType: 'text/csv', buffer: Buffer.from(text) });
+  await page.getByTestId('migration-file-partners').setInputFiles(file('partners.csv', PARTNERS));
+  await page.getByTestId('migration-file-commissions').setInputFiles(file('commissions.csv', COMMISSIONS));
+  await page.getByTestId('migration-file-payouts').setInputFiles(file('payouts.csv', PAYOUTS));
+  await expect(page.getByTestId('migration-run')).toBeDisabled();
+
+  await page.getByTestId('migration-check').click();
+  await expect(page.getByTestId('migration-reconciliation')).toContainText('spark-co');
+  await expect(page.getByTestId('migration-run')).toBeEnabled();
+  expect(await writtenRows(org)).toEqual({ partners: 0, payments: 0, commissions: 0, payouts: 0 });
+
+  // Another file after the check: the import is offered again only after a new check.
+  await page.getByTestId('migration-file-payouts').setInputFiles(file('payouts.csv', PAYOUTS.replace('TRX 0001', 'TRX 0002')));
+  await expect(page.getByTestId('migration-run')).toBeDisabled();
+  await page.getByTestId('migration-check').click();
+  await expect(page.getByTestId('migration-run')).toBeEnabled();
+
+  await page.getByTestId('migration-run').click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Import' }).click();
+  await expect(page.getByTestId('migration-status')).toContainText('Imported', { timeout: 30_000 });
+  expect(await writtenRows(org)).toEqual({ partners: 2, payments: 5, commissions: 5, payouts: 1 });
 });

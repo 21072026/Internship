@@ -280,11 +280,39 @@ the check.
 
 ## Migration from a previous system
 
-A one-off script under `prisma/`, dry-run by default, developed against synthetic
-data. Input: CSV exports of partners, commissions and payouts. Codes are copied
-verbatim. Commissions are imported **as recorded** (amount, status, paid date);
-nothing is recalculated. The import is not complete until, per partner, paid and
-unpaid totals match the source to the cent. Partners then receive an invitation.
+An admin screen (`/admin/affiliates/migration`, `affiliate.write`) — not a script on
+the server — so it runs on the shared import engine: `runAffiliateMigration()`
+(`src/lib/affiliateMigration.ts`) passes the commissions file through `runImport`
+and reads the partners and payouts files with the same parser; the rules are pure
+in `src/lib/affiliateMigrationRule.ts` (unit-tested with synthetic files). A dry run
+is the same call with a writer that does not write, and the screen offers the real
+run only after a clean dry run of exactly the files it checked.
+
+- **Input** — three CSV files (comma or semicolon, a header row). Partners:
+  `code, name, paid_total, unpaid_total` (+ `email, status, ended_on`). Commissions:
+  `partner_code, customer_ref, payment_ref, payment_amount, payment_date,
+  commission_amount, status` (+ `due_date, payout_ref`). Payouts:
+  `payout_ref, partner_code, amount, paid_date` (+ `bank_reference`). Amounts in
+  euros as written, days `YYYY-MM-DD`. Clicks are not migrated.
+- **As recorded** — codes verbatim (compared case-insensitively); commissions keep
+  their amount, status, due day and payout and are never recalculated: they are
+  stored with kind `IMPORTED`, plan version 0, and their payments with source
+  `IMPORT`, which the payment writer skips entirely (no update, no removal, no
+  drift — `affiliateCommissionSync.ts`). Imported customers still count for the
+  customer order, so the next new customer gets the right position in the plan.
+- **Checks** — a PAID commission belongs to a payout of the same partner; a payout's
+  amount is exactly the sum of its commissions; a customer belongs to one partner;
+  no duplicate codes, payment or payout references.
+- **Reconciliation** — per partner, the PAID sum and the PENDING + APPROVED sum
+  equal `paid_total` / `unpaid_total` from the source, to the cent. Any issue
+  blocks the whole migration.
+- **All or nothing, once** — the set is one chunk and one transaction. It is
+  refused into a programme that already holds partners or payments (checked again
+  inside the transaction), and after writing, the transaction re-checks the
+  reconciliation and every payout against what it wrote and rolls back on a
+  difference. Audited (`affiliate.migration.run`, counts only).
+- Partners are created without an account; the admin invites them afterwards
+  (see "The partner's account").
 
 ## Milestone plan
 
