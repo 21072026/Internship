@@ -65,6 +65,270 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.443.0-beta',
+    date: '2026-10-23',
+    time: '14:29',
+    commit: 'b9e6c91',
+    highlights: {
+      en: [
+        "Affiliate partners get their own sign-in area and are covered by your two-factor policy.",
+        "Partners must accept the current programme contract before they can use their area, and they are notified whenever their payout bank details change.",
+      ],
+      tr: [
+        "Affiliate partnerleri kendi giriş alanına sahip ve iki adımlı doğrulama politikanız onları da kapsıyor.",
+        "Partnerler, alanlarını kullanmadan önce güncel program sözleşmesini kabul ediyor ve ödeme banka bilgileri her değiştiğinde bilgilendiriliyor.",
+      ],
+      de: [
+        "Affiliate-Partner erhalten einen eigenen Anmeldebereich und sind von Ihrer Zwei-Faktor-Richtlinie erfasst.",
+        "Partner müssen den aktuellen Programmvertrag akzeptieren, bevor sie ihren Bereich nutzen, und werden bei jeder Änderung ihrer Bankverbindung für Auszahlungen benachrichtigt.",
+      ],
+    },
+  },
+  {
+    version: '0.442.0-beta',
+    date: '2026-10-23',
+    time: '01:23',
+    commit: '1619314',
+    highlights: {
+      en: [
+        "Leads from Klaviyo now land in an unassigned pool — each rep takes the ones they want with “Take it”.",
+        "Lead pages show the person's real e-mail address, and your company's own phone number is no longer stored as a lead's phone.",
+        "New on the Klaviyo card: delete what Klaviyo brought in and import it again cleanly — anything your team already worked on is kept.",
+      ],
+      tr: [
+        "Klaviyo'dan gelen lead'ler artık atanmamış bir havuza düşüyor — her temsilci istediğini “Üzerime al” ile alıyor.",
+        "Lead sayfaları kişinin gerçek e-posta adresini gösteriyor; şirketinizin kendi telefon numarası artık lead'in telefonu olarak kaydedilmiyor.",
+        "Klaviyo kartında yeni: Klaviyo'dan gelenleri silip temiz biçimde yeniden aktarın — ekibinizin üzerinde çalıştığı kayıtlar korunur.",
+      ],
+      de: [
+        "Leads aus Klaviyo landen jetzt in einem Pool ohne Zuständigen — jede:r im Vertrieb übernimmt die gewünschten mit „Übernehmen“.",
+        "Lead-Seiten zeigen die echte E-Mail-Adresse der Person, und die eigene Telefonnummer Ihres Unternehmens wird nicht mehr als Telefon eines Leads gespeichert.",
+        "Neu auf der Klaviyo-Karte: aus Klaviyo Übernommenes löschen und sauber neu einlesen — woran Ihr Team schon gearbeitet hat, bleibt erhalten.",
+      ],
+    },
+  },
+  {
+    version: '0.441.0-beta',
+    date: '2026-10-22',
+    time: '23:28',
+    commit: '9b465fd',
+    highlights: {
+      en: [
+        "Safety lock for the marketing product's test phase: leads and customers receive no e-mail at all — only your own team does.",
+      ],
+      tr: [
+        "Marketing ürününün test dönemi için güvenlik kilidi: lead'lere ve müşterilere hiçbir e-posta gitmez — yalnızca kendi ekibiniz alır.",
+      ],
+      de: [
+        "Sicherheitssperre für die Testphase des Marketing-Produkts: Leads und Kunden erhalten keinerlei E-Mail — nur Ihr eigenes Team.",
+      ],
+    },
+  },
+  {
+    version: '0.440.0-beta',
+    date: '2026-10-22',
+    time: '23:18',
+    commit: 'a77fbfd',
+    highlights: {
+      en: [
+        "Support messages now arrive as push notifications: admins are notified on their phone or browser when someone writes to support, and you are notified when support replies.",
+      ],
+      tr: [
+        "Destek mesajları artık anlık bildirim olarak geliyor: biri desteğe yazdığında admin'ler telefonda ya da tarayıcıda haberdar oluyor, destek yanıt verdiğinde de sen haberdar oluyorsun.",
+      ],
+      de: [
+        "Support-Nachrichten kommen jetzt als Push-Benachrichtigung: Admins werden auf dem Handy oder im Browser benachrichtigt, wenn jemand dem Support schreibt, und du, wenn der Support antwortet.",
+      ],
+    },
+  },
+  {
+    version: '0.439.0-beta',
+    date: '2026-10-22',
+    time: '23:02',
+    commit: 'd8067ef',
+    highlights: {
+      en: [
+        "Bug reports can now include a short replay of the last moments on screen, so the support team sees exactly what happened. Anything you typed and private fields are never recorded, and nothing is sent until you press Send.",
+      ],
+      tr: [
+        "Hata bildirimlerine artık ekrandaki son anların kısa bir kaydı eklenebiliyor; destek ekibi tam olarak ne olduğunu görüyor. Yazdıkların ve gizli alanlar asla kaydedilmez, Gönder’e basana kadar hiçbir şey gönderilmez.",
+      ],
+      de: [
+        "Fehlermeldungen können jetzt eine kurze Wiedergabe der letzten Momente auf dem Bildschirm enthalten, damit das Support-Team genau sieht, was passiert ist. Eingaben und private Felder werden nie aufgezeichnet, und nichts wird gesendet, bevor du auf Senden drückst.",
+      ],
+    },
+  },
+  {
+    version: '0.438.0-beta',
+    date: '2026-10-22',
+    time: '22:46',
+    commit: '7b75f8b',
+    highlights: {
+      en: [
+        "Klaviyo now brings in more than profiles: lists and segments with their members, e-mail engagement and order events, campaigns with their results, and flows — each with its own sync status on the integrations page.",
+      ],
+      tr: [
+        "Klaviyo artık profillerden fazlasını getiriyor: üyeleriyle birlikte listeler ve segmentler, e-posta etkileşimi ve sipariş olayları, sonuçlarıyla kampanyalar ve akışlar — her biri entegrasyonlar sayfasında kendi eşitleme durumuyla.",
+      ],
+      de: [
+        "Klaviyo bringt jetzt mehr als Profile: Listen und Segmente mit ihren Mitgliedern, E-Mail-Interaktionen und Bestell-Events, Kampagnen mit ihren Ergebnissen und Flows — jeweils mit eigenem Synchronisierungsstatus auf der Integrationsseite.",
+      ],
+    },
+  },
+  {
+    version: '0.437.3-beta',
+    date: '2026-10-22',
+    time: '22:20',
+    commit: '95833ba',
+    highlights: {
+      en: [
+        "The sales CRM no longer shows the Skills screen — it only fed mentor and candidate matching.",
+      ],
+      tr: [
+        "Satış CRM'inde Beceriler ekranı artık görünmüyor — yalnızca mentor ve aday eşleştirmesini besliyordu.",
+      ],
+      de: [
+        "Im Vertriebs-CRM erscheint der Bildschirm „Fähigkeiten“ nicht mehr — er diente nur dem Mentoren- und Kandidaten-Matching.",
+      ],
+    },
+  },
+  {
+    version: '0.437.0-beta',
+    date: '2026-10-22',
+    time: '21:44',
+    commit: '6c0e973',
+    highlights: {
+      en: [
+        "Found a problem? The new feedback button in the bottom-right corner sends the support team a screenshot and the technical details of the page in one go — passwords and other sensitive values are removed first.",
+      ],
+      tr: [
+        "Bir sorun mu buldun? Sağ alttaki yeni geri bildirim butonu, destek ekibine ekran görüntüsünü ve sayfanın teknik ayrıntılarını tek seferde gönderir — parolalar ve diğer hassas değerler önce çıkarılır.",
+      ],
+      de: [
+        "Ein Problem gefunden? Der neue Feedback-Button unten rechts schickt dem Support-Team einen Screenshot und die technischen Details der Seite in einem Schritt — Passwörter und andere sensible Werte werden vorher entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.436.4-beta',
+    date: '2026-10-22',
+    time: '20:23',
+    commit: '1cbf785',
+    highlights: {
+      en: [
+        "Erasing a lead now also removes that person's name, e-mail address and phone number from the account they were the contact of.",
+      ],
+      tr: [
+        "Bir lead silindiğinde, muhatabı olduğu hesaptaki adı, e-posta adresi ve telefonu da artık siliniyor.",
+      ],
+      de: [
+        "Beim Löschen eines Leads werden jetzt auch Name, E-Mail-Adresse und Telefonnummer der Person beim Account entfernt, dessen Kontakt sie war.",
+      ],
+    },
+  },
+  {
+    version: '0.435.0-beta',
+    date: '2026-10-22',
+    time: '16:44',
+    commit: '1a5e865',
+    highlights: {
+      en: [
+        "A paused pairing gets no reminders and does not count as active until it is resumed; its stage deadline picks up where it left off.",
+      ],
+      tr: [
+        "Duraklatılmış bir eşleşmeye hatırlatma gitmez ve devam ettirilene kadar aktif sayılmaz; aşama süresi kaldığı yerden devam eder.",
+      ],
+      de: [
+        "Eine pausierte Zusammenarbeit bekommt keine Erinnerungen und zählt bis zur Fortsetzung nicht als aktiv; ihre Phasenfrist läuft danach dort weiter, wo sie stand.",
+      ],
+    },
+  },
+  {
+    version: '0.434.0-beta',
+    date: '2026-10-22',
+    time: '16:23',
+    commit: 'ec105d5',
+    highlights: {
+      en: [
+        "Pairings can now be paused and resumed, and ending one asks why — an early end is no longer recorded as a completion.",
+      ],
+      tr: [
+        "Eşleşmeler artık duraklatılıp devam ettirilebiliyor; bir eşleşmeyi sonlandırırken sebebi soruluyor — erken bitiş artık tamamlanma olarak kaydedilmiyor.",
+      ],
+      de: [
+        "Zusammenarbeiten lassen sich jetzt pausieren und fortsetzen, und beim Beenden wird nach dem Grund gefragt — ein vorzeitiges Ende zählt nicht mehr als Abschluss.",
+      ],
+    },
+  },
+  {
+    version: '0.433.0-beta',
+    date: '2026-10-22',
+    time: '16:15',
+    commit: '543f0cf',
+    highlights: {
+      en: [
+        "You can now add and remove pipeline stages in the stage editor. A stage that still has candidates on it cannot be removed.",
+      ],
+      tr: [
+        "Aşama düzenleyicisinde artık pipeline aşaması ekleyip kaldırabilirsiniz. Üzerinde hâlâ aday bulunan bir aşama kaldırılamaz.",
+      ],
+      de: [
+        "Im Phasen-Editor lassen sich jetzt Pipeline-Phasen hinzufügen und entfernen. Eine Phase, in der noch Kandidat:innen stehen, kann nicht entfernt werden.",
+      ],
+    },
+  },
+  {
+    version: '0.432.0-beta',
+    date: '2026-10-22',
+    time: '16:12',
+    commit: '85f6f3a',
+    highlights: {
+      en: [
+        "Admins can now connect an HR export as a scheduled roster feed: map its columns from a sample file, preview a run, apply it, and see every row it changed.",
+      ],
+      tr: [
+        "Yöneticiler artık bir İK dışa aktarımını zamanlanmış kişi listesi beslemesi olarak bağlayabilir: sütunları örnek bir dosyadan eşleyin, bir çalıştırmayı önizleyin, uygulayın ve değiştirdiği her satırı görün.",
+      ],
+      de: [
+        "Admins können jetzt einen HR-Export als geplanten Personen-Feed anbinden: Spalten anhand einer Beispieldatei zuordnen, einen Lauf als Vorschau prüfen, anwenden und jede geänderte Zeile einsehen.",
+      ],
+    },
+  },
+  {
+    version: '0.431.1-beta',
+    date: '2026-10-22',
+    time: '16:06',
+    commit: '3191662',
+    highlights: {
+      en: [
+        "Settings no longer run off the edge of a phone screen.",
+      ],
+      tr: [
+        "Ayarlar artık telefon ekranından taşmıyor.",
+      ],
+      de: [
+        "Die Einstellungen laufen auf dem Handy nicht mehr über den Bildschirmrand.",
+      ],
+    },
+  },
+  {
+    version: '0.430.0-beta',
+    date: '2026-10-22',
+    time: '15:13',
+    commit: '82166dc',
+    highlights: {
+      en: [
+        "A company that shortlisted a candidate can now ask to send them a message — the candidate's programme team reviews it first, and the candidate can close the conversation at any time.",
+      ],
+      tr: [
+        "Bir adayı kısa listeye alan firma artık ona mesaj göndermek için talepte bulunabilir — önce adayın program ekibi inceler ve aday sohbeti istediği an kapatabilir.",
+      ],
+      de: [
+        "Ein Unternehmen, das eine Person in die engere Wahl genommen hat, kann jetzt anfragen, ihr eine Nachricht zu senden — zuerst prüft das Programmteam, und die Person kann das Gespräch jederzeit schließen.",
+      ],
+    },
+  },
+  {
     version: '0.429.0-beta',
     date: '2026-10-21',
     time: '17:47',
