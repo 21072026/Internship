@@ -193,6 +193,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     // The Klaviyo pull connector — the sales product only (its leads land on a
     // marketing funnel), hence the opposite tag, like the estimated deal value.
     { key: 'klaviyo', category: 'platform', icon: Link2, color: 'indigo', withoutCapability: 'mentorship', title: C.klaviyo.t, desc: C.klaviyo.d },
+    // #3111 — the affiliate programme: partners, commission plan, payouts, the
+    // partner portal and the migration. It IS a module (`affiliate`), so the tag.
+    { key: 'affiliate', category: 'companies', icon: Share2, color: 'purple', capability: 'affiliate', title: C.affiliate.t, desc: C.affiliate.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
     // Light gamification: the mentee portal's profile completeness meter. Lives

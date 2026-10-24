@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Affiliate module, release (#3119):** the affiliate programme gets its feature-catalogue card (`src/lib/features.ts`, tagged `capability: 'affiliate'`, so only the marketing product lists it), and two `@smoke` specs close the story's acceptance: `affiliate-end-to-end.spec.ts` drives partner → customer → payment → commission → payout through the real APIs and checks the partner sees only its own rows (another partner's payout 404), and `affiliate-internship-host.spec.ts` sweeps every affiliate API and page — read from the file system, so new routes are covered automatically — and asserts none answers on the internship product, with a marketing control."
+}
