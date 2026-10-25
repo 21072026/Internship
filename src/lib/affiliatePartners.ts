@@ -7,7 +7,7 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { maskedPayoutDetails } from '@/lib/affiliatePayoutDetails';
+import { maskedIbanFromCipher } from '@/lib/affiliatePayoutDetails';
 
 /** A referral code: what follows `?ref=`. Numbers and slugs both (a migrated code is kept verbatim). */
 export const PARTNER_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
@@ -97,11 +97,10 @@ export async function listPartners(orgId: string): Promise<PartnerRow[]> {
     prisma.affiliateCommission.groupBy({ by: ['partnerId', 'status'], where: { orgId }, _sum: { amountMinor: true } }),
   ]);
   const customerCount = new Map(customers.map((c) => [c.partnerId, c._count._all]));
-  const rows: PartnerRow[] = [];
-  for (const p of partners) {
-    const total = (status: 'PENDING' | 'APPROVED' | 'PAID') =>
-      sums.find((s) => s.partnerId === p.id && s.status === status)?._sum.amountMinor ?? 0;
-    rows.push({
+  const sumBy = new Map(sums.map((s) => [`${s.partnerId}:${s.status}`, s._sum.amountMinor ?? 0]));
+  return partners.map((p) => {
+    const total = (status: 'PENDING' | 'APPROVED' | 'PAID') => sumBy.get(`${p.id}:${status}`) ?? 0;
+    return {
       id: p.id,
       code: p.code,
       displayName: p.displayName,
@@ -111,9 +110,8 @@ export async function listPartners(orgId: string): Promise<PartnerRow[]> {
       hasAccount: p.userId !== null,
       customers: customerCount.get(p.id) ?? 0,
       totals: { PENDING: total('PENDING'), APPROVED: total('APPROVED'), PAID: total('PAID') },
-      payoutIban: p.payoutDetailsCipher ? (await maskedPayoutDetails(orgId, p.id))?.iban ?? null : null,
+      payoutIban: maskedIbanFromCipher(orgId, p.id, p.payoutDetailsCipher),
       createdAt: p.createdAt.toISOString(),
-    });
-  }
-  return rows;
+    };
+  });
 }

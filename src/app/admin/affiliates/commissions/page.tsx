@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
@@ -63,21 +64,35 @@ export default function AffiliateCommissionsPage() {
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<Transition | null>(null);
+  const [checkingDrift, setCheckingDrift] = useState(false);
 
   const load = useCallback(async () => {
-    const [c, d] = await Promise.all([fetch(`/api/admin/affiliate/commissions?status=${status}&page=${page}`), fetch('/api/admin/affiliate/commissions/drift')]);
-    if (c.status === 403 || d.status === 403) {
+    const c = await fetch(`/api/admin/affiliate/commissions?status=${status}&page=${page}`);
+    if (c.status === 403) {
       setForbidden(true);
       return;
     }
-    if (!c.ok || !d.ok) {
+    if (!c.ok) {
       setFailed(true);
       return;
     }
     setData(await c.json());
-    setDrift((await d.json()).drift);
     setSelected(new Set());
   }, [status, page]);
+
+  // The drift list re-evaluates the whole programme, so it runs when asked for,
+  // not on every load (a migrated programme holds thousands of partners).
+  async function checkDrift() {
+    setCheckingDrift(true);
+    try {
+      const d = await fetch('/api/admin/affiliate/commissions/drift');
+      if (d.ok) setDrift((await d.json()).drift);
+      else toast(L.failed, 'error');
+    } finally {
+      setCheckingDrift(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -102,6 +117,8 @@ export default function AffiliateCommissionsPage() {
       } else toast(L.failed, 'error');
     } finally {
       setBusy(false);
+      setConfirming(null);
+      setDrift(null); // a move can change what drifts; checked again on request
     }
   }
 
@@ -116,6 +133,8 @@ export default function AffiliateCommissionsPage() {
   };
   const actions: Transition[] = status === 'PENDING' ? ['APPROVE', 'REJECT'] : status === 'APPROVED' ? ['UNAPPROVE'] : [];
   const actionLabel: Record<Transition, string> = { APPROVE: L.approve, REJECT: L.reject, UNAPPROVE: L.unapprove };
+  // What the confirmation names: how many rows and how much, summed from the selected rows.
+  const selectedMinor = data ? data.rows.filter((r) => selected.has(r.id)).reduce((n, r) => n + r.amountMinor, 0) : 0;
 
   return (
     <div className="space-y-6">
@@ -152,7 +171,7 @@ export default function AffiliateCommissionsPage() {
           {data.canWrite && actions.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-2 dark:border-gray-800">
               {actions.map((a) => (
-                <Button key={a} type="button" size="sm" variant={a === 'REJECT' ? 'danger' : 'primary'} disabled={busy || selected.size === 0} onClick={() => void act(a)} data-testid={`affiliate-commission-${a}`}>
+                <Button key={a} type="button" size="sm" variant={a === 'REJECT' ? 'danger' : 'primary'} disabled={busy || selected.size === 0} onClick={() => setConfirming(a)} data-testid={`affiliate-commission-${a}`}>
                   {actionLabel[a]}
                 </Button>
               ))}
@@ -217,7 +236,11 @@ export default function AffiliateCommissionsPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400">{L.driftHint}</p>
         </CardHeader>
         {!drift ? (
-          <SkeletonRows rows={2} />
+          <div>
+            <Button type="button" size="sm" variant="outline" disabled={checkingDrift} onClick={() => void checkDrift()} data-testid="affiliate-drift-check">
+              {L.driftCheck}
+            </Button>
+          </div>
         ) : drift.length === 0 ? (
           <p className="text-sm text-gray-600 dark:text-gray-400" data-testid="affiliate-drift-none">{L.driftNone}</p>
         ) : (
@@ -232,6 +255,22 @@ export default function AffiliateCommissionsPage() {
           </ul>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirming ? actionLabel[confirming] : undefined}
+        message={
+          confirming
+            ? `${interpolate(L.confirmMove, { n: String(selected.size), amount: money(selectedMinor) })}${confirming === 'REJECT' ? ` ${L.confirmRejectFinal}` : ''}`
+            : ''
+        }
+        confirmLabel={confirming ? actionLabel[confirming] : ''}
+        cancelLabel={L.cancel}
+        variant={confirming === 'REJECT' ? 'danger' : 'default'}
+        loading={busy}
+        onConfirm={() => confirming && void act(confirming)}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   );
 }

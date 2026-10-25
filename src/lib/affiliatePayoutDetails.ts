@@ -82,14 +82,10 @@ export async function setPayoutDetails(input: {
   return { masked };
 }
 
-/** The stored details, in full. ADMIN only (the manual transfer); a partner gets `maskedPayoutDetails`. */
-export async function readPayoutDetails(orgId: string, partnerId: string): Promise<PayoutDetails | null> {
-  const row = await prisma.affiliatePartner.findFirst({
-    where: { id: partnerId, orgId },
-    select: { payoutDetailsCipher: true },
-  });
-  if (!row?.payoutDetailsCipher) return null;
-  const plain = open(row.payoutDetailsCipher, purposeFor(orgId, partnerId));
+/** Opens a sealed value already read from the partner row (no query of its own). */
+function openDetails(orgId: string, partnerId: string, cipher: string | null): PayoutDetails | null {
+  if (!cipher) return null;
+  const plain = open(cipher, purposeFor(orgId, partnerId));
   if (!plain) return null;
   try {
     const parsed = JSON.parse(plain) as PayoutDetails;
@@ -97,6 +93,21 @@ export async function readPayoutDetails(orgId: string, partnerId: string): Promi
   } catch {
     return null;
   }
+}
+
+/** The stored details, in full. ADMIN only (the manual transfer); a partner gets `maskedPayoutDetails`. */
+export async function readPayoutDetails(orgId: string, partnerId: string): Promise<PayoutDetails | null> {
+  const row = await prisma.affiliatePartner.findFirst({
+    where: { id: partnerId, orgId },
+    select: { payoutDetailsCipher: true },
+  });
+  return openDetails(orgId, partnerId, row?.payoutDetailsCipher ?? null);
+}
+
+/** The masked IBAN from a cipher the caller already read — the partner list reads them all in one query. */
+export function maskedIbanFromCipher(orgId: string, partnerId: string, cipher: string | null): string | null {
+  const details = openDetails(orgId, partnerId, cipher);
+  return details ? maskIban(details.iban) : null;
 }
 
 export async function maskedPayoutDetails(orgId: string, partnerId: string): Promise<{ iban: string; holder: string } | null> {

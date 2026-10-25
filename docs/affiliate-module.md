@@ -1,7 +1,7 @@
 # Affiliate module
 
-Status: **in development** on `feat/affiliate-module-v2`. Supersedes the first
-draft (`feat/affiliate-module`), which hard-coded one customer's contract terms.
+Status: **first release** (Story #3111: #3112–#3119). Supersedes the first draft,
+which hard-coded one customer's contract terms and was dropped.
 
 An organisation runs a partner (affiliate) programme inside the CRM: partners bring
 paying customers, the organisation records the customers' payments, the module
@@ -17,7 +17,7 @@ per organisation, and every number in tests and examples here is synthetic.
 |---|---|---|
 | 1 | Where it runs | A module of the CRM, gated by the `affiliate` capability (MARKETING vertical). Every row carries `orgId`. |
 | 2 | Commission rules | **A per-organisation commission plan (data)**, evaluated by one pure engine. The engine has no defaults that mirror a real contract. |
-| 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else. |
+| 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. |
 | 4 | Attribution | An ADMIN links a customer (the customer's id on the product side, opaque here) to a partner by hand. Automatic attribution through the `affiliate:<code>` lead source (`src/lib/leadSourceName.ts`) is a later step. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
@@ -69,7 +69,12 @@ partner; an unchanged save is a no-op. Money is **integer minor units** with an 
 
 `src/lib/affiliatePaymentWriter.ts` is the only code that creates a payment, or
 creates, changes the amount of, or removes a commission (`recordAffiliatePayment`,
-and `resyncPartnerCommissions` after a plan or termination change). It locks the
+and `resyncPartnerCommissions` after a plan or termination change). **The one
+exception is the migration** (`src/lib/affiliateMigration.ts`, "Migration from a
+previous system"): it writes a previous system's payments and commissions once,
+into an empty programme, as recorded (source `IMPORT`, kind `IMPORTED`), and the
+writer never touches them afterwards. After a termination takes effect a partner
+brings no new customer (`partner_terminated`); its known customers keep paying in. It locks the
 partner row first (`SELECT … FOR UPDATE`), reads the customer again under the lock,
 runs the engine over the partner's whole history, and lets the pure
 `src/lib/affiliateCommissionSync.ts` decide the changes. Status changes (approve,
@@ -81,8 +86,9 @@ reconciliation.
 - Everything else is **frozen**: `APPROVED`, `PAID`, `REJECTED`, and a `PENDING`
   row of an older plan version (so a plan change applies to what comes after it).
   A frozen row is never changed; when the engine disagrees, the writer returns the
-  difference as **drift** for the admin to look at. A correction is a separate,
-  explicit admin action.
+  difference as **drift** for the admin to look at. There is no correction action
+  in this release: a rejection is final (the screen confirms it with the count and
+  the sum first), and an APPROVED row goes back to PENDING only by un-approving.
 - A PENDING row of an older plan version whose payment was recorded AFTER the
   current plan took effect (a payment that raced a plan change) is live too: the
   next reconciliation recomputes it under the current plan.
@@ -111,18 +117,23 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliatePartner** — `userId` (1:1, null until the invitation is accepted),
   `code`, `displayName`, `contactEmail`, `status` (ACTIVE / SUSPENDED / TERMINATED),
   `noticeEffectiveAt`, sealed payout details (IBAN, holder).
-- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org). Ordinals are
-  not stored: the engine derives them from the payments every time.
+- **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org; shown to the
+  partner, so a customer number — never a name or an address). Ordinals are not
+  stored: the engine derives them from the payments every time.
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
-  future), `source`, `externalPaymentRef` (**required, unique per organisation**, so a
-  double entry is caught even under a mistyped customer).
-- **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT),
+  future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
+  unique per organisation**, so a double entry is caught even under a mistyped customer).
+- **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT, or
+  IMPORTED for a migrated one),
   `amountMinor`, `accruedAt`, `dueAt`, `windowEndsAt`, `planVersion`, `status`
   (PENDING / APPROVED / PAID / REJECTED), `payoutId`.
-- **AffiliatePayout** — a batch that marks commissions PAID; all-or-nothing.
+- **AffiliatePayout** — a batch that marks commissions PAID; all-or-nothing; its
+  day is never before a commission it pays accrued (`payout_before_accrual`).
 - **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
-  validated by `parseCommissionPlan`) and its `planVersion`, landing copy, contract
-  text and `contractVersion`. Without a valid plan the writer refuses payments.
+  validated by `parseCommissionPlan`) and its `planVersion`, the referral base URL
+  (`referralUrl`), landing copy, contract text and `contractVersion`. Without a
+  valid plan the writer refuses payments.
+- **InvitationToken.partnerId** — the partner an AFFILIATE invitation links to.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 
 ## Admin screens
@@ -162,8 +173,10 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   partner is its own transaction: one that fails (its lock busy) is reported in
   `failedPartners` and does not undo the others. One
   audit row per partner (`affiliate.commission.approve|reject|unapprove`).
-  `driftReport()` lists the frozen rows the current plan would calculate
-  differently — read only, nothing written.
+  Every move is confirmed with its row count and sum; a rejection says it is
+  final. `driftReport()` lists the frozen rows the current plan would calculate
+  differently — read only, nothing written, the whole programme in three queries,
+  and run only when the admin asks for it ("Check for differences").
 - **Payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
   recorded after the manual bank transfer. The screen lists a partner's approved
   commissions unpaged (`/payouts/candidates`, up to the 200 a payout can take) and
@@ -206,7 +219,9 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   an IBAN (the masked last four at most) or a person's data beyond ids.
   The admin screens add `affiliate.plan.update`, `affiliate.partner.create`,
   `affiliate.partner.state`, `affiliate.payout_details.read`,
-  `affiliate.commission.approve|reject|unapprove` and `affiliate.payout.create`.
+  `affiliate.commission.approve|reject|unapprove`, `affiliate.payout.create`,
+  `affiliate.referral_url.update`, `affiliate.partner.invite` and
+  `affiliate.migration.run`; registration adds `affiliate.partner.account_linked`.
 - Every partner API goes through `affiliatePartnerGate()` (`src/lib/affiliateContract.ts`):
   AFFILIATE only (403), inside a vertical with the `affiliate` module (403), the
   session's OWN partner record (404 without one — never taken from the request),
@@ -332,9 +347,9 @@ run only after a clean dry run of exactly the files it checked.
 | 2 | Commission plan + pure engine + unit tests (synthetic plans). |
 | 3 | Data model, payment writer (lock, date-ordered ordinals, plan version, unique reference). |
 | 4 | Role, 2FA, security notices, audit, contract acceptance in the API. |
-| 5 | Admin screens: plan and contract settings, customers, payments, commissions, payouts. |
+| 5 | Admin screens: plan and contract settings, partners, payments, commissions, payouts. |
 | 6 | Partner portal and invitations. |
-| 7 | Migration script with reconciliation. |
+| 7 | Migration screen with reconciliation. |
 | 8 | Release fragment, `features.ts`, `@smoke` security specs, review, PR. |
 
 Out of scope for this milestone: automatic payment import, automatic attribution,

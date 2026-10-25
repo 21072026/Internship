@@ -136,6 +136,7 @@ export default function AffiliateMigrationPage() {
               </div>
             ))}
             <p className="text-xs text-gray-500">{L.formatHint}</p>
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-400">{L.refHint}</p>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" disabled={busy || !texts.partners} onClick={() => void run(true)} data-testid="migration-check">
                 {L.check}

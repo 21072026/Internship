@@ -60,6 +60,8 @@ export type MigrationIssueCode =
   | 'future_date'
   | 'invalid_status'
   | 'ended_on_required'
+  | 'ended_on_without_termination'
+  | 'payout_before_payment'
   | 'duplicate'
   | 'unknown_partner'
   | 'unknown_payout'
@@ -245,6 +247,9 @@ export function readPartners(table: ParsedTable): { partners: MigrationPartner[]
     if (!status) bad('status', 'invalid_status');
     if (endedRaw && !ended) bad('ended_on', 'invalid_date');
     if (status === 'TERMINATED' && !endedRaw) bad('ended_on', 'ended_on_required');
+    // A notice given but not yet effective is a TERMINATED partner with a future
+    // day — never a date silently dropped from an ACTIVE one.
+    if (endedRaw && status && status !== 'TERMINATED') bad('ended_on', 'ended_on_without_termination');
     if (!paid.ok) bad('paid_total', paid.code);
     if (!unpaid.ok) bad('unpaid_total', unpaid.code);
     if (issues.length > before) continue;
@@ -380,6 +385,7 @@ export function checkMigration(input: {
   const seenPayments = new Set<string>();
   const customerPartner = new Map<string, string>();
   const payoutSums = new Map<string, number>();
+  const payoutLastPayment = new Map<string, number>();
   const totals = new Map<string, { paid: number; unpaid: number }>();
   for (const c of input.commissions) {
     const partnerKey = sameKey(c.partnerCode);
@@ -398,7 +404,10 @@ export function checkMigration(input: {
       const payout = payoutByRef.get(sameKey(c.payoutRef));
       if (!payout) issues.push({ file: 'commissions', row: c.row, code: 'unknown_payout', subject: c.payoutRef });
       else if (sameKey(payout.partnerCode) !== partnerKey) issues.push({ file: 'commissions', row: c.row, code: 'payout_other_partner', subject: c.payoutRef });
-      else payoutSums.set(sameKey(c.payoutRef), (payoutSums.get(sameKey(c.payoutRef)) ?? 0) + c.amountMinor);
+      else {
+        payoutSums.set(sameKey(c.payoutRef), (payoutSums.get(sameKey(c.payoutRef)) ?? 0) + c.amountMinor);
+        payoutLastPayment.set(sameKey(c.payoutRef), Math.max(payoutLastPayment.get(sameKey(c.payoutRef)) ?? 0, c.receivedAt.getTime()));
+      }
     }
 
     const t = totals.get(partnerKey) ?? { paid: 0, unpaid: 0 };
@@ -411,6 +420,8 @@ export function checkMigration(input: {
     const sum = payoutSums.get(sameKey(p.ref));
     if (sum === undefined) issues.push({ file: 'payouts', row: p.row, code: 'payout_empty', subject: p.ref });
     else if (sum !== p.amountMinor) issues.push({ file: 'payouts', row: p.row, code: 'payout_sum', subject: p.ref });
+    // A transfer cannot pay a payment that had not been made yet.
+    if (sum !== undefined && p.paidAt.getTime() < (payoutLastPayment.get(sameKey(p.ref)) ?? 0)) issues.push({ file: 'payouts', row: p.row, code: 'payout_before_payment', subject: p.ref });
   }
 
   // Over each code's first row only: a duplicate is already an issue of its own.

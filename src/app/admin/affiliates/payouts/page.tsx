@@ -115,7 +115,7 @@ export default function AffiliatePayoutsPage() {
         toast(interpolate(L.saved, { amount: money(body.amountMinor, body.currency), n: String(body.count) }));
         setReference('');
         await Promise.all([load(), loadApproved(partnerId)]);
-      } else toast(body.code === 'payout_mismatch' ? L.mismatch : L.failed, 'error');
+      } else toast(body.code === 'payout_mismatch' ? L.mismatch : body.code === 'payout_before_accrual' ? L.beforeAccrual : L.failed, 'error');
     } finally {
       setBusy(false);
     }

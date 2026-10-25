@@ -68,21 +68,29 @@ export async function partnerCustomers(partner: GatedPartner, rawPage?: unknown)
     }),
     prisma.affiliateCustomer.count({ where: scope }),
   ]);
-  // Earned per customer (everything but REJECTED), summed in SQL for the rows on this page.
-  const earned = rows.length
-    ? await prisma.affiliateCommission.groupBy({
-        by: ['customerId'],
-        where: { ...scope, customerId: { in: rows.map((r) => r.id) }, status: { not: 'REJECTED' } },
-        _sum: { amountMinor: true },
-      })
-    : [];
+  const ids = rows.map((r) => r.id);
+  // Earned per customer (everything but REJECTED), and the first payment day —
+  // the customer's "since", whether it was entered by hand (createdAt is the
+  // moment of entry, possibly back-dated) or imported — summed in SQL for this page.
+  const [earned, first] = ids.length
+    ? await Promise.all([
+        prisma.affiliateCommission.groupBy({
+          by: ['customerId'],
+          where: { ...scope, customerId: { in: ids }, status: { not: 'REJECTED' } },
+          _sum: { amountMinor: true },
+        }),
+        prisma.affiliatePayment.groupBy({ by: ['customerId'], where: { orgId: scope.orgId, customerId: { in: ids } }, _min: { receivedAt: true } }),
+      ])
+    : [[], []];
+  const earnedBy = new Map(earned.map((e) => [e.customerId, e._sum.amountMinor ?? 0]));
+  const firstBy = new Map(first.map((f) => [f.customerId, f._min.receivedAt]));
   return {
     rows: rows.map((r) => ({
       id: r.id,
       ref: r.externalRef,
-      since: r.createdAt.toISOString(),
+      since: (firstBy.get(r.id) ?? r.createdAt).toISOString(),
       payments: r._count.payments,
-      earnedMinor: earned.find((e) => e.customerId === r.id)?._sum.amountMinor ?? 0,
+      earnedMinor: earnedBy.get(r.id) ?? 0,
     })),
     total,
     page,

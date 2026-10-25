@@ -179,3 +179,20 @@ test('a row read from a non-UTF-8 file is refused in every file', () => {
   assert.deepEqual(o.issues, [{ file: 'payouts', row: 1, code: 'encoding' }]);
   assert.equal(rows[2].ok ? 'ok' : rows[2].reason, ':encoding');
 });
+
+test('an end day on a partner that is not TERMINATED is refused, never dropped', () => {
+  const { p } = read('code;name;status;ended_on;paid_total;unpaid_total\nok-1;Active;ACTIVE;2026-12-31;0;0\nok-2;Paused;SUSPENDED;2026-11-30;0;0\nok-3;Ending;TERMINATED;2027-01-31;0;0\n');
+  assert.deepEqual(p.issues.map((i) => [i.row, i.subject, i.code]), [
+    [1, 'ended_on', 'ended_on_without_termination'],
+    [2, 'ended_on', 'ended_on_without_termination'],
+  ]);
+  // A notice not yet effective is TERMINATED with a future day — accepted.
+  assert.equal(p.partners[0].noticeEffectiveAt.toISOString(), '2027-01-31T00:00:00.000Z');
+});
+
+test('a payout dated before a payment it pays is refused', () => {
+  const early = read(undefined, undefined, PAYOUTS.replace('2026-03-20', '2026-02-01'));
+  assert.deepEqual(checkMigration({ partners: early.p.partners, commissions: early.valid, payouts: early.o.payouts }).issues, [
+    { file: 'payouts', row: 1, code: 'payout_before_payment', subject: 'PO-1' },
+  ]);
+});
