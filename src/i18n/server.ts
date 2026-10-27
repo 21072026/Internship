@@ -11,6 +11,8 @@ import { applyVerticalOverlay } from './verticalOverlays';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
 import { hostBrand, productNameIn, requestProductName } from '@/lib/hostBrand';
+import { applyTerminologyMemo } from '@/lib/terminology';
+import { terminologyFor } from '@/lib/terminology.server';
 
 // Read the active locale, in this order (#1384, #1386):
 //   0. the language of the URL — `/tr/…` and `/de/…` are rewritten by
@@ -114,29 +116,47 @@ async function browserLocale(): Promise<Locale> {
 // vertical from generateMetadata, generateViewport and its body, and PublicShell
 // and the footer ask again — one session decode + one Prisma lookup per request,
 // not five.
-export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => {
+export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => (await resolveRequestOrg()).vertical);
+
+// The same lookup, with the signed-in person's org id (null when signed out or
+// on any failure) — what the terminology layer (#1629) reads its setting for.
+// One cache() entry, so asking for both costs one query.
+export const resolveRequestOrg = cache(async (): Promise<{ vertical: VerticalKey; orgId: string | null }> => {
   // Signed OUT (a public page — the landing, /apply, /for-companies): the only
   // signal is the request host, so two urls serve two products' copy from one
   // deployment (#2355). No query.
-  if (!(await hasSessionCookie())) return hostVertical();
+  if (!(await hasSessionCookie())) return { vertical: await hostVertical(), orgId: null };
   try {
     const session = await requestSession();
     // No VALID identity (a stale/expired/revoked cookie decodes to no user) is
     // still "signed out" for this purpose, so the vertical is a host signal —
     // otherwise a marketing-host visitor with a leftover cookie sees the
     // internship landing (#2355 review).
-    if (!session?.user?.id) return hostVertical();
+    if (!session?.user?.id) return { vertical: await hostVertical(), orgId: null };
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { org: { select: { vertical: true } } },
+      select: { orgId: true, org: { select: { vertical: true } } },
     });
-    return toVerticalKey(user?.org?.vertical);
+    return { vertical: toVerticalKey(user?.org?.vertical), orgId: user?.orgId ?? null };
   } catch {
     // A transient session/DB error is not a reason to override the host's
     // product with the default one; fall back to the host signal.
-    return hostVertical();
+    return { vertical: await hostVertical(), orgId: null };
   }
 });
+
+// The full dictionary a signed-in page renders: the base translation, the
+// request's vertical overlay with `{product}` filled (#2936), then the org's
+// stored terminology (#1629, src/lib/terminology.ts) — nothing stored, nothing
+// walked, the overlaid object itself. The root layout builds the client payload
+// from this same call, so server render and browser agree.
+export async function requestDictionary(locale: Locale) {
+  const { vertical, orgId } = await resolveRequestOrg();
+  const product = await requestProductName(vertical);
+  const overlaid = applyVerticalOverlay(getDictionary(locale), locale, vertical, { product });
+  const terms = await terminologyFor(vertical, { orgId });
+  return { product, t: applyTerminologyMemo(`${vertical}\u0000${product}`, overlaid, locale, terms) };
+}
 
 // The page's dictionary: the base translation with the request's vertical
 // overlay, the overlay's `{product}` filled with the product name this page
@@ -145,9 +165,7 @@ export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => {
 // base string that carries the same token (the landing FAQ, wrongWorld, …).
 export async function getServerDictionary() {
   const locale = await getLocale();
-  const vertical = await resolveRequestVertical();
-  const product = await requestProductName(vertical);
-  return { locale, product, t: applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }) };
+  return { locale, ...(await requestDictionary(locale)) };
 }
 
 // A share card's dictionary (src/lib/ogCard.tsx, the profile card): the same

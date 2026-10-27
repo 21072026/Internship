@@ -349,6 +349,10 @@ export const SETTING_DEFAULTS = {
   // APPROVED requests per company per calendar month (UTC). A company's own
   // `Company.quota`, when set, overrides it. Checked when a request is made.
   outreachMonthlyQuota: '20',
+  // Per-tenant nouns (#1629): a JSON document `{ en: { mentor: { one, many,
+  // oneCap, manyCap }, … }, tr: …, de: … }`, parsed (unknown keys dropped) by
+  // parseTerminology() in src/lib/terminology.ts. '' = the dictionary's words.
+  terminology: '',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
@@ -447,6 +451,7 @@ export const SETTING_SCHEMA = {
   usageBaselineDays: { type: 'number', scopes: O },
   trialActivationDays: { type: 'number', scopes: O },
   outreachMonthlyQuota: { type: 'number', scopes: O },
+  terminology: { type: 'string', scopes: P },
 } as const satisfies { readonly [K in SettingKey]: SettingSpec };
 
 type SpecValue<S> = S extends { type: 'number'; nullable: true }
