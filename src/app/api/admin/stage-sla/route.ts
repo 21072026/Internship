@@ -11,7 +11,8 @@ import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
-import { slaScopeKey } from '@/lib/stageSlaRule';
+import { inheritedSla, resolveSlaDays, slaScopeKey, type SlaScope } from '@/lib/stageSlaRule';
+import { loadStageSlaRows } from '@/lib/stageSla';
 import { z } from 'zod';
 
 // The org's own rows. Per-cohort / per-mentor overrides (#1640) are other
@@ -26,7 +27,18 @@ const ORG_SCOPE = slaScopeKey({});
 // than as a column on PipelineStage — that editor is premium and rewrites its
 // whole set on every save.
 
+// Per-cohort / per-mentor overrides (#1640). Either id narrows the save to
+// that scope; neither is the org's own row (everything this route did before).
+// The ids are CHECKED against the caller's org below — never trusted from the
+// form, because a row naming another tenant's cohort or mentor would otherwise
+// be stored under this org and silently never match anything.
+const scopeIds = {
+  cohortId: z.string().min(1).max(191).nullable().optional(),
+  mentorId: z.string().min(1).max(191).nullable().optional(),
+};
+
 const schema = z.object({
+  ...scopeIds,
   slas: z
     .array(
       z.object({
@@ -50,7 +62,27 @@ const schema = z.object({
     .max(60),
 });
 
-export async function GET() {
+/**
+ * The (cohortId, mentorId) a request names, verified to belong to `orgId`:
+ * the cohort must be one of the org's, the mentor a MENTOR of the org.
+ * `null` = an id that is not this org's — answered 404 like any other id the
+ * caller may not see. An empty object = the org scope.
+ */
+async function verifiedScope(orgId: string, raw: SlaScope): Promise<SlaScope | null> {
+  const cohortId = raw.cohortId || null;
+  const mentorId = raw.mentorId || null;
+  if (cohortId) {
+    const cohort = await prisma.cohort.findFirst({ where: { id: cohortId, orgId }, select: { id: true } });
+    if (!cohort) return null;
+  }
+  if (mentorId) {
+    const mentor = await prisma.user.findFirst({ where: { id: mentorId, orgId, role: 'MENTOR' }, select: { id: true } });
+    if (!mentor) return null;
+  }
+  return { cohortId, mentorId };
+}
+
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -68,16 +100,48 @@ export async function GET() {
     // board: this is already the one request that answers "what applies to each
     // column", and two sources for one number is how the hardcoded 8 survived.
     const defaultWipLimit = resolveOrgWipLimit(await resolveSettingRaw('boardWipLimit', { orgId: await settingsOrgOf(session) }));
+
+    // The override scope the editor is looking at (#1640), and what it offers.
+    const url = new URL(request.url);
+    const asked = { cohortId: url.searchParams.get('cohortId'), mentorId: url.searchParams.get('mentorId') };
+    const scope = orgId ? await verifiedScope(orgId, asked) : {};
+    if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const isOverride = slaScopeKey(scope) !== ORG_SCOPE;
+    const rows = orgId ? await loadStageSlaRows(orgId) : [];
+    const own = new Map(
+      rows.filter((r) => slaScopeKey(r) === slaScopeKey(scope) && r.days != null).map((r) => [r.stageKey, r.days as number])
+    );
+    const effective = resolveSlaDays(rows, scope);
+    const inherited = inheritedSla(rows, scope);
+    const [cohorts, mentors] = orgId
+      ? await Promise.all([
+          prisma.cohort.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+          prisma.user.findMany({
+            where: { orgId, role: 'MENTOR' },
+            select: { id: true, fullName: true },
+            orderBy: { fullName: 'asc' },
+            take: 1000,
+          }),
+        ])
+      : [[], []];
+
     // Every stage is listed, configured or not, so the form shows the whole
     // pipeline rather than only the rules that already exist.
     return NextResponse.json({
       defaultWipLimit,
+      scope: { cohortId: scope.cohortId ?? null, mentorId: scope.mentorId ?? null, override: isOverride },
+      cohorts,
+      mentors: mentors.map((m) => ({ id: m.id, name: m.fullName })),
       stages: stages.map((s) => ({
         key: s.key,
         label: s.label,
         isOffPath: s.isOffPath,
         isTerminal: s.isTerminal,
-        days: slas.get(s.key) ?? null,
+        // In an override scope `days` is that scope's OWN number (null = it
+        // inherits); `effective`/`inherited` say what applies and from where.
+        days: isOverride ? (own.get(s.key) ?? null) : (slas.get(s.key) ?? null),
+        effective: effective.get(s.key) ?? null,
+        inherited: inherited.get(s.key) ?? null,
         wipLimit: wipLimits.get(s.key) ?? null,
         escalateAfterDays: escalations.get(s.key) ?? null,
       })),
@@ -106,6 +170,46 @@ export async function PUT(request: Request) {
         { error: 'Validation failed', details: { formErrors: [`Unknown stages: ${unknown.join(', ')}`] } },
         { status: 400 }
       );
+    }
+
+    const scope = await verifiedScope(orgId, { cohortId: parsed.data.cohortId, mentorId: parsed.data.mentorId });
+    if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const scopeKey = slaScopeKey(scope);
+    if (scopeKey !== ORG_SCOPE) {
+      // An override carries a service level only: escalation rungs and board
+      // WIP limits stay organisation-wide (resolveStageEscalations /
+      // resolveStageWipLimits read the org scope), so they are ignored here.
+      const set = parsed.data.slas.filter((s) => s.days != null && s.days > 0);
+      const cleared = parsed.data.slas.filter((s) => !(s.days != null && s.days > 0)).map((s) => s.stageKey);
+      await prisma.$transaction([
+        ...(cleared.length > 0
+          ? [prisma.stageSla.deleteMany({ where: { orgId, scope: scopeKey, stageKey: { in: cleared } } })]
+          : []),
+        ...set.map((s) =>
+          prisma.stageSla.upsert({
+            where: { orgId_stageKey_scope: { orgId, stageKey: s.stageKey, scope: scopeKey } },
+            update: { days: s.days },
+            create: {
+              orgId,
+              stageKey: s.stageKey,
+              days: s.days,
+              cohortId: scope.cohortId ?? null,
+              mentorId: scope.mentorId ?? null,
+              scope: scopeKey,
+            },
+          })
+        ),
+      ]);
+      await logActivity({
+        action: 'stage_sla.override_updated',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'organization',
+        targetId: orgId,
+        detail: `scope ${scopeKey}: ${set.length} service levels, ${cleared.length} inherited`,
+        request,
+      });
+      return NextResponse.json({ ok: true, configured: set.length, wipConfigured: 0 });
     }
 
     // The row now carries two independent numbers (#1439), so what to do with

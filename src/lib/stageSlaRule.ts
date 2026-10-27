@@ -97,3 +97,16 @@ export function resolveSlaDays(rows: ReadonlyArray<StageSlaRow>, scope: SlaScope
 export function slaDaysByStage(rows: ReadonlyArray<StageSlaRow>, scope: SlaScope = {}): Map<string, number> {
   return new Map(Array.from(resolveSlaDays(rows, scope), ([key, r]) => [key, r.days]));
 }
+
+/**
+ * What a relation in `scope` would get if the row AT exactly that scope did not
+ * exist — the "inherited from" half the admin editor shows beside an override
+ * ("this cohort: 5 days, inherited from org: 7 days").
+ */
+export function inheritedSla(rows: ReadonlyArray<StageSlaRow>, scope: SlaScope): Map<string, ResolvedSla> {
+  const own = slaScopeKey(scope);
+  return resolveSlaDays(
+    rows.filter((r) => slaScopeKey(r) !== own),
+    scope
+  );
+}

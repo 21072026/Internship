@@ -14,3 +14,8 @@
   adds must run after it. A fill that a person may later undo by hand should be `once: true`.
 - **A pure rule a deploy script needs gets a plain-ESM twin and a test that runs both** (Node 20 on
   the server cannot import TS) — same pattern as `skill-split.mjs`.
+- **Playwright here wants `chromium_headless_shell-1248` but the box ships `-1243`.** Symlinking
+  the 1243 contents into a `-1248` directory (`ln -sfn …-1243/* …-1248/`) was enough: the SLA specs
+  ran green against apt MariaDB + `npx prisma db seed` with the CI env vars from `e2e.yml`.
+- **After `git checkout` onto a fresh main, `prisma generate` before `tsc`** — a sibling's schema
+  change showed up as dozens of unrelated TS errors until the client was regenerated.
