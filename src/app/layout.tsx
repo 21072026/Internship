@@ -7,7 +7,7 @@ import { Providers } from './providers';
 import { getLocale, getServerDictionary } from '@/i18n/server';
 import { requestSiteUrl } from '@/lib/siteUrl';
 import { pageAlternates, socialMetadata } from '@/lib/pageMetadata';
-import { toClientDictionary } from '@/i18n/dictionaries';
+import { shellDictionary } from '@/i18n/scope';
 import { requestDictionary, resolveRequestVertical } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -136,7 +136,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // and the org's terminology (#1629) swapped in — the one requestDictionary()
   // that getServerDictionary() returns too.
   const vertical = await resolveRequestVertical();
-  const dict = toClientDictionary((await requestDictionary(locale)).t);
+  // Only the shell namespaces (#2987): each top-level layout adds its own
+  // through <I18nScope> (src/i18n/scope.tsx, scripts/i18n-scopes.mjs).
+  const { t: fullDict } = await requestDictionary(locale);
+  const dict = shellDictionary(fullDict);
   const cookieStore = await cookies();
   // Inside the native app's web view (src/lib/embeddedApp.ts).
   const embeddedApp = isEmbeddedAppUserAgent((await headers()).get('user-agent'));
@@ -195,7 +198,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-2 focus:text-white"
         >
-          {dict.a11y.skipToContent}
+          {fullDict.a11y.skipToContent}
         </a>
         {/* Keeps a `system` theme preference following the OS while the tab
             is open (#2078). Renders nothing. */}

@@ -128,6 +128,20 @@ export async function countOrgProjects(orgId: string): Promise<number> {
   return prisma.project.count({ where: { orgId } });
 }
 
+/** Companies a tenant holds — capacity, rolled up nightly for the usage tab (#1763). */
+export async function countOrgCompanies(orgId: string): Promise<number> {
+  return prisma.company.count({ where: { orgId } });
+}
+
+/**
+ * Programmes a tenant runs — `PlanLimits.programs` is "concurrent programmes /
+ * cohorts", and the cohort is the row (the same count the super-admin gauge on
+ * /admin/organizations reads). Capacity, never a billing number.
+ */
+export async function countOrgPrograms(orgId: string): Promise<number> {
+  return prisma.cohort.count({ where: { orgId } });
+}
+
 // ── The ledger (UsageRollup) ────────────────────────────────────────────────
 // One row per (org, metric, period). COMPUTED metrics are written absolutely
 // so a re-run is a no-op; COUNTER metrics are incremented as they happen and

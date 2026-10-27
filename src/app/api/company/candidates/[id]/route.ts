@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
+import { resolveOrgId } from '@/lib/orgScope';
+import { verifiedLevelsByTerm } from '@/lib/skillLevels';
 
 // GET — read-only candidate detail for a COMPANY user (EPIC: company
 // candidate detail). Authorized when a mentorship relation links this
@@ -121,8 +123,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     verified = { evaluations, projects: Array.from(projectMap.values()) };
   }
 
+  // Levels a mentor confirmed (#1822), keyed by the typed skill the page
+  // renders, so a confirmed chip shows the confirmed value and a mark. Free:
+  // the confirmation is the mentor's work, not a premium signal.
+  const skillTerms = Array.isArray(candidate.skills) ? (candidate.skills as unknown[]).filter((s): s is string => typeof s === 'string') : [];
+  const verifiedLevels = await verifiedLevelsByTerm(resolveOrgId(session), id, skillTerms);
+
   return NextResponse.json({
-    candidate: { ...candidate, pipelineStatus: relation?.pipelineStatus ?? null, mentorName: relation?.mentor.fullName ?? null },
+    candidate: { ...candidate, verifiedLevels, pipelineStatus: relation?.pipelineStatus ?? null, mentorName: relation?.mentor.fullName ?? null },
     verified,
   });
   });

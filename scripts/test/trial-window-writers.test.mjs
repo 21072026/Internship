@@ -50,6 +50,8 @@ const STAMPERS = {
 
 // File → why it writes `pipelineStatus`-adjacent data without stamping.
 const EXEMPT = {
+  'src/lib/automation/actions.ts':
+    'Stage automation (#1703) never moves a stage: setStageDeadline writes only stageDeadline and its reminder claim, and `pipelineStatus` is the conditional where of that updateMany.',
   'src/app/api/mentorship/[id]/contract-end/route.ts':
     'A won customer\'s notice period (#2841): writes only contractEndsAt and its bell claim, never the stage — `pipelineStatus` is the conditional where of the updateMany.',
   'src/lib/contractEnd.ts':

@@ -342,6 +342,18 @@ marketing names redirect there, and their apex now serves **mail only**.
   both ways. `npm run check:i18n -- --leaks[=locale]` lists the offending keys. E-mail copy
   goes through `emailDictionary(locale, orgId)` (`src/i18n/emailDictionary.ts`), never a bare
   `getDictionary()`, so the recipient org's vertical reaches the mail.
+- **The browser gets the dictionary per segment** (#2987): the root layout ships only
+  `SHELL_NAMESPACES`; every top-level directory of `src/app` (route groups too) mounts
+  `<I18nScope scope="<dir>">` (`src/i18n/scope.tsx`) around its WHOLE layout, and the root page
+  mounts `scope="home"`. Which namespaces each scope gets is `src/i18n/scopes.generated.ts`,
+  written by `scripts/i18n-scopes.mjs` (an over-inclusive scan of the client module graph for
+  `.ns` / `'ns…'`) on `npm install` (postinstall), `npm run dev` and `npm run build` — it is
+  **gitignored, never committed**, so parallel PRs cannot conflict on it or leave it stale.
+  `npm run check:i18n-scopes` (CI) fails on an unmounted scope. A new
+  top-level directory therefore needs a layout with its `<I18nScope>`. Never trim by path in the
+  root layout — it survives client navigations, so a trimmed root dict outlives its page. Server
+  components are unaffected (`getServerDictionary()` is still the whole dictionary). A namespace
+  picked dynamically (`t[name]`) is invisible to the scan: write `t.ns` or `'ns.key'`.
 - **Dark mode** is class-based (`html.dark`) with flat utility overrides in
   `src/app/globals.css`: `bg-*-50` boxes are retinted dark while `bg-*-100` chips stay
   light. Mid-tone text (`text-*-600/700`) sitting on a tinted `*-50` box goes dark-on-dark —
@@ -586,6 +598,14 @@ marketing names redirect there, and their apex now serves **mail only**.
   each body runs as a handler in `src/jobs/` through the worker — so replica ≥2 no longer
   runs with `CRON_ENABLED=0`. Never call `cron.schedule()`; a new schedule is a
   `queue({ … })` entry plus a `registerJob()`.
+- **Stage automation is one engine with a fixed allowlist** ([`docs/automation-rules.md`](docs/automation-rules.md),
+  #1703): `AutomationRule`s are judged by the `automation` subscriber of `pipeline.stage_change`
+  on the queue, never in the request. The vocabulary, the write-time gate (`parseRuleInput()`) and
+  the ONE condition evaluator are pure in `src/lib/automation/rule.ts`; a new action is an entry
+  there with a strict schema — never a URL, an address or free text, never a stage move — plus a
+  handler in `actions.ts` that goes through `notifyIfAllowed()` / `sendEmail()`. One run per
+  `(ruleId, eventId)`, actions at-most-once (claimed `PENDING → RUNNING`). Audience nudges are
+  #1684's engine, not this one.
 - **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
   that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
   retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a

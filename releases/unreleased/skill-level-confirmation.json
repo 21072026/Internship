@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mentor confirmation of skill levels (#1822):** `GET /api/mentorship/[id]/skills` lists the mentee's canonical skills with level and confirmation state; `POST /api/mentorship/[id]/skills/[skillId]/confirm` (`{ level }`) lets the mentor of an ACTIVE relation, or an admin of its org, confirm or correct a level. Authorized from the relation server-side (another mentor or an ended pair: 403), `requireCapability('mentorship')`, never entitlement-gated. One guarded update (409 `level_conflict` when the level changed meanwhile) plus a `MENTOR` history row only when the value moves (`confirmLevelPlan()` in `src/lib/skillLevelRule.ts`; DB half in `src/lib/skillLevels.ts`). New `MenteeSkillLevels` panel on the mentor's mentee page; a confirmed level is marked on the company candidate detail (`verifiedLevels`) and on the mentee's own profile (`GET /api/profile` → `verifiedLevels`). e2e: `skill-rating.spec.ts` covers the self-assessment history, the 403s and the confirmation.",
+  "notes": {
+    "en": ["Mentors can now confirm — or correct — a mentee's self-assessed skill level. Confirmed levels are marked on the mentee's profile and for companies."],
+    "tr": ["Mentorlar artık mentee'nin kendi verdiği beceri seviyesini onaylayabiliyor ya da düzeltebiliyor. Onaylanan seviyeler mentee'nin profilinde ve şirketler için işaretleniyor."],
+    "de": ["Mentor:innen können jetzt das selbst eingeschätzte Skill-Level ihrer Mentees bestätigen oder korrigieren. Bestätigte Level werden im Profil und für Unternehmen markiert."]
+  }
+}

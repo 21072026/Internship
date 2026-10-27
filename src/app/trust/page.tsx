@@ -6,6 +6,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { operatorIdentityForRequest } from '@/lib/imprintRequest';
+import { AssuranceSection } from '@/components/trust/AssuranceSection';
 import {
   getSubprocessors,
   CONTROL_KEYS,
@@ -38,7 +39,7 @@ const DOC_BASE = `${GITHUB_URL}/blob/main/docs/trust`;
  * (#1572), and saying so is what makes the rest of the page worth reading.
  */
 export default async function TrustPage() {
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
   const p = t.trust;
 
   const operator = await operatorIdentityForRequest();
@@ -226,6 +227,10 @@ export default async function TrustPage() {
             <p className="text-sm text-gray-600 dark:text-gray-300">{p.residencySelfHost}</p>
           </div>
         </section>
+
+        {/* Assurance (#2031): disclosure policy, testing + open findings,
+            questionnaire answers, the SOC 2 decision and security.txt. */}
+        <AssuranceSection locale={locale} className="mb-10" />
 
         {/* Link row */}
         <section data-testid="trust-docs">
