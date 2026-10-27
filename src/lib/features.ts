@@ -210,5 +210,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
     // #3130 — the floating feedback button: screenshot + masked console/network context, triaged by admins.
     { key: 'feedbackReports', category: 'trust', icon: MessageSquareWarning, color: 'blue', title: C.feedbackReports.t, desc: C.feedbackReports.d },
+    { key: 'terminology', category: 'platform', icon: Palette, color: 'violet', capability: 'mentorship', title: C.terminology.t, desc: C.terminology.d },
   ];
 }

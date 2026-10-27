@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Terminology card on /admin/settings (#1629):** `TerminologyCard` edits the org's `terminology` setting per language — one row per catalogued noun, four forms each, a half-filled row refused in the browser, \"back to the defaults\" clears the layer — and refreshes the page so the new words take over. Rows are labelled from `TERM_DEFAULTS`, never the dictionary. Shown and accepted (`PUT /api/admin/terminology` → `requireCapability('mentorship')`) only where the vertical has `mentorship`. Feature catalogue entry `terminology`.",
+  "notes": {
+    "en": ["Use your own words: rename mentors, mentees, programmes, cohorts and mentorships per language in Settings — menus, screens and e-mails follow."],
+    "tr": ["Kendi kelimelerinizi kullanın: Ayarlar'da mentor, mentee, program, kohort ve mentorluk adlarını her dil için değiştirin — menüler, ekranlar ve e-postalar da değişir."],
+    "de": ["Eigene Begriffe: Benennen Sie Mentoren, Mentees, Programme, Kohorten und Mentorings in den Einstellungen je Sprache um — Menüs, Seiten und E-Mails übernehmen es."]
+  }
+}
