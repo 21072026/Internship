@@ -37,6 +37,10 @@ test('renders for a signed-out visitor', async ({ page }) => {
   await expect(page.getByTestId('trust-controls')).toBeVisible();
   await expect(page.getByTestId('trust-residency')).toBeVisible();
   await expect(page.getByTestId('trust-docs')).toBeVisible();
+  // The assurance layer (#2031): VDP, testing + open findings, questionnaire,
+  // SOC 2 decision, security.txt.
+  await expect(page.getByTestId('trust-assurance')).toBeVisible();
+  await expect(page.getByTestId('trust-assurance-securityTxt')).toHaveAttribute('href', '/.well-known/security.txt');
 });
 
 test('links the supply-chain evidence (#2059)', async ({ page }) => {

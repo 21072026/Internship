@@ -11,10 +11,8 @@ import type { Locale } from '@/i18n/config';
  *   the machine-readable contact at /.well-known/security.txt.
  *
  * WHERE IT RENDERS
- *   `src/components/trust/AssuranceSection.tsx`, which the /trust page (#2027)
- *   mounts. /trust is a server component built by that sibling task; this
- *   module and that component are deliberately self-contained so wiring them
- *   in is a single import, and so neither task has to edit the other's file.
+ *   `src/components/trust/AssuranceSection.tsx`, mounted by the /trust page
+ *   (#2027) above its "Read the source" link row.
  *
  * WHY THE COPY LIVES HERE AND NOT IN src/i18n/dictionaries.ts
  *   Same reason as `src/lib/newsletterContent.ts`: this is a *content list*,

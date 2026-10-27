@@ -66,19 +66,19 @@ This list is the reason the answer is "not yet" rather than "not worth it".
 
 | Prerequisite | Where we are | Tracked |
 |---|---|---|
-| **Environment separation** | One Plesk box hosts production (`:3200`), preview (`:3201`), every per-PR topic environment (`33xx`) **and** MySQL. Auditable separation of production from development/test is table stakes for the Confidentiality and Availability criteria. | Deployment table in [`CLAUDE.md`](../../CLAUDE.md) |
+| **Environment separation** | One Docker host behind Caddy runs production (`:3200`), preview (`:3201`), every per-PR topic environment (`34xx`) **and** MySQL. Auditable separation of production from development/test is table stakes for the Confidentiality and Availability criteria. | Deployment table in [`CLAUDE.md`](../../CLAUDE.md) |
 | **Reviewable, non-destructive schema changes** | Deploys run `prisma db push --accept-data-loss`; there is no migration history an auditor can review, only a guard script and a pre-deploy dump. | [#1515](https://github.com/21072026/Internship/issues/1515) |
 | **Monitoring, alerting and error tracking** | No error tracker, no APM, no external uptime monitor. Several Common Criteria (CC7.x — detection and response) have nothing to point at. | [#1591](https://github.com/21072026/Internship/issues/1591) |
 | **Formal change management** | Branch + PR + CI gates + branch protection are real, but there is **no mandatory second-person approval** and no change record beyond git — a single maintainer merges their own changes. | § F of [`questionnaire-answers.md`](questionnaire-answers.md) (row: "Is every change reviewed by a second person?") |
-| **Access-review cadence** | No periodic review or re-certification of who holds admin access. Also no separation between "runs the deployment" and "runs a tenant" — organisation management still authorises on `role === 'ADMIN'`. | [#1535](https://github.com/21072026/Internship/issues/1535) |
+| **Access-review cadence** | No periodic review or re-certification of who holds admin access in a tenant. (The separation between "runs the deployment" and "runs a tenant" now exists — a per-deployment super-admin capability, #1535 — and the secrets runbook sets a quarterly review of who can read the server's secrets; neither is a tenant access review.) | [`docs/role-access-matrix.md`](../role-access-matrix.md), [`docs/secrets-and-rotation.md`](../secrets-and-rotation.md) |
 | **Incident response** | No IR runbook, no severity ladder, no on-call, no communication templates. | [#1605](https://github.com/21072026/Internship/issues/1605) |
-| **Vendor management** | Subprocessors are known and (being) published, but no DPAs are collected and no vendor-risk review exists. | [#2027](https://github.com/21072026/Internship/issues/2027), [#2025](https://github.com/21072026/Internship/issues/2025) |
+| **Vendor management** | Subprocessors are known and published ([`subprocessors.md`](subprocessors.md)), but no DPAs are collected and no vendor-risk review exists. | [#2025](https://github.com/21072026/Internship/issues/2025) |
 | **HR controls** | No background checks, no security-training programme, no formal onboarding/offboarding record. Structurally hard for a project whose contributors are mentees — solvable, but a policy decision first. | [`docs/DATA_ACCESS_POLICY.md`](../DATA_ACCESS_POLICY.md) |
 | **Backup controls an auditor accepts** | Backups are taken, verified daily and drilled monthly — genuinely good — but they are **unencrypted and on the same host** as the database. | [`docs/disaster-recovery.md`](../disaster-recovery.md) |
 
 Note what this list is **not** saying. Most of these items are worth doing for
-their own sake — monitoring, migrations, incident response and a super-admin
-separation all make the product better whether or not an audit ever happens.
+their own sake — monitoring, migrations, incident response and access reviews
+all make the product better whether or not an audit ever happens.
 They are listed here as *prerequisites*, not as SOC 2 work, and they are
 tracked in their own issues where they belong. Nothing on this page asks for
 work to be started.
@@ -89,9 +89,9 @@ The answer a prospect gets today, in this order:
 
 1. **A Trust Center you can read**, not a report you have to request: the
    subprocessor register, the security overview and the hosting/residency
-   answer. Shipping as the sibling task
-   ([#2027](https://github.com/21072026/Internship/issues/2027)) — the four
-   documents in items 3–5 below are published already.
+   answer, at `/trust` ([#2027](https://github.com/21072026/Internship/issues/2027)),
+   with the SBOM, licence inventory and remediation SLA
+   ([`vulnerability-management.md`](vulnerability-management.md)) beside them.
 2. **A DPA you can sign**, with SCCs where they apply
    ([#2025](https://github.com/21072026/Internship/issues/2025)).
 3. **A published disclosure policy with safe harbour and response targets**, and

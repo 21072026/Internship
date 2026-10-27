@@ -8,12 +8,7 @@ import { ASSURANCE_HEADING, ASSURANCE_LINKS } from '@/lib/trustAssurance';
  * assurance documents plus the served `security.txt`, in the visitor's locale,
  * from the single typed list in `src/lib/trustAssurance.ts`.
  *
- * MOUNT POINT: the /trust page, built by the sibling task #2027. It is kept
- * standalone so the two tasks never edit the same file:
- *
- *     import { AssuranceSection } from '@/components/trust/AssuranceSection';
- *     …
- *     <AssuranceSection locale={locale} />   // locale from getServerDictionary()
+ * Mounted by the /trust page (#2027) with the locale from getServerDictionary().
  *
  * External links open in a new tab because they leave the app for GitHub;
  * `rel="noopener"` on every one of them, and the internal `security.txt` link

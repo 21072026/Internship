@@ -113,11 +113,13 @@ test('the four assurance documents are published and honest about what is missin
   expect(vdp).toMatch(/5 working days/);
   expect(vdp).toMatch(/security\/advisories\/new/);
 
-  // The pen-test page must carry the open findings rather than imply a clean
-  // result. If #1535/#1546/#1539 close, the page changes and so does this list.
-  for (const issue of ['1535', '1546', '1539']) {
-    expect(pentest, `pentest.md must name open finding #${issue}`).toContain(`#${issue}`);
+  // The pen-test page must carry the findings under #1522 rather than imply a
+  // clean result — the open one (#1552, CSP) and the fixed ones, which stay
+  // listed with their fix date so the history is checkable.
+  for (const issue of ['1552', '1535', '1546', '1539']) {
+    expect(pentest, `pentest.md must name finding #${issue}`).toContain(`#${issue}`);
   }
+  expect(pentest).toMatch(/\| \*\*Open\*\* \|/);
   expect(pentest).toMatch(/no external penetration test has been commissioned/i);
 
   // Every questionnaire answer carries an evidence path, so the table rows
