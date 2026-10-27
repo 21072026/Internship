@@ -11,7 +11,12 @@ import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
+import { slaScopeKey } from '@/lib/stageSlaRule';
 import { z } from 'zod';
+
+// The org's own rows. Per-cohort / per-mentor overrides (#1640) are other
+// scopes of the same table; this form edits the org scope only.
+const ORG_SCOPE = slaScopeKey({});
 
 // Per-stage service levels (#817).
 //
@@ -110,7 +115,7 @@ export async function PUT(request: Request) {
     const current = new Map(
       (
         await prisma.stageSla.findMany({
-          where: { orgId, stageKey: { in: parsed.data.slas.map((s) => s.stageKey) } },
+          where: { orgId, scope: ORG_SCOPE, stageKey: { in: parsed.data.slas.map((s) => s.stageKey) } },
           select: { stageKey: true, wipLimit: true, escalateAfterDays: true },
         })
       ).map((r) => [r.stageKey, r])
@@ -132,11 +137,11 @@ export async function PUT(request: Request) {
 
     await prisma.$transaction([
       ...(drop.length > 0
-        ? [prisma.stageSla.deleteMany({ where: { orgId, stageKey: { in: drop } } })]
+        ? [prisma.stageSla.deleteMany({ where: { orgId, scope: ORG_SCOPE, stageKey: { in: drop } } })]
         : []),
       ...keep.map((s) =>
         prisma.stageSla.upsert({
-          where: { orgId_stageKey: { orgId, stageKey: s.stageKey } },
+          where: { orgId_stageKey_scope: { orgId, stageKey: s.stageKey, scope: ORG_SCOPE } },
           update: { days: s.days, wipLimit: s.wipLimit, escalateAfterDays: s.escalateAfterDays },
           create: { orgId, stageKey: s.stageKey, days: s.days, wipLimit: s.wipLimit, escalateAfterDays: s.escalateAfterDays },
         })

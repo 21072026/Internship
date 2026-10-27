@@ -578,13 +578,31 @@ model StageSla {
   /// administrators are told too. NULL = the ladder stops at the mentor, which
   /// is exactly what every org had before. Meaningless without `days`.
   escalateAfterDays Int?
+  /// Per-cohort / per-mentor overrides (#1640). Both NULL = the org's own row,
+  /// exactly what every row was before. Resolution (mentor+cohort → mentor →
+  /// cohort → org) is pure in src/lib/stageSlaRule.ts.
+  cohortId          String?
+  mentorId          String?
+  /// The uniqueness key of the (cohortId, mentorId) pair: "org", "c:<id>",
+  /// "m:<id>" or "m:<id>|c:<id>" — written ONLY through `slaScopeKey()`
+  /// (src/lib/stageSlaRule.ts). It exists because MySQL treats NULLs as
+  /// distinct in a unique index, so @@unique([orgId, cohortId, mentorId,
+  /// stageKey]) would let an org hold two org-level rows for one stage. A
+  /// literal default, so `db push` fills the existing rows with "org" — which
+  /// is what each of them is.
+  scope             String   @default("org") @db.VarChar(191)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  cohort Cohort?      @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  mentor User?        @relation("StageSlaMentor", fields: [mentorId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, stageKey])
+  @@unique([orgId, stageKey, scope])
+  @@index([orgId, stageKey])
   @@index([orgId])
+  @@index([cohortId])
+  @@index([mentorId])
 }
 
 // The words of one notification event, per locale, as an org (and later one
@@ -993,6 +1011,8 @@ model User {
   // next deploy's backfill stamps it) is NOT covered by this index — the
   // per-world rule in src/lib/userWorld.ts (`emailTakenInWorld`) is what stops
   // a second one, and it is checked on every create path.
+  stageSlaOverrides StageSla[] @relation("StageSlaMentor")
+
   @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
@@ -3665,6 +3685,7 @@ model Cohort {
   steps            ProgramStep[]
   adminScopeGrants AdminScopeGrant[]
   settings         Setting[]
+  stageSlas        StageSla[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────

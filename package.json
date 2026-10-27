@@ -33,6 +33,7 @@
     "test:release": "node --test scripts/test/release-derive.test.mjs scripts/test/release-media.test.mjs scripts/test/release-lockfile.test.mjs",
     "fix:lockfile-version": "node scripts/release-lockfile.cjs --sync",
     "test:stage-aging": "node --test --experimental-strip-types scripts/test/stage-aging.test.mjs",
+    "test:stage-sla-rule": "node --test --experimental-strip-types scripts/test/stage-sla-rule.test.mjs",
     "test:mentor-directory": "node --test --experimental-strip-types scripts/test/mentor-directory.test.mjs",
     "test:note-privacy": "node --test scripts/test/mentor-application-note-privacy.test.mjs",
     "test:impersonation-history": "node --test --experimental-strip-types scripts/test/impersonation-history.test.mjs",

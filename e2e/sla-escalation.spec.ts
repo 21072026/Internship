@@ -42,10 +42,10 @@ test('a breach climbs mentor → administrators once each, and a stage move reso
   const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { id: true, orgId: true });
   expect(admin?.orgId).toBeTruthy();
   const orgId = admin!.orgId!;
-  const prior = await prisma.stageSla.findUnique({ where: { orgId_stageKey: { orgId, stageKey: STAGE } } });
+  const prior = await prisma.stageSla.findUnique({ where: { orgId_stageKey_scope: { orgId, stageKey: STAGE, scope: 'org' } } });
   // 5 days to wait, administrators told 3 days after a breach.
   await prisma.stageSla.upsert({
-    where: { orgId_stageKey: { orgId, stageKey: STAGE } },
+    where: { orgId_stageKey_scope: { orgId, stageKey: STAGE, scope: 'org' } },
     update: { days: 5, escalateAfterDays: 3 },
     create: { orgId, stageKey: STAGE, days: 5, escalateAfterDays: 3 },
   });
@@ -109,9 +109,9 @@ test('acknowledging stops the climb, is audited, and is scoped to the caller’s
   test.slow();
   const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { id: true, orgId: true });
   const orgId = admin!.orgId!;
-  const prior = await prisma.stageSla.findUnique({ where: { orgId_stageKey: { orgId, stageKey: STAGE } } });
+  const prior = await prisma.stageSla.findUnique({ where: { orgId_stageKey_scope: { orgId, stageKey: STAGE, scope: 'org' } } });
   await prisma.stageSla.upsert({
-    where: { orgId_stageKey: { orgId, stageKey: STAGE } },
+    where: { orgId_stageKey_scope: { orgId, stageKey: STAGE, scope: 'org' } },
     update: { days: 5, escalateAfterDays: 3 },
     create: { orgId, stageKey: STAGE, days: 5, escalateAfterDays: 3 },
   });
