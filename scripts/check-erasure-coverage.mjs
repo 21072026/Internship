@@ -144,6 +144,7 @@ const DECISIONS = new Map([
   ['AgendaTemplateItem.guidance', CONFIG],
   ['MatchRuleSet.description', CONFIG],
   ['Project.description', CONFIG],
+  ['ProgramEvent.description', CONFIG],
   ['Project.goals', CONFIG],
   ['Requisition.description', CONFIG],
   ['Company.description', 'describes the company, not its contact person (the contact columns are erased)'],
