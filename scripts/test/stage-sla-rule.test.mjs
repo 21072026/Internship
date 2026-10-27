@@ -101,3 +101,10 @@ test('backfill plan: the relation\'s own override wins, and no SLA means no writ
   assert.equal(esm.planStageDeadline(rel, [ORG, COHORT], NOW).source, 'cohort');
   assert.equal(esm.planStageDeadline({ ...rel, pipelineStatus: 'X' }, [ORG, COHORT], NOW), null);
 });
+
+test('inherited: what applies once the exact-scope row is gone', () => {
+  const all = [ORG, COHORT, MENTOR, BOTH];
+  assert.deepEqual(ts.inheritedSla(all, { cohortId: 'c1', mentorId: 'm1' }).get('S'), { days: 10, source: 'mentor' });
+  assert.deepEqual(ts.inheritedSla(all, { cohortId: 'c1' }).get('S'), { days: 7, source: 'org' });
+  assert.equal(ts.inheritedSla([ORG], {}).get('S'), undefined, 'the org row inherits nothing');
+});

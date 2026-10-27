@@ -841,6 +841,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       stageSla: {
         escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the rep is reminded, as before.',
+        scopeMentor: 'Rep',
+        allMentors: 'Every rep',
+        overrideHint: 'You are editing an override. For these records it beats the organisation’s number — rep and cohort together, then rep, then cohort, then the organisation. Leave a stage empty to inherit. Escalation and board limits stay organisation-wide.',
+        sourceMentor: 'this rep',
+        sourceMentorCohort: 'this rep in this cohort',
         subtitle: 'How long anyone may wait at a stage before the rep is warned. Leave a stage empty and it has no rule — an organisation that sets none keeps working exactly as before.',
       },
       // The public pages every footer links to (docs/worlds.md): the share
@@ -1822,6 +1827,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       stageSla: {
         escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca temsilciye hatırlatılır.',
+        scopeMentor: 'Temsilci',
+        allMentors: 'Tüm temsilciler',
+        overrideHint: 'Bir istisna düzenliyorsun. Bu kayıtlar için kurumun sayısının önüne geçer — önce temsilci ve dönem birlikte, sonra temsilci, sonra dönem, en son kurum. Devralmak için aşamayı boş bırak. Üst kademe ve pano limitleri kurum genelinde kalır.',
+        sourceMentor: 'bu temsilci',
+        sourceMentorCohort: 'bu dönemdeki bu temsilci',
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
       },
       share: { title: '{product} ile paylaşıldı' },
@@ -2793,6 +2803,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       stageSla: {
         escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur die Vertriebsperson erinnert.',
+        scopeMentor: 'Vertrieb',
+        allMentors: 'Alle Vertriebsmitarbeitenden',
+        overrideHint: 'Sie bearbeiten eine Ausnahme. Für diese Datensätze gilt sie vor der Zahl der Organisation — zuerst Vertriebsperson und Kohorte zusammen, dann Vertriebsperson, dann Kohorte, zuletzt die Organisation. Lassen Sie eine Phase leer, um zu erben. Eskalation und Board-Limits bleiben organisationsweit.',
+        sourceMentor: 'diese Vertriebsperson',
+        sourceMentorCohort: 'diese Vertriebsperson in dieser Kohorte',
         subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',
       },
       share: { title: 'Mit {product} geteilt' },
