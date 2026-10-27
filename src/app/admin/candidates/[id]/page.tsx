@@ -29,6 +29,7 @@ import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
+import { CandidateHiringPanel } from '@/components/CandidateHiringPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { ReferrerPicker } from '@/components/ReferrerPicker';
 import { TagEditor } from '@/components/TagEditor';
@@ -633,6 +634,9 @@ export default function AdminMenteeDetailPage() {
             onMoveToStage={(stageKey) => changeStage(rel.id, stageKey)}
           />
         )}
+        {/* The hiring side (#1398): companies, roles, applications and interview
+            requests — independent of a relation, so a candidate without one shows it too. */}
+        <CandidateHiringPanel candidateId={id} />
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}

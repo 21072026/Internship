@@ -88,9 +88,9 @@ test('the compliance rate reports numerator and denominator over the period', as
   test.slow();
   const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { id: true, orgId: true });
   const orgId = admin!.orgId!;
-  const prior = await prisma.stageSla.findUnique({ where: { orgId_stageKey: { orgId, stageKey: STAGE } } });
+  const prior = await prisma.stageSla.findUnique({ where: { orgId_stageKey_scope: { orgId, stageKey: STAGE, scope: 'org' } } });
   await prisma.stageSla.upsert({
-    where: { orgId_stageKey: { orgId, stageKey: STAGE } },
+    where: { orgId_stageKey_scope: { orgId, stageKey: STAGE, scope: 'org' } },
     update: { days: 5 },
     create: { orgId, stageKey: STAGE, days: 5 },
   });

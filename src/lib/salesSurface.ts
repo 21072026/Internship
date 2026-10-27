@@ -64,6 +64,8 @@ export const SALES_ATTENTION_REASONS = [
   // Product usage (#2449): an account whose usage dropped, a trial nobody uses.
   'usage_drop',
   'trial_inactive',
+  // A free-plan account past its monthly quota: an upsell signal (#2846).
+  'free_quota_exceeded',
   // A won customer's notice period (#2841).
   'cancellation_pending',
   // An expired trial's decision window closing (#2843).

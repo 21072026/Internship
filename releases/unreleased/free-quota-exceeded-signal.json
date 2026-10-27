@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`free_quota_exceeded` attention reason (#2846):** an account the account-event feed reports on the `free` plan (new optional envelope field `plan`, stored as `Company.productPlan` + `productPlanAt`, written forward in time only) that did more `CompanyUsage.transactions` this calendar month (UTC, `periodRange(currentPeriod())`) than the per-org setting `freePlanTransactionQuota` (default 10) gets the reason on its open funnel records in the owner's attention queue and on `/sales`. Rule pure in `src/lib/usageRule.ts`, query in `src/lib/usageSignals.ts`. A signal only: nothing is gated, moved or billed, and no mentee surface shows it.",
+  "notes": {
+    "en": ["Upsell signal: an account on the free plan that goes past its monthly usage quota now shows up in its owner's attention queue."],
+    "tr": ["Upsell sinyali: ücretsiz plandaki bir hesap aylık kullanım kotasını aştığında artık sorumlusunun dikkat listesinde görünüyor."],
+    "de": ["Upsell-Signal: Ein Konto im kostenlosen Plan, das sein monatliches Nutzungskontingent überschreitet, erscheint jetzt in der Aufmerksamkeitsliste der zuständigen Person."]
+  }
+}

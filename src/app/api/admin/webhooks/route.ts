@@ -5,6 +5,8 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
+import { redactedDiff, WEBHOOK_DIFF_SPEC } from '@/lib/events/diff';
 import { z } from 'zod';
 import { WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
@@ -65,6 +67,15 @@ export async function POST(request: Request) {
     detail: webhook.url,
     request,
   });
+  await emit(
+    'webhook.registered',
+    {
+      webhookId: webhook.id,
+      events: [...parsed.data.events],
+      changes: redactedDiff(null, { url: webhook.url, events: webhook.events, active: webhook.active }, WEBHOOK_DIFF_SPEC),
+    },
+    { orgId: webhook.orgId, actor: { id: session.user.id, type: 'user' } },
+  );
   // Return the secret once so the receiver can verify signatures.
   return NextResponse.json({ webhook: { id: webhook.id, url: webhook.url, events: webhook.events }, secret }, { status: 201 });
 }
@@ -110,6 +121,11 @@ export async function PATCH(request: Request) {
   if (parsed.data.url !== undefined) data.url = parsed.data.url;
   if (parsed.data.events !== undefined) data.events = [...parsed.data.events];
   if (parsed.data.active !== undefined) data.active = parsed.data.active;
+  // Read before the write: a diff computed from the response has no "before" (#1699).
+  const before = await prisma.webhook.findFirst({
+    where: { id, orgId: resolveOrgId(session) },
+    select: { url: true, events: true, active: true, orgId: true },
+  });
   const { count } = await prisma.webhook.updateMany({ where: { id, orgId: resolveOrgId(session) }, data });
   if (!count) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -127,6 +143,12 @@ export async function PATCH(request: Request) {
     where: { id, orgId: resolveOrgId(session) },
     select: { id: true, url: true, events: true, active: true },
   });
+  const changes = before && webhook
+    ? redactedDiff({ url: before.url, events: before.events, active: before.active }, { url: webhook.url, events: webhook.events, active: webhook.active }, WEBHOOK_DIFF_SPEC)
+    : [];
+  if (changes.length) {
+    await emit('webhook.updated', { webhookId: id, changes }, { orgId: before?.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
+  }
   return NextResponse.json({ webhook });
 }
 
@@ -134,7 +156,18 @@ export async function DELETE(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const id = new URL(request.url).searchParams.get('id') || '';
+  const before = await prisma.webhook.findFirst({
+    where: { id, orgId: resolveOrgId(session) },
+    select: { url: true, events: true, active: true, orgId: true },
+  });
   const { count } = await prisma.webhook.deleteMany({ where: { id, orgId: resolveOrgId(session) } });
+  if (count && before) {
+    await emit(
+      'webhook.deleted',
+      { webhookId: id, changes: redactedDiff({ url: before.url, events: before.events, active: before.active }, null, WEBHOOK_DIFF_SPEC) },
+      { orgId: before.orgId, actor: { id: session.user.id, type: 'user' } },
+    );
+  }
   if (count) {
     await logActivity({
       action: 'webhook.deleted',

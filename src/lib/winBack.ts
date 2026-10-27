@@ -82,7 +82,7 @@ export async function winBack(input: {
 
     const trialWindow =
       input.trialWindow ?? (await stageTrialWindow({ orgId: old.orgId, toStage: input.toStage, enteredAt: now, existing: null }));
-    const deadline = input.quiet ? null : await stageDeadlineUpdate(old.orgId, input.toStage, now);
+    const deadline = input.quiet ? null : await stageDeadlineUpdate({ orgId: old.orgId, mentorId: old.mentorId }, input.toStage, now);
     const created = await tx.mentorshipRelation.create({
       data: {
         orgId: old.orgId,

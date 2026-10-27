@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -129,10 +131,28 @@ export async function POST(request: Request) {
           },
           await tenantWhere(session),
         ),
-        select: { id: true },
+        select: { id: true, mentorCapacity: true, acceptingMentees: true, selfMatchLimit: true },
       });
       if (!preferredMentor) {
         return NextResponse.json({ error: 'invalid_preferred_mentor' }, { status: 400 });
+      }
+      // The mentor's self-match limit (#1808) is binding here — naming a mentor
+      // is a self-selection. Capacity and the on/off switch stay advisory on
+      // this path as before: the admin decides the request either way.
+      const [activeMenteeCount, selfSelected] = await Promise.all([
+        prisma.mentorshipRelation.count({ where: { mentorId: preferredMentor.id, status: 'ACTIVE' } }),
+        selfSelectedCount(preferredMentor.id),
+      ]);
+      const availability = getMentorAvailability({
+        mentorCapacity: preferredMentor.mentorCapacity,
+        activeMenteeCount,
+        acceptingMentees: preferredMentor.acceptingMentees,
+        selfMatchLimit: preferredMentor.selfMatchLimit,
+        selfSelectedCount: selfSelected,
+        context: 'self_select',
+      });
+      if (availability.status === 'self_match_full') {
+        return NextResponse.json({ error: 'mentor_self_match_full', code: 'mentor_self_match_full' }, { status: 409 });
       }
     }
 

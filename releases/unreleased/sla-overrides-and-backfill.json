@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage SLAs: per-cohort / per-mentor overrides and a deadline backfill (#1640):** `StageSla` gains nullable `cohortId`/`mentorId` plus a `scope` key (`org` · `c:<id>` · `m:<id>` · `m:<id>|c:<id>`, written only by `slaScopeKey()`; MySQL compares NULLs as distinct, so the unique is `(orgId, stageKey, scope)`, not the nullable ids). Resolution is pure in `src/lib/stageSlaRule.ts` — mentor+cohort → mentor → cohort → org — and a stage move now applies the relation's own scope; with no override rows it resolves exactly as before. Escalation rungs and WIP limits stay org-level. New deploy backfill `0033-stage-deadlines` (once, `--apply`, dry-run by default) gives ACTIVE relations already sitting in a stage a deadline dated from the stage ENTRY; a past-due one gets `deadlineReminderSentAt` stamped and, where the stage has an escalation rung, a breach snoozed for `escalateAfterDays` — so the 09:00 sweep adopts it silently instead of mailing every mentor and admin.",
+  "notes": {
+    "en": ["Stage service levels now also apply to candidates who were already waiting in a stage when the rule was set, so the aging report shows them right away — without a burst of reminder emails."],
+    "tr": ["Aşama süre hedefleri artık kural tanımlandığında zaten o aşamada bekleyen adaylara da uygulanıyor; bekleme raporu onları hemen gösteriyor — toplu hatırlatma e-postası olmadan."],
+    "de": ["Stufen-Servicelevels gelten jetzt auch für Kandidaten, die beim Festlegen der Regel bereits in der Stufe warteten — der Wartezeit-Bericht zeigt sie sofort, ohne eine Welle von Erinnerungs-E-Mails."]
+  }
+}

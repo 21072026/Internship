@@ -40,7 +40,8 @@ const PUBLISHED = [
 const at = '2026-10-20T09:30:00.000Z';
 
 // One object per producer call site, copied from the call as it reads today
-// (grep -rn "dispatchWebhook(" src/). Ten call sites, ten shapes.
+// (grep -rn "emit('" src/ — they called dispatchWebhook() directly before
+// #1697). Ten call sites, ten shapes.
 const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>][] = [
   ['api/apply', 'application.created', { mentorId: 'u1', menteeName: 'Ada Example', email: 'ada@example.test' }],
   ['stageChangeEffects', 'pipeline.stage_change', { relationId: 'r1', from: 'APPLICATION_100', to: 'APPROVAL_PENDING_220' }],

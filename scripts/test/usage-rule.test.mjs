@@ -9,6 +9,11 @@ import { register } from 'node:module';
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 const {
   DAY_MS,
+  FREE_PLAN_QUOTA_DEFAULT,
+  freePlanQuota,
+  freeQuotaExceeded,
+  isFreePlan,
+  normalizePlanKey,
   USAGE_SIGNAL_DEFAULTS,
   dropWindows,
   trialInactive,
@@ -76,4 +81,31 @@ test('trial inactive: N days in with no usage at all', () => {
   assert.equal(trialInactive({ trialStartedAt: new Date(NOW.getTime() - 8 * DAY_MS), usageSinceStart: 3, now: NOW, settings }), false);
   assert.equal(trialInactive({ trialStartedAt: new Date(NOW.getTime() - 6 * DAY_MS), usageSinceStart: 0, now: NOW, settings }), false);
   assert.equal(trialInactive({ trialStartedAt: null, usageSinceStart: 0, now: NOW, settings }), false);
+});
+
+// ── free_quota_exceeded (#2846) ─────────────────────────────────────────────
+
+test('plan keys: trimmed and lower-cased; malformed is null, never guessed', () => {
+  assert.equal(normalizePlanKey('  Free '), 'free');
+  assert.equal(normalizePlanKey('pro_annual'), 'pro_annual');
+  assert.equal(normalizePlanKey(''), null);
+  assert.equal(normalizePlanKey('free plan'), null);
+  assert.equal(normalizePlanKey('x'.repeat(41)), null);
+  assert.equal(normalizePlanKey(null), null);
+  assert.equal(isFreePlan('FREE'), true);
+  assert.equal(isFreePlan('pro'), false);
+  assert.equal(isFreePlan(null), false);
+});
+
+test('quota setting: integer 1…1,000,000, else the default of 10', () => {
+  assert.equal(FREE_PLAN_QUOTA_DEFAULT, 10);
+  assert.equal(freePlanQuota('25'), 25);
+  for (const bad of ['', '0', '-3', '2.5', 'ten', undefined, null, '1000001']) assert.equal(freePlanQuota(bad), 10);
+});
+
+test('past the quota means more than it, and only on the free plan', () => {
+  assert.equal(freeQuotaExceeded({ plan: 'free', transactionsThisMonth: 10, quota: 10 }), false);
+  assert.equal(freeQuotaExceeded({ plan: 'free', transactionsThisMonth: 11, quota: 10 }), true);
+  assert.equal(freeQuotaExceeded({ plan: 'pro', transactionsThisMonth: 500, quota: 10 }), false);
+  assert.equal(freeQuotaExceeded({ plan: null, transactionsThisMonth: 500, quota: 10 }), false);
 });

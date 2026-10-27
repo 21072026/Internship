@@ -231,6 +231,12 @@ jobs:
       # directions — a typo'd entry never matches anything either.
       - name: every orgId model is registered with the tenant middleware (#1560)
         run: npm run check:tenant-models
+      # Erasure reaches free text by key, so a new `@db.Text` column about a
+      # person is silently missed unless someone adds it to the sweep: ten were,
+      # between #2106 and #2098. Every free-text column needs a decision —
+      # erased, or kept with its reason.
+      - name: every free-text column has an erasure decision (#2098)
+        run: npm run check:erasure-coverage
       # `prisma db push` does not merely warn about some schema steps, it
       # REFUSES them on a table that already has rows — and `--accept-data-loss`
       # does not cover that class. #2249 added `Setting.id String @id

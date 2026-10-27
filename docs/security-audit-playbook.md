@@ -242,6 +242,11 @@ Bir sonraki turda buradan başlayın:
   koruma çit + sistem kuralı) ve PII ön-uçuşunun sezgisel olması (adres/telefon
   kalıpları her biçimi yakalamaz — `cv_extract` dışındaki görevlerde **daraltır**, garanti
   etmez).
+- ~~**Sır yönetimi**~~ — **envanter ve rotasyon runbook'u yazıldı (#1554):**
+  [`secrets-and-rotation.md`](secrets-and-rotation.md). En önemli bulgu: `NEXTAUTH_SECRET`
+  tek kök anahtar (oturumlar + mühürlü sütunlar + 2FA kurtarma kodları + e-postadaki
+  bağlantılar); döndürmek planlı bir operasyon. **Hâlâ açık:** örtüşme anahtarı
+  (`NEXTAUTH_SECRET_PREVIOUS`) yok, topic ortamları preview'ün kök sırrıyla koşuyor.
 - **`prisma db push --accept-data-loss`** deploy adımının veri kaybı riski.
 - **Preview ortamının paylaşımlı DB'si** (issue #39) — çok kiracılı sızıntı senaryosu.
 

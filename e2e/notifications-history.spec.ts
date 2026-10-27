@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -36,7 +37,7 @@ test('a user only ever sees their own notifications on /notifications, with work
     });
 
     await signIn(page, meEmail, 'MenteePass123');
-    await page.goto('/notifications');
+    await gotoSettled(page, '/notifications');
 
     const list = page.getByTestId('notifications-list');
     await expect(list).toBeVisible();
@@ -85,7 +86,7 @@ test('/notifications shows a total count badge, a paginated range readout, and l
     });
 
     await signIn(page, email, 'MenteePass123');
-    await page.goto('/notifications');
+    await gotoSettled(page, '/notifications');
 
     const list = page.getByTestId('notifications-list');
     await expect(list).toBeVisible();
@@ -119,7 +120,7 @@ test('/notifications shows an empty state for a user with no notifications', asy
 
   try {
     await signIn(page, email, 'MenteePass123');
-    await page.goto('/notifications');
+    await gotoSettled(page, '/notifications');
     await expect(page.getByText('No notifications')).toBeVisible();
     await expect(page.getByTestId('notifications-list')).toHaveCount(0);
   } finally {
@@ -205,7 +206,7 @@ test('searching the notification history narrows it to the matching text and cle
     });
 
     await signIn(page, email, 'MenteePass123');
-    await page.goto('/notifications');
+    await gotoSettled(page, '/notifications');
 
     const list = page.getByTestId('notifications-list');
     await expect(list.getByText(wanted, { exact: true })).toBeVisible();
@@ -264,7 +265,7 @@ test('a search sends the reader back to page 1, and only searches their own rows
     });
 
     await signIn(page, meEmail, 'MenteePass123');
-    await page.goto('/notifications');
+    await gotoSettled(page, '/notifications');
 
     // 25 rows over two pages; walk to the second one first.
     await expect(page.getByText('1–20 / 25 notifications')).toBeVisible();

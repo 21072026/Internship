@@ -98,6 +98,19 @@ varsayılan org'undur). `/projects/[id]` sayfası başka kiracıdan oturum açm�
 ziyaretçiyi **anonim** gibi okur: açık projede vitrin kartı, gerisinde 404.
 `/api/project-tasks/[taskId]` zaten `inCallerTenant` ile korunuyordu.
 
+### Takvim — `GET /api/calendar-events` (#2005)
+
+Rol listesi açıkça yazılı (`CALENDAR_ROLES`); listede olmayan rol **401** alır,
+menti dalına düşüp "şans eseri boş" görmez.
+
+| Rol | Kapsam |
+|---|---|
+| `ADMIN` | Kiracının tüm toplantıları, son tarihleri, kayıtlı toplantıları, serileri |
+| `MENTOR` | `mentorId = self` ilişkileri + üyesi olduğu projelerin serileri |
+| `MENTEE` | `menteeId = self` ilişkisi + üyesi olduğu projelerin serileri |
+| `COMPANY` | Yalnız **kendi mülakat taleplerinden** planlanan toplantılar (`interviewRequestActorWhere()`'in COMPANY dalı, kiracı içinde); mentor↔menti toplantısı, son tarih, kayıt, seri **yok**. `companyId` boşsa boş liste |
+| diğer (`SOURCE`, …) | — (401) |
+
 ## MARKETING dikeyi / `company` kaynağı — `Company`
 
 Story [#2396](https://github.com/21072026/Internship/issues/2396); karar
@@ -193,6 +206,7 @@ desenle yazılmıştır:
 | `/api/mentorship` (liste), `/api/mentorship/[id]`, `/api/offers*`, `/api/interview-requests`, `/api/requisitions/[id]`, `/api/candidates`, `/api/users/[id]`, `/api/account/export` | satırın kendi kapsamı + `include: { company: { select: … } }` | Firma **id ile aranmıyor**; zaten çağırana ait bir satırdan (ilişki, teklif, talep) geçilerek okunuyor. Seçilen kolonlar dar: `{ id, name }` (offers, interview-requests, requisitions/[id], candidates), `{ name }` (account/export), `{ id, name, industry }` (mentorship listesi, mentorship/[id], users/[id]). **`contactEmail`/`address`/`description`/`quota` bu uçlardan çıkmaz.** Bu yüzden `company` kapsamı değil, satırın kendi kapsamı doğru katmandır |
 | `/api/mentorship/[id]` — **düzeltilmiş geçmiş** | — | Bu uç #2431'e kadar `company: true` idi: ilişkinin MENTOR'u ve MENTEE'si **bütün** Company skalerlerini (`contactEmail`, `address`, `description`, `quota`) okuyordu. Bu PR'ın ilk hâli tabloyu yanlış yazıp uca "yalnızca `id`+`name`" demişti; inceleme yakaladı. Uç artık `{ id, name, industry }` seçiyor — payload'ın üç tüketicisi (`admin/candidates/[id]`, `mentor/mentees/[id]`, iki pano) zaten yalnızca bu üçünü okuyordu |
 | `/portal/journey` (sunucu bileşeni, uç değil) | `menteeRelationWhere(menteeId)` — menti **kendi** ilişkisi | Tek kalan `company: true`. Menti kendi yerleştiği firmanın `name`/`industry`/`contactEmail`/`description` alanlarını ekranda görür; bu **bilinçli bir ürün kararıdır** (staj yerinin muhatabı), API üzerinden ham satır dönüşü değil. Kapsam katmanı burada ilişkinin kendisidir: menti başka hiçbir firmaya ulaşamaz |
+| `GET /api/candidates/[id]/hiring` (aday kartı "İşe alım", #1398) | başvurular `visibleApplicationsWhere()`, mülakat talepleri `interviewRequestActorWhere()`, ilgiler ADMIN → org'un firmaları / COMPANY → kendi `companyId`'si / MENTOR → aktif mentisi | MENTEE ve diğer roller **403** (`PASS` adaya hiçbir yoldan gitmez). Görülemeyen aday — başka org, MENTOR'un aktif mentisi değil, COMPANY'nin hiçbir satırı/ilişkisi yok — **404**. Firmanın serbest notu yalnız ADMIN'e ve notu yazan firmaya döner, MENTOR'a değil |
 | `/api/admin/*` | `ADMIN` allowlist'i | |
 | `resolveOwner()` ([`projectAccess.ts`](../src/lib/projectAccess.ts)) | yalnız admin'in sahip seçicisinden çağrılır; varlık kontrolü, veri döndürmez | |
 | `/api/register`, `companyProvisioning.ts`, `emailService.ts` cron'u | oturumsuz | Kapsam katmanının konusu değil; tenant bağlamını kendileri geçer |
@@ -336,6 +350,8 @@ Kurallar:
 | Uç | İzin | ORG_ADMIN | OBSERVER | PROGRAM_ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz |
 |---|---|---|---|---|---|---|
 | `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
+| `GET /api/requisitions/[id]/matches` (`/admin/requisitions/[id]`, #1401) | `user.read` | ✅ kendi org'unun talebi; yalnız rızalı aday havuzu (`CONSENTING_POOL_WHERE`) | ✅ aynı | **403** (`unscoped_subject` — talebe göre kapsam henüz verilmiyor, fail-closed) | **403** | 401 |
+| `POST /api/requisitions/[id]/shortlist` (#1401) | `company.write` | ✅ kendi org'u; rızasız aday **409 `no_consent`**, kapalı talep 409 | **403** | **403** | **403** (COMPANY kendi kısa listesini `/api/company/interests` ile yazar) | 401 |
 
 Org her zaman oturumdan gelir; süper-admin de burada yalnız kendi org'unu okur.
 Çalıştırılabilir hali: `e2e/admin-audit.spec.ts` (`@smoke`).

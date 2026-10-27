@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { sendMeetingInviteEmail } from '@/services/emailService';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { meetingInCallerTenant } from '@/lib/meetingAccess';
@@ -307,12 +307,12 @@ async function announceNextOccurrence(
   }
 
   if (invited > 0) {
-    await dispatchWebhook('meeting.scheduled', {
+    await emit('meeting.scheduled', {
       title: series.title,
       scheduledAt: next.toISOString(),
       count: invited,
       seriesId: series.id,
-    }, orgId);
+    }, { orgId: orgId ?? null, actor: { id: sessionUserId, type: 'user' } });
   }
 
   return { invited, nextOccurrence: next.toISOString() };
