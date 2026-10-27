@@ -7,7 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
-import { syncUserSkills } from '@/lib/skillsResolve';
+import { syncUserSkillLevels, syncUserSkills } from '@/lib/skillsResolve';
 import { resolveOrgId } from '@/lib/orgScope';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { ACCENT_COLORS } from '@/lib/accent';
@@ -368,6 +368,10 @@ export async function PUT(request: Request) {
       });
       // Dual-write the canonical twin of the list just saved (#1818).
       if (rest.skills !== undefined) await syncUserSkills(session.user.id, resolveOrgId(session), rest.skills);
+      // …and the self-assessment onto those rows, with its history (#1822).
+      if (rest.skillLevels !== undefined) {
+        await syncUserSkillLevels(session.user.id, resolveOrgId(session), rest.skillLevels);
+      }
 
       const delta = before ? notificationDelta(before, user) : null;
       const detail = delta ? notificationDetail(delta) : null;

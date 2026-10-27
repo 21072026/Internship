@@ -549,6 +549,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
     prisma.aiArtifact.deleteMany({ where: { subjectUserId: userId } }),
     prisma.avatarFile.deleteMany({ where: { userId } }),
     prisma.document.deleteMany({ where: { ownerId: userId } }),
+    // The canonical twin of `skills`/`skillLevels` below (#1818/#1822): the
+    // rows carry the levels, and their history goes with them by cascade.
+    prisma.userSkill.deleteMany({ where: { userId } }),
     // Every free-text surface outside the User row — see scrubFreeTextOps. This
     // is the half that used to be missing: the row claimed to be anonymous
     // while the person's messages, their support thread and the notes written

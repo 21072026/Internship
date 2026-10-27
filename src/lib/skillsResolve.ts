@@ -28,6 +28,7 @@ import {
   skillLabel,
 } from '@/lib/skillTaxonomyRule';
 import type { SkillEdgeRow, WeightedSkill } from '@/lib/skillTaxonomyRule';
+import { planSelfLevelChanges, selfLevelData } from '@/lib/skillLevelRule';
 
 export interface ResolvedSkill {
   id: string;
@@ -391,6 +392,60 @@ export async function syncUserSkills(userId: string, orgId: string | null, skill
     }
   } catch (err) {
     logger.warning('skills.sync_user_failed', { userId, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/**
+ * Mirror a profile save's self-assessment (`{ "<skill>": 1..5 }`, keyed by the
+ * typed skill or by a skill id) onto the person's `UserSkill` rows (#1822).
+ * Runs after `syncUserSkills`, so the rows for the list just saved exist. The
+ * record is authoritative for held skills (`planSelfLevelChanges`); every
+ * change is one guarded update (the expected old level in the WHERE, so two
+ * tabs racing write one history row, not two) plus one `UserSkillLevelChange`.
+ *
+ * Never throws, for the same reason as `syncUserSkills`: the JSON column is
+ * still the written record and the person's save already happened.
+ */
+export async function syncUserSkillLevels(
+  userId: string,
+  orgId: string | null,
+  levels: Readonly<Record<string, number>>,
+): Promise<void> {
+  if (!orgId) return;
+  try {
+    const held = await prisma.userSkill.findMany({
+      where: { userId },
+      select: { id: true, skillId: true, level: true, levelSource: true, verifiedById: true, verifiedAt: true },
+    });
+    if (held.length === 0) return;
+    const heldIds = new Set(held.map((r) => r.skillId));
+    const wanted = new Map<string, number>();
+    const terms = Object.keys(levels).filter((k) => !heldIds.has(k));
+    const resolved = terms.length > 0 ? await resolveMany(orgId, terms) : new Map<string, ResolvedSkill | null>();
+    for (const [key, level] of Object.entries(levels)) {
+      const skillId = heldIds.has(key) ? key : resolved.get(key)?.id;
+      if (skillId && !wanted.has(skillId)) wanted.set(skillId, level);
+    }
+    const changes = planSelfLevelChanges(
+      held.map((r) => ({ ...r, userSkillId: r.id })),
+      wanted,
+    );
+    if (changes.length === 0) return;
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      for (const change of changes) {
+        const moved = await tx.userSkill.updateMany({
+          where: { id: change.userSkillId, level: change.fromLevel },
+          data: selfLevelData(change.toLevel, now),
+        });
+        if (moved.count !== 1) continue;
+        await tx.userSkillLevelChange.create({
+          data: { ...change, source: 'SELF', changedById: userId },
+        });
+      }
+    });
+  } catch (err) {
+    logger.warning('skills.sync_levels_failed', { userId, error: err instanceof Error ? err.message : String(err) });
   }
 }
 

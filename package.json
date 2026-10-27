@@ -48,7 +48,7 @@
     "test:job-lease": "node --test --experimental-strip-types scripts/test/job-lease.test.mjs",
     "test:idp-mock-der": "node --test --experimental-strip-types scripts/test/idp-mock-der.test.mjs",
     "test:skill-vocabulary": "node --test --experimental-strip-types scripts/test/skill-vocabulary.test.mjs scripts/test/check-skills-guard.test.mjs",
-    "test:skill-taxonomy": "node --test --experimental-strip-types scripts/test/skill-taxonomy.test.mjs scripts/test/skill-taxonomy-mirror.test.mjs",
+    "test:skill-taxonomy": "node --test --experimental-strip-types scripts/test/skill-taxonomy.test.mjs scripts/test/skill-taxonomy-mirror.test.mjs scripts/test/skill-level.test.mjs",
     "skills:seed-json": "node --experimental-strip-types scripts/skills-seed-json.mjs",
     "backfill:skill-taxonomy": "node prisma/backfill-skill-taxonomy.mjs",
     "test:schema-push": "node --test scripts/test/schema-push-safety.test.mjs",

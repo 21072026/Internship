@@ -468,20 +468,52 @@ model SkillEdge {
 // A person holds a canonical skill. Reached only through its User (scoped) or
 // its Skill (scoped), exactly like UserTag — so no orgId and deliberately not
 // in TENANT_MODELS. Removing a skill removes the row, never the person.
-// Proficiency columns are #1814's.
+// Proficiency (#1822): `level` 1..5 and who stands behind it. Keyed on the
+// skill id, so renaming or aliasing the skill keeps it; `source` above is where
+// the ROW came from, `levelSource` is who set the LEVEL — two different facts.
+// All nullable: additive under `db push` on a table that already has rows.
 model UserSkill {
-  id        String   @id @default(cuid())
-  userId    String
-  skillId   String
+  id             String    @id @default(cuid())
+  userId         String
+  skillId        String
   // Where the row came from: SELF | ADMIN | BACKFILL | CV | IMPORT.
-  source    String   @default("SELF") @db.VarChar(16)
-  createdAt DateTime @default(now())
+  source         String    @default("SELF") @db.VarChar(16)
+  createdAt      DateTime  @default(now())
+  // 1..5, null = not rated. Rules in src/lib/skillLevelRule.ts.
+  level          Int?
+  // SELF | MENTOR | EVALUATION — who set `level`. Null while unrated.
+  levelSource    String?   @db.VarChar(16)
+  // Set by a mentor/evaluation confirmation; cleared when the value changes,
+  // because a confirmation vouches for one value, not for the row.
+  verifiedById   String?
+  verifiedAt     DateTime?
+  levelUpdatedAt DateTime?
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill        Skill                  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  levelChanges UserSkillLevelChange[]
 
   @@unique([userId, skillId])
   @@index([skillId])
+}
+
+// One row per actual change of UserSkill.level (#1822) — setting the same
+// value again writes none — so "this mentee grew" is a query, not a guess.
+// Child of UserSkill (reached through it, so no orgId, not in TENANT_MODELS);
+// it goes with the row. `changedById` is a bare id on purpose: the actor may be
+// erased later and the history must not cascade away with them.
+model UserSkillLevelChange {
+  id          String   @id @default(cuid())
+  userSkillId String
+  fromLevel   Int?
+  toLevel     Int?
+  source      String   @db.VarChar(16)
+  changedById String?
+  createdAt   DateTime @default(now())
+
+  userSkill UserSkill @relation(fields: [userSkillId], references: [id], onDelete: Cascade)
+
+  @@index([userSkillId, createdAt])
 }
 
 // A requisition asks for a canonical skill. Child of Requisition (scoped),
