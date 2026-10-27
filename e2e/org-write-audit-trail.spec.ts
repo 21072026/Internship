@@ -133,7 +133,9 @@ test("a super admin's writes to another tenant land in that tenant's audit trail
 
   const expected = ['org.updated', 'org.pipeline_stages_replaced', 'org.pipeline_stages_reset', 'organization.conferencing_policy'];
 
-  const audit = await prisma.auditLog.findMany({ where: { actorId: user.id }, orderBy: { createdAt: 'asc' } });
+  // The `org.config.changed` diff row (#1699) arrives asynchronously through the
+  // job worker; config-change-audit.spec.ts covers it. Only the route rows here.
+  const audit = await prisma.auditLog.findMany({ where: { actorId: user.id, action: { in: expected } }, orderBy: { createdAt: 'asc' } });
   expect(audit.map((r) => r.action)).toEqual(expected);
   for (const row of audit) {
     expect(row.orgId).toBe(tenant.id);

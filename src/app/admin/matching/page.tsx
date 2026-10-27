@@ -285,6 +285,16 @@ export default function MatchingRulesPage() {
                         {L.honourPreference}
                       </label>
                     )}
+                    {r.dimension === 'capacityHeadroom' && (
+                      <label className="flex items-center gap-1 text-xs text-gray-600">
+                        <input
+                          type="checkbox"
+                          checked={r.config.selfSelect === true}
+                          onChange={(e) => patchConfig(i, 'selfSelect', e.target.checked)}
+                        />
+                        {L.selfSelectRound}
+                      </label>
+                    )}
                     <button
                       type="button"
                       onClick={() => setDraft({ ...draft, rules: draft.rules.filter((_, j) => j !== i) })}

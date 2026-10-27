@@ -606,6 +606,34 @@ html.dark option { background-color: #111827; color: #f3f4f6; }
   #outcomes-print .sm\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
+/* The calendar prints as a wall sheet (#2005): the view on screen, its date
+   headings kept, on white whatever the theme — the nav and the header go with
+   the generic rule above, the view switcher, the toolbar, the legend and the
+   subscription card carry `.no-print`. Events print as outlined boxes rather
+   than tinted chips (most printers drop background colours anyway). */
+@media print {
+  #calendar-print {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  #calendar-print,
+  #calendar-print * {
+    background: #fff !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #calendar-print li,
+  #calendar-print [data-testid^='calendar-day-'] {
+    border: 1px solid #d1d5db !important;
+    break-inside: avoid;
+  }
+  #calendar-print [data-testid='calendar-loading'] {
+    display: none !important;
+  }
+}
+
 /* a11y: a clear, consistent keyboard focus ring for interactive elements. */
 a:focus-visible,
 button:focus-visible,

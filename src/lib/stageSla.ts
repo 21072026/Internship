@@ -11,7 +11,9 @@
 // decision is recorded in the schema, in the admin hint and in the PR rather
 // than left implicit.
 
+import { cache } from 'react';
 import { prisma } from './prisma';
+import { slaDaysByStage, type SlaScope, type StageSlaRow } from './stageSlaRule';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -20,21 +22,42 @@ export interface StageSlaEntry {
   days: number;
 }
 
+/** Who a service level is being resolved for: an org, optionally narrowed to a relation's cohort and mentor (#1640). */
+export interface StageSlaScope extends SlaScope {
+  orgId: string | null | undefined;
+}
+
 /**
- * Every SLA an org has configured, keyed by stage. Empty when it configured none.
+ * Every `StageSla` row of an org that carries a service level, in every scope.
+ * Cached per org for the length of the request (React `cache`) — the aging
+ * report and a bulk move resolve a scope per row, and each of those must not
+ * be a query. Outside a request `cache` is a pass-through, which is correct
+ * for a cron tick.
  *
  * Rows with a null `days` are skipped: since #1439 a `StageSla` row can exist
  * for its `wipLimit` alone, and a board-only row must not make this org look
  * "SLA-managed" — that flag is what clears a hand-typed deadline on every stage
  * move (see `stageDeadlineUpdate` below).
  */
-export async function resolveStageSlas(orgId: string | null | undefined): Promise<Map<string, number>> {
-  if (!orgId) return new Map();
-  const rows = await prisma.stageSla.findMany({
+export const loadStageSlaRows = cache(async (orgId: string): Promise<StageSlaRow[]> => {
+  return prisma.stageSla.findMany({
     where: { orgId, days: { not: null } },
-    select: { stageKey: true, days: true },
+    select: { stageKey: true, days: true, cohortId: true, mentorId: true },
   });
-  return new Map(rows.flatMap((r) => (r.days == null ? [] : [[r.stageKey, r.days] as [string, number]])));
+});
+
+/**
+ * The service level per stage, keyed by stage. Empty when none applies.
+ *
+ * Given a bare orgId it answers for the ORG'S OWN rows only — what every
+ * caller read before overrides existed, and what the admin form shows as the
+ * inherited value. Given a scope it applies the precedence in
+ * src/lib/stageSlaRule.ts: mentor+cohort → mentor → cohort → org.
+ */
+export async function resolveStageSlas(scope: string | null | undefined | StageSlaScope): Promise<Map<string, number>> {
+  const { orgId, cohortId, mentorId } = typeof scope === 'object' && scope !== null ? scope : { orgId: scope };
+  if (!orgId) return new Map();
+  return slaDaysByStage(await loadStageSlaRows(orgId), { cohortId, mentorId });
 }
 
 /**
@@ -48,7 +71,7 @@ export async function resolveStageEscalations(
 ): Promise<Map<string, number>> {
   if (!orgId) return new Map();
   const rows = await prisma.stageSla.findMany({
-    where: { orgId, days: { not: null }, escalateAfterDays: { not: null } },
+    where: { orgId, scope: 'org', days: { not: null }, escalateAfterDays: { not: null } },
     select: { stageKey: true, escalateAfterDays: true },
   });
   return new Map(
@@ -68,7 +91,7 @@ export async function resolveStageWipLimits(
 ): Promise<Map<string, number>> {
   if (!orgId) return new Map();
   const rows = await prisma.stageSla.findMany({
-    where: { orgId, wipLimit: { not: null } },
+    where: { orgId, scope: 'org', wipLimit: { not: null } },
     select: { stageKey: true, wipLimit: true },
   });
   return new Map(rows.flatMap((r) => (r.wipLimit == null ? [] : [[r.stageKey, r.wipLimit] as [string, number]])));
@@ -88,15 +111,19 @@ export async function resolveStageWipLimits(
  *     when the candidate left it, and leaving the old date behind would report
  *     an overdue that no longer means anything.
  *
+ * "Configured" is judged for the relation's own scope (#1640): pass its
+ * cohortId and mentorId and an override counts, a bare orgId reads the org's
+ * rows only. An org with no override rows therefore behaves exactly as before.
+ *
  * Either way the reminder is re-armed, so the next genuine breach alerts even
  * if a previous one already did.
  */
 export async function stageDeadlineUpdate(
-  orgId: string | null | undefined,
+  scope: string | null | undefined | StageSlaScope,
   stageKey: string,
   now: Date = new Date()
 ): Promise<{ stageDeadline: Date | null; deadlineReminderSentAt: null } | null> {
-  const slas = await resolveStageSlas(orgId);
+  const slas = await resolveStageSlas(scope);
   if (slas.size === 0) return null;
   const days = slas.get(stageKey);
   return {

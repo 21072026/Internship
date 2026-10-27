@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
@@ -28,6 +29,14 @@ import { anonymizeUser, hardDeleteUser } from '../src/lib/accountErasure';
  * does not reach it — see the COVERAGE block in src/lib/accountErasure.ts: a
  * free-standing `PersonalNote` with `meetingId: null`, group/project meeting
  * notes, other people's notifications naming the person, and the audit trail.
+ *
+ * #2098 added the free text that arrived after #2106 (survey answers, meeting
+ * feedback, the hiring rows, outreach, match and placement notes, the session
+ * agenda, a rematch reason, an interview cancel reason, the person's own
+ * templates and sign-in devices) and the mentor application, which is keyed by
+ * address only — with a second tenant holding the same address to prove the
+ * sweep stays inside the person's own. `npm run check:erasure-coverage` keeps
+ * the list honest for the next column.
  */
 
 const PASSWORD = 'ErasurePass123';
@@ -68,6 +77,19 @@ interface Seeded {
     offerDecline: string;
     statusNote: string;
     notification: string;
+    rematchNote: string;
+    interviewCancel: string;
+    surveyAnswer: string;
+    feedbackOwn: string;
+    feedbackAbout: string;
+    coverNote: string;
+    dispositionNote: string;
+    applicationEvent: string;
+    outreach: string;
+    matchReason: string;
+    placementNote: string;
+    agendaItem: string;
+    ownTemplate: string;
   };
   mentorEmail: string;
   menteeEmail: string;
@@ -86,6 +108,7 @@ interface Seeded {
   evaluationId: string;
   weeklyReportId: string;
   questionId: string;
+  surveyId: string;
 }
 
 async function seedPaperTrail(prefix: string): Promise<Seeded> {
@@ -125,6 +148,20 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     offerDecline: `family reasons ${tag}`,
     statusNote: `paused while they recover ${tag}`,
     notification: `Erasure Mentor replied to you ${tag}`,
+    // #2098 — free text added to the schema after #2106.
+    rematchNote: `my mentor shouted at me ${tag}`,
+    interviewCancel: `the candidate is pregnant ${tag}`,
+    surveyAnswer: `I felt lonely in this programme ${tag}`,
+    feedbackOwn: `the mentor was late again ${tag}`,
+    feedbackAbout: `mentee seemed depressed ${tag}`,
+    coverNote: `I am a refugee and need this job ${tag}`,
+    dispositionNote: `accent too strong ${tag}`,
+    applicationEvent: `moved after the reference call ${tag}`,
+    outreach: `we saw your profile, call 0170 ${tag}`,
+    matchReason: `mentee asked for a woman mentor ${tag}`,
+    placementNote: `salary agreed at 3k ${tag}`,
+    agendaItem: `talk about her debts ${tag}`,
+    ownTemplate: `Hi, it's me from Kadikoy ${tag}`,
   };
 
   const mentorEmail = uniqueEmail(`${prefix}-mentor`);
@@ -243,7 +280,9 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
       notes: pii.interactionNotes,
     },
   });
-  await prisma.mentorshipRequest.create({ data: { menteeId: mentee.id, message: pii.request } });
+  await prisma.mentorshipRequest.create({
+    data: { menteeId: mentee.id, message: pii.request, rematchNote: pii.rematchNote },
+  });
 
   // ── The rest of the sanitize-db inventory (#2106) ─────────────────────────
   const org = await prisma.organization.upsert({
@@ -301,6 +340,7 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
       orgId: org.id,
       note: pii.interviewNote,
       declineNote: pii.interviewDecline,
+      cancelReason: pii.interviewCancel,
     },
   });
   await prisma.offer.create({
@@ -323,6 +363,56 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
   });
   await prisma.notification.create({ data: { userId: mentee.id, type: 'message.new', text: pii.notification } });
 
+  // ── Free text added after #2106 (#2098) ───────────────────────────────────
+  const survey = await prisma.survey.create({
+    data: { orgId: org.id, key: `erasure-${tag}`, title: { en: 'Pulse' }, audience: 'MENTEE', anonymity: 'IDENTIFIED' },
+  });
+  await prisma.surveyResponse.create({
+    data: {
+      surveyId: survey.id,
+      respondentId: mentee.id,
+      respondentRole: 'MENTEE',
+      answers: { create: [{ questionKey: 'open', value: Prisma.JsonNull, text: pii.surveyAnswer }] },
+    },
+  });
+  // Feedback the mentee wrote, and feedback the mentor wrote about a meeting
+  // that is about the mentee.
+  await prisma.meetingFeedback.createMany({
+    data: [
+      { meetingId: meeting.id, raterId: mentee.id, happened: true, note: pii.feedbackOwn },
+      { meetingId: meeting.id, raterId: mentor.id, happened: true, note: pii.feedbackAbout },
+    ],
+  });
+  const application = await prisma.application.create({
+    data: {
+      orgId: org.id,
+      requisitionId: requisition.id,
+      menteeId: mentee.id,
+      companyId: company.id,
+      coverNote: pii.coverNote,
+      dispositionNote: pii.dispositionNote,
+    },
+  });
+  await prisma.applicationEvent.create({
+    data: { applicationId: application.id, toStage: 'SCREENING', actorId: mentor.id, note: pii.applicationEvent },
+  });
+  await prisma.candidateOutreach.create({
+    data: { orgId: org.id, companyId: company.id, menteeId: mentee.id, requestedById: mentor.id, firstMessage: pii.outreach },
+  });
+  await prisma.matchFeedback.create({
+    data: { orgId: org.id, menteeId: mentee.id, mentorId: mentor.id, batchId: `batch-${tag}`, reasonNote: pii.matchReason },
+  });
+  await prisma.placement.create({
+    data: { orgId: org.id, relationId: relation.id, menteeId: mentee.id, placedAt: new Date(), note: pii.placementNote },
+  });
+  await prisma.sessionAgenda.create({
+    data: { relationId: relation.id, items: { create: [{ text: pii.agendaItem }] } },
+  });
+  await prisma.signInDevice.create({
+    data: { userId: mentee.id, fingerprint: `fp-${tag}`, userAgent: `Mozilla/5.0 ${tag}`, lastIp: '203.0.113.7' },
+  });
+  await prisma.messageTemplate.create({ data: { orgId: org.id, ownerId: mentee.id, title: pii.ownTemplate } });
+
   return {
     tag,
     pii,
@@ -343,6 +433,7 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     evaluationId: evaluation.id,
     weeklyReportId: weeklyReport.id,
     questionId: question.id,
+    surveyId: survey.id,
   };
 }
 
@@ -366,6 +457,9 @@ async function cleanup(s: Seeded) {
   // Company-side and project rows first: they hang off the users and the
   // company, and an interview request / offer blocks its parents otherwise.
   await prisma.interviewRequest.deleteMany({ where: { companyId: s.companyId } });
+  await prisma.survey.deleteMany({ where: { id: s.surveyId } });
+  await prisma.application.deleteMany({ where: { companyId: s.companyId } });
+  await prisma.placement.deleteMany({ where: { relation: { mentorId: s.mentorId } } });
   await prisma.companyInterest.deleteMany({ where: { companyId: s.companyId } });
   await prisma.requisition.deleteMany({ where: { companyId: s.companyId } });
   await prisma.offer.deleteMany({ where: { relation: { mentorId: s.mentorId } } });
@@ -426,6 +520,21 @@ async function expectNoFreeTextLeft(s: Seeded) {
   expect(await prisma.offer.count({ where: { declineNote: { contains: p.offerDecline } } })).toBe(0);
   expect(await prisma.statusChange.count({ where: { reasonNote: { contains: p.statusNote } } })).toBe(0);
   expect(await prisma.notification.count({ where: { text: { contains: p.notification } } })).toBe(0);
+  // #2098 — free text added after #2106.
+  expect(await prisma.mentorshipRequest.count({ where: { rematchNote: { contains: p.rematchNote } } })).toBe(0);
+  expect(await prisma.interviewRequest.count({ where: { cancelReason: { contains: p.interviewCancel } } })).toBe(0);
+  expect(await prisma.surveyAnswer.count({ where: { text: { contains: p.surveyAnswer } } })).toBe(0);
+  expect(await prisma.meetingFeedback.count({ where: { note: { contains: p.feedbackOwn } } })).toBe(0);
+  expect(await prisma.meetingFeedback.count({ where: { note: { contains: p.feedbackAbout } } })).toBe(0);
+  expect(await prisma.application.count({ where: { coverNote: { contains: p.coverNote } } })).toBe(0);
+  expect(await prisma.application.count({ where: { dispositionNote: { contains: p.dispositionNote } } })).toBe(0);
+  expect(await prisma.applicationEvent.count({ where: { note: { contains: p.applicationEvent } } })).toBe(0);
+  expect(await prisma.candidateOutreach.count({ where: { firstMessage: { contains: p.outreach } } })).toBe(0);
+  expect(await prisma.matchFeedback.count({ where: { reasonNote: { contains: p.matchReason } } })).toBe(0);
+  expect(await prisma.placement.count({ where: { note: { contains: p.placementNote } } })).toBe(0);
+  expect(await prisma.sessionAgendaItem.count({ where: { text: { contains: p.agendaItem } } })).toBe(0);
+  expect(await prisma.messageTemplate.count({ where: { title: { contains: p.ownTemplate } } })).toBe(0);
+  expect(await prisma.signInDevice.count({ where: { userAgent: { contains: s.tag } } })).toBe(0);
 }
 
 test.afterAll(async () => {
@@ -559,6 +668,10 @@ test("erasing the MENTOR takes the prose they authored, and leaves the mentee's 
     expect(question?.question).toBe(p.question);
     expect(await prisma.goal.count({ where: { description: { contains: p.goal } } })).toBe(1);
     expect(await prisma.notification.count({ where: { userId: s.menteeId } })).toBe(1);
+    // #2098: the mentee's own answers and application are not the mentor's.
+    expect(await prisma.surveyAnswer.count({ where: { text: p.surveyAnswer } })).toBe(1);
+    expect(await prisma.application.count({ where: { coverNote: p.coverNote } })).toBe(1);
+    expect(await prisma.meetingFeedback.count({ where: { note: p.feedbackOwn } })).toBe(1);
   } finally {
     await cleanup(s);
   }
@@ -601,6 +714,67 @@ for (const path of ['anonymize', 'hardDelete'] as const) {
     } finally {
       await cleanupByEmail(email);
       await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+    }
+  });
+}
+
+// The mentor application (#2098): no link to any `User`, only the address — so
+// neither path reached it, and a hard delete left the whole application behind.
+// Matched on the address INSIDE the person's tenant: the same address applying
+// in another organisation (the other world, #2590) is someone else's record.
+for (const path of ['anonymize', 'hardDelete'] as const) {
+  test(`${path}: the mentor application under the person's address goes, another tenant's stays`, async () => {
+    const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const own = await prisma.organization.create({ data: { name: `Erasure apps ${stamp}`, slug: `er-apps-${stamp}` } });
+    const other = await prisma.organization.create({ data: { name: `Erasure apps B ${stamp}`, slug: `er-apps-b-${stamp}` } });
+    const email = uniqueEmail('erasure-mentor-app');
+    const person = await seedUser(email, PASSWORD, 'MENTOR', 'Applied Mentor', { orgId: own.id });
+    const secret = `I left my last job because of burnout ${stamp}`;
+    try {
+      const [mine, elsewhere, neighbour] = await Promise.all([
+        prisma.mentorApplication.create({
+          data: {
+            orgId: own.id,
+            fullName: 'Applied Mentor',
+            email,
+            phone: '+49 170 0000000',
+            linkedinUrl: 'https://linkedin.example/in/applied',
+            experience: secret,
+            motivation: secret,
+            adminNote: secret,
+            status: 'APPROVED',
+          },
+        }),
+        prisma.mentorApplication.create({ data: { orgId: other.id, fullName: 'Applied Mentor', email, motivation: secret } }),
+        prisma.mentorApplication.create({
+          data: { orgId: own.id, fullName: 'Someone Else', email: `neighbour-${stamp}@example.test`, motivation: secret },
+        }),
+      ]);
+
+      if (path === 'anonymize') await anonymizeUser(person.id);
+      else await hardDeleteUser(person.id);
+
+      const after = await prisma.mentorApplication.findUniqueOrThrow({ where: { id: mine.id } });
+      expect(after.email).not.toBe(email);
+      expect(after.fullName).toBe('Erased applicant');
+      expect([after.phone, after.linkedinUrl, after.experience, after.motivation, after.adminNote]).toEqual([
+        null,
+        null,
+        null,
+        null,
+        null,
+      ]);
+      // The decision is the org's record and stays.
+      expect(after.status).toBe('APPROVED');
+      // Tenant isolation: the other world's application under the same address,
+      // and another applicant in the same org, are untouched.
+      expect((await prisma.mentorApplication.findUniqueOrThrow({ where: { id: elsewhere.id } })).motivation).toBe(secret);
+      expect((await prisma.mentorApplication.findUniqueOrThrow({ where: { id: neighbour.id } })).motivation).toBe(secret);
+    } finally {
+      await prisma.mentorApplication.deleteMany({ where: { orgId: { in: [own.id, other.id] } } });
+      await prisma.user.deleteMany({ where: { id: person.id } });
+      await cleanupByEmail(email);
+      await prisma.organization.deleteMany({ where: { id: { in: [own.id, other.id] } } });
     }
   });
 }

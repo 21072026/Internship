@@ -23,10 +23,13 @@ stream is a sequence of signed HTTP POSTs ("batches") to a URL the tenant regist
   repeat as a no-op. There is no "exactly once" and there will not be.
 - **Never a write to the audit trail.** The stream reads `AuditLog` and updates its own
   bookkeeping row (`AuditDrain`). Nothing in it edits or deletes an audit row.
-- **No retention of its own.** The age-based sweep of audit rows is #1585's, on #1678's single
-  schedule. The one way the two interact: a row swept before it was shipped is gone silently —
-  which is why the retention window is a floor on how long a drain may be down before the
-  tenant has a gap. The console shows the cursor so that gap is visible, not guessed.
+- **No retention of its own.** The age-based sweep of audit rows is #1585's (`pruneAuditLog()`
+  in `src/lib/retentionEntries.ts`, rule in `src/lib/auditRetentionRule.ts`), on #1678's single
+  schedule. It **never deletes a row a drain has not shipped**: in an org with a drain, only rows
+  at or before the oldest cursor of its drains are eligible, and a drain with no cursor yet —
+  paused ones included, since a drain pauses itself during exactly the outage that matters —
+  holds the org's whole trail. A receiver outage therefore produces a backlog, never a gap;
+  deleting the drain is what releases its rows.
 - **Not a webhook.** Webhooks (`docs/…`, `src/lib/webhooks.ts`) carry domain events to
   integrators and are fire-and-forget with a short retry. The audit stream carries a *log*,
   is cursor-based, and backs off for hours. They share the signature recipe on purpose, so an

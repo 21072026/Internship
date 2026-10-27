@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Configuration changes are audited with a redacted before/after diff (#1699):** `redactedDiff()` (`src/lib/events/diff.ts`) is the one diff helper — an explicit per-field policy (`record` / `redact` / `ignore`), unlisted fields redacted, secret-shaped field names redacted whatever the spec says, and an 8-hex SHA-256 fingerprint so a real certificate change differs from a re-save. The organization PATCH raises `org.config.changed`, the webhook routes `webhook.registered` / `webhook.updated` / `webhook.deleted`, the API-key routes `apikey.created` / `apikey.revoked`; the new `config-audit` subscriber writes one `AuditLog` row per event (tenant-stamped, so it reaches the audit drain). The existing `ActivityLog` entries are unchanged.",
+  "notes": {
+    "en": ["Changes to your organization's SSO, branding, webhooks and API keys are now recorded in the audit trail with the previous and the new value — certificates and secrets only ever as \"changed\"."],
+    "tr": ["Kurumunuzun SSO, marka, webhook ve API anahtarı ayarlarındaki değişiklikler artık denetim kaydına eski ve yeni değeriyle yazılıyor — sertifika ve sırlar yalnızca \"değişti\" olarak."],
+    "de": ["Änderungen an SSO, Branding, Webhooks und API-Schlüsseln Ihrer Organisation werden jetzt mit altem und neuem Wert im Audit-Protokoll festgehalten — Zertifikate und Geheimnisse nur als „geändert“."]
+  }
+}

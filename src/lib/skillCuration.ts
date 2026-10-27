@@ -19,6 +19,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normalizeSkillName, skillKey } from '@/lib/skills';
 import { seedSkillTaxonomy } from '@/lib/skillsResolve';
+import { mergedLevel } from '@/lib/skillLevelRule';
 import {
   MAX_SKILLS_PER_ORG,
   MAX_SKILL_KEY_LENGTH,
@@ -288,8 +289,24 @@ export async function mergeSkill(
     });
     if (claimed.count !== 1) return null;
 
-    const targetUsers = (await tx.userSkill.findMany({ where: { skillId: targetId }, select: { userId: true } })).map((r) => r.userId);
-    if (targetUsers.length) await tx.userSkill.deleteMany({ where: { skillId: id, userId: { in: targetUsers } } });
+    // A person holding both keeps ONE row — the target's. Its proficiency is
+    // decided by `mergedLevel` (a confirmed level beats a self-rating, a rating
+    // beats none) and the loser's history moves over before the row goes (#1822).
+    const LEVEL_SELECT = { id: true, userId: true, level: true, levelSource: true, verifiedById: true, verifiedAt: true } as const;
+    const targetRows = await tx.userSkill.findMany({ where: { skillId: targetId }, select: LEVEL_SELECT });
+    const targetUsers = targetRows.map((r) => r.userId);
+    if (targetUsers.length) {
+      const loserRows = await tx.userSkill.findMany({ where: { skillId: id, userId: { in: targetUsers } }, select: LEVEL_SELECT });
+      const targetOf = new Map(targetRows.map((r) => [r.userId, r]));
+      for (const loser of loserRows) {
+        const target = targetOf.get(loser.userId);
+        if (!target) continue;
+        await tx.userSkillLevelChange.updateMany({ where: { userSkillId: loser.id }, data: { userSkillId: target.id } });
+        const winner = mergedLevel(target, loser);
+        if (winner) await tx.userSkill.update({ where: { id: target.id }, data: winner });
+      }
+      await tx.userSkill.deleteMany({ where: { skillId: id, userId: { in: targetUsers } } });
+    }
     const movedUsers = (await tx.userSkill.updateMany({ where: { skillId: id }, data: { skillId: targetId } })).count;
 
     const targetReqs = (await tx.requisitionSkill.findMany({ where: { skillId: targetId }, select: { requisitionId: true } })).map((r) => r.requisitionId);

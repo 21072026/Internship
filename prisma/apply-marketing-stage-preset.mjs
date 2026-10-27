@@ -186,7 +186,8 @@ async function loadState(db, orgId) {
   const [current, grouped, slaRows] = await Promise.all([
     db.pipelineStage.findMany({ where: { orgId }, orderBy: { order: 'asc' } }),
     db.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: { orgId }, _count: { _all: true } }),
-    db.stageSla.findMany({ where: { orgId }, select: { stageKey: true, days: true, wipLimit: true } }),
+    // The org's own rows only — a per-cohort/per-mentor override (#1640) is not part of the preset.
+    db.stageSla.findMany({ where: { orgId, scope: 'org' }, select: { stageKey: true, days: true, wipLimit: true } }),
   ]);
   const occupied = Object.fromEntries(grouped.map((g) => [g.pipelineStatus, g._count._all]));
   return { current, occupied, slaRows };
@@ -250,7 +251,7 @@ async function main() {
         if (s.action === 'delete') await tx.stageSla.deleteMany({ where: { orgId: org.id, stageKey: s.stageKey } });
         if (s.action === 'create' || s.action === 'update') {
           await tx.stageSla.upsert({
-            where: { orgId_stageKey: { orgId: org.id, stageKey: s.stageKey } },
+            where: { orgId_stageKey_scope: { orgId: org.id, stageKey: s.stageKey, scope: 'org' } },
             create: { orgId: org.id, stageKey: s.stageKey, days: s.after.days, wipLimit: s.after.wipLimit },
             update: { days: s.after.days, wipLimit: s.after.wipLimit },
           });

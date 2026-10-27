@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { PasswordRules } from '@/components/auth/PasswordRules';
 import { passwordPolicyError, passwordRefusalText, usePasswordPolicy } from '@/lib/passwordPolicyClient';
@@ -173,6 +174,8 @@ export function AccountSettings() {
   // A list, not a comma-joined string (@/lib/skills, #2314).
   const [skills, setSkills] = useState<string[]>([]);
   const [capacity, setCapacity] = useState('');
+  // #1808: how many mentees may pick this mentor themselves; '' = capacity alone.
+  const [selfMatchLimit, setSelfMatchLimit] = useState('');
   const [savingExpertise, setSavingExpertise] = useState(false);
   // #941: mentor's own "I can take a new mentee" preference. Kept as the raw
   // tri-state from the API (true/false/null = never set) — null is never
@@ -182,7 +185,7 @@ export function AccountSettings() {
   const [acceptingMentees, setAcceptingMentees] = useState<boolean | null>(null);
   const [activeMenteeCount, setActiveMenteeCount] = useState(0);
   const [availability, setAvailability] = useState<{
-    status: 'available' | 'at_capacity' | 'not_accepting';
+    status: 'available' | 'at_capacity' | 'not_accepting' | 'self_match_full';
     source: 'preference' | 'capacity';
     capacityKnown: boolean;
   } | null>(null);
@@ -259,6 +262,7 @@ export function AccountSettings() {
         setSavedPersonalRoom(user.personalMeetingUrl ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills : []);
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
+        setSelfMatchLimit(user.selfMatchLimit != null ? String(user.selfMatchLimit) : '');
         setAcceptingMentees(user.acceptingMentees ?? null);
         setActiveMenteeCount(typeof user.activeMenteeCount === 'number' ? user.activeMenteeCount : 0);
         setAvailability(user.availability ?? null);
@@ -471,6 +475,7 @@ export function AccountSettings() {
         body: JSON.stringify({
           skills: skillsArr,
           mentorCapacity: capacity ? Number(capacity) : null,
+          selfMatchLimit: selfMatchLimit ? Number(selfMatchLimit) : null,
           acceptingMentees,
         }),
       });
@@ -831,12 +836,14 @@ export function AccountSettings() {
     : acceptingMentees;
 
   const availabilityBadge = availability && (
-    <Badge variant={availability.status === 'available' ? 'success' : availability.status === 'at_capacity' ? 'warning' : 'default'}>
+    <Badge variant={availability.status === 'available' ? 'success' : availability.status === 'not_accepting' ? 'default' : 'warning'}>
       {availability.status === 'available'
         ? t.account.availabilityAvailable
         : availability.status === 'at_capacity'
           ? t.account.availabilityAtCapacity
-          : t.account.availabilityNotAccepting}
+          : availability.status === 'self_match_full'
+            ? t.account.availabilitySelfMatchFull
+            : t.account.availabilityNotAccepting}
     </Badge>
   );
 
@@ -970,6 +977,21 @@ export function AccountSettings() {
               <SkillsField label={t.account.expertise} hint={t.account.expertiseHint} value={skills} onChange={setSkills} testId="account-skills" />
             </div>
             <Input label={t.account.capacity} type="number" min={0} hint={t.account.capacityHint} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+            {/* #1808: a personal preference, never a plan limit — free core. The
+                per-meeting rules (notice, monthly cap) are #2003's card on
+                /mentor/availability; linked, never rendered twice. */}
+            <Input
+              label={t.account.selfMatchLimit}
+              type="number"
+              min={0}
+              hint={t.account.selfMatchLimitHint}
+              value={selfMatchLimit}
+              onChange={(e) => setSelfMatchLimit(e.target.value)}
+              data-testid="self-match-limit"
+            />
+            <Link href="/mentor/availability" className="inline-block text-sm text-blue-600 dark:text-blue-300 hover:underline">
+              {t.account.bookingRulesLink}
+            </Link>
 
             {availability && (
               <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300" data-testid="mentor-availability-summary">

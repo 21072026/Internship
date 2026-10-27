@@ -164,6 +164,11 @@ export const SETTING_DEFAULTS = {
   // Company enquiries (#2559): an unconverted one is deleted after this many
   // days, a converted one keeps its row and loses its personal columns.
   companyInquiryRetentionDays: '730',
+  // The AuditLog window (#1585), 24 months. Raised to a 365-day floor on read
+  // (auditRetentionRule.ts), and rows a tenant's audit drain (#2012) has not
+  // shipped yet are kept however old — so no value here can open a gap in a
+  // SIEM that was down. The sweep is the only deleter of audit rows.
+  auditLogRetentionDays: '730',
   // Read access log (#2433): a repeat of the same read (same reader, record,
   // IP) inside this many minutes writes no second `*.view` ActivityLog row.
   // `0` = log every read; capped at a day; a blank or broken value falls back
@@ -335,10 +340,19 @@ export const SETTING_DEFAULTS = {
   usageDropThresholdPct: '40',
   usageBaselineDays: '60',
   trialActivationDays: '7',
+  // Free-plan upsell signal (#2846, src/lib/usageRule.ts): an account the
+  // account-event feed reports on the `free` plan that did MORE transactions
+  // than this in the current calendar month (UTC) gets `free_quota_exceeded`
+  // in its owner's attention queue. A signal only — nothing is blocked or billed.
+  freePlanTransactionQuota: '10',
   // Company → candidate message requests (#1840, src/lib/outreachQuota.ts):
   // APPROVED requests per company per calendar month (UTC). A company's own
   // `Company.quota`, when set, overrides it. Checked when a request is made.
   outreachMonthlyQuota: '20',
+  // Per-tenant nouns (#1629): a JSON document `{ en: { mentor: { one, many,
+  // oneCap, manyCap }, … }, tr: …, de: … }`, parsed (unknown keys dropped) by
+  // parseTerminology() in src/lib/terminology.ts. '' = the dictionary's words.
+  terminology: '',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
@@ -408,6 +422,7 @@ export const SETTING_SCHEMA = {
   jobRetentionDays: { type: 'number', scopes: G },
   domainEventRetentionDays: { type: 'number', scopes: G },
   supportReportRetentionDays: { type: 'number', scopes: G },
+  auditLogRetentionDays: { type: 'number', scopes: G },
   companyInquiryRetentionDays: { type: 'number', scopes: O },
   viewLogWindowMinutes: { type: 'number', scopes: G },
   notificationRetentionDays: { type: 'number', scopes: O },
@@ -432,9 +447,11 @@ export const SETTING_SCHEMA = {
   crmBccEnabled: { type: 'enum', values: ['', 'true', 'false'], scopes: O },
   crmBccVersion: { type: 'number', scopes: O },
   usageDropThresholdPct: { type: 'number', scopes: O },
+  freePlanTransactionQuota: { type: 'number', scopes: O },
   usageBaselineDays: { type: 'number', scopes: O },
   trialActivationDays: { type: 'number', scopes: O },
   outreachMonthlyQuota: { type: 'number', scopes: O },
+  terminology: { type: 'string', scopes: P },
 } as const satisfies { readonly [K in SettingKey]: SettingSpec };
 
 type SpecValue<S> = S extends { type: 'number'; nullable: true }

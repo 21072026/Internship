@@ -1,0 +1,6 @@
+# 2026-10-27 — Requisition matches + admin shortlist (#1401)
+
+- **Read the issue against today's code, not its own snapshot.** #1401 (filed 2026-08) said `requiredSkills` was matched nowhere and the shortlist needed a new "who added it" column. By now the canonical skill match (`requisitionSkillMatch`, #1821) and `Application.source = 'ADMIN'` (#1828) already existed — the work shrank to wiring, no schema change.
+- **One rule, two readers:** the match-alert cron's private `titleMatchesTarget` and its consent `where` moved into `src/lib/requisitionMatchRule.ts`, so the admin list and the e-mail cannot drift. A pure rule that imports another `@/` module cannot be loaded by `node --test`; pin it in an `e2e/*.unit.spec.ts` instead (runs browserless with `BASE_URL=http://127.0.0.1:9`, no server needed).
+- **Local e2e recipe that worked here:** apt MariaDB 10.11 + `.env` from the playbook, `set -a; . ./.env; set +a` before Playwright (the workers' Prisma reads `DATABASE_URL` from the shell, not from `.env`), and symlink `/opt/pw-browsers/chromium_headless_shell-1243` to the `-1248` name the installed Playwright expects.
+- **Warm the dev server first.** The first spec hit the 60 s timeout on cold compiles. Start `npm run dev` yourself, `curl` the pages and API routes once, then run with `BASE_URL=http://localhost:3000 --timeout=180000`.

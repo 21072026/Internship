@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat, Download, Printer } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
+import { buildFeedIcs, feedFilename } from '@/lib/ics';
+import { useProductName } from '@/lib/brandClient';
 
 // The calendar (#1110).
 //
@@ -30,12 +32,15 @@ interface Ev {
   title: string;
   who: string;
   date: string;
+  durationMinutes?: number | null;
   overdue?: boolean;
   link?: string | null;
 }
 
 const VIEWS: CalendarViewMode[] = ['month', 'week', 'day', 'agenda'];
 const VIEW_STORAGE_KEY = 'crm.calendar.view';
+/** A deadline in the download keeps the half-hour marker the subscription feed gives it. */
+const DEADLINE_EVENT_MINUTES = 30;
 /** How far ahead the agenda looks. */
 const AGENDA_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,9 +89,21 @@ function secondaryLabel(e: Ev) {
   return e.type === 'series' ? e.who : e.title;
 }
 
-export function CalendarView({ initialView }: { initialView?: CalendarViewMode }) {
+/**
+ * The UID an event carries in a calendar file — the subscription feed's own
+ * (`/api/calendar/feed/[token]`), so a downloaded copy and a subscribed one
+ * name the same occurrence the same way instead of doubling it: a one-off
+ * meeting is its bare row id there, a series occurrence and a deadline are
+ * already the shared synthetic id.
+ */
+function icsUid(e: Ev) {
+  return e.type === 'meeting' ? e.id.replace(/^meeting-/, '') : e.id;
+}
+
+export function CalendarView({ initialView, emptyText }: { initialView?: CalendarViewMode; emptyText?: string }) {
   const t = useT();
   const locale = useLocale();
+  const product = useProductName();
   const [events, setEvents] = useState<Ev[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -174,6 +191,35 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
     setLoadError(false);
     setRetryKey((key) => key + 1);
   }, []);
+
+  // "Download .ics" (#2005): exactly the events on screen, through the one
+  // feed builder in src/lib/ics.ts — no second builder, no export route. Built
+  // in the browser from what the caller was already allowed to load, so it can
+  // never carry more than the screen does. A logged meeting is in the past and
+  // a record, not an appointment, so it stays out of the file.
+  const downloadable = useMemo(() => displayedEvents.filter((e) => e.type !== 'logged'), [displayedEvents]);
+  const downloadIcs = () => {
+    const ics = buildFeedIcs(
+      product,
+      downloadable.map((e) => {
+        const label = secondaryLabel(e) ? `${primaryLabel(e)} · ${secondaryLabel(e)}` : primaryLabel(e);
+        return {
+          uid: icsUid(e),
+          title: e.type === 'deadline' ? `${t.calendar.deadline} · ${e.who}` : label,
+          start: new Date(e.date),
+          durationMinutes: e.type === 'deadline' ? DEADLINE_EVENT_MINUTES : e.durationMinutes ?? null,
+        };
+      })
+    );
+    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = feedFilename(product).replace(/\.ics$/, `-${dayKey(range.start)}.ics`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const byDay = useMemo(() => {
     const map: Record<string, Ev[]> = {};
@@ -479,10 +525,32 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
   );
 
   return (
-    <Card>
+    <Card id="calendar-print">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-base font-semibold capitalize text-gray-900 dark:text-gray-100 sm:text-lg">{heading}</h2>
-        <div className="flex items-center gap-1">
+        <div className="no-print flex items-center gap-1">
+          <button
+            type="button"
+            onClick={downloadIcs}
+            disabled={requestPending || currentError || downloadable.length === 0}
+            data-testid="calendar-download-ics"
+            title={t.calendar.downloadIcsHint}
+            className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-40 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">{t.calendar.downloadIcs}</span>
+            <span className="sr-only sm:hidden">{t.calendar.downloadIcs}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            data-testid="calendar-print"
+            className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            <Printer className="h-4 w-4" />
+            <span className="hidden sm:inline">{t.calendar.print}</span>
+            <span className="sr-only sm:hidden">{t.calendar.print}</span>
+          </button>
           {view !== 'agenda' && (
             <>
               <button onClick={() => step(-1)} aria-label={t.calendar.previous} className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -517,7 +585,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
           tab pattern without its arrow keys, tabpanel or aria-controls, so a
           screen reader announced "tab, 1 of 4" and the arrows did nothing. */}
       <div
-        className="mb-3 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
+        className="no-print mb-3 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
         role="group"
         aria-label={t.calendar.viewSwitcher}
         data-testid="calendar-view-switcher"
@@ -573,10 +641,10 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
       </div>
 
       {!requestPending && !currentError && events.length === 0 && view !== 'agenda' && (
-        <p className="mt-4 text-center text-sm text-gray-400">{t.calendar.empty}</p>
+        <p className="mt-4 text-center text-sm text-gray-400">{emptyText ?? t.calendar.empty}</p>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
+      <div className="no-print mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded bg-blue-100" />
           {t.calendar.meeting}

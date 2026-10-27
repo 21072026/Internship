@@ -210,6 +210,7 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
         const d = await res.json().catch(() => ({}));
         if (d.code === 'rate_limited') setErr(q.rateLimited);
         else if (d.code === 'already_pending') setErr(q.alreadyPending);
+        else if (d.code === 'mentor_self_match_full') setErr(dir.selfMatchFullError);
         else setErr(d.error || t.common.error);
       }
     } catch {
