@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Self-match limit (#1808):** new nullable `User.selfMatchLimit` — how many mentees may pick a mentor themselves, apart from `mentorCapacity`. `getMentorAvailability()` takes an optional `selfMatchLimit` / `selfSelectedCount` / `context` (`'admin'` default, `'self_select'`) and returns the new `self_match_full` status only under `self_select` while capacity has room; every caller passing no context answers exactly as before (pinned by `e2e/mentor-load-controls.unit.spec.ts`). Seats are counted once in `src/lib/selfMatchSeats.ts` (pending preferred-mentor requests + approved ones whose mentee is still ACTIVE with that mentor). Binding on the two self-select paths — the preferred mentor in `POST /api/mentorship-requests` (`409 mentor_self_match_full`) and the public apply link (`mentor_full`) — and on the directory for mentee viewers; admin assignment is never subject to it. The matching engine's `capacityHeadroom` dimension gains a `selfSelect` config switch. Mentors set it under Account → Expertise & capacity; free core, never a plan limit.",
+  "notes": {
+    "en": ["Mentors can now cap how many mentees may pick them themselves, separately from their total capacity — the programme can still assign them up to that capacity."],
+    "tr": ["Mentorlar artık toplam kapasitelerinden ayrı olarak kendilerini kaç menteenin kendisinin seçebileceğini sınırlayabilir — program onları yine kapasiteye kadar atayabilir."],
+    "de": ["Mentorinnen und Mentoren können jetzt begrenzen, wie viele Mentees sie selbst wählen dürfen – getrennt von ihrer Gesamtkapazität; das Programm kann sie weiterhin bis zur Kapazität zuweisen."]
+  }
+}

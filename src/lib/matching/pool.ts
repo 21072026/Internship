@@ -9,6 +9,7 @@
 import { prisma } from '@/lib/prisma';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import type { MatchMentee, MatchMentor } from './dimensions';
+import { selfSelectedCounts } from '@/lib/selfMatchSeats';
 
 export type PoolMentor = MatchMentor & { fullName: string };
 export type PoolMentee = MatchMentee & { fullName: string };
@@ -35,10 +36,13 @@ export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]>
       ...personSelect,
       mentorCapacity: true,
       acceptingMentees: true,
+      selfMatchLimit: true,
       _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
     },
   });
-  return rows.map(({ _count, ...m }) => ({ ...m, activeMenteeCount: _count.mentorRelations }));
+  // Seats only matter for a mentor who set a limit (#1808).
+  const seats = await selfSelectedCounts(rows.filter((r) => r.selfMatchLimit != null).map((r) => r.id));
+  return rows.map(({ _count, ...m }) => ({ ...m, activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 }));
 }
 
 /**
