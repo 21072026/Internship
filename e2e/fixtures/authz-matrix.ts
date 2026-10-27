@@ -327,6 +327,7 @@ export const OUTBOX_FOREIGN: Array<{ method: 'GET' | 'POST'; path: string; why: 
 export const MAIL_QUEUE_OPERATOR_ONLY: Array<{ method: 'GET' | 'POST'; path: string; why: string }> = [
   { method: 'GET', path: '/api/admin/mail-queue', why: 'the deployment-wide mail queue view' },
   { method: 'GET', path: '/api/admin/mail-queue?probe=1', why: 'the Queue tab probe' },
+  { method: 'GET', path: '/api/admin/operations', why: 'the operations console (#1607), same operator rule' },
   { method: 'POST', path: `/api/admin/mail-queue/${MAIL_JOB_ID_PARAM}/retry`, why: 'retry a dead mail' },
   { method: 'POST', path: `/api/admin/mail-queue/${MAIL_JOB_ID_PARAM}/cancel`, why: 'cancel a waiting mail' },
 ];

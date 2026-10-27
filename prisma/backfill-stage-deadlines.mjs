@@ -36,6 +36,9 @@
 // A deadline still in the future gets neither: when it passes, the mentor is
 // reminded exactly as for any other.
 //
+// The work itself is prisma/stage-deadline-fill.mjs, which the admin's SLA
+// save also runs for its own org (#3203).
+//
 // IDEMPOTENT: the write is a guarded `updateMany … where stageDeadline: null`,
 // so a second run (or a move that landed in between) changes nothing. The
 // registry runs it ONCE per environment (prisma/backfills/registry.mjs) — a
@@ -45,10 +48,7 @@
 // Dry run by default (`--dry-run` says so explicitly): prints counts per org
 // and per stage and writes nothing. `--apply` writes.
 import { PrismaClient } from '@prisma/client';
-import { planStageDeadline } from './stage-sla-rule.mjs';
-
-const DAY = 24 * 60 * 60 * 1000;
-const BATCH = 500;
+import { fillOrgStageDeadlines } from './stage-deadline-fill.mjs';
 
 async function main() {
   const prisma = new PrismaClient();
@@ -69,95 +69,11 @@ async function main() {
     let pastDue = 0;
     let fromStartDate = 0;
     for (const orgId of orgIds) {
-      const rows = await prisma.stageSla.findMany({
-        where: { orgId, days: { not: null } },
-        select: { stageKey: true, days: true, cohortId: true, mentorId: true },
-      });
-      // Escalation rungs stay org-level (resolveStageEscalations reads scope "org").
-      const escalations = new Map(
-        (
-          await prisma.stageSla.findMany({
-            where: { orgId, scope: 'org', days: { not: null }, escalateAfterDays: { gt: 0 } },
-            select: { stageKey: true, escalateAfterDays: true },
-          })
-        ).map((r) => [r.stageKey, r.escalateAfterDays])
-      );
-      const stageKeys = Array.from(new Set(rows.map((r) => r.stageKey)));
-      const perStage = new Map();
-
-      let cursor;
-      for (;;) {
-        const relations = await prisma.mentorshipRelation.findMany({
-          where: {
-            orgId,
-            status: 'ACTIVE',
-            lifecycleState: 'ACTIVE',
-            stageDeadline: null,
-            pipelineStatus: { in: stageKeys },
-            // A paused pair keeps its remaining days here and gets its deadline
-            // back on resume (#1772); the re-engagement pool is not stuck.
-            stageDeadlineRemainingDays: null,
-            mentee: { reEngageAt: null },
-          },
-          select: {
-            id: true,
-            cohortId: true,
-            mentorId: true,
-            pipelineStatus: true,
-            startDate: true,
-            // Newest first; a run of no-op rows (#2264) longer than this is not a thing.
-            statusChanges: {
-              orderBy: { createdAt: 'desc' },
-              take: 50,
-              select: { fromStatus: true, toStatus: true, createdAt: true },
-            },
-          },
-          orderBy: { id: 'asc' },
-          take: BATCH,
-          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        });
-        if (relations.length === 0) break;
-        cursor = relations[relations.length - 1].id;
-
-        for (const relation of relations) {
-          const plan = planStageDeadline(relation, rows, now);
-          if (!plan) continue;
-          const count = perStage.get(relation.pipelineStatus) ?? { set: 0, pastDue: 0 };
-          count.set++;
-          if (plan.pastDue) count.pastDue++;
-          perStage.set(relation.pipelineStatus, count);
-          total++;
-          if (plan.pastDue) pastDue++;
-          if (plan.enteredFrom === 'startDate') fromStartDate++;
-          if (!apply) continue;
-
-          const written = await prisma.mentorshipRelation.updateMany({
-            where: { id: relation.id, stageDeadline: null, pipelineStatus: relation.pipelineStatus },
-            data: {
-              stageDeadline: plan.stageDeadline,
-              deadlineReminderSentAt: plan.pastDue ? now : null,
-            },
-          });
-          const escalateAfterDays = escalations.get(relation.pipelineStatus);
-          if (written.count === 1 && plan.pastDue && escalateAfterDays) {
-            await prisma.slaBreach.createMany({
-              data: [
-                {
-                  orgId,
-                  relationId: relation.id,
-                  stageKey: relation.pipelineStatus,
-                  dueAt: plan.stageDeadline,
-                  level: 1,
-                  snoozedUntil: new Date(now.getTime() + escalateAfterDays * DAY),
-                },
-              ],
-              skipDuplicates: true,
-            });
-          }
-        }
-      }
-
-      for (const [stage, c] of perStage) {
+      const r = await fillOrgStageDeadlines(prisma, orgId, { apply, now });
+      total += r.total;
+      pastDue += r.pastDue;
+      fromStartDate += r.fromStartDate;
+      for (const [stage, c] of r.perStage) {
         console.log(`backfill-stage-deadlines (${mode}): org ${orgId} stage ${stage}: ${c.set} deadline(s), ${c.pastDue} already past`);
       }
     }

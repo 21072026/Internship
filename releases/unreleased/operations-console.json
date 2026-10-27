@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Operations console (#1607):** `/admin/operations` + `GET /api/admin/operations` show every queue schedule (`schedules.ts`) with its last `JobRun` (outcome, duration, trigger, sanitized error), last success, next slot and **alarms** computed by the pure `src/lib/jobs/operationsRule.ts` — `never_enqueued` (no `ScheduleState` row), `scheduler_behind`, `worker_behind` (only where the caller sees every run) and `last_run_failed`; plus failed-run counts for 1h/24h, the dead-letter count, the `JobLease` holders (world scope) and a state roll-up over `GET /api/admin/integrations/health` linking to `/admin/integrations`. Scope is the mail queue's operator rule (`resolveQueueScope()`, now with `queueScopeWhere()` exported): a super admin sees their world, the default organization's ADMIN its own runs only, everyone else gets 403 from the route. \"Run now\" goes through the existing `/api/cron?job=…&enqueue=1` (`manualKeyForJob()` is the inverse of `manualJobFor()`); platform jobs are offered to a super admin only.",
+  "notes": {
+    "en": ["New operations console for the platform operator: every scheduled job with its last run, next run and an alarm when it fell behind or failed, failure counts for the last day, and an integration health summary — with a \"Run now\" button."],
+    "tr": ["Platform operatörü için yeni operasyon konsolu: her zamanlanmış işin son ve sonraki çalışması, geride kaldığında veya başarısız olduğunda alarm, son bir günün hata sayıları ve entegrasyon sağlığı özeti — \"Şimdi çalıştır\" düğmesiyle."],
+    "de": ["Neue Betriebskonsole für den Plattformbetreiber: jeder geplante Job mit letztem und nächstem Lauf, ein Alarm bei Rückstand oder Fehler, die Fehlerzahlen des letzten Tages und eine Übersicht zur Integrationsgesundheit — mit „Jetzt ausführen“-Schaltfläche."]
+  }
+}

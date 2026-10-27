@@ -19,3 +19,8 @@
   ran green against apt MariaDB + `npx prisma db seed` with the CI env vars from `e2e.yml`.
 - **After `git checkout` onto a fresh main, `prisma generate` before `tsc`** — a sibling's schema
   change showed up as dozens of unrelated TS errors until the client was regenerated.
+- **A deploy backfill the app also needs: put the core in its own `prisma/*.mjs` module and import
+  it from the route** (`'../../../../../prisma/stage-deadline-fill.mjs'`, allowJs; `klaviyoReset.ts`
+  is the precedent). The CLI keeps only argv parsing and logging, so deploy and app cannot drift.
+- **The container's MariaDB can stop between turns** — `Can't reach database server` in the
+  WebServer log means `service mariadb start`, not a code bug.
