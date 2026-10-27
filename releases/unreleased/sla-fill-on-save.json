@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage SLAs fill deadlines on save (#3203):** saving a service level (org scope or a cohort/mentor override) now gives that org's ACTIVE relations already sitting in the stage a deadline at once, through the same `fillOrgStageDeadlines()` the deploy backfill uses (extracted to `prisma/stage-deadline-fill.mjs`): dated from the stage entry, only an empty deadline is ever filled, idempotent, and a past-due one is stamped (`deadlineReminderSentAt` + a breach snoozed for `escalateAfterDays`) so no reminder or escalation mail goes out for it. `PUT /api/admin/stage-sla` answers `deadlinesSet`; a failed fill never fails the save.",
+  "notes": {
+    "en": ["Setting a stage service level now applies right away to candidates who are already waiting in that stage — no reminder burst, and they show up in the aging report immediately."],
+    "tr": ["Bir aşama süre hedefi kaydedildiğinde artık o aşamada zaten bekleyen adaylara hemen uygulanıyor — toplu hatırlatma olmadan, bekleme raporunda anında görünüyorlar."],
+    "de": ["Ein gespeichertes Phasen-Servicelevel gilt jetzt sofort auch für Kandidaten, die bereits in der Phase warten — ohne Erinnerungswelle, und sie erscheinen gleich im Wartezeit-Bericht."]
+  }
+}

@@ -4,6 +4,7 @@ import { useState, type ComponentType } from 'react';
 import { useT } from '@/i18n/client';
 import { BillingPlanTab } from '@/components/billing/BillingPlanTab';
 import { BillingFeaturesTab } from '@/components/billing/BillingFeaturesTab';
+import { BillingUsageTab } from '@/components/billing/BillingUsageTab';
 import { OrgBillingProvider } from '@/components/billing/OrgBillingContext';
 
 // The tenant's own bill (#1739). A TABBED SHELL on purpose: the plan / meter /
@@ -14,11 +15,14 @@ import { OrgBillingProvider } from '@/components/billing/OrgBillingContext';
 // caller's own organisation) is fetched ONCE, by OrgBillingProvider, and every
 // tab reads it from there — a tab with data of its own fetches that itself.
 
-type TabKey = 'plan' | 'features';
+type TabKey = 'plan' | 'features' | 'usage';
 
-const TABS: { key: TabKey; Component: ComponentType }[] = [
+// A tab may switch to another one (the usage tab's over-limit CTA opens the
+// plan tab, where the plan-change request lives).
+const TABS: { key: TabKey; Component: ComponentType<{ goTo: (tab: TabKey) => void }> }[] = [
   { key: 'plan', Component: BillingPlanTab },
   { key: 'features', Component: BillingFeaturesTab },
+  { key: 'usage', Component: BillingUsageTab },
 ];
 
 export default function AdminBillingPage() {
@@ -53,7 +57,7 @@ export default function AdminBillingPage() {
 
       <OrgBillingProvider>
         <div role="tabpanel" data-testid={`billing-panel-${tab}`}>
-          <Active />
+          <Active goTo={setTab} />
         </div>
       </OrgBillingProvider>
     </div>

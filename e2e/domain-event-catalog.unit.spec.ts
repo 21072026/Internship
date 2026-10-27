@@ -40,7 +40,8 @@ const PUBLISHED = [
 const at = '2026-10-20T09:30:00.000Z';
 
 // One object per producer call site, copied from the call as it reads today
-// (grep -rn "dispatchWebhook(" src/). Ten call sites, ten shapes.
+// (grep -rn "emit('" src/ — they called dispatchWebhook() directly before
+// #1697). Ten call sites, ten shapes.
 const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>][] = [
   ['api/apply', 'application.created', { mentorId: 'u1', menteeName: 'Ada Example', email: 'ada@example.test' }],
   ['stageChangeEffects', 'pipeline.stage_change', { relationId: 'r1', from: 'APPLICATION_100', to: 'APPROVAL_PENDING_220' }],
@@ -52,6 +53,14 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['api/meetings/instant', 'meeting.scheduled', { title: 'Now', scheduledAt: null, count: 1, instant: true }],
   ['api/meeting-series', 'meeting.scheduled', { title: 'Series', scheduledAt: at, count: 2, seriesId: 's1' }],
   ['api/interview-panels/[id]/score', 'interview_panel.completed', { panelId: 'p1', subjectId: 'u2' }],
+  // #1998: the hiring producers.
+  ['api/interview-panels/[id]/close', 'interview_panel.completed', { panelId: 'p1', subjectId: 'u2' }],
+  ['api/interview-panels/[id]/outcome', 'interview_panel.outcome', { panelId: 'p1', applicationId: 'a1', outcome: 'ADVANCE' }],
+  ['api/interview-requests/[id]/schedule', 'interview_request.scheduled', { requestId: 'q1', meetingId: 'm1', scheduledAt: at, panelId: null }],
+  ['api/interview-requests/[id]/cancel', 'interview_request.cancelled', { requestId: 'q1', meetingId: null }],
+  ['meetingCancel', 'meeting.cancelled', { meetingId: 'm1', scheduledAt: at, count: 3 }],
+  ['api/meetings/[id] DELETE', 'meeting.cancelled', { meetingId: 'm1', scheduledAt: null, count: 1 }],
+  ['api/meetings/[id] PATCH', 'meeting.rescheduled', { meetingId: 'm1', scheduledAt: at, previousScheduledAt: null }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

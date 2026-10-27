@@ -59,6 +59,7 @@ test('the ordering constraints hold', () => {
   }
   assert.ok(indexOf('backfill-api-key-lifecycle.mjs') > org, 'api-key-lifecycle needs the default org');
   assert.ok(indexOf('backfill-skill-lists.mjs') < indexOf('backfill-skill-taxonomy.mjs'), 'split before mapping');
+  assert.ok(indexOf('backfill-skill-taxonomy.mjs') < indexOf('backfill-skill-levels.mjs'), 'rows before their levels');
 });
 
 test('deploy-prod.sh runs data migrations only through the runner', () => {

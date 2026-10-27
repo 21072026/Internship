@@ -32,7 +32,8 @@
 //     default org and would otherwise hand one tenant's rows to another;
 //   - backfill-api-key-lifecycle AFTER backfill-organization (it needs the
 //     default org to exist);
-//   - backfill-skill-lists BEFORE backfill-skill-taxonomy (map the split lists).
+//   - backfill-skill-lists BEFORE backfill-skill-taxonomy (map the split lists),
+//     and backfill-skill-levels AFTER it (it fills the rows taxonomy creates).
 //
 // The schema-bracketing steps are not here: the ones before the push
 // (backfill-company-interest-scope, backfill-setting-id, the expand pushes and
@@ -125,6 +126,10 @@ export const BACKFILLS = [
   // Map free-text skills onto the taxonomy (#1819); skipDuplicates makes a
   // re-run a no-op.
   { id: '0030-skill-taxonomy', script: 'prisma/backfill-skill-taxonomy.mjs', args: ['--apply'], once: false, optional: true, why: ALWAYS_OPTIONAL },
+  // Legacy User.skillLevels onto the UserSkill rows 0030 created (#1822).
+  // AFTER 0030. Fills only a row with no level and no history, so a re-run is
+  // a no-op and a level set or cleared since is never overwritten.
+  { id: '0034-skill-levels', script: 'prisma/backfill-skill-levels.mjs', args: ['--apply'], once: false, optional: true, why: 'New in #1822; optional like every skill backfill — the JSON column stays the written record until the contract step.' },
   // Document review chain (#1859): documents older than Document.reviewStatus
   // read PENDING; the ones that never entered a chain (no DocumentReview row)
   // become APPROVED. Only updates PENDING rows without a review step, so a

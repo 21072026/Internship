@@ -21,7 +21,11 @@ dictionary. No base string carries a placeholder.
   `src/i18n/server.ts` (used by `getServerDictionary()` and the root layout's client
   payload — so no `useT()` call site changes) and `emailDictionary()`.
 - Write: `GET`/`PUT /api/admin/terminology` (`org.settings.write`, optional
-  `programId` of the caller's own org; another org's programme is 404).
+  `programId` of the caller's own org; another org's programme is 404; a PUT from
+  an org without the `mentorship` capability is refused). The admin form is the
+  Terminology card on `/admin/settings` (`src/components/admin/TerminologyCard.tsx`,
+  org layer only), whose rows are labelled from the catalogue so a renamed noun
+  never renames its own label.
 
 ## Rules
 
@@ -40,6 +44,7 @@ dictionary. No base string carries a placeholder.
 
 ## Not done yet
 
+- A programme picker in the admin card (the API takes `programId` already).
 - A programme-scoped page: request pages resolve the **org** scope; a programme value
   reaches a caller that resolves `{ orgId, programId }` itself.
 - Turkish inflected forms beyond the four (genitive/dative…) — a catalogue extension.

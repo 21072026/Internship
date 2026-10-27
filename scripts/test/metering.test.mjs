@@ -184,7 +184,10 @@ test('the billing metrics are recomputed, the volume metrics are counted', () =>
 
   // The rollup only ever recomputes the COMPUTED ones — the list it iterates
   // is derived from the catalogue rather than typed out a second time.
-  assert.deepEqual([...COMPUTED_METRICS].sort(), ['ACTIVE_MATCHED_PAIRS', 'ADMIN_SEATS']);
+  assert.deepEqual(
+    [...COMPUTED_METRICS].sort(),
+    ['ACTIVE_MATCHED_PAIRS', 'ADMIN_SEATS', 'AI_CALLS', 'BROADCAST_RECIPIENTS', 'COMPANIES', 'PROGRAMS'],
+  );
   assert.equal(
     COMPUTED_METRICS.every((m) => USAGE_METRICS[m].kind === 'COMPUTED'),
     true,

@@ -124,6 +124,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Program journey steps (#1852). ProgramStepRun is reached through its step
   // and carries no orgId of its own — deliberately unregistered.
   'ProgramStep',
+  // Group sessions / office hours (#1856). EventRegistration is reached through
+  // its event and carries no orgId of its own — deliberately unregistered.
+  'ProgramEvent',
   // Brute-force lockouts (#1541). Rows are written by the sign-in path, which
   // runs outside any tenant scope (there is no session yet) and stamps orgId
   // itself; listing this here is what keeps one tenant's admin from seeing or
@@ -340,6 +343,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // so once MT_ENFORCE_ISOLATION is on they must pass `orgId` themselves or
   // run in an explicit context — otherwise they silently see zero rows.
   'DomainEvent',
+  // Stage automation (#1703): a tenant's rules and their run log. The evaluator
+  // runs in the worker with no session and passes orgId itself.
+  'AutomationRule',
+  'AutomationRun',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a

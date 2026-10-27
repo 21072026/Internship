@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { prisma } from '@/lib/prisma';
 import { TERM_DEFAULTS, TERM_TOKENS, parseTerminology, serializeTerminology } from '@/lib/terminology';
 import { resolveTerminology } from '@/lib/terminology.server';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // The org's (or one programme's) nouns (#1629): GET reads the stored document
 // for a scope, PUT replaces it. One `terminology` setting row per layer, written
@@ -55,6 +56,10 @@ export async function PUT(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const orgId = await settingsOrgOf(session);
+  // The nouns are the internship product's; a MARKETING tenant's come from its
+  // vertical overlay and a stored value would never be read (terminologyFor).
+  const refused = await requireCapability(orgId, 'mentorship');
+  if (refused) return refused;
 
   return withTenantScope(session, async () => {
     const scope = await scopeOf(orgId, parsed.data.programId ?? null);

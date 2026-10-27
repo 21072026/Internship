@@ -19,6 +19,7 @@ import {
   type LucideIcon,
   ShieldAlert,
   FileSearch,
+  ServerCog,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -168,6 +169,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
+  // The operations console (#1607). The default organization's ADMIN may open
+  // it too (the mail queue's operator rule); the link stays with the super admin.
+  { href: '/admin/operations', icon: ServerCog, key: 'operations', superAdminOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },

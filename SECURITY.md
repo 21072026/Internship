@@ -7,6 +7,21 @@ from you than read about it later.
 The security *model* — what protects what — is documented further down, under
 [Security overview](#security-overview).
 
+Three companion documents, for the questions this file does not answer:
+
+- [`docs/trust/vulnerability-disclosure.md`](docs/trust/vulnerability-disclosure.md)
+  — the same reporting channel, plus the parts a security reviewer asks to see
+  in writing: which environments are in scope, the **safe harbour** for
+  good-faith research, and the disclosure timeline.
+- [`docs/trust/pentest.md`](docs/trust/pentest.md) — what has actually been
+  tested, what has never been examined, and which findings are **open right
+  now**. No external penetration test has been commissioned yet.
+- [`docs/trust/soc2-decision.md`](docs/trust/soc2-decision.md) — there is no
+  SOC 2 report and none is in progress; here is the costed decision instead.
+
+The machine-readable pointer to all of it is
+[`/.well-known/security.txt`](public/.well-known/security.txt).
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue.** That discloses the problem to everyone
@@ -48,6 +63,12 @@ We will tell you when the fix is live. If we disagree that a report is a
 vulnerability we will say so plainly and explain why, rather than letting the
 thread go quiet.
 
+Those are the targets for *your report*. Once an issue is confirmed and rated,
+the clock it runs on is the one in
+[`docs/trust/vulnerability-management.md`](docs/trust/vulnerability-management.md) —
+the remediation SLA, with a stated time budget per severity, the path taken when
+there is no upstream fix, and the scanning cadence behind it.
+
 ## Scope
 
 **In scope** — the application code in this repository, and the deployments at
@@ -56,9 +77,11 @@ thread go quiet.
 **Out of scope**
 
 - Known CVEs in third-party dependencies. Those are tracked through `npm audit`
-  and its CI gate; telling us a dependency has a published advisory tells us
-  nothing we don't have. Showing that one is *exploitable through this
-  application* is very much in scope.
+  and its CI gate, with the findings we knowingly carry and the reason for each
+  written down in
+  [`docs/security-exceptions.md`](docs/security-exceptions.md); telling us a
+  dependency has a published advisory tells us nothing we don't have. Showing
+  that one is *exploitable through this application* is very much in scope.
 - Automated-scanner output with no demonstrated impact.
 - Missing hardening headers or best practices with no path to exploitation.
 - Social engineering of maintainers or users.
@@ -90,6 +113,21 @@ like to be credited — or that you'd rather not be — when you report.
 
 This document summarizes the security model of Internship CRM and the controls
 added in the security-hardening epic (#182).
+
+## Supply chain
+
+Three artefacts answer the supply-chain half of a security questionnaire, and
+all three are fetchable without an account:
+
+| Artefact | Where | What it answers |
+|---|---|---|
+| **CycloneDX SBOM** | `/sbom.cdx.json` on any deployed environment (also a workflow artifact on every release build) | Every production package and version this build resolves from its lockfile, stamped with the app version and the exact commit |
+| **Third-party licence inventory** | [`docs/legal/third-party-licenses.md`](docs/legal/third-party-licenses.md) | Every production dependency's licence, and whether it is compatible with distributing under AGPL-3.0-or-later *and* with the commercial licence sold on top |
+| **Vulnerability management policy** | [`docs/trust/vulnerability-management.md`](docs/trust/vulnerability-management.md) | Per-severity remediation targets, the no-upstream-fix path, who decides, and the scanning cadence |
+
+Both the licence inventory and the audit gate run on every pull request, so a
+dependency with an incompatible or unresolvable licence, or a fixable
+high-severity advisory, cannot merge unnoticed.
 
 ## Authentication
 - **NextAuth (Credentials)** with JWT sessions. Passwords hashed with **bcrypt** (cost 12).
