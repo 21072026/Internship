@@ -336,6 +336,8 @@ Kurallar:
 | Uç | İzin | ORG_ADMIN | OBSERVER | PROGRAM_ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz |
 |---|---|---|---|---|---|---|
 | `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
+| `GET /api/requisitions/[id]/matches` (`/admin/requisitions/[id]`, #1401) | `user.read` | ✅ kendi org'unun talebi; yalnız rızalı aday havuzu (`CONSENTING_POOL_WHERE`) | ✅ aynı | **403** (`unscoped_subject` — talebe göre kapsam henüz verilmiyor, fail-closed) | **403** | 401 |
+| `POST /api/requisitions/[id]/shortlist` (#1401) | `company.write` | ✅ kendi org'u; rızasız aday **409 `no_consent`**, kapalı talep 409 | **403** | **403** | **403** (COMPANY kendi kısa listesini `/api/company/interests` ile yazar) | 401 |
 
 Org her zaman oturumdan gelir; süper-admin de burada yalnız kendi org'unu okur.
 Çalıştırılabilir hali: `e2e/admin-audit.spec.ts` (`@smoke`).
