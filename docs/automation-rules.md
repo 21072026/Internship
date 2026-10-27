@@ -102,7 +102,32 @@ per-person caps, cooldown, the dormancy-mail limits — is the nudge engine's
 paths and therefore the same unsubscribe check; there is no second opt-out check and
 no second segment vocabulary.
 
+## The admin API (#1704)
+
+Every route checks `requirePermission('org.settings.write')` **in the handler** (an
+org admin), takes the org from the session and answers **404** for another org's rule.
+All of `/api/admin/automations*` is on the demo write blocklist.
+
+| route | |
+|---|---|
+| `GET /api/admin/automations` | rules (display order), the org's stages (`resolvePipelineStages`, custom ones included, with `isOutcome`), the pickers' tags / document requirements / goal templates |
+| `POST /api/admin/automations` | create — `validateRuleForOrg()` (allowlist + stage is the org's + every named row is the org's); always stored **disabled** |
+| `PATCH /api/admin/automations/[id]` | any subset, re-validated whole. Changing what the rule does clears `lastSimulatedAt`; switching it **on** without a dry run since → `409 simulate_first` |
+| `DELETE /api/admin/automations/[id]` | the rule and its runs |
+| `POST /api/admin/automations/reorder` | `{ ids }` — display order only; the engine runs every matching rule |
+| `POST /api/admin/automations/[id]/simulate` | the dry run (below); `{ draft }` judges unsaved edits without stamping |
+| `GET /api/admin/automations/runs` | the run log, newest first, `?ruleId=`, keyset `?before=` |
+
+### The dry run: `src/lib/automation/simulate.ts`
+
+Replays the rule against the org's last N (default 200, max 500) real `StatusChange`
+rows: trigger match, conditions (`daysInFromStage` from the relation's own recorded
+stage entries), and the outcome-stage skip — the live engine's verdicts on the same
+inputs. **It executes nothing by construction**: `simulate.ts` imports `./rule` and
+nothing else, and the route's module graph never reaches the engine, an action
+handler, `notify` or a mailer (`e2e/automation-builder.unit.spec.ts` pins the import
+lists). The only write is the rule's `lastSimulatedAt`.
+
 ## Not yet
 
 - Retention of `AutomationRun` rows (a retention-registry entry) — follow-up.
-- The builder, dry run and run log (#1704).
