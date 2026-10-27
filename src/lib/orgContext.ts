@@ -340,6 +340,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // so once MT_ENFORCE_ISOLATION is on they must pass `orgId` themselves or
   // run in an explicit context — otherwise they silently see zero rows.
   'DomainEvent',
+  // The webhook delivery log (#1695): one tenant's attempts against its own
+  // endpoints. The delivery job runs with no session and stamps `orgId` from
+  // the hook; the admin readers scope by the caller's org explicitly.
+  'WebhookDelivery',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a

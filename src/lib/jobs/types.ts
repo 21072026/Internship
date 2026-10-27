@@ -142,6 +142,9 @@ export interface JobPayloadMap {
   /// Names only — the event is read from its `DomainEvent` row and the handler
   /// is resolved by `subscriber` name when the job runs, never serialised.
   'event.deliver': { eventId: string; subscriber: string };
+  /// One (event × webhook subscription) delivery (#1695, src/lib/webhookDelivery.ts).
+  /// Each attempt writes a `WebhookDelivery` row; the queue's backoff spaces retries.
+  'webhook.deliver': { eventId: string; webhookId: string };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".

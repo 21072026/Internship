@@ -291,6 +291,7 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   domainEvents            DomainEvent[]
+  webhookDeliveries       WebhookDelivery[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
   externalProfileLinks    ExternalProfileLink[]
@@ -3082,28 +3083,80 @@ model CandidateOutreach {
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
 // POSTs (HMAC-SHA256 of the body in the X-Signature header).
 model Webhook {
-  id        String        @id @default(cuid())
+  id                  String            @id @default(cuid())
   // The tenant this webhook belongs to (#2357). Nullable + backfilled to the
   // default org so existing rows keep working; every dispatch filters by it, so
   // one tenant's event never fires another tenant's endpoint.
-  orgId     String?
-  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  url       String
-  secret    String
-  events    Json          @default("[]")
-  active    Boolean       @default(true)
-  createdAt DateTime      @default(now())
+  orgId               String?
+  org                 Organization?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  url                 String
+  secret              String
+  events              Json              @default("[]")
+  active              Boolean           @default(true)
+  createdAt           DateTime          @default(now())
   // A subscription a connector made for itself through POST /api/v1/hooks
   // (#2002): the key that owns it — the only key that may list or delete it —
   // and where it came from (`admin` | `api`). Both null on every admin-created
   // row; additive and nullable on purpose, never a re-key of Webhook. A
   // revoked or expired owner key stops its deliveries (src/lib/webhooks.ts).
-  apiKeyId  String?
-  apiKey    ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-  source    String?       @db.VarChar(20)
+  apiKeyId            String?
+  apiKey              ApiKey?           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  source              String?           @db.VarChar(20)
+  // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
+  // `consecutiveFailures` and `failingSince` describe the current failure
+  // streak (reset by any 2xx); past 20 failures or 72h without a success the
+  // hook is auto-disabled: `disabledAt` + `disabledReason` are stamped once,
+  // the relay skips it, and only an admin's explicit re-enable clears them.
+  // Additive and defaulted — never a re-key of Webhook.
+  consecutiveFailures Int               @default(0)
+  failingSince        DateTime?
+  lastSuccessAt       DateTime?
+  disabledAt          DateTime?
+  disabledReason      String?           @db.VarChar(191)
+  deliveries          WebhookDelivery[]
 
   @@index([orgId, active])
   @@index([apiKeyId])
+}
+
+// One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
+// three times and then 200 leaves four rows, the last one SUCCESS. Written
+// only by src/lib/webhookDelivery.ts. `deliveryId` is the stable
+// `X-Delivery-Id` header — the same for every attempt and every replay of one
+// (event × subscription), so a receiver can dedupe. `responseBody` is
+// truncated (WEBHOOK_RESPONSE_BODY_LIMIT): a partner echoing a 2 MB error page
+// must not fill the database. Goes with its event when retention prunes it.
+model WebhookDelivery {
+  id           String                @id @default(cuid())
+  orgId        String?
+  org          Organization?         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  webhookId    String
+  webhook      Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventId      String
+  event        DomainEvent           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventName    String                @db.VarChar(96)
+  deliveryId   String                @db.VarChar(64)
+  attempt      Int
+  status       WebhookDeliveryStatus @default(PENDING)
+  responseCode Int?
+  responseBody String?               @db.Text
+  error        String?               @db.Text
+  durationMs   Int?
+  createdAt    DateTime              @default(now())
+
+  @@index([webhookId, createdAt])
+  @@index([eventId])
+  @@index([orgId, createdAt])
+}
+
+// PENDING: the attempt is in flight (a row left PENDING is an attempt whose
+// process died). FAILED: this attempt failed and another one is scheduled.
+// DEAD: no further attempt — a 4xx, a refused URL or the last retry.
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DEAD
 }
 
 // THE event table (#1691): one append-only row per domain event the product
@@ -3117,20 +3170,21 @@ model Webhook {
 // `orgId` / run in an explicit context. Pruned by the `domainEvent` entry of
 // the retention registry (`domainEventRetentionDays`). docs/domain-events.md.
 model DomainEvent {
-  id            String        @id @default(cuid())
-  orgId         String?
-  org           Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  name          String        @db.VarChar(96)
-  version       Int           @default(1)
-  payload       Json
+  id                String            @id @default(cuid())
+  orgId             String?
+  org               Organization?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name              String            @db.VarChar(96)
+  version           Int               @default(1)
+  payload           Json
   // 'user' | 'system' | 'apikey' (EVENT_ACTOR_TYPES)
-  actorId       String?
-  actorType     String?       @db.VarChar(16)
+  actorId           String?
+  actorType         String?           @db.VarChar(16)
   // A Prisma model name (the catalogue entry's subjectType) + that row's id.
-  subjectType   String?       @db.VarChar(64)
-  subjectId     String?
-  correlationId String?
-  createdAt     DateTime      @default(now())
+  subjectType       String?           @db.VarChar(64)
+  subjectId         String?
+  correlationId     String?
+  createdAt         DateTime          @default(now())
+  webhookDeliveries WebhookDelivery[]
 
   @@index([orgId, createdAt])
   @@index([name, createdAt])

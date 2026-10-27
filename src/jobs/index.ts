@@ -14,6 +14,7 @@ import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
 import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { runEventDelivery } from '@/lib/events/emit';
+import { runWebhookDelivery } from '@/lib/webhookDelivery';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -74,6 +75,16 @@ export function registerAllJobs(): void {
     const outcome = await runEventDelivery(payload);
     return { [outcome]: 1 };
   }, { timeoutMs: 60_000 });
+
+  // One webhook POST for one (event × subscription) (#1695). Each attempt
+  // writes its own WebhookDelivery row and every attempt carries the same
+  // X-Delivery-Id, so a rerun is a second delivery the receiver dedupes —
+  // at-least-once, documented in docs/api-explorer.md. A FAILED attempt throws
+  // and the backoff schedules the next; a DEAD one settles the job.
+  registerJob('webhook.deliver', async (payload, { attempt, job }) => {
+    const outcome = await runWebhookDelivery(payload, attempt, job.maxAttempts);
+    return { [outcome]: 1 };
+  }, { timeoutMs: 30_000 });
 
   // Each feed runs under its own claim (one conditional UPDATE), and a feed
   // whose lastRunAt the first run already moved is no longer due — so a
