@@ -2,13 +2,14 @@ import { prisma } from '@/lib/prisma';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { orgWhere } from '@/lib/tenantFilter';
 import { TRIAL_ACTIVE_STAGE_KEY } from '@/lib/programTemplates';
-import { dropWindows, trialInactive, usageDropVerdict, usageSignalSettings } from '@/lib/usageRule';
+import { dropWindows, freePlanQuota, freeQuotaExceeded, isFreePlan, trialInactive, usageDropVerdict, usageSignalSettings } from '@/lib/usageRule';
+import { currentPeriod, periodRange } from '@/lib/meteringRules';
 
 // The Prisma half of the usage signals (#2449); the rule is src/lib/usageRule.ts.
-// Read by the attention queue (src/lib/mentorAttention.ts) — the signals are two
+// Read by the attention queue (src/lib/mentorAttention.ts) — the signals are three
 // more reasons there, never a screen of their own, and they never move a stage.
 
-export type UsageReason = 'usage_drop' | 'trial_inactive';
+export type UsageReason = 'usage_drop' | 'trial_inactive' | 'free_quota_exceeded';
 
 export type UsageNote = {
   /** False while the org has no usage row at all: no signal is computed. */
@@ -76,6 +77,33 @@ export async function usageSignalsFor(
       const startDay = Date.UTC(r.trialStartedAt!.getUTCFullYear(), r.trialStartedAt!.getUTCMonth(), r.trialStartedAt!.getUTCDate());
       const used = rows.filter((u) => u.companyId === r.companyId && u.date.getTime() >= startDay).reduce((s, u) => s + u.transactions, 0);
       if (trialInactive({ trialStartedAt: r.trialStartedAt, usageSinceStart: used, now, settings })) add(r.id, 'trial_inactive');
+    }
+  }
+
+  // Free plan past its quota this month (#2846): an upsell signal on every
+  // record of the account, in a trial or not. Only accounts the feed has
+  // reported a free plan for are summed.
+  const accountIds = [...new Set(relations.map((r) => r.companyId).filter((id): id is string => !!id))];
+  if (accountIds.length > 0) {
+    const free = await prisma.company.findMany({
+      where: { ...tenant, id: { in: accountIds }, productPlan: { not: null } },
+      select: { id: true, productPlan: true },
+    });
+    const freeIds = free.filter((c) => isFreePlan(c.productPlan)).map((c) => c.id);
+    if (freeIds.length > 0) {
+      const quota = freePlanQuota(await resolveSettingRaw('freePlanTransactionQuota', { orgId }));
+      const month = periodRange(currentPeriod(now));
+      const used = await prisma.companyUsage.groupBy({
+        by: ['companyId'],
+        where: { ...tenant, companyId: { in: freeIds }, date: { gte: month.gte, lt: month.lt } },
+        _sum: { transactions: true },
+      });
+      const over = new Set(
+        used
+          .filter((u) => freeQuotaExceeded({ plan: free.find((c) => c.id === u.companyId)?.productPlan, transactionsThisMonth: u._sum.transactions ?? 0, quota }))
+          .map((u) => u.companyId),
+      );
+      for (const r of relations) if (r.companyId && over.has(r.companyId)) add(r.id, 'free_quota_exceeded');
     }
   }
 

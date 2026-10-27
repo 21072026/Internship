@@ -2004,6 +2004,14 @@ model Company {
   // external id X?"). Contracts: docs/usage-feed.md and
   // docs/integrations/account-events.md.
   externalId      String?       @db.VarChar(191)
+  // The account's plan in the upstream product (#2846), as the account-event
+  // feed last reported it (`plan`, docs/integrations/account-events.md):
+  // lower-cased, null = never reported. `productPlanAt` is the `occurred_at`
+  // of the event that wrote it, so an older event arriving late never puts a
+  // stale plan back. Read by the `free_quota_exceeded` signal
+  // (src/lib/usageRule.ts); it gates nothing and is never billing.
+  productPlan     String?       @db.VarChar(40)
+  productPlanAt   DateTime?
   // The slug of the registered integration source (`IntegrationSource.slug`)
   // whose account event CREATED this row (#2959), stamped in the same insert by
   // the account-event writer (src/lib/accountEventIngest.ts). NULL for every

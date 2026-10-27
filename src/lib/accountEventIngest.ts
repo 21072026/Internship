@@ -343,9 +343,12 @@ async function apply(ctx: Ctx): Promise<Applied> {
       detail: `${source.slug}: ${event.event_type} (recorded; this event type has no funnel mapping)`,
     });
     // Recorded, but what it says about where the account came from still counts.
-    if (event.referral_code || event.acquisition_source) {
+    if (event.referral_code || event.acquisition_source || event.plan) {
       const known = await findAccounts(ctx);
-      if (known.length === 1) await fillLeadSource(ctx, known[0].id);
+      if (known.length === 1) {
+        await fillLeadSource(ctx, known[0].id);
+        await recordPlan(ctx, known[0].id);
+      }
     }
     return { outcome: 'recorded', detail: event.event_type };
   }
@@ -368,6 +371,7 @@ async function apply(ctx: Ctx): Promise<Applied> {
     if (!companyId) return { outcome: 'unknown_account' };
     const result = await moveAccount(ctx, companyId, intent, stages);
     await fillLeadSource(ctx, companyId);
+    await recordPlan(ctx, companyId);
     return result;
   }
 
@@ -382,6 +386,7 @@ async function apply(ctx: Ctx): Promise<Applied> {
   await fillGaps(ctx, companyId);
   const result = await moveAccount(ctx, companyId, intent, stages);
   await fillLeadSource(ctx, companyId);
+  await recordPlan(ctx, companyId);
   return result;
 }
 
@@ -482,6 +487,21 @@ async function fillGaps(ctx: Ctx, companyId: string): Promise<void> {
     { authoritative: false },
   );
   if (plan.changed.length > 0) await db.company.update({ where: { id: companyId }, data: plan.changes });
+}
+
+/**
+ * The account's plan at the source (#2846). The source owns this field, so it
+ * overwrites — but only forward in time: the write is conditional on the
+ * stored `productPlanAt` not being newer than this event, so a late or replayed
+ * older event never puts a stale plan back. No `plan` on the event = no opinion.
+ */
+async function recordPlan(ctx: Ctx, companyId: string): Promise<void> {
+  const { db, event } = ctx;
+  if (!event.plan) return;
+  await db.company.updateMany({
+    where: { id: companyId, OR: [{ productPlanAt: null }, { productPlanAt: { lte: event.occurred_at } }] },
+    data: { productPlan: event.plan, productPlanAt: event.occurred_at },
+  });
 }
 
 /**

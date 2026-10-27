@@ -29,6 +29,8 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   // trial nobody started using — still a conversation to have.
   usage_drop: 'danger',
   trial_inactive: 'warning',
+  // Purple: an opportunity, not a problem — a free account outgrowing its plan (#2846).
+  free_quota_exceeded: 'purple',
   // Red: a paying customer is on their way out (#2841).
   cancellation_pending: 'danger',
   // Amber: still a conversation to have, with a date on it (#2843).
@@ -74,6 +76,7 @@ export function MentorAttentionQueue({
     evaluation_due: labels.evaluationDue,
     usage_drop: labels.usageDrop,
     trial_inactive: labels.trialInactive,
+    free_quota_exceeded: labels.freeQuotaExceeded,
     cancellation_pending: labels.cancellationPending,
     decision_window_closing: labels.decisionWindowClosing,
   };

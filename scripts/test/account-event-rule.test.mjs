@@ -225,4 +225,12 @@ test('the v1 envelope: ids lower-cased, dropped fields stripped, a changed versi
   assert.ok(!accented.success);
   assert.deepEqual(accented.error.issues.map((i) => i.path.join('.')), ['external_id']);
   assert.match(accented.error.issues[0].message, /printable ASCII/);
+
+  // #2846: `plan` is optional, normalized, and a malformed key is refused.
+  assert.equal(ok.data.plan, null);
+  assert.equal(accountEventSchema.safeParse({ ...base, plan: ' Free ' }).data.plan, 'free');
+  assert.equal(accountEventSchema.safeParse({ ...base, plan: '' }).data.plan, null);
+  const badPlan = accountEventSchema.safeParse({ ...base, plan: 'free plan' });
+  assert.ok(!badPlan.success);
+  assert.deepEqual(badPlan.error.issues.map((i) => i.path.join('.')), ['plan']);
 });

@@ -127,3 +127,40 @@ export function trialInactive(input: { trialStartedAt: Date | null; usageSinceSt
   const elapsed = input.now.getTime() - input.trialStartedAt.getTime();
   return elapsed >= input.settings.trialDays * DAY_MS && input.usageSinceStart <= 0;
 }
+
+// ── Free plan over its quota (#2846) ────────────────────────────────────────
+//
+// An upsell signal, not a limit: an account on the upstream product's free plan
+// that did more transactions this calendar month (UTC) than the tenant's quota
+// gets `free_quota_exceeded` on its open funnel record. Nothing is blocked,
+// billed or moved — this CRM does not meter the upstream product, and the
+// billing meter (src/lib/meteringRules.ts) is a different thing entirely. Only
+// the month arithmetic is borrowed from there, so there is one definition of
+// "this month" in the tree.
+
+/** The plan key that means "free", as the account-event feed sends `plan`. */
+export const FREE_PLAN_KEY = 'free';
+
+/** `plan` as stored: trimmed, lower-cased, ≤ 40 of `a–z 0–9 . _ -`; null otherwise. */
+export function normalizePlanKey(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  const key = raw.trim().toLowerCase();
+  return /^[a-z0-9._-]{1,40}$/.test(key) ? key : null;
+}
+
+export function isFreePlan(plan: string | null | undefined): boolean {
+  return normalizePlanKey(plan) === FREE_PLAN_KEY;
+}
+
+export const FREE_PLAN_QUOTA_DEFAULT = 10;
+
+/** The `freePlanTransactionQuota` setting: an integer 1…1,000,000, else the default. */
+export function freePlanQuota(raw: string | null | undefined): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 1_000_000 ? n : FREE_PLAN_QUOTA_DEFAULT;
+}
+
+/** Past the quota means MORE than it: the quota itself is still included. */
+export function freeQuotaExceeded(input: { plan: string | null | undefined; transactionsThisMonth: number; quota: number }): boolean {
+  return isFreePlan(input.plan) && input.transactionsThisMonth > input.quota;
+}

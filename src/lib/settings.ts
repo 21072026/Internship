@@ -335,6 +335,11 @@ export const SETTING_DEFAULTS = {
   usageDropThresholdPct: '40',
   usageBaselineDays: '60',
   trialActivationDays: '7',
+  // Free-plan upsell signal (#2846, src/lib/usageRule.ts): an account the
+  // account-event feed reports on the `free` plan that did MORE transactions
+  // than this in the current calendar month (UTC) gets `free_quota_exceeded`
+  // in its owner's attention queue. A signal only — nothing is blocked or billed.
+  freePlanTransactionQuota: '10',
   // Company → candidate message requests (#1840, src/lib/outreachQuota.ts):
   // APPROVED requests per company per calendar month (UTC). A company's own
   // `Company.quota`, when set, overrides it. Checked when a request is made.
@@ -432,6 +437,7 @@ export const SETTING_SCHEMA = {
   crmBccEnabled: { type: 'enum', values: ['', 'true', 'false'], scopes: O },
   crmBccVersion: { type: 'number', scopes: O },
   usageDropThresholdPct: { type: 'number', scopes: O },
+  freePlanTransactionQuota: { type: 'number', scopes: O },
   usageBaselineDays: { type: 'number', scopes: O },
   trialActivationDays: { type: 'number', scopes: O },
   outreachMonthlyQuota: { type: 'number', scopes: O },
