@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // The meeting, if one was created: off both calendars through the one
       // cancel path, the row kept for its notes (#1980).
       if (current.meetingId) {
-        await cancelMeetingRows({ ids: [current.meetingId], actorId: session.user.id, reason, now });
+        await cancelMeetingRows({ ids: [current.meetingId], actorId: session.user.id, reason, now, orgId });
       }
       await prisma.auditLog.create({
         data: {

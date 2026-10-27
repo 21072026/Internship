@@ -8,3 +8,9 @@
   but only the score route raised it; the close route needed it too, guarded so a panel
   already complete through scores is not announced twice.
 - `*.unit.spec.ts` run without the dev server: `BASE_URL=http://localhost:9 npx playwright test …`.
+- **Put the emit in the shared helper, not the route.** `meeting.cancelled` lives in
+  `cancelMeetingRows()` (`src/lib/meetingCancel.ts`), so the meeting PATCH and the
+  interview-request cancel cannot diverge. The helper now takes `orgId` explicitly —
+  `Meeting` has no `orgId` column to read it from.
+- **A DELETE is a cancellation from the receiver's side** when the row was still
+  `SCHEDULED`; deleting an already-cancelled row is not announced again.
