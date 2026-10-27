@@ -10,10 +10,17 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { resolveOrgId } from '@/lib/orgScope';
 import { isStageOverdue } from '@/lib/stageClock';
+import { interviewRequestActorWhere } from '@/lib/interviewRequests';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Widest window a single request may ask for, so month-hopping can't pull a decade. */
 const MAX_RANGE_DAYS = 400;
+/**
+ * The roles with a calendar, spelled out (#2005) — the allowlist idiom of
+ * GET /api/meetings. An unlisted role (SOURCE, AFFILIATE, anything added later)
+ * is refused, never dropped into the mentee branch to "see nothing" by luck.
+ */
+const CALENDAR_ROLES = new Set(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY']);
 
 // The window on screen. Omitting both bounds keeps the pre-#1110 contract —
 // every stored event the caller can see, unfiltered — because API clients (and
@@ -44,8 +51,23 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  if (!CALENDAR_ROLES.has(session.user.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   return await withTenantScope(session, async () => {
   const { id, role } = session.user;
+  // A COMPANY sees its own interview schedule and nothing else (#2005): the
+  // meetings scheduled from ITS interview requests (#1844), inside its own
+  // org. No mentor↔mentee meeting, no stage deadline, no logged interaction
+  // and no project call — those belong to the pair and the programme. A
+  // company login without a company assignment has no schedule at all.
+  // The filter is the interview rule's own COMPANY branch, not a copy of it.
+  const isCompany = role === 'COMPANY';
+  const companyOrgId = resolveOrgId(session);
+  const interviewWhere =
+    isCompany && companyOrgId
+      ? interviewRequestActorWhere({ role, userId: id, orgId: companyOrgId, companyId: session.user.companyId })
+      : null;
+  if (isCompany && !interviewWhere) return NextResponse.json({ events: [], from: null, to: null });
   const { from, to, seriesFrom, seriesTo } = parseRange(new URL(request.url));
   // An absent bound means "no bound" — see parseRange.
   const inWindow = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
@@ -88,15 +110,22 @@ export async function GET(request: Request) {
         seriesId: null,
         status: 'SCHEDULED',
         scheduledAt: { not: null, ...inWindow },
-        relation: relWhere,
+        ...(isCompany
+          ? {
+              relation: withinTenant<Prisma.MentorshipRelationWhereInput>({}, tenant),
+              interviewRequest: { is: interviewWhere! },
+            }
+          : { relation: relWhere }),
       },
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
       orderBy: { scheduledAt: 'asc' },
     }),
-    prisma.mentorshipRelation.findMany({
-      where: { ...relWhere, stageDeadline: { not: null, ...inWindow } },
-      include: { mentee: { select: { fullName: true } } },
-    }),
+    isCompany
+      ? Promise.resolve([])
+      : prisma.mentorshipRelation.findMany({
+          where: { ...relWhere, stageDeadline: { not: null, ...inWindow } },
+          include: { mentee: { select: { fullName: true } } },
+        }),
     // Logged "Meeting" interactions are past meetings a mentor recorded without
     // going through the scheduling flow — surface them so the calendar isn't
     // empty when the team logs meetings as interactions instead.
@@ -106,16 +135,20 @@ export async function GET(request: Request) {
     // meeting would sit on the calendar twice. A log whose meeting was later
     // deleted has meetingId back to null (SetNull) and returns here, which is
     // right: it is then the only remaining record of that meeting.
-    prisma.interactionLog.findMany({
-      where: { type: 'Meeting', meetingId: null, ...(from || to ? { date: inWindow } : {}), relation: relWhere },
-      include: { relation: { include: { mentee: { select: { fullName: true } } } } },
-      orderBy: { date: 'asc' },
-    }),
+    isCompany
+      ? Promise.resolve([])
+      : prisma.interactionLog.findMany({
+          where: { type: 'Meeting', meetingId: null, ...(from || to ? { date: inWindow } : {}), relation: relWhere },
+          include: { relation: { include: { mentee: { select: { fullName: true } } } } },
+          orderBy: { date: 'asc' },
+        }),
     // The recurring project meetings this user is expected at: every active rule
     // on a project they are a member of, or that one of their relations carries.
     // A standing 1:1 (#2013) hangs off a relation instead: both of its
     // participants see it, scoped exactly like the relation's own meetings.
-    prisma.meetingSeries.findMany({
+    isCompany
+      ? Promise.resolve([])
+      : prisma.meetingSeries.findMany({
       where: {
         active: true,
         OR: [

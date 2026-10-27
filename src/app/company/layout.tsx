@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
-import { LayoutDashboard, Sparkles, BarChart3, BriefcaseBusiness } from 'lucide-react';
+import { LayoutDashboard, Sparkles, BarChart3, BriefcaseBusiness, CalendarDays } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -68,6 +68,13 @@ export default async function CompanyLayout({ children }: { children: React.Reac
             >
               <BriefcaseBusiness className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
               {t.nav.requisitions}
+            </Link>
+            <Link
+              href="/company/calendar"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+            >
+              <CalendarDays className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+              {t.nav.calendar}
             </Link>
             {showTalentPool && (
               <Link
