@@ -1645,6 +1645,12 @@ const en = {
     matchedOnTitle: 'Matches the target position', relatedSkill: '{skill} (for {via})', inFunnel: 'In the funnel: {stage}', addToShortlist: 'Add to shortlist',
     errors: { noConsent: 'This candidate has not agreed to be shown to companies.', closed: 'This requisition is closed.', conflict: 'Someone else changed this application first. The list has been refreshed.', failed: 'The shortlist could not be changed.' },
   },
+  candidateHiring: {
+    title: 'Hiring', queueLink: 'Interview requests queue', empty: 'No company has shown interest in this candidate yet.', loadFailed: 'Hiring information could not be loaded.',
+    applications: 'Applications', interests: 'Company interest', interviews: 'Interview requests', noRequisition: 'No specific role',
+    interestStatuses: { INTERESTED: 'Interested', SHORTLISTED: 'Shortlisted', PASS: 'Passed' },
+    requested: 'Requested {when}', proposedSlots: 'Proposed times', decidedBy: 'Decided by {name} {when}',
+  },
   companyForm: {
     name: 'Company Name',
     // Shown when a field runs past what the column can hold (#1433).
@@ -6979,7 +6985,7 @@ const en = {
       videoCalls: { t: 'Video calls in the app', d: 'Start a call with a mentee, a project team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant \u2014 no accounts, no install, and no time limit. If a call has to fall back to the free public room, the panel says so before anyone joins, with a one-click way to keep talking. The link is emailed to everyone invited and works in any browser. Prefer your own tool? A pasted Zoom, Meet, Teams or Slack huddle link is used as is, and the panel says where it opens.' },
       demo: { t: 'Public live demo', d: 'A writable demo instance with shared accounts and fully synthetic data: click through the pipeline, log interactions and create projects. Resets twice a day; nothing you type is real or kept.' },
       publicProfiles: { t: 'Shareable public profiles', d: 'Mentees and mentors can opt in to a public, PII-free profile page — and when its link is shared on LinkedIn, WhatsApp or Slack, it unfurls into a branded card with name, role, location and top skills.' },
-      interviewRequests: { t: 'Shortlists & interview approvals', d: 'Companies shortlist candidates per requisition and request interviews; the program team or assigned mentor reviews each request before scheduling.' },
+      interviewRequests: { t: 'Shortlists & interview approvals', d: 'Companies shortlist candidates per requisition and request interviews; the program team or assigned mentor reviews each request before scheduling. Every candidate page shows a Hiring card with the companies, roles, applications and interview requests in one place.' },
       aiPackage: { t: 'AI assistants (Premium)', d: 'CV feedback and interview prep for mentees, interaction-log summaries for mentors, AI-assisted matching, and themes across evaluation comments and weekly-report blockers for admins — each theme linked to the rows behind it. All consent- and quota-gated.' },
       security: { t: 'Two-factor auth & session control', d: 'Role-based 2FA enforcement, single-use recovery codes for a lost authenticator, session timeouts and "sign out of all devices".' },
       trustedDevices: { t: 'Stay signed in, safely', d: 'Tick "keep me signed in" and your own devices renew your session for you — each one listed, and revocable, from your account page.' },
@@ -11112,6 +11118,12 @@ const tr: Dict = {
     matchesEmpty: 'Bu pozisyona uyan, rızası olan bir aday henüz yok.', matchesFailed: 'Uyan adaylar yüklenemedi.',
     matchedOnTitle: 'Hedef pozisyon uyuyor', relatedSkill: '{skill} ({via} yerine)', inFunnel: 'Süreçte: {stage}', addToShortlist: 'Kısa listeye ekle',
     errors: { noConsent: 'Bu aday şirketlere gösterilmeyi kabul etmedi.', closed: 'Bu iş talebi kapalı.', conflict: 'Bu başvuruyu önce başka biri değiştirdi. Liste yenilendi.', failed: 'Kısa liste değiştirilemedi.' },
+  },
+  candidateHiring: {
+    title: 'İşe alım', queueLink: 'Mülakat talepleri kuyruğu', empty: 'Henüz hiçbir şirket bu adayla ilgilenmedi.', loadFailed: 'İşe alım bilgileri yüklenemedi.',
+    applications: 'Başvurular', interests: 'Şirket ilgisi', interviews: 'Mülakat talepleri', noRequisition: 'Belirli bir pozisyon yok',
+    interestStatuses: { INTERESTED: 'İlgileniyor', SHORTLISTED: 'Kısa listede', PASS: 'Geçildi' },
+    requested: 'Talep: {when}', proposedSlots: 'Önerilen saatler', decidedBy: 'Karar veren: {name} · {when}',
   },
   companyForm: {
     name: 'Şirket Adı',
@@ -16318,7 +16330,7 @@ const tr: Dict = {
       videoCalls: { t: 'Uygulama içinde görüntülü görüşme', d: 'Bir mentee, proje ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kişinin kaydının yanındaki yan panelde kendi Jitsi kiracımızda açılır \u2014 hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır. Kendi aracını mı tercih ediyorsun? Yapıştırılan bir Zoom, Meet, Teams veya Slack huddle bağlantısı olduğu gibi kullanılır ve panel nerede açılacağını söyler.' },
       demo: { t: 'Herkese açık canlı demo', d: 'Ortak hesaplar ve tamamen sentetik verilerle yazılabilir bir demo ortamı: süreçte gezinin, görüşme kaydı girin, proje oluşturun. Günde iki kez sıfırlanır; yazdığınız hiçbir şey gerçek değildir ve saklanmaz.' },
       publicProfiles: { t: 'Paylaşılabilir herkese açık profiller', d: 'Mentee ve mentörler isterlerse kişisel veri içermeyen herkese açık bir profil sayfası açabilir — linki LinkedIn, WhatsApp veya Slack’te paylaşıldığında isim, rol, konum ve öne çıkan becerileri gösteren markalı bir karta dönüşür.' },
-      interviewRequests: { t: 'Kısa liste ve mülakat onayları', d: 'Şirketler adayları iş talebi bazında kısa listeye alıp mülakat ister; program ekibi veya atanmış mentor her talebi planlamadan önce değerlendirir.' },
+      interviewRequests: { t: 'Kısa liste ve mülakat onayları', d: 'Şirketler adayları iş talebi bazında kısa listeye alıp mülakat ister; program ekibi veya atanmış mentor her talebi planlamadan önce değerlendirir. Her aday sayfasındaki İşe alım kartı şirketleri, pozisyonları, başvuruları ve mülakat taleplerini tek yerde gösterir.' },
       aiPackage: { t: 'AI asistanları (Premium)', d: 'Mentee’lere CV geri bildirimi ve mülakat hazırlığı, mentörlere etkileşim özeti, AI destekli eşleştirme ve yöneticilere değerlendirme yorumlarıyla haftalık rapor engellerindeki temalar — her tema arkasındaki satırlara bağlı. Hepsi rıza ve kota kapılı.' },
       security: { t: 'İki adımlı doğrulama & oturum kontrolü', d: 'Rol bazlı 2FA zorlama, doğrulayıcını kaybedersen tek kullanımlık kurtarma kodları, oturum zaman aşımı ve "tüm cihazlardan çıkış".' },
       trustedDevices: { t: 'Güvenle oturumda kal', d: '"Beni hatırla"yı işaretle, kendi cihazların oturumunu senin yerine yenilesin — her biri hesap sayfanda listelenir ve istediğinde iptal edilir.' },
@@ -20409,6 +20421,12 @@ const de: Dict = {
     matchesEmpty: 'Noch keine zustimmende Person passt zu dieser Stelle.', matchesFailed: 'Passende Kandidat:innen konnten nicht geladen werden.',
     matchedOnTitle: 'Zielposition passt', relatedSkill: '{skill} (statt {via})', inFunnel: 'Im Prozess: {stage}', addToShortlist: 'Zur Shortlist hinzufügen',
     errors: { noConsent: 'Diese Person hat der Anzeige für Unternehmen nicht zugestimmt.', closed: 'Diese Stellenanforderung ist geschlossen.', conflict: 'Jemand anderes hat diese Bewerbung zuerst geändert. Die Liste wurde aktualisiert.', failed: 'Die Shortlist konnte nicht geändert werden.' },
+  },
+  candidateHiring: {
+    title: 'Recruiting', queueLink: 'Warteschlange der Interviewanfragen', empty: 'Noch kein Unternehmen hat Interesse an dieser Person gezeigt.', loadFailed: 'Die Recruiting-Informationen konnten nicht geladen werden.',
+    applications: 'Bewerbungen', interests: 'Unternehmensinteresse', interviews: 'Interviewanfragen', noRequisition: 'Keine bestimmte Stelle',
+    interestStatuses: { INTERESTED: 'Interessiert', SHORTLISTED: 'Auf der Shortlist', PASS: 'Abgelehnt' },
+    requested: 'Angefragt {when}', proposedSlots: 'Vorgeschlagene Zeiten', decidedBy: 'Entschieden von {name} {when}',
   },
   companyForm: {
     name: 'Firmenname',
@@ -25616,7 +25634,7 @@ const de: Dict = {
       videoCalls: { t: 'Videoanrufe in der App', d: 'Starte mit einem Klick einen Anruf mit einem Mentee, einem Projektteam oder einem Chat \u2014 er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser. Lieber das eigene Tool? Ein eingefügter Zoom-, Meet-, Teams- oder Slack-Huddle-Link wird unverändert verwendet, und das Panel sagt, wo er sich öffnet.' },
       demo: { t: 'Öffentliche Live-Demo', d: 'Eine beschreibbare Demo-Instanz mit gemeinsamen Konten und vollständig synthetischen Daten: durch die Pipeline klicken, Interaktionen erfassen, Projekte anlegen. Wird zweimal täglich zurückgesetzt; nichts davon ist echt oder bleibt erhalten.' },
       publicProfiles: { t: 'Teilbare öffentliche Profile', d: 'Mentees und Mentoren können sich für eine öffentliche Profilseite ohne personenbezogene Daten entscheiden — wird ihr Link auf LinkedIn, WhatsApp oder Slack geteilt, entfaltet er sich zu einer Karte mit Name, Rolle, Ort und Top-Skills.' },
-      interviewRequests: { t: 'Shortlists & Interviewfreigaben', d: 'Unternehmen setzen Kandidaten je Stellenanforderung auf die Shortlist und fragen Interviews an; Programmteam oder zuständiger Mentor prüfen jede Anfrage vor der Planung.' },
+      interviewRequests: { t: 'Shortlists & Interviewfreigaben', d: 'Unternehmen setzen Kandidaten je Stellenanforderung auf die Shortlist und fragen Interviews an; Programmteam oder zuständiger Mentor prüfen jede Anfrage vor der Planung. Jede Kandidatenseite zeigt in einer Recruiting-Karte Unternehmen, Stellen, Bewerbungen und Interviewanfragen an einem Ort.' },
       aiPackage: { t: 'KI-Assistenten (Premium)', d: 'Lebenslauf-Feedback und Interviewvorbereitung für Mentees, Interaktionszusammenfassungen für Mentoren, KI-gestütztes Matching und Themen aus Bewertungskommentaren und Wochenbericht-Hindernissen für Admins — jedes Thema mit den Zeilen dahinter verknüpft. Alles einwilligungs- und kontingentgesteuert.' },
       security: { t: 'Zwei-Faktor-Auth & Sitzungskontrolle', d: 'Rollenbasierte 2FA-Durchsetzung, einmalig nutzbare Wiederherstellungscodes für einen verlorenen Authenticator, Sitzungs-Timeouts und „Auf allen Geräten abmelden".' },
       trustedDevices: { t: 'Sicher angemeldet bleiben', d: 'Aktiviere „Angemeldet bleiben“ und deine eigenen Geräte erneuern die Sitzung für dich — jedes einzeln aufgelistet und jederzeit widerrufbar.' },
