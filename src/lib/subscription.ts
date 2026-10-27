@@ -14,7 +14,7 @@
 // without changing behaviour is deliberate (#1731); moving the gates over is a
 // later task in the epic.
 
-import type { Subscription } from '@prisma/client';
+import type { Prisma, Subscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PremiumFeature } from '@/lib/entitlementsCatalog';
 import { ENTITLING_STATUSES, LEGACY_PLAN_MAP, PLANS, resolveEntitlements, type EntitlementResolution, type PlanKey } from '@/lib/plans';
@@ -40,15 +40,19 @@ function planKeyForLegacyPlan(plan: string | null | undefined): PlanKey {
 //
 // Safe to call concurrently: `orgId` is unique, so two racing creates end with
 // one row and one caught P2002, after which the loser reads the winner's row.
-export async function getOrCreateSubscription(orgId: string): Promise<Subscription> {
-  const existing = await prisma.subscription.findUnique({ where: { orgId } });
+//
+// `db` is a transaction client when the row must be born with its org — the
+// self-serve signup (#1749) creates org, admin and subscription together or
+// not at all.
+export async function getOrCreateSubscription(orgId: string, db: Prisma.TransactionClient = prisma): Promise<Subscription> {
+  const existing = await db.subscription.findUnique({ where: { orgId } });
   if (existing) return existing;
 
-  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
   if (!org) throw new Error(`getOrCreateSubscription: no organization ${orgId}`);
 
   try {
-    return await prisma.subscription.create({
+    return await db.subscription.create({
       data: {
         orgId,
         planKey: planKeyForLegacyPlan(org.plan),
@@ -60,7 +64,7 @@ export async function getOrCreateSubscription(orgId: string): Promise<Subscripti
     // Lost the race (or the row appeared some other way). Re-read rather than
     // reporting a failure: the only thing the caller asked for is a row, and
     // there is exactly one.
-    const row = await prisma.subscription.findUnique({ where: { orgId } });
+    const row = await db.subscription.findUnique({ where: { orgId } });
     if (row) return row;
     throw new Error(`getOrCreateSubscription: could not create or read a subscription for ${orgId}`);
   }
