@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**VPAT 2.1.4 and 3.2.6 close (#2864):** the shortcut sheet gets a \"Single-key shortcuts\" switch that turns the `?` binding off (per browser, `shortcuts.singleKey` in localStorage, read through `readSingleKeyShortcutsEnabled()` in `src/lib/shortcuts.ts`); the sheet stays reachable from the command palette. 3.2.6 is evidenced by `e2e/consistent-help.spec.ts`, which asserts the \"Report a problem\" button keeps one position across the admin, mentor and mentee shells. Both rows now read `Supports`; `npm run vpat:evidence` regenerated.",
+  "notes": {
+    "en": ["You can now turn off the single-key \"?\" shortcut from the keyboard shortcut list — handy with speech input."],
+    "tr": ["Tek tuşlu \"?\" kısayolunu artık klavye kısayolları listesinden kapatabilirsiniz — sesle yazarken işe yarar."],
+    "de": ["Das Einzeltasten-Kürzel „?“ lässt sich jetzt in der Liste der Tastenkürzel ausschalten — praktisch bei Spracheingabe."]
+  }
+}
