@@ -29,7 +29,8 @@ export function Providers({
 }: {
   children: React.ReactNode;
   locale: Locale;
-  dict: ClientDictionary;
+  /** The shell namespaces only (#2987) — segments add theirs through <I18nScope>. */
+  dict: Partial<ClientDictionary>;
   /** The request's vertical (#2501), resolved by the root layout. */
   vertical: VerticalKey;
   /** The request's organization brand (#2922); null = the vertical default. */

@@ -11,14 +11,16 @@
     "seed": "node prisma/seed.mjs"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/i18n-scopes.mjs && next dev",
+    "build": "node scripts/i18n-scopes.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:demo-fidelity": "node scripts/check-demo-fidelity.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
+    "check:i18n-scopes": "node scripts/i18n-scopes.mjs --check",
+    "i18n:scopes": "node scripts/i18n-scopes.mjs",
     "vpat:evidence": "node --experimental-strip-types scripts/vpat-evidence.mjs",
     "check:reports": "node --experimental-strip-types scripts/check-reports.ts",
     "check:skills": "node --experimental-strip-types scripts/check-skills.mjs",

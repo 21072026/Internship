@@ -20,6 +20,7 @@ import { roleHome } from '@/lib/roleHome';
 import { hasSalesSurface, NEUTRAL_HOME } from '@/lib/salesSurface';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes } from '@/lib/dualRole';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -38,7 +39,7 @@ export const metadata = NO_INDEX;
 // route to admin/mentor pages), no mode switcher. Settings, users, invites,
 // imports and deletes stay behind their ADMIN-only routes server-side. The mode
 // switch appears only for an ADMIN who also sells (admin ↔ sales).
-export default async function SalesLayout({ children }: { children: React.ReactNode }) {
+async function SalesLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
 
@@ -105,5 +106,15 @@ export default async function SalesLayout({ children }: { children: React.ReactN
     >
       <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
     </ResponsiveShell>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedSalesLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="sales">
+      <SalesLayout>{children}</SalesLayout>
+    </I18nScope>
   );
 }

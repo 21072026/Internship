@@ -23,11 +23,12 @@ import { MentorNav } from '@/components/MentorNav';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { availableModes, canUseMentorShell } from '@/lib/dualRole';
 import { mentorlessShellTarget } from '@/lib/salesSurface';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
 
-export default async function MentorLayout({ children }: { children: React.ReactNode }) {
+async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -119,5 +120,15 @@ export default async function MentorLayout({ children }: { children: React.React
       </PipelineStagesProvider>
     </ResponsiveShell>
     </>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedMentorLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="mentor">
+      <MentorLayout>{children}</MentorLayout>
+    </I18nScope>
   );
 }
