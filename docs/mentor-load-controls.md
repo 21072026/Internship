@@ -41,3 +41,22 @@ is derived — nothing to backfill.
   (the default) still ranks the mentor.
 
 Admin assignment, transfer, invite and request approval are never subject to it.
+
+## The roster import (`POST /api/admin/mentors/limits/import`)
+
+The panel on `/admin/mentors` posts a CSV: `email` plus any of `mentorCapacity`,
+`selfMatchLimit`, `acceptingMentees` (written onto `User`) and `minNoticeMinutes`,
+`maxPerMonth` (written onto the mentor's `MentorBookingPolicy` row, upserted by
+`mentorId` — #2003's names and units, minutes not hours; no parallel columns on `User`).
+
+- Runs on the one engine (`runImport()` + `parseDelimited()`, `src/lib/importPreview.ts`):
+  the pure half is `src/lib/mentorLimitsImport.ts`, the Prisma half
+  `src/lib/mentorLimitsImportStore.ts`. `apply` absent = dry run, the same call with a writer
+  that does not write; `apply: true` is the confirmed second call.
+- Empty cell = leave as is; a single `-` clears (null = no limit). Bounds are the edit
+  screens' bounds (`/api/profile`, `POLICY_LIMITS`). A monthly cap under the mentor's weekly
+  one is skipped (`below_weekly`), as `PUT /api/availability/policy` refuses it.
+- Per row: `UPDATE` (with `changed`), `UNCHANGED`, `SKIP` (`not_found` — never created —,
+  `not_a_mentor`, `duplicate_row`, `no_values`, `below_weekly`) or `ERROR` (each bad column named).
+  An unknown column refuses the whole file.
+- ADMIN only, checked in the handler; `mentorship` capability; never plan-gated.
