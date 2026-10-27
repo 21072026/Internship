@@ -14,6 +14,8 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Target } from 'lucide-react';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
+import { SkillProgressCard } from '@/components/SkillProgressCard';
+import { skillProgressOf } from '@/lib/skillLevels';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 
 export default async function PortalGoalsPage() {
@@ -22,7 +24,7 @@ export default async function PortalGoalsPage() {
   // between the layout check and this render (e.g. "sign out of all devices"),
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
 
   const [user, relations] = await Promise.all([
     prisma.user.findUnique({
@@ -36,6 +38,9 @@ export default async function PortalGoalsPage() {
     }),
   ]);
   const { relation, isArchived } = pickMenteeRelation(relations);
+  // Growth on the skills the mentee rated (#1822) — theirs, with or without a
+  // live mentorship, so it renders in both branches below.
+  const skillProgress = await skillProgressOf(session.user.id, locale);
 
   return (
     <div>
@@ -43,6 +48,12 @@ export default async function PortalGoalsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.tabs.goals}</h1>
         <p className="text-gray-500 mt-1">{t.portal.goalsSubtitle}</p>
       </div>
+
+      {skillProgress.length > 0 && (
+        <div className="mb-6">
+          <SkillProgressCard rows={skillProgress} t={t.skillConfirm} />
+        </div>
+      )}
 
       {relation ? (
         <div className="space-y-6">

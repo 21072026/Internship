@@ -7,7 +7,7 @@ import {
   seedMenteeWithRelation,
   cleanupMenteeWithRelation,
 } from './helpers/db';
-import { signInViaApi } from './helpers/auth';
+import { gotoSettled, signInAndSettle, signInViaApi } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -53,7 +53,7 @@ test('mentee sets a skill level with the star rating and it persists', async ({ 
 // mentor of the ACTIVE pair may confirm it (another mentor: 403 from the
 // route itself); a confirmation that corrects the value writes one MENTOR
 // history row and the mentee sees the confirmed level.
-test('a mentor confirms an active mentee\'s skill level; another mentor gets 403', async ({ playwright, baseURL }) => {
+test('a mentor confirms an active mentee\'s skill level; another mentor gets 403', async ({ page, playwright, baseURL }) => {
   const PW = 'SkillConfirm123!';
   const seeded = await seedMenteeWithRelation('skconf', PW);
   const otherEmail = uniqueEmail('skconf-other');
@@ -103,6 +103,13 @@ test('a mentor confirms an active mentee\'s skill level; another mentor gets 403
 
     const me = await (await mentee.get('/api/profile')).json();
     expect(me.verifiedLevels).toEqual({ React: 4 });
+
+    // …and their own progression strip says where they started and where they are.
+    await signInAndSettle(page, seeded.menteeEmail, PW, '/portal');
+    await gotoSettled(page, '/portal/goals');
+    const strip = page.getByTestId(`skill-progress-${row!.skillId}`);
+    await expect(strip).toContainText('React');
+    await expect(strip.getByLabel('From 3 to 4 out of 5')).toBeVisible();
 
     // An ended pair can no longer confirm.
     await prisma.mentorshipRelation.update({ where: { id: seeded.relationId }, data: { status: 'COMPLETED' } });

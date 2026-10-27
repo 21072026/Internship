@@ -5354,6 +5354,9 @@ const en = {
     conflict: 'The level changed meanwhile — reload and try again.',
     pickLevel: 'Pick a level first.',
     verifiedTitle: 'This level was confirmed in the programme',
+    progressTitle: 'Your skill levels',
+    progressHint: 'Where you started and where you are now.',
+    progressAria: 'From {start} to {now} out of 5',
   },
   skillsInput: {
     hint: 'Type a skill and press Enter. A pasted list is split automatically — commas, semicolons and line breaks all work.',
@@ -14956,6 +14959,9 @@ const tr: Dict = {
     conflict: 'Seviye bu arada değişti — sayfayı yenileyip tekrar dene.',
     pickLevel: 'Önce bir seviye seç.',
     verifiedTitle: 'Bu seviye program içinde onaylandı',
+    progressTitle: 'Beceri seviyelerin',
+    progressHint: 'Nereden başladın, şimdi neredesin.',
+    progressAria: '5 üzerinden {start} → {now}',
   },
   skillsInput: {
     hint: 'Bir beceri yaz ve Enter’a bas. Yapıştırdığın liste otomatik bölünür — virgül, noktalı virgül ve satır sonu çalışır.',
@@ -24484,6 +24490,9 @@ const de: Dict = {
     conflict: 'Das Level hat sich inzwischen geändert — neu laden und erneut versuchen.',
     pickLevel: 'Wähle zuerst ein Level.',
     verifiedTitle: 'Dieses Level wurde im Programm bestätigt',
+    progressTitle: 'Deine Skill-Level',
+    progressHint: 'Wo du angefangen hast und wo du jetzt stehst.',
+    progressAria: 'Von {start} auf {now} von 5',
   },
   skillsInput: {
     hint: 'Skill eingeben und Enter drücken. Eine eingefügte Liste wird automatisch getrennt — Kommas, Semikolons und Zeilenumbrüche funktionieren.',
