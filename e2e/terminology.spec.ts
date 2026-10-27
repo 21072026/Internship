@@ -67,3 +67,31 @@ test('a programme value overrides the org, and another tenant sees neither', asy
   expect((await admin.put('/api/admin/terminology', { data: { terminology: {}, programId: otherCohortId } })).status()).toBe(404);
   expect((await (await otherAdmin.get('/api/admin/terminology')).json()).terminology).toEqual({});
 });
+
+test('the settings card saves a row, refuses a half-filled one, and resets', async ({ page, context }) => {
+  await context.addCookies([{ name: 'locale', value: 'en', url: test.info().project.use.baseURL! }]);
+  await signInAsFreshUser(page, seeded.adminEmail, PW, '/admin');
+  await gotoSettled(page, '/admin/settings');
+  const card = page.getByTestId('terminology-card');
+  // The stored org value is loaded into the form.
+  await expect(card.getByTestId('terminology-en-mentor-manyCap')).toHaveValue('Coaches');
+
+  // A half-filled row is refused in the browser, nothing is sent.
+  await card.getByTestId('terminology-en-mentee-one').fill('student');
+  await card.getByTestId('terminology-save').click();
+  await expect(card.getByTestId('terminology-message')).toContainText('all four forms');
+
+  for (const [form, value] of Object.entries({ many: 'students', oneCap: 'Student', manyCap: 'Students' })) {
+    await card.getByTestId(`terminology-en-mentee-${form}`).fill(value);
+  }
+  await card.getByTestId('terminology-save').click();
+  await expect(card.getByTestId('terminology-message')).toHaveText('Saved.');
+  expect((await (await admin.get('/api/admin/terminology')).json()).terminology).toEqual({
+    en: { mentor: COACH, mentee: { one: 'student', many: 'students', oneCap: 'Student', manyCap: 'Students' } },
+  });
+
+  await card.getByTestId('terminology-reset').click();
+  await expect(card.getByTestId('terminology-message')).toHaveText('Saved.');
+  expect((await (await admin.get('/api/admin/terminology')).json()).terminology).toEqual({});
+  await expect(card.getByTestId('terminology-en-mentor-manyCap')).toHaveValue('');
+});
