@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Interview lifecycle on the event bus (#1998, 1/n):** `interview_request.scheduled`, `interview_request.cancelled` and `interview_panel.outcome` — registered in the public catalogue since #1854 but never raised — now leave through `emit()` from the schedule, cancel and outcome routes. `interview_panel.completed` is also raised when an admin closes a panel early (the close is now a guarded `updateMany`, so two racing closes raise one event, and a panel everybody had already scored is not announced twice). Payloads stay ids and states: no title, guest address, cancel reason, score or disposition code.",
+  "notes": {
+    "en": ["Webhooks now fire when an interview is scheduled or cancelled, when a panel is closed early and when a panel's decision is recorded."],
+    "tr": ["Webhook'lar artık bir mülakat planlandığında veya iptal edildiğinde, bir panel erken kapatıldığında ve panel kararı kaydedildiğinde tetikleniyor."],
+    "de": ["Webhooks werden jetzt ausgelöst, wenn ein Interview geplant oder abgesagt, ein Panel vorzeitig geschlossen oder eine Panel-Entscheidung erfasst wird."]
+  }
+}
