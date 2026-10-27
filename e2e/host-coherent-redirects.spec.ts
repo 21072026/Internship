@@ -38,6 +38,18 @@ test('a sign-out callbackUrl on a served host is kept — the marketing visitor 
   expect(url).toBe(`https://${MARKETING}/auth/signin`);
 });
 
+test('a sign-out on a served host keeps the configured port — and no other (#3174)', async ({ request }) => {
+  const base = new URL(await signOutUrl(request, '/'));
+  test.skip(!base.port, 'the configured origin has no port (a deployed env): nothing to keep');
+  const AS_MARKETING_DEV = { 'x-forwarded-host': `${MARKETING}:${base.port}`, 'x-forwarded-proto': base.protocol.replace(':', '') };
+  const kept = `${base.protocol}//${MARKETING}:${base.port}/auth/signin`;
+  expect(await signOutUrl(request, kept, AS_MARKETING_DEV)).toBe(kept);
+  const otherPort = String(Number(base.port) + 1);
+  expect(await signOutUrl(request, `${base.protocol}//${MARKETING}:${otherPort}/auth/signin`, AS_MARKETING_DEV))
+    .toBe(`${base.protocol}//${MARKETING}/auth/signin`);
+  expect(await signOutUrl(request, `${base.protocol}//evil.example:${base.port}/auth/signin`, AS_MARKETING_DEV)).toBe(base.href);
+});
+
 test('a sign-out callbackUrl on a host we do not serve falls back to baseUrl — no open redirect', async ({ request }) => {
   const base = await signOutUrl(request, '/');
   for (const evil of [
