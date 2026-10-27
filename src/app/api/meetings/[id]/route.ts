@@ -6,6 +6,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
@@ -210,7 +211,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // The status flip, the late-cancel record and the calendar withdrawal
       // are one path (src/lib/meetingCancel.ts), shared with the interview
       // request's cancel route (#1844).
-      await cancelMeetingRows({ ids, actorId: session.user.id, reason: cancelReason ?? null, now });
+      await cancelMeetingRows({ ids, actorId: session.user.id, reason: cancelReason ?? null, now, orgId: resolveOrgId(session), subjectId: row.id });
       await prisma.auditLog.create({
         data: {
           actorId: session.user.id,
@@ -226,13 +227,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           }),
         },
       });
-      // `meeting.cancelled` is REGISTERED in WEBHOOK_EVENTS by this PR, but it is
-      // deliberately not dispatched from here. `scripts/check-events.mjs` (#1697)
-      // caps direct callers of the webhook dispatcher at the ten that predate it,
-      // and that cap may only be lowered — an event has to leave through `emit()`
-      // (#1693), which is not in the tree yet. Registering the name now means the
-      // spine has something to raise the moment it lands; dispatching it from the
-      // handler would be the eleventh door.
+      // `meeting.cancelled` is raised by cancelMeetingRows() itself (#1998).
       //
       // Everyone it affects is told, in-app and by mail, on their own clock
       // (#1982). Inline rather than after(): the rows are bounded by
@@ -360,8 +355,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // rather than a second one appearing next to the stale first.
     for (const updated of moved) pushMeetingInBackground(updated, mirrorAudience(updated));
 
-    // `meeting.rescheduled` is registered, not dispatched — same reason as the
-    // cancel branch above (#1697's ratchet; the door is `emit()`, #1693).
+    // One `meeting.rescheduled` per row whose TIME moved (#1998) — a new title
+    // or link is not a reschedule, the same line the notices draw below.
+    const retimedSet = new Set(retimedIds);
+    for (const m of moved) {
+      if (!retimedSet.has(m.id) || !m.scheduledAt) continue;
+      const before = targets.find((t) => t.id === m.id)?.scheduledAt ?? null;
+      await emit(
+        'meeting.rescheduled',
+        { meetingId: m.id, scheduledAt: m.scheduledAt.toISOString(), previousScheduledAt: before?.toISOString() ?? null },
+        { orgId: resolveOrgId(session), actor: { id: session.user.id, type: 'user' } },
+      );
+    }
 
     // Told on their own clock — only when the TIME moved; a new title or room
     // link is not a reschedule (#1982).
@@ -420,6 +425,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // and a withdrawal with nothing left to read leaves a ghost event behind.
     await withdrawMeetings(ids);
     const removed = await prisma.meeting.deleteMany({ where: { id: { in: ids } } });
+    // Deleting a meeting that was still on is calling it off, from where a
+    // receiver stands (#1998); deleting an already-cancelled one is tidying up
+    // and was announced when it was cancelled.
+    const stillOn = targets.filter((t) => t.status === 'SCHEDULED');
+    if (stillOn.length > 0) {
+      const subject = stillOn.find((t) => t.id === row.id) ?? stillOn[0];
+      await emit(
+        'meeting.cancelled',
+        { meetingId: subject.id, scheduledAt: subject.scheduledAt?.toISOString() ?? null, count: stillOn.length },
+        { orgId: resolveOrgId(session), actor: { id: session.user.id, type: 'user' } },
+      );
+    }
     await prisma.auditLog.create({
       data: {
         actorId: session.user.id,
