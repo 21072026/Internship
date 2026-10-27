@@ -64,7 +64,7 @@ const schema = z.object({
 
 /**
  * The (cohortId, mentorId) a request names, verified to belong to `orgId`:
- * the cohort must be one of the org's, the mentor an active MENTOR of the org.
+ * the cohort must be one of the org's, the mentor a MENTOR of the org.
  * `null` = an id that is not this org's — answered 404 like any other id the
  * caller may not see. An empty object = the org scope.
  */
