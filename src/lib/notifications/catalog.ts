@@ -134,6 +134,12 @@ export const NOTIFICATION_EVENTS = [
   // The one neutral note to someone marked absent (#2014) — in-app only, no
   // score, sent once per record (MeetingAttendance.noShowNotifiedAt).
   { key: 'meeting.noShow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
+  // Group sessions (#1856): the publish notice to the audience, a waitlist
+  // promotion, a call-off and a move. In-app only — a seat change is a bell line.
+  { key: 'event.published', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'event.promoted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'event.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'event.updated', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
   { key: 'meeting_reminder.seriesSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_reminder.seriesTomorrow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'project', params: ['title', 'project', 'when'] },

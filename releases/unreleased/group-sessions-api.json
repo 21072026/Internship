@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Group sessions and office hours, model + API (#1856, 1/4):** new `ProgramEvent` (tenant model) and `EventRegistration` (child, no token — the session is the credential). `POST/GET /api/events`, `GET/PATCH /api/events/[id]`, `POST /api/events/[id]/cancel`, `POST/DELETE /api/events/[id]/register`, `PATCH /api/events/[id]/attendance`. Capacity is enforced by a guarded `updateMany` on `seatsTaken < capacity` under the event's row lock; past the cap a registration is WAITLISTED, a freed seat (or a raised cap) promotes the oldest waitlisted person in the same transaction. Attendance reuses #2014's `AttendanceState`. Join links go through `resolveMeetingLink()` and reach only the host, admins and confirmed registrants. In-app notices `event.published` / `event.promoted` / `event.cancelled` / `event.updated`. The single writer is `src/lib/groupEvents.ts`; the rules are pure in `src/lib/groupEventRule.ts`."
+}
