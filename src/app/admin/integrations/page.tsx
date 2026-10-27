@@ -13,9 +13,18 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
 import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
 import { KlaviyoCard } from '@/components/admin/KlaviyoCard';
+import { WebhookDeliveries } from '@/components/admin/WebhookDeliveries';
 import { useVertical } from '@/lib/verticalClient';
 
-interface Hook { id: string; url: string; events: string[]; active: boolean }
+interface Hook {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  // Auto-disabled by the delivery job after a failure streak (#1695).
+  disabledAt?: string | null;
+  disabledReason?: string | null;
+}
 interface Key {
   id: string;
   name: string;
@@ -100,6 +109,7 @@ export default function IntegrationsPage() {
   const [editUrl, setEditUrl] = useState('');
   const [editEvents, setEditEvents] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
+  const [showDeliveries, setShowDeliveries] = useState<string | null>(null);
   // The plan lacks INTEGRATIONS_API (#1744): set when a write answers 403
   // feature_locked, so the refusal is explained instead of swallowed.
   const [apiLocked, setApiLocked] = useState(false);
@@ -303,6 +313,16 @@ export default function IntegrationsPage() {
                         )}
                       </p>
                       <p className="text-xs text-gray-400">{h.events.join(', ')}</p>
+                      {h.disabledAt && (
+                        <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-red-700 dark:text-red-300" data-testid={`webhook-disabled-${h.id}`}>
+                          <span>
+                            {t.integrations.autoDisabled} — <RelativeTime date={h.disabledAt} />: {h.disabledReason}
+                          </span>
+                          <button type="button" className="text-blue-600 hover:underline" data-testid={`webhook-reenable-${h.id}`} onClick={() => patchHook(h.id, { active: true })}>
+                            {t.integrations.reenable}
+                          </button>
+                        </p>
+                      )}
                       {testResult[h.id] && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{testResult[h.id]}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -312,9 +332,13 @@ export default function IntegrationsPage() {
                       </Button>
                       <Button size="sm" variant="ghost" data-testid={`webhook-test-${h.id}`} onClick={() => sendTest(h.id)}>{t.integrations.sendTest}</Button>
                       <Button size="sm" variant="ghost" onClick={() => rotate(h.id)}>{t.integrations.rotateSecret}</Button>
+                      <Button size="sm" variant="ghost" data-testid={`webhook-deliveries-toggle-${h.id}`} onClick={() => setShowDeliveries((cur) => (cur === h.id ? null : h.id))}>
+                        {showDeliveries === h.id ? t.integrations.deliveriesHide : t.integrations.deliveries}
+                      </Button>
                       <button onClick={() => delHook(h.id)} aria-label={t.common.delete} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
+                  {showDeliveries === h.id && <WebhookDeliveries hookId={h.id} />}
                   {editing === h.id && (
                     <div className="mt-2 space-y-2">
                       <Input data-testid="webhook-edit-url" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />

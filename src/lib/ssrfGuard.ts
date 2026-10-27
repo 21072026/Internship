@@ -47,6 +47,12 @@ export function isPrivateAddress(ip: string): boolean {
 export class SsrfBlockedError extends Error {}
 
 /**
+ * The host did not resolve. Still a refusal (nothing is fetched), but unlike a
+ * private address it may be transient — a webhook retry (#1695) is worth it.
+ */
+export class SsrfUnresolvedError extends SsrfBlockedError {}
+
+/**
  * Throws `SsrfBlockedError` unless `raw` is an https URL on a public address.
  *
  * The check is on the **resolved** addresses, not the hostname string: a name
@@ -89,9 +95,9 @@ export async function assertPublicHttpsUrl(raw: string): Promise<URL> {
   try {
     addresses = await lookup(host, { all: true });
   } catch {
-    throw new SsrfBlockedError('That host could not be resolved');
+    throw new SsrfUnresolvedError('That host could not be resolved');
   }
-  if (addresses.length === 0) throw new SsrfBlockedError('That host could not be resolved');
+  if (addresses.length === 0) throw new SsrfUnresolvedError('That host could not be resolved');
   // Every answer must be public: one private record among them is enough for a
   // resolver to hand `fetch` the internal one.
   for (const a of addresses) {

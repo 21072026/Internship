@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -26,7 +27,12 @@ export async function GET() {
     // endpoints (their URLs and which events they subscribe to).
     where: { orgId: resolveOrgId(session) },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, url: true, events: true, active: true, createdAt: true },
+    select: {
+      id: true, url: true, events: true, active: true, createdAt: true,
+      // Delivery health (#1695): the integrations page shows an auto-disabled
+      // hook with its reason and a re-enable button.
+      consecutiveFailures: true, lastSuccessAt: true, disabledAt: true, disabledReason: true,
+    },
   });
   return NextResponse.json({ webhooks, eventTypes: WEBHOOK_EVENTS });
 }
@@ -117,10 +123,15 @@ export async function PATCH(request: Request) {
     }
   }
 
-  const data: { url?: string; events?: string[]; active?: boolean } = {};
+  const data: Prisma.WebhookUpdateManyMutationInput = {};
   if (parsed.data.url !== undefined) data.url = parsed.data.url;
   if (parsed.data.events !== undefined) data.events = [...parsed.data.events];
   if (parsed.data.active !== undefined) data.active = parsed.data.active;
+  // Switching a hook on is also the explicit re-enable of one the relay
+  // auto-disabled (#1695): the failure streak starts over.
+  if (parsed.data.active === true) {
+    Object.assign(data, { disabledAt: null, disabledReason: null, consecutiveFailures: 0, failingSince: null });
+  }
   // Read before the write: a diff computed from the response has no "before" (#1699).
   const before = await prisma.webhook.findFirst({
     where: { id, orgId: resolveOrgId(session) },

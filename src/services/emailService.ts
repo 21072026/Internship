@@ -3566,6 +3566,50 @@ export async function sendRoleChangeEmail({
 // this only renders. Category `sso-certificate`, in the essential
 // account_security group: a lapsed certificate locks the whole tenant out of
 // single sign-on, so no preference may mute the two warnings.
+// A webhook was auto-disabled after a failure streak (#1695,
+// src/lib/webhookDelivery.ts). Sent once per disable, to the org's admins,
+// as an operator alert: the integration is silently down until they act.
+export async function sendWebhookDisabledEmail({
+  to,
+  fullName,
+  url,
+  reason,
+  locale,
+  orgId,
+  userId,
+}: {
+  to: string;
+  fullName?: string | null;
+  url: string;
+  reason: string;
+  locale?: string | null;
+  orgId: string;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const loc = resolveLocale(locale);
+  const M = (await emailDictionary(loc, orgId)).webhookDisabledEmail;
+  return sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'ops-alert',
+    locale,
+    fromName: brand.name,
+    subject: M.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(fullName ? M.greeting.replace('{name}', fullName) : M.greetingNoName)}</p>
+        <p>${esc(M.body.replace('{url}', url).replace('{reason}', reason))}</p>
+        <p>${esc(M.action)}</p>
+        ${ctaBlock(brand, `${base}/admin/integrations`, esc(M.cta))}
+      </div>
+    `,
+  });
+}
+
 export async function sendSsoCertificateExpiryEmail({
   to,
   fullName,
