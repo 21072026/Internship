@@ -7,7 +7,7 @@
 //
 // Plain ESM: the server's Node 20 runs the deploy copy without a TypeScript
 // step; the app imports it through allowJs (the klaviyoReset precedent).
-import { planStageDeadline } from './stage-sla-rule.mjs';
+import { planStageDeadline, resolveSlaEscalations } from './stage-sla-rule.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const BATCH = 500;
@@ -28,18 +28,9 @@ export async function fillOrgStageDeadlines(db, orgId, options = {}) {
 
   const rows = await db.stageSla.findMany({
     where: { orgId, days: { not: null } },
-    select: { stageKey: true, days: true, cohortId: true, mentorId: true },
+    select: { stageKey: true, days: true, escalateAfterDays: true, cohortId: true, mentorId: true },
   });
   if (rows.length === 0) return result;
-  // Escalation rungs stay org-level (resolveStageEscalations reads scope "org").
-  const escalations = new Map(
-    (
-      await db.stageSla.findMany({
-        where: { orgId, scope: 'org', days: { not: null }, escalateAfterDays: { gt: 0 } },
-        select: { stageKey: true, escalateAfterDays: true },
-      })
-    ).map((r) => [r.stageKey, r.escalateAfterDays])
-  );
   const stageKeys = Array.from(new Set(rows.map((r) => r.stageKey)));
 
   let cursor;
@@ -89,7 +80,8 @@ export async function fillOrgStageDeadlines(db, orgId, options = {}) {
         });
         // Lost to a move or a parallel save: not ours to count.
         if (written.count !== 1) continue;
-        const escalateAfterDays = escalations.get(relation.pipelineStatus);
+        // The relation's own rung, resolved like its days (#3204).
+        const escalateAfterDays = resolveSlaEscalations(rows, relation).get(relation.pipelineStatus);
         if (plan.pastDue && escalateAfterDays) {
           await db.slaBreach.createMany({
             data: [

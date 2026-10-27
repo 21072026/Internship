@@ -26,6 +26,9 @@ const DAY = 24 * 60 * 60 * 1000;
 
 export interface ComplianceRelation {
   startDate: Date;
+  /** The relation's override scope (#3204); read only by a per-relation `slaDays`. */
+  cohortId?: string | null;
+  mentorId?: string | null;
   /** Ordered oldest → newest. */
   statusChanges: { fromStatus: string; toStatus: string; createdAt: Date }[];
 }
@@ -46,7 +49,11 @@ export interface ComplianceResult {
 
 export function computeSlaCompliance(
   relations: ComplianceRelation[],
-  slaDays: ReadonlyMap<string, number>,
+  // One map for everybody (the org's own numbers, as before #3204), or a
+  // function that answers each relation's OWN resolved service levels, so a
+  // relation in a 20-day mentor override that moved on day 15 is a hit, not a
+  // breach of the org's 7.
+  slaDays: ReadonlyMap<string, number> | ((relation: ComplianceRelation) => ReadonlyMap<string, number>),
   window: { from: Date; to: Date },
   clockStopped: (stageKey: string) => boolean
 ): ComplianceResult {
@@ -54,9 +61,9 @@ export function computeSlaCompliance(
   const to = window.to.getTime();
   const rows = new Map<string, ComplianceStageRow>();
 
-  const count = (stage: string, enteredAt: number, leftAt: number) => {
+  const count = (slas: ReadonlyMap<string, number>, stage: string, enteredAt: number, leftAt: number) => {
     if (leftAt < from || leftAt >= to) return;
-    const days = slaDays.get(stage);
+    const days = slas.get(stage);
     if (days == null || days <= 0 || clockStopped(stage)) return;
     let row = rows.get(stage);
     if (!row) {
@@ -70,9 +77,10 @@ export function computeSlaCompliance(
   for (const r of relations) {
     const changes = r.statusChanges.filter((c) => c.fromStatus !== c.toStatus);
     if (changes.length === 0) continue;
-    count(changes[0].fromStatus, r.startDate.getTime(), changes[0].createdAt.getTime());
+    const slas = typeof slaDays === 'function' ? slaDays(r) : slaDays;
+    count(slas, changes[0].fromStatus, r.startDate.getTime(), changes[0].createdAt.getTime());
     for (let i = 0; i < changes.length - 1; i++) {
-      count(changes[i].toStatus, changes[i].createdAt.getTime(), changes[i + 1].createdAt.getTime());
+      count(slas, changes[i].toStatus, changes[i].createdAt.getTime(), changes[i + 1].createdAt.getTime());
     }
   }
 

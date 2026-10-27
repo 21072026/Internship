@@ -108,3 +108,19 @@ test('inherited: what applies once the exact-scope row is gone', () => {
   assert.deepEqual(ts.inheritedSla(all, { cohortId: 'c1' }).get('S'), { days: 7, source: 'org' });
   assert.equal(ts.inheritedSla([ORG], {}).get('S'), undefined, 'the org row inherits nothing');
 });
+
+for (const [name, rule] of [['ts', ts], ['esm', esm]]) {
+  test(`${name}: escalation resolves field by field with the same precedence (#3204)`, () => {
+    const org = { stageKey: 'S', days: 7, escalateAfterDays: 2 };
+    const cohort = { stageKey: 'S', days: 5, cohortId: 'c1', escalateAfterDays: null };
+    const mentor = { stageKey: 'S', days: 10, mentorId: 'm1', escalateAfterDays: 4 };
+    // Only org rows: exactly the org's rung.
+    assert.equal(rule.resolveSlaEscalations([org], { cohortId: 'c1' }).get('S'), 2);
+    // A cohort override without its own rung inherits the org's.
+    assert.equal(rule.resolveSlaEscalations([org, cohort], { cohortId: 'c1' }).get('S'), 2);
+    // A mentor override with its own rung wins.
+    assert.equal(rule.resolveSlaEscalations([org, cohort, mentor], { cohortId: 'c1', mentorId: 'm1' }).get('S'), 4);
+    // A row without days never escalates.
+    assert.equal(rule.resolveSlaEscalations([{ stageKey: 'S', days: null, escalateAfterDays: 3 }], {}).get('S'), undefined);
+  });
+}
