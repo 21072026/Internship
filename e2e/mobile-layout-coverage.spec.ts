@@ -104,7 +104,9 @@ const FUNNEL: Route[] = [
     // Added to the sidebar without an entry here, same miss as the two lines above.
     '/admin/insights',
     '/admin/migrate',
-    '/admin/invitations'
+    '/admin/invitations',
+    // Mentor–mentee matching — in the sidebar without an entry here (#3059).
+    '/admin/matching'
   ),
   // An AdminNav destination that is NOT an admin page: interview panels live
   // outside the role shells because an admin convenes them and mentors score
@@ -162,6 +164,10 @@ const OPERATIONS: Route[] = shell(
   // The safeguarding review queue (#2056).
   '/admin/safeguarding',
   '/admin/integrations',
+  // The scheduled roster feeds and the audit log — in the sidebar without an
+  // entry here, which turned this gate red on main (#3059).
+  '/admin/roster-feeds',
+  '/admin/audit',
   // Billing — in the sidebar without an entry here, the same miss as the
   // agreements line above.
   '/admin/billing',

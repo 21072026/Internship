@@ -66,14 +66,18 @@ export type FlooredBucket<T = unknown> =
  * floor the smallest shown bucket is hidden with them (#1910 — #1879 only did
  * this for a single hidden bucket, which left two hidden buckets of 1 and 2
  * readable as a group of 3). A "everyone else" bucket is just a bucket here
- * and gets no exemption.
+ * and gets no exemption. Hidden buckets with no responses at all need no
+ * residual protection: there is nothing in them to subtract back out.
  */
 export function applyResponseFloor<T>(buckets: ResponseBucket<T>[], minResponses?: number | null): FlooredBucket<T>[] {
   const floor = effectiveMinResponses(minResponses);
   const hidden = new Set(buckets.filter((b) => b.n < floor).map((b) => b.key));
   const shown = buckets.filter((b) => !hidden.has(b.key)).sort((a, b) => a.n - b.n || a.key.localeCompare(b.key));
   let hiddenTotal = buckets.filter((b) => hidden.has(b.key)).reduce((sum, b) => sum + b.n, 0);
-  while (hidden.size > 0 && hiddenTotal < floor && shown.length > 0) {
+  // Hidden buckets that hold NO responses leave nothing to recover — overall
+  // minus the shown buckets is zero answers — so they never cost a shown bucket
+  // (#3059: an unassigned cohort with no answer hid a cohort that met the floor).
+  while (hiddenTotal > 0 && hiddenTotal < floor && shown.length > 0) {
     const next = shown.shift()!;
     hidden.add(next.key);
     hiddenTotal += next.n;

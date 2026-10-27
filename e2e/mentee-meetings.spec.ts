@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { settleStreamedSuspense } from './helpers/auth';
 
 // Story #874: meetings become visible to mentees. #913 opens GET /api/meetings
 // to MENTEE (fail-closed for unlisted roles, own relations only), #914 puts an
@@ -29,6 +30,9 @@ async function signIn(page: import('@playwright/test').Page, email: string, land
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+  // Reached by a redirect: wait out the streamed Suspense copy of the segment
+  // before the first testid query (#3059, CLAUDE.md § E2E locator pitfalls).
+  await settleStreamedSuspense(page);
 }
 
 test.beforeAll(async () => {

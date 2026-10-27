@@ -55,6 +55,11 @@ test('the floor: small buckets are hidden with their count, and so is the residu
   assert.equal(applyResponseFloor([{ key: 'cohort-x', n: 9 }, { key: 'everyone-else', n: 4 }]).every((b) => b.suppressed), true);
   // Nothing small: everything shown.
   assert.equal(applyResponseFloor([{ key: 'a', n: 5 }, { key: 'b', n: 6 }]).some((b) => b.suppressed), false);
+  // An EMPTY hidden bucket has nothing to recover by subtraction, so it does not
+  // take a shown bucket with it (#3059)…
+  assert.deepEqual(applyResponseFloor([{ key: 'a', n: 5 }, { key: 'empty', n: 0 }]).map((b) => b.suppressed), [false, true]);
+  // …but one response next to it still does.
+  assert.deepEqual(applyResponseFloor([{ key: 'a', n: 5 }, { key: 'empty', n: 0 }, { key: 'one', n: 1 }]).map((b) => b.suppressed), [true, true, true]);
 });
 
 test('a survey may raise the floor, never lower it', () => {

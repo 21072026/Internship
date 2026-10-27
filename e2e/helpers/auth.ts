@@ -35,6 +35,11 @@ export async function signInAndSettle(page: Page, email: string, password: strin
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
   await page.getByTestId('account-menu-button').waitFor({ state: 'visible', timeout: 20_000 });
+  // The landing page is reached by a redirect, not by `gotoSettled`, so the
+  // streamed-Suspense window applies to it too: /portal's segment sat in the
+  // document twice and the first testid assertion threw a strict-mode
+  // violation (#3059 — journey-outcome, upcoming-meetings-card).
+  await settleStreamedSuspense(page);
 }
 
 /**
