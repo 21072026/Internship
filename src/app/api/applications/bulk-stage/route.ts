@@ -16,6 +16,7 @@ import {
   requiresDispositionCode,
 } from '@/lib/applications';
 import { actorFlagsFor, moveApplicationStage, visibleApplicationsWhere } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 
 // Not exported: a Next.js route module may export only its handlers and the
 // route config — `next build` refuses any other export field.
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
         }
         // One transaction per row: a conflict on one id must not roll back the
         // moves that succeeded before it.
-        const result = await prisma.$transaction((tx) =>
+        const result = await stageTransaction((tx) =>
           moveApplicationStage(tx, { applicationId: id, expectedStage: row.stage, toStage, actorId: session.user.id, note, dispositionCode: code }),
         );
         if (!result.ok) { skipped.push({ id, reason: result.reason }); continue; }

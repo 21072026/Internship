@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`application.stage_changed` on the event bus (#1998, 3/n):** a new public catalogue event `{ applicationId, requisitionId, from, to }` raised for every move of `Application.stage`. `moveApplicationStage()` (the one writer) notes the move; `stageTransaction()` (`src/lib/applicationStageEvents.ts`) replaces `prisma.$transaction` at all eight callers and raises the noted events only after the commit, so a rolled-back move (a lost panel-outcome seal, a bulk conflict) announces nothing. A move noted outside `stageTransaction()` throws outside production. No note and no disposition code on the bus.",
+  "notes": {
+    "en": ["Webhooks can now subscribe to application stage changes — shortlisted, interview, offer, hired, rejected or withdrawn."],
+    "tr": ["Webhook'lar artık başvuru aşaması değişikliklerine abone olabiliyor — kısa liste, mülakat, teklif, işe alındı, reddedildi veya geri çekildi."],
+    "de": ["Webhooks können jetzt Statuswechsel von Bewerbungen abonnieren — Shortlist, Interview, Angebot, eingestellt, abgelehnt oder zurückgezogen."]
+  }
+}

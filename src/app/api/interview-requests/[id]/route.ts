@@ -10,6 +10,7 @@ import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
 import { advanceApplicationOnInterview } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const decidedAt = new Date();
     const declineReasonCode = parsed.data.action === 'decline' ? parsed.data.declineReasonCode! : null;
     const declineNote = parsed.data.action === 'decline' ? parsed.data.declineNote?.trim() || null : null;
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await stageTransaction(async (tx) => {
       const changed = await tx.interviewRequest.updateMany({
         where: { id: current.id, orgId, status: 'PENDING' },
         data: {

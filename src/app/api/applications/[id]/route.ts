@@ -10,6 +10,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { canPerformApplicationAction } from '@/lib/applications';
 import { APPLICATION_SELECT, actorFlagsFor, moveApplicationStage, visibleApplicationsWhere } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 
 const bodySchema = z.object({ action: z.literal('withdraw') }).strict();
 
@@ -39,7 +40,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!canPerformApplicationAction({ ...actorFlagsFor(actor, current), from: current.stage, to: 'WITHDRAWN' })) {
         return NextResponse.json({ error: 'This application cannot be withdrawn', code: 'cannot_withdraw' }, { status: 409 });
       }
-      const result = await prisma.$transaction((tx) =>
+      const result = await stageTransaction((tx) =>
         moveApplicationStage(tx, { applicationId: current.id, expectedStage: current.stage, toStage: 'WITHDRAWN', actorId: session.user.id }),
       );
       if (!result.ok) return NextResponse.json({ error: 'The application moved meanwhile', code: 'stage_conflict' }, { status: 409 });
