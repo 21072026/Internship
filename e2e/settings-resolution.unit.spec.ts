@@ -96,6 +96,7 @@ test('GLOBAL_SETTING_KEYS is exactly the keys with no org scope', { tag: '@smoke
     'orphanApplicantGraceDays',
     'pageViewRetentionDays',
     'pushSubscriptionStaleDays',
+    'supportReportRetentionDays',
     'viewLogWindowMinutes',
   ]);
   // Every key is catalogued, and every key has the global layer.

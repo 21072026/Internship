@@ -158,6 +158,8 @@ export const E2E_KLAVIYO_MOCK_PORT = 4603;
 // exactly a plain-http 127.0.0.1 URL past the https rule and the SSRF guard —
 // a test-only switch no deployment sets.
 export const E2E_ROSTER_SOURCE_PORT = 4604;
+// A local stand-in for the GitHub issues API (#3132) — see e2e/support/github-mock.mjs.
+export const E2E_GITHUB_MOCK_PORT = 4605;
 // The marketing product's host (#2926). There is no built-in one any more, so the
 // suite names its own (e2e/helpers/marketingHost.ts). Set on process.env, not only
 // on a webServer's env, because three parties must agree on it: both app servers
@@ -278,6 +280,13 @@ export default defineConfig({
         env: { KLAVIYO_MOCK_PORT: String(E2E_KLAVIYO_MOCK_PORT) },
       },
       {
+        command: `node e2e/support/github-mock.mjs`,
+        url: `http://127.0.0.1:${E2E_GITHUB_MOCK_PORT}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { GITHUB_MOCK_PORT: String(E2E_GITHUB_MOCK_PORT) },
+      },
+      {
         command: `node e2e/support/roster-source.mjs`,
         url: `http://127.0.0.1:${E2E_ROSTER_SOURCE_PORT}/__state`,
         reuseExistingServer: !process.env.CI,
@@ -356,6 +365,12 @@ export default defineConfig({
           // Bug-report session replay (#3131): off by default in a production
           // build, which is what the e2e server is — the replay spec needs it on.
           FEEDBACK_REPLAY_ENABLED: '1',
+          // "Create GitHub issue" (#3132) against the local stand-in above.
+          // Test-only switch; the repo name is a synthetic example.
+          SUPPORT_GITHUB_REPO: 'example-org/example-repo',
+          SUPPORT_GITHUB_TOKEN: 'e2e-github-token',
+          SUPPORT_GITHUB_API_BASE: `http://127.0.0.1:${E2E_GITHUB_MOCK_PORT}`,
+          SUPPORT_GITHUB_ALLOW_INSECURE_STUB: '1',
           // Breached-password screening (#1544) against the local stub above.
           HIBP_RANGE_URL: `http://127.0.0.1:${E2E_HIBP_MOCK_PORT}/range`,
           HIBP_ALLOW_INSECURE_STUB: '1',

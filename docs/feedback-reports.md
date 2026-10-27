@@ -94,13 +94,75 @@ the support team watches what happened instead of reading about it.
   moment the report was sent (blue), so the timeline shows where it broke.
 
 
+## Phase 3: notifications, GitHub, retention (#3132)
+
+### Telling the support team
+
+`SUPPORT_REPORT_NOTIFY` = `email` (default) | `slack` | `both` | `off`
+(`notifyChannels()` in `src/lib/supportReportIntegrationRule.ts`).
+
+- **E-mail** — every active ADMIN of the reporter's org, through `sendEmail()`
+  (category `support-report`, group `inbound_requests`; staff mail, so the
+  outbound approval never holds it). Subject: type + page path; body: reporter,
+  page, rating, their description (escaped), whether they allowed contact, and
+  a link to the report built from the org's own origin (`appUrlFor(orgId)`).
+- **Slack** — one incoming-webhook post to `SUPPORT_REPORT_SLACK_WEBHOOK_URL`,
+  which must be `https://hooks.slack.com/services/…` and passes the SSRF guard;
+  a `slack` choice without a usable URL falls back to e-mail, never to silence.
+  The post carries type, path, a 200-character excerpt and the link.
+- It runs inside `after()`, so the reporter's Send is never slowed down, and it
+  never throws: an outage is logged (`support_report.mail_failed` /
+  `support_report.slack_failed`) and the stored report is untouched.
+
+### Create GitHub issue
+
+Configured by two server-side values — `SUPPORT_GITHUB_REPO` (`owner/name`)
+and the secret `SUPPORT_GITHUB_TOKEN` (fine-grained, *Issues: read & write* on
+that one repository). Without both the card says "not configured".
+**Deployment decision (2026-10-23): the target is a PRIVATE repository**, set by
+the operator on the server — never this public one. There is no default repo in
+the code; the preview showing the yellow public-repo warning means the wrong
+repository is configured.
+
+**The draft is public-safe by construction** (`buildIssueDraft()`): type, page
+**path** (never the host — a tenant's own domain is a tenant name), build,
+environment, browser family + viewport, timestamps, console/failed-request
+**counts**, the failed requests' method / path / status / request id, and a
+**relative** link to the admin detail. Never the description, the reporter, an
+e-mail address, a console message, the screenshot or the replay. The admin
+sees the whole draft, may edit it, and gets a warning when the repository is
+public (`GET /repos/:repo` → `private`; an unknown answer reads as public).
+
+`POST /api/admin/support/reports/[id]/github` claims the report first
+(`githubIssueUrl: null` → `pending:…`, one conditional `updateMany`), so a
+double click opens one issue; a GitHub failure releases the claim. Only an
+`https://github.com/<repo>/issues/<n>` URL is ever stored.
+
+### Telling the reporter
+
+The status card has "Tell the reporter about this status change" and an
+optional note. It is disabled — and the route answers `409
+contact_not_allowed` — unless the reporter chose "yes, you may contact me".
+Category `support-report-update` (group `direct_messages`), status labelled in
+the recipient's language. Under outbound approval (MARKETING) it waits like the
+e-mail copy of any other message to a lead.
+
+### Retention
+
+Retention entry `supportReport` (`src/lib/retentionEntries.ts`), **90 days**,
+global setting `supportReportRetentionDays`. The report row goes and its
+screenshot / attachments / replay go with it (`SupportReportFile` cascades —
+they live in the database, so there is no second store to sweep).
+
+## Storage
+
 - `SupportReport` — `orgId` (in `TENANT_MODELS`, stamped from the reporter's
   row by the route), `userId`, `type`, `rating?`, `description`, `url`,
   `appVersion`, `env`, `userAgent`, `viewport`, `context Json?`,
   `contactAllowed`, `status`, `githubIssueUrl?` (Phase 3).
   `context` is **nullable on purpose**: a new non-null `Json` column backfills
   `''` on MariaDB and breaks every existing row.
-- `SupportReportFile` — `kind` (`SCREENSHOT` | `ATTACHMENT`) and the bytes,
+- `SupportReportFile` — `kind` (`SCREENSHOT` | `ATTACHMENT` | `REPLAY`) and the bytes,
   reached only through its report (deliberately unregistered, the same shape as
   `SupportAttachment`). The list query never reads it.
 
@@ -125,7 +187,7 @@ file (the route-auth and OpenAPI analysers follow a guard only within the file);
 - **Erasure** (`src/lib/accountErasure.ts`) deletes a person's reports; the
   files cascade.
 - **Account merge** (`src/lib/mergeUsers.ts`) re-points `SupportReport.userId`.
-- **Retention** (default 90 days) is Phase 3 (#3132).
+- **Retention**: 90 days, see § Phase 3 → Retention.
 
 ## Tests
 

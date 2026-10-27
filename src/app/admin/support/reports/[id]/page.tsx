@@ -10,6 +10,8 @@ import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { SupportTabs } from '@/components/SupportTabs';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
+import { SupportReportGithubCard } from '@/components/SupportReportGithubCard';
+import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import type { FeedbackContext } from '@/lib/feedbackContext';
 import {
@@ -47,6 +49,10 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
   const [tab, setTab] = useState<'console' | 'network'>('console');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [draftStatus, setDraftStatus] = useState<SupportReportStatusKey | null>(null);
+  const [notify, setNotify] = useState(false);
+  const [note, setNote] = useState('');
+  const [notice, setNotice] = useState('');
   const lightbox = useImageLightbox();
 
   useEffect(() => {
@@ -56,18 +62,25 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
       .catch(() => setReport('missing'));
   }, [id]);
 
-  const setStatus = async (status: SupportReportStatusKey) => {
+  const saveStatus = async () => {
     if (!report || report === 'missing') return;
+    const status = draftStatus ?? report.status;
     setSaving(true);
     setErr('');
+    setNotice('');
     try {
       const res = await fetch(`/api/admin/support/reports/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, notifyReporter: notify && report.contactAllowed, note: notify ? note : undefined }),
       });
       if (!res.ok) throw new Error();
+      const d = await res.json();
       setReport({ ...report, status });
+      setDraftStatus(null);
+      if (d.notified) setNotice(a.reporterNotified);
+      setNotify(false);
+      setNote('');
     } catch {
       setErr(t.common.error);
     } finally {
@@ -121,20 +134,41 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
         <Badge variant={report.type === 'BUG' ? 'danger' : 'info'}>{a[`type${report.type}`]}</Badge>
         <Badge variant={SUPPORT_REPORT_STATUS_VARIANT[report.status]} data-testid="report-status-badge">{a[`status${report.status}`]}</Badge>
         <RelativeTime date={report.createdAt} className="text-sm text-gray-500" />
-        <label className="ml-auto flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-          {a.changeStatus}
-          <select
-            value={report.status}
-            disabled={saving}
-            onChange={(e) => void setStatus(e.target.value as SupportReportStatusKey)}
-            data-testid="report-status-select"
-            className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          >
-            {SUPPORT_REPORT_STATUSES.map((s) => <option key={s} value={s}>{a[`status${s}`]}</option>)}
-          </select>
-        </label>
       </div>
-      {err && <p role="alert" className="mb-3 text-sm text-red-600">{err}</p>}
+
+      {/* Triage (#3130) and, when the reporter allowed it, telling them (#3132). */}
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col text-sm text-gray-700 dark:text-gray-300">
+            {a.changeStatus}
+            <select
+              value={draftStatus ?? report.status}
+              disabled={saving}
+              onChange={(e) => setDraftStatus(e.target.value as SupportReportStatusKey)}
+              data-testid="report-status-select"
+              className="mt-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            >
+              {SUPPORT_REPORT_STATUSES.map((s) => <option key={s} value={s}>{a[`status${s}`]}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+            <input type="checkbox" checked={notify} disabled={!report.contactAllowed || saving} onChange={(e) => setNotify(e.target.checked)} data-testid="report-notify-reporter" />
+            {a.notifyReporter}
+          </label>
+          <Button type="button" size="sm" onClick={() => void saveStatus()} disabled={saving || (!draftStatus && !notify)} data-testid="report-status-save">
+            {a.saveStatus}
+          </Button>
+        </div>
+        {!report.contactAllowed && <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">{a.notifyReporterOff}</p>}
+        {notify && (
+          <label className="mt-3 block text-sm text-gray-800 dark:text-gray-200">
+            {a.statusNoteLabel}
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={3} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" data-testid="report-status-note" />
+          </label>
+        )}
+        {notice && <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-400">{notice}</p>}
+        {err && <p role="alert" className="mt-2 text-sm text-red-600">{err}</p>}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -240,6 +274,7 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
           )}
         </div>
       </Card>
+      <SupportReportGithubCard reportId={report.id} />
       <ImageLightbox {...lightbox.lightboxProps} />
     </div>
   );

@@ -781,6 +781,29 @@ async function anonymizeOrphanApplicants(ctx: RetentionContext) {
   };
 }
 
+async function pruneSupportReports(ctx: RetentionContext) {
+  // The whole report goes: its screenshot, attachments and replay are
+  // SupportReportFile rows that cascade with it (they live in the database —
+  // there is no object store to sweep separately). Every tenant in one pass,
+  // served by @@index([orgId, status, createdAt]) only loosely, which is fine
+  // for a table that grows by human reports, not by traffic.
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.supportReport.findMany({
+          where: { createdAt: { lt: ctx.cutoff } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => (await prisma.supportReport.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 async function pruneRosterRowResults(ctx: RetentionContext) {
   // Row-level detail only: the RosterRun summary it hangs off is kept, so
   // "did the sync run that night and what did it change in total?" stays
@@ -978,6 +1001,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets a year rather than one of the short windows above (only companyUsage, a hygiene window for the same reason, is longer).',
     run: pruneTrialReminders,
+  },
+  {
+    key: 'supportReport',
+    // Resolved from the GLOBAL settings row: the sweep has no org bound.
+    settingKey: 'supportReportRetentionDays',
+    defaultDays: 90,
+    reason:
+      'A bug report carries a picture of someone\'s screen, their own words and, with replay, a recording of what they did — the most personal row a support tool keeps, and useful only while the problem is being worked on. Ninety days covers a fix shipping through a release train with room to spare; a report that matters beyond that has its GitHub issue, which by design carries none of it.',
+    run: pruneSupportReports,
   },
   {
     key: 'rosterRowResult',

@@ -127,6 +127,12 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'sso-certificate': { exempt: true, why: `${ESSENTIAL} — the IdP certificate-expiry warning, addressed to the org's admins and support address` },
   // ── triggered by the person themselves ────────────────────────────────────
   'mentor-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own application' },
+  // #3132: the answer to the person's own bug report, sent only when an admin
+  // chooses to AND the person allowed contact. Held like `message` (a human's
+  // words to a lead are still the product writing to a lead).
+  'support-report-update': { exempt: false, trigger: 'message', why: 'a support-team answer to the person\'s own report' },
+  // #3132: a new bug report, to the org's admins — staff mail, never held anyway.
+  'support-report': { exempt: false, trigger: 'request', why: 'a new in-app bug report, addressed to the org\'s admins' },
   // ── held although essential-grouped ───────────────────────────────────────
   // The re-consent ask ("keep your data with us?") is a cron the person never
   // triggered, sent to every lead past the retention limit — neither the
