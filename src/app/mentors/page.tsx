@@ -32,6 +32,7 @@ const AVAILABILITY_VARIANT: Record<MentorAvailabilityStatus, 'success' | 'warnin
   available: 'success',
   at_capacity: 'warning',
   not_accepting: 'default',
+  self_match_full: 'warning',
 };
 
 // Mentee-facing mentor directory (#938, story #900). Only mentors who opted in
@@ -65,6 +66,7 @@ export default function MentorDirectoryPage() {
     available: t.mentorDirectory.accepting,
     at_capacity: t.mentorDirectory.atCapacity,
     not_accepting: t.mentorDirectory.notAccepting,
+    self_match_full: t.mentorDirectory.selfMatchFull,
   };
 
   const fetchMentors = useCallback(async () => {

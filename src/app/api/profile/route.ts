@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { syncUserSkillLevels, syncUserSkills } from '@/lib/skillsResolve';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -77,6 +78,8 @@ const updateProfileSchema = z.object({
   interests: z.string().max(2000).optional(),
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
+  // How many mentees may pick this mentor themselves (#1808); null = capacity alone.
+  selfMatchLimit: z.number().int().min(0).max(100).nullable().optional(),
   // Name display on a published testimonial (#1096): full name is an explicit
   // choice; null/unset renders initials (the privacy-first default).
   testimonialNameStyle: z.enum(['fullname', 'initials']).nullable().optional(),
@@ -102,7 +105,7 @@ const PROFILE_FIELDS = new Set(Object.keys(updateProfileSchema.shape));
 const MENTEE_ONLY_FIELDS = new Set(['university', 'department', 'graduationYear', 'targetPosition', 'cvUrl']);
 // `interests` is deliberately absent: both roles fill it in (a mentee's areas of
 // interest, a mentor's areas of expertise), so it is not owned by either.
-const MENTOR_ONLY_FIELDS = new Set(['mentorCapacity', 'acceptingMentees', 'languages']);
+const MENTOR_ONLY_FIELDS = new Set(['mentorCapacity', 'acceptingMentees', 'selfMatchLimit', 'languages']);
 
 function forbiddenProfileFields(body: unknown, role: string): string[] {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
@@ -148,6 +151,7 @@ const PROFILE_SELECT = {
   targetPosition: true,
   mentorCapacity: true,
   acceptingMentees: true,
+  selfMatchLimit: true,
   testimonialNameStyle: true,
   emailNotifications: true,
   notificationPrefs: true,
@@ -269,16 +273,22 @@ export async function GET() {
         return NextResponse.json({ user });
       }
 
-      const activeMenteeCount = await prisma.mentorshipRelation.count({
-        where: { mentorId: user.id, status: 'ACTIVE' },
-      });
+      const [activeMenteeCount, selfSelected] = await Promise.all([
+        prisma.mentorshipRelation.count({ where: { mentorId: user.id, status: 'ACTIVE' } }),
+        selfSelectedCount(user.id),
+      ]);
+      // The mentor's own view answers as a mentee would see them (#1808), so
+      // a reached self-match limit shows up here as `self_match_full`.
       const availability = getMentorAvailability({
         mentorCapacity: user.mentorCapacity,
         activeMenteeCount,
         acceptingMentees: user.acceptingMentees,
+        selfMatchLimit: user.selfMatchLimit,
+        selfSelectedCount: selfSelected,
+        context: 'self_select',
       });
 
-      return NextResponse.json({ user: { ...user, activeMenteeCount, availability } });
+      return NextResponse.json({ user: { ...user, activeMenteeCount, selfSelectedCount: selfSelected, availability } });
     });
   } catch (error) {
     console.error('Get profile error:', error);

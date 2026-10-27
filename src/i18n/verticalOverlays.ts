@@ -379,6 +379,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         capacityHint: 'Max leads you can own at once (blank = no limit)',
         activeMentees: '{count} / {capacity} active leads',
         acceptingMentees: 'I can take on a new lead',
+        selfMatchLimitHint: 'How many leads may pick you themselves (directory request or your link). Blank = same as your capacity. Admins can still assign you up to your capacity. A personal preference, never a plan limit.',
       },
       consent: {
         items: {
@@ -1080,6 +1081,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         accepting: 'Accepting leads',
         requestMentor: 'Request this rep',
         requestedMentorUnavailable: 'That rep is no longer available — pick another one below.',
+        selfMatchFullError: 'This rep is not taking self-selected leads right now — pick another one, or leave the field empty and an admin will assign you.',
         requestedMentorPending: 'You already have a request waiting for an answer, so this rep was not added to it.',
         requestedMentorActiveMentorship: 'You already have a sales rep, so this request was not started.',
         empty: 'No sales reps are listed yet. Reps appear here once they opt in.',
@@ -1462,6 +1464,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         capacityHint: 'Aynı anda sahip olabileceğin maksimum müşteri adayı (boş = limitsiz)',
         activeMentees: '{count} / {capacity} aktif müşteri adayı',
         acceptingMentees: 'Yeni müşteri adayı alabilirim',
+        selfMatchLimitHint: 'Seni kaç müşteri adayı kendisi seçebilir (dizinden talep ya da bağlantın). Boş = kapasitenle aynı. Yöneticiler seni kapasitene kadar yine de atayabilir. Kişisel bir tercih, asla bir plan sınırı değil.',
       },
       consent: {
         items: {
@@ -2058,6 +2061,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         accepting: 'Müşteri adayı kabul ediyor',
         requestMentor: 'Bu temsilciyi iste',
         requestedMentorUnavailable: 'Bu temsilci artık müsait değil — aşağıdan başka bir temsilci seçebilirsin.',
+        selfMatchFullError: 'Bu temsilci şu an kendi seçimiyle gelen müşteri adayı almıyor — başka birini seç ya da alanı boş bırak, bir yönetici seni atasın.',
         requestedMentorPending: 'Yanıt bekleyen bir talebin zaten var, bu yüzden bu temsilci talebine eklenmedi.',
         requestedMentorActiveMentorship: 'Zaten bir satış temsilcin var, bu yüzden bu talep başlatılmadı.',
         empty: 'Henüz listelenen satış temsilcisi yok. Temsilciler onay verdikçe burada görünür.',
@@ -2440,6 +2444,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         capacityHint: 'Maximale Leads gleichzeitig (leer = kein Limit)',
         activeMentees: '{count} / {capacity} aktive Leads',
         acceptingMentees: 'Ich kann einen neuen Lead übernehmen',
+        selfMatchLimitHint: 'Wie viele Leads dich selbst wählen dürfen (Anfrage im Verzeichnis oder dein Link). Leer = wie deine Kapazität. Admins können dich trotzdem bis zu deiner Kapazität zuweisen. Eine persönliche Einstellung, nie ein Tarif-Limit.',
       },
       consent: {
         items: {
@@ -3030,6 +3035,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         accepting: 'Nimmt Leads an',
         requestMentor: 'Diesen Vertriebsmitarbeiter anfragen',
         requestedMentorUnavailable: 'Dieser Vertriebsmitarbeiter ist nicht mehr verfügbar — wähle unten eine andere Person.',
+        selfMatchFullError: 'Diese Person nimmt gerade keine selbst gewählten Leads an — wähle jemand anderen oder lass das Feld leer, dann weist dich ein Admin zu.',
         requestedMentorPending: 'Du hast bereits eine offene Anfrage, deshalb wurde dieser Vertriebsmitarbeiter nicht hinzugefügt.',
         requestedMentorActiveMentorship: 'Du hast bereits einen Vertriebsmitarbeiter, deshalb wurde diese Anfrage nicht gestartet.',
         empty: 'Noch keine Vertriebsmitarbeiter gelistet. Sie erscheinen hier, sobald sie zustimmen.',

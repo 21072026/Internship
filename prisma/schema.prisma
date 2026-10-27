@@ -776,6 +776,11 @@ model User {
   // availability then falls back to a capacity-derived guess (see
   // src/lib/mentorAvailability.ts).
   acceptingMentees        Boolean?
+  // How many mentees may pick this mentor THEMSELVES (#1808) — the directory's
+  // preferred-mentor request and the public apply link. Null = no separate
+  // limit (mentorCapacity alone). Never applies to an admin assigning them;
+  // judged by getMentorAvailability(context: 'self_select').
+  selfMatchLimit          Int?
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.

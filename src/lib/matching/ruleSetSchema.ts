@@ -23,6 +23,8 @@ const configSchema = z
     mode: z.enum(['normalized', 'lowercase']).optional(),
     // capacityHeadroom: also refuse a mentor who switched acceptingMentees off.
     honourPreference: z.boolean().optional(),
+    // capacityHeadroom: a self-select round — honour each mentor's selfMatchLimit (#1808).
+    selfSelect: z.boolean().optional(),
   })
   .strict();
 

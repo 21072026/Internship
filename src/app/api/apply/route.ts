@@ -11,6 +11,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
@@ -32,14 +33,20 @@ async function mentorApplyState(mentorId: string) {
   // is: a sales rep's id on interncrm.com would file a mentee request into an
   // org without mentorship and notify the rep about it. Such a link is unknown.
   if (await requireCapability(mentor.orgId, 'mentorship')) return null;
-  const [active, pending] = await Promise.all([
+  const [active, pending, selfSelected] = await Promise.all([
     prisma.mentorshipRelation.count({ where: { mentorId: mentor.id, status: 'ACTIVE' } }),
     prisma.mentorshipRequest.count({ where: { preferredMentorId: mentor.id, status: 'PENDING' } }),
+    selfSelectedCount(mentor.id),
   ]);
+  // An applicant picking this mentor by link is a self-selection (#1808): the
+  // mentor's selfMatchLimit closes the link even while capacity has room.
   const availability = getMentorAvailability({
     mentorCapacity: mentor.mentorCapacity,
     activeMenteeCount: active + pending,
     acceptingMentees: mentor.acceptingMentees,
+    selfMatchLimit: mentor.selfMatchLimit,
+    selfSelectedCount: selfSelected,
+    context: 'self_select',
   });
   return { mentor, accepting: availability.status === 'available', reason: availability.status };
 }
@@ -87,7 +94,7 @@ export async function POST(request: Request) {
   // applications with a clear reason — no silent failure (#679 lesson).
   if (!state.accepting) {
     return NextResponse.json(
-      { error: 'This mentor is not taking new applications right now', code: state.reason === 'at_capacity' ? 'mentor_full' : 'mentor_not_accepting' },
+      { error: 'This mentor is not taking new applications right now', code: state.reason === 'at_capacity' || state.reason === 'self_match_full' ? 'mentor_full' : 'mentor_not_accepting' },
       { status: 409 }
     );
   }
