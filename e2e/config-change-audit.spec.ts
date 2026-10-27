@@ -73,7 +73,9 @@ test('an SSO change is audited with the issuer diff and without the certificate'
   expect(audit.actorId).toBe(user.id);
   expect(audit.targetId).toBe(tenant.id);
   const detail = JSON.parse(audit.detail!);
-  const byField = Object.fromEntries((detail.changes as { field: string }[]).map((c) => [c.field, c]));
+  const byField = Object.fromEntries(
+    (detail.changes as { field: string; fromFingerprint?: string | null; toFingerprint?: string | null }[]).map((c) => [c.field, c]),
+  );
   expect(byField.ssoIssuer).toEqual({ field: 'ssoIssuer', from: 'https://idp.example.test/old', to: 'https://idp.example.test/new' });
   expect(byField.ssoCertificate).toMatchObject({ field: 'ssoCertificate', from: '[redacted]', to: '[redacted]', redacted: true });
   expect(byField.ssoCertificate.fromFingerprint).not.toBe(byField.ssoCertificate.toFingerprint);
