@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { LiveRegionProvider } from '@/components/ui/LiveRegion';
 import { CookieConsent } from '@/components/CookieConsent';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
+import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import { TimezoneSync } from '@/components/TimezoneSync';
@@ -60,6 +61,9 @@ export function Providers({
             <CookieConsent />
             {/* Signed-in only; renders nothing otherwise (#3130). */}
             <FeedbackWidget replay={feedbackReplay} />
+            {/* WCAG 2.2.1: warns five minutes before an idle session ends and
+                offers to extend it; signed-in only (#2864). */}
+            <SessionTimeoutWarning />
             <ActivityTracker />
             <TimezoneSync />
           </ToastProvider>

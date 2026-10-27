@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mentor board parity (#2076):** the admin board's behaviours are shared pieces under `src/components/board/` — `useBoardFilters()` (search + hide-empty state), `BoardPhaseGroups` (collapsible phases from `groupResolvedStages`, `stacked` for the admin board, `row` for the owner's board), `BoardColumnHeader` (label + count + WIP warning, the limit taken as a prop), `OverdueBadge` and `useBoardWipLimits()`. The mentor board (and `/sales/board`) now groups its stages into the same collapsible phases and shows the amber WIP chip from the org's limits (#1439). New read-only `GET /api/board/wip-limits` (ADMIN + MENTOR) serves the resolved limits from the same resolvers as `/api/admin/stage-sla`, which stays the admin-only editor.",
+  "notes": {
+    "en": ["Your pipeline board now groups stages into collapsible phases, and a stage over its work-in-progress limit is highlighted — just like the admin board."],
+    "tr": ["Pipeline panon artık aşamaları daraltılabilir fazlar hâlinde grupluyor ve iş limitini aşan bir aşama vurgulanıyor — tıpkı admin panosundaki gibi."],
+    "de": ["Dein Pipeline-Board fasst die Phasen jetzt in einklappbare Abschnitte zusammen, und eine Phase über ihrem Arbeitslimit wird hervorgehoben — genau wie im Admin-Board."]
+  }
+}

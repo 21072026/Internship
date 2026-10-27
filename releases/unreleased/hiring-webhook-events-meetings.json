@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Meeting lifecycle on the event bus (#1998, 2/n):** `meeting.cancelled` and `meeting.rescheduled` — registered since #1980 but never raised — now leave through `emit()`. `meeting.cancelled` is raised by `cancelMeetingRows()` itself, so the meeting PATCH and the interview-request cancel both carry it (one event per call: the addressed row plus `count`); a DELETE of a meeting that was still scheduled raises it too. `meeting.rescheduled` fires once per row whose time moved (not for a title or link edit). The cancel reason never goes on the bus.",
+  "notes": {
+    "en": ["Webhooks now fire when a meeting is moved to another time or called off."],
+    "tr": ["Webhook'lar artık bir toplantı başka bir saate taşındığında veya iptal edildiğinde tetikleniyor."],
+    "de": ["Webhooks werden jetzt ausgelöst, wenn ein Termin verschoben oder abgesagt wird."]
+  }
+}

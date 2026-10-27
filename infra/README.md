@@ -797,8 +797,14 @@ disk failure — needs a scheduled one. On the Docker host it is the
 installs: daily at **02:40 UTC** (+ up to 5 min jitter, `Persistent=true`),
 running **`/opt/internship-crm/bin/backup-db.sh --env prod`** as root with
 `KEEP_DAYS=14` and the host-side `DATABASE_URL` from
-`/etc/internship-crm-backup.env`. It covers **prod only**; preview is dumped
-only by its deploy hook (see the freshness check below).
+`/etc/internship-crm-backup.env`. Preview has its own pair,
+`internship-backup-preview.timer` at **02:50 UTC**, which sources
+`/etc/internship-crm/preview.env` (preview runs with `NETWORK=host`, so its
+`DATABASE_URL` already reaches MySQL on 127.0.0.1) and is skipped while that
+file does not exist (#3166). A box bootstrapped before #3166 has only the prod
+timer; `sudo infra/server/bootstrap.sh --only backups` (idempotent) installs it — and
+the same step re-fetches `backup-db.sh` from `main`, which also cures the stale
+prod copy described next.
 
 `/opt/internship-crm/bin/backup-db.sh` is a **copy**, fetched from `main` when
 bootstrap last ran. A change to `infra/backup-db.sh` does not reach the timer
@@ -808,7 +814,7 @@ until it is fetched again:
 sudo curl -fsSL -o /opt/internship-crm/bin/backup-db.sh \
   https://raw.githubusercontent.com/21072026/Internship/main/infra/backup-db.sh
 sudo chmod 0755 /opt/internship-crm/bin/backup-db.sh
-systemctl list-timers internship-backup.timer   # next run
+systemctl list-timers 'internship-backup*'      # next runs
 ```
 
 The timer runs as root, the deploy hook and the freshness check as the runner

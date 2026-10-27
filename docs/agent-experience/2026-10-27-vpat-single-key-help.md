@@ -10,3 +10,12 @@
 - **A VPAT row flips to `Supports` only with a path the test can check.** Writing the spec first
   (`e2e/consistent-help.spec.ts`) and citing it as evidence keeps the row honest; then
   `npm run vpat:evidence` and `node --test scripts/test/vpat.test.mjs`.
+- **`git add -A -- . ':!.env'` exits non-zero when `.env` is gitignored** ("paths are ignored"),
+  so a `git add … && git commit …` chain silently never commits. The PR call then fails with
+  "No commits between main and …". Use `git add -A` alone (it skips ignored files on its own).
+- **After fetching a fresh `origin/main`, run `npx prisma generate` before `tsc`** — sibling PRs
+  add columns all day, and a stale client shows as dozens of TS2353 errors in unrelated e2e specs.
+- **Time-based UI is testable without waiting: `page.clock.install({ time: Date.now() })` before
+  sign-in, then `page.clock.fastForward('11:56:00')`.** The server clock is untouched, so anything
+  the server hands back (a fresh session `expires`) is real time — `page.clock.setSystemTime(Date.now())`
+  before that round-trip, or the page sees the new expiry as already near (`e2e/session-timeout.spec.ts`).

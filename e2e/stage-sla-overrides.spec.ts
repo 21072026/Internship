@@ -92,3 +92,56 @@ test('a mentor override beats a cohort override, which beats the org', async ({ 
     for (const email of emails) await cleanupByEmail(email);
   }
 });
+
+// #3203 — saving a rule fills the deadline of relations ALREADY in the stage,
+// dated from the stage entry, and a past-due one rings nobody.
+test('saving an SLA fills deadlines for relations already in the stage, without a reminder', async ({ page }) => {
+  test.slow();
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
+  const orgId = admin?.orgId ?? null;
+  test.skip(!orgId, 'needs an admin bound to an organisation');
+  const org = orgId as string;
+  await prisma.stageSla.deleteMany({ where: { orgId: org } });
+
+  const mentorEmail = uniqueEmail('sla-fill-mentor');
+  const menteeEmail = uniqueEmail('sla-fill-mentee');
+  const mentor = await seedUser(mentorEmail, 'Pass123!x', 'MENTOR', 'SLA Fill Mentor');
+  const mentee = await seedUser(menteeEmail, 'Pass123!x', 'MENTEE', 'SLA Fill Mentee');
+  await prisma.user.updateMany({ where: { id: { in: [mentor.id, mentee.id] } }, data: { orgId: org } });
+  const entered = new Date(Date.now() - 10 * DAY);
+  const relation = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      orgId: org,
+      status: 'ACTIVE',
+      pipelineStatus: STAGE,
+      startDate: new Date(Date.now() - 30 * DAY),
+      statusChanges: { create: { fromStatus: 'APPLICATION_100', toStatus: STAGE, createdAt: entered } },
+    },
+  });
+
+  try {
+    await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
+    const saved = await page.request.put('/api/admin/stage-sla', { data: { slas: [{ stageKey: STAGE, days: 5 }] } });
+    expect(saved.ok()).toBeTruthy();
+    expect((await saved.json()).deadlinesSet).toBeGreaterThanOrEqual(1);
+
+    const after = await prisma.mentorshipRelation.findUnique({ where: { id: relation.id } });
+    // Entered 10 days ago + 5 = five days overdue, not five days from now.
+    expect(Math.abs((after?.stageDeadline?.getTime() ?? 0) - (entered.getTime() + 5 * DAY))).toBeLessThan(60 * 1000);
+    expect(after?.deadlineReminderSentAt).not.toBeNull();
+
+    // A second save changes nothing, and the sweep adopts the breach silently.
+    await page.request.put('/api/admin/stage-sla', { data: { slas: [{ stageKey: STAGE, days: 5 }] } });
+    const again = await prisma.mentorshipRelation.findUnique({ where: { id: relation.id } });
+    expect(again?.stageDeadline?.getTime()).toBe(after?.stageDeadline?.getTime());
+    expect((await page.request.get('/api/cron?job=stage-deadlines')).ok()).toBeTruthy();
+    expect(await prisma.notification.count({ where: { userId: mentor.id, type: 'deadline.stagePassed' } })).toBe(0);
+  } finally {
+    await prisma.stageSla.deleteMany({ where: { orgId: org } });
+    await prisma.notification.deleteMany({ where: { userId: mentor.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

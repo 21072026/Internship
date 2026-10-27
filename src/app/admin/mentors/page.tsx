@@ -12,6 +12,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { SavedViews } from '@/components/SavedViews';
+import { MentorLimitsImport } from '@/components/MentorLimitsImport';
 
 interface MentorUser {
   id: string;
@@ -112,6 +113,8 @@ export default function MentorsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentors.title}</h1>
         <p className="text-gray-500 mt-1">{t.mentors.subtitle}</p>
       </div>
+
+      <MentorLimitsImport onApplied={load} />
 
       <input
         type="search"

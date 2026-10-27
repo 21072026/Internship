@@ -31,8 +31,17 @@ function entry(over: Partial<RetentionEntry> & Pick<RetentionEntry, 'key' | 'run
   return { defaultDays: 30, reason: 'test fixture', ...over };
 }
 
+// The registry is module state, shared by every spec file the same worker runs.
+// Leaving it empty took the real entries away from whatever ran next:
+// safeguarding.spec.ts found no 'message' entry and failed until its retry got a
+// fresh worker (#3059). Put back exactly what was there.
+let realEntries: RetentionEntry[] = [];
+test.beforeAll(() => { realEntries = listRetentionEntries(); });
 test.beforeEach(() => clearRetentionRegistry());
-test.afterAll(() => clearRetentionRegistry());
+test.afterAll(() => {
+  clearRetentionRegistry();
+  for (const e of realEntries) registerRetention(e);
+});
 
 test('a new table is one registerRetention call, and the runner picks it up', async () => {
   const seen: string[] = [];

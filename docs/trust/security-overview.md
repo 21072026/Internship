@@ -121,6 +121,16 @@ facts rather than intentions.
   committed baseline in both light and dark mode. The full end-to-end suite runs
   four times a day and a load test nightly, both alerting only on failure.
   → `CLAUDE.md` § Commands, [`docs/testing.md`](../testing.md)
+- **Dependencies are tracked against a written remediation SLA.** Every
+  dependency advisory has a per-severity deadline, an unfixable one is carried
+  only with a written reason that the CI gate itself reads, and the scan runs on
+  every pull request and weekly. A CycloneDX SBOM of the production tree,
+  stamped with the version and commit, is served by every deployed image at
+  `/sbom.cdx.json`, and a third-party licence inventory is regenerated and
+  checked in CI (#2059).
+  → [`vulnerability-management.md`](vulnerability-management.md),
+  [`docs/security-exceptions.md`](../security-exceptions.md),
+  [`docs/legal/third-party-licenses.md`](../legal/third-party-licenses.md)
 
 ## Known limitations — read this part
 
