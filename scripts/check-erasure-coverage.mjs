@@ -144,6 +144,7 @@ const DECISIONS = new Map([
   ['AgendaTemplateItem.guidance', CONFIG],
   ['MatchRuleSet.description', CONFIG],
   ['Project.description', CONFIG],
+  ['ProgramEvent.description', CONFIG],
   ['Project.goals', CONFIG],
   ['Requisition.description', CONFIG],
   ['Company.description', 'describes the company, not its contact person (the contact columns are erased)'],
@@ -174,6 +175,8 @@ const DECISIONS = new Map([
   ['RosterRun.error', OPS],
   ['Job.lastError', OPS],
   ['JobRun.error', OPS],
+  // A failed automation action's message (#1703): codes and driver errors, never text about a person.
+  ['AutomationRun.error', OPS],
   ['BackfillRun.lastError', OPS],
   ['NotificationDelivery.error', OPS],
 ]);

@@ -259,6 +259,7 @@ model Organization {
   aiArtifacts             AiArtifact[]
   aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
+  programEvents           ProgramEvent[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
@@ -292,6 +293,8 @@ model Organization {
   webhooks                Webhook[]
   domainEvents            DomainEvent[]
   webhookDeliveries       WebhookDelivery[]
+  automationRules         AutomationRule[]
+  automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
   externalProfileLinks    ExternalProfileLink[]
@@ -977,6 +980,8 @@ model User {
   aiArtifacts                       AiArtifact[]                   @relation("AiArtifactSubject")
   attendanceRecords                 MeetingAttendance[]            @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]            @relation("AttendanceRecorder")
+  hostedEvents                      ProgramEvent[]                 @relation("EventHost")
+  eventRegistrations                EventRegistration[]            @relation("EventRegistrant")
   surveyResponses                   SurveyResponse[]               @relation("SurveyRespondent")
   formResponses                     FormResponse[]
   meetingFeedback                   MeetingFeedback[]              @relation("MeetingFeedbackRater")
@@ -3193,6 +3198,73 @@ model DomainEvent {
   @@index([createdAt])
 }
 
+// A stage automation rule (#1703): "when a relation enters/leaves stage X and
+// these conditions hold, run these allowlisted actions". The vocabulary, the
+// write-time gate and the condition evaluator are src/lib/automation/rule.ts;
+// the evaluator is the `automation` domain-event subscriber. `conditions` and
+// `actions` are JSON validated by that module on every write, and re-validated
+// on every read (a row that no longer parses records a FAILED run).
+// docs/automation-rules.md.
+model AutomationRule {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // Reserved for per-programme rules (#1618); unused until then.
+  programId       String?
+  name            String        @db.VarChar(120)
+  // STAGE_ENTRY | STAGE_EXIT (AUTOMATION_TRIGGERS)
+  trigger         String        @db.VarChar(16)
+  stageKey        String        @db.VarChar(191)
+  conditions      Json
+  // Ordered list of allowlisted actions (AUTOMATION_ACTIONS).
+  actions         Json
+  // 0 = run on the move; otherwise a queued `automation.run` at move + delay.
+  delayMinutes    Int           @default(0)
+  // Off until an admin switches it on (#1704 asks for a dry run first).
+  enabled         Boolean       @default(false)
+  // Display order on /admin/automations (#1704). Execution never depends on it.
+  position        Int           @default(0)
+  // The last dry run against real history (#1704).
+  lastSimulatedAt DateTime?
+  createdById     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  runs AutomationRun[]
+
+  @@index([orgId, stageKey, enabled])
+}
+
+// One evaluation of one rule for one stage-change event (#1703). Unique on
+// (ruleId, eventId): a redelivered event can never produce a second run. Status
+// PENDING (waiting for its delay) → RUNNING (claimed by one guarded update) →
+// SUCCESS | PARTIAL | FAILED, or SKIPPED (conditions not met, rule switched
+// off, relation left the stage). `results` is the per-action outcome: ids and
+// codes only, never a name or an address.
+model AutomationRun {
+  id         String         @id @default(cuid())
+  orgId      String?
+  org        Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ruleId     String
+  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  // The DomainEvent that caused it.
+  eventId    String
+  relationId String
+  fromStage  String         @db.VarChar(191)
+  toStage    String         @db.VarChar(191)
+  status     String         @db.VarChar(16)
+  results    Json
+  error      String?        @db.Text
+  // When its actions are due (the move, or the move + the rule's delay).
+  runAt      DateTime       @default(now())
+  finishedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  @@unique([ruleId, eventId])
+  @@index([orgId, createdAt])
+  @@index([relationId])
+}
+
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
 // A minted programmatic credential for the public /api/v1 surface.
 //
@@ -3742,6 +3814,7 @@ model Cohort {
   relations        MentorshipRelation[]
   programCosts     ProgramCost[]
   steps            ProgramStep[]
+  events           ProgramEvent[]
   adminScopeGrants AdminScopeGrant[]
   settings         Setting[]
   stageSlas        StageSla[]
@@ -4814,6 +4887,87 @@ model MeetingAttendance {
   @@unique([seriesId, occurrenceAt, userId])
   @@index([orgId])
   @@index([relationId, meetingAt])
+}
+
+// ── Group sessions and office hours (#1856) ─────────────────────────────────
+// One-to-many: a kickoff briefing, a mentor's office hour, an employer info
+// session. Publish, register, cap, waitlist, attend — and nothing else (no
+// booths, bidding, ticketing, payments or public directory: a separate epic).
+// Deliberately NOT a Meeting: a Meeting has one relation/project/conversation
+// context and a per-row RSVP token, and an event has neither — a registrant is
+// a signed-in account, so there is no token to leak (#1548).
+//
+// `seatsTaken` is the capacity's race guard: a seat is claimed by ONE guarded
+// `updateMany` (`seatsTaken < capacity`), released and refilled from the
+// waitlist inside the same transaction, so the row lock serialises every seat
+// change of one event. Its only writer is src/lib/groupEvents.ts. The
+// vocabularies (audience, registration state) are whitelists in
+// src/lib/groupEventRule.ts, free Strings here by repo convention. Never
+// deleted: a cancelled event keeps `cancelledAt` and its attendance record.
+model ProgramEvent {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id])
+  // Optional programme (the Cohort row, #1622): set, only its members see it.
+  programId       String?
+  program         Cohort?       @relation(fields: [programId], references: [id], onDelete: SetNull)
+  title           String        @db.VarChar(191)
+  description     String?       @db.Text
+  startsAt        DateTime
+  // The clock the host picked `startsAt` on (IANA zone), like Meeting.timeZone.
+  timeZone        String        @db.VarChar(64)
+  durationMinutes Int           @default(60)
+  // Null = no cap. Never lowered below `seatsTaken`.
+  capacity        Int?
+  seatsTaken      Int           @default(0)
+  location        String?       @db.VarChar(191)
+  // Through checkPastedMeetingLink() / resolveMeetingLink() only.
+  joinUrl         String?       @db.VarChar(191)
+  hostId          String
+  host            User          @relation("EventHost", fields: [hostId], references: [id], onDelete: Cascade)
+  // MENTEES | MENTORS | ALL
+  audience        String        @default("MENTEES") @db.VarChar(16)
+  // The journey step that published it (#1852's GROUP_SESSION), if any.
+  sourceStepId    String?
+  createdById     String
+  publishedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelledById   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  registrations EventRegistration[]
+
+  @@index([orgId, startsAt])
+  @@index([hostId])
+  @@index([programId])
+}
+
+// One person's place at one event (#1856). Reached through its event, which is
+// tenant-scoped; deliberately not in TENANT_MODELS (no orgId of its own, the
+// same shape as ProgramStepRun). The session is the credential — there is no
+// token on this row. Attendance reuses #2014's AttendanceState (never a second
+// enum, never an attendance field on Meeting); `attendedAt` is stamped with it.
+model EventRegistration {
+  id                     String           @id @default(cuid())
+  eventId                String
+  event                  ProgramEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId                 String
+  user                   User             @relation("EventRegistrant", fields: [userId], references: [id], onDelete: Cascade)
+  // REGISTERED | WAITLISTED | CANCELLED
+  state                  String           @db.VarChar(16)
+  // Queue position: the waitlist is promoted oldest first. Reset on re-register.
+  registeredAt           DateTime         @default(now())
+  promotedAt             DateTime?
+  cancelledAt            DateTime?
+  attendance             AttendanceState?
+  attendedAt             DateTime?
+  attendanceRecordedById String?
+  updatedAt              DateTime         @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([eventId, state, registeredAt])
+  @@index([userId])
 }
 
 model MeetingSeries {

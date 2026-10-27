@@ -87,3 +87,18 @@ test('merge: a confirmed loser beats a self-rated target, never the other way', 
 test('merge: an unrated loser changes nothing', () => {
   assert.equal(mergedLevel(row('t', null), row('l', null)), null);
 });
+
+import { confirmLevelPlan } from '../../src/lib/skillLevelRule.ts';
+
+test('confirming the standing value verifies it and writes no history', () => {
+  const now = new Date('2026-10-27T12:00:00Z');
+  const plan = confirmLevelPlan(3, 3, 'mentor-1', 'MENTOR', now);
+  assert.equal(plan.change, null);
+  assert.deepEqual(plan.data, { level: 3, levelSource: 'MENTOR', verifiedById: 'mentor-1', verifiedAt: now, levelUpdatedAt: now });
+});
+
+test('correcting the value while confirming writes exactly one change', () => {
+  const plan = confirmLevelPlan(5, 3, 'mentor-1', 'MENTOR', new Date());
+  assert.deepEqual(plan.change, { fromLevel: 5, toLevel: 3 });
+  assert.deepEqual(confirmLevelPlan(null, 2, 'm', 'MENTOR', new Date()).change, { fromLevel: null, toLevel: 2 });
+});

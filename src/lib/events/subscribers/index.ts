@@ -4,6 +4,7 @@
 import { registerSubscriber } from '../subscribers';
 import { webhookSubscriber } from './webhook';
 import { configAuditSubscriber } from './configAudit';
+import { automationSubscriber } from './automation';
 
 let registered = false;
 
@@ -12,4 +13,5 @@ export function registerAllSubscribers(): void {
   registered = true;
   registerSubscriber(webhookSubscriber);
   registerSubscriber(configAuditSubscriber);
+  registerSubscriber(automationSubscriber);
 }

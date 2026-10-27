@@ -13,6 +13,7 @@ import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
 import { inheritedSla, resolveSlaDays, slaScopeKey, type SlaScope } from '@/lib/stageSlaRule';
 import { loadStageSlaRows } from '@/lib/stageSla';
+import { fillOrgStageDeadlines } from '../../../../../prisma/stage-deadline-fill.mjs';
 import { z } from 'zod';
 
 // The org's own rows. Per-cohort / per-mentor overrides (#1640) are other
@@ -80,6 +81,24 @@ async function verifiedScope(orgId: string, raw: SlaScope): Promise<SlaScope | n
     if (!mentor) return null;
   }
   return { cohortId, mentorId };
+}
+
+/**
+ * Give this org's relations already sitting in a stage the deadline the saved
+ * rule now implies (#3203) — the same fill the deploy ran once for everybody
+ * (prisma/stage-deadline-fill.mjs): dated from the stage entry, idempotent,
+ * and a past-due one stamped so no reminder mail goes out for it. Only ever
+ * fills an EMPTY deadline: a stricter rule saved later never rewrites one a
+ * move or a person already set. Never fails the save — the rule is stored,
+ * and the next save or stage move catches up.
+ */
+async function fillDeadlines(orgId: string): Promise<number> {
+  try {
+    return (await fillOrgStageDeadlines(prisma, orgId, { apply: true })).total;
+  } catch (e) {
+    console.error('Stage deadline fill after SLA save failed:', e);
+    return 0;
+  }
 }
 
 export async function GET(request: Request) {
@@ -209,7 +228,7 @@ export async function PUT(request: Request) {
         detail: `scope ${scopeKey}: ${set.length} service levels, ${cleared.length} inherited`,
         request,
       });
-      return NextResponse.json({ ok: true, configured: set.length, wipConfigured: 0 });
+      return NextResponse.json({ ok: true, configured: set.length, wipConfigured: 0, deadlinesSet: await fillDeadlines(orgId) });
     }
 
     // The row now carries two independent numbers (#1439), so what to do with
@@ -266,6 +285,6 @@ export async function PUT(request: Request) {
       request,
     });
 
-    return NextResponse.json({ ok: true, configured: withSla, wipConfigured: withWip });
+    return NextResponse.json({ ok: true, configured: withSla, wipConfigured: withWip, deadlinesSet: await fillDeadlines(orgId) });
   });
 }

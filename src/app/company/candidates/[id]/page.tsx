@@ -29,6 +29,7 @@ interface Candidate {
   targetPosition?: string | null;
   skills: string[];
   skillLevels?: Record<string, number> | null;
+  verifiedLevels?: Record<string, number>;
   cvUrl?: string | null;
   linkedinUrl?: string | null;
   githubUrl?: string | null;
@@ -214,8 +215,17 @@ export default function CompanyCandidateDetailPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">{t.profileForm.skills}</p>
             <div className="flex flex-wrap gap-1.5">
               {candidate.skills.map((s) => (
-                <Badge key={s} variant="info" className="text-xs">
-                  {s}{candidate.skillLevels?.[s] ? ` · ${candidate.skillLevels[s]}/5` : ''}
+                <Badge
+                  key={s}
+                  variant={candidate.verifiedLevels?.[s] ? 'success' : 'info'}
+                  className="text-xs"
+                  title={candidate.verifiedLevels?.[s] ? t.skillConfirm.verifiedTitle : undefined}
+                  data-testid={candidate.verifiedLevels?.[s] ? 'skill-verified' : undefined}
+                >
+                  {s}
+                  {candidate.verifiedLevels?.[s]
+                    ? ` · ${candidate.verifiedLevels[s]}/5 ✓`
+                    : candidate.skillLevels?.[s] ? ` · ${candidate.skillLevels[s]}/5` : ''}
                 </Badge>
               ))}
             </div>

@@ -2199,6 +2199,54 @@ export async function sendDocumentReviewInviteEmail({
   });
 }
 
+// A stage-automation mail (#1703, src/lib/automation/). The copy is one of the
+// catalogued templates (`AUTOMATION_EMAIL_TEMPLATES`) — an admin picks it, never
+// writes it — and the recipient is the relation's own mentor or mentee, passed
+// by userId so the central unsubscribe check, the footer and the List-* headers
+// apply exactly as for every other pipeline mail ('stage-update' →
+// pipeline_updates). The link is the recipient's own role root.
+export async function sendAutomationEmail({
+  to,
+  userId,
+  template,
+  name,
+  menteeName,
+  stage,
+  locale,
+  orgId,
+}: {
+  to: string;
+  userId: string;
+  template: 'menteeNextStep' | 'mentorCheckIn';
+  name?: string | null;
+  menteeName: string;
+  stage: string;
+  locale?: string | null;
+  orgId: string;
+}): Promise<SendEmailResult> {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const T = (await emailDictionary(resolved, orgId)).notifications.automationEmail[template];
+  const fill = (text: string) => text.replace('{stage}', stage).replace('{mentee}', menteeName);
+  const link = `${brand.appUrl}${template === 'menteeNextStep' ? '/portal' : '/mentor'}`;
+  return sendEmail({
+    to,
+    userId,
+    fromName: brand.name,
+    orgId,
+    subject: fill(T.subject),
+    category: 'stage-update',
+    locale: resolved,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(fill(T.heading)))}
+        ${name ? `<p>${esc(T.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${esc(fill(T.body))}</p>
+        <a href="${link}" style="display:inline-block;background:${esc(brand.accent)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(T.cta)}</a>
+      </div>`,
+  });
+}
+
 export async function sendMeetingGuestInviteEmail({
   to,
   name,

@@ -287,6 +287,27 @@ marketing names redirect there, and their apex now serves **mail only**.
   `.gitattributes`, which only helps local merges). Read the newest files in the folder and the
   archive at the start of a session too — they capture fast-changing tactical tips that
   complement these durable rules. Format in `docs/agent-experience/README.md`.
+- **Supply-chain evidence** (#2059) — three artefacts and two gates, all cheap and offline:
+  `npm run check:licenses` reads `package-lock.json` (no install, no network) and regenerates
+  [`docs/legal/third-party-licenses.md`](docs/legal/third-party-licenses.md) with `-- --write`.
+  It fails on a licence that blocks **either** AGPL distribution **or** the commercial grant —
+  those are different questions, and a GPL-3.0/AGPL-3.0 dependency passes the first and kills
+  the second. An unclassified SPDX id fails rather than passing; resolving one by hand means an
+  `ALLOWLIST` entry in `scripts/license-policy.mjs` **with a written reason**, which is rendered
+  verbatim into the inventory. Drift is keyed on licence *facts*, not versions, so a patch bump
+  never reddens a Dependabot PR. `npm run check:audit` is the `npm audit` gate: it no longer
+  blocks on `critical` only but implements the ladder written in
+  [`docs/trust/vulnerability-management.md`](docs/trust/vulnerability-management.md) — and it
+  **parses the open-findings table of `docs/security-exceptions.md`**, so renaming that heading
+  or restructuring the table breaks the gate (it fails closed, loudly). The SBOM
+  (`npm run gen:sbom` → gitignored `public/sbom.cdx.json`, served at `/sbom.cdx.json`) is
+  generated on the runner in `build-image.yml`; it reuses the `RELEASE_STAMPS` plumbing for the
+  version and takes the commit as `--commit`, with `--require-stamps` refusing to write an SBOM
+  that cannot name its commit. Both policy engines are unit-tested offline —
+  `npm run test:supply-chain` (`scripts/test/supply-chain.test.mjs`, in CI): a classifier that
+  wrongly answers "permissive", or a gate that reads an unreachable feed as clean, still exits 0,
+  so nothing but a direct assertion catches it. Change the ladder or the SPDX table and update
+  that file in the same commit.
 - **Security work** starts from [`docs/security-audit-playbook.md`](docs/security-audit-playbook.md):
   how to stand up a local DB in this container (no Docker daemon — apt MariaDB), the Playwright
   `executablePath` workaround, the role × endpoint matrix method, **which areas already tested
@@ -565,6 +586,14 @@ marketing names redirect there, and their apex now serves **mail only**.
   each body runs as a handler in `src/jobs/` through the worker — so replica ≥2 no longer
   runs with `CRON_ENABLED=0`. Never call `cron.schedule()`; a new schedule is a
   `queue({ … })` entry plus a `registerJob()`.
+- **Stage automation is one engine with a fixed allowlist** ([`docs/automation-rules.md`](docs/automation-rules.md),
+  #1703): `AutomationRule`s are judged by the `automation` subscriber of `pipeline.stage_change`
+  on the queue, never in the request. The vocabulary, the write-time gate (`parseRuleInput()`) and
+  the ONE condition evaluator are pure in `src/lib/automation/rule.ts`; a new action is an entry
+  there with a strict schema — never a URL, an address or free text, never a stage move — plus a
+  handler in `actions.ts` that goes through `notifyIfAllowed()` / `sendEmail()`. One run per
+  `(ruleId, eventId)`, actions at-most-once (claimed `PENDING → RUNNING`). Audience nudges are
+  #1684's engine, not this one.
 - **Every mail goes through `sendEmail()`** ([`docs/mail-queue.md`](docs/mail-queue.md), #2941/#2944/#2951/#2953):
   that one door applies the opt-out gate, the lane, the shared send budget (`MailBudget`), the
   retry queue and the EmailLog row, and `npm run check:direct-sendmail` (CI) fails on a
