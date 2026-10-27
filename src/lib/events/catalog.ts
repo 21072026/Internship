@@ -280,6 +280,31 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: "A candidate's application for a requisition moved to another stage (`from` and `to` are stage keys, e.g. SHORTLISTED → INTERVIEW).",
   },
+  {
+    // One producer: transferMentorship() (src/lib/mentorTransfer.ts, #2289),
+    // the one way a mentee's mentor changes. `corrected` = the pairing had no
+    // history and its mentor was fixed in place (relationId is the same row,
+    // previousRelationId null); `transferred` = the old pairing closed as
+    // ENDED_REASSIGNED and `relationId` is its successor. The reason is the
+    // code only — the admin's free-text note never leaves the activity log.
+    name: 'mentorship.transferred',
+    version: 1,
+    subjectType: 'MentorshipRelation',
+    subjectKey: 'relationId',
+    payload: z
+      .object({
+        relationId: id,
+        previousRelationId: id.nullable(),
+        menteeId: id,
+        fromMentorId: id,
+        toMentorId: id,
+        mode: z.enum(['corrected', 'transferred']),
+        reasonCode: z.string(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: "A mentee's mentor changed — corrected in place, or a new pairing that carries the stage over.",
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from
