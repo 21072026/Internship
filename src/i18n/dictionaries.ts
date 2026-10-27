@@ -7592,6 +7592,8 @@ const en = {
       openSelection: 'Open the highlighted result',
       dismiss: 'Close the palette or this sheet',
     },
+    singleKeyLabel: 'Single-key shortcuts',
+    singleKeyHint: 'Lets ? open this list. Turn it off if you use speech input or press it by accident; the list stays available from the command palette (Ctrl/⌘ K).',
   },
   savedViews: {
     save: 'Save view',
@@ -16911,6 +16913,8 @@ const tr: Dict = {
       openSelection: 'Seçili sonucu aç',
       dismiss: 'Paleti ya da bu listeyi kapat',
     },
+    singleKeyLabel: 'Tek tuşlu kısayollar',
+    singleKeyHint: '? tuşu bu listeyi açar. Sesle yazıyorsanız ya da yanlışlıkla basıyorsanız kapatın; liste komut paletinden (Ctrl/⌘ K) açılmaya devam eder.',
   },
   savedViews: {
     save: 'Görünümü kaydet',
@@ -26199,6 +26203,8 @@ const de: Dict = {
       openSelection: 'Hervorgehobenes Ergebnis öffnen',
       dismiss: 'Palette oder diese Liste schließen',
     },
+    singleKeyLabel: 'Einzeltasten-Kürzel',
+    singleKeyHint: '? öffnet diese Liste. Schalten Sie es aus, wenn Sie Spracheingabe nutzen oder die Taste versehentlich drücken; die Liste bleibt über die Befehlspalette (Strg/⌘ K) erreichbar.',
   },
   savedViews: {
     save: 'Ansicht speichern',

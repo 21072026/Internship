@@ -18,10 +18,15 @@ import { SHORTCUTS, resolveChords, type ShortcutId } from '@/lib/shortcuts';
 export function ShortcutsSheet({
   open,
   isMac,
+  singleKeyEnabled,
+  onSingleKeyChange,
   onClose,
 }: {
   open: boolean;
   isMac: boolean;
+  /** Whether the single-character `?` binding is live (WCAG 2.1.4, #2864). */
+  singleKeyEnabled: boolean;
+  onSingleKeyChange: (enabled: boolean) => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -88,6 +93,25 @@ export function ShortcutsSheet({
             </div>
           ))}
         </dl>
+
+        {/* WCAG 2.1.4: the one single-character binding can be turned off here,
+            and this sheet stays reachable from the palette when it is. */}
+        <label className="mt-3 flex items-start gap-3 border-t border-gray-100 pt-3 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={singleKeyEnabled}
+            onChange={(e) => onSingleKeyChange(e.target.checked)}
+            data-testid="shortcuts-single-key-toggle"
+            aria-describedby="shortcuts-single-key-hint"
+            className="mt-0.5 h-4 w-4 rounded border-gray-300"
+          />
+          <span>
+            {t.shortcuts.singleKeyLabel}
+            <span id="shortcuts-single-key-hint" className="block text-xs text-gray-500">
+              {t.shortcuts.singleKeyHint}
+            </span>
+          </span>
+        </label>
       </div>
     </div>
   );
