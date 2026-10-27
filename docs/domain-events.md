@@ -22,7 +22,7 @@ holding that row's id), a **zod** payload schema, `visibility`
 - **Version 1 payloads are what producers dispatch today**, `.strict()`.
   `meeting.scheduled` has three producers and `interaction.logged` two; v1
   describes every shape as it ships, with the producer-specific keys optional.
-  Events registered but not raised yet (they wait on `emit()`, #1693) carry the
+  Events registered but not raised yet (no producer written so far) carry the
   shape they will ship with: ids only.
 - **Internal entries** (`org.config.changed`, `setting.changed`,
   `webhook.registered`, `apikey.*`, `relation.created`, `meeting.completed`,
@@ -136,3 +136,25 @@ writer (#1623) pass their own spec into it.
 `e2e/config-change-events.unit.spec.ts` pins the policy and that no secret
 reaches a payload or `AuditLog.detail`; `e2e/config-change-audit.spec.ts` drives
 an SSO change through the worker.
+
+### Producers (#1697)
+
+Every event the product raises today goes through `emit()`; the ten former
+direct `dispatchWebhook` callers moved over one-for-one with the same payload
+and the same `orgId` (the unit spec pins byte-identical webhook `data`):
+`application.created` (`/api/apply`, no actor), `pipeline.stage_change`
+(`emitStageChange()`, after its `from === to` no-op guard), `mentorship.created`
+(`POST /api/mentorship`), `interaction.logged` (`createInteraction()` — actor
+`user`, or `apikey` through `/api/v1`; and the auto-log in `meetingAutoLog.ts`,
+actor `system`), `evaluation.added`, `meeting.scheduled` (batch invite, instant
+meeting, recurring series — the one v1 schema with its producer-specific
+optional keys) and `interview_panel.completed`.
+
+What changed for a receiver is only *when*: the POST is sent by the job worker
+(a tick every 5 s) instead of inside the producer's request, so a slow receiver
+no longer slows the request that raised the event.
+
+`npm run check:events` (CI) refuses any other file that names
+`dispatchWebhook`/`deliverToWebhook` (the admin's test ping is the one
+allowlisted deliverer) and any hand-written `activityLog`/`auditLog` create
+whose `action` is a catalogue event name.

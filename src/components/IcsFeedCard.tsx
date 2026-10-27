@@ -63,7 +63,7 @@ export function IcsFeedCard() {
   };
 
   return (
-    <Card className="mt-6" data-testid="ics-feed-card">
+    <Card className="mt-6 no-print" data-testid="ics-feed-card">
       <CardHeader>
         <div className="flex items-center gap-2">
           <CalendarPlus className="h-5 w-5 text-blue-600" />

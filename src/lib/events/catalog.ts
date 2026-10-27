@@ -27,8 +27,8 @@
 //   them as they are, with the producer-specific keys optional, because that is
 //   what receivers have been getting. Reconciling them is a version 2.
 //
-//   Several public events are registered but not raised yet (they wait on
-//   `emit()`, see scripts/check-events.mjs). Their schemas are the shape they
+//   Several public events are registered but not raised yet (their producer
+//   has not been written; it calls `emit()`, src/lib/events/emit.ts). Their schemas are the shape they
 //   WILL ship with — ids only, no personal data — and the first producer is
 //   held to it.
 //
@@ -253,9 +253,8 @@ export const EVENT_CATALOG = [
   },
   {
     // A pairing paused, resumed, ended or reopened (#1770). Registered, not yet
-    // dispatched — a direct call would be the eleventh that
-    // scripts/check-events.mjs caps; it is raised through emit() once that
-    // exists. `from`/`to` are lifecycle states; `reasonCode` is set on an end
+    // raised — its first producer calls emit() (a direct dispatcher call is
+    // refused by scripts/check-events.mjs). `from`/`to` are lifecycle states; `reasonCode` is set on an end
     // only (LIFECYCLE_END_REASON_CODES), null otherwise.
     name: 'mentorship.lifecycle_changed',
     version: 1,

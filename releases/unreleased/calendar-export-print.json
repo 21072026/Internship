@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Calendar export + print (#2005, 2/3):** `CalendarView` gets a \"Download .ics\" button that builds the file in the browser from the events on screen through the existing `buildFeedIcs()` (no second builder, no export route); UIDs match the subscription feed's (bare meeting id, `series-…`, `deadline-…`) so an imported copy and a subscribed one do not double, deadlines keep the feed's 30-minute marker and logged interactions stay out. `/api/calendar-events` now returns `durationMinutes` on meeting and series events (additive). A `@media print` block in `globals.css` prints the calendar on white with outlined events; the toolbar, view switcher, legend and the subscription card carry `.no-print`. Pinned by `e2e/calendar-export.spec.ts`.",
+  "notes": {
+    "en": ["Download the calendar range on screen as a .ics file for Google Calendar or Outlook, or print it as a clean sheet."],
+    "tr": ["Takvimde ekrandaki aralığı Google Takvim veya Outlook için .ics dosyası olarak indirin ya da sade bir sayfa olarak yazdırın."],
+    "de": ["Laden Sie den angezeigten Kalenderzeitraum als .ics-Datei für Google Kalender oder Outlook herunter oder drucken Sie ihn als aufgeräumtes Blatt."]
+  }
+}

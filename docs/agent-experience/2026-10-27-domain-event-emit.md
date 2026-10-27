@@ -15,3 +15,11 @@
   `*.unit.spec.ts` (`BASE_URL=http://localhost:9 npx playwright test <spec>`).
 - A new `JobTrigger` value needs no schema change (`JobRun.trigger` is `VarChar(16)`); the
   worker falls back to `'schedule'` only for values `isJobTrigger()` does not know.
+- **#1697 follow-up (call sites):** the e2e webServer runs `npm run start` under `CI`
+  (NODE_ENV=production → an invalid event is logged and dropped) but `npm run dev`
+  locally (→ it throws). So a catalogue/producer drift is red only in a *local* e2e
+  run or in the unit spec — run the touched producers' specs locally against MariaDB.
+- Local e2e in this container: export the `.env` into the shell too (`set -a; . ./.env;
+  set +a`) — specs that import `prisma` directly read `DATABASE_URL` from the test
+  process, not from Next's env loading. Playwright wanted `chromium_headless_shell-1248`
+  while `/opt/pw-browsers` had `-1243`: a symlink fixes it.

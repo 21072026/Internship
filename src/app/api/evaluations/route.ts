@@ -9,7 +9,7 @@ import { inCallerTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { EVALUATION_TYPES, isWithinEditWindow } from '@/lib/evaluation';
 import { allowedCriterionKeys, criteriaByTemplate, resolveTemplateId } from '@/lib/evaluationTemplates';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { notifyIfAllowed } from '@/lib/notify';
 import { markEvaluationCompleted } from '@/lib/evaluationDue';
 
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
   // admin) writes it (#1891) — stamped here, never polled for. The mentee's
   // own review of their mentor is not that task.
   await markEvaluationCompleted(rel.id, evaluation.type, session.user.id === rel.menteeId ? 'mentee' : 'staff');
-  await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id }, rel.orgId);
+  await emit('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id }, { orgId: rel.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
   // The evaluated side learns an evaluation exists (#925): mentee wrote it →
   // mentor is told, mentor/admin wrote it → mentee is told. Privacy rule: the
   // notification (which can surface on a lock screen via browser notifications)

@@ -1,5 +1,5 @@
 import { notifyIfAllowed } from '@/lib/notify';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { PIPELINE_STATUSES } from '@/lib/pipeline';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { outcomeForStage } from '@/lib/outcomeComms';
@@ -105,5 +105,5 @@ export async function emitStageChange(opts: {
     }
   }
 
-  await dispatchWebhook('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to }, opts.orgId);
+  await emit('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to }, { orgId: opts.orgId ?? null });
 }
