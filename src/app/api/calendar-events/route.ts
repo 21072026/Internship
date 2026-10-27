@@ -175,6 +175,7 @@ export async function GET(request: Request) {
         id: true,
         title: true,
         ...SERIES_RULE_SELECT,
+        durationMinutes: true,
         fixedLink: true,
         projectId: true,
         relationId: true,
@@ -192,6 +193,8 @@ export async function GET(request: Request) {
       title: m.title,
       who: m.relation!.mentee.fullName,
       date: m.scheduledAt!.toISOString(),
+      // How long it runs, for the .ics download (#2005); null = the one default.
+      durationMinutes: m.durationMinutes ?? null,
       link: m.meetLink ?? null,
     })),
     // One entry per occurrence of the rule — not one per attendee. The weekly
@@ -208,6 +211,7 @@ export async function GET(request: Request) {
           (s.relation ? (role === 'MENTEE' ? s.relation.mentor.fullName : s.relation.mentee.fullName) : null) ??
           s.title,
         date: when.toISOString(),
+        durationMinutes: s.durationMinutes ?? null,
         link: s.fixedLink ?? null,
         projectId: s.projectId,
       }))
