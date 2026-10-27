@@ -14,3 +14,7 @@
 - **An org-scoped viewer cannot judge an absence.** The default-org ADMIN does not see the
   org-less platform runs, so "no run since the slot" is only an alarm where every run is visible
   (`runsVisible`); otherwise every platform schedule would alarm for them forever.
+- **Wide specs time out on `next dev` cold compiles, not on the code.** `authz-matrix` +
+  `mobile-layout-audit` failed with 60 s `apiRequestContext` timeouts under `npm run dev`; after
+  `npm run build`, the same run with `CI=1` (the config then boots `npm run start`) was 20/20 green
+  in 1.3 min. For a many-route spec, build first.
