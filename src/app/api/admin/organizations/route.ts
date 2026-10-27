@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { withoutOrgCredentials } from '@/lib/orgCredentials';
 import { logActivity } from '@/lib/activity';
 import { recordOrgWrite } from '@/lib/orgAudit';
+import { emit } from '@/lib/events/emit';
+import { redactedDiff, ORGANIZATION_DIFF_SPEC } from '@/lib/events/diff';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
@@ -700,5 +702,12 @@ export async function PATCH(request: Request) {
     detail: Object.keys(data).join(', '),
     request,
   });
+  // The values, redacted by field policy (#1699): the row read before the
+  // write against the row it left. The certificate is a fingerprint, never
+  // itself. The config-audit subscriber turns this into the AuditLog row.
+  const changes = redactedDiff(existing, organization, ORGANIZATION_DIFF_SPEC);
+  if (changes.length) {
+    await emit('org.config.changed', { orgId: organization.id, changes }, { orgId: organization.id, actor: { id: session.user.id, type: 'user' } });
+  }
   return NextResponse.json({ organization: withoutOrgCredentials(organization), sessionsEnded, sweepPreview });
 }
