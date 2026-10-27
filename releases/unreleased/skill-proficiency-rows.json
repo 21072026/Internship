@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Skill proficiency on the canonical row, part 1 (#1822):** `UserSkill` gains `level` (1–5), `levelSource` (SELF | MENTOR | EVALUATION), `verifiedById`/`verifiedAt` and `levelUpdatedAt` (all nullable, additive under `db push`), and a new `UserSkillLevelChange` history table (one row per actual change, none for an unchanged value). `PATCH /api/profile` mirrors the self-assessment onto the rows through `syncUserSkillLevels()` (keyed by typed skill or skill id, guarded update so two tabs write one history row); `User.skillLevels` keeps being written. A self-assessed change clears any confirmation. A curator's skill merge keeps the person's rating (`mergedLevel()`: confirmed beats self-rated, rated beats unrated) and moves the history; account erasure now deletes the person's `UserSkill` rows. Rules are pure in `src/lib/skillLevelRule.ts`. Mentor confirmation and the progression UI follow."
+}
