@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -11,6 +12,19 @@ async function signIn(page: import('@playwright/test').Page, email: string, pw: 
   await page.fill('input[type="password"]', pw);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
+}
+
+/**
+ * Every cookie gone — the accent cookie included, which is what "another device"
+ * means below — with the page torn down FIRST. Clearing cookies under a live
+ * page let its `/api/auth/session` poll re-issue the session cookie, so
+ * /auth/signin redirected the second sign-in to the previous user's portal
+ * while the email field was being filled ("element was detached", #3059).
+ * signInAsFreshUser then drops the session cookie once more, for the same race.
+ */
+async function signOutCompletely(page: import('@playwright/test').Page) {
+  await page.goto('about:blank');
+  await page.context().clearCookies();
 }
 
 test('a user can pick an accent color; it applies live and persists across reloads', async ({ page }) => {
@@ -108,10 +122,10 @@ test('an organization that opts into its brand colour paints its members; their 
     await page.goto('/account');
     await expect(html).toHaveAttribute('data-accent', 'blue');
     expect(await html.getAttribute('style') ?? '').not.toMatch(/--brand-600/);
-    await page.context().clearCookies();
+    await signOutCompletely(page);
 
     // Opted in: the brand accent, its ramp derived from the one colour.
-    await signIn(page, email, pw, '/portal');
+    await signInAsFreshUser(page, email, pw, '/portal');
     await page.goto('/account');
     await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(html).toHaveAttribute('data-accent', 'brand');
@@ -133,8 +147,8 @@ test('an organization that opts into its brand colour paints its members; their 
     await expect(html).toHaveAttribute('data-accent', 'teal');
 
     // On another device (no accent cookie) the saved choice still wins.
-    await page.context().clearCookies();
-    await signIn(page, email, pw, '/portal');
+    await signOutCompletely(page);
+    await signInAsFreshUser(page, email, pw, '/portal');
     await expect(html).toHaveAttribute('data-accent', 'teal');
   } finally {
     await cleanupByEmail(quietEmail);
