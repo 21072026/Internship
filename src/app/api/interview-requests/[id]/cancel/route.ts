@@ -7,6 +7,7 @@ import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { cancelMeetingRows } from '@/lib/meetingCancel';
 import { CANCELLABLE_INTERVIEW_STATUSES, cancelInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
@@ -62,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // The meeting, if one was created: off both calendars through the one
       // cancel path, the row kept for its notes (#1980).
       if (current.meetingId) {
-        await cancelMeetingRows({ ids: [current.meetingId], actorId: session.user.id, reason, now });
+        await cancelMeetingRows({ ids: [current.meetingId], actorId: session.user.id, reason, now, orgId });
       }
       await prisma.auditLog.create({
         data: {
@@ -100,8 +101,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         request,
         orgId,
       });
-      // `interview_request.cancelled` is REGISTERED in WEBHOOK_EVENTS, not
-      // dispatched from here (scripts/check-events.mjs caps the direct callers).
+      // The reason stays off the bus (#1998): free text, and the company's own
+      // words when it cancelled.
+      await emit('interview_request.cancelled', { requestId: current.id, meetingId: current.meetingId }, { orgId, actor: { id: session.user.id, type: 'user' } });
       return NextResponse.json({ ok: true, status: 'CANCELLED', meetingId: current.meetingId });
     });
   });

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Session timeout warning (WCAG 2.2.1, #2864):** five minutes before an idle session ends, `SessionTimeoutWarning` (mounted in `app/providers.tsx`, signed-in only) opens an alert dialog with \"Stay signed in\", which calls next-auth's `update()` and re-issues the 12 h cookie. Timing lives in the pure `src/lib/sessionTimeoutRule.ts` (unit-tested); `e2e/session-timeout.spec.ts` drives it with a fast-forwarded browser clock. VPAT 2.2.1 now reads `Supports`.",
+  "notes": {
+    "en": ["Before you are signed out for inactivity, the app now warns you and lets you stay signed in with one click."],
+    "tr": ["Hareketsizlik nedeniyle oturumunuz kapanmadan önce uygulama artık sizi uyarıyor ve tek tıkla oturumu açık tutmanıza izin veriyor."],
+    "de": ["Bevor Sie wegen Inaktivität abgemeldet werden, warnt die App Sie jetzt und Sie bleiben mit einem Klick angemeldet."]
+  }
+}

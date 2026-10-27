@@ -7,12 +7,17 @@ import { GraduationCap, LayoutGrid, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { groupResolvedStages } from '@/lib/pipeline';
+import { isWipSaturated } from '@/lib/boardWip';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
-import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
+import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
+import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
+import { useBoardFilters } from '@/components/board/useBoardFilters';
+import { useBoardWipLimits } from '@/components/board/useBoardWipLimits';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { StageClockChip } from '@/components/StageClockChip';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
@@ -73,12 +78,19 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   // (GET /api/mentorship pages only for callers that pass `page`), so the box
   // searches every mentee, not a visible page. The matching rule is shared with
   // /mentor/mentees — see src/lib/menteeFilter.ts.
-  const [search, setSearch] = useState('');
+  //
   // Desktop: a stage with no card on it collapses to a narrow strip (#1366).
   // Thirteen full-width columns put a mentor's own mentees two screens to the
   // right of a row of empty ones. Collapsed, not hidden: the strip stays a drop
-  // target, so an empty stage is still somewhere a card can be moved to.
-  const [showEmpty, setShowEmpty] = useState(false);
+  // target, so an empty stage is still somewhere a card can be moved to. That is
+  // the shared filter's `hideEmpty`, on by default here (#2076).
+  const { search, setSearch, hideEmpty, setHideEmpty } = useBoardFilters({ hideEmpty: true });
+  const showEmpty = !hideEmpty;
+  // The same phases as the admin board (#2076), from the same resolved stages.
+  const groups = useMemo(() => groupResolvedStages(stages), [stages]);
+  // The same WIP limits as the admin board (#1439) — the org's, read through
+  // the one endpoint; there is no mentor-specific limit.
+  const resolvedWipLimit = useBoardWipLimits();
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrolledToFirst = useRef(false);
 
@@ -202,6 +214,15 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   const itemsFor = (status: string) =>
     relations.filter((r) => r.pipelineStatus === status && matchesMenteeQuery(r, q));
 
+  // When every measured column breaches, the chips have stopped pointing
+  // anywhere and are dropped (src/lib/boardWip.ts). The admin board says so
+  // with a link to the settings; a mentor cannot change the limit, so here
+  // the chips simply go quiet.
+  const wipSaturated = isWipSaturated(
+    stages.map((s) => ({ status: s.key, count: itemsFor(s.key).length, limit: resolvedWipLimit(s.key) }))
+  );
+  const wipLimitFor = (status: string) => (wipSaturated ? null : resolvedWipLimit(status));
+
   // One drop contract for a full column and an empty-stage target alike.
   const dropHandlersFor = (status: string) => ({
     onDragOver: (e: React.DragEvent) => {
@@ -305,7 +326,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
                 type="checkbox"
                 data-testid="board-show-empty"
                 checked={showEmpty}
-                onChange={(e) => setShowEmpty(e.target.checked)}
+                onChange={(e) => setHideEmpty(!e.target.checked)}
               />
               {t.mentor.boardShowEmpty}
             </label>
@@ -376,8 +397,12 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
           </div>
         </div>
       ) : (
-        <HorizontalScrollArea testId="board-columns" label={t.a11y.scrollableColumns} className="flex gap-4 pb-4">
-          {boardSegments(stages, (key) => itemsFor(key).length === 0 && !showEmpty).map((segment) => {
+        <BoardPhaseGroups
+          testId="board-columns"
+          layout="row"
+          groups={groups}
+          countFor={(s) => itemsFor(s).length}
+          renderColumns={(statuses) => boardSegments(statuses.map((key) => ({ key })), (key) => itemsFor(key).length === 0 && !showEmpty).map((segment) => {
             if (segment.kind === 'empty-run') {
               // A run of consecutive empty stages is ONE narrow strip holding a
               // small drop target per stage. Ten separate strips did not fit
@@ -431,19 +456,9 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
                   dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
                 }`}
               >
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
-                  {/* Derived from the same filtered `items` the column renders,
-                      so the badge never claims rows the search has hidden. */}
-                  <span
-                    data-testid={`board-column-count-${status}`}
-                    className={`text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5 ${
-                      items.length === 0 ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {items.length}
-                  </span>
-                </div>
+                {/* Derived from the same filtered `items` the column renders,
+                    so the badge never claims rows the search has hidden. */}
+                <BoardColumnHeader status={status} label={label(status)} count={items.length} limit={wipLimitFor(status)} muted />
 
                 <div className="space-y-2 min-h-[40px]">
                   {items.map(renderCard)}
@@ -451,7 +466,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
               </div>
             );
           })}
-        </HorizontalScrollArea>
+        />
       )}
 
       <DropoffReasonDialog
