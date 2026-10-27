@@ -12,6 +12,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { formatCount } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import type { UsageRow, UsageState, UsageSummary } from '@/lib/usageSummary';
+import { METERING_DEFINITION_HREF } from '@/lib/meteringRules';
 
 // The usage tab of /admin/billing (#1763): every metered number against its
 // plan limit, with a four-month sparkline. Reads GET /api/org/usage only — the
@@ -151,7 +152,7 @@ export function BillingUsageTab({ goTo }: { goTo?: (tab: 'plan') => void }) {
                 {row.key === 'activePairs' && (
                   <p className="mt-2 text-xs text-gray-600 dark:text-gray-300" data-testid="usage-pair-definition">
                     {t.billing.meter.definition}{' '}
-                    <Link href="/pricing" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                    <Link href={METERING_DEFINITION_HREF} className="font-medium text-blue-600 hover:underline dark:text-blue-400" data-testid="usage-pair-definition-link">
                       {t.billing.meter.pricingLink}
                     </Link>
                   </p>
