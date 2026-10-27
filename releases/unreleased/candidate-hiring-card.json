@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Hiring card on the candidate page (#1398):** `/admin/candidates/[id]` shows every application (role, company, stage, disposition, who added it), every company interest (INTERESTED / SHORTLISTED / PASS, with the company's note) and every interview request (status, proposed or scheduled time, who decided), linking to the requisition detail and the interview-request queue. Read from the new `GET /api/candidates/[id]/hiring`, scoped on the server through `visibleApplicationsWhere()`, `interviewRequestActorWhere()` and an org/company/active-mentee rule for interests; MENTEE is refused (a PASS never reaches the candidate) and a candidate the caller cannot see is a 404. Loading, empty and failed are separate states; the card hides in a vertical without placements.",
+  "notes": {
+    "en": ["The candidate page now has a Hiring card: which companies want this person, for which role, and where each application and interview request stands."],
+    "tr": ["Aday sayfasında artık bir İşe alım kartı var: hangi şirket bu kişiyi hangi pozisyon için istiyor, her başvuru ve mülakat talebi hangi aşamada."],
+    "de": ["Die Kandidatenseite hat jetzt eine Recruiting-Karte: welche Unternehmen diese Person für welche Stelle wollen und wo jede Bewerbung und Interviewanfrage steht."]
+  }
+}
