@@ -5547,7 +5547,7 @@ const en = {
   billing: {
     title: 'Billing',
     subtitle: 'Your plan, this month\'s active pairs and the last twelve months — for your organisation only.',
-    tabs: { plan: 'Plan & usage', features: 'Included features' },
+    tabs: { plan: 'Plan & usage', features: 'Included features', usage: 'Usage' },
     changePlan: 'Change plan',
     freeCore: 'Mentors and mentees are never counted and never charged. Your bill depends only on active matched pairs and admin seats.',
     plan: {
@@ -5629,6 +5629,21 @@ const en = {
       granted: 'Feature granted.',
       revoked: 'Feature revoked.',
       expiryInPast: 'The end date must be in the future.',
+    },
+    // The usage tab (#1763): every metered number against its limit.
+    usage: {
+      title: 'Usage — {period}',
+      intro: 'Every number your plan measures, against its limit, with the last four months. Counted every night.',
+      metric: { activePairs: 'Active pairs', adminSeats: 'Admin seats', companies: 'Companies', programs: 'Programmes', aiCalls: 'AI calls (admin)', broadcastRecipients: 'Broadcast recipients', videoRooms: 'Video rooms', videoParticipants: 'Video participants' },
+      of: 'of {limit}',
+      state: { ok: 'Within limit', approaching: 'Approaching limit', over: 'Over limit', unlimited: 'Unlimited', not_included: 'Not part of this plan', reported: 'Reported, never limited', pending: 'Not counted yet' },
+      trend: 'Last four months',
+      asOf: 'Counted {when}',
+      overTitle: 'You are over a limit of your plan',
+      overBody: 'Nothing has been blocked by this screen. A larger plan raises the limit — request one on the plan tab.',
+      goToPlan: 'Change plan',
+      neverTitle: 'What is never metered',
+      neverBody: 'Mentors, mentees and programmes are never counted towards your bill, on any plan. Messaging, meetings, video calls, goals, evaluations and the participant portal are free for everyone.',
     },
     history: {
       title: 'Last twelve months',
@@ -14954,7 +14969,7 @@ const tr: Dict = {
   billing: {
     title: 'Faturalandırma',
     subtitle: 'Planınız, bu ayki aktif çiftleriniz ve son on iki ay — yalnızca kendi organizasyonunuz için.',
-    tabs: { plan: 'Plan ve kullanım', features: 'Dahil özellikler' },
+    tabs: { plan: 'Plan ve kullanım', features: 'Dahil özellikler', usage: 'Kullanım' },
     changePlan: 'Planı değiştir',
     freeCore: 'Mentorlar ve menteeler hiçbir zaman sayılmaz ve hiçbir zaman ücretlendirilmez. Faturanız yalnızca aktif eşleşmiş çiftlere ve admin koltuklarına bağlıdır.',
     plan: {
@@ -15035,6 +15050,20 @@ const tr: Dict = {
       granted: 'Özellik tanımlandı.',
       revoked: 'Özellik geri alındı.',
       expiryInPast: 'Bitiş tarihi gelecekte olmalı.',
+    },
+    usage: {
+      title: 'Kullanım — {period}',
+      intro: 'Planınızın ölçtüğü her sayı, limitiyle birlikte ve son dört ayla. Her gece sayılır.',
+      metric: { activePairs: 'Aktif çiftler', adminSeats: 'Admin koltukları', companies: 'Şirketler', programs: 'Programlar', aiCalls: 'AI çağrıları (admin)', broadcastRecipients: 'Toplu gönderim alıcıları', videoRooms: 'Video odaları', videoParticipants: 'Video katılımcıları' },
+      of: '{limit} içinden',
+      state: { ok: 'Limit içinde', approaching: 'Limite yaklaşıyor', over: 'Limit aşıldı', unlimited: 'Sınırsız', not_included: 'Bu planda yok', reported: 'Raporlanır, asla sınırlanmaz', pending: 'Henüz sayılmadı' },
+      trend: 'Son dört ay',
+      asOf: 'Sayıldı: {when}',
+      overTitle: 'Planınızın bir limitini aştınız',
+      overBody: 'Bu ekran hiçbir şeyi engellemedi. Daha büyük bir plan limiti yükseltir — plan sekmesinden talep edebilirsiniz.',
+      goToPlan: 'Planı değiştir',
+      neverTitle: 'Asla ölçülmeyenler',
+      neverBody: 'Mentorlar, menteeler ve programlar hiçbir planda faturanıza sayılmaz. Mesajlaşma, toplantılar, görüntülü görüşmeler, hedefler, değerlendirmeler ve katılımcı portalı herkes için ücretsizdir.',
     },
     history: {
       title: 'Son on iki ay',
@@ -24291,7 +24320,7 @@ const de: Dict = {
   billing: {
     title: 'Abrechnung',
     subtitle: 'Ihr Plan, die aktiven Paare dieses Monats und die letzten zwölf Monate — nur für Ihre Organisation.',
-    tabs: { plan: 'Plan & Nutzung', features: 'Enthaltene Funktionen' },
+    tabs: { plan: 'Plan & Nutzung', features: 'Enthaltene Funktionen', usage: 'Verbrauch' },
     changePlan: 'Plan ändern',
     freeCore: 'Mentoren und Mentees werden nie gezählt und nie berechnet. Ihre Rechnung hängt nur von aktiven zugeordneten Paaren und Admin-Plätzen ab.',
     plan: {
@@ -24372,6 +24401,20 @@ const de: Dict = {
       granted: 'Funktion freigeschaltet.',
       revoked: 'Funktion entzogen.',
       expiryInPast: 'Das Enddatum muss in der Zukunft liegen.',
+    },
+    usage: {
+      title: 'Verbrauch — {period}',
+      intro: 'Jede Zahl, die Ihr Plan misst, mit ihrem Limit und den letzten vier Monaten. Jede Nacht gezählt.',
+      metric: { activePairs: 'Aktive Paare', adminSeats: 'Admin-Plätze', companies: 'Unternehmen', programs: 'Programme', aiCalls: 'KI-Aufrufe (Admin)', broadcastRecipients: 'Empfänger von Rundsendungen', videoRooms: 'Videoräume', videoParticipants: 'Video-Teilnehmende' },
+      of: 'von {limit}',
+      state: { ok: 'Im Limit', approaching: 'Nahe am Limit', over: 'Über dem Limit', unlimited: 'Unbegrenzt', not_included: 'Nicht Teil dieses Plans', reported: 'Erfasst, nie begrenzt', pending: 'Noch nicht gezählt' },
+      trend: 'Letzte vier Monate',
+      asOf: 'Gezählt {when}',
+      overTitle: 'Sie liegen über einem Limit Ihres Plans',
+      overBody: 'Diese Ansicht hat nichts gesperrt. Ein größerer Plan hebt das Limit an — beantragen Sie ihn im Plan-Tab.',
+      goToPlan: 'Plan ändern',
+      neverTitle: 'Was nie gemessen wird',
+      neverBody: 'Mentoren, Mentees und Programme werden in keinem Plan auf Ihre Rechnung angerechnet. Nachrichten, Termine, Videoanrufe, Ziele, Bewertungen und das Teilnehmerportal sind für alle kostenlos.',
     },
     history: {
       title: 'Letzte zwölf Monate',
