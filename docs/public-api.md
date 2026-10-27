@@ -14,6 +14,19 @@ asks for an unknown scope, or is missing from the OpenAPI document. A handler
 still scopes its own query by `key.orgId` — a cross-tenant read must not wait
 for `MT_ENFORCE_ISOLATION`.
 
+**A key without an organisation is refused, on purpose (#2311).** A key carries
+the `orgId` of the admin who minted it (`resolveOrgId(session)` in
+`POST /api/admin/api-keys`). If that is `null`, `withApiKey()` answers
+`403 org_unbound` before any handler runs. This is the decision, not a gap:
+the handler scopes by `key.orgId`, so an org-less key would either read every
+tenant (an unscoped query) or need a guessed fallback — and "fall back to the
+default org" is exactly the silent widening the door exists to prevent. No real
+account is org-less: registration, invitation acceptance and the seeder all
+assign one (`defaultOrgId()`, `src/lib/defaultOrg.ts`). The only org-less admins
+are test fixtures made with `seedUser()`; a spec that exercises `/api/v1` gives
+its admin an org first (`e2e/integrations.spec.ts`, `e2e/api-explorer.spec.ts`).
+Do not "fix" a red spec by relaxing this check.
+
 ## The contract (#1988, `src/lib/api/v1.ts`)
 
 One module, so the eighth endpoint does not invent its own shape.
