@@ -54,6 +54,10 @@ test('feedback replay: in memory until Send, typed values masked, admin plays it
     await page.getByTestId('feedback-open').click();
     const panel = page.getByTestId('feedback-panel');
     await expect(panel.getByTestId('feedback-replay')).toBeChecked({ timeout: 15_000 });
+    // The person can watch what would be sent before sending it.
+    await panel.getByTestId('feedback-replay-preview').click();
+    await expect(panel.getByTestId('feedback-replay-player').locator('.rr-player')).toBeVisible({ timeout: 20_000 });
+    await expect(panel.getByTestId('feedback-replay-meta')).toBeVisible();
     await panel.getByTestId('feedback-description').fill('The page froze after I typed.');
     await panel.getByTestId('feedback-contact-false').check();
     const posted = page.waitForResponse((r) => r.url().includes('/api/support/reports') && r.request().method() === 'POST');
@@ -95,5 +99,73 @@ test('feedback replay: in memory until Send, typed values masked, admin plays it
     await cleanupByEmail(adminEmail);
     await userCtx.close().catch(() => {});
     await adminCtx.close().catch(() => {});
+  }
+});
+
+// The person starts and stops a recording themselves (#3131 follow-up): the
+// panel gets out of the way while it runs, nothing is sent until Send, and
+// what is attached begins where they pressed Start.
+test('feedback replay: a recording the person starts and stops, previewed before Send', { tag: '@smoke' }, async ({ browser }) => {
+  test.slow();
+  const userEmail = uniqueEmail('fbm-user');
+  const pw = 'FeedbackManual123';
+  const user = await seedUser(userEmail, pw, 'MENTEE', 'Manual User');
+  const ctx = await browser.newContext();
+  const marker = `MANUAL-MARKER-${Date.now()}`;
+  try {
+    const page = await ctx.newPage();
+    await signInAndSettle(page, userEmail, pw, '/portal');
+    await expect(page.getByTestId('feedback-open')).toBeVisible({ timeout: 15_000 });
+
+    await page.getByTestId('feedback-open').click();
+    const panel = page.getByTestId('feedback-panel');
+    await panel.getByTestId('feedback-description').fill('It breaks after the second click.');
+    const startedAt = Date.now();
+    await panel.getByTestId('feedback-record-start').click();
+
+    // While recording: no panel, a Stop pill, and nothing goes out.
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId('feedback-open')).toBeHidden();
+    const pill = page.getByTestId('feedback-recording');
+    await expect(pill).toBeVisible();
+    const sent: string[] = [];
+    page.on('request', (r) => sent.push(`${r.url()} ${r.postDataBuffer()?.toString('latin1') ?? ''}`));
+    await page.evaluate((text) => {
+      const box = document.createElement('div');
+      box.textContent = text;
+      (document.querySelector('main') ?? document.body).prepend(box);
+    }, marker);
+    await expect(pill).toContainText(/0:0[2-9]/, { timeout: 10_000 });
+    for (const r of sent) {
+      expect(r).not.toContain('/api/support/reports');
+      expect(r).not.toContain(marker);
+    }
+
+    // Stop: back to the report, the description kept, the recording attached.
+    await page.getByTestId('feedback-record-stop').click();
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(pill).toBeHidden();
+    await expect(panel.getByTestId('feedback-description')).toHaveValue('It breaks after the second click.');
+    await expect(panel.getByTestId('feedback-replay')).toBeChecked();
+    await expect(panel.getByTestId('feedback-replay-meta')).toContainText(/0:0\d · [\d.,]+ KB/);
+    await expect(panel.getByTestId('feedback-replay-discard')).toBeVisible();
+    await panel.getByTestId('feedback-replay-preview').click();
+    await expect(panel.getByTestId('feedback-replay-player').locator('.rr-player')).toBeVisible({ timeout: 20_000 });
+
+    await panel.getByTestId('feedback-contact-false').check();
+    const posted = page.waitForResponse((r) => r.url().includes('/api/support/reports') && r.request().method() === 'POST');
+    await panel.getByTestId('feedback-send').click();
+    expect((await posted).status()).toBe(201);
+
+    const report = await prisma.supportReport.findFirstOrThrow({ where: { userId: user.id }, include: { files: true } });
+    const replay = report.files.find((f) => f.kind === 'REPLAY');
+    const events = JSON.parse(gunzipSync(Buffer.from(replay!.data)).toString('utf8')) as { type: number; timestamp: number }[];
+    expect(JSON.stringify(events)).toContain(marker);
+    // It starts at Start, on a full snapshot — not on the rolling window before it.
+    expect(events[0].timestamp).toBeGreaterThanOrEqual(startedAt - 1000);
+    expect(events.some((e) => e.type === 2)).toBe(true);
+  } finally {
+    await cleanupByEmail(userEmail);
+    await ctx.close().catch(() => {});
   }
 });

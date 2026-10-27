@@ -1,5 +1,5 @@
 import { gunzipSync } from 'node:zlib';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -11,6 +11,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { withRequestScope } from '@/lib/requestContext';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { APP_ENV } from '@/lib/appEnv';
+import { announceSupportReport } from '@/lib/supportReportNotify';
 import { buildSupportAttachments } from '@/lib/supportMessageRequest';
 import { SUPPORT_ATTACHMENT_MAX_COUNT } from '@/lib/supportAttachments';
 import {
@@ -149,6 +150,9 @@ export async function POST(request: Request) {
         select: { id: true },
       });
 
+      // The support team is told after the response (#3132): a slow mail relay
+      // or Slack must not hold the reporter's Send button.
+      after(() => announceSupportReport(report.id));
       return NextResponse.json({ id: report.id }, { status: 201 });
     });
   });

@@ -53,6 +53,7 @@ type Outcome =
   | 'skippedRegistered'
   | 'skippedRevoked'
   | 'skippedOpened'
+  | 'skippedPartner'
   | 'notFound';
 
 interface RowResult {
@@ -188,6 +189,12 @@ export async function POST(request: Request) {
           const status = deriveInvitationStatus(row, now);
           if (!isInvitationResendable(status)) {
             results.push(skip(row, status === 'revoked' ? 'skippedRevoked' : 'skippedRegistered'));
+            continue;
+          }
+          // A partner's invitation is resent only from the partner screen, behind
+          // `affiliate.write` (#3117) — the same rule as POST /api/invite/[id].
+          if (row.role === 'AFFILIATE') {
+            results.push(skip(row, 'skippedPartner'));
             continue;
           }
           eligible.push(row);

@@ -24,6 +24,8 @@ import { stageTrialWindow } from '@/lib/trialWindow';
 import { logActivity } from '@/lib/activity';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isOrgEnforcingSso, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
+import { PartnerInviteError, linkPartnerAccount } from '@/lib/affiliateInvite';
+import type { Prisma } from '@prisma/client';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -98,7 +100,7 @@ export async function POST(request: Request) {
     // Without a token: open self-registration creates a MENTEE (#589) — mentees
     // are the self-serve intake; mentors/companies/sources arrive by invitation.
     // Same safety net as before: unverified email + inactive until admin approval.
-    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' = 'MENTEE';
+    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' | 'AFFILIATE' = 'MENTEE';
     // Set from the invitation (its sender) or from a referral code, and written
     // onto the new account so "who brought this person in" is answerable later.
     let referredById: string | null = null;
@@ -116,6 +118,8 @@ export async function POST(request: Request) {
     // `User.companyId` — and the invitee has no way to supply it, so it rides on
     // the invitation from the moment the conversion minted it.
     let invitedCompanyId: string | null = null;
+    // The affiliate partner an invited AFFILIATE account is linked to (#3117).
+    let invitedPartnerId: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
@@ -158,11 +162,14 @@ export async function POST(request: Request) {
       if (invitation.email && invitation.email.toLowerCase() !== email.toLowerCase()) {
         return NextResponse.json({ error: 'Email does not match the invitation' }, { status: 400 });
       }
-      // A partner of the affiliate programme joins through the programme's own
-      // invitation (docs/affiliate-module.md), never through this generic route.
-      if (invitation.role === 'AFFILIATE') {
+      // A partner of the affiliate programme joins only through the programme's
+      // own invitation (src/lib/affiliateInvite.ts): addressed to the partner's
+      // contact (so the mailbox is proven) and naming the partner the account is
+      // linked to. Anything else carrying the role creates no account.
+      if (invitation.role === 'AFFILIATE' && (!invitation.partnerId || !invitation.email)) {
         return NextResponse.json({ error: 'This invitation cannot create an account' }, { status: 400 });
       }
+      invitedPartnerId = invitation.role === 'AFFILIATE' ? invitation.partnerId : null;
       invitationEmail = invitation.email;
       role = invitation.role;
       referredById = invitation.invitedById;
@@ -262,10 +269,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: SSO_REQUIRED_MESSAGE, code: SSO_REQUIRED_CODE }, { status: 400 });
     }
 
-    const user = await prisma.user.create({
+    const userData = {
       data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale ?? parsed.data.locale ?? null, companyId: role === 'COMPANY' ? invitedCompanyId : null },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
-    });
+    } satisfies Prisma.UserCreateArgs;
+    let user: Prisma.UserGetPayload<{ select: typeof userData.select }>;
+    if (invitedPartnerId) {
+      // The account and its partner link are one write: a partner that was
+      // linked, suspended or removed since the invitation leaves no account behind.
+      const partnerId = invitedPartnerId;
+      try {
+        user = await prisma.$transaction(async (tx) => {
+          const created = await tx.user.create(userData);
+          await linkPartnerAccount(tx, { orgId, partnerId, userId: created.id });
+          return created;
+        });
+      } catch (e) {
+        if (e instanceof PartnerInviteError) {
+          return NextResponse.json({ error: 'This invitation is no longer valid — ask for a new one' }, { status: 400 });
+        }
+        throw e;
+      }
+    } else {
+      user = await prisma.user.create(userData);
+    }
 
     // Record which privacy-notice version was accepted, so consent is auditable
     // and re-consent can be requested when the notice changes (GDPR Art. 7).

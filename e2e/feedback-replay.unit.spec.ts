@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
 import {
+  FEEDBACK_MANUAL_MAX_MS,
+  ManualRecording,
   ReplayBuffer,
   checkReplayEvents,
+  formatReplayDuration,
+  formatReplaySize,
+  replayDurationMs,
   checkoutEveryMs,
   isGzip,
   replayConfig,
@@ -69,5 +74,32 @@ test.describe('feedback replay rules', { tag: '@smoke' }, () => {
     ]);
     expect(out.map((e) => e.timestamp)).toEqual([100, 100, 300, 500]);
     expect(out[2]).toMatchObject({ type: RR_CUSTOM, data: { tag: 'console', payload: { label: 'boom' } } });
+  });
+
+  test('a manual recording keeps everything until its 20-minute limit, then refuses', () => {
+    const rec = new ManualRecording(1_000);
+    expect(rec.push(ev(RR_FULL_SNAPSHOT, 1_000))).toBe(true);
+    expect(rec.push(ev(3, 1_000 + FEEDBACK_MANUAL_MAX_MS))).toBe(true);
+    expect(rec.full).toBe(false);
+    expect(rec.push(ev(3, 1_001 + FEEDBACK_MANUAL_MAX_MS))).toBe(false);
+    expect(rec.full).toBe(true);
+    expect(rec.push(ev(3, 1_002 + FEEDBACK_MANUAL_MAX_MS))).toBe(false);
+    const frozen = rec.freeze();
+    expect(frozen).toHaveLength(2);
+    // Frozen means frozen: the returned array is a copy.
+    frozen.push(ev(3, 9));
+    expect(rec.freeze()).toHaveLength(2);
+    expect(rec.elapsed(1_000 + 5 * 60_000)).toBe(5 * 60_000);
+    expect(rec.elapsed(1_000 + 99 * 60_000)).toBe(FEEDBACK_MANUAL_MAX_MS);
+  });
+
+  test('duration and size read the way the panel shows them', () => {
+    expect(formatReplayDuration(0)).toBe('0:00');
+    expect(formatReplayDuration(95_400)).toBe('1:35');
+    expect(formatReplayDuration(20 * 60_000)).toBe('20:00');
+    expect(formatReplaySize(300 * 1024, 'en')).toBe('300 KB');
+    expect(formatReplaySize(2.5 * 1024 * 1024, 'de')).toBe('2,5 MB');
+    expect(replayDurationMs([ev(4, 10), ev(2, 10), ev(3, 4010)])).toBe(4000);
+    expect(replayDurationMs([ev(4, 10)])).toBe(0);
   });
 });
