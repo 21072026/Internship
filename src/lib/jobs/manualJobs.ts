@@ -73,3 +73,14 @@ export function manualJobFor(
   }
   return null;
 }
+
+/**
+ * Job → the `/api/cron?job=` key that re-runs it, for the operations console's
+ * re-run button (#1607). `platform` keys take a super admin at the route; the
+ * console asks here instead of keeping its own copy of either table.
+ */
+export function manualKeyForJob(name: JobName): { key: string; platform: boolean } | null {
+  for (const [key, job] of Object.entries(OWN_ORG)) if (job === name) return { key, platform: false };
+  for (const [key, job] of Object.entries(PLATFORM)) if (job === name) return { key, platform: true };
+  return null;
+}

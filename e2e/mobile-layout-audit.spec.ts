@@ -103,6 +103,8 @@ test('phone width: the admin screens stay inside the viewport in German', async 
       '/admin/mentorship',
       '/admin/analytics',
       '/admin/support',
+      // A table-heavy operator page (#1607): the schedules table scrolls in its own box.
+      '/admin/operations',
     ]) {
       await gotoSettled(page, path);
       await settle(page);

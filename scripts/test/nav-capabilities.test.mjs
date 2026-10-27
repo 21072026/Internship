@@ -51,11 +51,13 @@ test('every untagged link survives every vertical', () => {
 });
 
 test('a super-admin-only link is shown to a super admin alone (#1575)', () => {
-  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.superAdminOnly).map((l) => l.href), ['/admin/api-explorer']);
+  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.superAdminOnly).map((l) => l.href), ['/admin/api-explorer', '/admin/operations']);
   for (const caps of [INTERNSHIP, MARKETING]) {
-    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps).some((l) => l.href === '/admin/api-explorer'));
-    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: false }).some((l) => l.href === '/admin/api-explorer'));
-    assert.ok(visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: true }).some((l) => l.href === '/admin/api-explorer'));
+    for (const href of ['/admin/api-explorer', '/admin/operations']) {
+      assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps).some((l) => l.href === href));
+      assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: false }).some((l) => l.href === href));
+      assert.ok(visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: true }).some((l) => l.href === href));
+    }
   }
   assert.deepEqual(MENTOR_NAV_LINKS.filter((l) => l.superAdminOnly), []);
   assert.deepEqual(PORTAL_NAV_LINKS.filter((l) => l.superAdminOnly), []);
