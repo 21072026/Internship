@@ -56,3 +56,50 @@ Append-only, one row per raised event: `orgId`, `name` (≤ 96), `version`,
   (`src/lib/retentionEntries.ts`, #1678), window `domainEventRetentionDays`
   (global setting, default 90 days). No schedule of its own. Once the outbox
   lands, a row not yet relayed must be excluded in `pruneDomainEvents()`.
+
+## One way in: `emit()` (#1693)
+
+```ts
+import { emit } from '@/lib/events/emit';
+await emit('mentorship.created', { relationId, mentorId, menteeId, companyId }, { orgId, actor: { id, type: 'user' } });
+```
+
+`src/lib/events/emit.ts` (server-only) binds the rules in
+`src/lib/events/emitCore.ts` (dependency-free, unit-tested in
+`e2e/domain-event-emit.unit.spec.ts`) to Prisma and the job queue:
+
+1. **Validate** against the catalogue. An unknown name or a payload the entry
+   does not describe **throws outside production** (a red test, not a silent
+   contract change) and is logged and dropped in production.
+2. **Record** one `DomainEvent` row — `orgId` (explicit, else
+   `currentOrgId()`; an explicit `null` stays null), actor, `subjectType`/
+   `subjectId` from the entry, `correlationId` (default: the request id).
+   Until the transactional outbox (#1680) lands, `insertDomainEvent()` in
+   `emit.ts` is the only insert into the table; #1680 swaps it for
+   `publishEvent(tx, …)` and moves step 3 into its relay.
+3. **Fan out**: one `event.deliver` job per interested subscriber, payload
+   `{ eventId, subscriber }` (names only — the handler is resolved by name in
+   the worker), `idempotencyKey = <eventId>:<subscriber>`, `trigger: 'event'`.
+4. **Never throws** past step 1: a failed row write or enqueue is logged, like
+   `logActivity`.
+
+The `event.deliver` job (`src/jobs/index.ts`) loads the row, re-parses the
+payload through its catalogue entry — which restores the producer's key order
+that MySQL's JSON column re-sorts — and calls the subscriber. A missing row
+(pruned) or a subscriber that no longer exists settles without a retry; a
+subscriber that throws is retried with the queue's backoff.
+
+### Subscribers: `src/lib/events/subscribers/`
+
+`registerSubscriber({ name, events, handle })` (`subscribers.ts`, pure);
+every production subscriber is registered in `subscribers/index.ts`. Delivery
+is at-least-once — each subscriber says in its file what makes a rerun
+harmless.
+
+- **`webhook`** (`subscribers/webhook.ts`): every public event →
+  `dispatchWebhook(name, payload, orgId)`, exactly the arguments the producers
+  used to pass directly, so receivers get the same `event`, `data` and tenant
+  scoping. It never throws (a dead receiver is logged, not retried — per-receiver
+  retries and the delivery log are #1695), so one dead endpoint cannot make the
+  other receivers get the event twice. It is the one file besides
+  `src/lib/webhooks.ts` that may name the dispatcher (`npm run check:events`).
