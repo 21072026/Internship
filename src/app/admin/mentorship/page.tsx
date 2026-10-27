@@ -1,6 +1,8 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
 import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { parseGateBody, type GateInfo } from "@/lib/upgradePrompt";
 import Link from "next/link";
 import { RelationHealthBadge, useRelationHealth } from "@/components/HealthBadge";
 
@@ -96,6 +98,8 @@ export default function MentorshipPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
+  // The plan's active-mentorship cap renders the upgrade prompt (#1745).
+  const [formGate, setFormGate] = useState<GateInfo | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
   const [agreementFilter, setAgreementFilter] = useState<AgreementStatus | ''>('');
@@ -211,6 +215,7 @@ export default function MentorshipPage() {
     }
     setSubmitting(true);
     setFormError('');
+    setFormGate(null);
     setAssignBlocked(null);
     try {
       const res = await fetch('/api/mentorship', {
@@ -230,7 +235,9 @@ export default function MentorshipPage() {
         // shared resolver translates every code this route can answer,
         // including the plan gate's quota sentence (#2283 follow-up).
         const body = await res.json().catch(() => ({}));
-        setFormError(mentorshipAssignmentError(t, body, t.mentorships.assignFailed));
+        const wall = parseGateBody(body);
+        setFormGate(wall);
+        setFormError(wall ? '' : mentorshipAssignmentError(t, body, t.mentorships.assignFailed));
         // A correct refusal the admin could not act on is how people learn to
         // fake a completion (#2289): the route names the current mentor and
         // their relation, so offer the change right here instead of leaving
@@ -405,6 +412,7 @@ export default function MentorshipPage() {
           onClick={() => {
             // A stale refusal from the last attempt must not greet the next one.
             setFormError('');
+            setFormGate(null);
             setAssignBlocked(null);
             setShowForm(true);
           }}
@@ -447,6 +455,7 @@ export default function MentorshipPage() {
             {formError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{formError}</div>
             )}
+            {formGate && <UpgradePrompt gate={formGate} viewer="admin" className="mb-4" />}
             {assignBlocked && (
               <div
                 data-testid="assign-blocked-offer"
