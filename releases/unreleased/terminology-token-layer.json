@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Per-tenant terminology (#1629):** a closed catalogue of nouns (`mentor`, `mentee`, `program`, `cohort`, `mentorship`, each `one`/`many`/`oneCap`/`manyCap` per locale) in `src/lib/terminology.ts`, stored as ONE `terminology` setting per layer (programme → org → global, `resolveSetting` chain) and written through `GET`/`PUT /api/admin/terminology` (`org.settings.write`; unknown locales/tokens and incomplete tokens are dropped, never stored). It feeds the overlay mechanism rather than adding a second layer: the stored forms are swapped as whole words into the vertical-overlaid dictionary at the existing choke points (`getServerDictionary()`, the root layout's client payload, `emailDictionary()`), memoised per (base, locale, terminology). Nothing stored returns the same dictionary object, byte-identical. INTERNSHIP only; interpolation tokens, paths, hosts, Turkish suffixed forms and German compounds are never touched."
+}
