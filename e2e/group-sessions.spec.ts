@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInViaApi } from './helpers/auth';
+import { signInViaApi, signInAndSettle, gotoSettled } from './helpers/auth';
 
 // Group sessions and office hours (#1856): publish → register to capacity →
 // waitlist → cancel → promote, through the API, against a real database.
@@ -110,5 +110,28 @@ test.describe('group sessions', () => {
     expect(participants.find((p) => p.userId === ids.c)?.attendance).toBe('ATTENDED');
     const past = (await (await c.get('/api/events?when=past')).json()).events as { id: string; myRegistration: { attendance: string } }[];
     expect(past.find((e) => e.id === eventId)?.myRegistration.attendance).toBe('ATTENDED');
+  });
+
+  test('a mentee registers from the portal and is told about the group video limit', async ({ page, playwright }) => {
+    const host = await as(playwright, 'host');
+    const startsAt = new Date(Date.now() + 5 * 24 * 3600_000).toISOString();
+    // No pasted link, no place: the room comes from resolveMeetingLink().
+    const created = await host.post('/api/events', {
+      data: { title: 'Kickoff briefing', startsAt, timeZone: 'Europe/Berlin', durationMinutes: 30, capacity: 5, audience: 'MENTEES', publish: true },
+    });
+    expect(created.status()).toBe(201);
+    const eventId = (await created.json()).event.id as string;
+
+    await signInAndSettle(page, emails.a, PASSWORD, '/portal');
+    await gotoSettled(page, '/portal/events');
+    const card = page.getByTestId(`event-card-${eventId}`);
+    await expect(card).toContainText('Kickoff briefing');
+    await card.getByTestId(`event-register-${eventId}`).click();
+    await expect(card.getByTestId(`event-my-state-${eventId}`)).toBeVisible();
+    await expect(card.getByTestId(`event-seats-${eventId}`)).toContainText('1/5');
+    // A confirmed registrant gets the link; on the public Jitsi server the five-minute limit is stated.
+    const link = (await (await page.request.get(`/api/events/${eventId}`)).json()).event.joinUrl as string;
+    expect(link).toBeTruthy();
+    if (new URL(link).hostname === 'meet.jit.si') await expect(card.getByTestId(`event-video-note-${eventId}`)).toBeVisible();
   });
 });
