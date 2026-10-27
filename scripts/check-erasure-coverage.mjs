@@ -175,6 +175,8 @@ const DECISIONS = new Map([
   ['RosterRun.error', OPS],
   ['Job.lastError', OPS],
   ['JobRun.error', OPS],
+  // A failed automation action's message (#1703): codes and driver errors, never text about a person.
+  ['AutomationRun.error', OPS],
   ['BackfillRun.lastError', OPS],
   ['NotificationDelivery.error', OPS],
 ]);

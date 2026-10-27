@@ -14,6 +14,7 @@ import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
 import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { runEventDelivery } from '@/lib/events/emit';
+import { runDelayedAutomation } from '@/lib/automation/evaluate';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -74,6 +75,11 @@ export function registerAllJobs(): void {
     const outcome = await runEventDelivery(payload);
     return { [outcome]: 1 };
   }, { timeoutMs: 60_000 });
+
+  // A delayed stage-automation run (#1703). The run is claimed PENDING →
+  // RUNNING in one guarded update before any action, so a rerun finds it taken
+  // and does nothing — the actions are at-most-once by design (engine.ts).
+  registerJob('automation.run', async (payload) => runDelayedAutomation(payload.runId), { timeoutMs: 120_000 });
 
   // Each feed runs under its own claim (one conditional UPDATE), and a feed
   // whose lastRunAt the first run already moved is no longer due — so a

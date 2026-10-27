@@ -111,6 +111,9 @@ harmless.
   `orgId` = its tenant (explicit; a global setting stays `null`), `detail` =
   `{"eventId":…,…payload}`. A rerun finds the row by the event id that opens
   `detail` and writes nothing.
+- **`automation`** (`subscribers/automation.ts`, #1703): `pipeline.stage_change`
+  → the org's enabled stage automation rules for that move, one `AutomationRun` per
+  (rule, event) — unique, so a rerun creates none. `docs/automation-rules.md`.
 
 ## Configuration diffs: `src/lib/events/diff.ts` (#1699)
 
