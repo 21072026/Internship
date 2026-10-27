@@ -8,6 +8,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface ApplicationRow {
   id: string;
@@ -64,6 +65,10 @@ export default function MentorApplicationsPage() {
       r.email.toLowerCase().includes(q) ||
       (r.expertise ?? []).some((s) => s.toLowerCase().includes(q))
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, shown.length) : null);
 
   return (
     <div>

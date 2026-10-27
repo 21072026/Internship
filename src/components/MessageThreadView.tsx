@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen, MessageSquareQuote, X } from 'lucide-react';
@@ -317,6 +318,9 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const cannedList = (canned ?? []).filter(
     (tpl) => !cannedQ || resolveMessageTemplateText(tpl, locale).toLowerCase().includes(cannedQ)
   );
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(cannedQ !== '' ? resultCountMessage(t.a11y, cannedList.length) : null);
 
   // Enter/Shift+Enter behaviour depends on the preference above; ArrowUp on an
   // empty box edits your last message (WhatsApp/Slack/Telegram style).

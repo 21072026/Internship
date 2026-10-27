@@ -13,6 +13,7 @@ import { DraftFromBrief, TranslationFillButton, MachineTranslatedChip } from '@/
 import { afterEdit } from '@/lib/machineTranslation';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // Management for the shared goal-template pool (#51 follow-up). Every project
 // sees these on top of its own, and a mentor hands them to a new member in one
@@ -146,6 +147,10 @@ export default function AdminGoalTemplatesPage() {
   const filtered = templates.filter(
     (tpl) => !q || [tpl.title, ...Object.values(tpl.translations)].some((v) => v?.toLowerCase().includes(q))
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -33,6 +34,9 @@ export function EmailSuppressionPanel({ scopeOrg }: { scopeOrg?: boolean }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [q, setQ] = useState('');
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(rows && q.trim() !== '' ? resultCountMessage(t.a11y, rows.length) : null);
   const [showReleased, setShowReleased] = useState(false);
   const [target, setTarget] = useState<Row | null>(null);
   const [reason, setReason] = useState('');

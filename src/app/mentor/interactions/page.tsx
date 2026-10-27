@@ -10,6 +10,7 @@ import { BookOpen } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Interaction {
   id: string;
@@ -64,6 +65,10 @@ export default function MentorInteractionsPage() {
         (i.subject ?? '').toLowerCase().includes(q) ||
         i.relation.mentee.fullName.toLowerCase().includes(q))
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (q !== '' || typeFilter !== 'ALL') ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <div>

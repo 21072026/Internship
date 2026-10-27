@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Copy, Check, Share2, UserPlus, X } from 'lucide-react';
@@ -649,6 +650,9 @@ export default function AdminOrganizationsPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = orgs.filter((o) => !q || o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q));
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <div>
