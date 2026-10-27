@@ -330,6 +330,27 @@ test('an event type with no funnel mapping is recorded and moves nothing', async
   expect(log?.detail).toContain(`${SLUG}: plan_changed`);
 });
 
+test('plan is stored on the account, and an older event never puts a stale plan back (#2846)', async ({ request }) => {
+  const externalId = extId();
+  const { companyId, relationId } = await seedAccount('DEAL_WON', externalId);
+  const now = Date.now();
+  const changed = await post(request, envelope({ external_id: externalId, event_type: 'plan_changed', plan: 'Free', occurred_at: new Date(now).toISOString() }));
+  expect((await changed.json()).outcome).toBe('recorded');
+  const read = () => prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { productPlan: true, productPlanAt: true } });
+  expect((await read()).productPlan).toBe('free');
+  // An event from before it arriving late: the stored plan stays.
+  await post(request, envelope({ external_id: externalId, event_type: 'plan_changed', plan: 'pro', occurred_at: new Date(now - DAY).toISOString() }));
+  expect((await read()).productPlan).toBe('free');
+  // No plan on an event = no opinion.
+  await post(request, envelope({ external_id: externalId, event_type: 'plan_changed', occurred_at: new Date(now + 1000).toISOString() }));
+  expect((await read()).productPlan).toBe('free');
+  // Recording it moved nothing.
+  expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relationId } })).pipelineStatus).toBe('DEAL_WON');
+  // A malformed plan is a readable 400.
+  const bad = await post(request, envelope({ external_id: externalId, event_type: 'plan_changed', plan: 'free plan' }));
+  expect(bad.status()).toBe(400);
+});
+
 test('an org without a default owner answers 409, and the event is retryable once one is set', async ({ request }) => {
   const event = envelope();
   const refused = await post(request, event, ownerlessKey);
