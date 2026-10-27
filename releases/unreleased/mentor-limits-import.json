@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mentor limits CSV import (#1808):** `POST /api/admin/mentors/limits/import` and a panel on `/admin/mentors` — `email` + `mentorCapacity`, `selfMatchLimit`, `acceptingMentees` (User) and `minNoticeMinutes`, `maxPerMonth` (upserted onto the mentor's `MentorBookingPolicy`, #2003's names and units). Runs on the one import engine (`runImport` + the shared parser, `src/lib/mentorLimitsImport.ts` / `mentorLimitsImportStore.ts`): dry run first with a per-row report (`UPDATE` + changed fields / `UNCHANGED` / `SKIP not_found|not_a_mentor|duplicate_row|below_weekly` / `ERROR` per column), writes only on `apply: true`, one transaction per chunk. Unknown addresses are reported, never created; empty cell = keep, `-` = clear. ADMIN only, free core.",
+  "notes": {
+    "en": ["Admins can import every mentor's capacity, self-match limit and booking limits from a spreadsheet — with a preview of each row before anything is saved."],
+    "tr": ["Yöneticiler artık tüm mentorların kapasitesini, kendi seçim limitini ve görüşme limitlerini bir tablodan içe aktarabilir — kaydedilmeden önce her satırın önizlemesiyle."],
+    "de": ["Admins können Kapazität, Selbstwahl-Limit und Termin-Limits aller Mentorinnen und Mentoren aus einer Tabelle importieren – mit einer Vorschau jeder Zeile, bevor etwas gespeichert wird."]
+  }
+}
