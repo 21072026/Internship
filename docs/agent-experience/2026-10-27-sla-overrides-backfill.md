@@ -24,3 +24,6 @@
   is the precedent). The CLI keeps only argv parsing and logging, so deploy and app cannot drift.
 - **The container's MariaDB can stop between turns** — `Can't reach database server` in the
   WebServer log means `service mariadb start`, not a code bug.
+- **Resolve "which number applies" field by field when rows carry several numbers.** An override
+  row that sets days but no escalation must inherit the org's rung, or a cohort's tighter clock
+  silently switches the admin escalation off — `resolveSlaEscalations()` vs `resolveSlaDays()`.

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**SLA compliance and escalation honour overrides (#3204):** `computeSlaCompliance()` takes either one map or a per-relation resolver; `slaCompliance()` judges each relation against its own resolved service level (`slaDaysByStage` over every scope, memoised per cohort/mentor pair) and reports a rate for an org whose only SLAs are overrides. The escalation rung resolves per relation, field by field (`resolveSlaEscalations()` in `stageSlaRule.ts` + its ESM twin): an override without a rung of its own inherits the next scope's. `checkStageDeadlineReminders()`, the deadline fill and `resolveStageEscalations(scope)` read it; override rows may now carry `escalateAfterDays` (API + editor, placeholder shows the inherited rung). With no override rows both readers answer exactly as before (unit-tested).",
+  "notes": {
+    "en": ["The SLA compliance rate and the escalation to administrators now follow per-cohort and per-mentor service levels, and an override can set its own escalation."],
+    "tr": ["SLA uyum oranı ve yöneticilere üst kademe bildirimi artık dönem ve mentör bazındaki süre hedeflerini izliyor; bir istisna kendi üst kademe süresini de belirleyebiliyor."],
+    "de": ["Die SLA-Einhaltungsquote und die Eskalation an Administratoren folgen jetzt den Servicelevels je Kohorte und Mentor:in, und eine Ausnahme kann ihre eigene Eskalation festlegen."]
+  }
+}

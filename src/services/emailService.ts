@@ -4284,13 +4284,15 @@ export async function checkStageDeadlineReminders() {
     }
     return hit;
   };
-  const escalationsByOrg = new Map<string, Promise<Map<string, number>>>();
-  const escalationsOf = (orgId: string | null) => {
-    const key = orgId ?? '';
-    let hit = escalationsByOrg.get(key);
+  // Per relation SCOPE, not per org (#3204): a cohort or mentor override may
+  // carry its own rung (or inherit the org's) — memoised per scope per run.
+  const escalationsByScope = new Map<string, Promise<Map<string, number>>>();
+  const escalationsOf = (rel: { orgId: string | null; cohortId: string | null; mentorId: string }) => {
+    const key = `${rel.orgId ?? ''}|${rel.cohortId ?? ''}|${rel.mentorId}`;
+    let hit = escalationsByScope.get(key);
     if (!hit) {
-      hit = resolveStageEscalations(orgId);
-      escalationsByOrg.set(key, hit);
+      hit = resolveStageEscalations({ orgId: rel.orgId, cohortId: rel.cohortId, mentorId: rel.mentorId });
+      escalationsByScope.set(key, hit);
     }
     return hit;
   };
@@ -4388,7 +4390,7 @@ export async function checkStageDeadlineReminders() {
     }
     standing.add(breach.id);
 
-    const escalateAfterDays = (await escalationsOf(rel.orgId)).get(rel.pipelineStatus);
+    const escalateAfterDays = (await escalationsOf(rel)).get(rel.pipelineStatus);
     if (!escalationDue(breach, escalateAfterDays, now)) continue;
     if (!(await claimEscalation(breach.id, breach.level, now))) continue;
     escalated++;
