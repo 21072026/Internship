@@ -83,10 +83,15 @@ test('XXE, defence in depth: the parser itself resolves no external entity', () 
   } catch {
     /* no such file here — the assertion below still holds */
   }
-  const doc = new DOMParser({ errorHandler: { warning() {}, error() {}, fatalError() {} } }).parseFromString(
-    '<!DOCTYPE r [ <!ENTITY xxe SYSTEM "file:///etc/hostname"> ]><r>&xxe;</r>',
-    'text/xml',
-  );
+  let doc;
+  try {
+    doc = new DOMParser({ onError() {} }).parseFromString(
+      '<!DOCTYPE r [ <!ENTITY xxe SYSTEM "file:///etc/hostname"> ]><r>&xxe;</r>',
+      'text/xml',
+    );
+  } catch {
+    /* xmldom ≥0.9 throws on the fatal error — nothing was expanded either way */
+  }
   const text = doc?.documentElement?.textContent ?? '';
   if (hostname) assert.ok(!text.includes(hostname), 'the external entity was expanded');
 });

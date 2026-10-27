@@ -91,8 +91,10 @@ export function parseIdpMetadata(xml: string): ParsedIdpMetadata {
   let doc: Document;
   try {
     doc = new DOMParser({
-      locator: {},
-      errorHandler: { warning: () => {}, error: fail, fatalError: fail },
+      locator: true,
+      onError: (level, msg) => {
+        if (level !== 'warning') fail(msg);
+      },
     }).parseFromString(xml.trim(), 'text/xml') as unknown as Document;
   } catch (e) {
     if (e instanceof MetadataError) throw e;
