@@ -139,7 +139,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const dict = toClientDictionary((await requestDictionary(locale)).t);
   const cookieStore = await cookies();
   // Inside the native app's web view (src/lib/embeddedApp.ts).
-  const embeddedApp = isEmbeddedAppUserAgent((await headers()).get('user-agent'));
+  const requestHeaders = await headers();
+  const embeddedApp = isEmbeddedAppUserAgent(requestHeaders.get('user-agent'));
+  const nonce = requestHeaders.get('x-nonce') ?? undefined;
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
   let accent = cookieStore.get('accent')?.value;
@@ -188,7 +190,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
+        {/* The nonce the middleware minted for this request (#1552): the strict
+            CSP allows this inline script by it, not by 'unsafe-inline'. The
+            browser hides a nonce from the DOM once parsed, so hydration reads
+            "" there — hence suppressHydrationWarning, not a real mismatch. */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
       </head>
       <body>
         <a
