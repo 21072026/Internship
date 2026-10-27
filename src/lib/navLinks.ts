@@ -119,6 +119,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/users', icon: UserCog, key: 'users' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
+  // Every mentor's hours, run by the admin without impersonation (#2005).
+  { href: '/admin/availability', icon: CalendarRange, key: 'availability', capability: 'mentorship' },
   { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
   // The newsletter is career content for MENTEE/MENTOR audiences (#1469): an
   // internship module. Tagged `mentorship` rather than a new `newsletter`

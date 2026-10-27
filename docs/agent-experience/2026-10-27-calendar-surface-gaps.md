@@ -16,3 +16,7 @@
 - **Print checks are cheap in Playwright:** `page.emulateMedia({ media: 'print' })` and then
   `toBeHidden()` on the chrome. `globals.css` already hides `aside`, `header` and `.no-print` in
   print, so a page only marks its own toolbar.
+- **New strings in a namespace MARKETING renders trip the leak ratchet even when the page is
+  gated.** `check:i18n` counts by namespace, not by page: keys for an internship-only admin page
+  belong in their own namespace (`adminAvailability`) with a `LEAK_EXEMPT` entry naming the
+  `gatePage`, not in the shared `availability` block.

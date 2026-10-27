@@ -6251,6 +6251,19 @@ const en = {
     retry: 'Try again',
     themeNote: 'Swagger UI below renders in its own light theme in both light and dark mode, and sizes its text in pixels, so it does not follow the app’s font-size setting.',
   },
+  // The admin's view of a mentor's hours (#2005), /admin/availability only —
+  // gatePage closes it without the `mentorship` capability (LEAK_EXEMPT).
+  adminAvailability: {
+    adminTitle: 'Mentor availability',
+    adminSubtitle: 'See and fix any mentor’s hours in your organisation, without signing in as them',
+    pickMentor: 'Mentor',
+    pickMentorPlaceholder: 'Choose a mentor…',
+    pickMentorPrompt: 'Choose a mentor to see and edit their hours.',
+    noMentors: 'There are no active mentors in your organisation yet.',
+    mentorSlots: 'Their slots',
+    inZoneMentor: 'Times are shown in {zone} — the mentor’s profile time zone.',
+    zoneUnsetMentor: 'This mentor never set a time zone, so these hours are read as {zone}. Ask them to set theirs so mentees see the right time.',
+  },
   availability: {
     title: 'Availability',
     subtitle: 'Your recurring weekly slots for mentee meetings',
@@ -7163,7 +7176,7 @@ const en = {
       weeklyReports: { t: 'Weekly internship reports', d: 'Mentees write a weekly internship report, keep drafts and print their diary; mentors review each submission, approve it or request changes. Missing reports surface in the mentor attention queue and a weekly reminder; coordinators get a term-wide compliance matrix with a one-click reminder, an XLSX export and a printable report booklet per intern.' },
       newsletter: { t: 'Career newsletter', d: 'Short, emoji-led issues of CV and interview advice, written once in English, Turkish and German and sent to each reader in their own language. Send by hand or on a weekly, fortnightly or monthly schedule; mentors get a coaching angle on the same issue, every send is kept on the record, and one press unsubscribes.' },
       mentorSelfApply: { t: 'Self-serve mentor applications', d: 'Anyone can apply to become a mentor without an account; admins review, take into review, approve or reject from a queue, and approval creates or upgrades the mentor\u2019s account automatically.' },
-      calendar: { t: 'Calendar in four views', d: 'Meetings, recurring project calls and stage deadlines in one calendar — month, week, day or a plain upcoming list, with the upcoming list as the default on a phone. A recurring project meeting is kept as a rule, so it shows once under its own title, moves when you move it and disappears when you cancel it. Subscribe to the same calendar from your own app with a personal, revocable link — meetings, series occurrences and deadlines all travel with it — and every meeting invitation arrives with a .ics attachment. A company login gets a calendar of its own scheduled interviews — and only those. Any view downloads as a .ics file for the range on screen, and prints as a clean sheet for the wall.' },
+      calendar: { t: 'Calendar in four views', d: 'Meetings, recurring project calls and stage deadlines in one calendar — month, week, day or a plain upcoming list, with the upcoming list as the default on a phone. A recurring project meeting is kept as a rule, so it shows once under its own title, moves when you move it and disappears when you cancel it. Subscribe to the same calendar from your own app with a personal, revocable link — meetings, series occurrences and deadlines all travel with it — and every meeting invitation arrives with a .ics attachment. A company login gets a calendar of its own scheduled interviews — and only those. Any view downloads as a .ics file for the range on screen, and prints as a clean sheet for the wall. An admin sees and fixes anyone’s bookable hours from one screen, without signing in as them.' },
       offers: { t: 'Offer management', d: 'Create, preview and send a job offer from a candidate’s Mentorship card in three steps; the candidate accepts or declines (with a reason) from their portal, sees a persistent decision state, and overdue offers expire on their own — every step logged and notified. An admin offer index answers what is still outstanding, what expires this week and what was declined, and why.' },
       multiTenancy: { t: 'Multi-tenant organisations', d: 'Keep each organisation’s data, plan and configuration separate in one CRM.' },
       whiteLabel: { t: 'Per-tenant branding settings', d: 'Brand name, logo, colours and support contact are stored for each organisation, and tenant branding is applied across the product — the role layouts, every e-mail a member receives including the career newsletter, and generated certificates.' },
@@ -15779,6 +15792,19 @@ const tr: Dict = {
     retry: 'Yeniden dene',
     themeNote: 'Aşağıdaki Swagger UI, açık ve koyu temada kendi açık temasıyla görünür; yazı boyutlarını piksel verdiği için uygulamanın yazı boyutu ayarını izlemez.',
   },
+  // The admin's view of a mentor's hours (#2005), /admin/availability only —
+  // gatePage closes it without the `mentorship` capability (LEAK_EXEMPT).
+  adminAvailability: {
+    adminTitle: 'Mentor müsaitliği',
+    adminSubtitle: 'Kurumundaki herhangi bir mentorun saatlerini, onun hesabına girmeden gör ve düzelt',
+    pickMentor: 'Mentor',
+    pickMentorPlaceholder: 'Bir mentor seç…',
+    pickMentorPrompt: 'Saatlerini görmek ve düzenlemek için bir mentor seç.',
+    noMentors: 'Kurumunda henüz aktif mentor yok.',
+    mentorSlots: 'Saatleri',
+    inZoneMentor: 'Saatler {zone} olarak gösteriliyor — mentorun profil saat dilimi.',
+    zoneUnsetMentor: 'Bu mentor hiç saat dilimi seçmemiş, bu yüzden saatler {zone} olarak okunuyor. Menteeler doğru saati görsün diye kendisinden ayarlamasını iste.',
+  },
   availability: {
     title: 'Müsaitlik',
     subtitle: 'Mentee toplantıları için haftalık tekrarlayan saatlerin',
@@ -16685,7 +16711,7 @@ const tr: Dict = {
       weeklyReports: { t: 'Haftalık staj raporları', d: 'Mentee’ler haftalık staj raporu yazar, taslaklarını saklar ve günlüklerini yazdırır; mentörler her gönderimi onaylar veya değişiklik ister. Eksik raporlar mentörün dikkat kuyruğuna ve haftalık hatırlatmaya yansır; koordinatörler dönem boyu uyum matrisi, tek tıkla hatırlatma, XLSX dışa aktarma ve stajyer başına yazdırılabilir rapor defteri alır.' },
       newsletter: { t: 'Kariyer bülteni', d: 'CV ve mülakat tavsiyelerini emojili, kısa sayılar hâlinde ulaştırır; İngilizce, Türkçe ve Almanca bir kez yazılır, her okuyucuya kendi dilinde gider. Elle ya da haftalık, iki haftalık, aylık programla gönderilir; mentörler aynı sayıda mentorluk bakışını da görür, her gönderim kayda geçer ve tek dokunuşla abonelik bırakılır.' },
       mentorSelfApply: { t: 'Self-servis mentör başvurusu', d: 'Herkes hesap açmadan mentör olmak için başvurabilir; adminler kuyruktan inceler, incelemeye alır, onaylar veya reddeder; onay, mentörün hesabını otomatik olarak oluşturur veya yükseltir.' },
-      calendar: { t: 'Takvim: dört görünüm', d: 'Toplantılar, düzenli proje görüşmeleri ve aşama son tarihleri tek takvimde — aylık, haftalık, günlük ya da sade bir yaklaşan listesi; telefonda varsayılan olarak yaklaşan listesi açılır. Düzenli proje toplantısı bir kural olarak tutulur: takvimde bir kez, kendi başlığıyla görünür; taşıyınca taşınır, iptal edince kaybolur. Aynı takvime kendi uygulamandan kişisel, iptal edilebilir bir bağlantıyla abone olabilirsin — toplantılar, seri tekrarları ve son tarihler akışla birlikte gelir — ve her toplantı daveti bir .ics ekiyle ulaşır. Şirket hesabı da kendi planlanmış mülakatlarını — yalnızca onları — kendi takviminde görür. Her görünüm ekrandaki aralık için .ics dosyası olarak indirilir ve duvara asılacak sade bir sayfa olarak yazdırılır.' },
+      calendar: { t: 'Takvim: dört görünüm', d: 'Toplantılar, düzenli proje görüşmeleri ve aşama son tarihleri tek takvimde — aylık, haftalık, günlük ya da sade bir yaklaşan listesi; telefonda varsayılan olarak yaklaşan listesi açılır. Düzenli proje toplantısı bir kural olarak tutulur: takvimde bir kez, kendi başlığıyla görünür; taşıyınca taşınır, iptal edince kaybolur. Aynı takvime kendi uygulamandan kişisel, iptal edilebilir bir bağlantıyla abone olabilirsin — toplantılar, seri tekrarları ve son tarihler akışla birlikte gelir — ve her toplantı daveti bir .ics ekiyle ulaşır. Şirket hesabı da kendi planlanmış mülakatlarını — yalnızca onları — kendi takviminde görür. Her görünüm ekrandaki aralık için .ics dosyası olarak indirilir ve duvara asılacak sade bir sayfa olarak yazdırılır. Yönetici herkesin randevu saatlerini, onun hesabına girmeden tek ekrandan görür ve düzeltir.' },
       offers: { t: 'Teklif yönetimi', d: 'Bir adayın Mentorluk kartından üç adımda iş teklifi oluşturun, önizleyin ve gönderin; aday portalından kabul veya (nedeniyle) reddeder, kararı kalıcı olarak görünür kalır, süresi geçen teklifler kendiliğinden süresi doldu olur — her adım kaydedilir ve bildirilir. Yönetici teklif listesi hangi tekliflerin hâlâ beklediğini, hangilerinin bu hafta dolduğunu ve hangilerinin neden reddedildiğini yanıtlar.' },
       integrationHealth: { t: 'Bozulduğunu söyleyen entegrasyonlar', d: 'Tek bir yönetici panosu e-posta gönderimi, giden webhook’lar, Google Takvim, kurumsal SSO ve iki gelen alıcının durumunu gösterir — sağlıklı, kısmen bozuk, arızalı ya da hiç kurulmamış. Her satır o bağlayıcının zaten tuttuğu kayıttan okunur; böylece hiçbir gösterge gerçekle sessizce çelişemez. Ekrana basılan hata metinlerinden adresler, jetonlar ve sertifika gövdeleri temizlenir.' },
     },
@@ -25260,6 +25286,19 @@ const de: Dict = {
     retry: 'Erneut versuchen',
     themeNote: 'Die Swagger UI unten rendert in hell und dunkel in ihrem eigenen hellen Theme und gibt Textgrößen in Pixeln an, folgt also nicht der Schriftgrößen-Einstellung der App.',
   },
+  // The admin's view of a mentor's hours (#2005), /admin/availability only —
+  // gatePage closes it without the `mentorship` capability (LEAK_EXEMPT).
+  adminAvailability: {
+    adminTitle: 'Verfügbarkeit der Mentoren',
+    adminSubtitle: 'Sieh und korrigiere die Zeiten jedes Mentors deiner Organisation, ohne dich als er anzumelden',
+    pickMentor: 'Mentor',
+    pickMentorPlaceholder: 'Mentor wählen…',
+    pickMentorPrompt: 'Wähle einen Mentor, um seine Zeiten zu sehen und zu bearbeiten.',
+    noMentors: 'In deiner Organisation gibt es noch keine aktiven Mentoren.',
+    mentorSlots: 'Seine Zeitfenster',
+    inZoneMentor: 'Die Zeiten sind in {zone} angegeben — der Profil-Zeitzone des Mentors.',
+    zoneUnsetMentor: 'Dieser Mentor hat nie eine Zeitzone gewählt, daher werden die Zeiten als {zone} gelesen. Bitte ihn, seine festzulegen, damit Mentees die richtige Uhrzeit sehen.',
+  },
   availability: {
     title: 'Verfügbarkeit',
     subtitle: 'Deine wiederkehrenden wöchentlichen Zeitfenster für Mentee-Meetings',
@@ -26166,7 +26205,7 @@ const de: Dict = {
       weeklyReports: { t: 'Wöchentliche Praktikumsberichte', d: 'Mentees schreiben wöchentlich einen Praktikumsbericht, speichern Entwürfe und drucken ihr Tagebuch; Mentoren genehmigen Einreichungen oder fordern Änderungen an. Fehlende Berichte erscheinen in der Aufmerksamkeit-Liste und in einer wöchentlichen Erinnerung; Koordinatoren erhalten eine Abgabe-Matrix für den ganzen Zeitraum mit Erinnerung per Klick, XLSX-Export und einem druckbaren Berichtsheft je Praktikant.' },
       newsletter: { t: 'Karriere-Newsletter', d: 'Kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt. Manuell oder wöchentlich, zweiwöchentlich, monatlich geplant; Mentoren erhalten zur gleichen Ausgabe die Coaching-Perspektive, jeder Versand wird archiviert, und ein Klick genügt zum Abmelden.' },
       mentorSelfApply: { t: 'Self-Service-Mentor-Bewerbungen', d: 'Jeder kann sich ohne Konto als Mentor bewerben; Admins prüfen die Warteschlange, starten die Prüfung, genehmigen oder lehnen ab — bei Genehmigung wird das Mentor-Konto automatisch erstellt oder hochgestuft.' },
-      calendar: { t: 'Kalender in vier Ansichten', d: 'Meetings, wiederkehrende Projekt-Calls und Phasenfristen in einem Kalender — Monat, Woche, Tag oder eine schlichte Demnächst-Liste, auf dem Handy standardmäßig die Demnächst-Liste. Ein wiederkehrendes Projekt-Meeting wird als Regel geführt: Es erscheint einmal unter seinem eigenen Titel, wandert mit, wenn du es verschiebst, und verschwindet, wenn du es absagst. Denselben Kalender abonnierst du mit einem persönlichen, widerrufbaren Link in deiner eigenen App — Meetings, Serientermine und Fristen kommen mit — und jede Meeting-Einladung bringt eine .ics-Datei mit. Ein Firmenkonto sieht seine eigenen geplanten Vorstellungsgespräche — und nur diese — in einem eigenen Kalender. Jede Ansicht lässt sich für den angezeigten Zeitraum als .ics-Datei herunterladen und als aufgeräumtes Blatt für die Wand drucken.' },
+      calendar: { t: 'Kalender in vier Ansichten', d: 'Meetings, wiederkehrende Projekt-Calls und Phasenfristen in einem Kalender — Monat, Woche, Tag oder eine schlichte Demnächst-Liste, auf dem Handy standardmäßig die Demnächst-Liste. Ein wiederkehrendes Projekt-Meeting wird als Regel geführt: Es erscheint einmal unter seinem eigenen Titel, wandert mit, wenn du es verschiebst, und verschwindet, wenn du es absagst. Denselben Kalender abonnierst du mit einem persönlichen, widerrufbaren Link in deiner eigenen App — Meetings, Serientermine und Fristen kommen mit — und jede Meeting-Einladung bringt eine .ics-Datei mit. Ein Firmenkonto sieht seine eigenen geplanten Vorstellungsgespräche — und nur diese — in einem eigenen Kalender. Jede Ansicht lässt sich für den angezeigten Zeitraum als .ics-Datei herunterladen und als aufgeräumtes Blatt für die Wand drucken. Ein Admin sieht und korrigiert die buchbaren Zeiten aller von einem Bildschirm aus, ohne sich als sie anzumelden.' },
       offers: { t: 'Angebotsverwaltung', d: 'Erstelle, prüfe in der Vorschau und sende ein Jobangebot in drei Schritten direkt von der Mentoring-Karte eines Kandidaten; der Kandidat nimmt im Portal an oder lehnt (mit Grund) ab, die Entscheidung bleibt dauerhaft sichtbar, und überfällige Angebote laufen von selbst ab — jeder Schritt wird protokolliert und gemeldet. Eine Angebotsübersicht für Admins beantwortet, was noch offen ist, was diese Woche abläuft und was warum abgelehnt wurde.' },
       integrationHealth: { t: 'Integrationen, die sagen, wenn sie ausfallen', d: 'Ein Admin-Board zeigt den Zustand von E-Mail-Versand, ausgehenden Webhooks, Google Kalender, Enterprise-SSO und den beiden eingehenden Empfängern — gesund, beeinträchtigt, fehlerhaft oder einfach nicht eingerichtet. Jede Zeile wird aus dem gelesen, was der Konnektor ohnehin aufzeichnet, sodass keine Anzeige still von der Realität abweichen kann. Aus jeder Fehlerzeile werden Adressen, Tokens und Zertifikatsinhalte entfernt.' },
     },
