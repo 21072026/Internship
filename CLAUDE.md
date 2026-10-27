@@ -342,6 +342,18 @@ marketing names redirect there, and their apex now serves **mail only**.
   both ways. `npm run check:i18n -- --leaks[=locale]` lists the offending keys. E-mail copy
   goes through `emailDictionary(locale, orgId)` (`src/i18n/emailDictionary.ts`), never a bare
   `getDictionary()`, so the recipient org's vertical reaches the mail.
+- **The browser gets the dictionary per segment** (#2987): the root layout ships only
+  `SHELL_NAMESPACES`; every top-level directory of `src/app` (route groups too) mounts
+  `<I18nScope scope="<dir>">` (`src/i18n/scope.tsx`) around its WHOLE layout, and the root page
+  mounts `scope="home"`. Which namespaces each scope gets is `src/i18n/scopes.generated.ts`,
+  written by `scripts/i18n-scopes.mjs` (an over-inclusive scan of the client module graph for
+  `.ns` / `'ns…'`) on `npm install` (postinstall), `npm run dev` and `npm run build` — it is
+  **gitignored, never committed**, so parallel PRs cannot conflict on it or leave it stale.
+  `npm run check:i18n-scopes` (CI) fails on an unmounted scope. A new
+  top-level directory therefore needs a layout with its `<I18nScope>`. Never trim by path in the
+  root layout — it survives client navigations, so a trimmed root dict outlives its page. Server
+  components are unaffected (`getServerDictionary()` is still the whole dictionary). A namespace
+  picked dynamically (`t[name]`) is invisible to the scan: write `t.ns` or `'ns.key'`.
 - **Dark mode** is class-based (`html.dark`) with flat utility overrides in
   `src/app/globals.css`: `bg-*-50` boxes are retinted dark while `bg-*-100` chips stay
   light. Mid-tone text (`text-*-600/700`) sitting on a tinted `*-50` box goes dark-on-dark —

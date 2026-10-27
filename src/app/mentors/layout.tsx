@@ -5,11 +5,12 @@ import { redirect } from 'next/navigation';
 import { roleHome } from '@/lib/roleHome';
 import { RoleShell } from '@/components/RoleShell';
 import { gatePage } from '@/lib/pageCapabilityGate';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
 
-export default async function MentorsLayout({ children }: { children: React.ReactNode }) {
+async function MentorsLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
   // An allowlist: the mentor directory is for the mentoring roles only. A role
@@ -22,4 +23,14 @@ export default async function MentorsLayout({ children }: { children: React.Reac
   await gatePage('/mentors');
 
   return <RoleShell>{children}</RoleShell>;
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedMentorsLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="mentors">
+      <MentorsLayout>{children}</MentorsLayout>
+    </I18nScope>
+  );
 }

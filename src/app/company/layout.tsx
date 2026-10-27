@@ -17,11 +17,12 @@ import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
 
-export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
+async function CompanyLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
 
   if (!session) redirect('/auth/signin');
@@ -110,5 +111,15 @@ export default async function CompanyLayout({ children }: { children: React.Reac
     >
       <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
     </ResponsiveShell>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedCompanyLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="company">
+      <CompanyLayout>{children}</CompanyLayout>
+    </I18nScope>
   );
 }

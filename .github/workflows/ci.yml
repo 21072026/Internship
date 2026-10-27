@@ -48,6 +48,10 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # The browser gets the dictionary per top-level segment (#2987): every
+      # segment must mount its <I18nScope> and the manifest must be fresh.
+      - name: i18n scopes (what each segment ships)
+        run: npm run check:i18n-scopes
       # check:i18n sees key PARITY, not copy that never became a key: the
       # per-tenant pipeline-stage editor shipped English end to end on a
       # trilingual product (#1613). Pinned per file and shrink-only.

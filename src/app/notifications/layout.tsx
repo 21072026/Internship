@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { roleHome } from '@/lib/roleHome';
+import { I18nScope } from '@/i18n/scope';
 
 // Notification history is available to any authenticated role.
-export default async function NotificationsLayout({ children }: { children: React.ReactNode }) {
+async function NotificationsLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   // callbackUrl: the manifest's "Notifications" shortcut (#2084) must survive
   // the sign-in redirect and land back here.
@@ -28,5 +29,15 @@ export default async function NotificationsLayout({ children }: { children: Reac
         {children}
       </div>
     </div>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedNotificationsLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="notifications">
+      <NotificationsLayout>{children}</NotificationsLayout>
+    </I18nScope>
   );
 }

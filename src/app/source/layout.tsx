@@ -14,8 +14,9 @@ import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { I18nScope } from '@/i18n/scope';
 
-export default async function SourceLayout({ children }: { children: React.ReactNode }) {
+async function SourceLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
 
   if (!session) redirect('/auth/signin');
@@ -71,5 +72,15 @@ export default async function SourceLayout({ children }: { children: React.React
     >
       {children}
     </ResponsiveShell>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedSourceLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="source">
+      <SourceLayout>{children}</SourceLayout>
+    </I18nScope>
   );
 }
