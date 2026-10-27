@@ -8,6 +8,7 @@ import { CookieConsent } from '@/components/CookieConsent';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
+import { ErrorTrackingListener } from '@/components/ErrorTrackingListener';
 import { TimezoneSync } from '@/components/TimezoneSync';
 import { MeetingLauncherProvider } from '@/components/meeting/MeetingLauncher';
 import { FloatingNotesProvider } from '@/components/meeting/FloatingNotes';
@@ -57,6 +58,8 @@ export function Providers({
               <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
             </FloatingNotesProvider>
             <CookieConsent />
+            {/* Renders nothing; inert without NEXT_PUBLIC_ERROR_TRACKING (#1600). */}
+            <ErrorTrackingListener />
             {/* Signed-in only; renders nothing otherwise (#3130). */}
             <FeedbackWidget replay={feedbackReplay} />
             <ActivityTracker />

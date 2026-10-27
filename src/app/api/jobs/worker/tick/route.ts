@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
+import { captureError } from '@/lib/errorTracking';
 import { createWorker, concurrencyFromEnv, workerEnabled, type JobWorker } from '@/lib/jobs/worker';
 import { jobRegistry } from '@/lib/jobs/registry';
 import { prismaQueueStore } from '@/lib/jobs/queueStore';
@@ -58,6 +59,21 @@ function worker(): JobWorker {
     ownedElsewhere: ['email.send'],
     logger,
     bindOrg: runWithOrg,
+    onError: (job, error, outcome) => {
+      void captureError({
+        error,
+        level: outcome === 'deadLettered' ? 'error' : 'warning',
+        tags: {
+          source: 'job',
+          job: job.name,
+          attempt: `${job.attempts}/${job.maxAttempts}`,
+          outcome: outcome === 'deadLettered' ? 'dead_letter' : 'retried',
+          orgId: job.orgId ?? undefined,
+        },
+        // One issue per job name and outcome, whatever the message says.
+        fingerprint: ['job', job.name, outcome],
+      });
+    },
     onDeadLetter: (job, error) =>
       logActivity({
         action: 'job.dead_letter',
