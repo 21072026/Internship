@@ -15,6 +15,7 @@ import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { SavedViews } from '@/components/SavedViews';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface AdminUser {
   id: string;
@@ -304,6 +305,10 @@ export default function AdminUsersPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const shown = users;
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (debouncedSearch !== '' || filter !== 'ALL' || statusView !== 'ACTIVE') ? resultCountMessage(t.a11y, total) : null);
 
   return (
     <div>

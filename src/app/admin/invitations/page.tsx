@@ -13,6 +13,7 @@ import {
   emptyInvitationCounts,
   type InvitationStatus,
 } from '@/lib/invitationStatus';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // The invitation status board (#2071).
 //
@@ -190,6 +191,10 @@ export default function AdminInvitationsPage() {
 
   const outcomeLabel = (outcome: string) =>
     (v.outcome as Record<string, string>)[outcome] ?? outcome;
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (debouncedQ !== '' || status !== '' || role !== '' || from !== '' || to !== '') ? resultCountMessage(t.a11y, rows.length) : null);
 
   return (
     <div>

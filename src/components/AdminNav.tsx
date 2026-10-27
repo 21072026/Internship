@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -80,6 +81,9 @@ export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: 
     if (!needle) return LINKS;
     return LINKS.filter((l) => (nav[l.key] ?? l.key).toLowerCase().includes(needle));
   }, [q, nav, LINKS]);
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(q.trim() !== '' ? resultCountMessage(t.a11y, items.length) : null);
 
   const isActive = (l: (typeof LINKS)[number]) =>
     l.exact ? pathname === l.href : pathname === l.href || pathname.startsWith(l.href + '/');

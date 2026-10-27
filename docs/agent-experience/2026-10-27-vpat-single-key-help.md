@@ -19,3 +19,6 @@
   sign-in, then `page.clock.fastForward('11:56:00')`.** The server clock is untouched, so anything
   the server hands back (a fresh session `expires`) is real time — `page.clock.setSystemTime(Date.now())`
   before that round-trip, or the page sees the new expiry as already near (`e2e/session-timeout.spec.ts`).
+- **On `/admin/users` the seeded person's name also matches the sidebar account menu**, so
+  `getByText(name).first()` passes before the list has loaded (the first `next dev` compile of
+  `/api/admin/lockouts` holds the skeleton for >10 s). Wait for a row action instead.
