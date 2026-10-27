@@ -8,6 +8,7 @@ import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { notifyIfAllowed } from '@/lib/notify';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isDispositionCode, requiresDispositionCode } from '@/lib/applications';
@@ -184,8 +185,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         advancePipeline && outcomeMayAdvancePipeline(decision) && relation
           ? await advanceRelationStage(relation.id, { id: session.user.id, email: session.user.email ?? null }, `interview panel ${panel.id} outcome ${decision}`)
           : null;
-      // `interview_panel.outcome` is REGISTERED in WEBHOOK_EVENTS, not dispatched
-      // from here (scripts/check-events.mjs caps the direct callers).
+      // The decision only (#1998) — never a score, a note or a disposition
+      // code: the same line the company's notification holds.
+      await emit('interview_panel.outcome', { panelId: panel.id, applicationId: application.id, outcome: decision }, { orgId, actor: { id: session.user.id, type: 'user' } });
 
       return NextResponse.json({
         ok: true,
