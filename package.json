@@ -104,7 +104,7 @@
     "import:csv": "node scripts/import-csv.mjs",
     "import:marketing-accounts": "node --experimental-strip-types scripts/import-marketing-accounts.mjs",
     "test:marketing-import": "node --test --experimental-strip-types scripts/test/marketing-import.test.mjs",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && node scripts/i18n-scopes.mjs",
     "seed:templates": "node prisma/seed-templates.mjs",
     "seed:demo": "node prisma/seed-demo.mjs",
     "capture:landing": "node scripts/capture-landing-screenshots.mjs",

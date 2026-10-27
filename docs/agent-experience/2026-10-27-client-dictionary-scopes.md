@@ -12,6 +12,11 @@
 - **The Docker build is Node 20 — no `--experimental-strip-types`.** A generator that `build` runs
   must be plain `.mjs` and must not import `dictionaries.ts`; it reads the namespace names from the
   `const en = {` block with a line regex instead.
+- **Never commit a manifest that every PR changes.** The first version committed
+  `scopes.generated.ts` and failed CI when it was stale; one merge of `main` (4 new namespaces
+  from parallel PRs) made it stale at once. With ~10 sessions merging in parallel that is a
+  conflict and a red check on every PR — the `agent-experience.md` lesson again. It is now
+  gitignored and generated on postinstall / dev / build; CI checks only that scopes are mounted.
 - **Measure before/after in the same mode.** `git worktree add <scratch>/base origin/main` plus a
   `node_modules` symlink runs main's `next dev` on a second port in under two minutes; both dev
   servers start with a dummy `DATABASE_URL`, and every public page except the Prisma-backed ones
