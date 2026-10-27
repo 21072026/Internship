@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate module, migration from a previous system (#3118):** `/admin/affiliates/migration` imports partners, commissions and payouts from three CSV files through the shared import engine (`runAffiliateMigration()` on `runImport`; rules pure in `src/lib/affiliateMigrationRule.ts`). Dry run by default; the real run is one transaction, only into a programme without partners or payments, and only when every partner's paid and unpaid totals match the source to the cent — re-checked against what was written before commit. Commissions are taken as recorded: new `AffiliateCommissionKind.IMPORTED` and `AffiliatePaymentSource.IMPORT`, which the commission sync skips (no recompute, no drift) while imported customers still count for the customer order. `POST /api/admin/affiliate/migration` (`affiliate.write`).",
+  "notes": {
+    "en": ["Move your existing affiliate programme over: import partners, commissions and payouts from CSV files, checked first and reconciled to the cent per partner."],
+    "tr": ["Mevcut affiliate programınızı taşıyın: partnerleri, komisyonları ve ödemeleri CSV dosyalarından içe aktarın — önce kontrol edilir, partner başına kuruşu kuruşuna mutabık tutulur."],
+    "de": ["Übernehmen Sie Ihr bestehendes Partnerprogramm: Partner, Provisionen und Auszahlungen per CSV importieren – vorab geprüft und je Partner centgenau abgestimmt."]
+  }
+}

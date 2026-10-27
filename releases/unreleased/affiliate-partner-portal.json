@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate module, partner portal and invitations (#3117):** the admin invites a partner to its contact e-mail from the partner screen (`POST /api/admin/affiliate/partners/[id]/invite`, `affiliate.write`; a new invitation withdraws the open one). The invitation carries the new `InvitationToken.partnerId`; `/api/register` accepts an AFFILIATE token only when it names a partner and an address, and creates the account and the partner link in one transaction with a guarded write (`linkPartnerAccount()`), so a partner is never linked twice. No password or hash is imported. The portal (`/affiliate`, server-rendered from the session) first shows the contract until the current version is accepted (`requirePortalPartner()`), then the referral link, totals, own customers, commissions and payouts (`src/lib/affiliatePartnerView.ts`, narrowed by `affiliateRowScope()`; another partner's payout is 404, a payment's own reference never reaches the partner) and the bank-details form (masked). The referral link is built on the new `AffiliateProgramSettings.referralUrl` (https base URL, admin setting, audited; `src/lib/affiliateReferralRule.ts`).",
+  "notes": {
+    "en": ["Invite your affiliate partners to their own portal: they accept the contract, share their referral link and follow their customers, commissions and payouts."],
+    "tr": ["Affiliate partnerlerinizi kendi portallarına davet edin: sözleşmeyi kabul eder, referans linklerini paylaşır, müşterilerini, komisyonlarını ve ödemelerini takip ederler."],
+    "de": ["Laden Sie Ihre Affiliate-Partner in ihr eigenes Portal ein: Sie nehmen den Vertrag an, teilen ihren Empfehlungslink und verfolgen ihre Kunden, Provisionen und Auszahlungen."]
+  }
+}

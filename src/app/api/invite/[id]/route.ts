@@ -42,6 +42,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     // A revoked invitation (#2071) is unusable: extending its expiry or re-mailing
     // its link would hand out a token registration is going to refuse.
     if (invite.revokedAt) return NextResponse.json({ error: 'This invitation was revoked' }, { status: 409 });
+    // A partner's invitation (#3117) is resent only from the partner screen,
+    // behind `affiliate.write`: this route answers any ADMIN tier with the live
+    // register link, and that link opens an account that receives payouts.
+    if (invite.role === 'AFFILIATE') {
+      return NextResponse.json({ code: 'partner_invitation', error: 'Resend this invitation from the partner screen' }, { status: 409 });
+    }
 
     // Refresh the expiry so a resent invite is always valid for another week.
     const expiresAt = new Date();
