@@ -84,7 +84,7 @@ function secondaryLabel(e: Ev) {
   return e.type === 'series' ? e.who : e.title;
 }
 
-export function CalendarView({ initialView }: { initialView?: CalendarViewMode }) {
+export function CalendarView({ initialView, emptyText }: { initialView?: CalendarViewMode; emptyText?: string }) {
   const t = useT();
   const locale = useLocale();
   const [events, setEvents] = useState<Ev[]>([]);
@@ -573,7 +573,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
       </div>
 
       {!requestPending && !currentError && events.length === 0 && view !== 'agenda' && (
-        <p className="mt-4 text-center text-sm text-gray-400">{t.calendar.empty}</p>
+        <p className="mt-4 text-center text-sm text-gray-400">{emptyText ?? t.calendar.empty}</p>
       )}
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">

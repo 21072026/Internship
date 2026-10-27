@@ -98,6 +98,19 @@ varsayılan org'undur). `/projects/[id]` sayfası başka kiracıdan oturum açm�
 ziyaretçiyi **anonim** gibi okur: açık projede vitrin kartı, gerisinde 404.
 `/api/project-tasks/[taskId]` zaten `inCallerTenant` ile korunuyordu.
 
+### Takvim — `GET /api/calendar-events` (#2005)
+
+Rol listesi açıkça yazılı (`CALENDAR_ROLES`); listede olmayan rol **401** alır,
+menti dalına düşüp "şans eseri boş" görmez.
+
+| Rol | Kapsam |
+|---|---|
+| `ADMIN` | Kiracının tüm toplantıları, son tarihleri, kayıtlı toplantıları, serileri |
+| `MENTOR` | `mentorId = self` ilişkileri + üyesi olduğu projelerin serileri |
+| `MENTEE` | `menteeId = self` ilişkisi + üyesi olduğu projelerin serileri |
+| `COMPANY` | Yalnız **kendi mülakat taleplerinden** planlanan toplantılar (`interviewRequestActorWhere()`'in COMPANY dalı, kiracı içinde); mentor↔menti toplantısı, son tarih, kayıt, seri **yok**. `companyId` boşsa boş liste |
+| diğer (`SOURCE`, …) | — (401) |
+
 ## MARKETING dikeyi / `company` kaynağı — `Company`
 
 Story [#2396](https://github.com/21072026/Internship/issues/2396); karar
