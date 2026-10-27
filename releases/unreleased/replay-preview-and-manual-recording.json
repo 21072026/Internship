@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Bug reports: preview the recording, or make one by hand (#3131 follow-up):** the feedback panel can now PLAY the recording before it is sent — the rolling window is frozen and packed once (`freezeRollingWindow()` + `packReplay()`) and Send attaches that same blob, with duration and compressed size shown. \"Start a new recording\" closes the panel and shows a red \"Recording m:ss · Stop\" pill; it starts on a fresh full snapshot (`record.takeFullSnapshot(true)`) and keeps every event until Stop or 20 minutes (`ManualRecording`, `FEEDBACK_MANUAL_MAX_MS`, stops itself at the limit), with a `beforeunload` prompt while it runs; Stop reopens the panel with the description kept, a fresh screenshot and the recording attached (preview / discard). A recording over the 8 MB upload limit is refused in the panel before sending. The player is split into `ReplayView` (loaded only when a preview opens, via `next/dynamic`) and the admin `ReplayPlayer` wrapper.",
+  "notes": {
+    "en": ["Before sending a bug report you can now watch the recording that will be attached — or start a recording yourself, show us what goes wrong for up to 20 minutes, and stop it when you are done."],
+    "tr": ["Hata bildirimi göndermeden önce eklenecek kaydı izleyebilirsin — ya da kaydı kendin başlatıp sorunu 20 dakikaya kadar gösterebilir, bitince durdurabilirsin."],
+    "de": ["Bevor du eine Fehlermeldung sendest, kannst du dir die angehängte Aufzeichnung ansehen — oder selbst eine Aufnahme starten, bis zu 20 Minuten zeigen, was schiefgeht, und sie dann beenden."]
+  }
+}

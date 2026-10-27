@@ -83,6 +83,23 @@ the support team watches what happened instead of reading about it.
 - **Consent:** the form shows "Attach a recording of the last ~90 seconds",
   ticked by default, untickable. Nothing leaves the tab before Send — pinned by
   `e2e/feedback-replay.spec.ts`, which watches every request body.
+- **Preview:** "Preview recording" plays, inside the panel, exactly what would
+  be sent — the window is frozen at that moment (`freezeRollingWindow()`) and
+  packed once, and Send attaches that same blob, so what the person watched is
+  what leaves. Duration and compressed size are shown next to the checkbox.
+  The player (`ReplayView`, rrweb-player + its stylesheet) is loaded only when a
+  preview is opened (`next/dynamic`).
+- **A recording the person makes:** "Start a new recording" closes the panel
+  and replaces the button with a red "Recording m:ss · Stop" pill. It begins
+  on a fresh full snapshot (`record.takeFullSnapshot(true)`) and keeps every
+  event — not a window — until Stop or **20 minutes** (`ManualRecording`,
+  `FEEDBACK_MANUAL_MAX_MS`; at the limit it stops itself and says so). Stop
+  reopens the panel with the description kept, a fresh screenshot of where it
+  ended, and "Attach my recording (3:12 · 1,8 MB)" + preview + discard. A
+  reload or a typed address would lose it (it is in memory), so the page asks
+  before unloading while it runs. Measured ≈ 3 KB/s of activity, so 20 minutes
+  stays well inside the 8 MB upload limit; a larger one is refused in the panel
+  with its size, before anything is sent.
 - **Upload:** `CompressionStream('gzip')` in the browser, a `replay` multipart
   part. The route checks the gzip magic, ≤ 8 MB compressed, decompresses with a
   **80 MB ceiling** (`maxOutputLength`, so a gzip bomb stops there) and

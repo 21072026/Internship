@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Bug-report replay player readable in dark mode, with size and download (#3131):** rrweb-player paints its controller white but inherits the text colour, so in dark mode the speed buttons, \"skip inactive\" and the time labels were white on white — the player's host now pins a dark text colour inline (a utility class would be flipped by the dark-mode overrides). Under the player: duration, event count and compressed size, and a \"Download recording (.json.gz)\" link with a note that it is an rrweb recording, not a video file.",
+  "notes": {
+    "en": ["The bug-report recording player now shows all its controls in dark mode, plus the recording's length and size and a download link."],
+    "tr": ["Hata bildirimi kayıt oynatıcısı artık karanlık modda tüm kontrollerini gösteriyor; ayrıca kaydın süresi, boyutu ve bir indirme bağlantısı var."],
+    "de": ["Der Player für Fehlermeldungs-Aufzeichnungen zeigt im Dunkelmodus jetzt alle Bedienelemente, dazu Länge und Größe der Aufzeichnung und einen Download-Link."]
+  }
+}
