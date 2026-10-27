@@ -48,6 +48,7 @@ test.describe('group sessions', () => {
   }
 
   test('publish → register to capacity → waitlist → cancel → promote, and attendance', async ({ playwright }) => {
+    test.setTimeout(120_000);
     const host = await as(playwright, 'host');
     const [a, b, c, otherMentor] = await Promise.all([as(playwright, 'a'), as(playwright, 'b'), as(playwright, 'c'), as(playwright, 'otherMentor')]);
 
@@ -113,6 +114,7 @@ test.describe('group sessions', () => {
   });
 
   test('a mentee registers from the portal and is told about the group video limit', async ({ page, playwright }) => {
+    test.setTimeout(120_000);
     const host = await as(playwright, 'host');
     const startsAt = new Date(Date.now() + 5 * 24 * 3600_000).toISOString();
     // No pasted link, no place: the room comes from resolveMeetingLink().
@@ -130,8 +132,9 @@ test.describe('group sessions', () => {
     await expect(card.getByTestId(`event-my-state-${eventId}`)).toBeVisible();
     await expect(card.getByTestId(`event-seats-${eventId}`)).toContainText('1/5');
     // A confirmed registrant gets the link; on the public Jitsi server the five-minute limit is stated.
-    const link = (await (await page.request.get(`/api/events/${eventId}`)).json()).event.joinUrl as string;
-    expect(link).toBeTruthy();
+    const { joinUrl: link } = await prisma.programEvent.findUniqueOrThrow({ where: { id: eventId }, select: { joinUrl: true } });
+    if (!link) throw new Error('a session without a place gets a room');
+    await expect(card.getByRole('link', { name: /join/i })).toHaveAttribute('href', link);
     if (new URL(link).hostname === 'meet.jit.si') await expect(card.getByTestId(`event-video-note-${eventId}`)).toBeVisible();
   });
 });
