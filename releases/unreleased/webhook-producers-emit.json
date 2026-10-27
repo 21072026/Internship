@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Webhook producers raise domain events (#1697):** the ten former direct `dispatchWebhook` call sites (`application.created`, `pipeline.stage_change` after the `from === to` guard, `mentorship.created`, both `interaction.logged`, `evaluation.added`, all three `meeting.scheduled`, `interview_panel.completed`) now call `emit()` with the same payload and org, plus the actor. Each event gets a `DomainEvent` row and the webhook is POSTed by the job worker instead of inside the request — same `event`, byte-identical `data` (pinned in `e2e/domain-event-emit.unit.spec.ts`). `npm run check:events` drops its ten-site burndown list: only the webhook subscriber and the admin test ping may reach the dispatcher, and a hand-written `activityLog`/`auditLog` create may not use a catalogue event name."
+}

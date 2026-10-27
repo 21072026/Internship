@@ -8,7 +8,7 @@ import { useModalFocus } from '@/components/ui/useModalFocus';
 import { ShortcutsSheet } from '@/components/ShortcutsSheet';
 import { navLinksForRole, visibleNavLinks, type NavRole } from '@/lib/navLinks';
 import type { VerticalCapability } from '@/lib/verticals';
-import { isMacPlatform, isTypingTarget } from '@/lib/shortcuts';
+import { isMacPlatform, isTypingTarget, readSingleKeyShortcutsEnabled, writeSingleKeyShortcutsEnabled } from '@/lib/shortcuts';
 import { THEME_CYCLE, applyTheme, readStoredTheme } from '@/lib/theme';
 
 interface UserHit { id: string; fullName: string; email: string; role: string; relationId?: string | null }
@@ -68,6 +68,8 @@ export function CommandPalette({
   const [open, setOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [isMac, setIsMac] = useState(false);
+  // The `?` binding can be switched off from the sheet (WCAG 2.1.4, #2864).
+  const [singleKey, setSingleKey] = useState(true);
   const [q, setQ] = useState('');
   const [users, setUsers] = useState<UserHit[]>([]);
   const [companies, setCompanies] = useState<CompanyHit[]>([]);
@@ -78,6 +80,11 @@ export function CommandPalette({
 
   // Platform sniff after mount only — `navigator` is absent during SSR.
   useEffect(() => setIsMac(isMacPlatform()), []);
+  useEffect(() => setSingleKey(readSingleKeyShortcutsEnabled()), []);
+  const changeSingleKey = useCallback((enabled: boolean) => {
+    writeSingleKeyShortcutsEnabled(enabled);
+    setSingleKey(enabled);
+  }, []);
 
   // /api/search is 401 for anyone who is not an admin or a mentor, so a mentee's
   // palette never asks. The server stays the authority either way.
@@ -106,7 +113,7 @@ export function CommandPalette({
         openPalette();
         return;
       }
-      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (singleKey && e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (isTypingTarget(e.target)) return;
         e.preventDefault();
         setOpen(false);
@@ -125,7 +132,7 @@ export function CommandPalette({
       document.removeEventListener('keydown', onKeyDown);
       delete root.dataset.shortcuts;
     };
-  }, [openPalette]);
+  }, [openPalette, singleKey]);
 
   // Debounced people/company lookup, same 250 ms as the header search.
   useEffect(() => {
@@ -379,7 +386,13 @@ export function CommandPalette({
         </div>
       )}
 
-      <ShortcutsSheet open={sheetOpen} isMac={isMac} onClose={() => setSheetOpen(false)} />
+      <ShortcutsSheet
+        open={sheetOpen}
+        isMac={isMac}
+        singleKeyEnabled={singleKey}
+        onSingleKeyChange={changeSingleKey}
+        onClose={() => setSheetOpen(false)}
+      />
     </>
   );
 }

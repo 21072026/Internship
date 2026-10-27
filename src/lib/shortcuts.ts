@@ -70,3 +70,35 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
+
+/**
+ * WCAG 2.1.4 (Character Key Shortcuts, #2864): `?` is the one binding that is a
+ * single printable character, so a speech-input user who says a sentence
+ * containing a question mark — or anyone who simply does not want it — can turn
+ * it off. The switch sits in the shortcut sheet itself, which stays reachable
+ * from the command palette's "Keyboard shortcuts" action, so turning the key off
+ * never strands the person. Chords (Mod+K) and non-printing keys are outside the
+ * criterion and stay on.
+ *
+ * Per browser, in localStorage: it is a convenience of this device, not an
+ * account setting, and storage that throws (private mode, blocked site data)
+ * reads as "on", which is the shipped default.
+ */
+export const SINGLE_KEY_SHORTCUTS_STORAGE_KEY = 'shortcuts.singleKey';
+
+export function readSingleKeyShortcutsEnabled(): boolean {
+  try {
+    return window.localStorage.getItem(SINGLE_KEY_SHORTCUTS_STORAGE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function writeSingleKeyShortcutsEnabled(enabled: boolean): void {
+  try {
+    if (enabled) window.localStorage.removeItem(SINGLE_KEY_SHORTCUTS_STORAGE_KEY);
+    else window.localStorage.setItem(SINGLE_KEY_SHORTCUTS_STORAGE_KEY, 'off');
+  } catch {
+    // Storage unavailable: the switch only lasts for this page view.
+  }
+}

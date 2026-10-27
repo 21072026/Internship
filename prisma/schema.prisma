@@ -468,20 +468,52 @@ model SkillEdge {
 // A person holds a canonical skill. Reached only through its User (scoped) or
 // its Skill (scoped), exactly like UserTag — so no orgId and deliberately not
 // in TENANT_MODELS. Removing a skill removes the row, never the person.
-// Proficiency columns are #1814's.
+// Proficiency (#1822): `level` 1..5 and who stands behind it. Keyed on the
+// skill id, so renaming or aliasing the skill keeps it; `source` above is where
+// the ROW came from, `levelSource` is who set the LEVEL — two different facts.
+// All nullable: additive under `db push` on a table that already has rows.
 model UserSkill {
-  id        String   @id @default(cuid())
-  userId    String
-  skillId   String
+  id             String    @id @default(cuid())
+  userId         String
+  skillId        String
   // Where the row came from: SELF | ADMIN | BACKFILL | CV | IMPORT.
-  source    String   @default("SELF") @db.VarChar(16)
-  createdAt DateTime @default(now())
+  source         String    @default("SELF") @db.VarChar(16)
+  createdAt      DateTime  @default(now())
+  // 1..5, null = not rated. Rules in src/lib/skillLevelRule.ts.
+  level          Int?
+  // SELF | MENTOR | EVALUATION — who set `level`. Null while unrated.
+  levelSource    String?   @db.VarChar(16)
+  // Set by a mentor/evaluation confirmation; cleared when the value changes,
+  // because a confirmation vouches for one value, not for the row.
+  verifiedById   String?
+  verifiedAt     DateTime?
+  levelUpdatedAt DateTime?
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill        Skill                  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  levelChanges UserSkillLevelChange[]
 
   @@unique([userId, skillId])
   @@index([skillId])
+}
+
+// One row per actual change of UserSkill.level (#1822) — setting the same
+// value again writes none — so "this mentee grew" is a query, not a guess.
+// Child of UserSkill (reached through it, so no orgId, not in TENANT_MODELS);
+// it goes with the row. `changedById` is a bare id on purpose: the actor may be
+// erased later and the history must not cascade away with them.
+model UserSkillLevelChange {
+  id          String   @id @default(cuid())
+  userSkillId String
+  fromLevel   Int?
+  toLevel     Int?
+  source      String   @db.VarChar(16)
+  changedById String?
+  createdAt   DateTime @default(now())
+
+  userSkill UserSkill @relation(fields: [userSkillId], references: [id], onDelete: Cascade)
+
+  @@index([userSkillId, createdAt])
 }
 
 // A requisition asks for a canonical skill. Child of Requisition (scoped),
@@ -546,13 +578,31 @@ model StageSla {
   /// administrators are told too. NULL = the ladder stops at the mentor, which
   /// is exactly what every org had before. Meaningless without `days`.
   escalateAfterDays Int?
+  /// Per-cohort / per-mentor overrides (#1640). Both NULL = the org's own row,
+  /// exactly what every row was before. Resolution (mentor+cohort → mentor →
+  /// cohort → org) is pure in src/lib/stageSlaRule.ts.
+  cohortId          String?
+  mentorId          String?
+  /// The uniqueness key of the (cohortId, mentorId) pair: "org", "c:<id>",
+  /// "m:<id>" or "m:<id>|c:<id>" — written ONLY through `slaScopeKey()`
+  /// (src/lib/stageSlaRule.ts). It exists because MySQL treats NULLs as
+  /// distinct in a unique index, so @@unique([orgId, cohortId, mentorId,
+  /// stageKey]) would let an org hold two org-level rows for one stage. A
+  /// literal default, so `db push` fills the existing rows with "org" — which
+  /// is what each of them is.
+  scope             String   @default("org") @db.VarChar(191)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  cohort Cohort?      @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  mentor User?        @relation("StageSlaMentor", fields: [mentorId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, stageKey])
+  @@unique([orgId, stageKey, scope])
+  @@index([orgId, stageKey])
   @@index([orgId])
+  @@index([cohortId])
+  @@index([mentorId])
 }
 
 // The words of one notification event, per locale, as an org (and later one
@@ -726,6 +776,11 @@ model User {
   // availability then falls back to a capacity-derived guess (see
   // src/lib/mentorAvailability.ts).
   acceptingMentees        Boolean?
+  // How many mentees may pick this mentor THEMSELVES (#1808) — the directory's
+  // preferred-mentor request and the public apply link. Null = no separate
+  // limit (mentorCapacity alone). Never applies to an admin assigning them;
+  // judged by getMentorAvailability(context: 'self_select').
+  selfMatchLimit          Int?
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.
@@ -961,6 +1016,8 @@ model User {
   // next deploy's backfill stamps it) is NOT covered by this index — the
   // per-world rule in src/lib/userWorld.ts (`emailTakenInWorld`) is what stops
   // a second one, and it is checked on every create path.
+  stageSlaOverrides StageSla[] @relation("StageSlaMentor")
+
   @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
@@ -2004,6 +2061,14 @@ model Company {
   // external id X?"). Contracts: docs/usage-feed.md and
   // docs/integrations/account-events.md.
   externalId      String?       @db.VarChar(191)
+  // The account's plan in the upstream product (#2846), as the account-event
+  // feed last reported it (`plan`, docs/integrations/account-events.md):
+  // lower-cased, null = never reported. `productPlanAt` is the `occurred_at`
+  // of the event that wrote it, so an older event arriving late never puts a
+  // stale plan back. Read by the `free_quota_exceeded` signal
+  // (src/lib/usageRule.ts); it gates nothing and is never billing.
+  productPlan     String?       @db.VarChar(40)
+  productPlanAt   DateTime?
   // The slug of the registered integration source (`IntegrationSource.slug`)
   // whose account event CREATED this row (#2959), stamped in the same insert by
   // the account-event writer (src/lib/accountEventIngest.ts). NULL for every
@@ -3625,6 +3690,7 @@ model Cohort {
   steps            ProgramStep[]
   adminScopeGrants AdminScopeGrant[]
   settings         Setting[]
+  stageSlas        StageSla[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────

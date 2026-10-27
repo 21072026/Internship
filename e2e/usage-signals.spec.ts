@@ -6,7 +6,8 @@ import { TRIAL_ACTIVE_STAGE_KEY, defaultTemplateForVertical, templateStagePayloa
 // Product usage (#2448, #2449), from seeded CompanyUsage rows:
 //   1. the rep's attention queue shows `usage_drop` and `trial_inactive`, and
 //      its footnote counts the account with too short a history and the
-//      dropping account nobody owns;
+//      dropping account nobody owns; a free-plan account past its monthly
+//      quota gets `free_quota_exceeded` (#2846);
 //   2. the account page charts 90 days, with a zero day and a no-data day
 //      drawn differently.
 
@@ -61,6 +62,10 @@ test('usage drop, inactive trial, footnotes and the account chart', async ({ pag
   }
   for (let d = 0; d < 10; d++) rows.push({ orgId: org.id, companyId: fresh.id, date: utcDay(d), transactions: 5 });
   await prisma.companyUsage.createMany({ data: rows });
+  // The fresh account is on the free plan with a quota of 4: today's 5 alone
+  // is past it, whichever day of the month the suite runs on (#2846).
+  await prisma.company.update({ where: { id: fresh.id }, data: { productPlan: 'free', productPlanAt: new Date() } });
+  await prisma.setting.create({ data: { orgId: org.id, key: 'freePlanTransactionQuota', value: '4' } });
 
   try {
     await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
@@ -70,7 +75,11 @@ test('usage drop, inactive trial, footnotes and the account chart', async ({ pag
     const dropItem = queue.locator('a', { hasText: `Dropping Lead ${stamp}` });
     await expect(dropItem).toContainText('Usage dropped');
     await expect(queue.locator('a', { hasText: `Idle Trial Lead ${stamp}` })).toContainText('Trial not used yet');
-    await expect(queue.locator('a', { hasText: `New Lead ${stamp}` })).toHaveCount(0);
+    const freeItem = queue.locator('a', { hasText: `New Lead ${stamp}` });
+    await expect(freeItem).toContainText('Free plan over its quota');
+    await expect(freeItem).not.toContainText('Usage dropped');
+    // The dropping account has no plan reported: no upsell signal.
+    await expect(dropItem).not.toContainText('Free plan over its quota');
     await expect(page.getByTestId('attention-usage-no-history')).toContainText('1');
     await expect(page.getByTestId('attention-usage-unowned')).toContainText('1');
     await expect(page.getByTestId('attention-usage-no-feed')).toHaveCount(0);

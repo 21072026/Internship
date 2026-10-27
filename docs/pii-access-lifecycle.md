@@ -311,9 +311,39 @@ serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
   sınırlı (`activityLogRetentionDays`, varsayılan 365 gün). Bu kararı değiştirmeden
   silme bu tabloları yeniden yazmaya başlamamalı.
 
-Aşağıdaki bölümdeki uyarı burada da geçerli ve iki yönlü: yeni bir serbest metin
-kolonu eklerken hem `scripts/sanitize-db.mjs` envanterine hem de
-`accountErasure.ts`'e eklenmezse sızıntı olur.
+- **Şirket tarafının kanıt kayıtları** (#2098): `ContactPermission.reason`
+  (UWG § 7 iletişim izninin kanıtı — şirket kaydına bağlı, kişiye değil) ve
+  `AffiliatePartner.payoutDetailsCipher` (ticari ortağın ödeme kaydı; defter
+  tutma yükümlülüğü hesaptan uzun yaşar). İkisi de **açık bir hukuki soru**:
+  kanıt kaydının kişinin silinmesinden sonra ne kadar tutulacağı hak sahibinin
+  kararı.
+- **Bastırma listesi** (`EmailSuppression`, `EmailDeliveryEvent.detail`): silme
+  bunu kaldırırsa, geri dönen ya da şikâyet eden bir adres yeniden posta alır.
+  Olaylar `emailDeliveryEvent` saklama kaydıyla sınırlı.
+
+### Yeni bir serbest metin kolonu — CI kararı zorlar (#2098)
+
+#2106'dan #2098'e kadar şemaya kişi hakkında **on** yeni serbest metin kolonu
+eklendi ve hiçbiri silmeye girmedi: anket cevapları (`SurveyAnswer.text`),
+toplantı geri bildirimi, başvuru notları (`Application.coverNote`/
+`dispositionNote`, `ApplicationEvent.note`), şirketin ilk mesajı
+(`CandidateOutreach.firstMessage`), eşleştirme gerekçesi, yerleştirme notu,
+oturum gündemi, mentör değişimi gerekçesi (`MentorshipRequest.rematchNote`),
+mülakat iptal gerekçesi — ve hiçbir `User`'a bağlı olmayan, yalnızca adrese
+bağlı **mentör başvurusu** (`MentorApplication`: ad, adres, telefon, iki serbest
+cevap; tam silmede bile kalıyordu). Ayrıca anonimleştirme kullanıcı satırını
+tuttuğu için cascade'le gitmeyenler: oturum açılan cihazların user-agent/IP'si
+(`SignInDevice`, `TrustedDevice`), kişinin **kendi** hazır cevap şablonları ve
+— en ağırı — **Google Takvim OAuth token'ları** (artık iki yolda da önce
+Google'da iptal edilip sonra siliniyor). Hepsi #2098'de eklendi.
+
+Kural artık yorumda değil, CI'da: `npm run check:erasure-coverage`
+(`scripts/check-erasure-coverage.mjs`) şemadaki her `@db.Text` /
+`MediumText` / `LongText` kolonun ya `ERASED` (bir silme modülü o modele
+dokunuyor ve kolonu adlandırıyor ya da satırları siliyor) ya da gerekçeli bir
+"kişi hakkında değil / bilinçli tutuluyor" kararıyla listelenmesini ister;
+listede olup şemada olmayan bir kolon da kırmızıdır. Yeni bir kolon için
+`scripts/sanitize-db.mjs` envanteri de güncellenmeli.
 
 ## Önizleme verisi: anonimleştirme (#1186)
 
@@ -389,6 +419,7 @@ ile değiştirilir.
 | `CompanyInquiry` | `companyInquiryRetentionDays` | 730 gün | Her talep bir kişinin adı, adresi, telefonu ve kendi yazdıklarıdır ve bu girdiden önce hiçbiri silinmiyordu (#2559). Hiç hesaba dönüştürülmemiş talep **silinir**; dönüştürülmüş olan satır kalır (hesap oradan geldi) ve yalnızca kişisel kolonlarını kaybeder — hesap silmenin temizlediği kolonların aynısı (`inquiryErasureData()`). İki yıl: sessizleşen bir müşteri adayının geri dönmesine ve talep kaynaklarının yıldan yıla karşılaştırılmasına yeter, cevapsız kalmış bir talebi sonsuza dek tutmaz. Talepteki pazarlama izni kaydı da satırla birlikte gider; kalıcı bir opt-out kanıtı gerekiyorsa o #2577'nin kararıdır. |
 | `DomainEvent` | `domainEventRetentionDays` | 90 gün | Olay kaydı (#1691): bir şeyin olduğu ve hangi kimliklere olduğu. En eski halka açık yükler (`application.created`) bir ad ve adres taşıyor. Okuyucuları günlere bakıyor, yıllara değil: webhook alıcısının yeniden gönderim isteği (#1695), bir otomasyon koşusunun tetikleyicisi (#1703). 90 gün, diğer "gitti mi?" defteri olan `EmailLog` ile aynı. Bir kaydın kalıcı geçmişi kaydın kendisi ve ActivityLog/AuditLog izidir, bu tablo değil. Yalnızca **global** katmandan okunur. |
 | `SupportReport` (+ `SupportReportFile`) | `supportReportRetentionDays` | 90 gün | Uygulama içi hata bildirimleri (#3130–#3132): ekran görüntüsü, kişinin kendi açıklaması ve replay açıksa yaptıklarının kaydı — destek aracının tuttuğu en kişisel satır, ve yalnızca sorun üzerinde çalışılırken işe yarıyor. 90 gün, bir düzeltmenin release'e girmesine fazlasıyla yetiyor; daha uzun yaşaması gereken bir bildirimin GitHub issue'su var ve o, tasarım gereği bunların hiçbirini taşımıyor. Dosyalar rapora bağlı satırlar olduğu için onunla birlikte siliniyor. Yalnızca **global** katmandan okunur. |
+| `AuditLog` | `auditLogRetentionDays` | 730 gün (en az 365) | Ayrıcalıklı işlem izi (#1585): hesaba girme, admin parola sıfırlama, birleştirme, teklif/mülakat kararları. Kanıt niteliğinde, bu yüzden iki yıllık denetim döngüsü ve hiçbir ayar onu bir yılın altına indiremez. Bir tenant'ın audit drain'i (#2012) bir satırı henüz göndermediyse satır ne kadar eski olursa olsun **silinmez** — SIEM kesintisi boşluk değil birikme üretir; drain'i silmek satırları serbest bırakır. Ürünün başka hiçbir yolu tek bir audit satırı silmez. Yalnızca **global** katmandan okunur. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
 | `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
 | `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki, kişisel veri taşımayan iki girdiden biri (#2414; diğeri `CompanyUsage`): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |

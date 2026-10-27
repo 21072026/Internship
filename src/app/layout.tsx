@@ -7,9 +7,8 @@ import { Providers } from './providers';
 import { getLocale, getServerDictionary } from '@/i18n/server';
 import { requestSiteUrl } from '@/lib/siteUrl';
 import { pageAlternates, socialMetadata } from '@/lib/pageMetadata';
-import { getDictionary, toClientDictionary } from '@/i18n/dictionaries';
-import { resolveRequestVertical } from '@/i18n/server';
-import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
+import { toClientDictionary } from '@/i18n/dictionaries';
+import { requestDictionary, resolveRequestVertical } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
@@ -23,7 +22,7 @@ import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
 import { applyHostBrandMetadata } from '@/lib/brandMetadata';
-import { clientBrandOf, hostBrand, requestBrand, requestProductName } from '@/lib/hostBrand';
+import { clientBrandOf, hostBrand, requestBrand } from '@/lib/hostBrand';
 import { paletteCssVars, resolveAccentChoice } from '@/lib/brandRule';
 
 // Vertical-aware tab title / app name (#2498): a marketing host/tenant reads
@@ -134,10 +133,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // the overlay touches — `landing` above all — was merged back into the
   // browser payload on a marketing host.
   // The overlay's `{product}` is filled with the request brand's name (#2936),
-  // exactly as getServerDictionary() fills it.
+  // and the org's terminology (#1629) swapped in — the one requestDictionary()
+  // that getServerDictionary() returns too.
   const vertical = await resolveRequestVertical();
-  const product = await requestProductName(vertical);
-  const dict = toClientDictionary(applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }));
+  const dict = toClientDictionary((await requestDictionary(locale)).t);
   const cookieStore = await cookies();
   // Inside the native app's web view (src/lib/embeddedApp.ts).
   const embeddedApp = isEmbeddedAppUserAgent((await headers()).get('user-agent'));

@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT } from '@/i18n/client';
+import { AUDIT_EXPORT_MAX_ROWS } from '@/lib/auditRetentionRule';
 
 interface Person {
   id: string;
@@ -49,14 +50,21 @@ export default function AdminAuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // One filter string for the list and the export (#1585), so the file is
+  // exactly the rows the screen is filtered to — every page of them.
+  const filters = useMemo(() => {
     const params = new URLSearchParams();
     if (action) params.set('action', action);
     if (actor) params.set('actor', actor);
     if (targetId) params.set('targetId', targetId);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    return params.toString();
+  }, [action, actor, targetId, from, to]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams(filters);
     params.set('page', String(page));
     const res = await fetch(`/api/admin/audit?${params}`);
     const data = await res.json().catch(() => ({}));
@@ -70,7 +78,7 @@ export default function AdminAuditPage() {
       setTotal(data.total ?? 0);
     }
     setLoading(false);
-  }, [action, actor, targetId, from, to, page, t]);
+  }, [filters, page, t]);
 
   useEffect(() => {
     load();
@@ -98,6 +106,15 @@ export default function AdminAuditPage() {
           {t.audit.to}
           <input data-testid="audit-filter-to" type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} className={input} />
         </label>
+        <a
+          data-testid="audit-export"
+          href={`/api/admin/audit/export${filters ? `?${filters}` : ''}`}
+          download
+          title={t.audit.exportHint.replace('{n}', String(AUDIT_EXPORT_MAX_ROWS))}
+          className="ml-auto inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+        >
+          {t.audit.exportCsv}
+        </a>
       </div>
 
       <Card>

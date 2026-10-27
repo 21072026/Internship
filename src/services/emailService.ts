@@ -46,6 +46,7 @@ import { getDictionary, type Dictionary } from '@/i18n/dictionaries';
 import { emailDictionary, emailDictionaryMemo } from '@/i18n/emailDictionary';
 import { requisitionSkillMatch } from '@/lib/skillTaxonomyRule';
 import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
+import { CONSENTING_POOL_WHERE, titleMatchesTarget } from '@/lib/requisitionMatchRule';
 import { isNextActionReminderDue, nextActionDueBefore } from '@/lib/nextActionRule';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
@@ -5886,14 +5887,9 @@ function candidateMatchesNeeds(
   });
 }
 
-// A requisition that lists no required skills falls back to its title, but only
-// against the candidate's target position: comparing a title with skill strings
-// in both directions is exactly what let "Go" match every "...go..." title.
-function titleMatchesTarget(title: string, targetPosition: string | null | undefined): boolean {
-  const pos = title.toLowerCase().trim();
-  const target = (targetPosition || '').toLowerCase().trim();
-  return !!pos && !!target && (target.includes(pos) || pos.includes(target));
-}
+// The title fallback (a requisition without required skills) lives with the
+// rest of the match rule in src/lib/requisitionMatchRule.ts (#1401), shared
+// with the admin's matching-candidates list.
 
 function escapeMailText(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
@@ -5967,12 +5963,7 @@ export async function checkCompanyNeedMatches() {
   // TALENT_POOL_VISIBILITY consent (#527), same visibility rule as talent-pool
   // search.
   const pool = await prisma.user.findMany({
-    where: {
-      role: 'MENTEE',
-      isActive: true,
-      publicProfile: true,
-      consents: { some: { type: 'TALENT_POOL_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
-    },
+    where: CONSENTING_POOL_WHERE,
     select: {
       id: true,
       orgId: true,

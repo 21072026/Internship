@@ -221,6 +221,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(result.results.map((r) => r.key).sort()).toEqual(
       [
         'activityLog',
+        'auditLog',
         'companyInquiry',
         'companyUsage',
         'domainEvent',

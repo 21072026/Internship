@@ -27,8 +27,8 @@
 //   them as they are, with the producer-specific keys optional, because that is
 //   what receivers have been getting. Reconciling them is a version 2.
 //
-//   Several public events are registered but not raised yet (they wait on
-//   `emit()`, see scripts/check-events.mjs). Their schemas are the shape they
+//   Several public events are registered but not raised yet (their producer
+//   has not been written; it calls `emit()`, src/lib/events/emit.ts). Their schemas are the shape they
 //   WILL ship with — ids only, no personal data — and the first producer is
 //   held to it.
 //
@@ -57,6 +57,23 @@ export const EVENT_NAME_MAX = 96;
 // A timestamp as producers send it: `Date#toISOString()`.
 const isoInstant = z.string().datetime();
 const id = z.string().min(1);
+
+// One field of a configuration diff, as `redactedDiff()` returns it (#1699).
+const diffValue = z.union([z.string(), z.number(), z.boolean()]).nullable();
+const configChanges = z
+  .array(
+    z
+      .object({
+        field: z.string().min(1),
+        from: diffValue,
+        to: diffValue,
+        redacted: z.literal(true).optional(),
+        fromFingerprint: z.string().nullable().optional(),
+        toFingerprint: z.string().nullable().optional(),
+      })
+      .strict(),
+  )
+  .min(1);
 
 export interface EventDefinition {
   name: string;
@@ -236,9 +253,8 @@ export const EVENT_CATALOG = [
   },
   {
     // A pairing paused, resumed, ended or reopened (#1770). Registered, not yet
-    // dispatched — a direct call would be the eleventh that
-    // scripts/check-events.mjs caps; it is raised through emit() once that
-    // exists. `from`/`to` are lifecycle states; `reasonCode` is set on an end
+    // raised — its first producer calls emit() (a direct dispatcher call is
+    // refused by scripts/check-events.mjs). `from`/`to` are lifecycle states; `reasonCode` is set on an end
     // only (LIFECYCLE_END_REASON_CODES), null otherwise.
     name: 'mentorship.lifecycle_changed',
     version: 1,
@@ -252,42 +268,73 @@ export const EVENT_CATALOG = [
   },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
-  // None has a producer yet. Ids only: a payload that needs a person's name or
-  // address reads it from the record at delivery time, so pruning the event
-  // table is never the only way to forget somebody.
+  // Ids only: a payload that needs a person's name or address reads it from
+  // the record at delivery time, so pruning the event table is never the only
+  // way to forget somebody.
+  //
+  // The configuration events (#1699) also carry `changes`: the redacted
+  // before/after diff `redactedDiff()` (src/lib/events/diff.ts) computed from
+  // the row read BEFORE the write and the row after it. A secret never reaches
+  // it — a redacted field is `[redacted]` plus a short fingerprint. Their v1
+  // shapes were reshaped in place by #1699, before any producer had raised one.
   {
     name: 'org.config.changed',
     version: 1,
     subjectType: 'Organization',
     subjectKey: 'orgId',
-    payload: z.object({ orgId: id, keys: z.array(z.string()).min(1) }).strict(),
+    payload: z.object({ orgId: id, changes: configChanges }).strict(),
     visibility: 'internal',
-    description: "An organisation's configuration changed (which keys, not their values).",
+    description: "An organisation's configuration changed (a redacted before/after diff).",
   },
   {
     name: 'setting.changed',
     version: 1,
     subjectType: 'Setting',
     subjectKey: 'key',
-    payload: z.object({ key: z.string().min(1), scope: z.enum(['global', 'org']) }).strict(),
+    payload: z
+      .object({
+        key: z.string().min(1),
+        scope: z.enum(['global', 'org', 'program']),
+        programId: id.nullable(),
+        changes: configChanges,
+      })
+      .strict(),
     visibility: 'internal',
-    description: 'A setting was written, globally or for one org.',
+    description: 'A setting was written or reverted to its inherited value, at one scope (a redacted before/after diff).',
   },
   {
     name: 'webhook.registered',
     version: 1,
     subjectType: 'Webhook',
     subjectKey: 'webhookId',
-    payload: z.object({ webhookId: id, events: z.array(z.string()).min(1) }).strict(),
+    payload: z.object({ webhookId: id, events: z.array(z.string()).min(1), changes: configChanges }).strict(),
     visibility: 'internal',
     description: 'An admin registered a webhook receiver.',
+  },
+  {
+    name: 'webhook.updated',
+    version: 1,
+    subjectType: 'Webhook',
+    subjectKey: 'webhookId',
+    payload: z.object({ webhookId: id, changes: configChanges }).strict(),
+    visibility: 'internal',
+    description: 'An admin re-pointed, re-scoped, paused or resumed a webhook receiver.',
+  },
+  {
+    name: 'webhook.deleted',
+    version: 1,
+    subjectType: 'Webhook',
+    subjectKey: 'webhookId',
+    payload: z.object({ webhookId: id, changes: configChanges }).strict(),
+    visibility: 'internal',
+    description: 'An admin deleted a webhook receiver.',
   },
   {
     name: 'apikey.created',
     version: 1,
     subjectType: 'ApiKey',
     subjectKey: 'apiKeyId',
-    payload: z.object({ apiKeyId: id }).strict(),
+    payload: z.object({ apiKeyId: id, changes: configChanges }).strict(),
     visibility: 'internal',
     description: 'An API key was minted.',
   },

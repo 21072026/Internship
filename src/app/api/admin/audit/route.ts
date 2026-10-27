@@ -2,20 +2,16 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/authz';
-import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import {
-  auditRangeFrom,
-  auditTargetsWhere,
-  IMPERSONATION_ACTIVITY,
-  impersonationActivityFor,
-  pairActivity,
-} from '@/lib/auditViewRule';
+import { withinTenant } from '@/lib/tenantFilter';
+import { auditWhereFor } from '@/lib/auditQuery';
+import { IMPERSONATION_ACTIVITY, impersonationActivityFor, pairActivity } from '@/lib/auditViewRule';
 
 const PAGE_SIZE = 50;
 
 // GET — the audit trail viewer (#1583): AuditLog rows (impersonation, admin
 // password resets, merges, offer and interview decisions) with action / actor /
-// target / date filters, the same paging as /api/admin/activity.
+// target / date filters, the same paging as /api/admin/activity. The filter is
+// src/lib/auditQuery.ts, shared with the CSV export (#1585).
 //
 // Behind the `audit.read` PERMISSION (src/lib/authz.ts), not a role check: an
 // OBSERVER may read here, a PROGRAM_ADMIN reads only the rows whose target is a
@@ -27,44 +23,12 @@ const PAGE_SIZE = 50;
 export async function GET(request: Request) {
   const gate = await requirePermission('audit.read', { request, listing: true });
   if ('error' in gate) return gate.error;
-  const { session, actor, grants } = gate;
 
   const sp = new URL(request.url).searchParams;
-  const action = sp.get('action')?.trim();
-  const actorQ = sp.get('actor')?.trim();
-  const targetId = sp.get('targetId')?.trim();
   const page = Math.max(1, Number(sp.get('page')) || 1);
-  const range = auditRangeFrom(sp.get('from'), sp.get('to'));
-  if (range === 'invalid') return NextResponse.json({ error: 'invalid_date' }, { status: 400 });
-
-  const tenant = await tenantWhere(session);
-  const terms: Prisma.AuditLogWhereInput[] = [];
-  if (action) terms.push({ action: { contains: action } });
-  if (targetId) terms.push({ targetId });
-  if (range) terms.push({ createdAt: range });
-  if (actorQ) {
-    // AuditLog stores the actor's id only: resolve the e-mail filter to the
-    // tenant's matching accounts. An actor whose account is gone is not
-    // findable by e-mail — their rows still show, with the bare id.
-    const actors = await prisma.user.findMany({
-      where: withinTenant<Prisma.UserWhereInput>({ email: { contains: actorQ } }, tenant),
-      select: { id: true },
-      take: 500,
-    });
-    terms.push({ actorId: { in: actors.map((a) => a.id) } });
-  }
-  if (actor.adminLevel === 'PROGRAM_ADMIN') {
-    // Only rows about a person inside the grants (their relations' cohort /
-    // company, or a company's own account). Rows with no target are org-wide
-    // and stay out.
-    const people = await prisma.user.findMany({
-      where: withinTenant<Prisma.UserWhereInput>(auditTargetsWhere(grants ?? []), tenant),
-      select: { id: true },
-      take: 5000,
-    });
-    terms.push({ targetId: { in: people.map((p) => p.id) } });
-  }
-  const where = withinTenant<Prisma.AuditLogWhereInput>(terms.length ? { AND: terms } : {}, tenant);
+  const built = await auditWhereFor(sp, gate);
+  if (built === 'invalid_date') return NextResponse.json({ error: 'invalid_date' }, { status: 400 });
+  const { where, tenant } = built;
 
   const [rows, total] = await Promise.all([
     prisma.auditLog.findMany({

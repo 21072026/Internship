@@ -145,10 +145,10 @@ reviving a closed pairing.
 - **No capacity block.** `mentor_at_capacity` / `mentor_not_accepting` come back
   in `warnings`, advisory exactly as on `POST /api/mentorship`. An admin moving
   a mentee off a mentor who left has to be able to put them somewhere.
-- **No webhook.** `mentorship.created` would be a lie in `'corrected'` mode, and
-  direct `dispatchWebhook` call sites are capped at ten by `npm run check:events`
-  (#1697). A `mentorship.transferred` event belongs to the catalogue that guard
-  exists to make room for.
+- **No webhook.** `mentorship.created` would be a lie in `'corrected'` mode. A
+  `mentorship.transferred` event would be a new catalogue entry raised through
+  `emit()` (`docs/domain-events.md`); a direct dispatcher call is refused by
+  `npm run check:events` (#1697).
 - **No automatic stage change and no certificate.** `endedByMentorChange()`
   keeps both `ENDED_REASSIGNED` and `ENDED_REMATCHED` out of certificate
   eligibility (`src/lib/certificateEligibility.ts`): the pairing ended, the

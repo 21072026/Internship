@@ -48,6 +48,15 @@ files; losing those costs old links, not the product. Full shapes and the
 verification curls are in `infra/README.md` § The marketing hosts.
 
 
+### The env file is part of the backup (#1554)
+
+The dump holds sealed columns (Google tokens, SSO SP keys, roster/Klaviyo
+credentials, IBANs, queued mail) as ciphertext under keys derived from the
+`NEXTAUTH_SECRET` that wrote them. Restore with a different secret and the rows
+come back while those credentials do not. Keep each environment's env file off the
+box next to its backups, and keep a rotated-out secret for as long as backups taken
+under it exist. See [`secrets-and-rotation.md`](secrets-and-rotation.md) § 6.
+
 ## Restore
 
 No timings are quoted here on purpose: the measured ones live in the drill log

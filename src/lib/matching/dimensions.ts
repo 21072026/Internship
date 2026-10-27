@@ -43,6 +43,10 @@ export interface MatchMentor extends MatchPerson {
   mentorCapacity?: number | null;
   activeMenteeCount: number;
   acceptingMentees?: boolean | null;
+  /** #1808: how many mentees may pick this mentor themselves; read only by a self-select round. */
+  selfMatchLimit?: number | null;
+  /** #1808: self-selected seats currently held (countSelfSelected). */
+  selfSelectedCount?: number;
 }
 
 export interface DimensionResult {
@@ -130,11 +134,17 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
   // config.honourPreference (default false): also refuse a mentor who switched
   // acceptingMentees off. Off by default because the pre-#1781 ranking only
   // looked at the headcount ceiling.
+  // config.selfSelect (default false, #1808): the round is a self-selection,
+  // so a mentor at their selfMatchLimit does not match; an admin-led round
+  // (the default) still ranks them.
   capacityHeadroom: (_mentee, mentor, config) => {
     const availability = getMentorAvailability({
       mentorCapacity: mentor.mentorCapacity,
       activeMenteeCount: mentor.activeMenteeCount,
       acceptingMentees: config.honourPreference === true ? mentor.acceptingMentees : undefined,
+      selfMatchLimit: mentor.selfMatchLimit,
+      selfSelectedCount: mentor.selfSelectedCount ?? 0,
+      context: config.selfSelect === true ? 'self_select' : 'admin',
     });
     const cap = mentor.mentorCapacity;
     const ratio = cap == null ? 1 : cap <= 0 ? 0 : clamp01((cap - mentor.activeMenteeCount) / cap);

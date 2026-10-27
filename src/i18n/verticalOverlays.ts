@@ -379,6 +379,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         capacityHint: 'Max leads you can own at once (blank = no limit)',
         activeMentees: '{count} / {capacity} active leads',
         acceptingMentees: 'I can take on a new lead',
+        selfMatchLimitHint: 'How many leads may pick you themselves (directory request or your link). Blank = same as your capacity. Admins can still assign you up to your capacity. A personal preference, never a plan limit.',
       },
       consent: {
         items: {
@@ -841,6 +842,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       stageSla: {
         escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the rep is reminded, as before.',
+        scopeMentor: 'Rep',
+        allMentors: 'Every rep',
+        overrideHint: 'You are editing an override. For these records it beats the organisation’s number — rep and cohort together, then rep, then cohort, then the organisation. Leave a stage empty to inherit. Escalation and board limits stay organisation-wide.',
+        sourceMentor: 'this rep',
+        sourceMentorCohort: 'this rep in this cohort',
         subtitle: 'How long anyone may wait at a stage before the rep is warned. Leave a stage empty and it has no rule — an organisation that sets none keeps working exactly as before.',
       },
       // The public pages every footer links to (docs/worlds.md): the share
@@ -1075,6 +1081,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         accepting: 'Accepting leads',
         requestMentor: 'Request this rep',
         requestedMentorUnavailable: 'That rep is no longer available — pick another one below.',
+        selfMatchFullError: 'This rep is not taking self-selected leads right now — pick another one, or leave the field empty and an admin will assign you.',
         requestedMentorPending: 'You already have a request waiting for an answer, so this rep was not added to it.',
         requestedMentorActiveMentorship: 'You already have a sales rep, so this request was not started.',
         empty: 'No sales reps are listed yet. Reps appear here once they opt in.',
@@ -1457,6 +1464,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         capacityHint: 'Aynı anda sahip olabileceğin maksimum müşteri adayı (boş = limitsiz)',
         activeMentees: '{count} / {capacity} aktif müşteri adayı',
         acceptingMentees: 'Yeni müşteri adayı alabilirim',
+        selfMatchLimitHint: 'Seni kaç müşteri adayı kendisi seçebilir (dizinden talep ya da bağlantın). Boş = kapasitenle aynı. Yöneticiler seni kapasitene kadar yine de atayabilir. Kişisel bir tercih, asla bir plan sınırı değil.',
       },
       consent: {
         items: {
@@ -1822,6 +1830,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       stageSla: {
         escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca temsilciye hatırlatılır.',
+        scopeMentor: 'Temsilci',
+        allMentors: 'Tüm temsilciler',
+        overrideHint: 'Bir istisna düzenliyorsun. Bu kayıtlar için kurumun sayısının önüne geçer — önce temsilci ve dönem birlikte, sonra temsilci, sonra dönem, en son kurum. Devralmak için aşamayı boş bırak. Üst kademe ve pano limitleri kurum genelinde kalır.',
+        sourceMentor: 'bu temsilci',
+        sourceMentorCohort: 'bu dönemdeki bu temsilci',
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
       },
       share: { title: '{product} ile paylaşıldı' },
@@ -2048,6 +2061,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         accepting: 'Müşteri adayı kabul ediyor',
         requestMentor: 'Bu temsilciyi iste',
         requestedMentorUnavailable: 'Bu temsilci artık müsait değil — aşağıdan başka bir temsilci seçebilirsin.',
+        selfMatchFullError: 'Bu temsilci şu an kendi seçimiyle gelen müşteri adayı almıyor — başka birini seç ya da alanı boş bırak, bir yönetici seni atasın.',
         requestedMentorPending: 'Yanıt bekleyen bir talebin zaten var, bu yüzden bu temsilci talebine eklenmedi.',
         requestedMentorActiveMentorship: 'Zaten bir satış temsilcin var, bu yüzden bu talep başlatılmadı.',
         empty: 'Henüz listelenen satış temsilcisi yok. Temsilciler onay verdikçe burada görünür.',
@@ -2430,6 +2444,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         capacityHint: 'Maximale Leads gleichzeitig (leer = kein Limit)',
         activeMentees: '{count} / {capacity} aktive Leads',
         acceptingMentees: 'Ich kann einen neuen Lead übernehmen',
+        selfMatchLimitHint: 'Wie viele Leads dich selbst wählen dürfen (Anfrage im Verzeichnis oder dein Link). Leer = wie deine Kapazität. Admins können dich trotzdem bis zu deiner Kapazität zuweisen. Eine persönliche Einstellung, nie ein Tarif-Limit.',
       },
       consent: {
         items: {
@@ -2793,6 +2808,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       stageSla: {
         escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur die Vertriebsperson erinnert.',
+        scopeMentor: 'Vertrieb',
+        allMentors: 'Alle Vertriebsmitarbeitenden',
+        overrideHint: 'Sie bearbeiten eine Ausnahme. Für diese Datensätze gilt sie vor der Zahl der Organisation — zuerst Vertriebsperson und Kohorte zusammen, dann Vertriebsperson, dann Kohorte, zuletzt die Organisation. Lassen Sie eine Phase leer, um zu erben. Eskalation und Board-Limits bleiben organisationsweit.',
+        sourceMentor: 'diese Vertriebsperson',
+        sourceMentorCohort: 'diese Vertriebsperson in dieser Kohorte',
         subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',
       },
       share: { title: 'Mit {product} geteilt' },
@@ -3015,6 +3035,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         accepting: 'Nimmt Leads an',
         requestMentor: 'Diesen Vertriebsmitarbeiter anfragen',
         requestedMentorUnavailable: 'Dieser Vertriebsmitarbeiter ist nicht mehr verfügbar — wähle unten eine andere Person.',
+        selfMatchFullError: 'Diese Person nimmt gerade keine selbst gewählten Leads an — wähle jemand anderen oder lass das Feld leer, dann weist dich ein Admin zu.',
         requestedMentorPending: 'Du hast bereits eine offene Anfrage, deshalb wurde dieser Vertriebsmitarbeiter nicht hinzugefügt.',
         requestedMentorActiveMentorship: 'Du hast bereits einen Vertriebsmitarbeiter, deshalb wurde diese Anfrage nicht gestartet.',
         empty: 'Noch keine Vertriebsmitarbeiter gelistet. Sie erscheinen hier, sobald sie zustimmen.',

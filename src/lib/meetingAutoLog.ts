@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -115,12 +115,12 @@ export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<b
         meetingId: meeting.id,
       },
     });
-    await dispatchWebhook('interaction.logged', {
+    await emit('interaction.logged', {
       relationId: meeting.relationId,
       type: 'Meeting',
       date: meeting.scheduledAt.toISOString(),
       autoLogged: true,
-    }, meeting.relation?.orgId ?? null);
+    }, { orgId: meeting.relation?.orgId ?? null, actor: { type: 'system' } });
     return true;
   } catch (error) {
     // P2002 on the unique meetingId — the other path (click vs. sweep, or two

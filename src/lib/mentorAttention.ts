@@ -14,7 +14,7 @@ import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 import { isCancellationPending } from '@/lib/contractEndRule';
 import { activeRelationWhere } from '@/lib/relationLifecycle';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending' | 'decision_window_closing';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending' | 'decision_window_closing' | 'free_quota_exceeded';
 
 // The relationship-health flags this queue shows (#1898) — every one the
 // table raises except `stage_stalled`, which belongs to the admin monitor.
@@ -44,7 +44,7 @@ export interface AttentionQueue {
    * The usage signals' footnote (#2449): whether a usage feed exists for the
    * org at all, how many of the caller's accounts were left out for too short
    * a history, and how many dropping accounts nobody actively owns. Null when
-   * the caller passed no `orgId` or the reasons filter excludes both signals.
+   * the caller passed no `orgId` or the reasons filter excludes every usage signal.
    */
   usage: UsageNote | null;
 }
@@ -127,8 +127,8 @@ export async function getAttentionItems(
   );
 
   // Product-usage signals (#2449): only show, never move a stage. Computed only
-  // when the caller names the org and asked for at least one of the two.
-  const wantsUsage = !options.reasons || options.reasons.some((r) => r === 'usage_drop' || r === 'trial_inactive');
+  // when the caller names the org and asked for at least one of them.
+  const wantsUsage = !options.reasons || options.reasons.some((r) => r === 'usage_drop' || r === 'trial_inactive' || r === 'free_quota_exceeded');
   const usage = options.orgId && wantsUsage && relations.length > 0
     ? await usageSignalsFor(options.orgId, relations, new Date(now))
     : null;

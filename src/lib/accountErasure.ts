@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { disconnect as disconnectGoogleCalendar } from '@/lib/googleCalendarClient';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
@@ -198,6 +199,37 @@ async function leadAccountContacts(
 }
 
 /**
+ * The mentor application the person sent before they had an account (#2098):
+ * `MentorApplication` has no link to a `User` at all — name, address, phone and
+ * two free-text answers keyed by nothing but the ADDRESS — so neither erasure
+ * path reached it, and a hard delete left the whole application behind. Matched
+ * on the address inside the erased person's own tenant (`erasureScoped`, the
+ * same rule as the company contact above), so the other world's application
+ * under the same address is untouched. The row and its status stay: an admin's
+ * decision is the org's record, the person on it goes. Pre-read like
+ * `companyContactOps`, because anonymise rewrites the address it matches on.
+ */
+async function mentorApplicationOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
+  if (!user?.email) return [];
+  return [
+    prisma.mentorApplication.updateMany({
+      where: erasureScoped({ email: user.email }, user.orgId, await defaultOrgId()),
+      data: {
+        fullName: 'Erased applicant',
+        email: erasedAddress(userId),
+        phone: null,
+        linkedinUrl: null,
+        experience: null,
+        motivation: null,
+        rejectReason: null,
+        adminNote: null,
+      },
+    }),
+  ];
+}
+
+/**
  * The roster-feed run log (#1964/#1966, docs/roster-feed.md) names people: a
  * `RosterRowResult` carries the person's key (their e-mail, or the HR system's
  * personnel number) and their `userId`, and a run's `absentKeys` lists the keys
@@ -388,8 +420,15 @@ export async function forgetCompanyContact(
 //   - the roster-feed run log (`RosterRowResult.key/message`, `RosterRun.absentKeys`)
 //     is not free text but names the person by key: forgotten by `rosterLogOps()`
 //     on both paths, and bounded by the `rosterRowResult` retention entry (90 days).
+//   - company-side proof and bookkeeping: `ContactPermission.reason` (the
+//     UWG § 7 basis on the company record) and an affiliate partner's payout
+//     details. How long a proof outlives the person is the rights holder's call.
+//   - the suppression list (`EmailSuppression`, `EmailDeliveryEvent.detail`):
+//     erasing it would mail a bounced/complaining address again.
 // A new `@db.Text` column about a person belongs in BOTH lists — here and in
-// the sanitize-db header — or in this block with its reason.
+// the sanitize-db header — or in this block with its reason. Since #2098 that
+// is enforced: `npm run check:erasure-coverage` fails on a free-text column
+// with no decision in scripts/check-erasure-coverage.mjs.
 //
 // Emptying rather than nulling is forced by the schema: `Message.body`,
 // `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body` and
@@ -433,8 +472,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // The person's own private notes: theirs alone, so deleted rather than kept
     // as an empty row. (A hard delete cascades these; anonymise does not.)
     prisma.personalNote.deleteMany({ where: { userId } }),
-    // The mentee's own words in their self-serve mentorship request.
-    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null } }),
+    // Their own canned replies (#2098): their wording, theirs alone. Org-wide
+    // templates they merely created (`createdById`) are the org's and stay.
+    prisma.messageTemplate.deleteMany({ where: { ownerId: userId } }),
+    // The mentee's own words in their self-serve mentorship request, and the
+    // reason they gave when asking for a different mentor (#2098).
+    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null } }),
     // Their own bell. A hard delete cascades it; anonymise used to keep every
     // rendered sentence ("Ayşe sent you a message", with the link) under a row
     // that claimed to be anonymous. Theirs alone, so deleted (#2106).
@@ -488,7 +531,34 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
-    prisma.interviewRequest.updateMany({ where: { menteeId: userId }, data: { note: null, declineNote: null } }),
+    prisma.interviewRequest.updateMany({
+      where: { menteeId: userId },
+      data: { note: null, declineNote: null, cancelReason: null },
+    }),
+    // Free text added to the schema after #2106 (#2098). Same split as above:
+    // the person's own words wherever they wrote them, the prose written about
+    // them on the rows whose subject they are; every stage, date and score stays.
+    //   - their answers to a free-text survey question (an ANONYMOUS response
+    //     has no respondent and is not theirs to find). `respondentId` is
+    //     SetNull, so on a hard delete these outlived the account.
+    prisma.surveyAnswer.updateMany({ where: { response: { respondentId: userId } }, data: { text: null } }),
+    //   - meeting feedback: what they wrote, and what the other side wrote
+    //     about a meeting that is about them.
+    prisma.meetingFeedback.updateMany({
+      where: { OR: [{ raterId: userId }, { meeting: { OR: [asSubject, directMeeting] } }] },
+      data: { note: null },
+    }),
+    //   - the hiring rows (#1828): their cover note, the disposition note and
+    //     every stage-change note on their applications.
+    prisma.application.updateMany({ where: { menteeId: userId }, data: { coverNote: null, dispositionNote: null } }),
+    prisma.applicationEvent.updateMany({ where: { application: { menteeId: userId } }, data: { note: null } }),
+    //   - a company's first message to them, a matching decision's reason and
+    //     a placement note — each about them as the candidate.
+    prisma.candidateOutreach.updateMany({ where: { menteeId: userId }, data: { firstMessage: null } }),
+    prisma.matchFeedback.updateMany({ where: { menteeId: userId }, data: { reasonNote: null } }),
+    prisma.placement.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    //   - the session agenda of their relation (required column → emptied).
+    prisma.sessionAgendaItem.updateMany({ where: { agenda: asSubject }, data: { text: '' } }),
   ];
 }
 
@@ -509,13 +579,20 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   const companyContact = await companyContactOps(userId);
   const openText = await openTextArtifactOps(userId);
   const rosterLog = await rosterLogOps(userId);
+  const mentorApplication = await mentorApplicationOps(userId);
   // BEFORE the relations go: deleting a relation cascades to its meetings, and
   // `PersonalNote.meetingId` is SetNull — so a note taken in this person's
   // meeting would survive with its text intact and its only link to them
   // nulled, unreachable by any later query (#2052). One $transaction so a
   // partial scrub cannot happen; the deletes below keep their existing failure
   // mode (an FK that neither cascades nor is detached).
-  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText, ...rosterLog]);
+  await prisma.$transaction([
+    ...scrubFreeTextOps(userId, new Date()),
+    ...companyContact,
+    ...openText,
+    ...rosterLog,
+    ...mentorApplication,
+  ]);
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
   await prisma.relationLifecycleEvent.deleteMany({ where: { changedById: userId } });
@@ -527,6 +604,9 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   await prisma.supportTicket.updateMany({ where: { assignedAdminId: userId }, data: { assignedAdminId: null } });
   await prisma.mentorshipRequest.updateMany({ where: { decidedById: userId }, data: { decidedById: null } });
   await prisma.project.updateMany({ where: { ownerUserId: userId }, data: { ownerUserId: null } });
+  // Revoked at Google first (#2098): the cascade would drop our copy of the
+  // token but leave the grant live on the person's Google account.
+  await disconnectGoogleCalendar(userId);
   await prisma.user.delete({ where: { id: userId } });
 }
 
@@ -539,9 +619,19 @@ export async function anonymizeUser(userId: string): Promise<void> {
   const companyContact = await companyContactOps(userId);
   const openText = await openTextArtifactOps(userId);
   const rosterLog = await rosterLogOps(userId);
+  const mentorApplication = await mentorApplicationOps(userId);
   await prisma.$transaction([
     ...openText,
     ...rosterLog,
+    ...mentorApplication,
+    // The browsers they signed in from (#1717): user-agent and last IP. A hard
+    // delete cascades them; anonymise keeps the user row, so they went nowhere
+    // until the housekeeping purge (#2098).
+    prisma.signInDevice.deleteMany({ where: { userId } }),
+    // The remember-me rows carry the same two columns. They are revoked below
+    // (outside this transaction, through the one revoker), not deleted: a
+    // revoked row is what turns a replayed cookie into a refusal.
+    prisma.trustedDevice.updateMany({ where: { userId }, data: { userAgent: null, lastIp: null } }),
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
     // What an AI wrote about the person (#2044): the row stays, the person's
@@ -549,6 +639,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
     prisma.aiArtifact.deleteMany({ where: { subjectUserId: userId } }),
     prisma.avatarFile.deleteMany({ where: { userId } }),
     prisma.document.deleteMany({ where: { ownerId: userId } }),
+    // The canonical twin of `skills`/`skillLevels` below (#1818/#1822): the
+    // rows carry the levels, and their history goes with them by cascade.
+    prisma.userSkill.deleteMany({ where: { userId } }),
     // Every free-text surface outside the User row — see scrubFreeTextOps. This
     // is the half that used to be missing: the row claimed to be anonymous
     // while the person's messages, their support thread and the notes written
@@ -611,4 +704,8 @@ export async function anonymizeUser(userId: string): Promise<void> {
   // moments later (docs/remember-me.md). A hard delete needs no equivalent:
   // TrustedDevice cascades with the user row.
   await revokeAllTrustedDevices(userId);
+  // And the calendar grant (#2098): anonymise keeps the user row, so nothing
+  // cascaded it — an erased account kept OAuth tokens to the person's own
+  // Google calendar. Revoked at Google, then forgotten here.
+  await disconnectGoogleCalendar(userId);
 }
