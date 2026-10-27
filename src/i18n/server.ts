@@ -13,6 +13,7 @@ import { hostVertical } from '@/lib/hostVertical';
 import { hostBrand, productNameIn, requestProductName } from '@/lib/hostBrand';
 import { applyTerminologyMemo } from '@/lib/terminology';
 import { terminologyFor } from '@/lib/terminology.server';
+import { settingsOrgOfRow } from '@/lib/settingsOrg';
 
 // Read the active locale, in this order (#1384, #1386):
 //   0. the language of the URL — `/tr/…` and `/de/…` are rewritten by
@@ -118,9 +119,9 @@ async function browserLocale(): Promise<Locale> {
 // not five.
 export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => (await resolveRequestOrg()).vertical);
 
-// The same lookup, with the signed-in person's org id (null when signed out or
-// on any failure) — what the terminology layer (#1629) reads its setting for.
-// One cache() entry, so asking for both costs one query.
+// The same lookup, with the org the signed-in person's settings live in (null
+// when signed out or on any failure) — what the terminology layer (#1629)
+// reads its setting for. One cache() entry, so asking for both is one query.
 export const resolveRequestOrg = cache(async (): Promise<{ vertical: VerticalKey; orgId: string | null }> => {
   // Signed OUT (a public page — the landing, /apply, /for-companies): the only
   // signal is the request host, so two urls serve two products' copy from one
@@ -137,12 +138,22 @@ export const resolveRequestOrg = cache(async (): Promise<{ vertical: VerticalKey
       where: { id: session.user.id },
       select: { orgId: true, org: { select: { vertical: true } } },
     });
-    return { vertical: toVerticalKey(user?.org?.vertical), orgId: user?.orgId ?? null };
+    // An org-less account's settings live in the default org (#2628), which
+    // is also where /api/admin/terminology writes for it.
+    return { vertical: toVerticalKey(user?.org?.vertical), orgId: user ? await settingsOrgOfRow(user.orgId) : null };
   } catch {
     // A transient session/DB error is not a reason to override the host's
     // product with the default one; fall back to the host signal.
     return { vertical: await hostVertical(), orgId: null };
   }
+});
+
+// The org's stored terminology, read once per request: a page asks for its
+// dictionary from the layout, the page and several server components, and a
+// render outside a request scope has no settings memo of its own.
+const requestTerminology = cache(async () => {
+  const { vertical, orgId } = await resolveRequestOrg();
+  return terminologyFor(vertical, { orgId });
 });
 
 // The full dictionary a signed-in page renders: the base translation, the
@@ -151,10 +162,10 @@ export const resolveRequestOrg = cache(async (): Promise<{ vertical: VerticalKey
 // walked, the overlaid object itself. The root layout builds the client payload
 // from this same call, so server render and browser agree.
 export async function requestDictionary(locale: Locale) {
-  const { vertical, orgId } = await resolveRequestOrg();
+  const { vertical } = await resolveRequestOrg();
   const product = await requestProductName(vertical);
   const overlaid = applyVerticalOverlay(getDictionary(locale), locale, vertical, { product });
-  const terms = await terminologyFor(vertical, { orgId });
+  const terms = await requestTerminology();
   return { product, t: applyTerminologyMemo(`${vertical}\u0000${product}`, overlaid, locale, terms) };
 }
 
@@ -163,6 +174,7 @@ export async function requestDictionary(locale: Locale) {
 // prints (#2936) — the request brand's (the signed-in person's organization,
 // else the host's), never another vertical's. `product` is returned too, for a
 // base string that carries the same token (the landing FAQ, wrongWorld, …).
+// The org's terminology rides along through requestDictionary().
 export async function getServerDictionary() {
   const locale = await getLocale();
   return { locale, ...(await requestDictionary(locale)) };
