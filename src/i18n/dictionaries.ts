@@ -7724,6 +7724,13 @@ const en = {
     singleKeyLabel: 'Single-key shortcuts',
     singleKeyHint: 'Lets ? open this list. Turn it off if you use speech input or press it by accident; the list stays available from the command palette (Ctrl/⌘ K).',
   },
+  sessionTimeout: {
+    title: 'Your session is about to end',
+    body: 'You will be signed out in about {minutes} min because nothing has happened for a while. Stay signed in to keep working.',
+    stay: 'Stay signed in',
+    dismiss: 'Not now',
+    extended: 'You stay signed in for another 12 hours.',
+  },
   savedViews: {
     save: 'Save view',
     saved: 'Saved views',
@@ -17177,6 +17184,13 @@ const tr: Dict = {
     singleKeyLabel: 'Tek tuşlu kısayollar',
     singleKeyHint: '? tuşu bu listeyi açar. Sesle yazıyorsanız ya da yanlışlıkla basıyorsanız kapatın; liste komut paletinden (Ctrl/⌘ K) açılmaya devam eder.',
   },
+  sessionTimeout: {
+    title: 'Oturumunuz bitmek üzere',
+    body: 'Bir süredir işlem yapılmadığı için yaklaşık {minutes} dk. içinde oturumunuz kapanacak. Çalışmaya devam etmek için oturumu açık tutun.',
+    stay: 'Oturumu açık tut',
+    dismiss: 'Şimdi değil',
+    extended: 'Oturumunuz 12 saat daha açık kalacak.',
+  },
   savedViews: {
     save: 'Görünümü kaydet',
     saved: 'Kayıtlı görünümler',
@@ -26598,6 +26612,13 @@ const de: Dict = {
     },
     singleKeyLabel: 'Einzeltasten-Kürzel',
     singleKeyHint: '? öffnet diese Liste. Schalten Sie es aus, wenn Sie Spracheingabe nutzen oder die Taste versehentlich drücken; die Liste bleibt über die Befehlspalette (Strg/⌘ K) erreichbar.',
+  },
+  sessionTimeout: {
+    title: 'Ihre Sitzung läuft gleich ab',
+    body: 'Da eine Weile nichts passiert ist, werden Sie in etwa {minutes} Min. abgemeldet. Bleiben Sie angemeldet, um weiterzuarbeiten.',
+    stay: 'Angemeldet bleiben',
+    dismiss: 'Nicht jetzt',
+    extended: 'Sie bleiben weitere 12 Stunden angemeldet.',
   },
   savedViews: {
     save: 'Ansicht speichern',

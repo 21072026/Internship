@@ -15,3 +15,7 @@
   "No commits between main and …". Use `git add -A` alone (it skips ignored files on its own).
 - **After fetching a fresh `origin/main`, run `npx prisma generate` before `tsc`** — sibling PRs
   add columns all day, and a stale client shows as dozens of TS2353 errors in unrelated e2e specs.
+- **Time-based UI is testable without waiting: `page.clock.install({ time: Date.now() })` before
+  sign-in, then `page.clock.fastForward('11:56:00')`.** The server clock is untouched, so anything
+  the server hands back (a fresh session `expires`) is real time — `page.clock.setSystemTime(Date.now())`
+  before that round-trip, or the page sees the new expiry as already near (`e2e/session-timeout.spec.ts`).
