@@ -231,7 +231,7 @@ export async function PUT(request: Request) {
 
   return withTenantScope(session, async () => {
     // Sequential on purpose: two writes for the same (org, key) must not race
-    // the read-modify-write inside setSetting into a duplicate row.
+    // the read-modify-write inside writeSetting into a duplicate row.
     // An unchanged key writes nothing — no Setting row, no history row, no log.
     const actor = { id: session.user.id, email: session.user.email ?? null };
     for (const [key, value] of entries) {
