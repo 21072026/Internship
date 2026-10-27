@@ -142,6 +142,10 @@ export interface JobPayloadMap {
   /// Names only — the event is read from its `DomainEvent` row and the handler
   /// is resolved by `subscriber` name when the job runs, never serialised.
   'event.deliver': { eventId: string; subscriber: string };
+  /// One delayed stage-automation run (#1703, src/lib/automation/evaluate.ts).
+  /// The `AutomationRun` row holds the rule, the relation and the org; the
+  /// payload is only its id, keyed `automation:<runId>`.
+  'automation.run': { runId: string };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -193,6 +197,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'evaluations.reminders',
   'programJourney.run',
   'event.deliver',
+  'automation.run',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

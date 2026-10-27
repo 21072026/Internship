@@ -340,6 +340,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // so once MT_ENFORCE_ISOLATION is on they must pass `orgId` themselves or
   // run in an explicit context — otherwise they silently see zero rows.
   'DomainEvent',
+  // Stage automation (#1703): a tenant's rules and their run log. The evaluator
+  // runs in the worker with no session and passes orgId itself.
+  'AutomationRule',
+  'AutomationRun',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a

@@ -143,6 +143,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorAutoAssign: 'Whoever registers through your link becomes your lead automatically — no assignment step. The link works once and expires after 7 days.',
       },
       notifications: {
+        automationEmail: { mentorCheckIn: { cta: 'Open my leads' } },
         invitationEmail: {
           roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
         },
@@ -1256,6 +1257,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorAutoAssign: 'Bağlantınla kaydolan kişi otomatik olarak senin müşteri adayın olur — ayrıca atama yapman gerekmez. Bağlantı tek kullanımlıktır ve 7 gün sonra geçersiz olur.',
       },
       notifications: {
+        automationEmail: { mentorCheckIn: { cta: "Lead'lerimi aç" } },
         invitationEmail: {
           roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
         },
@@ -2236,6 +2238,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorAutoAssign: 'Wer sich über deinen Link registriert, wird automatisch dein Lead — kein Zuweisungsschritt. Der Link gilt einmalig und verfällt nach 7 Tagen.',
       },
       notifications: {
+        automationEmail: { mentorCheckIn: { cta: 'Meine Leads öffnen' } },
         invitationEmail: {
           roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
         },

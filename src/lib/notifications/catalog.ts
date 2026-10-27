@@ -182,6 +182,11 @@ export const NOTIFICATION_EVENTS = [
   { key: 'integration.newLeads', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['count', 'provider'] },
 
   // Pipeline: where a candidate stands, and what came of it.
+  // Stage automation (#1703): an admin's rule told the relation's own people.
+  // In-app only — the rule's mail action is a separate, catalogued template.
+  { key: 'automation.stageReached', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['name', 'stage'] },
+  { key: 'automation.stageReachedSelf', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['stage'] },
+  { key: 'automation.documentRequired', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['document'] },
   { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
   { key: 'outcome.noMatch', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'outcome.placedElsewhere', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },

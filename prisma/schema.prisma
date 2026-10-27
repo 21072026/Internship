@@ -291,6 +291,8 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   domainEvents            DomainEvent[]
+  automationRules         AutomationRule[]
+  automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
   externalProfileLinks    ExternalProfileLink[]
@@ -3137,6 +3139,73 @@ model DomainEvent {
   @@index([subjectType, subjectId, createdAt])
   // The retention sweep's cross-tenant range (pruneDomainEvents).
   @@index([createdAt])
+}
+
+// A stage automation rule (#1703): "when a relation enters/leaves stage X and
+// these conditions hold, run these allowlisted actions". The vocabulary, the
+// write-time gate and the condition evaluator are src/lib/automation/rule.ts;
+// the evaluator is the `automation` domain-event subscriber. `conditions` and
+// `actions` are JSON validated by that module on every write, and re-validated
+// on every read (a row that no longer parses records a FAILED run).
+// docs/automation-rules.md.
+model AutomationRule {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // Reserved for per-programme rules (#1618); unused until then.
+  programId       String?
+  name            String        @db.VarChar(120)
+  // STAGE_ENTRY | STAGE_EXIT (AUTOMATION_TRIGGERS)
+  trigger         String        @db.VarChar(16)
+  stageKey        String        @db.VarChar(191)
+  conditions      Json
+  // Ordered list of allowlisted actions (AUTOMATION_ACTIONS).
+  actions         Json
+  // 0 = run on the move; otherwise a queued `automation.run` at move + delay.
+  delayMinutes    Int           @default(0)
+  // Off until an admin switches it on (#1704 asks for a dry run first).
+  enabled         Boolean       @default(false)
+  // Display order on /admin/automations (#1704). Execution never depends on it.
+  position        Int           @default(0)
+  // The last dry run against real history (#1704).
+  lastSimulatedAt DateTime?
+  createdById     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  runs AutomationRun[]
+
+  @@index([orgId, stageKey, enabled])
+}
+
+// One evaluation of one rule for one stage-change event (#1703). Unique on
+// (ruleId, eventId): a redelivered event can never produce a second run. Status
+// PENDING (waiting for its delay) → RUNNING (claimed by one guarded update) →
+// SUCCESS | PARTIAL | FAILED, or SKIPPED (conditions not met, rule switched
+// off, relation left the stage). `results` is the per-action outcome: ids and
+// codes only, never a name or an address.
+model AutomationRun {
+  id         String         @id @default(cuid())
+  orgId      String?
+  org        Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ruleId     String
+  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  // The DomainEvent that caused it.
+  eventId    String
+  relationId String
+  fromStage  String         @db.VarChar(191)
+  toStage    String         @db.VarChar(191)
+  status     String         @db.VarChar(16)
+  results    Json
+  error      String?        @db.Text
+  // When its actions are due (the move, or the move + the rule's delay).
+  runAt      DateTime       @default(now())
+  finishedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  @@unique([ruleId, eventId])
+  @@index([orgId, createdAt])
+  @@index([relationId])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
