@@ -53,6 +53,10 @@ life is billable again the moment something is logged against it.
 | `VIDEO_ROOM` | COUNTER | Video rooms created in the period. |
 | `VIDEO_PARTICIPANT` | COUNTER | Invitees the created rooms were for — the JaaS MAU exposure. |
 | `ACTIVE_PAIR_ACTIVITY` | COUNTER | Activity signals logged against a relation. **Volume, not the pair count**: one pair can raise it fifty times in a month and is still one billable pair. |
+| `COMPANIES` | COMPUTED | Companies of the org at rollup time — capacity, for the usage tab (#1763). |
+| `PROGRAMS` | COMPUTED | Cohorts of the org at rollup time (`PlanLimits.programs`) — capacity, never billed. |
+| `AI_CALLS` | COMPUTED | `AiUsage` rows of the period that consumed quota (not `provider_error`) — the same count as `getAiQuota()`, recomputed from that ledger. |
+| `BROADCAST_RECIPIENTS` | COMPUTED | Announcement + newsletter recipients of the period, counted by `broadcastRecipientsInRange()` with the quota's own per-category rules. |
 
 **COMPUTED vs COUNTER is the idempotency guarantee**, not a taxonomy:
 
@@ -89,6 +93,13 @@ activity tables; a usage screen or an invoice reads `UsageRollup`. The tenant's 
 the caller's `ACTIVE_MATCHED_PAIRS` / `ADMIN_SEATS` rows for twelve months, and shows a month
 the rollup has not written yet as *not counted* — never as a live count and never as 0. The
 arithmetic next to the prices is pure in `src/lib/billingSummary.ts`.
+
+The **usage tab** of the same page (`GET /api/org/usage`, #1763) is the second reader: every
+metric above against its plan limit (`src/lib/plans.ts`; the broadcast band as the gate
+resolves it), four periods of trend, from `UsageRollup` only. A `null` limit is *unlimited*
+and is never rendered as 0 or as over; a `0` limit means *not part of this plan*; video is
+*reported, never limited*. The active-pair row is the same rollup row the plan tab reads. The
+rules are pure in `src/lib/usageSummary.ts`.
 
 ## Video is reported, never gated
 

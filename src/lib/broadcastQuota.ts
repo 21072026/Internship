@@ -104,8 +104,8 @@ export function broadcastMonth(now: Date = new Date()): BroadcastMonth {
  * broadcast category to `BROADCAST_EMAIL_CATEGORIES` without teaching this map
  * how to count it is a type error rather than a silently unmetered blast.
  */
-const USED_THIS_MONTH: Record<BroadcastCategory, (orgId: string, since: Date) => Promise<number>> = {
-  announcement: async (orgId, since) => {
+const USED_THIS_MONTH: Record<BroadcastCategory, (orgId: string, since: Date, until?: Date) => Promise<number>> = {
+  announcement: async (orgId, since, until) => {
     // Only an ADMIN can broadcast (the route requires the role), and admin
     // seats are capped in single digits by every plan, so this stays a small
     // `IN (…)` rather than a list of the whole tenant.
@@ -113,17 +113,17 @@ const USED_THIS_MONTH: Record<BroadcastCategory, (orgId: string, since: Date) =>
     if (admins.length === 0) return 0;
     const agg = await prisma.announcement.aggregate({
       _sum: { emailedCount: true },
-      where: { sentById: { in: admins.map((a) => a.id) }, createdAt: { gte: since } },
+      where: { sentById: { in: admins.map((a) => a.id) }, createdAt: { gte: since, ...(until ? { lt: until } : {}) } },
     });
     return agg._sum.emailedCount ?? 0;
   },
-  [NEWSLETTER_EMAIL_CATEGORY]: (orgId, since) =>
+  [NEWSLETTER_EMAIL_CATEGORY]: (orgId, since, until) =>
     prisma.newsletterSend.count({
       // SENT and FAILED both reached the relay and both can generate a
       // complaint or a bounce; SKIPPED never left the process, so it costs the
       // sending domain nothing and is not counted. QUEUED (#2951) is on its way
       // to the relay, so it is counted from the moment it is queued.
-      where: { sentAt: { gte: since }, status: { in: ['SENT', 'FAILED', 'QUEUED'] }, user: { orgId } },
+      where: { sentAt: { gte: since, ...(until ? { lt: until } : {}) }, status: { in: ['SENT', 'FAILED', 'QUEUED'] }, user: { orgId } },
     }),
 };
 
@@ -132,6 +132,18 @@ export async function broadcastRecipientsUsed(orgId: string, now: Date = new Dat
   const { start } = broadcastMonth(now);
   const counts = await Promise.all(
     BROADCAST_EMAIL_CATEGORIES.map((category) => USED_THIS_MONTH[category](orgId, start)),
+  );
+  return counts.reduce((sum, n) => sum + n, 0);
+}
+
+/**
+ * Recipients in a closed or open UTC window — the nightly usage rollup's
+ * question (#1763, BROADCAST_RECIPIENTS), counted by the same per-category
+ * rules as the quota, so the usage tab and the gate cannot disagree.
+ */
+export async function broadcastRecipientsInRange(orgId: string, range: { gte: Date; lt: Date }): Promise<number> {
+  const counts = await Promise.all(
+    BROADCAST_EMAIL_CATEGORIES.map((category) => USED_THIS_MONTH[category](orgId, range.gte, range.lt)),
   );
   return counts.reduce((sum, n) => sum + n, 0);
 }
