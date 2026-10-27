@@ -13,6 +13,7 @@ import { runAuditDrains } from '@/lib/auditDrain';
 import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
 import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
+import { runEventDelivery } from '@/lib/events/emit';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -64,6 +65,15 @@ export function registerAllJobs(): void {
   registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {
     timeoutMs: 10 * 60 * 1000,
   });
+
+  // One subscriber for one domain event (#1693). The enqueue is keyed
+  // `<eventId>:<subscriber>`, so a retried emit makes no second row; a rerun of
+  // the row itself is the subscriber's to tolerate — each one says how in its
+  // file under src/lib/events/subscribers/.
+  registerJob('event.deliver', async (payload) => {
+    const outcome = await runEventDelivery(payload);
+    return { [outcome]: 1 };
+  }, { timeoutMs: 60_000 });
 
   // Each feed runs under its own claim (one conditional UPDATE), and a feed
   // whose lastRunAt the first run already moved is no longer due — so a

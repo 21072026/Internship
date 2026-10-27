@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Sign-out on a dev host with a port lands back on that port (#3174):** `resolveRedirectTarget()`, `requestOrigin()` and `servedOrigin()` (`src/lib/servedHosts.ts`) now keep the configured origin's own port on every served host, so signing out at `http://marketing.localhost:3000` returns to `http://marketing.localhost:3000/auth/signin` instead of the port-less, unreachable `http://marketing.localhost/auth/signin`. Any other port is still dropped (or refused, for `servedOrigin`), the exact-hostname allowlist is unchanged, and a deployment whose configured origin has no port (prod, preview, topic envs) behaves exactly as before."
+}

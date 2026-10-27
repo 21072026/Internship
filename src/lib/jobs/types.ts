@@ -24,10 +24,11 @@
 /// failed manual re-run look identical on the row without it, and the
 /// operations console (#1607) needs to tell them apart. `'boot'` is a run that
 /// fired because the process started, which is the one class of run that can
-/// arrive in a burst after a deploy.
-export type JobTrigger = 'schedule' | 'manual' | 'boot';
+/// arrive in a burst after a deploy. `'event'` is a delivery `emit()` enqueued
+/// for a domain event (#1693).
+export type JobTrigger = 'schedule' | 'manual' | 'boot' | 'event';
 
-export const JOB_TRIGGERS: readonly JobTrigger[] = ['schedule', 'manual', 'boot'] as const;
+export const JOB_TRIGGERS: readonly JobTrigger[] = ['schedule', 'manual', 'boot', 'event'] as const;
 
 export function isJobTrigger(value: unknown): value is JobTrigger {
   return typeof value === 'string' && (JOB_TRIGGERS as readonly string[]).includes(value);
@@ -137,6 +138,10 @@ export interface JobPayloadMap {
   'surveys.campaigns': ScopedPayload & { batch?: number };
   'evaluations.reminders': ScopedPayload;
   'programJourney.run': ScopedPayload;
+  /// One subscriber for one recorded domain event (#1693, src/lib/events/emit.ts).
+  /// Names only — the event is read from its `DomainEvent` row and the handler
+  /// is resolved by `subscriber` name when the job runs, never serialised.
+  'event.deliver': { eventId: string; subscriber: string };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -187,6 +192,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'surveys.campaigns',
   'evaluations.reminders',
   'programJourney.run',
+  'event.deliver',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

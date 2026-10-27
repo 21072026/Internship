@@ -8,9 +8,10 @@ import { notify } from '@/lib/notify';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
@@ -32,14 +33,20 @@ async function mentorApplyState(mentorId: string) {
   // is: a sales rep's id on interncrm.com would file a mentee request into an
   // org without mentorship and notify the rep about it. Such a link is unknown.
   if (await requireCapability(mentor.orgId, 'mentorship')) return null;
-  const [active, pending] = await Promise.all([
+  const [active, pending, selfSelected] = await Promise.all([
     prisma.mentorshipRelation.count({ where: { mentorId: mentor.id, status: 'ACTIVE' } }),
     prisma.mentorshipRequest.count({ where: { preferredMentorId: mentor.id, status: 'PENDING' } }),
+    selfSelectedCount(mentor.id),
   ]);
+  // An applicant picking this mentor by link is a self-selection (#1808): the
+  // mentor's selfMatchLimit closes the link even while capacity has room.
   const availability = getMentorAvailability({
     mentorCapacity: mentor.mentorCapacity,
     activeMenteeCount: active + pending,
     acceptingMentees: mentor.acceptingMentees,
+    selfMatchLimit: mentor.selfMatchLimit,
+    selfSelectedCount: selfSelected,
+    context: 'self_select',
   });
   return { mentor, accepting: availability.status === 'available', reason: availability.status };
 }
@@ -87,7 +94,7 @@ export async function POST(request: Request) {
   // applications with a clear reason — no silent failure (#679 lesson).
   if (!state.accepting) {
     return NextResponse.json(
-      { error: 'This mentor is not taking new applications right now', code: state.reason === 'at_capacity' ? 'mentor_full' : 'mentor_not_accepting' },
+      { error: 'This mentor is not taking new applications right now', code: state.reason === 'at_capacity' || state.reason === 'self_match_full' ? 'mentor_full' : 'mentor_not_accepting' },
       { status: 409 }
     );
   }
@@ -143,7 +150,7 @@ export async function POST(request: Request) {
     data: { menteeId: mentee.id, preferredMentorId: mentor.id },
   });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/applications');
-  await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email }, mentor.orgId);
+  await emit('application.created', { mentorId: mentor.id, menteeName: fullName, email }, { orgId: mentor.orgId ?? null, actor: null });
 
   // Duplicate post-check (#841): fire-and-forget — the application itself is
   // already accepted, admins just get a heads-up to review /admin/duplicates.

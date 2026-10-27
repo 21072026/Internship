@@ -1,5 +1,5 @@
 import { notifyIfAllowed } from '@/lib/notify';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { PIPELINE_STATUSES } from '@/lib/pipeline';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { outcomeForStage } from '@/lib/outcomeComms';
@@ -93,12 +93,17 @@ export async function emitStageChange(opts: {
   await resolveBreaches({ relationId: opts.relationId });
   if (!opts.deadlineSetByCaller) {
     try {
-      const update = await stageDeadlineUpdate(opts.orgId, opts.to);
+      // The relation's own cohort and mentor pick the override that applies (#1640).
+      const scope = await prisma.mentorshipRelation.findUnique({
+        where: { id: opts.relationId },
+        select: { cohortId: true, mentorId: true },
+      });
+      const update = await stageDeadlineUpdate({ orgId: opts.orgId, cohortId: scope?.cohortId, mentorId: scope?.mentorId }, opts.to);
       if (update) await prisma.mentorshipRelation.update({ where: { id: opts.relationId }, data: update });
     } catch (e) {
       console.error('Stage SLA deadline update failed:', e);
     }
   }
 
-  await dispatchWebhook('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to }, opts.orgId);
+  await emit('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to }, { orgId: opts.orgId ?? null });
 }

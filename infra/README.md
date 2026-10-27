@@ -789,28 +789,39 @@ Both are wired into `infra/deploy-prod.sh` (which is also what deploys preview
 and the topic envs — only `CONTAINER` differs), so there is nothing to call by
 hand on a normal deploy.
 
-### Daily backup (cron)
+### Daily backup (systemd timer)
 
 The deploy-time dump only covers deploys. Everything else — a bad bulk delete, a
-disk failure — needs a scheduled one. On the server:
+disk failure — needs a scheduled one. On the Docker host it is the
+`internship-backup.timer` that `infra/server/bootstrap.sh` (`step_backups`)
+installs: daily at **02:40 UTC** (+ up to 5 min jitter, `Persistent=true`),
+running **`/opt/internship-crm/bin/backup-db.sh --env prod`** as root with
+`KEEP_DAYS=14` and the host-side `DATABASE_URL` from
+`/etc/internship-crm-backup.env`. It covers **prod only**; preview is dumped
+only by its deploy hook (see the freshness check below).
+
+`/opt/internship-crm/bin/backup-db.sh` is a **copy**, fetched from `main` when
+bootstrap last ran. A change to `infra/backup-db.sh` does not reach the timer
+until it is fetched again:
 
 ```bash
-sudo install -m 755 infra/backup-db.sh /usr/local/bin/internship-backup-db
-sudo crontab -e
+sudo curl -fsSL -o /opt/internship-crm/bin/backup-db.sh \
+  https://raw.githubusercontent.com/21072026/Internship/main/infra/backup-db.sh
+sudo chmod 0755 /opt/internship-crm/bin/backup-db.sh
+systemctl list-timers internship-backup.timer   # next run
 ```
 
-```cron
-# 03:15 UTC daily, production
-15 3 * * * set -a; . /etc/internship-crm/prod.env; set +a; /usr/local/bin/internship-backup-db --env prod >> /var/log/internship-backup.log 2>&1
-```
-
-The cron runs as root, the deploy hook and the freshness check as the runner
+The timer runs as root, the deploy hook and the freshness check as the runner
 user. So a dump written as root is handed to the **owner of the backup
 directory** (`chown --reference`, #2989) — otherwise it stays root-owned `0600`
 and the check reports the newest backup as unreadable every morning after the
-cron ran. `/usr/local/bin/internship-backup-db` is a *copy*: re-run the
-`install` line above after a change to `infra/backup-db.sh`, or the cron keeps
-running the old one.
+timer ran. A copy fetched before #2989 does not do that (#3166): a prod dump
+stamped ~02:4x that is `root 600` is the signature.
+
+(The older recipe — `install` to `/usr/local/bin/internship-backup-db` plus a
+root crontab line at 03:15 — is the Plesk-era setup. If a box has **both**, it
+takes two dumps a day and either copy can be the stale one; keep the timer and
+drop the cron line.)
 
 Dumps land in `/var/backups/internship-crm` (override with `BACKUP_DIR`), are
 kept for `KEEP_DAYS` (default 7) and are written `0600` in a `0700` directory —

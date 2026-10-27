@@ -70,6 +70,27 @@ export function configuredOrigin(): string {
   }
 }
 
+/**
+ * The port a served URL may carry (#3174): ONLY the configured origin's own
+ * port, whatever the host. One server listens there, so on a dev setup
+ * (NEXTAUTH_URL=http://localhost:3000, MARKETING_HOSTS=marketing.localhost)
+ * `marketing.localhost:3000` is the same process as `localhost:3000` — dropping
+ * the port sent the browser to :80, where nothing answers. Any other port is
+ * never trusted, and a deployment whose configured origin has no port (prod,
+ * preview, topic envs: https on 443) keeps none, exactly as before. The host
+ * check is unchanged; this only decides which port survives it.
+ */
+function keptPort(received: string | null | undefined): string {
+  const cfgPort = new URL(configuredOrigin()).port;
+  return cfgPort && received === cfgPort ? `:${cfgPort}` : '';
+}
+
+/** The port of a Host / X-Forwarded-Host header value (first proxy entry), or null. */
+function headerPort(hostHeader: string | null | undefined): string | null {
+  if (!hostHeader) return null;
+  return /:(\d+)$/.exec(hostHeader.split(',')[0].trim())?.[1] ?? null;
+}
+
 /** Every hostname this deployment serves. Exact-match set; nothing else. */
 export function servedHosts(): Set<string> {
   const out = marketingHosts();
@@ -112,19 +133,21 @@ export function isServedHost(hostHeader: string | null | undefined): boolean {
  * if that host is one we serve, else the configured origin. Protocol never
  * downgrades (an https deployment answers https whatever the header says) and a
  * received port is never trusted — only the configured origin's own port (the
- * dev server's :3000) is re-attached, and only for that host.
+ * dev server's :3000) survives: re-attached for the configured host, and kept
+ * on another served host only when the request already carried it (#3174).
  */
 export function requestOrigin(
   get: (name: string) => string | null | undefined,
   extraHosts: ReadonlySet<string> = NO_EXTRA_HOSTS,
 ): string {
   const configured = configuredOrigin();
-  const host = hostnameOf(get('x-forwarded-host') ?? get('host'));
+  const hostHeader = get('x-forwarded-host') ?? get('host');
+  const host = hostnameOf(hostHeader);
   if (!host || !(servedHosts().has(host) || extraHosts.has(host))) return configured;
   const cfg = new URL(configured);
   const forwardedProto = (get('x-forwarded-proto') ?? '').split(',')[0].trim().toLowerCase();
   const proto = cfg.protocol === 'https:' || forwardedProto === 'https' ? 'https' : 'http';
-  const port = cfg.hostname === host && cfg.port ? `:${cfg.port}` : '';
+  const port = cfg.hostname === host && cfg.port ? `:${cfg.port}` : keptPort(headerPort(hostHeader));
   return `${proto}://${host}${port}`;
 }
 
@@ -142,8 +165,8 @@ export function requestOrigin(
  *     `interncrm.com.evil.example`, `https://interncrm.com@evil.example` and
  *     `marketing.example.test,evil.example` all fall back to baseUrl;
  *   - the accepted url is re-assembled from its parts, which drops userinfo and
- *     any received port (prod hosts have none; a same-origin dev url is returned
- *     verbatim by the origin check above it).
+ *     any received port other than the configured origin's own (prod hosts
+ *     have none; on dev, marketing.localhost:3000 keeps its :3000, #3174).
  */
 export function resolveRedirectTarget(url: string, baseUrl: string, extraHosts: ReadonlySet<string> = NO_EXTRA_HOSTS): string {
   if (url.startsWith('/')) return `${baseUrl}${url}`;
@@ -159,7 +182,7 @@ export function resolveRedirectTarget(url: string, baseUrl: string, extraHosts: 
   if (target.origin === base.origin) return url;
   const targetHost = target.hostname.toLowerCase();
   if (!servedHosts().has(targetHost) && !extraHosts.has(targetHost)) return baseUrl;
-  return `${target.protocol}//${target.hostname}${target.pathname}${target.search}${target.hash}`;
+  return `${target.protocol}//${target.hostname}${keptPort(target.port)}${target.pathname}${target.search}${target.hash}`;
 }
 
 // ── Links that cannot follow a request: e-mail (#2495) ──────────────────────
@@ -215,7 +238,8 @@ export function appLinkOrigin(publicHost: string | null | undefined): string {
 // parts. It must be a bare ORIGIN — a path, a query, a fragment or userinfo is
 // refused rather than stripped, because nothing we mint carries one, so a value
 // that does was not minted by us. The port follows requestOrigin(): only the
-// configured origin's own port, and only on its own host.
+// configured origin's own port — re-attached on its own host, kept on another
+// served host that already carried it (#3174), refused otherwise.
 //
 // Returns null, never a fallback, so each caller decides what "no usable
 // origin" means — for both flows today: the configured origin, as before.
@@ -236,7 +260,7 @@ export function servedOrigin(value: string | null | undefined, extraHosts: Reado
   const host = target.hostname.toLowerCase();
   if (!servedHosts().has(host) && !extraHosts.has(host)) return null;
   const sameHost = cfg.hostname.toLowerCase() === host;
-  if (target.port && !(sameHost && target.port === cfg.port)) return null;
-  const port = sameHost && cfg.port ? `:${cfg.port}` : '';
+  if (target.port && target.port !== cfg.port) return null;
+  const port = sameHost && cfg.port ? `:${cfg.port}` : keptPort(target.port);
   return `${target.protocol}//${host}${port}`;
 }

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Requisition detail for admins: matching candidates + shortlist (#1401):** `/admin/requisitions/[id]` lists who is on the role (the applicant board's rows) and who fits it. `GET /api/requisitions/[id]/matches` (`user.read`) ranks the org's consenting talent pool with the one match rule in `src/lib/requisitionMatchRule.ts` — canonical required skills through `requisitionSkillMatch()` (adjacency-aware), title vs. target position when the role has no skills — and names the skills that matched; the premium match-alert cron now reads the same module (`CONSENTING_POOL_WHERE`, `titleMatchesTarget`). `POST /api/requisitions/[id]/shortlist` (`company.write`) creates the Application at SHORTLISTED with `source: 'ADMIN'` or moves an earlier one through `moveApplicationStage()`, refuses a candidate without talent-pool consent (409 `no_consent`) and logs `application.shortlist.add`; removal is the ordinary stage move to REJECTED with a reason.",
+  "notes": {
+    "en": ["Open a requisition to see which candidates fit it and why, and add them to the shortlist yourself."],
+    "tr": ["Bir iş talebini açın: hangi adayların uyduğunu ve nedenini görün, onları kısa listeye kendiniz ekleyin."],
+    "de": ["Öffnen Sie eine Stellenanforderung, um zu sehen, welche Kandidat:innen passen und warum, und setzen Sie sie selbst auf die Shortlist."]
+  }
+}

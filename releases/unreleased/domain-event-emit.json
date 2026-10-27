@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**`emit()` and the subscriber registry (#1693):** `src/lib/events/emit.ts` validates a domain event against the catalogue (throws outside production, log-and-drop in production), writes one `DomainEvent` row and enqueues one `event.deliver` job per interested subscriber (payload `{ eventId, subscriber }`, idempotency key `<eventId>:<subscriber>`, new job trigger `'event'`). The worker resolves the subscriber by name, re-parses the payload through its catalogue entry and runs it. First subscriber: `webhook`, which forwards to `dispatchWebhook` with the producer's exact arguments. No producer uses it yet (#1697 moves them). docs/domain-events.md § emit()."
+}

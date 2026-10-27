@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
-import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { getMentorAvailability, type MentorAvailabilityInput } from '@/lib/mentorAvailability';
+import { selfSelectedCounts } from '@/lib/selfMatchSeats';
 import { applyScanCap, matchesTextFilters, pageSlice, toStringArray } from '@/lib/mentorDirectory';
 import { skillTermWhere } from '@/lib/skillFilter';
 import type { Prisma } from '@prisma/client';
@@ -52,6 +53,10 @@ export async function GET(request: Request) {
     const mentorId = (searchParams.get('mentorId') || '').trim().slice(0, 64);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '12', 10) || 12));
+    // A mentee browsing here is choosing for themselves (#1808), so a mentor at
+    // their self-match limit reads `self_match_full` and drops out of
+    // `accepting=1`. Mentor/admin viewers keep the plain capacity answer.
+    const selfSelect = session.user.role === 'MENTEE';
 
     // Visibility = publicProfile opt-in AND an active MENTOR_DIRECTORY_VISIBILITY
     // consent (#937, GDPR basis for mentee-facing exposure). Revoking the
@@ -91,6 +96,7 @@ export async function GET(request: Request) {
       interests: true,
       mentorCapacity: true,
       acceptingMentees: true,
+      selfMatchLimit: true,
     } as const;
 
     // `fullName` is neither unique nor indexed, so ordering by it alone leaves
@@ -120,8 +126,27 @@ export async function GET(request: Request) {
       return new Map(counts.map((c) => [c.mentorId, c._count._all]));
     };
 
+    // The self-select seats are read only when they can change the answer: a
+    // mentee viewer, and only for mentors who set a limit at all.
+    const seatCounts = async (rows: { id: string; selfMatchLimit: number | null }[]) =>
+      selfSelect ? selfSelectedCounts(rows.filter((r) => r.selfMatchLimit != null).map((r) => r.id)) : new Map<string, number>();
+
+    const availabilityOf = (
+      r: { id: string; mentorCapacity: number | null; acceptingMentees: boolean | null; selfMatchLimit: number | null },
+      counts: Map<string, number>,
+      seats: Map<string, number>
+    ) => {
+      const input: MentorAvailabilityInput = {
+        mentorCapacity: r.mentorCapacity,
+        activeMenteeCount: counts.get(r.id) ?? 0,
+        acceptingMentees: r.acceptingMentees,
+        ...(selfSelect ? { selfMatchLimit: r.selfMatchLimit, selfSelectedCount: seats.get(r.id) ?? 0, context: 'self_select' as const } : {}),
+      };
+      return getMentorAvailability(input).status;
+    };
+
     const toCards = async (rows: CardRow[]) => {
-      const counts = await activeCounts(rows.map((r) => r.id));
+      const [counts, seats] = await Promise.all([activeCounts(rows.map((r) => r.id)), seatCounts(rows)]);
       return rows.map((r) => ({
         id: r.id,
         fullName: r.fullName,
@@ -135,11 +160,7 @@ export async function GET(request: Request) {
         interests: r.interests,
         mentorCapacity: r.mentorCapacity,
         acceptingMentees: r.acceptingMentees,
-        availabilityStatus: getMentorAvailability({
-          mentorCapacity: r.mentorCapacity,
-          activeMenteeCount: counts.get(r.id) ?? 0,
-          acceptingMentees: r.acceptingMentees,
-        }).status,
+        availabilityStatus: availabilityOf(r, counts, seats),
       }));
     };
 
@@ -180,6 +201,7 @@ export async function GET(request: Request) {
         interests: true,
         mentorCapacity: true,
         acceptingMentees: true,
+        selfMatchLimit: true,
       },
       orderBy,
       take: JS_FILTER_SCAN_CAP + 1, // limit+1 probe: the extra row is what makes `partial` exact
@@ -189,15 +211,8 @@ export async function GET(request: Request) {
     // The skill is already part of `where`; only the language is matched here.
     let matches = scanRows.filter((r) => matchesTextFilters(r, '', language));
     if (acceptingOnly) {
-      const counts = await activeCounts(matches.map((r) => r.id));
-      matches = matches.filter(
-        (r) =>
-          getMentorAvailability({
-            mentorCapacity: r.mentorCapacity,
-            activeMenteeCount: counts.get(r.id) ?? 0,
-            acceptingMentees: r.acceptingMentees,
-          }).status === 'available'
-      );
+      const [counts, seats] = await Promise.all([activeCounts(matches.map((r) => r.id)), seatCounts(matches)]);
+      matches = matches.filter((r) => availabilityOf(r, counts, seats) === 'available');
     }
 
     // `total` describes the set that was actually filtered — never a truncated

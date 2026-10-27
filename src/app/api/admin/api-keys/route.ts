@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
+import { redactedDiff, API_KEY_DIFF_SPEC } from '@/lib/events/diff';
 import { z } from 'zod';
 import { generateApiKey } from '@/lib/apiKey';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -154,6 +156,18 @@ export async function POST(request: Request) {
     detail: `${key.name} [${serializeScopes(scopes)}]`,
     request,
   });
+  await emit(
+    'apikey.created',
+    {
+      apiKeyId: key.id,
+      changes: redactedDiff(
+        null,
+        { name: key.name, scopes: key.scopes, expiresAt: key.expiresAt, quotaPeriod: key.quotaPeriod, quotaLimit: key.quotaLimit },
+        API_KEY_DIFF_SPEC,
+      ),
+    },
+    { orgId: key.orgId, actor: { id: session.user.id, type: 'user' } },
+  );
   // The raw key is shown exactly once.
   return NextResponse.json(
     {
@@ -180,6 +194,8 @@ export async function DELETE(request: Request) {
     data: { revokedAt: new Date() },
   });
   if (count) {
+    const revoked = await prisma.apiKey.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: { orgId: true } });
+    await emit('apikey.revoked', { apiKeyId: id }, { orgId: revoked?.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
     await logActivity({
       action: 'apikey.revoked',
       level: 'warning',

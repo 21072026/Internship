@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Erasure reaches the free text added since #2106 (#2098):** `anonymizeUser()`/`hardDeleteUser()` now also scrub `SurveyAnswer.text` (a hard delete used to leave it behind — `respondentId` is SetNull), `MeetingFeedback.note`, `Application.coverNote`/`dispositionNote`, `ApplicationEvent.note`, `CandidateOutreach.firstMessage`, `MatchFeedback.reasonNote`, `Placement.note`, `SessionAgendaItem.text`, `MentorshipRequest.rematchNote` and `InterviewRequest.cancelReason`; forget the person's **mentor application** (keyed by address only, scoped to their own tenant — another world's application under the same address stays); and on anonymise delete their own message templates and `SignInDevice` rows, blank the remember-me rows' user-agent/IP and **revoke their Google Calendar grant** (both paths). New CI guard `npm run check:erasure-coverage`: every `@db.Text` column needs an erasure decision — erased, or kept with its reason. `sanitize-db` covers the same columns.",
+  "notes": {
+    "en": ["Deleting or anonymising an account now also removes survey answers, application notes, meeting feedback, a mentor application and a connected Google Calendar."],
+    "tr": ["Bir hesabı silmek veya anonimleştirmek artık anket cevaplarını, başvuru notlarını, toplantı geri bildirimlerini, mentör başvurusunu ve bağlı Google Takvim'i de kaldırıyor."],
+    "de": ["Das Löschen oder Anonymisieren eines Kontos entfernt jetzt auch Umfrageantworten, Bewerbungsnotizen, Meeting-Feedback, eine Mentoren-Bewerbung und einen verbundenen Google-Kalender."]
+  }
+}

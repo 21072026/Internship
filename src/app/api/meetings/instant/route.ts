@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -138,12 +138,12 @@ export async function POST(request: Request) {
       await inviteAll(ctx.invitees, [row], title, meetLink, session.user.name ?? null, session.user.orgId);
     }
 
-    await dispatchWebhook('meeting.scheduled', {
+    await emit('meeting.scheduled', {
       title,
       scheduledAt: null,
       count: ctx.invitees.length,
       instant: true,
-    }, session.user.orgId);
+    }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
 
     return NextResponse.json({ meetingId, meetLink, invited: ctx.invitees.length }, { status: 201 });
   });

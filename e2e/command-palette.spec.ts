@@ -116,3 +116,41 @@ test('? opens the shortcut sheet with the platform modifier label', async ({ pag
     await cleanupByEmail(email);
   }
 });
+
+// WCAG 2.1.4 (#2864): the one single-character binding can be turned off, the
+// choice survives a reload, and the sheet stays reachable from the palette.
+test('the ? shortcut can be turned off from the sheet', async ({ page }) => {
+  const email = uniqueEmail('palette-singlekey');
+  await seedUser(email, 'MentorPass123', 'MENTOR', 'Palette Single Key');
+
+  try {
+    await signIn(page, email, 'MentorPass123', '/mentor');
+
+    await page.keyboard.press('?');
+    const sheet = page.getByTestId('shortcuts-sheet');
+    await expect(sheet).toBeVisible();
+    const toggle = page.getByTestId('shortcuts-single-key-toggle');
+    await expect(toggle).toBeChecked();
+    await toggle.uncheck();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+
+    await page.reload();
+    await shortcutsReady(page);
+    await page.keyboard.press('?');
+    await expect(sheet).toHaveCount(0);
+
+    // Still reachable without the key, and the switch turns it back on.
+    await page.keyboard.press('Control+k');
+    await page.getByTestId('command-palette-shortcuts').click();
+    await expect(sheet).toBeVisible();
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+  } finally {
+    await cleanupByEmail(email);
+  }
+});

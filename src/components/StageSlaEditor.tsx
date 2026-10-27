@@ -26,6 +26,20 @@ interface StageRow {
   // The ladder's second rung (#1722): days after the breach before the org's
   // administrators are told. null = only the mentor is reminded.
   escalateAfterDays: number | null;
+  // Override scopes (#1640): what applies here, and what would without this
+  // scope's own row. Server-resolved — the precedence lives in stageSlaRule.ts.
+  effective?: ResolvedSla | null;
+  inherited?: ResolvedSla | null;
+}
+
+interface ResolvedSla {
+  days: number;
+  source: 'mentorCohort' | 'mentor' | 'cohort' | 'org';
+}
+
+interface Option {
+  id: string;
+  name: string;
 }
 
 export function StageSlaEditor() {
@@ -37,15 +51,27 @@ export function StageSlaEditor() {
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The scope being edited (#1640): both empty = the organisation's own rows.
+  const [cohortId, setCohortId] = useState('');
+  const [mentorId, setMentorId] = useState('');
+  const [cohorts, setCohorts] = useState<Option[]>([]);
+  const [mentors, setMentors] = useState<Option[]>([]);
+  const isOverride = cohortId !== '' || mentorId !== '';
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/admin/stage-sla');
+    const qs = new URLSearchParams();
+    if (cohortId) qs.set('cohortId', cohortId);
+    if (mentorId) qs.set('mentorId', mentorId);
+    const query = qs.toString();
+    const res = await fetch(`/api/admin/stage-sla${query ? `?${query}` : ''}`);
     if (res.ok) {
       const body = await res.json();
       setRows(body.stages ?? []);
       setDefaultWip(body.defaultWipLimit ?? null);
+      setCohorts(body.cohorts ?? []);
+      setMentors(body.mentors ?? []);
     }
-  }, []);
+  }, [cohortId, mentorId]);
   useEffect(() => {
     load();
   }, [load]);
@@ -59,6 +85,8 @@ export function StageSlaEditor() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          cohortId: cohortId || null,
+          mentorId: mentorId || null,
           slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit, escalateAfterDays: r.escalateAfterDays })),
         }),
       });
@@ -73,6 +101,14 @@ export function StageSlaEditor() {
     }
   };
 
+  const sourceLabel = (source: ResolvedSla['source']) =>
+    ({
+      org: t.stageSla.sourceOrg,
+      cohort: t.stageSla.sourceCohort,
+      mentor: t.stageSla.sourceMentor,
+      mentorCohort: t.stageSla.sourceMentorCohort,
+    })[source];
+
   if (rows.length === 0) return null;
 
   return (
@@ -84,6 +120,44 @@ export function StageSlaEditor() {
         </div>
       </CardHeader>
       <p className="text-sm text-gray-500 mb-4">{t.stageSla.subtitle}</p>
+      {(cohorts.length > 0 || mentors.length > 0) && (
+        <div className="mb-4 flex flex-wrap items-end gap-3 text-sm" data-testid="stage-sla-scope">
+          <span className="basis-full text-xs font-medium text-gray-600 dark:text-gray-400">{t.stageSla.scopeTitle}</span>
+          {cohorts.length > 0 && (
+            <label className="flex flex-col gap-1 text-xs text-gray-500">
+              {t.stageSla.scopeCohort}
+              <select
+                value={cohortId}
+                onChange={(e) => setCohortId(e.target.value)}
+                data-testid="stage-sla-cohort"
+                className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              >
+                <option value="">{t.stageSla.allCohorts}</option>
+                {cohorts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {mentors.length > 0 && (
+            <label className="flex flex-col gap-1 text-xs text-gray-500">
+              {t.stageSla.scopeMentor}
+              <select
+                value={mentorId}
+                onChange={(e) => setMentorId(e.target.value)}
+                data-testid="stage-sla-mentor"
+                className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              >
+                <option value="">{t.stageSla.allMentors}</option>
+                {mentors.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {isOverride && <p className="basis-full text-xs text-gray-500">{t.stageSla.overrideHint}</p>}
+        </div>
+      )}
       {flash && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{flash}</div>}
       {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
 
@@ -108,13 +182,27 @@ export function StageSlaEditor() {
             <span className="basis-full sm:basis-auto flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
               {r.label}
               {r.isOffPath && <span className="ml-2 text-xs text-gray-400">({t.stageSla.offPath})</span>}
+              {isOverride && (r.effective || r.inherited) && (
+                <span className="block text-xs text-gray-500" data-testid={`sla-effective-${r.key}`}>
+                  {[
+                    r.days != null && r.effective
+                      ? t.stageSla.effective.replace('{scope}', sourceLabel(r.effective.source)).replace('{n}', String(r.effective.days))
+                      : null,
+                    r.inherited
+                      ? t.stageSla.inheritedFrom.replace('{source}', sourceLabel(r.inherited.source)).replace('{n}', String(r.inherited.days))
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              )}
             </span>
             <input
               type="number"
               min={0}
               max={365}
               value={r.days ?? ''}
-              placeholder={t.stageSla.noRule}
+              placeholder={isOverride && r.inherited ? t.stageSla.inherits.replace('{n}', String(r.inherited.days)) : t.stageSla.noRule}
               aria-label={`${r.label} — ${t.stageSla.days}`}
               data-testid={`sla-${r.key}`}
               onChange={(e) => {
@@ -131,7 +219,8 @@ export function StageSlaEditor() {
               value={r.escalateAfterDays ?? ''}
               placeholder={t.stageSla.noRule}
               /* Escalation hangs off the service level: no days, no breach. */
-              disabled={r.days == null || r.days <= 0}
+              /* An override carries the service level only (#1640). */
+              disabled={isOverride || r.days == null || r.days <= 0}
               aria-label={`${r.label} — ${t.stageSla.escalateAfter}`}
               data-testid={`escalate-${r.key}`}
               onChange={(e) => {
@@ -155,12 +244,13 @@ export function StageSlaEditor() {
               }
               aria-label={`${r.label} — ${t.stageSla.wipLimit}`}
               data-testid={`wip-${r.key}`}
+              disabled={isOverride}
               onChange={(e) => {
                 const v = e.target.value.trim();
                 const wipLimit = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, wipLimit } : row)));
               }}
-              className="w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="w-20 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm disabled:opacity-50"
             />
           </div>
         ))}
