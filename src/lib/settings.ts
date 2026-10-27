@@ -164,6 +164,11 @@ export const SETTING_DEFAULTS = {
   // Company enquiries (#2559): an unconverted one is deleted after this many
   // days, a converted one keeps its row and loses its personal columns.
   companyInquiryRetentionDays: '730',
+  // The AuditLog window (#1585), 24 months. Raised to a 365-day floor on read
+  // (auditRetentionRule.ts), and rows a tenant's audit drain (#2012) has not
+  // shipped yet are kept however old — so no value here can open a gap in a
+  // SIEM that was down. The sweep is the only deleter of audit rows.
+  auditLogRetentionDays: '730',
   // Read access log (#2433): a repeat of the same read (same reader, record,
   // IP) inside this many minutes writes no second `*.view` ActivityLog row.
   // `0` = log every read; capped at a day; a blank or broken value falls back
@@ -413,6 +418,7 @@ export const SETTING_SCHEMA = {
   jobRetentionDays: { type: 'number', scopes: G },
   domainEventRetentionDays: { type: 'number', scopes: G },
   supportReportRetentionDays: { type: 'number', scopes: G },
+  auditLogRetentionDays: { type: 'number', scopes: G },
   companyInquiryRetentionDays: { type: 'number', scopes: O },
   viewLogWindowMinutes: { type: 'number', scopes: G },
   notificationRetentionDays: { type: 'number', scopes: O },

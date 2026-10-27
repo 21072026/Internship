@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Audit trail CSV export and retention (#1585):** `GET /api/admin/audit/export` behind the new-in-use `audit.export` permission (ORG_ADMIN; an OBSERVER keeps `audit.read` but gets 403) streams every row matching the viewer's filters — the filter builder is now shared in `src/lib/auditQuery.ts` — capped at 10 000 rows (`X-Export-Truncated` / `X-Export-Total`), formula cells neutralised, the export itself logged as `audit.exported`. An \"Export CSV\" button on `/admin/audit`. `pruneAuditLog()` joins #1678's retention registry as the `auditLog` entry: `auditLogRetentionDays` (global, default 730, raised to a 365-day floor), and a row a tenant's audit drain has not shipped yet is never pruned. No route deletes a single audit row.",
+  "notes": {
+    "en": ["Export the audit trail as CSV — every row matching your filters, not just the page on screen. Audit entries are now kept for two years by default."],
+    "tr": ["Denetim kaydını CSV olarak dışa aktarın — yalnızca ekrandaki sayfayı değil, filtrenize uyan tüm satırları. Denetim kayıtları artık varsayılan olarak iki yıl saklanıyor."],
+    "de": ["Exportieren Sie das Prüfprotokoll als CSV — alle Zeilen, die zu Ihren Filtern passen, nicht nur die angezeigte Seite. Prüfprotokolleinträge werden jetzt standardmäßig zwei Jahre aufbewahrt."]
+  }
+}

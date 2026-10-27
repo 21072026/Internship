@@ -72,6 +72,8 @@ const schema = z.object({
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   domainEventRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   companyInquiryRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  // The AuditLog window (#1585). The sweep raises it to a 365-day floor.
+  auditLogRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   // Repeat-read suppression window for the access log, in minutes (#2433).
   // Same reasoning as the retention windows above: writable, not on the form.
   // `0` logs every read; the rule clamps anything above a day to a day.

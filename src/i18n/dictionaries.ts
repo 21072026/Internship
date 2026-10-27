@@ -7626,6 +7626,8 @@ const en = {
     openActivity: 'Open in activity log',
     forbidden: 'You do not have permission to read the audit trail.',
     loadError: 'The audit trail could not be loaded.',
+    exportCsv: 'Export CSV',
+    exportHint: 'Every row matching the filters, not only this page (up to {n}).',
   },
   analytics: {
     aging: {
@@ -16943,6 +16945,8 @@ const tr: Dict = {
     openActivity: 'Aktivite kaydında aç',
     forbidden: 'Denetim kaydını okuma yetkiniz yok.',
     loadError: 'Denetim kaydı yüklenemedi.',
+    exportCsv: 'CSV olarak dışa aktar',
+    exportHint: 'Yalnızca bu sayfa değil, filtreye uyan tüm satırlar (en fazla {n}).',
   },
   analytics: {
     aging: {
@@ -26229,6 +26233,8 @@ const de: Dict = {
     openActivity: 'Im Aktivitätsprotokoll öffnen',
     forbidden: 'Sie haben keine Berechtigung, das Prüfprotokoll zu lesen.',
     loadError: 'Das Prüfprotokoll konnte nicht geladen werden.',
+    exportCsv: 'Als CSV exportieren',
+    exportHint: 'Alle Zeilen, die zu den Filtern passen, nicht nur diese Seite (bis zu {n}).',
   },
   analytics: {
     aging: {

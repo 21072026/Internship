@@ -17,6 +17,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { messageRetentionCutoff } from '@/lib/safeguarding';
 import { inquiryErasureData } from '@/lib/companyContactErasure';
 import { ERASED_EMAIL_DOMAIN } from '@/lib/menteeAccount';
+import { AUDIT_RETENTION_DEFAULT_DAYS, auditPrunableWhere, auditRetentionCutoff } from '@/lib/auditRetentionRule';
 import {
   ORPHAN_ANONYMIZE_PER_RUN,
   ORPHAN_APPLICANT_GRACE_DAYS,
@@ -804,6 +805,39 @@ async function pruneSupportReports(ctx: RetentionContext) {
   return { deleted: processed, capped };
 }
 
+/**
+ * The AuditLog window (#1585) — the ONLY code path that deletes an audit row.
+ *
+ * Two limits, both in src/lib/auditRetentionRule.ts: the window is raised to a
+ * one-year floor whatever the setting says, and in an org with an audit drain
+ * (#2012) a row the drain has not shipped yet is never touched, however old —
+ * an outage of the tenant's SIEM must produce a backlog, not a silent gap. The
+ * drain positions are read once per run; a drain that advances meanwhile only
+ * means this run took less than it could have.
+ *
+ * The count lands in the run's one `retention.pruned` ActivityLog row
+ * (runRetentionPrune), so the sweep of an audit trail is itself on the record.
+ */
+export async function pruneAuditLog(ctx: RetentionContext): Promise<RetentionOutcome> {
+  const cutoff = auditRetentionCutoff(ctx.now, ctx.retentionDays);
+  const drains = await prisma.auditDrain.findMany({ select: { orgId: true, cursorAt: true, cursorId: true } });
+  const where = auditPrunableWhere(cutoff, drains);
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.auditLog.findMany({ where, orderBy: { createdAt: 'asc' }, select: { id: true }, take })
+      ).map((r) => r.id),
+    // The window is re-stated in the DELETE: an id selected a moment ago is
+    // still out of window, but the guard costs nothing and makes this
+    // statement unable to remove a row younger than the cutoff on its own.
+    handleBatch: async (ids) =>
+      (await prisma.auditLog.deleteMany({ where: { id: { in: ids }, createdAt: { lt: cutoff } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 async function pruneRosterRowResults(ctx: RetentionContext) {
   // Row-level detail only: the RosterRun summary it hangs off is kept, so
   // "did the sync run that night and what did it change in total?" stays
@@ -1018,6 +1052,16 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'One row per person per roster-feed run, every night, so the table grows by the size of each tenant\'s roster daily, and every row names a person (their key, usually an e-mail address). Ninety days covers "why was this person changed last month?" with room to spare; the RosterRun summary row (counts, file hash, status) is never pruned, so the history of runs survives the detail — only its per-person `absentKeys` list is cleared on the same window.',
     run: pruneRosterRowResults,
+  },
+  {
+    key: 'auditLog',
+    // Resolved from the GLOBAL settings row, like activityLog: the sweep has no
+    // org bound and takes every tenant's rows in one pass.
+    settingKey: 'auditLogRetentionDays',
+    defaultDays: AUDIT_RETENTION_DEFAULT_DAYS,
+    reason:
+      'The privileged-action trail (impersonation, admin password resets, merges, offer and interview decisions) is evidence, and evidence is asked about across audit cycles: two years covers two annual reviews, and no setting may take it under one. A row a tenant\'s audit drain has not shipped yet is never pruned, so a SIEM outage leaves a backlog rather than a gap; nothing else in the product deletes an audit row.',
+    run: pruneAuditLog,
   },
 ];
 
