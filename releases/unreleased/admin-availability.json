@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Admin availability (#2005, 3/3):** `/admin/availability` (nav `availability`, `mentorship` capability, `gatePage`) — a mentor picker over the org's active mentors plus the shared `AvailabilityEditor` (extracted from `/mentor/availability`, which now mounts it too). With `mentorId` the editor reads `/api/availability?mentorId=` and `/api/availability/exceptions?mentorId=`, posts `mentorId` on slot/away creation, and `BookingRulesCard` reads/writes the mentor's rules — no new API; every endpoint already admitted an ADMIN for a mentor of their own org and 404s another org's. Shows the mentor's zone and a \"this mentor never set a time zone\" variant. New `adminAvailability` i18n namespace (EN/TR/DE, `LEAK_EXEMPT` with its reason). Pinned by `e2e/admin-availability.spec.ts` (cross-org boundary @smoke).",
+  "notes": {
+    "en": ["Admins can now see and fix any mentor's availability, away days and booking rules from Admin › Availability — without signing in as them."],
+    "tr": ["Yöneticiler artık herhangi bir mentorun müsaitliğini, izin günlerini ve randevu kurallarını Yönetim › Müsaitlik ekranından — onun hesabına girmeden — görüp düzeltebiliyor."],
+    "de": ["Admins können jetzt die Verfügbarkeit, Abwesenheiten und Buchungsregeln jedes Mentors unter Admin › Verfügbarkeit sehen und korrigieren – ohne sich als dieser anzumelden."]
+  }
+}
