@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
-import { isGlobalSettingKey, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { isGlobalSettingKey, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { revertSetting, writeSetting, type SettingWriteResult } from '@/lib/settingsWrite';
+import { requirePermission } from '@/lib/authz';
 import { resolveSettings } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
@@ -25,7 +27,33 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const orgId = await settingsOrgOf(session);
-  return withTenantScope(session, async () => NextResponse.json({ settings: await resolveSettings({ orgId }).then((r) => r.raw) }));
+  return withTenantScope(session, async () => {
+    const resolved = await resolveSettings({ orgId });
+    // `sources` drives the "set here / inherited" badge of each key (#1623).
+    return NextResponse.json({ settings: resolved.raw, sources: resolved.sources });
+  });
+}
+
+// The activity entry of one real change (#1623): the key as the target and the
+// redacted before → after as the detail — a `redact` key reads "[redacted]",
+// never its value. ActivityLog.detail is a VARCHAR, hence the clip.
+async function logSettingChange(
+  result: NonNullable<SettingWriteResult>,
+  session: { user: { id: string; email?: string | null } },
+  request: Request,
+  action = 'settings.update',
+) {
+  const show = (v: string | number | boolean | null) => (v === null ? '∅' : String(v));
+  const detail = `${result.scope}: ${show(result.change.from)} → ${show(result.change.to)}`;
+  await logActivity({
+    action,
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'Setting',
+    targetId: result.change.field,
+    detail: detail.length > 180 ? `${detail.slice(0, 179)}…` : detail,
+    request,
+  });
 }
 
 const schema = z.object({
@@ -204,8 +232,42 @@ export async function PUT(request: Request) {
   return withTenantScope(session, async () => {
     // Sequential on purpose: two writes for the same (org, key) must not race
     // the read-modify-write inside setSetting into a duplicate row.
-    for (const [key, value] of entries) await setSetting(key, value, isGlobalSettingKey(key) ? null : orgId);
-    await logActivity({ action: 'settings.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
-    return NextResponse.json({ settings: await resolveSettings({ orgId }).then((r) => r.raw) });
+    // An unchanged key writes nothing — no Setting row, no history row, no log.
+    const actor = { id: session.user.id, email: session.user.email ?? null };
+    for (const [key, value] of entries) {
+      const result = await writeSetting(key, value, isGlobalSettingKey(key) ? null : orgId, { actor });
+      if (result) await logSettingChange(result, session, request);
+    }
+    const resolved = await resolveSettings({ orgId });
+    return NextResponse.json({ settings: resolved.raw, sources: resolved.sources });
+  });
+}
+
+// DELETE ?key= — revert one key to its inherited value (#1623): the caller's
+// org row is DELETED, never overwritten with the parent's value, so a later
+// change at the global layer flows down again. Authorized like every other
+// org-configuration write (`org.settings.write`, src/lib/authzRule.ts); a
+// deployment-global key reverts the global row to the code default and is a
+// super admin's act, as in PUT. The org is the session's, never the request's.
+export async function DELETE(request: Request) {
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
+  const key = new URL(request.url).searchParams.get('key') ?? '';
+  if (!(key in SETTING_DEFAULTS)) return NextResponse.json({ error: 'Unknown setting' }, { status: 400 });
+  const settingKey = key as SettingKey;
+  const global = isGlobalSettingKey(settingKey);
+  if (global && !(await isSuperAdmin(session))) {
+    await logCrossTenantDenial(session, `DELETE /api/admin/settings (${settingKey})`, null);
+    return NextResponse.json({ error: 'Forbidden', fields: [settingKey] }, { status: 403 });
+  }
+  const orgId = await settingsOrgOf(session);
+  return withTenantScope(session, async () => {
+    const result = await revertSetting(settingKey, global ? null : orgId, {
+      actor: { id: session.user.id, email: session.user.email ?? null },
+    });
+    if (result) await logSettingChange(result, session, request, 'settings.revert');
+    const resolved = await resolveSettings({ orgId });
+    return NextResponse.json({ reverted: Boolean(result), settings: resolved.raw, sources: resolved.sources });
   });
 }

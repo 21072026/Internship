@@ -119,6 +119,8 @@ const DECISIONS = new Map([
   // ── Kept, by decision (accountErasure.ts COVERAGE, docs/pii-access-lifecycle.md) ──
   ['AuditLog.detail', 'the audit trail is kept by decision (Art. 17(3)(b)/(e)); bounded by activityLogRetentionDays'],
   ['ActivityLog.userAgent', 'the audit trail is kept by decision (Art. 17(3)(b)/(e)); bounded by activityLogRetentionDays'],
+  ['SettingChange.oldValue', "an org's configuration history (#1623), not about a person: a key carrying personal data is flagged `redact` in SETTING_SCHEMA and stored as [redacted]; the actor is an id, read live"],
+  ['SettingChange.newValue', 'see SettingChange.oldValue'],
   ['EmailSuppression.detail', 'the suppression list must outlive erasure, or an erased bounce/complaint address is mailed again'],
   ['EmailSuppression.releaseReason', "an admin's audited delist reason on the suppression list (see EmailSuppression.detail)"],
   ['EmailDeliveryEvent.detail', 'provider webhook log behind the suppression list; bounded by the emailDeliveryEvent retention entry'],

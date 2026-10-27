@@ -28,7 +28,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const SETTINGS_MODULES = new Set(['src/lib/settings.ts', 'src/lib/settingsResolver.ts']);
+// settingsWrite.ts holds the one writer (writeSetting / revertSetting, #1623).
+const SETTINGS_MODULES = new Set(['src/lib/settings.ts', 'src/lib/settingsResolver.ts', 'src/lib/settingsWrite.ts']);
 
 const ALLOWED_MODEL_ACCESS = new Map([
   [

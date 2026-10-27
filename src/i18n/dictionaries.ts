@@ -7411,6 +7411,20 @@ const en = {
     failed: 'The password does not meet the policy: {rules}.',
   },
   settings: {
+    provenance: {
+      setHere: 'Set here',
+      inheritedGlobal: 'Inherited from global',
+      inheritedOrg: 'Inherited from organization',
+      inheritedDefault: 'Default',
+      history: 'History',
+      historyEmpty: 'No changes recorded yet.',
+      historyFailed: 'Could not load the history.',
+      operator: 'Operator',
+      system: 'System',
+      unset: 'not set',
+      revert: 'Revert to inherited',
+      revertFailed: 'Could not revert this setting.',
+    },
     evaluationSchedule: {
       title: 'Evaluation schedule',
       subtitle: 'When the interim and final evaluations fall due. Whoever writes them is reminded on the due date and once more a week later.',
@@ -17035,6 +17049,20 @@ const tr: Dict = {
     failed: 'Parola politikaya uymuyor: {rules}.',
   },
   settings: {
+    provenance: {
+      setHere: 'Burada ayarlandı',
+      inheritedGlobal: 'Genel ayardan miras',
+      inheritedOrg: 'Kurumdan miras',
+      inheritedDefault: 'Varsayılan',
+      history: 'Geçmiş',
+      historyEmpty: 'Henüz kayıtlı bir değişiklik yok.',
+      historyFailed: 'Geçmiş yüklenemedi.',
+      operator: 'Operatör',
+      system: 'Sistem',
+      unset: 'ayarlanmamış',
+      revert: 'Mirasa dön',
+      revertFailed: 'Bu ayar geri alınamadı.',
+    },
     evaluationSchedule: {
       title: 'Değerlendirme takvimi',
       subtitle: 'Ara ve final değerlendirmenin ne zaman yazılması gerektiği. Yazacak kişiye vade gününde ve bir hafta sonra bir kez daha hatırlatılır.',
@@ -26626,6 +26654,20 @@ const de: Dict = {
     failed: 'Das Passwort erfüllt die Richtlinie nicht: {rules}.',
   },
   settings: {
+    provenance: {
+      setHere: 'Hier festgelegt',
+      inheritedGlobal: 'Global geerbt',
+      inheritedOrg: 'Von der Organisation geerbt',
+      inheritedDefault: 'Standardwert',
+      history: 'Verlauf',
+      historyEmpty: 'Noch keine Änderungen erfasst.',
+      historyFailed: 'Der Verlauf konnte nicht geladen werden.',
+      operator: 'Betreiber',
+      system: 'System',
+      unset: 'nicht gesetzt',
+      revert: 'Auf geerbten Wert zurücksetzen',
+      revertFailed: 'Diese Einstellung konnte nicht zurückgesetzt werden.',
+    },
     evaluationSchedule: {
       title: 'Bewertungsplan',
       subtitle: 'Wann die Zwischen- und Abschlussbewertung fällig sind. Wer sie schreibt, wird am Fälligkeitstag und eine Woche später noch einmal erinnert.',
