@@ -266,6 +266,20 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: 'A mentorship was paused, resumed, ended or reopened (`from` and `to` are lifecycle states).',
   },
+  {
+    // One producer, by construction: moveApplicationStage() is the one writer
+    // of Application.stage (#1836); stageTransaction() raises the event after
+    // its caller's transaction commits (src/lib/applicationStageEvents.ts).
+    // A creation is not a stage change — `from` is always a stage key. No
+    // note, no disposition code (#1998).
+    name: 'application.stage_changed',
+    version: 1,
+    subjectType: 'Application',
+    subjectKey: 'applicationId',
+    payload: z.object({ applicationId: id, requisitionId: id, from: z.string(), to: z.string() }).strict(),
+    visibility: 'public',
+    description: "A candidate's application for a requisition moved to another stage (`from` and `to` are stage keys, e.g. SHORTLISTED → INTERVIEW).",
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from

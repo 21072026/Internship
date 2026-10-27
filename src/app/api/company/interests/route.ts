@@ -12,6 +12,7 @@ import { notificationLink } from '@/lib/notificationLink';
 import { hasConsent } from '@/lib/consent';
 import { requireCapability } from '@/lib/capabilityGate';
 import { syncApplicationFromInterest } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 
 const bodySchema = z.object({
   menteeId: z.string().min(1),
@@ -154,7 +155,7 @@ export async function POST(request: Request) {
   // mapping between the two vocabularies is applicationFromInterest(). The
   // legacy, requisition-less interest stays what it was: a flag on a person.
   if (requisitionId) {
-    const synced = await prisma.$transaction((tx) =>
+    const synced = await stageTransaction((tx) =>
       syncApplicationFromInterest(tx, { interest: { requisitionId, menteeId, companyId, status, note: note ?? null }, orgId, actorId: session.user.id }),
     );
     if (synced?.moved) {

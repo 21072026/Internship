@@ -24,6 +24,7 @@ import { validateOfferRequisition } from '@/lib/requisitions';
 import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
 import { advanceOnAcceptedOffer } from '@/lib/offerAutoAdvance';
 import { advanceApplicationOnAcceptedOffer } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 import { logger } from '@/lib/logger';
 
 const baseSelect = {
@@ -200,7 +201,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // conditional on the status the checks above saw, so two concurrent
       // requests cannot both move the same offer; the loser gets a 409, not a
       // second write.
-      const outcome = await prisma.$transaction(async (tx) => {
+      const outcome = await stageTransaction(async (tx) => {
         const flip = await tx.offer.updateMany({ where: { id, status: offer.status }, data });
         if (flip.count === 0) return null;
         const count: RequisitionCount =

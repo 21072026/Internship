@@ -115,6 +115,18 @@ harmless.
   → the org's enabled stage automation rules for that move, one `AutomationRun` per
   (rule, event) — unique, so a rerun creates none. `docs/automation-rules.md`.
 
+### Inside a transaction: never `emit()` directly (#1998)
+
+`emit()` writes through the global Prisma client, so an `emit()` from inside an
+interactive transaction survives that transaction's rollback — a ghost event.
+`Application.stage` is always written inside its caller's transaction, so its
+writer `moveApplicationStage()` only **notes** each move
+(`noteStageMove()`, `src/lib/applicationStageEvents.ts`), and every caller
+opens its transaction with `stageTransaction(fn, options)` instead of
+`prisma.$transaction`: once the transaction resolves, one
+`application.stage_changed` per noted move is raised. A rejected transaction
+raises nothing; a move noted outside the wrapper throws outside production.
+
 ## Configuration diffs: `src/lib/events/diff.ts` (#1699)
 
 `redactedDiff(before, after, spec)` is the **only** before/after diff in the
