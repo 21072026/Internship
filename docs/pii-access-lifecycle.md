@@ -311,9 +311,39 @@ serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
   sınırlı (`activityLogRetentionDays`, varsayılan 365 gün). Bu kararı değiştirmeden
   silme bu tabloları yeniden yazmaya başlamamalı.
 
-Aşağıdaki bölümdeki uyarı burada da geçerli ve iki yönlü: yeni bir serbest metin
-kolonu eklerken hem `scripts/sanitize-db.mjs` envanterine hem de
-`accountErasure.ts`'e eklenmezse sızıntı olur.
+- **Şirket tarafının kanıt kayıtları** (#2098): `ContactPermission.reason`
+  (UWG § 7 iletişim izninin kanıtı — şirket kaydına bağlı, kişiye değil) ve
+  `AffiliatePartner.payoutDetailsCipher` (ticari ortağın ödeme kaydı; defter
+  tutma yükümlülüğü hesaptan uzun yaşar). İkisi de **açık bir hukuki soru**:
+  kanıt kaydının kişinin silinmesinden sonra ne kadar tutulacağı hak sahibinin
+  kararı.
+- **Bastırma listesi** (`EmailSuppression`, `EmailDeliveryEvent.detail`): silme
+  bunu kaldırırsa, geri dönen ya da şikâyet eden bir adres yeniden posta alır.
+  Olaylar `emailDeliveryEvent` saklama kaydıyla sınırlı.
+
+### Yeni bir serbest metin kolonu — CI kararı zorlar (#2098)
+
+#2106'dan #2098'e kadar şemaya kişi hakkında **on** yeni serbest metin kolonu
+eklendi ve hiçbiri silmeye girmedi: anket cevapları (`SurveyAnswer.text`),
+toplantı geri bildirimi, başvuru notları (`Application.coverNote`/
+`dispositionNote`, `ApplicationEvent.note`), şirketin ilk mesajı
+(`CandidateOutreach.firstMessage`), eşleştirme gerekçesi, yerleştirme notu,
+oturum gündemi, mentör değişimi gerekçesi (`MentorshipRequest.rematchNote`),
+mülakat iptal gerekçesi — ve hiçbir `User`'a bağlı olmayan, yalnızca adrese
+bağlı **mentör başvurusu** (`MentorApplication`: ad, adres, telefon, iki serbest
+cevap; tam silmede bile kalıyordu). Ayrıca anonimleştirme kullanıcı satırını
+tuttuğu için cascade'le gitmeyenler: oturum açılan cihazların user-agent/IP'si
+(`SignInDevice`, `TrustedDevice`), kişinin **kendi** hazır cevap şablonları ve
+— en ağırı — **Google Takvim OAuth token'ları** (artık iki yolda da önce
+Google'da iptal edilip sonra siliniyor). Hepsi #2098'de eklendi.
+
+Kural artık yorumda değil, CI'da: `npm run check:erasure-coverage`
+(`scripts/check-erasure-coverage.mjs`) şemadaki her `@db.Text` /
+`MediumText` / `LongText` kolonun ya `ERASED` (bir silme modülü o modele
+dokunuyor ve kolonu adlandırıyor ya da satırları siliyor) ya da gerekçeli bir
+"kişi hakkında değil / bilinçli tutuluyor" kararıyla listelenmesini ister;
+listede olup şemada olmayan bir kolon da kırmızıdır. Yeni bir kolon için
+`scripts/sanitize-db.mjs` envanteri de güncellenmeli.
 
 ## Önizleme verisi: anonimleştirme (#1186)
 

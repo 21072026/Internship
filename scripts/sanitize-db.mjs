@@ -56,7 +56,11 @@
  *   Offer.compensationNote/declineNote, Meeting.title/meetLink,
  *   MenteeOnboarding.steps, Announcement (text/translations/link),
  *   StatusChange.reasonNote, RosterRun.absentKeys (the keys — addresses — a
- *   roster feed did not mention)
+ *   roster feed did not mention), MentorshipRequest.rematchNote,
+ *   InterviewRequest.declineNote/cancelReason, SurveyAnswer.text,
+ *   MeetingFeedback.note, Application.coverNote/dispositionNote,
+ *   ApplicationEvent.note, CandidateOutreach.firstMessage,
+ *   MatchFeedback.reasonNote, Placement.note, SessionAgendaItem.text (#2098)
  *
  * Neutralised (a live link to a customer's system):
  *   RosterFeed — secretEnc dropped and every feed switched off, so a preview
@@ -65,14 +69,16 @@
  *   The per-person half of this list is ALSO what account erasure must reach:
  *   src/lib/accountErasure.ts scrubs every one of them for a single person, and
  *   its COVERAGE block names the few it deliberately leaves, with the reason
- *   (#2106). A new free-text column about a person goes in both places.
+ *   (#2106). A new free-text column about a person goes in both places; the
+ *   erasure half is enforced by `npm run check:erasure-coverage` (#2098).
  *
  * Deleted outright (files and credentials — nothing to anonymise):
  *   CvFile, AvatarFile, Document, AnnouncementImage, MessageAttachment,
  *   SupportAttachment, InvitationToken, PasswordResetToken,
  *   EmailVerificationToken, ImpersonationGrant, SsoLoginGrant, ApiKey,
  *   Webhook, MeetingRoomState, PageView, RosterRowResult (the roster-feed run
- *   log: one row per person per run, keyed by their address)
+ *   log: one row per person per run, keyed by their address),
+ *   GoogleCalendarConnection, SignInDevice
  *
  * Left alone on purpose (structure, not people — this is the test value):
  *   Organization, PipelineStage, StageSla, UserConsent, MentorshipRelation,
@@ -210,6 +216,9 @@ async function run() {
     ['meetingRoomState', () => prisma.meetingRoomState.deleteMany({})],
     ['pageView', () => prisma.pageView.deleteMany({})],
     ['rosterRowResult', () => prisma.rosterRowResult.deleteMany({})],
+    // A real person's Google Calendar grant, and the browsers they sign in from (#2098).
+    ['googleCalendarConnection', () => prisma.googleCalendarConnection.deleteMany({})],
+    ['signInDevice', () => prisma.signInDevice.deleteMany({})],
   ];
   for (const [label, fn] of deletions) {
     const { count } = await fn();
@@ -235,9 +244,18 @@ async function run() {
     ['weeklyReport', () => prisma.weeklyReport.updateMany({ data: { summary: PLACEHOLDER, blockers: null, mentorComment: null } })],
     ['goal', () => prisma.goal.updateMany({ data: { description: null } })],
     ['projectJoinRequest', () => prisma.projectJoinRequest.updateMany({ data: { message: null } })],
-    ['mentorshipRequest', () => prisma.mentorshipRequest.updateMany({ data: { message: null } })],
+    ['mentorshipRequest', () => prisma.mentorshipRequest.updateMany({ data: { message: null, rematchNote: null } })],
     ['companyInterest', () => prisma.companyInterest.updateMany({ data: { note: null } })],
-    ['interviewRequest', () => prisma.interviewRequest.updateMany({ data: { note: null } })],
+    ['interviewRequest', () => prisma.interviewRequest.updateMany({ data: { note: null, declineNote: null, cancelReason: null } })],
+    // Free text added after #2106, swept by erasure since #2098.
+    ['surveyAnswer', () => prisma.surveyAnswer.updateMany({ data: { text: null } })],
+    ['meetingFeedback', () => prisma.meetingFeedback.updateMany({ data: { note: null } })],
+    ['application', () => prisma.application.updateMany({ data: { coverNote: null, dispositionNote: null } })],
+    ['applicationEvent', () => prisma.applicationEvent.updateMany({ data: { note: null } })],
+    ['candidateOutreach', () => prisma.candidateOutreach.updateMany({ data: { firstMessage: null } })],
+    ['matchFeedback', () => prisma.matchFeedback.updateMany({ data: { reasonNote: null } })],
+    ['placement', () => prisma.placement.updateMany({ data: { note: null } })],
+    ['sessionAgendaItem', () => prisma.sessionAgendaItem.updateMany({ data: { text: PLACEHOLDER } })],
     ['offer', () => prisma.offer.updateMany({ data: { compensationNote: null, declineNote: null } })],
     ['statusChange', () => prisma.statusChange.updateMany({ data: { reasonNote: null } })],
     ['rosterRun', () => prisma.rosterRun.updateMany({ data: { absentKeys: Prisma.DbNull } })],
