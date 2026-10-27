@@ -166,7 +166,11 @@ export async function mailQueueHealth(now: Date = new Date()): Promise<MailQueue
 // ── The Queue tab ───────────────────────────────────────────────────────────
 
 /** The Prisma filter for a scope's rows (the `Job.orgId` half). */
-async function scopeWhere(scope: QueueScope): Promise<Prisma.JobWhereInput> {
+/**
+ * The rows a scope reaches, as a `Job` filter — shared with the operations
+ * console (#1607), which reads the same deployment-wide tables under the same rule.
+ */
+export async function queueScopeWhere(scope: QueueScope): Promise<Prisma.JobWhereInput> {
   if (scope.kind === 'org') return { orgId: scope.orgId };
   const orgs = await runUnscoped(() =>
     prisma.organization.findMany({ where: orgWorldWhere(toVerticalKey(scope.world)), select: { id: true } }),
@@ -269,7 +273,7 @@ function toQueueRow(row: JobRow, action: QueueAction, now: Date): QueueRow {
 }
 
 export async function mailQueueView(scope: QueueScope, now: Date = new Date()): Promise<QueueView> {
-  const where = await scopeWhere(scope);
+  const where = await queueScopeWhere(scope);
   const base: Prisma.JobWhereInput = { AND: [{ name: MAIL_JOB_NAME }, where] };
   const [grouped, dead, waiting, health] = await Promise.all([
     runUnscoped(() =>
@@ -334,7 +338,7 @@ export async function applyQueueAction(
   request?: Request,
   now: Date = new Date(),
 ): Promise<QueueActionResult> {
-  const where = await scopeWhere(scope);
+  const where = await queueScopeWhere(scope);
   const row = await runUnscoped(() =>
     prisma.job.findFirst({
       where: { AND: [{ id: jobId, name: MAIL_JOB_NAME }, where] },

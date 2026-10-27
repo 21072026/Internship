@@ -60,6 +60,7 @@ const ICONS: Record<string, string> = {
   agreements: 'document-lock',
   announcements: 'megaphone',
   apiExplorer: 'code-slash',
+  operations: 'server',
   applications: 'document-text',
   cohorts: 'layers',
   contributorTerms: 'document-lock',

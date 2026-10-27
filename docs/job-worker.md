@@ -113,6 +113,31 @@ instead enqueues the job with `trigger: 'manual'` and answers
 (#1575) is the same either way: `OWN_ORG_JOBS` for a tenant ADMIN, scoped to
 their org in the payload; everything else a super admin.
 
+## The operations console (#1607)
+
+`/admin/operations` (`GET /api/admin/operations`, read by `src/lib/operationsConsole.ts`)
+is the one screen over everything above: one row per `QUEUE_SCHEDULES` entry with its
+last `JobRun` (outcome, duration, trigger, error through `sanitizeError()`), its last
+success, `ScheduleState.lastEnqueuedSlot`, the next slot, and the failed-run counts for
+the last hour and day plus the dead-letter count. It writes nothing and keeps no record of
+its own — every field is read from the row the scheduler, the worker or the lease writes.
+
+**Alarms, never empty cells** (`src/lib/jobs/operationsRule.ts`, pure, tested in
+`e2e/operations-rule.unit.spec.ts`): `never_enqueued` (no `ScheduleState` row),
+`scheduler_behind` (the latest cron slot is older than 5 min and not enqueued),
+`worker_behind` (an enqueued slot with no run started 15 min later — judged only when the
+caller sees every run) and `last_run_failed`.
+
+**Who** — the mail queue's operator rule, `resolveQueueScope()` + `queueScopeWhere()`
+(`src/lib/mailQueueAdmin.ts`), because these are the same deployment-wide tables: a super
+admin sees their world (and the org-less platform runs in the default world) plus the
+`JobLease` holders; the default organization's ADMIN sees that organization's runs only;
+anybody else gets 403 **from the route**. The schedule list itself carries no tenant data,
+so both scopes see every schedule. "Run now" is `/api/cron?job=…&enqueue=1`
+(`manualKeyForJob()`), offered for a platform job to a super admin only. The integrations
+card is a state count over `GET /api/admin/integrations/health` (#2008) and a link to
+`/admin/integrations`; it adds no health module of its own.
+
 ## Tenant binding
 
 A job enqueued with an `orgId` runs inside `runWithOrg(job.orgId, …)`; a job
