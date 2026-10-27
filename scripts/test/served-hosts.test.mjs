@@ -167,6 +167,27 @@ test('resolveRedirectTarget on a dev (http) base accepts the base protocol and h
   assert.equal(resolveRedirectTarget('http://evil.example/', B), B);
 });
 
+test('#3174: a dev server on a port keeps that port on every served host — and only that port', () => {
+  setEnv({ NEXTAUTH_URL: 'http://localhost:3000', MARKETING_HOSTS: 'marketing.localhost' });
+  const B = 'http://localhost:3000';
+  // signOutEverywhere() → absoluteHere('/auth/signin') on marketing.localhost:3000.
+  assert.equal(resolveRedirectTarget('http://marketing.localhost:3000/auth/signin', B), 'http://marketing.localhost:3000/auth/signin');
+  assert.equal(resolveRedirectTarget('http://marketing.localhost/auth/signin', B), 'http://marketing.localhost/auth/signin', 'no port stays no port');
+  assert.equal(resolveRedirectTarget('http://marketing.localhost:4000/auth/signin', B), 'http://marketing.localhost/auth/signin', 'another port is never trusted');
+  assert.equal(resolveRedirectTarget('http://evil.example:3000/auth/signin', B), B, 'the host check is unchanged: no open redirect');
+  assert.equal(resolveRedirectTarget('http://localhost.evil.example:3000/', B), B);
+  const H = (m) => (n) => m[n] ?? null;
+  assert.equal(requestOrigin(H({ host: 'marketing.localhost:3000' })), 'http://marketing.localhost:3000');
+  assert.equal(requestOrigin(H({ host: 'marketing.localhost:4000' })), 'http://marketing.localhost');
+  assert.equal(requestOrigin(H({ host: 'marketing.localhost' })), 'http://marketing.localhost');
+  assert.equal(requestOrigin(H({ host: 'evil.example:3000' })), B);
+  // Production shape: the configured origin has no port, so none is ever kept.
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', MARKETING_HOSTS: 'marketing.example.test' });
+  assert.equal(resolveRedirectTarget('https://marketing.example.test:3000/auth/signin', 'https://interncrm.com'), 'https://marketing.example.test/auth/signin');
+  assert.equal(requestOrigin(H({ 'x-forwarded-host': 'marketing.example.test:443' })), 'https://marketing.example.test');
+  assert.equal(servedOrigin('https://marketing.example.test:3000'), null);
+});
+
 // servedOrigin (#2494): SAML RelayState and the Google OAuth state carry the
 // origin a sign-in started on through a third party and back. RelayState is
 // signed by nobody, so this is the open-redirect boundary for both flows.
@@ -210,7 +231,8 @@ test('servedOrigin on a dev (http) configured origin: its own port on its own ho
   assert.equal(servedOrigin('http://localhost:9999'), null, 'another port on the same host is not ours');
   assert.equal(servedOrigin('http://marketing.example.test'), 'http://marketing.example.test', 'the base protocol is accepted');
   assert.equal(servedOrigin('https://marketing.example.test'), 'https://marketing.example.test');
-  assert.equal(servedOrigin('http://marketing.example.test:3143'), null, 'the configured port is not re-attached to another host');
+  assert.equal(servedOrigin('http://marketing.example.test:3143'), 'http://marketing.example.test:3143', 'the configured port survives on another served host (#3174)');
+  assert.equal(servedOrigin('http://marketing.example.test:9999'), null, 'any other port on another host is refused');
 });
 
 // ── Verified tenant domains (#1661) ──────────────────────────────────────────
