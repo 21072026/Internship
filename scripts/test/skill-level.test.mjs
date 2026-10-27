@@ -102,3 +102,19 @@ test('correcting the value while confirming writes exactly one change', () => {
   assert.deepEqual(plan.change, { fromLevel: 5, toLevel: 3 });
   assert.deepEqual(confirmLevelPlan(null, 2, 'm', 'MENTOR', new Date()).change, { fromLevel: null, toLevel: 2 });
 });
+
+import { skillProgression } from '../../src/lib/skillLevelRule.ts';
+
+test('progression: the first rating is the start, the row is now', () => {
+  const history = [{ fromLevel: null, toLevel: 2 }, { fromLevel: 2, toLevel: 3 }, { fromLevel: 3, toLevel: 4 }];
+  assert.deepEqual(skillProgression(history, 4), { start: 2, now: 4 });
+});
+
+test('progression: a level that predates the history starts where it was', () => {
+  assert.deepEqual(skillProgression([{ fromLevel: 3, toLevel: 5 }], 5), { start: 3, now: 5 });
+});
+
+test('progression: no history means no movement; unrated means no strip', () => {
+  assert.deepEqual(skillProgression([], 3), { start: 3, now: 3 });
+  assert.equal(skillProgression([{ fromLevel: null, toLevel: 3 }, { fromLevel: 3, toLevel: null }], null), null);
+});

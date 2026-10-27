@@ -9,7 +9,7 @@
 import { prisma } from '@/lib/prisma';
 import { skillLabel } from '@/lib/skillTaxonomyRule';
 import { resolveMany } from '@/lib/skillsResolve';
-import { confirmLevelPlan } from '@/lib/skillLevelRule';
+import { confirmLevelPlan, skillProgression } from '@/lib/skillLevelRule';
 
 export interface SkillLevelView {
   skillId: string;
@@ -101,4 +101,37 @@ export async function verifiedLevelsByTerm(
     if (id && levelOf.has(id)) out[term] = levelOf.get(id)!;
   }
   return out;
+}
+
+export interface SkillProgressView {
+  skillId: string;
+  label: string;
+  start: number;
+  now: number;
+  verified: boolean;
+}
+
+/**
+ * A person's rated skills, each with where it started and where it is now
+ * (`skillProgression`), most-grown first. Free core: a mentee reading their
+ * own growth is never gated.
+ */
+export async function skillProgressOf(userId: string, locale: string): Promise<SkillProgressView[]> {
+  const rows = await prisma.userSkill.findMany({
+    where: { userId, level: { not: null } },
+    select: {
+      skillId: true,
+      level: true,
+      verifiedAt: true,
+      skill: { select: { labelEn: true, labelTr: true, labelDe: true } },
+      levelChanges: { orderBy: { createdAt: 'asc' }, select: { fromLevel: true, toLevel: true } },
+    },
+  });
+  const out: SkillProgressView[] = [];
+  for (const r of rows) {
+    const p = skillProgression(r.levelChanges, r.level);
+    if (!p) continue;
+    out.push({ skillId: r.skillId, label: skillLabel(r.skill, locale), ...p, verified: r.verifiedAt !== null });
+  }
+  return out.sort((a, b) => b.now - b.start - (a.now - a.start) || a.label.localeCompare(b.label, locale));
 }

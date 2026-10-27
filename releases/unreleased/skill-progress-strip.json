@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Skill progression strip (#1822):** `/portal/goals` shows the mentee's rated skills with the level they started at and the level now, most-grown first, with the confirmation mark. Server-rendered from `skillProgressOf()` (`src/lib/skillLevels.ts`) over `UserSkillLevelChange`; the start rule is pure in `skillProgression()` (`src/lib/skillLevelRule.ts`, unit-tested). Free core, renders nothing until a skill is rated. e2e: `skill-rating.spec.ts` asserts the strip after a mentor's correction.",
+  "notes": {
+    "en": ["See how your skills grew: your goals page now shows, per skill, the level you started at and where you are now."],
+    "tr": ["Becerilerinin nasıl geliştiğini gör: hedefler sayfan artık her beceri için başladığın seviyeyi ve şu anki seviyeni gösteriyor."],
+    "de": ["Sieh, wie deine Skills gewachsen sind: Deine Zielseite zeigt jetzt pro Skill, wo du angefangen hast und wo du jetzt stehst."]
+  }
+}
