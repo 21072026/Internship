@@ -39,6 +39,16 @@ test('renders for a signed-out visitor', async ({ page }) => {
   await expect(page.getByTestId('trust-docs')).toBeVisible();
 });
 
+test('links the supply-chain evidence (#2059)', async ({ page }) => {
+  await page.goto('/trust');
+
+  // Procurement asks for these three by name and will not sign up to get them.
+  const docs = page.getByTestId('trust-docs');
+  await expect(docs.locator('a[href="/sbom.cdx.json"]')).toHaveCount(1);
+  await expect(docs.locator('a[href$="/docs/trust/vulnerability-management.md"]')).toHaveCount(1);
+  await expect(docs.locator('a[href$="/docs/legal/third-party-licenses.md"]')).toHaveCount(1);
+});
+
 test('publishes the subprocessor register as a table', async ({ page }) => {
   await page.goto('/trust');
 

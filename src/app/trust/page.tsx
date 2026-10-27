@@ -59,6 +59,12 @@ export default async function TrustPage() {
     { href: `${DOC_BASE}/subprocessors.md`, label: p.docs.subprocessors, external: true },
     { href: `${DOC_BASE}/security-overview.md`, label: p.docs.security, external: true },
     { href: `${DOC_BASE}/hosting-and-residency.md`, label: p.docs.hosting, external: true },
+    // Supply-chain evidence (#2059). The SBOM is generated per image build and
+    // served by that image, so it always describes the tree that is running; a
+    // plain <a>, because it is a JSON file and not a route.
+    { href: `${DOC_BASE}/vulnerability-management.md`, label: p.docs.vulnerability, external: true },
+    { href: '/sbom.cdx.json', label: p.docs.sbom, external: true },
+    { href: `${GITHUB_URL}/blob/main/docs/legal/third-party-licenses.md`, label: p.docs.licenses, external: true },
     // The conformance report (#2037) is rendered by the app, not read from docs/.
     { href: '/accessibility/vpat', label: p.docs.vpat, external: false },
     { href: '/privacy', label: p.docs.privacy, external: false },
