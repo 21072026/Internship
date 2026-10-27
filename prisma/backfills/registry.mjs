@@ -131,4 +131,18 @@ export const BACKFILLS = [
   // second run reports updated=0 — and NONE-mode requirements ignore PENDING,
   // so nothing turns red before it runs.
   { id: '0031-document-reviews', script: 'prisma/backfill-document-reviews.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  // Stage deadlines for relations already sitting in a stage when its service
+  // level was configured (#1640), dated from the stage ENTRY. Past-due ones get
+  // their reminder stamp (and a snoozed breach) in the same write, so the next
+  // 09:00 sweep adopts them silently instead of mailing every mentor. ONCE: a
+  // deadline a person later clears must not come back on every deploy. After
+  // the push — it reads StageSla.scope/cohortId/mentorId.
+  {
+    id: '0033-stage-deadlines',
+    script: 'prisma/backfill-stage-deadlines.mjs',
+    args: ['--apply'],
+    once: true,
+    optional: true,
+    why: 'A derived convenience column: a failed fill leaves relations exactly as before #1640, so it must not block a deploy.',
+  },
 ];

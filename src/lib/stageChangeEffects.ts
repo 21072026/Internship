@@ -93,7 +93,12 @@ export async function emitStageChange(opts: {
   await resolveBreaches({ relationId: opts.relationId });
   if (!opts.deadlineSetByCaller) {
     try {
-      const update = await stageDeadlineUpdate(opts.orgId, opts.to);
+      // The relation's own cohort and mentor pick the override that applies (#1640).
+      const scope = await prisma.mentorshipRelation.findUnique({
+        where: { id: opts.relationId },
+        select: { cohortId: true, mentorId: true },
+      });
+      const update = await stageDeadlineUpdate({ orgId: opts.orgId, cohortId: scope?.cohortId, mentorId: scope?.mentorId }, opts.to);
       if (update) await prisma.mentorshipRelation.update({ where: { id: opts.relationId }, data: update });
     } catch (e) {
       console.error('Stage SLA deadline update failed:', e);
