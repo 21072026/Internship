@@ -304,6 +304,8 @@ model Organization {
   trialReminders          TrialReminder[]
   outboundDrafts          OutboundDraft[]
   supportReports          SupportReport[]
+  // The chat apps (#1934, epic #1923): the Slack / Teams workspaces this org installed.
+  chatWorkspaces          ChatWorkspace[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
@@ -948,6 +950,8 @@ model User {
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
   supportReports                    SupportReport[]                @relation("SupportReportAuthor")
+  // Which chat-workspace member this account is (#1934).
+  chatIdentities                    ChatIdentity[]
   assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
   supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
@@ -8490,5 +8494,111 @@ model AffiliateContractAcceptance {
   acceptedAt DateTime         @default(now())
 
   @@unique([partnerId, version])
+  @@index([orgId])
+}
+
+// ── Chat apps (#1934, epic #1923) ──────────────────────────────────────────
+// Slack and Microsoft Teams as ADAPTERS on the notification router's `chat`
+// channel, never a third fan-out. Three additive, tenant-anchored models; the
+// tokens are sealed exactly like GoogleCalendarConnection's, through
+// src/lib/chat/tokens.ts (secretBox, purpose `chat-bot-token`) — never written
+// or logged in the clear. docs/chat-apps.md is the operator's side.
+
+enum ChatPlatform {
+  SLACK
+  TEAMS
+}
+
+enum ChatDeliveryStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// One installed workspace (a Slack team, a Teams tenant) of one organisation.
+model ChatWorkspace {
+  id         String       @id @default(cuid())
+  /// Registered in TENANT_MODELS. Nullable like the other phase-1 tenant models;
+  /// every writer stamps the installing admin's org explicitly.
+  orgId      String?
+  platform   ChatPlatform
+  /// Slack team_id / Teams tenant id.
+  externalId String       @db.VarChar(128)
+  name       String
+
+  /// Sealed with lib/secretBox (AES-256-GCM, src/lib/chat/tokens.ts), never in
+  /// the clear. An uninstall deletes the row, so no sealed token outlives it.
+  botTokenEnc     String?   @db.Text
+  refreshTokenEnc String?   @db.Text
+  tokenExpiresAt  DateTime?
+  /// What the platform actually granted, so a reduced re-consent is visible.
+  scope           String    @db.Text
+
+  /// Configured vs ENABLED: the per-workspace kill switch. A disabled workspace
+  /// keeps its install and delivers nothing; the router falls back to the
+  /// person's other channels. Deliberately NOT a Setting row (#1958).
+  enabled       Boolean @default(true)
+  installedById String
+
+  /// Operational state, visible in the console instead of failing silently.
+  lastDeliveryAt DateTime?
+  lastError      String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org        Organization?  @relation(fields: [orgId], references: [id])
+  identities ChatIdentity[]
+  deliveries ChatDelivery[]
+
+  @@unique([platform, externalId])
+  @@index([orgId])
+}
+
+/// "This chat member is this CRM user" — confirmed by the person, revocable.
+model ChatIdentity {
+  id              String    @id @default(cuid())
+  orgId           String?
+  workspaceId     String
+  userId          String
+  /// Slack U…, Teams AAD object id.
+  externalUserId  String    @db.VarChar(128)
+  /// Opened lazily on the first DM and cached; Teams also needs a conversation
+  /// reference before the bot may message proactively.
+  dmChannelId     String?   @db.VarChar(128)
+  conversationRef Json?
+  /// Null until the person themselves confirmed the link. Nothing is delivered
+  /// to an unverified identity.
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  // Two CRM users can never claim the same chat member.
+  @@unique([workspaceId, externalUserId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+/// The chat delivery ledger: one row per attempt, append-only. Never the card
+/// body (it can carry candidate data) — the event key is enough.
+model ChatDelivery {
+  id                String             @id @default(cuid())
+  orgId             String?
+  workspaceId       String
+  identityId        String?
+  eventKey          String             @db.VarChar(96)
+  /// DM or channel id.
+  target            String             @db.VarChar(128)
+  externalMessageId String?            @db.VarChar(128)
+  status            ChatDeliveryStatus
+  error             String?            @db.Text
+  createdAt         DateTime           @default(now())
+
+  workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
   @@index([orgId])
 }

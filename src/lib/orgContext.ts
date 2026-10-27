@@ -424,6 +424,14 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // must never reach another tenant's support inbox. POST /api/support/reports
   // stamps the reporter's org explicitly; its files are reached through it.
   'SupportReport',
+  // The chat apps (#1934): an installed Slack/Teams workspace, who in it is
+  // which of our users, and what was delivered there. One tenant's bot token
+  // and member list must never be reachable from another; every writer (the
+  // install callback, the identity link, the chat adapter in crons) stamps the
+  // org explicitly, because none of them runs inside a request's org scope.
+  'ChatWorkspace',
+  'ChatIdentity',
+  'ChatDelivery',
   // A funnel record's estimated monthly value (#2422). Commercial data, like
   // Placement next door: one tenant must never read or sum another's pipeline
   // value. Every writer — the owner/ADMIN edit route, the marketing import and
