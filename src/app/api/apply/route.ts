@@ -8,7 +8,7 @@ import { notify } from '@/lib/notify';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { selfSelectedCount } from '@/lib/selfMatchSeats';
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
     data: { menteeId: mentee.id, preferredMentorId: mentor.id },
   });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/applications');
-  await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email }, mentor.orgId);
+  await emit('application.created', { mentorId: mentor.id, menteeName: fullName, email }, { orgId: mentor.orgId ?? null, actor: null });
 
   // Duplicate post-check (#841): fire-and-forget — the application itself is
   // already accepted, admins just get a heads-up to review /admin/duplicates.

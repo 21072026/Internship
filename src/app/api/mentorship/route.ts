@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { withTenantScope } from '@/lib/orgContext';
@@ -348,7 +348,7 @@ export async function POST(request: Request) {
       throw e;
     }
 
-    await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, session.user.orgId);
+    await emit('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
 
     // A direct admin assignment used to be completely silent — neither side heard
     // about it until they happened to log in (#668). In-app is unconditional,

@@ -1,7 +1,7 @@
 import type { InteractionType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { shellCapabilities } from '@/lib/shellCapabilities';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { recordPairActivity } from '@/lib/metering';
 import { notifyIfAllowed } from '@/lib/notify';
 
@@ -41,7 +41,10 @@ export async function createInteraction(opts: {
   // awaited, and it cannot fail the write.
   recordPairActivity(relation.orgId);
 
-  await dispatchWebhook('interaction.logged', { relationId: relation.id, type: opts.type, date: interaction.date.toISOString() }, relation.orgId);
+  await emit('interaction.logged', { relationId: relation.id, type: opts.type, date: interaction.date.toISOString() }, {
+    orgId: relation.orgId ?? null,
+    actor: opts.actorId ? { id: opts.actorId, type: 'user' } : { type: 'apikey' },
+  });
   // The mentee learns something was logged (#924). No echo: the mentee logging
   // on their own relation is not told about it. The notification carries no
   // note content, just the fact.

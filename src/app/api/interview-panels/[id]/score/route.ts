@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { allowedCriterionKeys } from '@/lib/evaluationTemplates';
 import { isPanelComplete } from '@/lib/interviewPanel';
 import { notifyIfAllowed } from '@/lib/notify';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 
 // An interviewer's own scorecard (#824).
 //
@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             : panel.scorecards.find((s) => s.authorId === m.userId)?.submittedAt ?? null,
       }));
       if (isPanelComplete(state, panel.closedAt)) {
-        await dispatchWebhook('interview_panel.completed', { panelId: panel.id, subjectId: panel.subjectId }, session.user.orgId);
+        await emit('interview_panel.completed', { panelId: panel.id, subjectId: panel.subjectId }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
         // Everyone who scored now has something to compare against, and the
         // person who convened the panel has a decision to make.
         const audience = new Set([...panel.members.map((m) => m.userId), panel.createdById].filter(Boolean) as string[]);

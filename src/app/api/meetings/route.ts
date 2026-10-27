@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emit } from '@/lib/events/emit';
 import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -345,7 +345,7 @@ export async function POST(request: Request) {
     // relations. See the note in /api/interactions.
     if (created > 0) recordPairActivity(session.user.orgId, created);
 
-    if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created }, session.user.orgId);
+    if (created > 0) await emit('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
     // Nothing could be booked: the whole request collided (#1995).
     if (created === 0 && conflicts.length > 0) {
       const first = conflicts[0];
