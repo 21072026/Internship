@@ -117,6 +117,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   adminInsights: '/admin/insights (#2046) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   adminAvailability: '/admin/availability (#2005) — gatePage closes it for an org without the `mentorship` capability, and the editor reads these keys only when an admin has picked a mentor there.',
   mentorLimitsImport: 'Read only by MentorLimitsImport on /admin/mentors (#1808) — gatePage closes that page, and POST /api/admin/mentors/limits/import refuses (requireCapability), for an org without the `mentorship` capability. Its column names are the CSV contract and cannot be overlaid.',
+  groupEvents: '/admin|/mentor|/portal/events (#1856) — gatePage closes the three pages, and every /api/events route refuses (requireCapability), for an org without the `mentorship` capability.',
   adminMatching: '/admin/matching (#1783) — gatePage closes it, and every /api/admin/matching route refuses (requireCapability), for an org without the `mentorship` capability.',
   billing: '/admin/billing (#1739) — gatePage closes it, and GET /api/org/billing refuses (requireCapability), for an org without `mentorship`: the active-pair meter and the price list are the internship product\'s (src/lib/plans.ts); MARKETING has its own (src/lib/marketingPlans.ts).',
   adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
