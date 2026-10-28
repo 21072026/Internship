@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { getAiQuota, runAiGated } from '../src/lib/aiGate';
-import { setSetting } from '../src/lib/settings';
+import { writeSetting } from '../src/lib/settingsWrite';
 import { currentPeriod, periodRange } from '../src/lib/meteringRules';
 
 // The monthly AI quota is per org (`aiMonthlyQuota` is a tenant setting, #1553),
@@ -34,8 +34,8 @@ test('two orgs meter their AI quota independently, by UTC month', async () => {
   process.env.ANTHROPIC_API_KEY = prevKey || 'e2e-stub-key';
 
   try {
-    await setSetting('aiMonthlyQuota', '2', orgA.id);
-    await setSetting('aiMonthlyQuota', '2', orgB.id);
+    await writeSetting('aiMonthlyQuota', '2', orgA.id);
+    await writeSetting('aiMonthlyQuota', '2', orgB.id);
     const call = async () => 'ok';
 
     // A spends its whole budget.
