@@ -21,7 +21,9 @@ import { seedLeakRows, cleanupLeakRows, type LeakRows, type LeakTenants } from '
  *
  * A failure names the endpoint, the actor and the leaked marker. Removing
  * `withTenantScope` from a route whose only tenant filter is the middleware
- * (`GET /api/companies` is one) turns its row red — that is the gate.
+ * turns its row red — that is the gate. Verified on `GET /api/interview-panels`
+ * (its query carries no orgId of its own); `GET /api/companies` stays green
+ * without the wrapper because it filters by org explicitly too.
  *
  * `denied` rows are surfaces a tenant admin must not reach at all (the
  * installation-wide mail log is super-admin only, #2635): both tenants get a
