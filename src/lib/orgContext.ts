@@ -351,6 +351,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // runs in the worker with no session and passes orgId itself.
   'AutomationRule',
   'AutomationRun',
+  // Admin-authored nudges (#1684) and what they sent. The evaluator and the
+  // send job run in the worker with no session and pass orgId themselves.
+  'NudgeRule',
+  'NudgeSend',
   'Announcement',
   'Newsletter',
   // The audit trail and where it is streamed to (#2012). AuditLog gained a

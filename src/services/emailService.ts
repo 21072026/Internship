@@ -3566,6 +3566,56 @@ export async function sendRoleChangeEmail({
 // this only renders. Category `sso-certificate`, in the essential
 // account_security group: a lapsed certificate locks the whole tenant out of
 // single sign-on, so no preference may mute the two warnings.
+// One admin-authored nudge (#1684, src/lib/nudges/evaluate.ts). The subject and
+// body are the rule's own text in the reader's language (already chosen and
+// `{name}`-filled by the evaluator); here they are only escaped — nothing in
+// them is evaluated or rendered as markup. Category 'nudge' (task_reminders):
+// non-essential, so the reader's unsubscribe and the outbound approval hold
+// apply exactly as to every other reminder.
+export async function sendNudgeEmail({
+  to,
+  userId,
+  orgId,
+  locale,
+  subject,
+  body,
+  role,
+}: {
+  to: string;
+  userId: string;
+  orgId: string;
+  locale: string;
+  subject: string;
+  body: string;
+  role: 'MENTOR' | 'MENTEE';
+}): Promise<SendEmailResult> {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const loc = resolveLocale(locale);
+  const M = (await emailDictionary(loc, orgId)).nudgeEmail;
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  return sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'nudge',
+    locale: loc,
+    fromName: brand.name,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(subject))}
+        ${paragraphs}
+        ${ctaBlock(brand, `${base}${role === 'MENTOR' ? '/mentor' : '/portal'}`, esc(role === 'MENTOR' ? M.ctaMentor : M.ctaMentee))}
+        <p style="color:#666;font-size:12px;">${esc(M.why)}</p>
+      </div>
+    `,
+  });
+}
+
 // A webhook was auto-disabled after a failure streak (#1695,
 // src/lib/webhookDelivery.ts). Sent once per disable, to the org's admins,
 // as an operator alert: the integration is silently down until they act.

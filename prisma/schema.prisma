@@ -293,6 +293,8 @@ model Organization {
   webhooks                Webhook[]
   domainEvents            DomainEvent[]
   webhookDeliveries       WebhookDelivery[]
+  nudgeRules              NudgeRule[]
+  nudgeSends              NudgeSend[]
   automationRules         AutomationRule[]
   automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
@@ -3233,6 +3235,74 @@ model AutomationRule {
   runs AutomationRun[]
 
   @@index([orgId, stageKey, enabled])
+}
+
+// An admin-authored nudge (#1684): "to the people this segment describes, when
+// this trigger fires, after this delay, send this message — at most so often".
+// The vocabulary is pure in src/lib/nudges/rule.ts (trigger and segment are
+// allowlisted JSON, refused at write time when they do not parse); the
+// evaluator is src/lib/nudges/evaluate.ts. Stage-triggered rules are
+// AutomationRule (#1703), never this model. Off until an admin enables it.
+model NudgeRule {
+  id                  String        @id @default(cuid())
+  orgId               String?
+  org                 Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name                String        @db.VarChar(120)
+  enabled             Boolean       @default(false)
+  // { kind: 'event', event } | { kind: 'scan' }
+  trigger             Json
+  // { conditions: [{ field, op, value }] } — SEGMENT_FIELDS
+  segment             Json
+  delayMinutes        Int           @default(0)
+  channel             NudgeChannel  @default(EMAIL)
+  // Per language; a missing one falls back to English (the editor flags it).
+  subjectEn           String?       @db.VarChar(191)
+  subjectTr           String?       @db.VarChar(191)
+  subjectDe           String?       @db.VarChar(191)
+  bodyEn              String?       @db.Text
+  bodyTr              String?       @db.Text
+  bodyDe              String?       @db.Text
+  // Counted over EVERY nudge the person got in this org, not only this rule's.
+  maxPerUserPer30Days Int           @default(2)
+  cooldownDays        Int           @default(7)
+  lastEvaluatedAt     DateTime?
+  createdById         String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  sends NudgeSend[]
+
+  @@index([orgId, enabled])
+}
+
+// One nudge one person received (#1684). Unique on (ruleId, userId, dedupeKey)
+// — `evt:<eventId>` for an event rule, `scan` for a scan rule — so a
+// re-evaluated rule, a redelivered event or a rerun send job can never send it
+// twice: the send job inserts this row BEFORE it mails. `status` SENT | HELD
+// (outbound approval) | SKIPPED (the mail gate refused); the caps count SENT
+// and HELD. `eventId` is the triggering DomainEvent, when there was one.
+model NudgeSend {
+  id        String        @id @default(cuid())
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ruleId    String
+  rule      NudgeRule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  userId    String
+  dedupeKey String        @db.VarChar(64)
+  eventId   String?
+  channel   NudgeChannel
+  status    String        @default("SENT") @db.VarChar(16)
+  sentAt    DateTime      @default(now())
+
+  @@unique([ruleId, userId, dedupeKey])
+  @@index([orgId, userId, sentAt])
+  @@index([ruleId, sentAt])
+}
+
+enum NudgeChannel {
+  EMAIL
+  IN_APP
+  BOTH
 }
 
 // One evaluation of one rule for one stage-change event (#1703). Unique on
