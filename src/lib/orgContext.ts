@@ -105,6 +105,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // INTERIM/FINAL due dates and reminders (#1891).
   'EvaluationDue',
   'Requisition',
+  'RequisitionFit',
   'InterviewRequest',
   // One person considered for one role (#1828). ApplicationEvent is reached only
   // through its application and is deliberately not listed (schema comment).
