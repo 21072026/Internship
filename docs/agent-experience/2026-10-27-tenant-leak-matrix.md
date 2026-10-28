@@ -17,3 +17,7 @@
   job (`isolation-gate` in `e2e.yml`).
 - **Local Playwright 1.64 wants chromium-1248, the image has 1243:** `ln -sfn chromium-1243
   chromium-1248` (and the `chromium_headless_shell-*` pair) under `/opt/pw-browsers` worked.
+- **A module-level `AsyncLocalStorage` paired with a `globalThis` "installed once" flag is a
+  cross-instance bug.** The middleware read the store of whichever module instance installed it;
+  a route in another instance bound its org elsewhere and its query went out `WHERE 1=1`. Find it
+  in the dev log (`prisma:query` lines) — keep any process-wide singleton on `globalThis`.
