@@ -11,6 +11,6 @@
 - **The coverage gate tells you what to do next.** Once a module in `AWAITING_TESTS` is exercised,
   `npm run test:unit:coverage` fails and names the floor to write. Move the entry and lower
   `EXPECTED_AWAITING` in the same diff.
-- **`main` can be red on the unit gate without anyone noticing** while Actions minutes are
-  exhausted. Here `erasure-coverage` was failing: two features had added `@db.Text` columns
-  without an erasure decision. Run `npm run test:unit` on a fresh `main` before blaming your own diff.
+- **Check `origin/main` again right before pushing a fix to a red `main`.** `erasure-coverage`
+  was red (new `@db.Text` columns without a decision), but a sibling session landed the same fix
+  while this branch was open, and the merge kept both copies as duplicate Map entries.
