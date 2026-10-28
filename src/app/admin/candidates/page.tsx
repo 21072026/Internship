@@ -23,6 +23,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { clipSkillLabel } from '@/lib/skills';
 import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { shownEmail } from '@/lib/leadEmail';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Candidate {
   id: string;
@@ -322,6 +323,10 @@ export default function CandidatesPage() {
       setBulkBusy(false);
     }
   };
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && buildFilterParams().toString() !== '' ? resultCountMessage(t.a11y, total) : null);
 
   return (
     <div>

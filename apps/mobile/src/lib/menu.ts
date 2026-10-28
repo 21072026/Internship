@@ -44,6 +44,7 @@ const ICONS: Record<string, string> = {
   mentees: 'people',
   availability: 'time',
   calendar: 'calendar',
+  groupEvents: 'easel',
   menteeActivity: 'pulse',
   analytics: 'bar-chart',
   feedback: 'chatbox-ellipses',

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Result counts are announced on every searchable list (WCAG 4.1.3, #2864):** the 29 screens and components with a search box (admin lists, the sidebar menu filter, notifications, jobs, the company overview, message search, canned replies, …) now speak \"N results shown\" / \"No results\" through `useFilterAnnouncement` + the new `resultCountMessage()` when a filter changes them. A VPAT `check:` fails if a new `type=\"search\"` box ships without the hook. VPAT 4.1.3 now reads `Supports`.",
+  "notes": {
+    "en": ["Screen readers now hear how many results a search or filter leaves on every list."],
+    "tr": ["Ekran okuyucular artık her listede bir arama ya da filtrenin kaç sonuç bıraktığını duyuyor."],
+    "de": ["Screenreader hören jetzt in jeder Liste, wie viele Ergebnisse eine Suche oder ein Filter übrig lässt."]
+  }
+}

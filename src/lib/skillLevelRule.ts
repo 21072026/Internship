@@ -124,3 +124,20 @@ export function confirmLevelPlan(
     change: currentLevel === level ? null : { fromLevel: currentLevel, toLevel: level },
   };
 }
+
+/**
+ * Where a person started on a skill and where they are now — the mentee's
+ * progression strip. `history` is the row's `UserSkillLevelChange` entries in
+ * time order. The start is the level before the first change (or, when the
+ * first change was the first rating, that rating); with no history the start
+ * IS now. A strip compares two numbers, so an unrated skill returns null.
+ */
+export function skillProgression(
+  history: readonly { fromLevel: number | null; toLevel: number | null }[],
+  currentLevel: number | null,
+): { start: number; now: number } | null {
+  if (currentLevel === null) return null;
+  const first = history.find((h) => h.fromLevel !== null || h.toLevel !== null);
+  const start = first ? (first.fromLevel ?? first.toLevel) : currentLevel;
+  return { start: start ?? currentLevel, now: currentLevel };
+}

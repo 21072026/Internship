@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ShieldAlert } from 'lucide-react';
@@ -143,7 +144,8 @@ function SettingsCard() {
 }
 
 export default function SafeguardingPage() {
-  const s = useT().safeguarding;
+  const t = useT();
+  const s = t.safeguarding;
   const locale = useLocale();
   const [status, setStatus] = useState<Status>('open');
   const [kind, setKind] = useState<'' | Kind>('');
@@ -197,6 +199,9 @@ export default function SafeguardingPage() {
     { key: 'all', label: s.tabAll },
   ];
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(data && (query !== '' || kind !== '') ? resultCountMessage(t.a11y, data.total) : null);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

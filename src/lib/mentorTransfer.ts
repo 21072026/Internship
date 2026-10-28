@@ -17,6 +17,7 @@ import {
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
 import { ENDED_REASSIGNED, type AdminEndReasonCode } from '@/lib/relationLifecycle';
+import { emit } from '@/lib/events/emit';
 import { carriedOverFields, hasRelationHistory } from '@/lib/relationHistory';
 
 // ---------------------------------------------------------------------------
@@ -333,12 +334,22 @@ export async function transferMentorship(opts: {
   // Everything below is deliberately outside the transaction: it must not run
   // if the write rolled back, and must not hold a transaction open across SMTP.
   //
-  // No webhook is dispatched here on purpose. `mentorship.created` would be a
-  // lie in 'corrected' mode (nothing was created) and the direct-dispatch call
-  // sites are capped at ten by npm run check:events (#1697) — an eleventh is a
-  // red build. A `mentorship.transferred` event belongs to the catalogue that
-  // guard exists to make room for, raised through emit() rather than posted
-  // from here.
+  // `mentorship.transferred`, not `mentorship.created`: the latter would be a
+  // lie in 'corrected' mode, where nothing was created (#1998). After the
+  // commit, so a rolled-back transfer announces nothing.
+  await emit(
+    'mentorship.transferred',
+    {
+      relationId: newRelationId,
+      previousRelationId: mode === 'transferred' ? relation.id : null,
+      menteeId: relation.menteeId,
+      fromMentorId: relation.mentorId,
+      toMentorId,
+      mode,
+      reasonCode,
+    },
+    { orgId: relation.orgId, actor: { id: actorId, type: 'user' } },
+  );
 
   // The mentee. Told who their mentor is now — never the reason, which is the
   // admin's operational note and (in the `wrong_assignment` case) about the

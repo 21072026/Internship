@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { skillsOf, type PortalJob } from '@/lib/portalJobView';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // The mentee's job board (#1830): the open roles of the programme's employers,
 // from GET /api/portal/requisitions — search and filters run on the server,
@@ -46,6 +47,10 @@ export default function PortalJobsPage() {
 
   const submit = (e: FormEvent) => { e.preventDefault(); setPage(1); setFilters(draft); };
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(data && Object.values(filters).some(Boolean) ? resultCountMessage(t.a11y, data.total) : null);
 
   return (
     <div data-testid="portal-jobs">

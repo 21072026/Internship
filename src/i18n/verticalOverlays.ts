@@ -773,6 +773,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           newsletter: {
             d: 'Short, emoji-led issues of CV and interview advice, written once in English, Turkish and German and sent to each reader in their own language. Send by hand or on a weekly, fortnightly or monthly schedule; sales reps get a coaching angle on the same issue, every send is kept on the record, and one press unsubscribes.',
           },
+          groupSessions: {
+            d: 'Publish a kickoff briefing, an office hour or an info session to a team or the whole organisation. People register for a place; past the cap they join a waitlist and move up automatically — and are told — when someone cancels. The host records who attended, and each participant sees their own record.',
+          },
           mentorSelfApply: {
             t: 'Self-serve sales rep applications',
             d: 'Anyone can apply to become a sales rep without an account; admins review, take into review, approve or reject from a queue, and approval creates or upgrades the rep’s account automatically.',
@@ -1769,6 +1772,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           newsletter: {
             d: 'CV ve mülakat tavsiyelerini emojili, kısa sayılar hâlinde ulaştırır; İngilizce, Türkçe ve Almanca bir kez yazılır, her okuyucuya kendi dilinde gider. Elle ya da haftalık, iki haftalık, aylık programla gönderilir; satış temsilcileri aynı sayıda koçluk bakışını da görür, her gönderim kayda geçer ve tek dokunuşla abonelik bırakılır.',
           },
+          groupSessions: {
+            d: 'Açılış brifingini, ofis saatini ya da tanıtım oturumunu bir ekibe veya tüm kuruma yayımla. Katılımcılar yer ayırır; kontenjan dolunca yedek listeye girer ve biri iptal ettiğinde otomatik olarak — haber verilerek — yukarı çıkar. Ev sahibi kimin katıldığını kaydeder, her katılımcı kendi kaydını görür.',
+          },
           mentorSelfApply: {
             t: 'Self-servis satış temsilcisi başvurusu',
             d: 'Herkes hesap açmadan satış temsilcisi olmak için başvurabilir; adminler kuyruktan inceler, incelemeye alır, onaylar veya reddeder; onay, temsilcinin hesabını otomatik olarak oluşturur veya yükseltir.',
@@ -2747,6 +2753,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           },
           newsletter: {
             d: 'Kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt. Manuell oder wöchentlich, zweiwöchentlich, monatlich geplant; Vertriebsmitarbeiter erhalten zur gleichen Ausgabe die Coaching-Perspektive, jeder Versand wird archiviert, und ein Klick genügt zum Abmelden.',
+          },
+          groupSessions: {
+            d: 'Veröffentliche ein Kickoff-Briefing, eine Sprechstunde oder eine Infoveranstaltung für ein Team oder die ganze Organisation. Teilnehmende melden sich für einen Platz an; über dem Limit kommen sie auf die Warteliste und rücken automatisch — mit Benachrichtigung — nach, wenn jemand absagt. Der Gastgeber erfasst die Teilnahme, und alle sehen ihren eigenen Eintrag.',
           },
           mentorSelfApply: {
             t: 'Self-Service-Bewerbungen als Vertriebsmitarbeiter',

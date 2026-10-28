@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { outcomeStageKeysFrom } from '@/lib/pipeline';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Cohort {
   id: string;
@@ -88,6 +89,10 @@ export default function AdminCohortsPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = cohorts.filter((c) => !q || c.name.toLowerCase().includes(q));
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <>

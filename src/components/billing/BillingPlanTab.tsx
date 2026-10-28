@@ -12,6 +12,7 @@ import { formatCount, formatEur, formatEurCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { PlanChangeRequestCard } from '@/components/billing/PlanChangeRequestCard';
 import { useOrgBilling } from '@/components/billing/OrgBillingContext';
+import { METERING_DEFINITION_HREF } from '@/lib/meteringRules';
 
 // The first tab of /admin/billing (#1739): plan card, this month's active-pair
 // meter against the band, the over-band state and twelve months of history.
@@ -125,7 +126,7 @@ export function BillingPlanTab() {
         )}
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
           {b.meter.definition}{' '}
-          <Link href="/pricing" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+          <Link href={METERING_DEFINITION_HREF} className="font-medium text-blue-600 hover:underline dark:text-blue-400" data-testid="billing-meter-definition-link">
             {b.meter.pricingLink}
           </Link>
         </p>

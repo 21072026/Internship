@@ -28,6 +28,14 @@
 // live in lib/metering.ts, which re-exports everything here, so a caller needs
 // exactly one import and there is exactly one meter in this repo.
 
+/**
+ * Where the definition is published: the "How we count" section of /pricing
+ * (#1735). Every billing screen that shows the pair count links here, so a
+ * customer checks their own number against the sentence we publish.
+ */
+export const METERING_DEFINITION_ANCHOR = 'how-we-count';
+export const METERING_DEFINITION_HREF = `/pricing#${METERING_DEFINITION_ANCHOR}`;
+
 /** The published definition, so a UI or a doc renders the same words the code enforces. */
 export const ACTIVE_MATCHED_PAIR_DEFINITION =
   'a relation in ACTIVE state with any logged activity in the calendar month; ' +
