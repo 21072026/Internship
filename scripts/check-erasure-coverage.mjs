@@ -176,6 +176,16 @@ const DECISIONS = new Map([
   ['RosterRun.source', OPS],
   ['RosterRun.error', OPS],
   ['Job.lastError', OPS],
+  // Webhook delivery log (#1695): the receiver's status text and a truncated response body — the
+  // external system's answer to our signed payload, never text written about a person.
+  ['WebhookDelivery.error', OPS],
+  ['WebhookDelivery.responseBody', OPS],
+  // Chat workspace install (#1934): sealed bot tokens, the granted OAuth scope list and ops errors.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', CONFIG],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
   ['JobRun.error', OPS],
   // A failed automation action's message (#1703): codes and driver errors, never text about a person.
   ['AutomationRun.error', OPS],
