@@ -165,6 +165,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // → code-default fallback chain needs to read a row this filter would hide;
   // they compute the org themselves from the bound context instead.
   'Setting',
+  // Settings history (#1623): the org's own change rows. Readers pass the org
+  // explicitly (the history route derives it from the session).
+  'SettingChange',
   // AI metering (#537). The monthly quota is per org (`aiMonthlyQuota` is a
   // tenant setting), so the usage it is counted against must be too — an
   // unscoped count let one tenant's calls exhaust another's budget.

@@ -3473,6 +3473,29 @@ model Setting {
   @@index([programId])
 }
 
+// One row per real settings change (#1623): the settings-shaped read model
+// behind the admin's per-key history and "revert to inherited". Written ONLY by
+// writeSetting() / revertSetting() (src/lib/settingsWrite.ts), in the same
+// transaction as the Setting row, from #1699's redactedDiff() — so a key flagged
+// `redact` in SETTING_SCHEMA is stored as "[redacted]", never its value. A
+// no-op save writes nothing. `newValue` null = the row at this scope was
+// deleted (reverted to the inherited value); `oldValue` null = there was none.
+// orgId null = the global layer (an operator's change).
+model SettingChange {
+  id        String   @id @default(cuid())
+  orgId     String?
+  programId String?
+  key       String
+  oldValue  String?  @db.Text
+  newValue  String?  @db.Text
+  // An id only, resolved live by the history route: an address copied here
+  // would outlive the person's erasure.
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, key, createdAt])
+}
+
 enum ProjectStatus {
   DRAFT
   ACTIVE
