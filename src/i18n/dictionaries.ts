@@ -473,6 +473,11 @@ const en = {
       capacityHeadroom: 'Mentor capacity',
       managerExclusion: 'Direct manager',
       previousPairing: 'Previous pairing',
+      requiredSkills: 'Required skills',
+      niceSkills: 'Nice-to-have skills',
+      stage: 'Programme progress',
+      title: 'Target position',
+      location: 'Location',
     },
     // Why a rule BLOCKED, as a sentence. Kept apart from `dimensions` on
     // purpose: the exclusion dimensions are named for the state that satisfies
@@ -4183,6 +4188,7 @@ const en = {
       body: '{candidate} matches one of {company}\'s open positions{position}.',
       skills: 'Matching skills: {skills}',
       related: '{skill} (related to {via})',
+      fit: 'Fit for {position}: {score}/100 (rule-based, a person decides)',
       cta: 'View profile',
     },
     // #2715 — the weekly analytics report to admins. Placeholders in `summary`
@@ -10311,6 +10317,11 @@ const tr: Dict = {
       capacityHeadroom: 'Mentor kapasitesi',
       managerExclusion: 'Doğrudan yönetici',
       previousPairing: 'Önceki eşleşme',
+      requiredSkills: 'Zorunlu beceriler',
+      niceSkills: 'Tercih edilen beceriler',
+      stage: 'Program ilerlemesi',
+      title: 'Hedef pozisyon',
+      location: 'Konum',
     },
     violations: {
       skills: 'Gereken yetkinlikler eksik',
@@ -13911,6 +13922,7 @@ const tr: Dict = {
       body: '{candidate}, {company} şirketinin açık pozisyonlarından birine uyuyor{position}.',
       skills: 'Eşleşen beceriler: {skills}',
       related: '{skill} ({via} ile ilişkili)',
+      fit: '{position} için uygunluk: {score}/100 (kurala dayalı, kararı bir insan verir)',
       cta: 'Profili görüntüle',
     },
     deadlineEmail: {
@@ -19940,6 +19952,11 @@ const de: Dict = {
       capacityHeadroom: 'Mentor-Kapazität',
       managerExclusion: 'Direkte Führungskraft',
       previousPairing: 'Frühere Paarung',
+      requiredSkills: 'Erforderliche Fähigkeiten',
+      niceSkills: 'Wünschenswerte Fähigkeiten',
+      stage: 'Programmfortschritt',
+      title: 'Zielposition',
+      location: 'Standort',
     },
     violations: {
       skills: 'Die geforderten Kompetenzen fehlen',
@@ -23542,6 +23559,7 @@ const de: Dict = {
       body: '{candidate} passt zu einer der offenen Stellen von {company}{position}.',
       skills: 'Passende Skills: {skills}',
       related: '{skill} (verwandt mit {via})',
+      fit: 'Eignung für {position}: {score}/100 (regelbasiert, entscheiden tut ein Mensch)',
       cta: 'Profil ansehen',
     },
     deadlineEmail: {
