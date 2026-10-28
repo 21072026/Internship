@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Webhook delivery log, retries and replay (#1695):** webhook delivery is now one queued `webhook.deliver` job per (event × subscription) instead of a fire-and-forget `Promise.all` — a slow receiver no longer delays another partner's delivery. Every attempt writes a `WebhookDelivery` row (status `PENDING|SUCCESS|FAILED|DEAD`, response code, truncated body, error, duration); a 5xx/408/429/timeout retries with the queue's backoff up to 8 attempts, any other answer is `DEAD` at once, and redirects are no longer followed (they walked around the SSRF re-check). Every attempt carries a stable `X-Delivery-Id`; body, `X-Signature` and `X-Event` are unchanged. A hook with 20 consecutive failures or 72h without a success is auto-disabled once (`Webhook.disabledAt`/`disabledReason`), its org's admins get one `ops-alert` mail, and the relay skips it until an admin switches it back on. New ADMIN-only, org-scoped routes: `GET /api/admin/webhooks/deliveries`, `POST /api/admin/webhooks/deliveries/[id]/replay`, `POST /api/admin/webhooks/replay-events`. `dispatchWebhook` is removed. Semantics documented in `docs/api-explorer.md`.",
+  "notes": {
+    "en": ["See every webhook delivery attempt on the Integrations page, replay a failed one or the last events, and get one e-mail if a dead endpoint is switched off."],
+    "tr": ["Entegrasyonlar sayfasında her webhook teslimat denemesini görün, başarısız olanı veya son olayları tekrar gönderin; ölü bir uç nokta kapatılırsa tek bir e-posta alın."],
+    "de": ["Sehen Sie jeden Webhook-Zustellversuch auf der Seite „Integrationen“, senden Sie einen fehlgeschlagenen oder die letzten Ereignisse erneut und erhalten Sie eine E-Mail, wenn ein toter Endpunkt abgeschaltet wird."]
+  }
+}

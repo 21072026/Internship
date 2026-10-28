@@ -5,12 +5,13 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { roleHome } from '@/lib/roleHome';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
 
 // Standalone settings page available to every authenticated role.
-export default async function AccountLayout({ children }: { children: React.ReactNode }) {
+async function AccountLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   // Back here after sign-in: /delete-account sends signed-out visitors to
   // this page, and landing on the role dashboard instead loses their way.
@@ -29,5 +30,15 @@ export default async function AccountLayout({ children }: { children: React.Reac
         {children}
       </div>
     </div>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedAccountLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="account">
+      <AccountLayout>{children}</AccountLayout>
+    </I18nScope>
   );
 }

@@ -103,3 +103,41 @@ export function mergedLevel(
   }
   return null;
 }
+
+/**
+ * A mentor (or an evaluation) vouching for a level. The confirmer may confirm
+ * the value as it stands or correct it; either way the row ends up verified
+ * by them, with the level they named. A history row is due only when the
+ * value moves — re-confirming the same value refreshes the verification and
+ * writes no change, so the history stays "what the level was", not "who
+ * clicked".
+ */
+export function confirmLevelPlan(
+  currentLevel: number | null,
+  level: number,
+  actorId: string,
+  source: Exclude<SkillLevelSource, 'SELF'>,
+  now: Date,
+) {
+  return {
+    data: { level, levelSource: source, verifiedById: actorId, verifiedAt: now, levelUpdatedAt: now },
+    change: currentLevel === level ? null : { fromLevel: currentLevel, toLevel: level },
+  };
+}
+
+/**
+ * Where a person started on a skill and where they are now — the mentee's
+ * progression strip. `history` is the row's `UserSkillLevelChange` entries in
+ * time order. The start is the level before the first change (or, when the
+ * first change was the first rating, that rating); with no history the start
+ * IS now. A strip compares two numbers, so an unrated skill returns null.
+ */
+export function skillProgression(
+  history: readonly { fromLevel: number | null; toLevel: number | null }[],
+  currentLevel: number | null,
+): { start: number; now: number } | null {
+  if (currentLevel === null) return null;
+  const first = history.find((h) => h.fromLevel !== null || h.toLevel !== null);
+  const start = first ? (first.fromLevel ?? first.toLevel) : currentLevel;
+  return { start: start ?? currentLevel, now: currentLevel };
+}

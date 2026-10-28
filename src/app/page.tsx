@@ -28,8 +28,9 @@ import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostO
 import { formatMinorPrice } from '@/lib/money';
 import { marketingPriceListForHost } from '@/lib/marketingPriceList';
 import { priceListFromSeatMinor } from '@/lib/marketingPriceListRule';
+import { I18nScope } from '@/i18n/scope';
 
-export default async function HomePage() {
+async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
   // the app and the overwhelming majority of its visitors are signed out (#1197).
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
@@ -456,5 +457,15 @@ export default async function HomePage() {
           page only, and only once marketing cookies are accepted. */}
       <TawkChat />
     </PublicShell>
+  );
+}
+
+// The landing's client components get their namespaces here: the root page has
+// no directory, so no layout, of its own (#2987, src/i18n/scope.tsx).
+export default function Home() {
+  return (
+    <I18nScope scope="home">
+      <HomePage />
+    </I18nScope>
   );
 }

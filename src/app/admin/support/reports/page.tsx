@@ -13,6 +13,7 @@ import {
   SUPPORT_REPORT_STATUS_VARIANT as STATUS_VARIANT,
   type SupportReportStatusKey,
 } from '@/lib/supportReportStatus';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Row {
   id: string;
@@ -58,6 +59,10 @@ export default function AdminSupportReportsPage() {
     }, q ? 250 : 0);
     return () => { clearTimeout(timer); ctrl.abort(); };
   }, [type, status, from, to, q, sort]);
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(rows && (type !== '' || status !== '' || from !== '' || to !== '' || q.trim() !== '') ? resultCountMessage(t.a11y, rows.length) : null);
 
   return (
     <div>

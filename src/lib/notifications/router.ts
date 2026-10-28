@@ -51,6 +51,7 @@ import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowed, isEssentialGroup } from '@/lib/emailGroups';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo } from '@/lib/shellCapabilities';
+import { chatCapableUsers, deliverChat } from '@/lib/notifications/adapters/chat';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import {
   eventDef,
@@ -77,7 +78,12 @@ export type SkipReason =
   | 'no_address'
   | 'no_adapter'
   | 'unknown_event'
-  | 'invalid_payload';
+  | 'invalid_payload'
+  // The chat adapter's (#1939): the deployment switch is off, the person has no
+  // confirmed identity any more, or their workspace's admin disabled it.
+  | 'chat_apps_off'
+  | 'no_identity'
+  | 'workspace_disabled';
 
 /**
  * A recipient. Either a bare user id (the router reads what it needs) or a row
@@ -361,7 +367,7 @@ function channelAllowed(
   // twin. See MANDATORY EVENTS at the top of the file.
   if (isEssentialGroup(def.emailGroup)) return channel === 'email' && !user.email ? 'no_address' : null;
 
-  if (channel === 'inApp') {
+  if (channel === 'inApp' || channel === 'chat') {
     return notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)
       ? null
       : 'category_off';
@@ -475,6 +481,11 @@ export async function notifyEvent<K extends NotificationEventKey>(
       if (typeof v === 'string') linkIds[k] = v;
     }
 
+    // Chat (#1939) rides along for the people who linked a chat identity —
+    // unless the caller pinned the channels explicitly (a security notice that
+    // asks for in-app only gets in-app only).
+    const chatUsers = opts?.channels ? new Set<string>() : await chatCapableUsers(normalized.map((r) => r.id));
+
     // The recipient's vertical shapes the deep link (a MARKETING rep's record
     // is /sales/leads/<id>, #2580); one lookup per org for the whole fan-out.
     const capabilitiesOf = capabilitiesMemo();
@@ -484,7 +495,9 @@ export async function notifyEvent<K extends NotificationEventKey>(
       const locale = asLocale(user.preferredLanguage);
       const link = notificationLink(asRole(user.role), def.link, linkIds, { capabilities: await capabilitiesOf(orgId) });
 
-      for (const channel of channels) {
+      const recipientChannels: readonly NotificationChannel[] =
+        chatUsers.has(rec.id) && !channels.includes('chat') ? [...channels, 'chat'] : channels;
+      for (const channel of recipientChannels) {
         const row: LedgerRow = {
           orgId,
           userId: rec.id,
@@ -526,6 +539,23 @@ export async function notifyEvent<K extends NotificationEventKey>(
             // Stays QUEUED: the job, not this function, decides whether the
             // mail was actually handed to SMTP.
             await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
+          } else {
+            result.failed += 1;
+            await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
+          }
+          continue;
+        }
+
+        if (channel === 'chat') {
+          // Its own ledger row and its own outcome: a disabled or failing
+          // workspace never touches the e-mail or in-app delivery above.
+          const outcome = await deliverChat({ userId: rec.id, orgId, eventKey: def.key, params, link, locale });
+          if (outcome.status === 'SENT') {
+            result.sent += 1;
+            await settleDelivery(deliveryId, 'SENT', { templateId: `notifications.events.${def.key}` });
+          } else if (outcome.status === 'SKIPPED') {
+            result.skipped += 1;
+            await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
           } else {
             result.failed += 1;
             await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });

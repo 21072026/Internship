@@ -10,6 +10,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { canPerformApplicationAction, canTransition } from '@/lib/applications';
 import { moveApplicationStage } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 import { CONSENTING_POOL_WHERE } from '@/lib/requisitionMatchRule';
 
 const bodySchema = z.object({ menteeId: z.string().trim().min(1).max(64) }).strict();
@@ -69,7 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       type Outcome = { applicationId: string; created: boolean; moved: boolean; fromStage: string | null; stage: string } | { conflict: true };
       let outcome: Outcome;
       try {
-        outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
+        outcome = await stageTransaction(async (tx): Promise<Outcome> => {
           const existing = await tx.application.findUnique({
             where: { requisitionId_menteeId: { requisitionId: requisition.id, menteeId } },
             select: { id: true, stage: true },

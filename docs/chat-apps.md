@@ -1,14 +1,19 @@
 # Slack and Microsoft Teams apps — #1923
 
-**Nothing is implemented yet.** There is no `ChatWorkspace` / `ChatIdentity` /
-`ChatDelivery` model in `prisma/schema.prisma`, no `src/lib/chat*`, no
-`/api/integrations/chat/*` route, no card renderer and no e2e stub — searching
-`src/` and `prisma/` for `slack` or `teams` returns link-preview marketing copy,
-a release note and a comment about Jitsi clock drift, and nothing else. The
-epic's own hard blockers have not landed either: `src/lib/notifications/router.ts`
-(#1705/#1706) and the `ChatTransport` contract (#1712) do not exist, and #1923
-says in as many words that starting before them writes the fan-out logic a third
-time into `emailService.ts`.
+**Partly implemented.** The data model exists (#1934): `ChatWorkspace`,
+`ChatIdentity` and `ChatDelivery` in `prisma/schema.prisma`, all three in
+`TENANT_MODELS`, with tokens sealed by `src/lib/chat/tokens.ts` (secretBox,
+purposes `chat-bot-token` / `chat-refresh-token`). The delivery side exists too
+(#1939): `chat` is a channel of the notification router
+(`src/lib/notifications/adapters/chat.ts`), added per recipient only for a
+person with a **confirmed** `ChatIdentity` and only while `CHAT_APPS_ENABLED=1`;
+every platform HTTP call sits behind the `ChatPlatformClient` port in
+`src/lib/chat/client/` (Slack Web API; Teams through the Bot Framework
+connector, whose `serviceUrl` is trusted only on Microsoft hosts). A disabled
+workspace or a platform refusal is recorded (`SKIPPED` / `FAILED` in
+`ChatDelivery`) and never touches the person's e-mail or in-app delivery. Still
+to come: the OAuth install (#1935), identity linking (#1937), the per-category
+channel matrix (#1707) and the console (#1958/#1960).
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the

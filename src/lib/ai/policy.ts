@@ -7,7 +7,7 @@
 // chain, and the two would disagree one day.
 
 import { prisma } from '@/lib/prisma';
-import { setSetting } from '@/lib/settings';
+import { writeSetting } from '@/lib/settingsWrite';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { AI_TASK_IDS, AI_TASKS, isAiTaskId, type AiTaskId } from '@/lib/ai/tasks';
 import { resolvePolicyChain, parseQuota, type AiPolicy } from '@/lib/ai/policyRule';
@@ -70,7 +70,7 @@ export interface AiPolicyPatch {
  * stored: a row nobody can read would only confuse the next admin.
  */
 export async function saveAiPolicy(orgId: string, patch: AiPolicyPatch): Promise<void> {
-  if (patch.enabled !== undefined) await setSetting('aiEnabled', patch.enabled ? 'true' : 'false', orgId);
+  if (patch.enabled !== undefined) await writeSetting('aiEnabled', patch.enabled ? 'true' : 'false', orgId);
   for (const task of patch.tasks ?? []) {
     if (!isAiTaskId(task.id)) continue;
     const data = {

@@ -410,7 +410,7 @@ key/value table. It is now keyed by **(`orgId`, `key`)**:
 
 Resolution is **org row → global row → `SETTING_DEFAULTS`**, and that rule lives
 in exactly one file, `src/lib/settings.ts`. Nothing else reads `prisma.setting`
-directly — `getSetting(key, orgId?)` / `getSettings(orgId?)` / `setSetting(key,
+directly — `getSetting(key, orgId?)` / `getSettings(orgId?)` / `writeSetting(key,
 value, orgId?)` are the whole surface. The org argument is optional: omitted, it
 resolves to the org bound by `withTenantScope()` (`currentOrgId()`, bound whether
 or not the flag is on), and to the global layer when no org is bound.
@@ -436,11 +436,11 @@ INTERNSHIP tenant too. Now:
   retention windows, `viewLogWindowMinutes`, `orphanApplicantGraceDays`) are read
   by jobs that sweep every tenant with none bound, so a tenant row for one would
   never be the number that fires. Reads ignore tenant rows for them,
-  `setSetting` refuses to write one, and the settings route lets only a super
+  `writeSetting` refuses to write one, and the settings route lets only a super
   admin (`isSuperAdmin`) write them — to the global row.
 
 The global row is therefore written only by a super admin (global keys), by
-deploy scripts, and by an explicit `setSetting(key, value, null)`. Existing
+deploy scripts, and by an explicit `writeSetting(key, value, null)`. Existing
 global rows keep working as the fallback for every tenant that has not set its
 own value.
 
@@ -473,7 +473,7 @@ Uniqueness has a MySQL wrinkle worth knowing: the key is enforced by
 `@@unique([orgId, programId, key])`, and MySQL treats `NULL`s as distinct in a
 unique index. The constraint therefore binds the **programme** rows only; the
 org layer (`programId = NULL`) and the global layer (both `NULL`) stay single
-because `setSetting()` is their only writer and does a read-modify-write rather
+because `writeSetting()` is their only writer and does a read-modify-write rather
 than a blind insert (pinned by `e2e/settings-resolver.spec.ts`). (`upsert` is not
 an option either way — a compound unique cannot address a `NULL` component.)
 
@@ -492,7 +492,7 @@ tenant. The full order, written once in `pickSetting()` (`src/lib/settings.ts`):
   other key is refused by the writer and ignored by the reader.
   `GLOBAL_SETTING_KEYS` is derived from the same catalogue (the keys whose scopes
   stop at `global`).
-- `setSetting(key, value, orgId, { programId })` writes a programme row only
+- `writeSetting(key, value, orgId, { programId })` writes a programme row only
   under an explicit org, and only for a programme that belongs to that org —
   checked against the database, never taken from input.
 - `resolveSetting(key, { orgId?, programId? })` in `src/lib/settingsResolver.ts`
@@ -504,7 +504,7 @@ tenant. The full order, written once in `pickSetting()` (`src/lib/settings.ts`):
   { cohortId })` returns both ids in one query.
 - One query per scope loads every key, memoised for the request
   (`withRequestScope`'s memo) or a job (`withSettingsCache(fn)`), and dropped
-  when `setSetting()` writes — so a sweep over hundreds of relations of one
+  when `writeSetting()` writes — so a sweep over hundreds of relations of one
   programme costs one settings query.
 
 The index re-key needed its own one-shot expand phase on a populated table,
@@ -651,3 +651,27 @@ is done and verified in a preview/staging environment first:
    env var so rollback is instant.
 
 Until then the flag stays off and the single-tenant production app is unchanged.
+
+#### The settings writer and its history (#1623)
+
+`src/lib/settingsWrite.ts` (server-only) holds the only two writers of a
+`Setting` row: `writeSetting(key, value, orgId?, { programId, actor })` and
+`revertSetting(key, orgId?, { actor })`. Both resolve the layer as reads do,
+**write nothing when nothing changes**, and in one transaction write the row and
+one `SettingChange` (tenant model; the actor as an id only, so no address outlives an erasure) whose `oldValue`/`newValue` come from #1699's
+`redactedDiff()` under the key's policy — `settingDiffSpec(key)`, i.e.
+`SETTING_SCHEMA[key].redact` (today `supportEmail`) stores `[redacted]`. After
+the commit they emit `setting.changed`, which the config-audit subscriber turns
+into an `AuditLog` row. They live outside `settings.ts` because that module is
+client-reachable and the event stream is not.
+
+- **Revert = delete the row at this layer**, never a copy of the parent's value,
+  so a later change upstream flows down. `DELETE /api/admin/settings?key=` goes
+  through `requirePermission('org.settings.write')`; a deployment-global key is
+  a super admin's, as in PUT.
+- `GET /api/admin/settings` and the PUT answer carry `sources` (the layer each
+  value came from) for the admin form's badges; the form sends only the keys
+  that differ from what it loaded, so an untouched field never becomes an org row.
+- `GET /api/admin/settings/history?key=&limit=` reads the caller's org only (from
+  the session); the global layer's rows are added for a super admin; an actor
+  outside the org is shown as "operator", without a name or an address.

@@ -12,6 +12,7 @@ import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
 import { renderNotification } from '@/lib/notificationText';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface NotificationItem {
   id: string;
@@ -142,6 +143,10 @@ export default function NotificationsPage() {
         type,
     })),
   ];
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (query !== '' || typeFilter !== '' || readFilter !== 'all') ? resultCountMessage(t.a11y, total) : null);
 
   return (
     <div>

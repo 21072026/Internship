@@ -4,7 +4,9 @@
 // Every stage change in the tree — the PATCH route, the bulk route, a company's
 // shortlist, an approved interview request — ends in moveApplicationStage(): a
 // guarded `updateMany` whose WHERE carries the stage the caller saw, plus
-// exactly one ApplicationEvent, inside the caller's transaction. Zero rows
+// exactly one ApplicationEvent, inside the caller's transaction — which the
+// caller opens with stageTransaction(), so the move's
+// `application.stage_changed` leaves only once it is committed (#1998). Zero rows
 // updated means somebody else moved the row first, and the caller answers
 // 409 `stage_conflict` instead of writing over them (the idiom of
 // /api/interview-requests/[id]). A hand-rolled `prisma.application.update` of
@@ -24,6 +26,7 @@ import {
   type DispositionCode,
   type InterestLike,
 } from '@/lib/applications';
+import { noteStageMove } from '@/lib/applicationStageEvents';
 
 export type StageDb = Prisma.TransactionClient;
 
@@ -65,6 +68,9 @@ export async function moveApplicationStage(db: StageDb, input: StageMoveInput): 
   await db.applicationEvent.create({
     data: { applicationId, fromStage: expectedStage, toStage, actorId: input.actorId, note, createdAt: now },
   });
+  // Raised after the caller's transaction commits — never from inside it
+  // (src/lib/applicationStageEvents.ts, #1998).
+  noteStageMove({ applicationId, fromStage: expectedStage, toStage, actorId: input.actorId });
   return { ok: true, fromStage: expectedStage, toStage };
 }
 

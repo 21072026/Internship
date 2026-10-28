@@ -339,6 +339,10 @@ export default defineConfig({
           // because CI serves a production build. Unset everywhere else, so the
           // routes are a 404 on preview and production.
           E2E_ERROR_ROUTES: '1',
+          // Self-serve tenant signup (#1749) is OFF by default everywhere; the
+          // e2e server turns it on so e2e/signup-org.spec.ts can drive it. The
+          // off state is pinned by scripts/test/self-serve-signup.test.mjs.
+          SELF_SERVE_SIGNUP: 'true',
           // Per-model database query tally for the N+1 report (#1608,
           // e2e/db-query-report.spec.ts). Same opt-in shape as E2E_ERROR_ROUTES:
           // unset everywhere else, where /api/dev/db-tally is a 404.

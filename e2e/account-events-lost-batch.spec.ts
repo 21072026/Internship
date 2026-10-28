@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { createHash, randomBytes } from 'crypto';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { setSetting } from '../src/lib/settings';
+import { writeSetting } from '../src/lib/settingsWrite';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // Loss, win-back, source fill and the batch endpoint of the account-event feed
@@ -440,7 +440,7 @@ test('an account waiting for the default owner holds back its later events; the 
     expect(await prisma.integrationEvent.count({ where: { orgId, eventId: { in: ids } } })).toBe(0);
     expect(await prisma.company.count({ where: { orgId, externalId } })).toBe(0);
   } finally {
-    await setSetting('defaultLeadOwnerId', ownerId, orgId);
+    await writeSetting('defaultLeadOwnerId', ownerId, orgId);
   }
 
   const again = await (await postBatch(request, { events })).json();

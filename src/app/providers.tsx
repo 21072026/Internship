@@ -6,8 +6,10 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { LiveRegionProvider } from '@/components/ui/LiveRegion';
 import { CookieConsent } from '@/components/CookieConsent';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
+import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
+import { ErrorTrackingListener } from '@/components/ErrorTrackingListener';
 import { TimezoneSync } from '@/components/TimezoneSync';
 import { MeetingLauncherProvider } from '@/components/meeting/MeetingLauncher';
 import { FloatingNotesProvider } from '@/components/meeting/FloatingNotes';
@@ -29,7 +31,8 @@ export function Providers({
 }: {
   children: React.ReactNode;
   locale: Locale;
-  dict: ClientDictionary;
+  /** The shell namespaces only (#2987) — segments add theirs through <I18nScope>. */
+  dict: Partial<ClientDictionary>;
   /** The request's vertical (#2501), resolved by the root layout. */
   vertical: VerticalKey;
   /** The request's organization brand (#2922); null = the vertical default. */
@@ -57,8 +60,13 @@ export function Providers({
               <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
             </FloatingNotesProvider>
             <CookieConsent />
+            {/* Renders nothing; inert without NEXT_PUBLIC_ERROR_TRACKING (#1600). */}
+            <ErrorTrackingListener />
             {/* Signed-in only; renders nothing otherwise (#3130). */}
             <FeedbackWidget replay={feedbackReplay} />
+            {/* WCAG 2.2.1: warns five minutes before an idle session ends and
+                offers to extend it; signed-in only (#2864). */}
+            <SessionTimeoutWarning />
             <ActivityTracker />
             <TimezoneSync />
           </ToastProvider>

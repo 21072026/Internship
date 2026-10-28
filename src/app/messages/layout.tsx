@@ -9,6 +9,7 @@ import { RoleShell } from '@/components/RoleShell';
 import { resolveRequestVertical } from '@/i18n/server';
 import { themeColorFor } from '@/lib/accent';
 import { requestBrand } from '@/lib/hostBrand';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -44,7 +45,7 @@ export async function generateViewport(): Promise<Viewport> {
 // top bar and padding sat around a frame sized to the whole viewport and pushed
 // the chat 88px past the bottom of the screen (#2463). On a phone MessagesShell's
 // own header is the way back out.
-export default async function MessagesLayout({ children }: { children: React.ReactNode }) {
+async function MessagesLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   // The callbackUrl is what makes the manifest's "Messages" shortcut (#2084)
   // land here after signing in, instead of on the role's home page.
@@ -54,5 +55,15 @@ export default async function MessagesLayout({ children }: { children: React.Rea
     <RoleShell mobileChrome={false}>
       <MessagesShell homeHref={roleHome(session.user.role)}>{children}</MessagesShell>
     </RoleShell>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedMessagesLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="messages">
+      <MessagesLayout>{children}</MessagesLayout>
+    </I18nScope>
   );
 }

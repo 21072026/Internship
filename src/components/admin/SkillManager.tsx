@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, GitMerge, Link2, Loader2, Pencil, Plus, X } from 'lucide-react';
 import { useT } from '@/i18n/client';
@@ -135,6 +136,9 @@ function Vocabulary() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [q, status]);
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q.trim() !== '' ? resultCountMessage(t.a11y, rows.length) : null);
 
   useEffect(() => {
     const timer = setTimeout(load, 200);

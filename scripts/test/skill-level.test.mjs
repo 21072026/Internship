@@ -87,3 +87,34 @@ test('merge: a confirmed loser beats a self-rated target, never the other way', 
 test('merge: an unrated loser changes nothing', () => {
   assert.equal(mergedLevel(row('t', null), row('l', null)), null);
 });
+
+import { confirmLevelPlan } from '../../src/lib/skillLevelRule.ts';
+
+test('confirming the standing value verifies it and writes no history', () => {
+  const now = new Date('2026-10-27T12:00:00Z');
+  const plan = confirmLevelPlan(3, 3, 'mentor-1', 'MENTOR', now);
+  assert.equal(plan.change, null);
+  assert.deepEqual(plan.data, { level: 3, levelSource: 'MENTOR', verifiedById: 'mentor-1', verifiedAt: now, levelUpdatedAt: now });
+});
+
+test('correcting the value while confirming writes exactly one change', () => {
+  const plan = confirmLevelPlan(5, 3, 'mentor-1', 'MENTOR', new Date());
+  assert.deepEqual(plan.change, { fromLevel: 5, toLevel: 3 });
+  assert.deepEqual(confirmLevelPlan(null, 2, 'm', 'MENTOR', new Date()).change, { fromLevel: null, toLevel: 2 });
+});
+
+import { skillProgression } from '../../src/lib/skillLevelRule.ts';
+
+test('progression: the first rating is the start, the row is now', () => {
+  const history = [{ fromLevel: null, toLevel: 2 }, { fromLevel: 2, toLevel: 3 }, { fromLevel: 3, toLevel: 4 }];
+  assert.deepEqual(skillProgression(history, 4), { start: 2, now: 4 });
+});
+
+test('progression: a level that predates the history starts where it was', () => {
+  assert.deepEqual(skillProgression([{ fromLevel: 3, toLevel: 5 }], 5), { start: 3, now: 5 });
+});
+
+test('progression: no history means no movement; unrated means no strip', () => {
+  assert.deepEqual(skillProgression([], 3), { start: 3, now: 3 });
+  assert.equal(skillProgression([{ fromLevel: null, toLevel: 3 }, { fromLevel: 3, toLevel: null }], null), null);
+});

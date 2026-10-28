@@ -37,6 +37,20 @@ test('renders for a signed-out visitor', async ({ page }) => {
   await expect(page.getByTestId('trust-controls')).toBeVisible();
   await expect(page.getByTestId('trust-residency')).toBeVisible();
   await expect(page.getByTestId('trust-docs')).toBeVisible();
+  // The assurance layer (#2031): VDP, testing + open findings, questionnaire,
+  // SOC 2 decision, security.txt.
+  await expect(page.getByTestId('trust-assurance')).toBeVisible();
+  await expect(page.getByTestId('trust-assurance-securityTxt')).toHaveAttribute('href', '/.well-known/security.txt');
+});
+
+test('links the supply-chain evidence (#2059)', async ({ page }) => {
+  await page.goto('/trust');
+
+  // Procurement asks for these three by name and will not sign up to get them.
+  const docs = page.getByTestId('trust-docs');
+  await expect(docs.locator('a[href="/sbom.cdx.json"]')).toHaveCount(1);
+  await expect(docs.locator('a[href$="/docs/trust/vulnerability-management.md"]')).toHaveCount(1);
+  await expect(docs.locator('a[href$="/docs/legal/third-party-licenses.md"]')).toHaveCount(1);
 });
 
 test('publishes the subprocessor register as a table', async ({ page }) => {
