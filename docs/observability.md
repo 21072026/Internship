@@ -153,3 +153,44 @@ With the DSN unset the app behaves exactly as before: `captureError()` returns b
 anything — no fetch, no timer, no console line. A send that fails (wrong DSN, receiver down)
 logs one `[error-tracking] send failed` warning per process and is otherwise silent; it never
 fails the request or changes how a job settles.
+
+# Core Web Vitals (#1593)
+
+k6 measures the server; this measures the visitor's browser. Two halves:
+
+## Field data — `NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE`
+
+`<WebVitalsReporter>` (mounted in `providers.tsx`, Next's `useReportWebVitals`) beacons LCP,
+CLS, INP, FCP and TTFB for a sampled share of page loads to `POST /api/telemetry/vitals`, which
+writes one structured log line per metric:
+
+```
+[INFO] web_vital {"requestId":"…","metric":"LCP","value":2140,"rating":"good","route":"/portal/meetings/[id]","navigationType":"navigate"}
+```
+
+- **Sample rate**: build-time, 0…1, unset = **off** (the reporter does nothing and the route
+  answers 204). Recommended start: `0.1` — enough samples for a p75 per route on a normal day,
+  one small beacon per metric per sampled load.
+- **What a sample carries** (`src/lib/webVitalsRule.ts`): name, value, rating band, a route
+  **template** (`/admin/candidates/[id]` — the query dropped, every id-like segment replaced) and
+  the navigation type. No user, session, user agent or query string. The route re-derives the
+  template, because a body is never trusted.
+- Anonymous by design (the landing page is the screen that matters), so it is rate-limited to
+  60 per 10 min per IP and writes nothing to the database. The p75 per route is a log query:
+  `grep web_vital | jq` over the container log.
+
+## The CI budget — `e2e/web-vitals-budget.spec.ts` (`@smoke`)
+
+Runs in the PR gate against the production build it already serves (`npm run start`) and loads
+`/` (anonymous) and `/portal` (a seeded mentee, fresh browser cache) with buffered
+`PerformanceObserver`s. Budgets per page are in `e2e/web-vitals-budget.json`, each next to the
+value it was set from:
+
+| Number | Why it is budgeted |
+|---|---|
+| `jsKb` — compressed JavaScript of the first load | deterministic per build: the budget that catches a heavy library landing in a shared chunk |
+| `cls` | stable on a runner; a layout shift is a real regression |
+| `lcpMs` | runner-noisy — a ceiling for "something broke", not a tuning target. The runner is not throttled, so a 4G phone is slower than this number |
+
+A local `npm run dev` run skips it (unminified bundles); `PERF_BUDGET=1` runs it against a local
+`npm run start`. Raising a budget is a deliberate line in the PR that pays for it.
