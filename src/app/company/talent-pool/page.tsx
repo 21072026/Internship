@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, ExternalLink, Users } from 'lucide-react';
+import { Search, ExternalLink, Users } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useT } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 
 interface Candidate {
   id: string;
@@ -21,8 +22,8 @@ interface Candidate {
   avatarUrl?: string | null;
 }
 
-// Premium talent-pool search (Faz 1). Shows a locked upsell when the company
-// lacks the TALENT_POOL_SEARCH entitlement (API returns 403 feature_locked).
+// Premium talent-pool search (Faz 1). Shows the shared upgrade prompt (#1745)
+// when the company lacks the TALENT_POOL_SEARCH entitlement (403 feature_locked).
 const PAGE_SIZE = 24;
 
 export default function TalentPoolPage() {
@@ -78,11 +79,7 @@ export default function TalentPoolPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{tp.title}</h1>
         <p className="text-gray-500 mb-6">{tp.subtitle}</p>
-        <Card className="text-center py-12 max-w-lg mx-auto">
-          <Sparkles className="h-12 w-12 text-blue-500 mx-auto mb-4" />
-          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">{tp.lockedTitle}</p>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto">{tp.lockedBody}</p>
-        </Card>
+        <UpgradePrompt gate={{ code: 'feature_locked', feature: 'TALENT_POOL_SEARCH' }} viewer="company" audience="EMPLOYER" className="max-w-lg mx-auto" />
       </div>
     );
   }

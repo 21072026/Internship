@@ -550,6 +550,16 @@ marketing names redirect there, and their apex now serves **mail only**.
   transaction), which hands the sealed mail to `enqueueMail()` with key `draft:<id>`. A new mail
   category gets an entry in `OUTBOUND_CATEGORIES` (the unit test fails otherwise); never add a
   "skip approval" flag to `sendEmail()`.
+- **Nudges are one evaluator with two hard limits** ([`docs/nudges.md`](docs/nudges.md), #1684):
+  an admin-authored `NudgeRule` fires on an allowlisted NON-stage event or the daily
+  `nudge.evaluate` scan; stage-change rules are `AutomationRule` (#1703) and are refused at
+  write time. A segment reaches Prisma only through `src/lib/nudges/segment.ts` (strict zod
+  allowlist, no pass-through). `planRecipients()` (`src/lib/nudges/rule.ts`) is the one
+  per-person decision — live run and dry run both call it — and its two hard limits are not
+  configurable: no nudge to a dormant first contact (no third dormancy mail) and none to a
+  mentee at an ending stage (outcome copy is the mentor's). Dedupe is the `NudgeSend` row,
+  claimed before the send; mail is `sendEmail()` category `nudge`. Recipients are MENTOR and
+  MENTEE rows only — a role added later must also call `canSendMarketingEmail()`.
 - **One meeting link resolver, one link check** (`docs/video-calls-jaas.md` § Bring your own
   link, #2007): every meeting-creation path gets its room from `resolveMeetingLink()`
   (`src/lib/meetingRoom.ts`) — pasted link → the organiser's saved `personalMeetingUrl` (under

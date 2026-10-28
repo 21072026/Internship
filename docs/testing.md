@@ -208,11 +208,18 @@ The imports have to be **dynamic** and come after `register()`: a static import 
 above it and would resolve before the hook is installed.
 
 Anything that needs a rendered page, a session cookie or a Prisma query stays in `e2e/`
-under Playwright. The one awkward case is the `e2e/*.unit.spec.ts` files (16 of them at the
-time of writing, and the set keeps growing — count them, don't trust this sentence): they
-are pure, but they import through the `@/` alias, which is why they were written against
-Playwright's resolver. They will move to a real unit runner in #1598; until then they run
-in the browser suite and **contribute no coverage**.
+under Playwright. The one awkward case is the `e2e/*.unit.spec.ts` files (about 70 at
+the time of writing — count them, don't trust this sentence): they are pure, but they were
+written against Playwright's resolver for the `@/` alias, so they run in the browser suite
+and **contribute no coverage**. The resolve hook above handles `@/` too (#2264), so a new
+pure test belongs in `scripts/test/`, not in `e2e/`.
+
+**#1598 decided against a third runner (Vitest).** Node already strips TypeScript and
+measures coverage, so moving a spec is mechanical: `@playwright/test` becomes `node:test` +
+`node:assert/strict`, `expect(a).toBe(b)` becomes `assert.equal(a, b)`, and the `@/lib/x`
+imports become dynamic imports after `register()`. Move a spec when it pins a module the
+coverage gate cares about. `relative-time` and `locale-dates` moved first, and that put
+`relativeTime.ts` under a floor. Nobody is porting the remaining files in bulk.
 
 ### The coverage ratchet
 
@@ -241,7 +248,7 @@ Two lists live in that script:
 | List | What it means |
 |------|---------------|
 | `FLOORS` | Modules with real coverage today. Each carries a floor, the measured value, and the incident its suite pins down. |
-| `AWAITING_TESTS` | The wave-0/1 modules (#1592) that score 0% under this runner: `orgContext`, `entitlements`, `planGate`, `pipeline`, `dormantFirstContact`, `relativeTime`. |
+| `AWAITING_TESTS` | The wave-0/1 modules (#1592) that still score 0% under this runner: `orgContext`, `entitlements`, `planGate`, `dormantFirstContact` — all four reach Prisma, so each needs its database-free rule extracted before it can have a suite. (`pipeline` left in #2264, `relativeTime` in #1598.) |
 
 `AWAITING_TESTS` is a ratchet, not an allowlist — the same shape as
 `PENDING_REGISTRATION` in `check-tenant-models.mjs`. It is printed on every run with a
