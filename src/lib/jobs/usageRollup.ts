@@ -1,9 +1,14 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { withinTenant, orgWhere } from '@/lib/tenantFilter';
+import { broadcastRecipientsInRange } from '@/lib/broadcastQuota';
 import {
   COMPUTED_METRICS,
   activeMatchedPairs,
   countAdminSeats,
+  countOrgCompanies,
+  countOrgPrograms,
+  periodRange,
   rollupPeriods,
   setUsage,
   type Period,
@@ -63,6 +68,19 @@ async function computeMetric(metric: UsageMetric, orgId: string, period: Period)
     // also why a closed period keeps the last value written for it.
     case 'ADMIN_SEATS':
       return countAdminSeats(orgId);
+    // Same point-in-time reasoning as seats (#1763).
+    case 'COMPANIES':
+      return countOrgCompanies(orgId);
+    case 'PROGRAMS':
+      return countOrgPrograms(orgId);
+    // The quota's own count (getAiQuota in aiGate.ts): a provider failure is
+    // recorded but never consumes quota, and the default org takes NULL rows.
+    case 'AI_CALLS':
+      return prisma.aiUsage.count({
+        where: withinTenant({ createdAt: periodRange(period), outcome: { not: 'provider_error' } }, await orgWhere(orgId)),
+      });
+    case 'BROADCAST_RECIPIENTS':
+      return broadcastRecipientsInRange(orgId, periodRange(period));
     default:
       // COMPUTED_METRICS is derived from the catalogue, so a metric added there
       // without a branch here lands loudly instead of silently writing zero.

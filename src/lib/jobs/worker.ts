@@ -79,6 +79,13 @@ export interface WorkerOptions {
    */
   onDeadLetter?: (job: JobRecord, error: string) => Promise<void> | void;
   /**
+   * Called for every failed attempt with what the handler threw (#1600) — the
+   * runtime reports it to the error tracker, a retry as a warning and a
+   * dead-letter as an error. Fire and forget: never awaited, its failure
+   * swallowed, so a tracker outage cannot change how the job settles.
+   */
+  onError?: (job: JobRecord, error: unknown, outcome: 'retried' | 'deadLettered') => void;
+  /**
    * Runs a handler for a job that carries an `orgId` inside that tenant's
    * context (#1561/#1677) — the runtime passes `runWithOrg`. Only the handler
    * is bound: the queue's own reads and writes (claim, ledger, settle) stay
@@ -212,6 +219,13 @@ export function createWorker(opts: WorkerOptions): JobWorker {
       // handler. Not this job's fault — its lease is released by shutdown().
       if (stopping && abort.signal.aborted && !(e instanceof JobTimeoutError)) return 'released';
       const outcome = failureOutcome(attempt, job.maxAttempts, now(), handler?.backoff ?? DEFAULT_BACKOFF, random);
+      if (opts.onError) {
+        try {
+          opts.onError({ ...job, attempts: attempt }, e, outcome.status === 'DEAD_LETTER' ? 'deadLettered' : 'retried');
+        } catch {
+          // The job's settle below matters; the report does not.
+        }
+      }
       if (outcome.status === 'DEAD_LETTER') {
         const settled = await settle(job, { status: 'DEAD_LETTER', attempts: attempt, lastError: message });
         if (settled && opts.onDeadLetter) {

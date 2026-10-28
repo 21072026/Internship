@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Relation {
   id: string;
@@ -41,6 +42,10 @@ export default function CompanyOverviewPage() {
       (!stage || r.pipelineStatus === stage) &&
       (!q || r.mentee.fullName.toLowerCase().includes(q) || (r.mentee.university?.toLowerCase().includes(q) ?? false))
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (q !== '' || stage !== '') ? resultCountMessage(t.a11y, shown.length) : null);
 
   return (
     <div>

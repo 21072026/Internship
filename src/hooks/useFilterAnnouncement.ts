@@ -36,3 +36,20 @@ export function useFilterAnnouncement(message: string | null, delay = 700) {
     return () => clearTimeout(id);
   }, [message, delay, announce]);
 }
+
+/** The `a11y` strings a result count is spoken with. */
+export interface ResultCountStrings {
+  resultsShown: string;
+  resultsShownOne: string;
+  noResultsShown: string;
+}
+
+/**
+ * "No results" / "1 result shown" / "{count} results shown" — the sentence a
+ * filtered list hands to `useFilterAnnouncement`, so every list says it alike.
+ */
+export function resultCountMessage(a11y: ResultCountStrings, count: number): string {
+  if (count === 0) return a11y.noResultsShown;
+  if (count === 1) return a11y.resultsShownOne;
+  return a11y.resultsShown.replace('{count}', String(count));
+}

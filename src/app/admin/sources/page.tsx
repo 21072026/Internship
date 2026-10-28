@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Source {
   id: string;
@@ -95,6 +96,10 @@ export default function AdminSourcesPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = sources.filter((s) => !q || s.name.toLowerCase().includes(q));
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <div>

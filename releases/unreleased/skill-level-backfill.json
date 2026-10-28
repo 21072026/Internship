@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Legacy skill levels on the canonical rows (#1822):** new deploy backfill `0034-skill-levels` (`prisma/backfill-skill-levels.mjs`, after `0030-skill-taxonomy`) copies `User.skillLevels` onto `UserSkill.level` with one `UserSkillLevelChange` per fill. Insert-only per row (`planLegacyLevels()` in `prisma/skill-taxonomy-lib.mjs`): only a row with no level and no history is filled, so a re-run is a no-op and a level set or cleared since is never overwritten. The JSON column is not touched."
+}

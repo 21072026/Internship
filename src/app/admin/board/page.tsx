@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, User, ChevronDown, ChevronRight, AlertTriangle, LayoutGrid } from 'lucide-react';
+import { GraduationCap, User, LayoutGrid } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { groupResolvedStages, type PipelineGroupKey } from '@/lib/pipeline';
+import { groupResolvedStages } from '@/lib/pipeline';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
@@ -14,20 +14,18 @@ import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
-import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
+import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
+import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
+import { OverdueBadge } from '@/components/board/OverdueBadge';
+import { useBoardFilters } from '@/components/board/useBoardFilters';
+import { useBoardWipLimits } from '@/components/board/useBoardWipLimits';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { isStageOverdue } from '@/lib/stageClock';
 import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
 import { SavedViews } from '@/components/SavedViews';
-import {
-  DEFAULT_BOARD_WIP_LIMIT,
-  isOverWipLimit,
-  isWipSaturated,
-  resolveWipLimit,
-  type WipColumn,
-} from '@/lib/boardWip';
+import { isWipSaturated, type WipColumn } from '@/lib/boardWip';
 
 interface Relation {
   id: string;
@@ -59,22 +57,15 @@ export default function AdminBoardPage() {
   // Work-in-progress limits (#1439). Was a hardcoded 8 here, which every column
   // of a large pipeline breached — so the limit is configuration now: the
   // org-wide `boardWipLimit` setting, overridable per stage, and switchable off.
-  // Both come from the one endpoint that already answers "what applies to this
-  // stage"; the rule that combines them lives in src/lib/boardWip.ts.
-  const [wipDefault, setWipDefault] = useState<number | null>(DEFAULT_BOARD_WIP_LIMIT);
-  const [wipPerStage, setWipPerStage] = useState<Record<string, number | null>>({});
+  // The rule that combines them lives in src/lib/boardWip.ts.
+  const resolvedWipLimit = useBoardWipLimits();
   // moveTo is also called much later from a toast's "Undo", where the closed-over
   // `relations` would be stale — read the live list through a ref instead.
   const relationsRef = useRef<Relation[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [hideEmpty, setHideEmpty] = useState(false);
+  const { search, setSearch, hideEmpty, setHideEmpty } = useBoardFilters();
   const [mobileStage, setMobileStage] = useState('');
-  // Keyed by group, but by a plain string: a tenant with custom stages gets a
-  // "custom" group that isn't one of the three built-ins, and an unvisited key
-  // reads as undefined → expanded, which is the wanted default anyway.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // The groups the VIEWER actually has (#828) — built from the resolved stages,
   // so a customized pipeline is not silently dropped on the desktop board.
   const groups = useMemo(() => groupResolvedStages(stages), [stages]);
@@ -85,28 +76,6 @@ export default function AdminBoardPage() {
     setRelations(data.relations ?? []);
     setLoading(false);
   }, []);
-
-  // Advisory decoration on top of the board: a failed request leaves the
-  // resolved default in place rather than blanking the board or retrying.
-  const fetchWipLimits = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/stage-sla');
-      if (!res.ok) return;
-      const data = await res.json();
-      setWipDefault(data.defaultWipLimit ?? null);
-      setWipPerStage(
-        Object.fromEntries(
-          ((data.stages ?? []) as { key: string; wipLimit: number | null }[]).map((s) => [s.key, s.wipLimit ?? null])
-        )
-      );
-    } catch {
-      /* keep the default */
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchWipLimits();
-  }, [fetchWipLimits]);
 
   useEffect(() => {
     relationsRef.current = relations;
@@ -205,17 +174,13 @@ export default function AdminBoardPage() {
   const wipColumns: WipColumn[] = stages.map((s) => ({
     status: s.key,
     count: itemsFor(s.key).length,
-    limit: resolveWipLimit(s.key, wipDefault, wipPerStage),
+    limit: resolvedWipLimit(s.key),
   }));
   // When every column breaches, the amber chips have stopped comparing
   // anything: they are replaced by one line that says the limit is wrong for
   // this programme and links to where it is changed (#1439).
   const wipSaturated = isWipSaturated(wipColumns);
-  const wipLimitFor = (status: string) =>
-    wipSaturated ? null : resolveWipLimit(status, wipDefault, wipPerStage);
-
-  const toggleGroup = (key: PipelineGroupKey) =>
-    setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+  const wipLimitFor = (status: string) => (wipSaturated ? null : resolvedWipLimit(status));
 
   // Phone view opens on the first stage that has anyone in it (see the effect above).
   const activeStage = mobileStage || stages[0]?.key || '';
@@ -248,12 +213,7 @@ export default function AdminBoardPage() {
           >
             {r.mentee.fullName}
           </Link>
-          {overdue && (
-            <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-1.5 py-0.5">
-              <AlertTriangle className="h-3 w-3" />
-              {t.adminBoard.overdue}
-            </span>
-          )}
+          {overdue && <OverdueBadge />}
         </div>
         {r.mentee.university && (
           <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
@@ -284,14 +244,6 @@ export default function AdminBoardPage() {
 
   const renderColumn = (status: string) => {
     const items = itemsFor(status);
-    const limit = wipLimitFor(status);
-    const overLimit = isOverWipLimit({ status, count: items.length, limit });
-    // Says WHICH limit was passed, rather than "over the recommended limit" —
-    // with the number configurable per stage, a warning that does not name it
-    // cannot be acted on.
-    const wipWarning = overLimit
-      ? t.adminBoard.wipWarning.replace('{count}', String(items.length)).replace('{limit}', String(limit))
-      : undefined;
     return (
       <div
         key={status}
@@ -314,24 +266,7 @@ export default function AdminBoardPage() {
           dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
         }`}
       >
-        <div className="flex items-center justify-between mb-3 px-1">
-          <span data-testid={`board-column-title-${status}`} className="text-xs font-semibold text-gray-700">{label(status)}</span>
-          <span
-            /* Named so a test can read one column's count and its warning
-               without matching on the label text (#1346). */
-            data-testid={`board-column-count-${status}`}
-            title={wipWarning}
-            className={`text-xs rounded-full px-2 py-0.5 border ${
-              overLimit
-                ? 'text-amber-700 bg-amber-50 border-amber-300 font-semibold'
-                : 'text-gray-400 bg-white border-gray-200'
-            }`}
-          >
-            {items.length}{overLimit ? ` / ${limit}` : ''}
-            {/* A `title` on a plain span reaches a mouse and nothing else. */}
-            {wipWarning && <span className="sr-only">{wipWarning}</span>}
-          </span>
-        </div>
+        <BoardColumnHeader status={status} label={label(status)} count={items.length} limit={wipLimitFor(status)} />
 
         <div className="space-y-2 min-h-[40px]">
           {items.map(renderCard)}
@@ -426,42 +361,12 @@ export default function AdminBoardPage() {
             </Link>
           </div>
         )}
-        {groups.map((group) => {
-          const statuses = hideEmpty
-            ? group.statuses.filter((s) => itemsFor(s).length > 0)
-            : group.statuses;
-          const groupTotal = group.statuses.reduce((n, s) => n + itemsFor(s).length, 0);
-          if (hideEmpty && groupTotal === 0) return null;
-          const isCollapsed = collapsed[group.key];
-          return (
-            <section key={group.key} className="rounded-xl border border-gray-100 bg-white/40">
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.key)}
-                aria-expanded={!isCollapsed}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left"
-              >
-                {isCollapsed ? <ChevronRight className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                <span className="text-sm font-semibold text-gray-800">
-                  {(t.adminBoard.groups as Record<string, string>)[group.key]}
-                </span>
-                {/* gray-700, not the muted token: this chip carries its own
-                    gray-100 background, and even the raised gray-500 only makes
-                    4.4:1 on it (4.1:1 on the dark remap) — #2131. */}
-                <span className="text-xs text-gray-700 bg-gray-100 rounded-full px-2 py-0.5">{groupTotal}</span>
-              </button>
-              {!isCollapsed && (
-                <HorizontalScrollArea
-                  testId={`board-scroll-${group.key}`}
-                  label={t.a11y.scrollableColumns}
-                  className="flex gap-4 px-3 pb-4"
-                >
-                  {statuses.map(renderColumn)}
-                </HorizontalScrollArea>
-              )}
-            </section>
-          );
-        })}
+        <BoardPhaseGroups
+          groups={groups}
+          countFor={(s) => itemsFor(s).length}
+          hideEmpty={hideEmpty}
+          renderColumns={(statuses) => statuses.map(renderColumn)}
+        />
       </div>
       )}
 

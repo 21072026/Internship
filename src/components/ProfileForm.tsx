@@ -119,6 +119,8 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   // is the shape the API takes and the shape a paste has to survive as (#2314).
   const [skills, setSkills] = useState<string[]>([]);
   const [skillLevels, setSkillLevels] = useState<Record<string, number>>({});
+  // Levels a mentor confirmed (#1822), keyed by the typed skill.
+  const [verifiedLevels, setVerifiedLevels] = useState<Record<string, number>>({});
   // What the completeness meter reads (mentee only): the SAVED profile, not
   // the unsaved form — the meter must not claim a field that a reload would
   // show empty. Refreshed on load, on a successful save and on a CV upload or
@@ -153,7 +155,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   useEffect(() => {
     fetch('/api/profile')
       .then((res) => res.json())
-      .then(({ user }) => {
+      .then(({ user, verifiedLevels: verified }) => {
         if (user) {
           setUserId(user.id);
           setInitialCv(user.cvUrl || null);
@@ -164,6 +166,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           setAvatarUrl(user.avatarUrl || null);
           setFullName(user.fullName || '');
           setSkillLevels((user.skillLevels && typeof user.skillLevels === 'object') ? user.skillLevels : {});
+          setVerifiedLevels(verified && typeof verified === 'object' ? verified : {});
           setSkills(Array.isArray(user.skills) ? user.skills : []);
           setSavedProfile(completenessSnapshot(user));
           reset({
@@ -463,7 +466,18 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {list.map((s) => (
                         <div key={s} className="flex items-center justify-between gap-2 text-sm bg-gray-50 rounded-lg px-3 py-1.5">
-                          <span className="truncate text-gray-700">{s}</span>
+                          <span className="truncate text-gray-700">
+                            {s}
+                            {verifiedLevels[s] ? (
+                              <span
+                                className="ml-1.5 text-xs text-green-700 dark:text-green-400"
+                                title={t.skillConfirm.verifiedTitle}
+                                data-testid="skill-verified"
+                              >
+                                ✓ {verifiedLevels[s]}/5 · {t.skillConfirm.confirmed}
+                              </span>
+                            ) : null}
+                          </span>
                           <SkillRating
                             label={s}
                             value={skillLevels[s] ?? 0}

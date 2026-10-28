@@ -22,11 +22,12 @@ import { availableModes, canUsePortal } from '@/lib/dualRole';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { PortalTabs } from '@/components/PortalTabs';
+import { I18nScope } from '@/i18n/scope';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
 
-export default async function PortalLayout({ children }: { children: React.ReactNode }) {
+async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -123,5 +124,15 @@ export default async function PortalLayout({ children }: { children: React.React
       </PipelineStagesProvider>
     </ResponsiveShell>
     </>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedPortalLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="portal">
+      <PortalLayout>{children}</PortalLayout>
+    </I18nScope>
   );
 }

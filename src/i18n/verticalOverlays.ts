@@ -149,6 +149,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorAutoAssign: 'Whoever registers through your link becomes your lead automatically — no assignment step. The link works once and expires after 7 days.',
       },
       notifications: {
+        automationEmail: { mentorCheckIn: { cta: 'Open my leads' } },
         invitationEmail: {
           roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
         },
@@ -778,6 +779,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           newsletter: {
             d: 'Short, emoji-led issues of CV and interview advice, written once in English, Turkish and German and sent to each reader in their own language. Send by hand or on a weekly, fortnightly or monthly schedule; sales reps get a coaching angle on the same issue, every send is kept on the record, and one press unsubscribes.',
           },
+          groupSessions: {
+            d: 'Publish a kickoff briefing, an office hour or an info session to a team or the whole organisation. People register for a place; past the cap they join a waitlist and move up automatically — and are told — when someone cancels. The host records who attended, and each participant sees their own record.',
+          },
           mentorSelfApply: {
             t: 'Self-serve sales rep applications',
             d: 'Anyone can apply to become a sales rep without an account; admins review, take into review, approve or reject from a queue, and approval creates or upgrades the rep’s account automatically.',
@@ -850,7 +854,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         escalateHint: 'Escalate after: if a stage is still overdue this many days after its deadline passed, the organisation’s administrators are told too — once. Leave it empty and only the rep is reminded, as before.',
         scopeMentor: 'Rep',
         allMentors: 'Every rep',
-        overrideHint: 'You are editing an override. For these records it beats the organisation’s number — rep and cohort together, then rep, then cohort, then the organisation. Leave a stage empty to inherit. Escalation and board limits stay organisation-wide.',
+        overrideHint: 'You are editing an override. For these records it beats the organisation’s number — rep and cohort together, then rep, then cohort, then the organisation. Leave a stage empty to inherit. An empty escalation inherits too; board limits stay organisation-wide.',
         sourceMentor: 'this rep',
         sourceMentorCohort: 'this rep in this cohort',
         subtitle: 'How long anyone may wait at a stage before the rep is warned. Leave a stage empty and it has no rule — an organisation that sets none keeps working exactly as before.',
@@ -1266,6 +1270,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorAutoAssign: 'Bağlantınla kaydolan kişi otomatik olarak senin müşteri adayın olur — ayrıca atama yapman gerekmez. Bağlantı tek kullanımlıktır ve 7 gün sonra geçersiz olur.',
       },
       notifications: {
+        automationEmail: { mentorCheckIn: { cta: "Lead'lerimi aç" } },
         invitationEmail: {
           roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
         },
@@ -1777,6 +1782,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           newsletter: {
             d: 'CV ve mülakat tavsiyelerini emojili, kısa sayılar hâlinde ulaştırır; İngilizce, Türkçe ve Almanca bir kez yazılır, her okuyucuya kendi dilinde gider. Elle ya da haftalık, iki haftalık, aylık programla gönderilir; satış temsilcileri aynı sayıda koçluk bakışını da görür, her gönderim kayda geçer ve tek dokunuşla abonelik bırakılır.',
           },
+          groupSessions: {
+            d: 'Açılış brifingini, ofis saatini ya da tanıtım oturumunu bir ekibe veya tüm kuruma yayımla. Katılımcılar yer ayırır; kontenjan dolunca yedek listeye girer ve biri iptal ettiğinde otomatik olarak — haber verilerek — yukarı çıkar. Ev sahibi kimin katıldığını kaydeder, her katılımcı kendi kaydını görür.',
+          },
           mentorSelfApply: {
             t: 'Self-servis satış temsilcisi başvurusu',
             d: 'Herkes hesap açmadan satış temsilcisi olmak için başvurabilir; adminler kuyruktan inceler, incelemeye alır, onaylar veya reddeder; onay, temsilcinin hesabını otomatik olarak oluşturur veya yükseltir.',
@@ -1842,7 +1850,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         escalateHint: 'Üst kademe: bir aşama son tarihi geçtikten bu kadar gün sonra hâlâ gecikmişse kurumun yöneticilerine de — bir kez — haber verilir. Boş bırakırsan, eskisi gibi yalnızca temsilciye hatırlatılır.',
         scopeMentor: 'Temsilci',
         allMentors: 'Tüm temsilciler',
-        overrideHint: 'Bir istisna düzenliyorsun. Bu kayıtlar için kurumun sayısının önüne geçer — önce temsilci ve dönem birlikte, sonra temsilci, sonra dönem, en son kurum. Devralmak için aşamayı boş bırak. Üst kademe ve pano limitleri kurum genelinde kalır.',
+        overrideHint: 'Bir istisna düzenliyorsun. Bu kayıtlar için kurumun sayısının önüne geçer — önce temsilci ve dönem birlikte, sonra temsilci, sonra dönem, en son kurum. Devralmak için aşamayı boş bırak. Boş bırakılan üst kademe de devralınır; pano limitleri kurum genelinde kalır.',
         sourceMentor: 'bu temsilci',
         sourceMentorCohort: 'bu dönemdeki bu temsilci',
         subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
@@ -2250,6 +2258,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorAutoAssign: 'Wer sich über deinen Link registriert, wird automatisch dein Lead — kein Zuweisungsschritt. Der Link gilt einmalig und verfällt nach 7 Tagen.',
       },
       notifications: {
+        automationEmail: { mentorCheckIn: { cta: 'Meine Leads öffnen' } },
         invitationEmail: {
           roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
         },
@@ -2759,6 +2768,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           newsletter: {
             d: 'Kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt. Manuell oder wöchentlich, zweiwöchentlich, monatlich geplant; Vertriebsmitarbeiter erhalten zur gleichen Ausgabe die Coaching-Perspektive, jeder Versand wird archiviert, und ein Klick genügt zum Abmelden.',
           },
+          groupSessions: {
+            d: 'Veröffentliche ein Kickoff-Briefing, eine Sprechstunde oder eine Infoveranstaltung für ein Team oder die ganze Organisation. Teilnehmende melden sich für einen Platz an; über dem Limit kommen sie auf die Warteliste und rücken automatisch — mit Benachrichtigung — nach, wenn jemand absagt. Der Gastgeber erfasst die Teilnahme, und alle sehen ihren eigenen Eintrag.',
+          },
           mentorSelfApply: {
             t: 'Self-Service-Bewerbungen als Vertriebsmitarbeiter',
             d: 'Jeder kann sich ohne Konto als Vertriebsmitarbeiter bewerben; Admins prüfen die Warteschlange, starten die Prüfung, genehmigen oder lehnen ab — bei Genehmigung wird das Konto des Vertriebsmitarbeiters automatisch erstellt oder hochgestuft.',
@@ -2824,7 +2836,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         escalateHint: 'Eskalieren nach: Ist eine Phase so viele Tage nach Ablauf ihrer Frist noch überfällig, werden auch die Administratoren der Organisation informiert — einmal. Bleibt das Feld leer, wird wie bisher nur die Vertriebsperson erinnert.',
         scopeMentor: 'Vertrieb',
         allMentors: 'Alle Vertriebsmitarbeitenden',
-        overrideHint: 'Sie bearbeiten eine Ausnahme. Für diese Datensätze gilt sie vor der Zahl der Organisation — zuerst Vertriebsperson und Kohorte zusammen, dann Vertriebsperson, dann Kohorte, zuletzt die Organisation. Lassen Sie eine Phase leer, um zu erben. Eskalation und Board-Limits bleiben organisationsweit.',
+        overrideHint: 'Sie bearbeiten eine Ausnahme. Für diese Datensätze gilt sie vor der Zahl der Organisation — zuerst Vertriebsperson und Kohorte zusammen, dann Vertriebsperson, dann Kohorte, zuletzt die Organisation. Lassen Sie eine Phase leer, um zu erben. Eine leere Eskalation wird ebenfalls geerbt; Board-Limits bleiben organisationsweit.',
         sourceMentor: 'diese Vertriebsperson',
         sourceMentorCohort: 'diese Vertriebsperson in dieser Kohorte',
         subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',

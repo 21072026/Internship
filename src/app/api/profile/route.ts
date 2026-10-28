@@ -9,6 +9,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { syncUserSkillLevels, syncUserSkills } from '@/lib/skillsResolve';
+import { verifiedLevelsByTerm } from '@/lib/skillLevels';
 import { resolveOrgId } from '@/lib/orgScope';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { ACCENT_COLORS } from '@/lib/accent';
@@ -270,6 +271,12 @@ export async function GET() {
       // from getMentorAvailability() so callers never re-derive this logic.
       // Left off entirely for non-mentors — same response shape as before.
       if (user.role !== 'MENTOR') {
+        // A mentee sees which of their levels a mentor confirmed (#1822).
+        if (user.role === 'MENTEE') {
+          const terms = Array.isArray(user.skills) ? (user.skills as unknown[]).filter((s): s is string => typeof s === 'string') : [];
+          const verifiedLevels = await verifiedLevelsByTerm(resolveOrgId(session), user.id, terms);
+          return NextResponse.json({ user, verifiedLevels });
+        }
         return NextResponse.json({ user });
       }
 

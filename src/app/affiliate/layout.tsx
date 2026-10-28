@@ -14,10 +14,11 @@ import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { I18nScope } from '@/i18n/scope';
 
 // The partner portal shell (docs/affiliate-module.md). AFFILIATE only, and only in
 // a vertical that carries the affiliate module — anywhere else the URL is 404.
-export default async function AffiliateLayout({ children }: { children: React.ReactNode }) {
+async function AffiliateLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
 
   if (!session) redirect('/auth/signin');
@@ -74,5 +75,15 @@ export default async function AffiliateLayout({ children }: { children: React.Re
     >
       {children}
     </ResponsiveShell>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedAffiliateLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="affiliate">
+      <AffiliateLayout>{children}</AffiliateLayout>
+    </I18nScope>
   );
 }

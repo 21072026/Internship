@@ -24,6 +24,7 @@ import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
 // asks the API for the `mentorAvailability` field set — still no email/phone/
@@ -400,6 +401,10 @@ export default function MentorshipPage() {
     value: code,
     label: t.changeMentor.reasons[code],
   }));
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (search !== '' || statusFilter !== 'ALL' || agreementFilter !== '') ? resultCountMessage(t.a11y, total) : null);
 
   return (
     <div>

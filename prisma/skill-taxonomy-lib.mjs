@@ -91,3 +91,29 @@ export function makeResolver({ skills, aliases }) {
     return end.status === 'ACTIVE' ? end.id : null;
   };
 }
+
+/**
+ * Which legacy self-assessments (`User.skillLevels`, `{ "<typed skill>": 1..5 }`)
+ * land on the person's `UserSkill` rows (#1822). Insert-only by construction:
+ * a row is filled only when it has NO level and NO history — so a level the
+ * person or a mentor set (or deliberately cleared) since the rows went live is
+ * never touched, and a second run plans nothing. The 1..5 range is the same as
+ * `isSkillLevel()` in src/lib/skillLevelRule.ts (this file cannot import TS).
+ *
+ * `held` maps skill id → { id, level, hasHistory } for one person.
+ */
+export function planLegacyLevels({ levels, resolve, fold, held }) {
+  const plan = [];
+  if (!levels || typeof levels !== 'object' || Array.isArray(levels)) return plan;
+  const done = new Set();
+  for (const [raw, value] of Object.entries(levels)) {
+    if (!Number.isInteger(value) || value < 1 || value > 5) continue;
+    const skillId = resolve(fold(raw));
+    if (!skillId || done.has(skillId)) continue;
+    done.add(skillId);
+    const row = held.get(skillId);
+    if (!row || row.level !== null || row.hasHistory) continue;
+    plan.push({ userSkillId: row.id, toLevel: value });
+  }
+  return plan;
+}

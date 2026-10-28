@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Search, X } from 'lucide-react';
@@ -49,6 +50,10 @@ export function MessageSearch() {
   };
 
   const clear = () => { setQ(''); setHits(null); setAsked(null); setError(''); };
+
+  // WCAG 4.1.3 (#2864): the results appear without moving focus, so the
+  // sentence the panel shows is also spoken.
+  useFilterAnnouncement(asked !== null && hits ? (hits.length ? t.messages.search.results : t.messages.search.noResults).replace('{q}', asked) : null);
 
   return (
     <div className="mb-4" data-testid="message-search">

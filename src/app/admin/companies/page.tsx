@@ -19,6 +19,7 @@ import { useVertical } from '@/lib/verticalClient';
 import { marketingEmailAllowed, type PermissionRow } from '@/lib/contactPermissionRule';
 import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
 import { SavedViews } from '@/components/SavedViews';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface Company {
   id: string;
@@ -320,6 +321,10 @@ export default function CompaniesPage() {
 
   const cascadeItems = impact ? impactItems(impact.cascade) : '';
   const detachItems = impact ? impactItems(impact.detach) : '';
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && (search.trim() !== '' || permission !== 'all' || owner !== 'all' || source !== 'all') ? resultCountMessage(t.a11y, total) : null);
 
   return (
     <div>

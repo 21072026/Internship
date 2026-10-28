@@ -1,14 +1,11 @@
 # Slack and Microsoft Teams apps — #1923
 
-**Nothing is implemented yet.** There is no `ChatWorkspace` / `ChatIdentity` /
-`ChatDelivery` model in `prisma/schema.prisma`, no `src/lib/chat*`, no
-`/api/integrations/chat/*` route, no card renderer and no e2e stub — searching
-`src/` and `prisma/` for `slack` or `teams` returns link-preview marketing copy,
-a release note and a comment about Jitsi clock drift, and nothing else. The
-epic's own hard blockers have not landed either: `src/lib/notifications/router.ts`
-(#1705/#1706) and the `ChatTransport` contract (#1712) do not exist, and #1923
-says in as many words that starting before them writes the fan-out logic a third
-time into `emailService.ts`.
+**Partly implemented.** The data model exists (#1934): `ChatWorkspace`,
+`ChatIdentity` and `ChatDelivery` in `prisma/schema.prisma`, all three in
+`TENANT_MODELS`, with tokens sealed by `src/lib/chat/tokens.ts` (secretBox,
+purposes `chat-bot-token` / `chat-refresh-token`). Everything else below —
+the OAuth install, the adapter on the router's `chat` channel, the console —
+is still to come; each task updates this paragraph as it lands.
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the

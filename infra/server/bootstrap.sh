@@ -600,6 +600,43 @@ RandomizedDelaySec=300
 WantedBy=timers.target
 EOF
 
+  # Preview gets its own daily dump (#3166). Until now it was dumped only by its
+  # deploy hook, so a few days without a merge to main (the drift gate turns
+  # every scheduled deploy into a no-op) read as "stale" in backup-verify —
+  # and preview holds real accounts, so a quiet week was a real gap.
+  # No separate secrets file: preview runs with NETWORK=host (#2166), so the
+  # DATABASE_URL in its env file already reaches MySQL on 127.0.0.1. The file is
+  # sourced by bash rather than read as an EnvironmentFile because deploy-prod.sh
+  # writes it for `. file` (shell quoting), not for systemd's parser. Missing
+  # file (preview never deployed on this box) = the unit is skipped, not failed.
+  cat > /etc/systemd/system/internship-backup-preview.service <<EOF
+[Unit]
+Description=Internship CRM database backup (preview)
+After=docker.service
+ConditionPathExists=/etc/internship-crm/preview.env
+
+[Service]
+Type=oneshot
+Environment=BACKUP_DIR=/var/backups/internship-crm
+Environment=KEEP_DAYS=14
+ExecStart=/bin/bash -c 'set -a; . /etc/internship-crm/preview.env; set +a; exec $APP_DIR/bin/backup-db.sh --env preview'
+EOF
+
+  # 02:50, after prod's 02:40 so the two dumps never compete for MySQL, and
+  # before the 03:10 off-site push so it ships the fresh one.
+  cat > /etc/systemd/system/internship-backup-preview.timer <<'EOF'
+[Unit]
+Description=Daily Internship CRM database backup (preview)
+
+[Timer]
+OnCalendar=*-*-* 02:50:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
+EOF
+
   # Off-site push, as its OWN unit and timer rather than a step of the backup.
   # A dump that succeeded locally must still count as a success when the remote
   # is unreachable — but the off-site failure has to be visible on its own, and
@@ -655,7 +692,9 @@ EOF
 
   systemctl daemon-reload
   systemctl enable --now internship-backup.timer >/dev/null
-  ok "daily backup timer active ($(systemctl show internship-backup.timer -p NextElapseUSecRealtime --value | cut -c1-24))"
+  systemctl enable --now internship-backup-preview.timer >/dev/null
+  ok "daily backup timers active (prod + preview)"
+  ok "next prod backup ($(systemctl show internship-backup.timer -p NextElapseUSecRealtime --value | cut -c1-24))"
 }
 
 # -------------------------------------------------------- runner permissions --

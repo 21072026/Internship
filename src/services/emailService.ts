@@ -2199,6 +2199,54 @@ export async function sendDocumentReviewInviteEmail({
   });
 }
 
+// A stage-automation mail (#1703, src/lib/automation/). The copy is one of the
+// catalogued templates (`AUTOMATION_EMAIL_TEMPLATES`) — an admin picks it, never
+// writes it — and the recipient is the relation's own mentor or mentee, passed
+// by userId so the central unsubscribe check, the footer and the List-* headers
+// apply exactly as for every other pipeline mail ('stage-update' →
+// pipeline_updates). The link is the recipient's own role root.
+export async function sendAutomationEmail({
+  to,
+  userId,
+  template,
+  name,
+  menteeName,
+  stage,
+  locale,
+  orgId,
+}: {
+  to: string;
+  userId: string;
+  template: 'menteeNextStep' | 'mentorCheckIn';
+  name?: string | null;
+  menteeName: string;
+  stage: string;
+  locale?: string | null;
+  orgId: string;
+}): Promise<SendEmailResult> {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const T = (await emailDictionary(resolved, orgId)).notifications.automationEmail[template];
+  const fill = (text: string) => text.replace('{stage}', stage).replace('{mentee}', menteeName);
+  const link = `${brand.appUrl}${template === 'menteeNextStep' ? '/portal' : '/mentor'}`;
+  return sendEmail({
+    to,
+    userId,
+    fromName: brand.name,
+    orgId,
+    subject: fill(T.subject),
+    category: 'stage-update',
+    locale: resolved,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(fill(T.heading)))}
+        ${name ? `<p>${esc(T.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${esc(fill(T.body))}</p>
+        <a href="${link}" style="display:inline-block;background:${esc(brand.accent)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(T.cta)}</a>
+      </div>`,
+  });
+}
+
 export async function sendMeetingGuestInviteEmail({
   to,
   name,
@@ -3518,6 +3566,50 @@ export async function sendRoleChangeEmail({
 // this only renders. Category `sso-certificate`, in the essential
 // account_security group: a lapsed certificate locks the whole tenant out of
 // single sign-on, so no preference may mute the two warnings.
+// A webhook was auto-disabled after a failure streak (#1695,
+// src/lib/webhookDelivery.ts). Sent once per disable, to the org's admins,
+// as an operator alert: the integration is silently down until they act.
+export async function sendWebhookDisabledEmail({
+  to,
+  fullName,
+  url,
+  reason,
+  locale,
+  orgId,
+  userId,
+}: {
+  to: string;
+  fullName?: string | null;
+  url: string;
+  reason: string;
+  locale?: string | null;
+  orgId: string;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const loc = resolveLocale(locale);
+  const M = (await emailDictionary(loc, orgId)).webhookDisabledEmail;
+  return sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'ops-alert',
+    locale,
+    fromName: brand.name,
+    subject: M.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(fullName ? M.greeting.replace('{name}', fullName) : M.greetingNoName)}</p>
+        <p>${esc(M.body.replace('{url}', url).replace('{reason}', reason))}</p>
+        <p>${esc(M.action)}</p>
+        ${ctaBlock(brand, `${base}/admin/integrations`, esc(M.cta))}
+      </div>
+    `,
+  });
+}
+
 export async function sendSsoCertificateExpiryEmail({
   to,
   fullName,
@@ -4236,13 +4328,15 @@ export async function checkStageDeadlineReminders() {
     }
     return hit;
   };
-  const escalationsByOrg = new Map<string, Promise<Map<string, number>>>();
-  const escalationsOf = (orgId: string | null) => {
-    const key = orgId ?? '';
-    let hit = escalationsByOrg.get(key);
+  // Per relation SCOPE, not per org (#3204): a cohort or mentor override may
+  // carry its own rung (or inherit the org's) — memoised per scope per run.
+  const escalationsByScope = new Map<string, Promise<Map<string, number>>>();
+  const escalationsOf = (rel: { orgId: string | null; cohortId: string | null; mentorId: string }) => {
+    const key = `${rel.orgId ?? ''}|${rel.cohortId ?? ''}|${rel.mentorId}`;
+    let hit = escalationsByScope.get(key);
     if (!hit) {
-      hit = resolveStageEscalations(orgId);
-      escalationsByOrg.set(key, hit);
+      hit = resolveStageEscalations({ orgId: rel.orgId, cohortId: rel.cohortId, mentorId: rel.mentorId });
+      escalationsByScope.set(key, hit);
     }
     return hit;
   };
@@ -4340,7 +4434,7 @@ export async function checkStageDeadlineReminders() {
     }
     standing.add(breach.id);
 
-    const escalateAfterDays = (await escalationsOf(rel.orgId)).get(rel.pipelineStatus);
+    const escalateAfterDays = (await escalationsOf(rel)).get(rel.pipelineStatus);
     if (!escalationDue(breach, escalateAfterDays, now)) continue;
     if (!(await claimEscalation(breach.id, breach.level, now))) continue;
     escalated++;

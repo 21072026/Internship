@@ -28,6 +28,14 @@
 // live in lib/metering.ts, which re-exports everything here, so a caller needs
 // exactly one import and there is exactly one meter in this repo.
 
+/**
+ * Where the definition is published: the "How we count" section of /pricing
+ * (#1735). Every billing screen that shows the pair count links here, so a
+ * customer checks their own number against the sentence we publish.
+ */
+export const METERING_DEFINITION_ANCHOR = 'how-we-count';
+export const METERING_DEFINITION_HREF = `/pricing#${METERING_DEFINITION_ANCHOR}`;
+
 /** The published definition, so a UI or a doc renders the same words the code enforces. */
 export const ACTIVE_MATCHED_PAIR_DEFINITION =
   'a relation in ACTIVE state with any logged activity in the calendar month; ' +
@@ -147,7 +155,11 @@ export type UsageMetric =
   | 'ADMIN_SEATS'
   | 'VIDEO_ROOM'
   | 'VIDEO_PARTICIPANT'
-  | 'ACTIVE_PAIR_ACTIVITY';
+  | 'ACTIVE_PAIR_ACTIVITY'
+  | 'COMPANIES'
+  | 'PROGRAMS'
+  | 'AI_CALLS'
+  | 'BROADCAST_RECIPIENTS';
 
 export type MetricKind = 'COMPUTED' | 'COUNTER';
 
@@ -162,6 +174,15 @@ export const USAGE_METRICS: Record<UsageMetric, { kind: MetricKind; what: string
   // Activity volume behind the pair count. NOT the pair count — one pair can
   // raise this fifty times in a month and is still one billable pair.
   ACTIVE_PAIR_ACTIVITY: { kind: 'COUNTER', what: 'activity signals logged against a relation' },
+  // The rest of the plan's limits (#1763), rolled up nightly so the usage tab
+  // on /admin/billing reads the ledger and never scans a domain table on a
+  // request. Point-in-time capacity, like ADMIN_SEATS:
+  COMPANIES: { kind: 'COMPUTED', what: 'companies of the org at the time of the rollup' },
+  PROGRAMS: { kind: 'COMPUTED', what: 'programmes (cohorts) of the org at the time of the rollup' },
+  // Month-shaped volumes that already have a source ledger — recomputed from it
+  // absolutely, so a re-run writes the same value (never incremented here):
+  AI_CALLS: { kind: 'COMPUTED', what: 'AI calls that consumed quota (outcome ok or parse_error) in the period' },
+  BROADCAST_RECIPIENTS: { kind: 'COMPUTED', what: 'announcement and newsletter recipients in the period' },
 };
 
 export function isUsageMetric(value: string): value is UsageMetric {

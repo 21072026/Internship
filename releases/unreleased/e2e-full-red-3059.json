@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Scheduled full suite back to green (#3059):** `/admin/meetings` rows wrap their actions (copy link, RSVP, reschedule, cancel) instead of spilling ~130px past a phone's card in German; `/notifications` leaves room under its last row for the floating feedback button; `applyResponseFloor()` no longer hides a shown bucket to protect hidden buckets that hold no responses at all (the outcome-destination report hid a cohort that met the floor next to an empty unassigned bucket); the `/for-companies`, `/apply-as-mentor` and `/stories` share cards are route handlers instead of the `opengraph-image.tsx` file convention, which Next injected into the page's metadata (404 included) on hosts whose product does not serve the page. Spec side: `signInAndSettle()` and two hand-rolled portal sign-ins wait out the streamed Suspense copy, `accent-color` tears the page down before clearing cookies, `retention-registry.unit` restores the real retention entries it cleared, and the mobile layout audit covers `/admin/matching`, `/admin/roster-feeds` and `/admin/audit`.",
+  "notes": {
+    "en": ["On a phone, the meeting list's buttons no longer run off the screen, and the last notification is no longer hidden behind the feedback button."],
+    "tr": ["Telefonda toplantı listesindeki düğmeler artık ekrandan taşmıyor ve son bildirim geri bildirim düğmesinin arkasında kalmıyor."],
+    "de": ["Auf dem Smartphone laufen die Schaltflächen der Terminliste nicht mehr aus dem Bildschirm, und die letzte Benachrichtigung liegt nicht mehr unter der Feedback-Schaltfläche."]
+  }
+}

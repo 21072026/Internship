@@ -145,6 +145,19 @@ test('a pairing with history is handed over: closed ENDED_REASSIGNED, successor 
     expect(live[0].mentorId).toBe(newMentor.id);
     expect(live[0].pipelineStatus).toBe('INTERNSHIP_IN_PROGRESS_450');
     expect(live[0].previousRelationId).toBe(relation.id);
+    // The bus (#1998): one `mentorship.transferred` about the successor —
+    // codes and ids, never the admin's note.
+    const raised = await prisma.domainEvent.findMany({ where: { name: 'mentorship.transferred', subjectId: live[0].id } });
+    expect(raised).toHaveLength(1);
+    expect(raised[0].payload).toEqual({
+      relationId: live[0].id,
+      previousRelationId: relation.id,
+      menteeId: mentee.id,
+      fromMentorId: oldMentor.id,
+      toMentorId: newMentor.id,
+      mode: 'transferred',
+      reasonCode: 'mentor_unavailable',
+    });
 
     // The three people are told three different true things, and the outgoing
     // mentor is not told the reason (#1801's rule, kept here).

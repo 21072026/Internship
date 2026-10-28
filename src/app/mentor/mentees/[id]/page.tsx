@@ -16,6 +16,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
+import { MenteeSkillLevels } from '@/components/MenteeSkillLevels';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { JourneyView } from '@/components/JourneyView';
@@ -664,6 +665,9 @@ export default function MenteeDetailPage() {
           <RelationTimeline relationId={id} />
 
           <EvaluationPanel relationId={id} />
+
+          {/* Skill levels a mentor can confirm or correct (#1822). */}
+          <MenteeSkillLevels relationId={id} />
 
           <GoalsPanel relationId={id} />
 

@@ -438,7 +438,9 @@ export function MeetingsManager() {
                     )}
                     <MeetingGuestList guests={m.guests ?? []} />
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Wraps: copy + RSVP + reschedule + cancel is ~410px in German,
+                      wider than a phone's card (#3059). */}
+                  <div className="flex flex-wrap items-center gap-2">
                     {m.meetLink && (
                       <Button
                         variant="outline"

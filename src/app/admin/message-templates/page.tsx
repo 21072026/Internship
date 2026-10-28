@@ -18,6 +18,7 @@ import {
   resolveMessageTemplateText,
   type MessageTemplateDto,
 } from '@/lib/messageTemplates';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // Management for the org-wide canned-response pool (#1871). The mirror of
 // /admin/goal-templates, one level up in length: a canned reply is a paragraph,
@@ -144,6 +145,10 @@ export default function AdminMessageTemplatesPage() {
   const filtered = templates.filter(
     (tpl) => !q || [tpl.title, ...Object.values(tpl.translations)].some((v) => v?.toLowerCase().includes(q))
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <>

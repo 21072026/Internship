@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { computeSlaCompliance } from '@/lib/slaCompliance';
+import { slaDaysByStage } from '@/lib/stageSlaRule';
 
 // #1723 — the compliance rate's arithmetic, browserless.
 
@@ -54,5 +55,24 @@ test.describe('SLA compliance rate', () => {
 
   test('no measured move is a null rate, never a fake 100%', () => {
     expect(computeSlaCompliance([], slas, window, stopped).rate).toBeNull();
+  });
+  // #3204 — each relation is judged against its OWN resolved service level.
+  test('a relation in a mentor override is judged by the override, not the org', () => {
+    const rows = [
+      { stageKey: 'A', days: 7 },
+      { stageKey: 'A', days: 20, mentorId: 'busy' },
+    ];
+    const moveOnDay15 = (mentorId: string) => ({
+      startDate: d(0),
+      mentorId,
+      statusChanges: [{ fromStatus: 'A', toStatus: 'B', createdAt: d(15) }],
+    });
+    const perRelation = (r: { cohortId?: string | null; mentorId?: string | null }) => slaDaysByStage(rows, r);
+    const res = computeSlaCompliance([moveOnDay15('busy'), moveOnDay15('other')], perRelation, window, stopped);
+    // busy: 15 ≤ 20 met · other: 15 > 7 missed
+    expect(res).toMatchObject({ met: 1, total: 2, rate: 50 });
+    // With org rows only, the per-relation form answers exactly what the single map did.
+    const orgOnly = computeSlaCompliance([moveOnDay15('busy')], (r) => slaDaysByStage([rows[0]], r), window, stopped);
+    expect(orgOnly).toEqual(computeSlaCompliance([moveOnDay15('busy')], new Map([['A', 7]]), window, stopped));
   });
 });

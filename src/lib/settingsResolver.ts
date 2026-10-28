@@ -18,7 +18,7 @@
 // no request. A sweep reading `reminderDays` for three hundred relations of one
 // programme issues one query, not three hundred. Outside both, nothing is
 // cached and every call is its own query, which is correct, just slower. The
-// memo drops itself whenever `setSetting()` has written since it was filled.
+// memo drops itself whenever `writeSetting()` has written since it was filled.
 //
 // SERVER-ONLY: it imports the request and tenant contexts (node:async_hooks)
 // and Prisma. A client-reachable module reads the pure half in settings.ts.

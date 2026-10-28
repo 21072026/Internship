@@ -5,7 +5,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { setSetting } from '@/lib/settings';
+import { writeSetting } from '@/lib/settingsWrite';
 import { logActivity } from '@/lib/activity';
 import { letterTemplateSchema } from '@/lib/postCampaignInput';
 import { campaignDefaultsFor } from '@/lib/postCampaign';
@@ -33,7 +33,7 @@ export async function PUT(request: Request) {
 
     const orgId = await settingsOrgOf(session);
     return withTenantScope(session, async () => {
-      await setSetting('postLetterTemplate', parsed.data.letterBody, orgId);
+      await writeSetting('postLetterTemplate', parsed.data.letterBody, orgId, { actor: { id: session.user.id, email: session.user.email } });
       await logActivity({
         action: parsed.data.letterBody ? 'post_campaign.letter_template_saved' : 'post_campaign.letter_template_cleared',
         actorId: session.user.id,

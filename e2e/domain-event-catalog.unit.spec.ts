@@ -35,6 +35,8 @@ const PUBLISHED = [
   'offer.declined',
   'requisition.filled',
   'mentorship.lifecycle_changed',
+  'application.stage_changed',
+  'mentorship.transferred',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -53,6 +55,17 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['api/meetings/instant', 'meeting.scheduled', { title: 'Now', scheduledAt: null, count: 1, instant: true }],
   ['api/meeting-series', 'meeting.scheduled', { title: 'Series', scheduledAt: at, count: 2, seriesId: 's1' }],
   ['api/interview-panels/[id]/score', 'interview_panel.completed', { panelId: 'p1', subjectId: 'u2' }],
+  // #1998: the hiring producers.
+  ['api/interview-panels/[id]/close', 'interview_panel.completed', { panelId: 'p1', subjectId: 'u2' }],
+  ['api/interview-panels/[id]/outcome', 'interview_panel.outcome', { panelId: 'p1', applicationId: 'a1', outcome: 'ADVANCE' }],
+  ['api/interview-requests/[id]/schedule', 'interview_request.scheduled', { requestId: 'q1', meetingId: 'm1', scheduledAt: at, panelId: null }],
+  ['api/interview-requests/[id]/cancel', 'interview_request.cancelled', { requestId: 'q1', meetingId: null }],
+  ['meetingCancel', 'meeting.cancelled', { meetingId: 'm1', scheduledAt: at, count: 3 }],
+  ['api/meetings/[id] DELETE', 'meeting.cancelled', { meetingId: 'm1', scheduledAt: null, count: 1 }],
+  ['api/meetings/[id] PATCH', 'meeting.rescheduled', { meetingId: 'm1', scheduledAt: at, previousScheduledAt: null }],
+  ['applicationStageEvents', 'application.stage_changed', { applicationId: 'a1', requisitionId: 'rq1', from: 'SHORTLISTED', to: 'INTERVIEW' }],
+  ['mentorTransfer', 'mentorship.transferred', { relationId: 'r2', previousRelationId: 'r1', menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'transferred', reasonCode: 'mentor_capacity' }],
+  ['mentorTransfer', 'mentorship.transferred', { relationId: 'r1', previousRelationId: null, menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'corrected', reasonCode: 'wrong_assignment' }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

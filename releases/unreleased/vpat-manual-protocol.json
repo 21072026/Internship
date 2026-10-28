@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**VPAT manual test protocol (#2864):** `docs/a11y-manual-protocol.md` defines the screen-reader / keyboard / zoom pass (NVDA + Firefox, VoiceOver + Safari) over the scanned page states, criterion by criterion, with a results log a person fills in. Every `Partially Supports` row that waits on manual verification now cites it as evidence; `npm run vpat:evidence` regenerated."
+}

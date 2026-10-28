@@ -17,7 +17,9 @@ const input = 'block w-full rounded-lg border border-gray-300 dark:border-gray-6
 
 type Field = 'notice' | 'buffer' | 'week' | 'month' | 'slot';
 
-export function BookingRulesCard() {
+// `mentorId`: an ADMIN editing a mentor of their own org (#2005) — the policy
+// route authorizes it; omitted, the caller's own rules.
+export function BookingRulesCard({ mentorId }: { mentorId?: string } = {}) {
   const t = useT();
   const r = t.availability.rules;
   const duration = useDurationText();
@@ -41,12 +43,12 @@ export function BookingRulesCard() {
   };
 
   useEffect(() => {
-    fetch('/api/availability/policy')
+    fetch(`/api/availability/policy${mentorId ? `?mentorId=${encodeURIComponent(mentorId)}` : ''}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((d) => d?.policy && fill(d.policy))
       .catch(() => {})
       .finally(() => setLoaded(true));
-  }, []);
+  }, [mentorId]);
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
   const save = async (e: React.FormEvent) => {
@@ -65,7 +67,7 @@ export function BookingRulesCard() {
       return;
     }
     setStatus('saving');
-    const res = await fetch('/api/availability/policy', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await fetch('/api/availability/policy', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, ...(mentorId ? { mentorId } : {}) }) });
     if (!res.ok) {
       setStatus('idle');
       setError(t.common.error);

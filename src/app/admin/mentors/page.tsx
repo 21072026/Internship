@@ -12,6 +12,8 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { SavedViews } from '@/components/SavedViews';
+import { MentorLimitsImport } from '@/components/MentorLimitsImport';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface MentorUser {
   id: string;
@@ -106,12 +108,18 @@ export default function MentorsPage() {
         (m.skills ?? []).some((s) => s.toLowerCase().includes(q)))
   );
 
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, shown.length) : null);
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentors.title}</h1>
         <p className="text-gray-500 mt-1">{t.mentors.subtitle}</p>
       </div>
+
+      <MentorLimitsImport onApplied={load} />
 
       <input
         type="search"

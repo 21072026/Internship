@@ -259,6 +259,7 @@ model Organization {
   aiArtifacts             AiArtifact[]
   aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
+  programEvents           ProgramEvent[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
@@ -291,6 +292,9 @@ model Organization {
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
   domainEvents            DomainEvent[]
+  webhookDeliveries       WebhookDelivery[]
+  automationRules         AutomationRule[]
+  automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
   externalProfileLinks    ExternalProfileLink[]
@@ -300,6 +304,8 @@ model Organization {
   trialReminders          TrialReminder[]
   outboundDrafts          OutboundDraft[]
   supportReports          SupportReport[]
+  // The chat apps (#1934, epic #1923): the Slack / Teams workspaces this org installed.
+  chatWorkspaces          ChatWorkspace[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
@@ -944,6 +950,8 @@ model User {
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
   supportReports                    SupportReport[]                @relation("SupportReportAuthor")
+  // Which chat-workspace member this account is (#1934).
+  chatIdentities                    ChatIdentity[]
   assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
   supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
@@ -976,6 +984,8 @@ model User {
   aiArtifacts                       AiArtifact[]                   @relation("AiArtifactSubject")
   attendanceRecords                 MeetingAttendance[]            @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]            @relation("AttendanceRecorder")
+  hostedEvents                      ProgramEvent[]                 @relation("EventHost")
+  eventRegistrations                EventRegistration[]            @relation("EventRegistrant")
   surveyResponses                   SurveyResponse[]               @relation("SurveyRespondent")
   formResponses                     FormResponse[]
   meetingFeedback                   MeetingFeedback[]              @relation("MeetingFeedbackRater")
@@ -3082,28 +3092,80 @@ model CandidateOutreach {
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
 // POSTs (HMAC-SHA256 of the body in the X-Signature header).
 model Webhook {
-  id        String        @id @default(cuid())
+  id                  String            @id @default(cuid())
   // The tenant this webhook belongs to (#2357). Nullable + backfilled to the
   // default org so existing rows keep working; every dispatch filters by it, so
   // one tenant's event never fires another tenant's endpoint.
-  orgId     String?
-  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  url       String
-  secret    String
-  events    Json          @default("[]")
-  active    Boolean       @default(true)
-  createdAt DateTime      @default(now())
+  orgId               String?
+  org                 Organization?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  url                 String
+  secret              String
+  events              Json              @default("[]")
+  active              Boolean           @default(true)
+  createdAt           DateTime          @default(now())
   // A subscription a connector made for itself through POST /api/v1/hooks
   // (#2002): the key that owns it — the only key that may list or delete it —
   // and where it came from (`admin` | `api`). Both null on every admin-created
   // row; additive and nullable on purpose, never a re-key of Webhook. A
   // revoked or expired owner key stops its deliveries (src/lib/webhooks.ts).
-  apiKeyId  String?
-  apiKey    ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-  source    String?       @db.VarChar(20)
+  apiKeyId            String?
+  apiKey              ApiKey?           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  source              String?           @db.VarChar(20)
+  // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
+  // `consecutiveFailures` and `failingSince` describe the current failure
+  // streak (reset by any 2xx); past 20 failures or 72h without a success the
+  // hook is auto-disabled: `disabledAt` + `disabledReason` are stamped once,
+  // the relay skips it, and only an admin's explicit re-enable clears them.
+  // Additive and defaulted — never a re-key of Webhook.
+  consecutiveFailures Int               @default(0)
+  failingSince        DateTime?
+  lastSuccessAt       DateTime?
+  disabledAt          DateTime?
+  disabledReason      String?           @db.VarChar(191)
+  deliveries          WebhookDelivery[]
 
   @@index([orgId, active])
   @@index([apiKeyId])
+}
+
+// One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
+// three times and then 200 leaves four rows, the last one SUCCESS. Written
+// only by src/lib/webhookDelivery.ts. `deliveryId` is the stable
+// `X-Delivery-Id` header — the same for every attempt and every replay of one
+// (event × subscription), so a receiver can dedupe. `responseBody` is
+// truncated (WEBHOOK_RESPONSE_BODY_LIMIT): a partner echoing a 2 MB error page
+// must not fill the database. Goes with its event when retention prunes it.
+model WebhookDelivery {
+  id           String                @id @default(cuid())
+  orgId        String?
+  org          Organization?         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  webhookId    String
+  webhook      Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventId      String
+  event        DomainEvent           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventName    String                @db.VarChar(96)
+  deliveryId   String                @db.VarChar(64)
+  attempt      Int
+  status       WebhookDeliveryStatus @default(PENDING)
+  responseCode Int?
+  responseBody String?               @db.Text
+  error        String?               @db.Text
+  durationMs   Int?
+  createdAt    DateTime              @default(now())
+
+  @@index([webhookId, createdAt])
+  @@index([eventId])
+  @@index([orgId, createdAt])
+}
+
+// PENDING: the attempt is in flight (a row left PENDING is an attempt whose
+// process died). FAILED: this attempt failed and another one is scheduled.
+// DEAD: no further attempt — a 4xx, a refused URL or the last retry.
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DEAD
 }
 
 // THE event table (#1691): one append-only row per domain event the product
@@ -3117,26 +3179,94 @@ model Webhook {
 // `orgId` / run in an explicit context. Pruned by the `domainEvent` entry of
 // the retention registry (`domainEventRetentionDays`). docs/domain-events.md.
 model DomainEvent {
-  id            String        @id @default(cuid())
-  orgId         String?
-  org           Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  name          String        @db.VarChar(96)
-  version       Int           @default(1)
-  payload       Json
+  id                String            @id @default(cuid())
+  orgId             String?
+  org               Organization?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name              String            @db.VarChar(96)
+  version           Int               @default(1)
+  payload           Json
   // 'user' | 'system' | 'apikey' (EVENT_ACTOR_TYPES)
-  actorId       String?
-  actorType     String?       @db.VarChar(16)
+  actorId           String?
+  actorType         String?           @db.VarChar(16)
   // A Prisma model name (the catalogue entry's subjectType) + that row's id.
-  subjectType   String?       @db.VarChar(64)
-  subjectId     String?
-  correlationId String?
-  createdAt     DateTime      @default(now())
+  subjectType       String?           @db.VarChar(64)
+  subjectId         String?
+  correlationId     String?
+  createdAt         DateTime          @default(now())
+  webhookDeliveries WebhookDelivery[]
 
   @@index([orgId, createdAt])
   @@index([name, createdAt])
   @@index([subjectType, subjectId, createdAt])
   // The retention sweep's cross-tenant range (pruneDomainEvents).
   @@index([createdAt])
+}
+
+// A stage automation rule (#1703): "when a relation enters/leaves stage X and
+// these conditions hold, run these allowlisted actions". The vocabulary, the
+// write-time gate and the condition evaluator are src/lib/automation/rule.ts;
+// the evaluator is the `automation` domain-event subscriber. `conditions` and
+// `actions` are JSON validated by that module on every write, and re-validated
+// on every read (a row that no longer parses records a FAILED run).
+// docs/automation-rules.md.
+model AutomationRule {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // Reserved for per-programme rules (#1618); unused until then.
+  programId       String?
+  name            String        @db.VarChar(120)
+  // STAGE_ENTRY | STAGE_EXIT (AUTOMATION_TRIGGERS)
+  trigger         String        @db.VarChar(16)
+  stageKey        String        @db.VarChar(191)
+  conditions      Json
+  // Ordered list of allowlisted actions (AUTOMATION_ACTIONS).
+  actions         Json
+  // 0 = run on the move; otherwise a queued `automation.run` at move + delay.
+  delayMinutes    Int           @default(0)
+  // Off until an admin switches it on (#1704 asks for a dry run first).
+  enabled         Boolean       @default(false)
+  // Display order on /admin/automations (#1704). Execution never depends on it.
+  position        Int           @default(0)
+  // The last dry run against real history (#1704).
+  lastSimulatedAt DateTime?
+  createdById     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  runs AutomationRun[]
+
+  @@index([orgId, stageKey, enabled])
+}
+
+// One evaluation of one rule for one stage-change event (#1703). Unique on
+// (ruleId, eventId): a redelivered event can never produce a second run. Status
+// PENDING (waiting for its delay) → RUNNING (claimed by one guarded update) →
+// SUCCESS | PARTIAL | FAILED, or SKIPPED (conditions not met, rule switched
+// off, relation left the stage). `results` is the per-action outcome: ids and
+// codes only, never a name or an address.
+model AutomationRun {
+  id         String         @id @default(cuid())
+  orgId      String?
+  org        Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ruleId     String
+  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  // The DomainEvent that caused it.
+  eventId    String
+  relationId String
+  fromStage  String         @db.VarChar(191)
+  toStage    String         @db.VarChar(191)
+  status     String         @db.VarChar(16)
+  results    Json
+  error      String?        @db.Text
+  // When its actions are due (the move, or the move + the rule's delay).
+  runAt      DateTime       @default(now())
+  finishedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  @@unique([ruleId, eventId])
+  @@index([orgId, createdAt])
+  @@index([relationId])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
@@ -3341,6 +3471,29 @@ model Setting {
   @@unique([orgId, programId, key])
   @@index([orgId, key])
   @@index([programId])
+}
+
+// One row per real settings change (#1623): the settings-shaped read model
+// behind the admin's per-key history and "revert to inherited". Written ONLY by
+// writeSetting() / revertSetting() (src/lib/settingsWrite.ts), in the same
+// transaction as the Setting row, from #1699's redactedDiff() — so a key flagged
+// `redact` in SETTING_SCHEMA is stored as "[redacted]", never its value. A
+// no-op save writes nothing. `newValue` null = the row at this scope was
+// deleted (reverted to the inherited value); `oldValue` null = there was none.
+// orgId null = the global layer (an operator's change).
+model SettingChange {
+  id        String   @id @default(cuid())
+  orgId     String?
+  programId String?
+  key       String
+  oldValue  String?  @db.Text
+  newValue  String?  @db.Text
+  // An id only, resolved live by the history route: an address copied here
+  // would outlive the person's erasure.
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, key, createdAt])
 }
 
 enum ProjectStatus {
@@ -3688,6 +3841,7 @@ model Cohort {
   relations        MentorshipRelation[]
   programCosts     ProgramCost[]
   steps            ProgramStep[]
+  events           ProgramEvent[]
   adminScopeGrants AdminScopeGrant[]
   settings         Setting[]
   stageSlas        StageSla[]
@@ -4760,6 +4914,87 @@ model MeetingAttendance {
   @@unique([seriesId, occurrenceAt, userId])
   @@index([orgId])
   @@index([relationId, meetingAt])
+}
+
+// ── Group sessions and office hours (#1856) ─────────────────────────────────
+// One-to-many: a kickoff briefing, a mentor's office hour, an employer info
+// session. Publish, register, cap, waitlist, attend — and nothing else (no
+// booths, bidding, ticketing, payments or public directory: a separate epic).
+// Deliberately NOT a Meeting: a Meeting has one relation/project/conversation
+// context and a per-row RSVP token, and an event has neither — a registrant is
+// a signed-in account, so there is no token to leak (#1548).
+//
+// `seatsTaken` is the capacity's race guard: a seat is claimed by ONE guarded
+// `updateMany` (`seatsTaken < capacity`), released and refilled from the
+// waitlist inside the same transaction, so the row lock serialises every seat
+// change of one event. Its only writer is src/lib/groupEvents.ts. The
+// vocabularies (audience, registration state) are whitelists in
+// src/lib/groupEventRule.ts, free Strings here by repo convention. Never
+// deleted: a cancelled event keeps `cancelledAt` and its attendance record.
+model ProgramEvent {
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id])
+  // Optional programme (the Cohort row, #1622): set, only its members see it.
+  programId       String?
+  program         Cohort?       @relation(fields: [programId], references: [id], onDelete: SetNull)
+  title           String        @db.VarChar(191)
+  description     String?       @db.Text
+  startsAt        DateTime
+  // The clock the host picked `startsAt` on (IANA zone), like Meeting.timeZone.
+  timeZone        String        @db.VarChar(64)
+  durationMinutes Int           @default(60)
+  // Null = no cap. Never lowered below `seatsTaken`.
+  capacity        Int?
+  seatsTaken      Int           @default(0)
+  location        String?       @db.VarChar(191)
+  // Through checkPastedMeetingLink() / resolveMeetingLink() only.
+  joinUrl         String?       @db.VarChar(191)
+  hostId          String
+  host            User          @relation("EventHost", fields: [hostId], references: [id], onDelete: Cascade)
+  // MENTEES | MENTORS | ALL
+  audience        String        @default("MENTEES") @db.VarChar(16)
+  // The journey step that published it (#1852's GROUP_SESSION), if any.
+  sourceStepId    String?
+  createdById     String
+  publishedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelledById   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  registrations EventRegistration[]
+
+  @@index([orgId, startsAt])
+  @@index([hostId])
+  @@index([programId])
+}
+
+// One person's place at one event (#1856). Reached through its event, which is
+// tenant-scoped; deliberately not in TENANT_MODELS (no orgId of its own, the
+// same shape as ProgramStepRun). The session is the credential — there is no
+// token on this row. Attendance reuses #2014's AttendanceState (never a second
+// enum, never an attendance field on Meeting); `attendedAt` is stamped with it.
+model EventRegistration {
+  id                     String           @id @default(cuid())
+  eventId                String
+  event                  ProgramEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId                 String
+  user                   User             @relation("EventRegistrant", fields: [userId], references: [id], onDelete: Cascade)
+  // REGISTERED | WAITLISTED | CANCELLED
+  state                  String           @db.VarChar(16)
+  // Queue position: the waitlist is promoted oldest first. Reset on re-register.
+  registeredAt           DateTime         @default(now())
+  promotedAt             DateTime?
+  cancelledAt            DateTime?
+  attendance             AttendanceState?
+  attendedAt             DateTime?
+  attendanceRecordedById String?
+  updatedAt              DateTime         @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([eventId, state, registeredAt])
+  @@index([userId])
 }
 
 model MeetingSeries {
@@ -8282,5 +8517,111 @@ model AffiliateContractAcceptance {
   acceptedAt DateTime         @default(now())
 
   @@unique([partnerId, version])
+  @@index([orgId])
+}
+
+// ── Chat apps (#1934, epic #1923) ──────────────────────────────────────────
+// Slack and Microsoft Teams as ADAPTERS on the notification router's `chat`
+// channel, never a third fan-out. Three additive, tenant-anchored models; the
+// tokens are sealed exactly like GoogleCalendarConnection's, through
+// src/lib/chat/tokens.ts (secretBox, purpose `chat-bot-token`) — never written
+// or logged in the clear. docs/chat-apps.md is the operator's side.
+
+enum ChatPlatform {
+  SLACK
+  TEAMS
+}
+
+enum ChatDeliveryStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// One installed workspace (a Slack team, a Teams tenant) of one organisation.
+model ChatWorkspace {
+  id         String       @id @default(cuid())
+  /// Registered in TENANT_MODELS. Nullable like the other phase-1 tenant models;
+  /// every writer stamps the installing admin's org explicitly.
+  orgId      String?
+  platform   ChatPlatform
+  /// Slack team_id / Teams tenant id.
+  externalId String       @db.VarChar(128)
+  name       String
+
+  /// Sealed with lib/secretBox (AES-256-GCM, src/lib/chat/tokens.ts), never in
+  /// the clear. An uninstall deletes the row, so no sealed token outlives it.
+  botTokenEnc     String?   @db.Text
+  refreshTokenEnc String?   @db.Text
+  tokenExpiresAt  DateTime?
+  /// What the platform actually granted, so a reduced re-consent is visible.
+  scope           String    @db.Text
+
+  /// Configured vs ENABLED: the per-workspace kill switch. A disabled workspace
+  /// keeps its install and delivers nothing; the router falls back to the
+  /// person's other channels. Deliberately NOT a Setting row (#1958).
+  enabled       Boolean @default(true)
+  installedById String
+
+  /// Operational state, visible in the console instead of failing silently.
+  lastDeliveryAt DateTime?
+  lastError      String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org        Organization?  @relation(fields: [orgId], references: [id])
+  identities ChatIdentity[]
+  deliveries ChatDelivery[]
+
+  @@unique([platform, externalId])
+  @@index([orgId])
+}
+
+/// "This chat member is this CRM user" — confirmed by the person, revocable.
+model ChatIdentity {
+  id              String    @id @default(cuid())
+  orgId           String?
+  workspaceId     String
+  userId          String
+  /// Slack U…, Teams AAD object id.
+  externalUserId  String    @db.VarChar(128)
+  /// Opened lazily on the first DM and cached; Teams also needs a conversation
+  /// reference before the bot may message proactively.
+  dmChannelId     String?   @db.VarChar(128)
+  conversationRef Json?
+  /// Null until the person themselves confirmed the link. Nothing is delivered
+  /// to an unverified identity.
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  // Two CRM users can never claim the same chat member.
+  @@unique([workspaceId, externalUserId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+/// The chat delivery ledger: one row per attempt, append-only. Never the card
+/// body (it can carry candidate data) — the event key is enough.
+model ChatDelivery {
+  id                String             @id @default(cuid())
+  orgId             String?
+  workspaceId       String
+  identityId        String?
+  eventKey          String             @db.VarChar(96)
+  /// DM or channel id.
+  target            String             @db.VarChar(128)
+  externalMessageId String?            @db.VarChar(128)
+  status            ChatDeliveryStatus
+  error             String?            @db.Text
+  createdAt         DateTime           @default(now())
+
+  workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
   @@index([orgId])
 }

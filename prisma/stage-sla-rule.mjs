@@ -46,6 +46,19 @@ export function resolveSlaDays(rows, scope = {}) {
   return out;
 }
 
+export function resolveSlaEscalations(rows, scope = {}) {
+  const held = new Map();
+  for (const row of rows) {
+    if (row.days == null || row.escalateAfterDays == null || row.escalateAfterDays <= 0) continue;
+    const source = rowSource(row, scope);
+    if (!source) continue;
+    const rank = SLA_PRECEDENCE.indexOf(source);
+    const current = held.get(row.stageKey);
+    if (!current || rank < current.rank) held.set(row.stageKey, { value: row.escalateAfterDays, rank });
+  }
+  return new Map(Array.from(held, ([key, v]) => [key, v.value]));
+}
+
 /**
  * When the relation entered the stage it is in now — the same rule as
  * `stageEnteredAt` in src/lib/stageClock.ts: the newest REAL move (a row whose

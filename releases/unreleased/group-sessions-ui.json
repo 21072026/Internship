@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Group sessions, screens (#1856, 2/4):** `/admin/events`, `/mentor/events` and `/portal/events` (one `GroupEventsBoard`, each gated by `gatePage` on `mentorship`, sidebar + native-app menu key `groupEvents`). Hosts create (time zone, seats, audience, programme for admins, place or video link), publish, cancel, open the participant list and record attendance in #2014's vocabulary; participants register, join the waitlist, leave and read back their own attendance. The join link appears only for confirmed registrants, and a link on the public Jitsi server carries the five-minute embedded-call warning. Feature catalogue entry `groupSessions` (+ MARKETING overlay).",
+  "notes": {
+    "en": ["Group sessions and office hours: publish a session with a seat limit, let people register or join the waitlist, and record who attended."],
+    "tr": ["Grup oturumları ve ofis saatleri: kontenjanlı bir oturum yayımla, katılımcılar kaydolsun ya da yedek listeye girsin, kimin katıldığını kaydet."],
+    "de": ["Gruppensitzungen und Sprechstunden: eine Sitzung mit Platzlimit veröffentlichen, Anmeldung oder Warteliste ermöglichen und die Teilnahme erfassen."]
+  }
+}

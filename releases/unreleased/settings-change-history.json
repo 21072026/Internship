@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Settings change history, inheritance badges and revert (#1623):** `writeSetting()` / `revertSetting()` (`src/lib/settingsWrite.ts`) are the only settings writers — a no-op writes nothing; a real change writes the row and one `SettingChange` (new tenant model) in one transaction, with values from #1699's `redactedDiff()` under the per-key `redact` flag in `SETTING_SCHEMA` (`supportEmail`), and emits `setting.changed`. `setSetting()` is gone. New `GET /api/admin/settings/history` (caller's org only) and `DELETE /api/admin/settings?key=` (revert to inherited, `org.settings.write`). The settings form shows per key whether the value is set here or inherited, its history, and a revert control, and saves only the fields that changed; the activity feed gets one redacted `settings.update` entry per changed key.",
+  "notes": {
+    "en": ["Settings now show whether each value is set for your organization or inherited, with a history of who changed it and when — and a one-click way back to the inherited value."],
+    "tr": ["Ayarlar artık her değerin kurumunuz için mi ayarlandığını yoksa miras mı alındığını, kimin ne zaman değiştirdiğini gösteriyor — ve tek tıkla mirasa dönmeyi sağlıyor."],
+    "de": ["Einstellungen zeigen jetzt, ob ein Wert für Ihre Organisation festgelegt oder geerbt ist, wer ihn wann geändert hat — und setzen ihn mit einem Klick auf den geerbten Wert zurück."]
+  }
+}

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { setSetting } from '@/lib/settings';
+import { writeSetting } from '@/lib/settingsWrite';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { logActivity } from '@/lib/activity';
 import {
@@ -61,11 +61,11 @@ export async function PUT(request: Request) {
   return withTenantScope(session, async () => {
     const changed: string[] = [];
     if (parsed.data.keywords) {
-      await setSetting('safeguardingKeywords', serializeWatchKeywords(parsed.data.keywords), orgId);
+      await writeSetting('safeguardingKeywords', serializeWatchKeywords(parsed.data.keywords), orgId, { actor: { id: session.user.id, email: session.user.email } });
       changed.push(`keywords=${parseWatchKeywords(parsed.data.keywords.join('\n')).length}`);
     }
     if (parsed.data.messageRetentionDays !== undefined) {
-      await setSetting('messageRetentionDays', String(parsed.data.messageRetentionDays), orgId);
+      await writeSetting('messageRetentionDays', String(parsed.data.messageRetentionDays), orgId, { actor: { id: session.user.id, email: session.user.email } });
       changed.push(`messageRetentionDays=${parsed.data.messageRetentionDays}`);
     }
     if (changed.length > 0) {
