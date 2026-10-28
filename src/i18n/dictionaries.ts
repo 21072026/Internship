@@ -3992,6 +3992,7 @@ const en = {
       'automation.stageReached': '{name} reached the stage "{stage}".',
       'automation.stageReachedSelf': 'You are now at the stage "{stage}". Open your portal to see what comes next.',
       'automation.documentRequired': 'Please upload this document: {document}.',
+      'nudge.message': '{text}',
       'stage.changed': 'Your stage changed: {from} → {to}.',
       'outcome.noMatch': 'There is news about your application — open your portal to read where things stand and what you can do next.',
       'outcome.placedElsewhere': 'Congratulations on your internship! Your journey here is marked as complete — the door stays open for the next step.',
@@ -8524,6 +8525,11 @@ const en = {
     bodyMentor: 'An administrator converted your account to a mentor account. You were signed out of all devices; when you sign in again you will land in the mentor workspace. Your existing mentorships and history are untouched.',
     bodyMentee: 'An administrator converted your account to a mentee account. You were signed out of all devices; when you sign in again you will land in your mentee portal. Your existing mentorships and history are untouched.',
     cta: 'Sign in',
+  },
+  nudgeEmail: {
+    ctaMentee: 'Open your portal',
+    ctaMentor: 'Open your dashboard',
+    why: 'You are receiving this reminder from your programme team. You can switch reminders off in your e-mail preferences.',
   },
   webhookDisabledEmail: {
     subject: 'A webhook was switched off after repeated failures',
@@ -13701,6 +13707,7 @@ const tr: Dict = {
       'automation.stageReached': '{name}, "{stage}" aşamasına ulaştı.',
       'automation.stageReachedSelf': 'Artık "{stage}" aşamasındasın. Sırada ne olduğunu görmek için portalını aç.',
       'automation.documentRequired': 'Lütfen şu belgeyi yükle: {document}.',
+      'nudge.message': '{text}',
       'stage.changed': 'Aşaman değişti: {from} → {to}.',
       'outcome.noMatch': 'Başvurunla ilgili bir haber var — durumun ne olduğunu ve bundan sonra ne yapabileceğini portalından oku.',
       'outcome.placedElsewhere': 'Stajın için tebrikler! Buradaki yolculuğun tamamlandı olarak işaretlendi — sıradaki adım için kapı açık.',
@@ -18153,6 +18160,11 @@ const tr: Dict = {
     bodyMentor: 'Bir yönetici hesabını mentor hesabına dönüştürdü. Tüm cihazlardan çıkış yapıldı; tekrar giriş yaptığında mentor çalışma alanına ineceksin. Mevcut mentörlüklerin ve geçmişin aynen duruyor.',
     bodyMentee: 'Bir yönetici hesabını mentee hesabına dönüştürdü. Tüm cihazlardan çıkış yapıldı; tekrar giriş yaptığında mentee portalına ineceksin. Mevcut mentörlüklerin ve geçmişin aynen duruyor.',
     cta: 'Giriş yap',
+  },
+  nudgeEmail: {
+    ctaMentee: 'Portalını aç',
+    ctaMentor: 'Panonu aç',
+    why: 'Bu hatırlatmayı program ekibinden alıyorsun. Hatırlatmaları e-posta tercihlerinden kapatabilirsin.',
   },
   webhookDisabledEmail: {
     subject: 'Bir webhook tekrarlanan hatalar sonrası kapatıldı',
@@ -23305,6 +23317,7 @@ const de: Dict = {
       'automation.stageReached': '{name} hat die Phase „{stage}“ erreicht.',
       'automation.stageReachedSelf': 'Du bist jetzt in der Phase „{stage}“. Öffne dein Portal, um zu sehen, wie es weitergeht.',
       'automation.documentRequired': 'Bitte lade dieses Dokument hoch: {document}.',
+      'nudge.message': '{text}',
       'stage.changed': 'Deine Phase hat sich geändert: {from} → {to}.',
       'outcome.noMatch': 'Es gibt Neuigkeiten zu deiner Bewerbung — öffne dein Portal, um zu lesen, wo du stehst und was du als Nächstes tun kannst.',
       'outcome.placedElsewhere': 'Glückwunsch zu deinem Praktikum! Deine Reise hier ist als abgeschlossen markiert — die Tür bleibt offen für den nächsten Schritt.',
@@ -27759,6 +27772,11 @@ const de: Dict = {
     bodyMentor: 'Ein Administrator hat dein Konto in ein Mentor-Konto umgewandelt. Du wurdest auf allen Geräten abgemeldet; bei der nächsten Anmeldung landest du im Mentor-Arbeitsbereich. Deine bestehenden Mentorschaften und dein Verlauf bleiben unberührt.',
     bodyMentee: 'Ein Administrator hat dein Konto in ein Mentee-Konto umgewandelt. Du wurdest auf allen Geräten abgemeldet; bei der nächsten Anmeldung landest du in deinem Mentee-Portal. Deine bestehenden Mentorschaften und dein Verlauf bleiben unberührt.',
     cta: 'Anmelden',
+  },
+  nudgeEmail: {
+    ctaMentee: 'Portal öffnen',
+    ctaMentor: 'Dashboard öffnen',
+    why: 'Du erhältst diese Erinnerung von deinem Programmteam. Erinnerungen kannst du in deinen E-Mail-Einstellungen abschalten.',
   },
   webhookDisabledEmail: {
     subject: 'Ein Webhook wurde nach wiederholten Fehlern abgeschaltet',
