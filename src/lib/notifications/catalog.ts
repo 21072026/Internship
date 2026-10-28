@@ -47,8 +47,13 @@ import type { NotificationCategory } from '@/lib/notificationPrefs';
 import type { EmailGroupId } from '@/lib/emailGroups';
 import type { LinkKind } from '@/lib/notificationLink';
 
-/** The channels a notification can travel on. One adapter each, in router.ts. */
-export const NOTIFICATION_CHANNELS = ['inApp', 'email'] as const;
+/**
+ * The channels a notification can travel on. One adapter each, in router.ts.
+ * `chat` (#1939, Slack/Teams) is never in an event's `defaultChannels`: the
+ * router adds it per recipient, only for a person who confirmed a chat
+ * identity — installing an app must not start messaging anybody.
+ */
+export const NOTIFICATION_CHANNELS = ['inApp', 'email', 'chat'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 /**
