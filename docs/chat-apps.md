@@ -3,9 +3,17 @@
 **Partly implemented.** The data model exists (#1934): `ChatWorkspace`,
 `ChatIdentity` and `ChatDelivery` in `prisma/schema.prisma`, all three in
 `TENANT_MODELS`, with tokens sealed by `src/lib/chat/tokens.ts` (secretBox,
-purposes `chat-bot-token` / `chat-refresh-token`). Everything else below —
-the OAuth install, the adapter on the router's `chat` channel, the console —
-is still to come; each task updates this paragraph as it lands.
+purposes `chat-bot-token` / `chat-refresh-token`). The delivery side exists too
+(#1939): `chat` is a channel of the notification router
+(`src/lib/notifications/adapters/chat.ts`), added per recipient only for a
+person with a **confirmed** `ChatIdentity` and only while `CHAT_APPS_ENABLED=1`;
+every platform HTTP call sits behind the `ChatPlatformClient` port in
+`src/lib/chat/client/` (Slack Web API; Teams through the Bot Framework
+connector, whose `serviceUrl` is trusted only on Microsoft hosts). A disabled
+workspace or a platform refusal is recorded (`SKIPPED` / `FAILED` in
+`ChatDelivery`) and never touches the person's e-mail or in-app delivery. Still
+to come: the OAuth install (#1935), identity linking (#1937), the per-category
+channel matrix (#1707) and the console (#1958/#1960).
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
