@@ -187,6 +187,13 @@ const DECISIONS = new Map([
   // A receiver's answer to a webhook POST and our transport error (#1695):
   // truncated, and it goes with its DomainEvent under the event retention.
   ['WebhookDelivery.responseBody', OPS],
+  // A chat workspace connection's sealed tokens, granted scope and last error,
+  // and one chat delivery's transport error: the integration's, not a person's.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', SECRET],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
   ['WebhookDelivery.error', OPS],
   ['BackfillRun.lastError', OPS],
   ['NotificationDelivery.error', OPS],
