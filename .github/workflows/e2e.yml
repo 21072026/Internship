@@ -242,6 +242,105 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # The tenant leak gate (#1568): the `isolation` Playwright project —
+  # e2e/isolation/**, including the leak matrix (leak-matrix.spec.ts) and the
+  # direct-Prisma gap measurement (uncovered-models.spec.ts) — against a server
+  # booted with MT_ENFORCE_ISOLATION=true, on every PR. A route that drops its
+  # tenant scope turns this red at review instead of at a customer.
+  #
+  # Its own job, not a shard of the smoke matrix above: it needs its own Next
+  # server (port 3010, flag on), and playwright.config.ts refuses to assemble
+  # both projects in one run. Same docs-only skip and fail-closed `if:` as the
+  # smoke shards, so a docs-only PR reports it skipped (= passing), and NO
+  # path filter (#2719) — this check is meant to become required.
+  # Not (yet) a required check: branch protection is the maintainer's switch.
+  # The scheduled e2e-full.yml `isolation` job still runs the same project 4×/day.
+  isolation-gate:
+    name: Playwright tenant isolation gate
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
+      NODE_OPTIONS: --max-old-space-size=8192
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      # The isolation webServer overrides this to its own origin (port 3010);
+      # left at the default, NextAuth's post-sign-in redirect walks off it.
+      NEXTAUTH_URL: "http://localhost:3010"
+      SEED_ADMIN_EMAIL: "admin@example.com"
+      SEED_ADMIN_PASSWORD: "ChangeMe123!"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "ChangeMe123!"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply DB schema
+        run: npx prisma db push
+
+      - name: Seed admin user
+        run: npx prisma db seed
+
+      # Read-only: main's push run saves it (the smoke job above), PRs reuse it.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: Build app
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      # Browser only, no `--with-deps` — same reasoning as the smoke shards.
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Run the isolation project
+        run: npx playwright test --project=isolation
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-isolation-gate
+          path: playwright-report/
+          retention-days: 7
+
   # The REQUIRED check. Green when every shard above is green, and when the PR
   # is docs-only and the shards were skipped on purpose (`changes` said
   # code=false) — the same outcome the single skipped job used to report.

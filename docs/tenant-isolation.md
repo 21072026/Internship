@@ -80,6 +80,37 @@ server on port 3010 with the flag genuinely on and runs `e2e/isolation/**`
 against it, using the two-tenant fixture in `e2e/helpers/tenants.ts`. See
 [`docs/testing.md`](testing.md#tenant-isolation-the-isolation-playwright-project-1566).
 
+### The leak matrix and its PR gate (#1568)
+
+`e2e/isolation/leak-matrix.spec.ts` is the "no surface leaks" claim, checked
+mechanically: a table of authenticated read surfaces (`MATRIX`), each called by
+tenant B's actor (admin, mentor or company user) and asserted to carry **none**
+of tenant A's per-run markers in its raw body — plus the **negative control**,
+the same call by tenant A's actor, which must find every one of A's own markers
+(a surface that returns nothing would otherwise pass for the wrong reason).
+Cross-tenant `PUT`/`GET /api/mentorship/[id]` and `DELETE
+/api/status-changes/[id]` must answer **404** and leave the row unchanged. The
+extra rows it needs (cohort, activity, webhook, API key, settings, templates,
+panels, requisitions, and the child rows) come from `e2e/helpers/leakSeed.ts`.
+A new authenticated read surface gets a row in `MATRIX`.
+
+`e2e/isolation/uncovered-models.spec.ts` measures the gap the middleware cannot
+close: the `orgId`-less children (`StatusChange`, `InteractionLog`, `Message`,
+`Goal`, `Evaluation`, `InterviewPanelMember`, `UserTag`) are scoped only when
+reached **through** their scoped parent; queried directly they are not.
+
+The whole `isolation` project runs on every PR as the `Playwright tenant
+isolation gate` job in `.github/workflows/e2e.yml` (no path filter, docs-only
+PRs skip it). Making it a **required** check is a branch-protection switch for
+the maintainer.
+
+The first run found a real leak in the engine itself: the AsyncLocalStorage
+was per module instance while the middleware is installed once per process, so
+a route whose bundle evaluated `orgContext.ts` separately bound its org where
+the middleware never looked — `GET /api/interview-panels` listed every
+tenant's panels (`WHERE 1=1`) with the flag on. The stores now live on
+`globalThis`, like the Prisma client.
+
 ### Keeping the registry honest (`npm run check:tenant-models`)
 
 The middleware only scopes models that are named in `TENANT_MODELS`. An
