@@ -181,6 +181,17 @@ const DECISIONS = new Map([
   ['AutomationRun.error', OPS],
   ['BackfillRun.lastError', OPS],
   ['NotificationDelivery.error', OPS],
+  // Outbound webhooks (#1695): what the subscriber's endpoint answered, truncated
+  // (WEBHOOK_RESPONSE_BODY_LIMIT), and our own delivery error.
+  ['WebhookDelivery.responseBody', "the subscriber endpoint's truncated reply to a delivery — diagnostic text of an integration, not about a person"],
+  ['WebhookDelivery.error', OPS],
+  // Chat workspace installs (#1934): sealed tokens go when the install is
+  // removed (the row is deleted), the scope is what the platform granted.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', 'the OAuth scopes the chat platform granted the install — configuration, not about a person'],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
 ]);
 
 const lc = (s) => s[0].toLowerCase() + s.slice(1);
