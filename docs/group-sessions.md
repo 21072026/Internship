@@ -43,3 +43,15 @@ The join link is returned only to the host, admins and REGISTERED people.
 JaaS is 1:1 only (`src/lib/meetingRoom.ts`), so a group session without a pasted link falls
 back to the public `meet.jit.si`, whose **embedded** calls end after five minutes. The UI
 says so and opens the call in a new tab or asks for the host's own conferencing link.
+
+## Calendar and the programme journey
+
+- `/api/calendar-events` lists a session as `type: 'group'` for its host and for people with a
+  **confirmed** place (an admin: every live session of the org). The entry links to the
+  session's page, never to the call — the join link stays the events API's to hand out.
+- A `GROUP_SESSION` journey step (#1852) may carry `payload.eventId`: one upcoming session of
+  the **same programme** (`stepColumns()` refuses anything else with `invalid_event`).
+  Delivering the step publishes the session if it is still a draft (guarded on
+  `publishedAt: null`) and links the pair's invitation to it — only for the people its
+  audience includes. A session that was cancelled or has started announces nothing; the step
+  falls back to its plain nudge. A step without `eventId` behaves as before.
