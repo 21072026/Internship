@@ -5,7 +5,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
-import { resolveSetting } from '@/lib/settingsResolver';
+import { resolveSetting, resolveSettings } from '@/lib/settingsResolver';
 import { revertSetting, writeSetting } from '@/lib/settingsWrite';
 import { isValidTimeZone } from '@/lib/timezone';
 import { parseWorkingDays } from '@/lib/businessDays';
@@ -38,8 +38,10 @@ export async function GET(request: Request) {
       resolveSetting('slaWorkingDays', at),
       resolveSetting('slaTimeZone', at),
       resolveSetting('slaHolidayCalendarId', at),
+      // Whether this programme overrides any of the four, read through the
+      // resolver's layer report (#1621), not the Setting table.
       scope.programId
-        ? prisma.setting.count({ where: { orgId, programId: scope.programId, key: { in: [...KEYS] } } })
+        ? resolveSettings(at).then((r) => KEYS.filter((key) => r.sources[key] === 'program').length)
         : Promise.resolve(0),
       prisma.holidayCalendar.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
       prisma.cohort.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),

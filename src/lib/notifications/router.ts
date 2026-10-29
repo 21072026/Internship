@@ -54,7 +54,7 @@ import { chatCapableUsers, deliverChat } from '@/lib/notifications/adapters/chat
 import { CHANNEL_ADAPTERS } from '@/lib/notifications/adapters';
 import type { SkipReason } from '@/lib/notifications/adapters/types';
 import { claimDelivery, recordSkipped, settleDelivery, type LedgerRow } from '@/lib/notifications/ledger';
-import { getSetting } from '@/lib/settings';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { enqueue } from '@/lib/jobs/queue';
 import { prismaQueueStore } from '@/lib/jobs/queueStore';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
@@ -255,7 +255,7 @@ function blackoutMemo(): (orgId: string | null) => Promise<Blackout> {
     if (!orgId) return Promise.resolve({ dates: [], weekends: false });
     let hit = cache.get(orgId);
     if (!hit) {
-      hit = Promise.all([getSetting('notificationBlackoutDates', orgId), getSetting('notificationBlackoutWeekends', orgId)])
+      hit = Promise.all([resolveSettingRaw('notificationBlackoutDates', { orgId }), resolveSettingRaw('notificationBlackoutWeekends', { orgId })])
         .then(([dates, weekends]) => ({ dates: parseBlackoutDates(dates), weekends: weekends === 'true' }))
         // A settings read that fails holds nothing: an outage must not silence mail.
         .catch(() => ({ dates: [], weekends: false }));
