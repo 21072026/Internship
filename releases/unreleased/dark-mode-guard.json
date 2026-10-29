@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Dark-mode guard (#1614, part 1):** new `npm run check:dark-mode` (CI) flags a `className` that paints a light background the `globals.css` retint layer does not cover, with no `dark:` background on the same element; the covered list is read from `globals.css` itself and the findings are a shrink-only ratchet (`scripts/dark-mode-baseline.json`), started at zero. Fixing the tree's findings retinted `bg-violet-50` (the AI-draft panels), `bg-white/90` and `hover:bg-white` (message reaction chips and edit/delete pills, which were light-on-light), `hover:bg-gray-200`, `hover:bg-indigo-50` and `bg-gray-200` (onboarding step circles) — the last at gray-700, the colour every element pairing it with its own `dark:` background already chose — plus an explicit dark track on the enter-to-send toggle.",
+  "notes": {
+    "en": ["Dark mode: message reactions, the AI draft panels and the onboarding steps no longer show as pale boxes with unreadable text."],
+    "tr": ["Karanlık mod: mesaj tepkileri, yapay zekâ taslak panelleri ve kayıt adımları artık okunamayan yazılı açık renkli kutular olarak görünmüyor."],
+    "de": ["Dunkelmodus: Nachrichtenreaktionen, die KI-Entwurfsfelder und die Onboarding-Schritte erscheinen nicht mehr als helle Kästen mit unlesbarem Text."]
+  }
+}
