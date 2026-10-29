@@ -77,7 +77,9 @@ export async function GET() {
 
   const orgs = await prisma.organization.findMany({
     where,
-    orderBy: { name: 'asc' },
+    // Archived tenants (#1582) sink to the bottom with their badge: still the
+    // operator's to export or bring back, no longer part of the working list.
+    orderBy: [{ archivedAt: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }],
     include: {
       _count: {
         select: {
@@ -176,6 +178,8 @@ export async function GET() {
           sessionsToEnd: sweepable.get(o.id) ?? 0,
         },
         createdAt: o.createdAt,
+        // Tenant lifecycle (#1582): set = closed (no sign-in, no mail, data kept).
+        archivedAt: o.archivedAt,
         counts: {
           users: o._count.users,
           sources: o._count.sources,

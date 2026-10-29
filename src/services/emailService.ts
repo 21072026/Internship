@@ -7,6 +7,7 @@ import { suppressedLogReason } from '@/lib/emailSuppressionRule';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isOrgArchived } from '@/lib/orgArchive';
 import { directKeyFor } from '@/lib/conversations';
 import { orgIdsEntitledTo } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -1063,6 +1064,24 @@ export async function prepareEmail({
     return { status: 'SKIPPED' };
   }
 
+  // ── AN ARCHIVED TENANT IS NOT MAILED (#1582) ─────────────────────────────
+  // Archiving a tenant stops its mail (docs/tenant-lifecycle.md): every group,
+  // essential included — a closed tenant's people cannot sign in, so a reset
+  // or a sign-in link would only point at a refused door. The tenant is the
+  // `orgId` the sender passed, else the recipient account's. Mail with
+  // neither (a public inquiry's reply) is not a tenant's mail and passes.
+  // Fails open (isOrgArchived), like the preference read below.
+  const tenantOrgId =
+    orgId ??
+    (userId
+      ? (await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } }).catch(() => null))?.orgId ?? null
+      : null);
+  if (await isOrgArchived(tenantOrgId)) {
+    logger.info('Email not sent: tenant archived', { category });
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), 'Tenant archived', { orgId: tenantOrgId, userId });
+    return { status: 'SKIPPED' };
+  }
+
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
   // user who simply never replied (#1194) — the whole reason a batch of
@@ -1788,6 +1807,8 @@ export async function sendInvitationEmail({
 
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'invitation',
     lane,
@@ -1863,6 +1884,8 @@ export async function sendPasswordResetEmail({
 
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'password-reset',
     // Queued only on a temporary failure (#2944): a link that has expired is
@@ -1923,6 +1946,8 @@ export async function sendMagicLinkEmail({
 
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     // Essential (account_security group): a sign-in link the person just asked
     // for is never a preference someone can have opted out of.
@@ -1986,6 +2011,8 @@ export async function sendVerificationEmail({
 
   await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'verification',
     locale: resolved,
@@ -3547,6 +3574,8 @@ export async function sendRoleChangeEmail({
   const mentor = newRole === 'MENTOR';
   await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     subject: mentor ? M.subjectMentor : M.subjectMentee,
     category: 'account',
@@ -3736,6 +3765,8 @@ export async function sendTwoFactorResetEmail({
   const M = getDictionary(resolved).twoFactorResetEmail;
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'account',
     locale: resolved,

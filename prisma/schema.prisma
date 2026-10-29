@@ -221,6 +221,13 @@ model Organization {
   // `db push`). Literal default, so `db push` fills existing rows itself.
   conferencingPolicy ConferencingPolicy @default(BUILTIN)
 
+  // Tenant lifecycle (#1582, docs/tenant-lifecycle.md). Set = archived: no
+  // sign-in on any door, no mail to its people, gone from operational lists,
+  // every row kept. Cleared = live again. Written only by
+  // src/lib/orgLifecycle.ts (super admin). Nullable — additive (#2298).
+  archivedAt   DateTime?
+  archivedById String?
+
   users                   User[]
   sources                 Source[]
   cohorts                 Cohort[]
@@ -322,6 +329,8 @@ model Organization {
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
   requisitionFits         RequisitionFit[]
+
+  @@index([archivedAt])
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).

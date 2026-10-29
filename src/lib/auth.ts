@@ -95,6 +95,18 @@ async function assertAccountMatchesHost(user: { orgId: string | null }, req: unk
 }
 
 /**
+ * Is this account's tenant archived (#1582, docs/tenant-lifecycle.md)? Read
+ * fresh on every sign-in door — never from a cache — and answered with the
+ * door's ordinary generic failure, so a refusal says nothing about the
+ * tenant's state that a wrong password would not.
+ */
+async function tenantArchived(orgId: string | null): Promise<boolean> {
+  if (!orgId) return false;
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { archivedAt: true } });
+  return Boolean(org?.archivedAt);
+}
+
+/**
  * The world of the request being served, or null when there is no request to
  * read (a cron, a script, a unit test). Read from the proxy's forwarded host —
  * cosmetic-and-refusing only, see hostWorld.ts.
@@ -418,6 +430,10 @@ export const authOptions: NextAuthOptions = {
           throw new Error(authWrongWorld(await worldOfOrg(user.orgId)));
         }
 
+        // An archived tenant (#1582): the same words as a wrong password, so the
+        // form cannot be used to learn that a tenant was closed.
+        if (await tenantArchived(user.orgId)) throw new Error('Invalid email or password');
+
         // NOTE: the failure counter is NOT cleared here. It used to be, which
         // meant that once the password verified the 6-digit TOTP code below
         // could be guessed without limit — the whole 10^6 space, as fast as the
@@ -518,6 +534,7 @@ export const authOptions: NextAuthOptions = {
           select: AUTH_USER_SELECT,
         });
         if (!user) throw new Error('Target user not found');
+        if (await tenantArchived(user.orgId)) throw new Error('Invalid or expired grant');
         await assertAccountMatchesHost(user, req);
 
         const isStart = grant.kind === 'START';
@@ -569,6 +586,7 @@ export const authOptions: NextAuthOptions = {
         if (!user.isActive) {
           throw new Error('This account has been deactivated. Please contact an administrator.');
         }
+        if (await tenantArchived(user.orgId)) throw new Error('Invalid or expired SSO grant');
         await assertAccountMatchesHost(user, req);
 
         return {
@@ -631,6 +649,7 @@ export const authOptions: NextAuthOptions = {
         if (await isPasswordLoginBlocked(user)) {
           throw new Error(AUTH_SSO_REQUIRED);
         }
+        if (await tenantArchived(user.orgId)) throw new Error('Invalid or expired grant');
         await assertAccountMatchesHost(user, req);
 
         return {
@@ -694,6 +713,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error('This account has been deactivated. Please contact an administrator.');
         }
         if (await isPasswordLoginBlocked(user)) throw new Error(AUTH_SSO_REQUIRED);
+        if (await tenantArchived(user.orgId)) throw new Error('Invalid or expired grant');
         await assertAccountMatchesHost(user, req);
 
         if (user.twoFactorEnabled && user.twoFactorSecret) {
@@ -816,7 +836,7 @@ export const authOptions: NextAuthOptions = {
       if (token.id && typeof token.authTime === 'number') {
         const acct = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { sessionsValidFrom: true, org: { select: { vertical: true } } },
+          select: { sessionsValidFrom: true, org: { select: { vertical: true, archivedAt: true } } },
         });
         // A deleted account cannot be stamped — there is no row left to hold a
         // cutoff — so the lookup coming back empty is itself the revocation.
@@ -828,6 +848,10 @@ export const authOptions: NextAuthOptions = {
         } else if (acct.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
           token.invalidated = true;
         }
+        // An archived tenant (#1582) ends every live session on its next
+        // request — the same lookup, no extra query. Covers every door,
+        // including ones that mint a session without an authorize() above.
+        if (acct?.org?.archivedAt) token.invalidated = true;
 
         // A session belongs to ONE world, and only ever works on that world's
         // host (docs/worlds.md): sign in on marketing.… and you are in the
