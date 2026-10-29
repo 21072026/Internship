@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage automation builder (#1704, 2/2):** `/admin/automations` — rules list (enable/disable, reorder, delete), an editor built from the action allowlist (trigger, the tenant's own stages, delay, the shared `ConditionRow` field → operator → value component, an ordered step list with a typed control and a help line per action), a dry-run panel against real stage history and a run log with per-step results and error text. A rule can only be switched on after a dry run since its last change. AdminNav entry `automations` (capability `pipeline`), native-app icon, EN/TR/DE copy with MARKETING overlays, `stageAutomation` feature-catalogue entry. `e2e/automation-builder.spec.ts` covers create → dry run → enable → stage move → run log.",
+  "notes": {
+    "en": ["Stage automation: when a candidate enters or leaves a stage, notify people, send a ready-made e-mail, set a deadline, hand out a goal, ask for a document or add a tag — dry-run each rule against your real history before switching it on, and see every run in the log."],
+    "tr": ["Aşama otomasyonu: bir aday bir aşamaya girdiğinde ya da çıktığında kişileri bilgilendir, hazır bir e-posta gönder, son tarih koy, hedef ver, belge iste ya da etiket ekle — her kuralı açmadan önce gerçek geçmişinize karşı kuru çalıştırın ve her çalıştırmayı kayıtta görün."],
+    "de": ["Phasen-Automatisierung: Betritt oder verlässt eine Person eine Phase, Beteiligte benachrichtigen, eine fertige E-Mail senden, eine Frist setzen, ein Ziel vergeben, ein Dokument anfordern oder ein Tag setzen — jede Regel vor dem Einschalten im Probelauf gegen die echte Historie prüfen und jede Ausführung im Protokoll sehen."]
+  }
+}

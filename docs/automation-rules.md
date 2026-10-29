@@ -128,6 +128,30 @@ nothing else, and the route's module graph never reaches the engine, an action
 handler, `notify` or a mailer (`e2e/automation-builder.unit.spec.ts` pins the import
 lists). The only write is the rule's `lastSimulatedAt`.
 
+## The screen: `/admin/automations` (#1704)
+
+AdminNav entry `automations` (capability `pipeline`, so every vertical with a board
+has it; a native-app icon in `apps/mobile/src/lib/menu.ts`). Two tabs:
+
+- **Rules** (`automation-rule-list`): name, trigger summary, steps, On/Off, the last
+  dry run. A rule that has not been dry-run since its last logic change shows the
+  warning and its switch stays disabled (the server answers `409 simulate_first`
+  anyway). Edit opens the editor (`automation-editor`): trigger, the org's stages,
+  delay, condition rows and an ordered step list with a typed control and one help
+  line per action. Reorder (up/down), delete with confirmation.
+- **Dry run** (`automation-simulate-output`): the summary and, per matched move, fire
+  or skip with the failed conditions, and each step as *would run* / *skipped —
+  outcome stage*.
+- **Run log** (`automation-run-log`): status, per-step result and code, error text.
+
+**`src/components/automation/ConditionRow.tsx`** is the shared *field → operator →
+value* row. It knows neither engine: the audience-nudge builder (#1686) imports it
+instead of shipping a second one.
+
+`e2e/automation-builder.spec.ts` drives create → dry run (zero runs, zero
+notifications) → switch on → a real stage move → the worker runs the rule → the run
+log, plus the cross-org 404s and a refused unknown action.
+
 ## Not yet
 
 - Retention of `AutomationRun` rows (a retention-registry entry) — follow-up.
