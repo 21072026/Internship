@@ -63,6 +63,8 @@ const DECISIONS = new Map([
   ['MentorApplication.motivation', ERASED],
   ['MentorApplication.rejectReason', ERASED],
   ['MentorApplication.adminNote', ERASED],
+  ['MentorApplication.interviewNotes', ERASED],
+  ['MentorApplication.referenceOutcome', ERASED],
   ['Offer.compensationNote', ERASED],
   ['Offer.declineNote', ERASED],
   ['AiArtifact.content', ERASED],

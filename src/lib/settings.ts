@@ -206,6 +206,11 @@ export const SETTING_DEFAULTS = {
   // parsed by `parseWatchKeywords` (src/lib/safeguarding.ts). Empty by default —
   // contact-detail detection works without it. Edited on /admin/safeguarding.
   safeguardingKeywords: '',
+  // Mentor-application screening items that must be marked done before an
+  // application may be approved (#1807): comma-separated keys from
+  // SCREENING_ITEMS (src/lib/mentorScreeningRule.ts). Empty by default — no
+  // item required, approval exactly as before. Edited on /admin/mentor-applications.
+  mentorScreeningRequired: '',
   // Board work-in-progress limit (#1439): a pipeline column holding more than
   // this many candidates gets an amber count, so a bottleneck stands out.
   // Advisory only — it never blocks a move.
@@ -428,6 +433,7 @@ export const SETTING_SCHEMA = {
   notificationRetentionDays: { type: 'number', scopes: O },
   messageRetentionDays: { type: 'number', scopes: O },
   safeguardingKeywords: { type: 'string', scopes: O },
+  mentorScreeningRequired: { type: 'string', scopes: O },
   boardWipLimit: { type: 'number', scopes: P },
   orphanApplicantGraceDays: { type: 'number', scopes: G },
   broadcastMonthlyRecipients: { type: 'number', nullable: true, scopes: O },
