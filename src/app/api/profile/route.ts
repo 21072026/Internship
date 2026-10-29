@@ -91,7 +91,18 @@ const updateProfileSchema = z.object({
   // null clears the preference (falls back to a capacity-derived guess).
   acceptingMentees: z.boolean().nullable().optional(),
   emailNotifications: z.boolean().optional(),
-  notificationPrefs: z.record(z.string(), z.boolean()).optional(),
+  // The page PUTs back the blob it read, which may carry the channel matrix and
+  // quiet hours (#1714); those two keys are not this route's to write — they are
+  // dropped here and carried over from the stored row below.
+  notificationPrefs: z
+    .preprocess(
+      (v) =>
+        v && typeof v === 'object' && !Array.isArray(v)
+          ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => k !== 'channels' && k !== 'quietHours'))
+          : v,
+      z.record(z.string(), z.boolean()),
+    )
+    .optional(),
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
@@ -374,6 +385,21 @@ export async function PUT(request: Request) {
             select: { emailNotifications: true, notificationPrefs: true },
           })
         : null;
+
+      // The account page sends the category switches as a flat boolean map and
+      // this PUT replaces the column; the channel matrix and the quiet hours
+      // (#1714) live in the same JSON under their own keys and are written only
+      // by /api/account/notification-channels — carry them over untouched.
+      if (rest.notificationPrefs !== undefined && before) {
+        const prev = before.notificationPrefs;
+        const kept =
+          prev && typeof prev === 'object' && !Array.isArray(prev)
+            ? Object.fromEntries(
+                Object.entries(prev as Record<string, unknown>).filter(([k]) => k === 'channels' || k === 'quietHours'),
+              )
+            : {};
+        (rest as Record<string, unknown>).notificationPrefs = { ...rest.notificationPrefs, ...kept };
+      }
 
       const user = await prisma.user.update({
         where: { id: session.user.id },

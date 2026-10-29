@@ -19,6 +19,7 @@ import { runWebhookDelivery } from '@/lib/webhookDelivery';
 import { runNudgeScan, runNudgeSend } from '@/lib/nudges/evaluate';
 import { runDelayedAutomation } from '@/lib/automation/evaluate';
 import { runNotificationEmail } from '@/lib/notifications/emailJob';
+import { runDeferredDelivery, type DeferredDelivery } from '@/lib/notifications/router';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -116,6 +117,11 @@ export function registerAllJobs(): void {
   // NotificationDelivery row is claimed QUEUED → SENT before the send, so a
   // rerun of a job whose mail already left finds it taken and sends nothing.
   registerJob('notification.email', async (payload, ctx) => ({ [await runNotificationEmail(payload, ctx.job)]: 1 }), { timeoutMs: 60_000 });
+
+  // A delivery held to the end of quiet hours or a blackout day (#1714).
+  // Rerun-safe: a ledger row no longer QUEUED was settled by an earlier run, and
+  // the e-mail it hands on is keyed `notify:<dedupeKey>`.
+  registerJob('notification.deferred', async (payload) => ({ [await runDeferredDelivery(payload as DeferredDelivery)]: 1 }), { timeoutMs: 60_000 });
 
   // Each feed runs under its own claim (one conditional UPDATE), and a feed
   // whose lastRunAt the first run already moved is no longer due — so a
