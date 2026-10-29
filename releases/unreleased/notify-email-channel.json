@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Notification router: channel adapters (#1711, slice 1):** one `ChannelAdapter` port (`src/lib/notifications/adapters/types.ts`) with in-app, e-mail and chat adapters registered in `adapters/index.ts`, and the ledger writes moved to `src/lib/notifications/ledger.ts`. The router decides (preferences, then the ledger claim) and the adapter delivers, so a new channel (push, #1715) needs an adapter and one registry line, not a router edit. The e-mail adapter enqueues through the queue's `enqueue()` instead of a raw `prisma.job.create`; its consumer stays `emailJob.ts` (#1719). No behaviour change."
+}

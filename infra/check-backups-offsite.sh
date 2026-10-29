@@ -44,8 +44,9 @@ else
   command -v restic >/dev/null || fail "restic is not installed"
   : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is not set}"
   # Fail closed: an unreachable bucket or a wrong password is a red check, never
-  # an empty list read as "no snapshots yet".
-  json="$(restic snapshots --host internship-crm --tag dumps --json 2>/tmp/restic-err.txt)" \
+  # an empty list read as "no snapshots yet". --no-lock: the checker's R2 token
+  # is read-only on purpose, and restic would otherwise try to write a lock file.
+  json="$(restic snapshots --no-lock --host internship-crm --tag dumps --json 2>/tmp/restic-err.txt)" \
     || fail "cannot list snapshots: $(head -c 300 /tmp/restic-err.txt | tr '\n' ' ')"
 fi
 

@@ -78,10 +78,24 @@ left if the host is lost (2026-09-03 came close).
 **Operator steps still open** (not doable from the repo, each needs the R2 console
 or the box):
 
-1. Add the repo secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-   `RESTIC_PASSWORD` (and `vars.OFFSITE_BUCKET` if the bucket is not
-   `internship-crm-backups`) so the hosted check can run. A **read-only** R2 token
-   is enough for it — use one, not the host's write token.
+1. **Give the hosted check its own read-only token.** In the Cloudflare dashboard:
+   R2 → *Manage R2 API Tokens* → *Create API token* → permission **Object Read only**,
+   scoped to the backup bucket. Then, from a checkout with `gh` signed in:
+
+   ```bash
+   gh secret set R2_ACCOUNT_ID                     # skip if already set for backup-offsite-setup.yml
+   gh secret set OFFSITE_CHECK_ACCESS_KEY_ID       # the read-only token's Access Key ID
+   gh secret set OFFSITE_CHECK_SECRET_ACCESS_KEY   # …and its Secret Access Key
+   gh secret set RESTIC_PASSWORD                   # skip if already set; must be the repository's password
+   gh variable set OFFSITE_BUCKET --body '<bucket>' # only if it is not internship-crm-backups
+   gh workflow run backup-verify.yml               # the verify-offsite job should now report snapshots
+   ```
+
+   `gh secret set` prompts for the value, so it never lands in shell history. Use the
+   `OFFSITE_CHECK_*` names, **not** `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`:
+   `backup-offsite-setup.yml` writes those to the server as the backup's write
+   credential, and a read-only key there would break the next backup. The check calls
+   `restic snapshots --no-lock`, so a read-only token is enough.
 2. Turn on bucket versioning or an object-lock retention rule in R2, so the host's
    token cannot destroy history.
 3. Run the off-site drill once (preview) and add its row to the Drill log below,
