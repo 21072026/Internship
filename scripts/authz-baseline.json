@@ -5,17 +5,20 @@
     "allowed: a site that branches on the caller role for DATA SHAPE, not access — { count, reason }."
   ],
   "allowed": {
-    "src/app/api/weekly-reports/[id]/route.ts": {
+    "src/app/api/agendas/personalize/route.ts": {
       "count": 1,
-      "reason": "PATCH refuses the ADMIN role a write (admins only read weekly reports): it narrows access, never widens it."
+      "reason": "`audience: 'operator'` marks an admin outside the pair as operator AI use — a billing class (#1738), not an access decision; asking can() here would let a narrowed admin tier be billed as the pair"
     },
     "src/app/api/company/outreach/route.ts": {
       "count": 1,
       "reason": "GET only picks which approval queue a decider sees (mentor/admin PENDING, mentee APPROVED); the rows any caller can reach come from outreachActorWhere(), not from this branch"
+    },
+    "src/app/api/weekly-reports/[id]/route.ts": {
+      "count": 1,
+      "reason": "PATCH refuses the ADMIN role a write (admins only read weekly reports): it narrows access, never widens it."
     }
   },
   "pending": {
-    "src/app/api/agendas/personalize/route.ts": 1,
     "src/app/api/cron/route.ts": 1,
     "src/app/api/dev/db-tally/route.ts": 1,
     "src/app/api/health/route.ts": 1
