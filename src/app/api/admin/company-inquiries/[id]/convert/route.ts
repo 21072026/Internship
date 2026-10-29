@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -14,6 +12,7 @@ import { verticalFor } from '@/lib/verticalContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
 import { convertInquiryToMarketingLead } from '@/lib/inquiryLead';
+import { requirePermission } from '@/lib/authz';
 
 // Convert an inbound enquiry into a Company plus an invited COMPANY login, in
 // one action (#1863). The mechanics — and the reasoning about ordering,
@@ -45,10 +44,9 @@ const convertSchema = z.object({
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('company.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = convertSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {

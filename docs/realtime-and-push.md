@@ -182,6 +182,21 @@ Kişinin *oturduğu* tarayıcıyı kaldırması yerel aboneliği de iptal eder v
 abonelik, az önce silinen satırı sunucuya geri verirdi. Geçersiz kılınacak bir
 önbellek yok: `sendPushToUser` tabloyu her gönderimde okur.
 
+### Hangi olaylar push atar (#1715)
+
+Push, bildirim yönlendiricisinin (`notifyEvent()`) dördüncü kanalıdır:
+`src/lib/notifications/adapters/push.ts`. Hangi olayın telefonu titreteceği
+`src/lib/notifications/catalog.ts` içinde olay başına `defaultChannels`'a `push`
+yazılarak, gerekçesiyle birlikte karar verilir: toplantı başlıyor/taşındı/iptal,
+teklif gönderildi/cevaplandı, kişinin kendi aşama değişikliği, destek yanıtı,
+mülakat planlandı/iptal ve hemen eylem gerektiren güvenlik bildirimleri. Özetler,
+raporlar, bülten sayıları ve `batched` olaylar **asla** push atmaz — bunu
+`scripts/test/notification-catalog.test.mjs` sabitler. Tepsideki satır zilin
+cümlesiyle aynıdır (`renderNotification()`, alıcının dilinde); kategori anahtarı
+zil gibi push'u da susturur; cihazı olmayan kişi için ledger'a `SKIPPED no_device`
+yazılır. Yeni mesaj push'u (iş parçacığı başına `tag`) şimdilik `messagePush.ts`'te
+kalır.
+
 ### Platform sınırları
 
 - **iOS/iPadOS:** yalnızca ana ekrana eklenmiş PWA'da çalışır (16.4+); Safari

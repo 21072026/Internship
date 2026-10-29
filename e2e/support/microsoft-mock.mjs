@@ -9,7 +9,7 @@
 // why the integration ships behind a default-off flag.
 import { createServer } from 'node:http';
 
-const PORT = Number(process.env.MICROSOFT_MOCK_PORT || 4607);
+const PORT = Number(process.env.MICROSOFT_MOCK_PORT || 4608);
 
 const state = { events: new Map(), seq: 0, tokenRequests: [], fail: false };
 

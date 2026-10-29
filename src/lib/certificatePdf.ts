@@ -22,6 +22,7 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb, type RGB } from 'pdf-lib';
 import { isHexColor, type ResolvedBranding } from './branding';
 import { assertPublicHttpsUrl } from './ssrfGuard';
+import { pdfSafeText } from './pdfText';
 
 export interface CertificatePdfInput {
   title: string;
@@ -138,7 +139,18 @@ function drawMarkdownBody(
   return y;
 }
 
-export async function generateCertificatePdf(input: CertificatePdfInput): Promise<Buffer> {
+export async function generateCertificatePdf(raw: CertificatePdfInput): Promise<Buffer> {
+  // Every drawn string through the WinAnsi fold (src/lib/pdfText.ts): the
+  // standard fonts throw on ş/ğ/ı/İ, and a mentee's own name must never turn
+  // their certificate into a 500.
+  const input: CertificatePdfInput = {
+    ...raw,
+    title: pdfSafeText(raw.title),
+    bodyMarkdown: pdfSafeText(raw.bodyMarkdown),
+    branding: { ...raw.branding, name: pdfSafeText(raw.branding.name) },
+    signatureName: pdfSafeText(raw.signatureName),
+    signatureTitle: pdfSafeText(raw.signatureTitle),
+  };
   const doc = await PDFDocument.create();
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const font = await doc.embedFont(StandardFonts.Helvetica);

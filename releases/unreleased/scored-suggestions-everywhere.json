@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Scored suggestions everywhere (#1787):** `POST /api/admin/mentor-suggest` now ranks with `scoreMatch()` and the org's rule set (`resolveRuleSet`, #1781) through the pure `suggestMentors()` (`src/lib/matching/suggest.ts`). Every suggestion carries `score` (0-100) and `match` (`breakdown`, `blockedBy`); the response names `ruleSetId`/`ruleSetVersion`/`ruleSetName`, lists ruled-out mentors in `blocked` (+ `blockedTotal`) instead of dropping them, and records `rules-v3:<set>@<version>` on the MatchFeedback rows. An optional `requestId` (the mentee's own request, else 404) feeds `preferredField`/`preferredLanguages` into the score and returns `preferredMentorId`. `acceptingMentees=false` blocks under any rule set. The `skills` dimension reads canonical skill ids with adjacency when the caller passes `ctx.skillGraph` (the #1821 rule, shared — no second matcher); without it, free text as before. The AI re-rank is unchanged (anonymous labels, metered, `aiUsed:false` fallback) and never rewrites a score. UI: `AssignMentorInline` shows the compact `MatchScoreBreakdown`; the request queue gets an on-demand Suggest per request that keeps the preferred mentor as the default pick.",
+  "notes": {
+    "en": ["Mentor suggestions now show a transparent score with the rules behind it — on candidate cards and in the mentorship request queue, where a request's preferred field counts too."],
+    "tr": ["Mentor önerileri artık arkasındaki kurallarla birlikte şeffaf bir skor gösteriyor — aday kartlarında ve mentorluk istek kuyruğunda; kuyrukta isteğin tercih edilen alanı da hesaba katılıyor."],
+    "de": ["Mentor:innen-Vorschläge zeigen jetzt einen nachvollziehbaren Score mit den Regeln dahinter — auf Kandidatenkarten und in der Warteschlange der Mentoring-Anfragen, wo auch das gewünschte Fachgebiet einer Anfrage zählt."]
+  }
+}

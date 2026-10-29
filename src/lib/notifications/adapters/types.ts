@@ -14,6 +14,8 @@ export type SkipReason =
   | 'category_off'
   | 'group_off'
   | 'email_off'
+  // The person switched this channel off for this category (#1714).
+  | 'channel_off'
   | 'no_address'
   | 'no_adapter'
   | 'unknown_event'
@@ -22,7 +24,9 @@ export type SkipReason =
   // confirmed identity any more, or their workspace's admin disabled it.
   | 'chat_apps_off'
   | 'no_identity'
-  | 'workspace_disabled';
+  | 'workspace_disabled'
+  // The push adapter's (#1715): no subscribed browser and no app install.
+  | 'no_device';
 
 /** One claimed delivery, everything a channel needs to perform it. */
 export interface ChannelDelivery {

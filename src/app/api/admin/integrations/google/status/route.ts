@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { isGoogleCalendarConfigured, isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { prisma } from '@/lib/prisma';
 
@@ -12,11 +11,9 @@ import { prisma } from '@/lib/prisma';
 // wants meetings flowing into real calendars. `connections` counts the people
 // who have connected their OWN account — an operator-level health figure, not
 // anyone's identity.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
   const connections = await prisma.calendarConnection.count({ where: { provider: 'GOOGLE' } });
   return NextResponse.json({
     configured: isGoogleCalendarConfigured(),

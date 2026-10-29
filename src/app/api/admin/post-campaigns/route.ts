@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
+import { requirePermission, type Permission } from '@/lib/authz';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
@@ -27,11 +26,10 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
  * by hand (the middleware filters nothing while isolation is off).
  */
 
-async function gate() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const;
-  }
+async function gate(permission: Permission, request: Request) {
+  const authz = await requirePermission(permission, { request });
+  if ('error' in authz) return { error: authz.error } as const;
+  const { session } = authz;
   const gated = await requireCapability(session.user.orgId, 'companies');
   if (gated) return { error: gated } as const;
   return { session } as const;
@@ -39,7 +37,7 @@ async function gate() {
 
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.read', request);
     if ('error' in g) return g.error;
     const { session } = g;
     return withTenantScope(session, async () => {
@@ -79,7 +77,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.write', request);
     if ('error' in g) return g.error;
     const { session } = g;
     const parsed = campaignCreateSchema.safeParse(await request.json().catch(() => null));

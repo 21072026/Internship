@@ -47,29 +47,6 @@ export function unknownMergeTags(bodyMarkdown: string): string[] {
   return [...out];
 }
 
-// Standard 14 PDF fonts are WinAnsi-encoded: they cannot draw ğ, ş, ı, İ, Ğ, Ş
-// (pdf-lib throws on them), while ä/ö/ü/ß/ç are fine. A letter must never fail
-// to download over a Turkish name, so letters the font cannot carry are folded
-// to their base letter and anything else outside WinAnsi becomes "?". The
-// on-screen letter (the snapshot itself) keeps every character.
-const FOLD: Record<string, string> = { 'ğ': 'g', 'Ğ': 'G', 'ş': 's', 'Ş': 'S', 'ı': 'i', 'İ': 'I' };
-// WinAnsi (cp1252) beyond Latin-1: the printable characters in 0x80–0x9F.
-const CP1252_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
-
-export function pdfSafeText(text: string): string {
-  let out = '';
-  for (const ch of text) {
-    if (FOLD[ch]) { out += FOLD[ch]; continue; }
-    const code = ch.codePointAt(0)!;
-    if (code === 0x09 || code === 0x0a || (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || CP1252_EXTRA.has(ch)) {
-      out += ch;
-    } else {
-      out += '?';
-    }
-  }
-  return out;
-}
-
 /** The sample values the admin preview renders with. */
 export function sampleMergeValues(locale: 'en' | 'tr' | 'de'): MergeValues {
   const sample = {

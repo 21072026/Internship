@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -22,6 +20,7 @@ import {
 import { dispatchNewsletter, newsletterQuotaHold } from '@/lib/newsletterDispatch';
 import { mailQueueNotice } from '@/lib/mailOutbox';
 import { broadcastQuotaError } from '@/lib/broadcastQuota';
+import { requirePermission } from '@/lib/authz';
 
 /**
  * Newsletter issues: the history, and creating one (#1469).
@@ -94,8 +93,9 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
 // to keep, so nothing is ever filtered out of it: drafts, canceled issues and
 // sent ones all appear, with their per-recipient tallies.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 
@@ -193,8 +193,9 @@ export async function GET(request: Request) {
 
 // POST — create an issue as a draft, schedule it, or send it now.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 

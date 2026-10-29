@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { replayRecentEvents } from '@/lib/webhookDelivery';
@@ -10,9 +9,9 @@ import { clampReplayCount, WEBHOOK_REPLAY_MAX } from '@/lib/webhookDeliveryRule'
 // most recent subscribed events from the DomainEvent record, oldest first.
 // N is capped at WEBHOOK_REPLAY_MAX. ADMIN only, org-scoped, demo-blocked.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const body = (await request.json().catch(() => ({}))) as { count?: unknown };
   const count = clampReplayCount(body.count);

@@ -6,11 +6,13 @@ import type { ChannelAdapter } from './types';
 import { inAppAdapter } from './inApp';
 import { emailAdapter } from './email';
 import { chatAdapter } from './chat';
+import { pushAdapter } from './push';
 
 export const CHANNEL_ADAPTERS: Readonly<Record<NotificationChannel, ChannelAdapter>> = {
   inApp: inAppAdapter,
   email: emailAdapter,
   chat: chatAdapter,
+  push: pushAdapter,
 };
 
 export type { ChannelAdapter, ChannelDelivery, ChannelOutcome, SkipReason } from './types';

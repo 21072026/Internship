@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { notify } from '@/lib/notify';
 import { AlreadyMentoredError, ALREADY_MENTORED_ERROR, findActiveMentorship } from '@/lib/activeMentorship';
 import {
@@ -141,6 +142,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
         throw e;
       }
+
+      await raiseLifecycleChanged({ relationId: id, orgId: relation.orgId, from, to, reasonCode, actorId: session.user.id });
 
       // Both participants hear about it, by name of the other one — never the
       // reason, which is the actor's note. No echo to whoever made the move.

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Certificates with Turkish names no longer fail (#3319):** pdf-lib's standard fonts are WinAnsi and threw on `ş ğ ı İ` (\"WinAnsi cannot encode ı\"), so generating a certificate or reference letter for a Turkish name answered 500. Every string `generateCertificatePdf()` draws now goes through `pdfSafeText()` (new `src/lib/pdfText.ts`, shared with the offer letter): WinAnsi characters are kept, accented letters fold to their base letter, `ı/ł/đ/ħ` are mapped by hand, anything else becomes `?`. PDF only — on-screen text is unchanged. Pinned by `e2e/certificate-pdf-turkish.unit.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Certificates and reference letters can now be generated for names with Turkish letters."],
+    "tr": ["Türkçe karakter içeren isimler için sertifika ve referans mektubu artık sorunsuz oluşturuluyor."],
+    "de": ["Zertifikate und Referenzschreiben lassen sich jetzt auch für Namen mit türkischen Buchstaben erstellen."]
+  }
+}

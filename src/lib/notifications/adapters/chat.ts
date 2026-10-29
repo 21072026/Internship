@@ -8,6 +8,7 @@ import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { isChatAppsEnabled } from '@/lib/chat/config';
 import { openBotToken } from '@/lib/chat/tokens';
 import { freshSlackBotToken } from '@/lib/chat/tokenRefresh';
+import { resolveTarget } from '@/lib/chat/identity';
 import { chatClientFor } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
 
@@ -130,13 +131,10 @@ export async function deliverChat(input: {
 
     let targetId = identity.dmChannelId;
     try {
-      if (!targetId) {
-        const opened = await client.openDm({ token, externalUserId: identity.externalUserId, conversationRef: identity.conversationRef });
-        targetId = opened.id;
-        await prisma.chatIdentity.update({ where: { id: identity.id }, data: { dmChannelId: opened.id.slice(0, 128) } });
-      }
+      const target = await resolveTarget(identity, client, token);
+      targetId = target.id;
       const text = await cardText(input.eventKey, input.params, input.link, input.locale, input.orgId ?? ws.orgId);
-      const sent = await client.postMessage({ token, target: { id: targetId, conversationRef: identity.conversationRef }, text });
+      const sent = await client.postMessage({ token, target, text });
       const row = await record('SENT', targetId, { externalMessageId: sent.externalMessageId?.slice(0, 128) ?? null });
       await prisma.chatWorkspace.update({ where: { id: ws.id }, data: { lastDeliveryAt: new Date(), lastError: null } });
       return { status: 'SENT', deliveryId: row.id };

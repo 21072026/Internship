@@ -188,8 +188,8 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
 
     // Not for anyone but an admin.
     await signInAsFreshUser(page, menteeEmail, PW, '/portal');
-    expect((await page.request.get('/api/admin/post-campaigns')).status()).toBe(401);
-    expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } })).status()).toBe(401);
+    expect((await page.request.get('/api/admin/post-campaigns')).status()).toBe(403);
+    expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } })).status()).toBe(403);
   } finally {
     await cleanupOrg(org.id, [adminEmail, menteeEmail]);
   }

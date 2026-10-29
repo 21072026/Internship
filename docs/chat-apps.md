@@ -35,9 +35,26 @@ a token). A failed row offers **Retry** (`POST …/deliveries/[id]/retry`,
 (`retryChatDelivery()`), rebuilds the card from the person's in-app
 notification of that event and **appends** a row — the failed one is never
 rewritten, a second retry of it is `409 already_retried`, and a retry whose
-source notification is gone is `409 source_gone` rather than a guess. Still to
-come: the OAuth install (#1935), identity linking (#1937) and the per-category
-channel matrix (#1707).
+source notification is gone is `409 source_gone` rather than a guess. **Identity
+linking** exists too (#1937, `src/lib/chat/identity.ts`): "Find people" on a
+workspace (`POST /api/admin/integrations/chat/[id]/propose`) reads the Slack
+directory (`users.list`, `users:read.email`) and **proposes** a link for each
+member whose address matches a **verified, active** account of the same org — an
+unmatched or unverified address creates nothing, and no member ever becomes a
+user. The person confirms (or rejects) on their account page ("Chat apps" card,
+`GET/POST/DELETE /api/integrations/chat/identity`, own identities only; an ADMIN
+may remove any link of their org). Only a confirmed identity is delivered to;
+disconnecting stops chat and leaves e-mail and the bell untouched. For Teams the
+directory is read through Microsoft Graph (#3327), **only with
+`TEAMS_GRAPH_DIRECTORY_ENABLED=1`** — it needs the `User.Read.All` application
+permission on the app registration with the tenant admin's consent: a
+client-credentials token for the workspace's tenant
+(`<TEAMS_LOGIN_BASE>/<tenant>/oauth2/v2.0/token`), then `GET /v1.0/users`
+paged, a `@odata.nextLink` followed only on the Graph host. Enabled users with
+a `mail` are matched on that tenant-managed address (never the
+`userPrincipalName`). Without the flag Teams answers `not_supported`.
+Account erasure deletes the person's chat identities. Still to come: the
+per-category channel matrix (#1707).
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
@@ -198,8 +215,18 @@ That is #1923's Story 4, not an operator setting.
   switches the workspace off, clears its sealed tokens and writes
   `CHAT_PLATFORM_UNINSTALL`; the row stays for the admin to remove or reinstall.
   Point **Event Subscriptions → Request URL** at it and subscribe to those two
-  bot events. The Teams equivalent (an `installationUpdate` activity with a
-  Microsoft-signed JWT) is **not built yet** — that path answers 404.
+  bot events.
+- **Teams removal** (#3322) — the bot's **messaging endpoint** is
+  `POST /api/integrations/chat/teams/messages` (Azure Bot → Configuration →
+  Messaging endpoint). Every activity there must carry the Bot Framework's RS256
+  JWT: signature against the keys behind its OpenID metadata
+  (`TEAMS_OPENID_METADATA_URL`, real default; keys cached an hour, refetched on
+  an unknown `kid`, an unreachable JWKS refuses — fail closed), `iss`
+  `https://api.botframework.com`, `aud` = `TEAMS_APP_ID`, `nbf`/`exp` (±5 min) and
+  a `serviceUrl` claim equal to the activity's (`src/lib/chat/botFrameworkAuth.ts`).
+  A verified `installationUpdate` / `remove` switches that tenant's workspace off
+  and clears it (`CHAT_PLATFORM_UNINSTALL`); every other activity is a 200 that
+  does nothing yet. The e2e signs its tokens with `e2e/support/botframework-mock.mjs`.
 - **Token rotation** — `src/lib/chat/tokenRefresh.ts` trades a rotating Slack
   install's refresh token a minute before the bot token expires, before each
   send; a failed refresh is the workspace's `lastError`.
