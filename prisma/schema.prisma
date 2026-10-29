@@ -323,6 +323,7 @@ model Organization {
   nudgeRules              NudgeRule[]
   nudgeSends              NudgeSend[]
   automationRules         AutomationRule[]
+  holidayCalendars        HolidayCalendar[]
   automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
@@ -2166,6 +2167,9 @@ model Company {
   adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
+  // API keys a COMPANY owner minted for their own data (#2006).
+  apiKeys ApiKey[]
+
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
@@ -3297,6 +3301,35 @@ model DomainEvent {
   @@index([createdAt])
 }
 
+// A tenant's holiday calendar for business-day stage SLAs (#1638). Entered by
+// hand or pasted (`YYYY-MM-DD, label` per line) — no third-party holiday API.
+// Chosen per org or per programme through the `slaHolidayCalendarId` setting;
+// only read when `slaDayMode = 'business'`. docs/business-day-slas.md.
+model HolidayCalendar {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String       @db.VarChar(120)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  holidays  Holiday[]
+
+  @@index([orgId])
+}
+
+// One non-working date of a calendar, a LOCAL calendar day (no time, no zone):
+// the SLA judges it in the scope's `slaTimeZone`. Reached through its calendar,
+// which carries the org — deliberately not a tenant model of its own.
+model Holiday {
+  id         String          @id @default(cuid())
+  calendarId String
+  date       DateTime        @db.Date
+  label      String          @db.VarChar(120)
+  calendar   HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
+}
+
 // A stage automation rule (#1703): "when a relation enters/leaves stage X and
 // these conditions hold, run these allowlisted actions". The vocabulary, the
 // write-time gate and the condition evaluator are src/lib/automation/rule.ts;
@@ -3463,6 +3496,12 @@ model ApiKey {
   // recorded owner, and a deleted admin must not take the key's history away.
   createdById     String?
   createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  // Set when a COMPANY owner minted the key for their own data (#2006): the
+  // door then admits it only on routes that filter by this company, and its
+  // scopes never exceed the company ceiling (src/lib/companyApiKeyRule.ts).
+  // Null = an org-wide key an ADMIN minted. Additive and nullable.
+  companyId       String?
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Null means "never expires" — allowed, but flagged in the admin UI.
   expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
@@ -3482,6 +3521,7 @@ model ApiKey {
 
   @@index([orgId])
   @@index([createdById])
+  @@index([companyId])
 }
 
 // Requests per API key per quota period (#2010) — the only counter model the
