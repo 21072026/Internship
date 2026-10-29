@@ -122,6 +122,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'This instrument asks sales reps a differently worded question, so it is one survey per role — create a second one for the other role.',
       },
       nav: {
+        mentorOffers: 'Offer to a lead',
         candidates: 'Leads',
         companyInquiries: 'Demo requests',
         myCompanies: 'My accounts',
@@ -172,6 +173,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'A company showed interest in your profile. Your contact person will get in touch with you.',
           'mentorship_request.mentorAssigned': 'You have been assigned a contact person: {mentorName}.',
           'mentorship_request.menteeAssigned': 'A new lead was assigned to you: {menteeName}.',
+          'mentor_offer.new': '{mentorName} offered to be your contact person.',
+          'mentor_offer.reminder': 'The offer from {mentorName} expires soon.',
+          'mentor_offer.accepted': '{menteeName} accepted your offer.',
+          'mentor_offer.declined': '{menteeName} declined your offer.',
           'mentorship.mentorChanged': 'Your contact person has changed — {mentorName} is looking after you now.',
           'mentorship.reassignedAway': '{menteeName} was handed over to another rep — your deal with them has ended.',
           'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your lead.',
@@ -200,6 +205,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         // The assignment mails (#2558): the rep is asked to book a demo; the
         // lead is a customer and gets a contact person, not a mentor.
+        mentorOfferEmail: {
+          newSubject: '{mentorName} offered to be your contact person',
+          reminderSubject: 'The offer from {mentorName} expires soon',
+          heading: 'A rep would like to look after you',
+          newBody: '{mentorName} read your profile and offered to be your contact person. You can accept or decline in your portal — no reason needed either way.',
+          why: 'You get this because you allowed reps to approach you. You can switch it off in your profile at any time.',
+        },
         menteeAssignedEmail: {
           subject: 'New lead assigned: {mentee}',
           heading: 'You have a new lead',
@@ -1260,6 +1272,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'Bu anket satış temsilcilerine soruyu farklı sözcüklerle soruyor, bu yüzden her rol için ayrı bir anket gerekir — diğer rol için ikincisini oluşturun.',
       },
       nav: {
+        mentorOffers: 'Müşteri adayına teklif et',
         candidates: 'Müşteri Adayları',
         companyInquiries: 'Demo talepleri',
         myCompanies: 'Hesaplarım',
@@ -1304,6 +1317,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'Bir firma profilinle ilgilendi. Muhatabın seninle iletişime geçecek.',
           'mentorship_request.mentorAssigned': 'Sana bir muhatap atandı: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Sana yeni bir müşteri adayı atandı: {menteeName}.',
+          'mentor_offer.new': '{mentorName} senin ilgili kişin olmayı teklif etti.',
+          'mentor_offer.reminder': '{mentorName} adlı kişinin teklifinin süresi yakında doluyor.',
+          'mentor_offer.accepted': '{menteeName} teklifini kabul etti.',
+          'mentor_offer.declined': '{menteeName} teklifini kabul etmedi.',
           'mentorship.mentorChanged': 'Muhatabın değişti — artık {mentorName} seninle ilgileniyor.',
           'mentorship.reassignedAway': '{menteeName} başka bir temsilciye devredildi — onunla fırsatın sona erdi.',
           'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin müşteri adayın değil.',
@@ -1329,6 +1346,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'application.received': '{name} müşteri adayın olarak kaydoldu.',
           'mentor_application.new': '{name} satış temsilcisi olmak için başvurdu.',
           'mentor_application.approved': 'Satış temsilcisi başvurun onaylandı — aramıza hoş geldin!',
+        },
+        mentorOfferEmail: {
+          newSubject: '{mentorName} senin ilgili kişin olmayı teklif etti',
+          reminderSubject: '{mentorName} adlı kişinin teklifinin süresi yakında doluyor',
+          reminderBody: '{mentorName} adlı kişinin teklifi hâlâ açık ama birkaç gün içinde sona eriyor. Bu tek hatırlatma.',
+          heading: 'Bir temsilci seninle ilgilenmek istiyor',
+          newBody: '{mentorName} profilini okudu ve ilgili kişin olmayı teklif etti. Portalında kabul edebilir ya da reddedebilirsin — iki durumda da gerekçe gerekmez.',
+          why: 'Bu e-postayı temsilcilerin sana ulaşmasına izin verdiğin için alıyorsun. Profilinden istediğin zaman kapatabilirsin.',
         },
         menteeAssignedEmail: {
           subject: 'Yeni müşteri adayı atandı: {mentee}',
@@ -2259,6 +2284,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'Diese Vorlage fragt Vertriebsmitarbeiter mit anderem Wortlaut, daher ist es eine Umfrage pro Rolle — legen Sie für die andere Rolle eine zweite an.',
       },
       nav: {
+        mentorOffers: 'Lead ein Angebot machen',
         candidates: 'Leads',
         companyInquiries: 'Demo-Anfragen',
         myCompanies: 'Meine Accounts',
@@ -2303,6 +2329,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'Ein Unternehmen hat Interesse an deinem Profil gezeigt. Deine Ansprechperson meldet sich bei dir.',
           'mentorship_request.mentorAssigned': 'Dir wurde eine Ansprechperson zugewiesen: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Dir wurde ein neuer Lead zugewiesen: {menteeName}.',
+          'mentor_offer.new': '{mentorName} bietet an, deine Ansprechperson zu sein.',
+          'mentor_offer.reminder': 'Das Angebot von {mentorName} läuft bald ab.',
+          'mentor_offer.accepted': '{menteeName} hat dein Angebot angenommen.',
+          'mentor_offer.declined': '{menteeName} hat dein Angebot abgelehnt.',
           'mentorship.mentorChanged': 'Deine Ansprechperson hat sich geändert — {mentorName} betreut dich jetzt.',
           'mentorship.reassignedAway': '{menteeName} wurde an einen anderen Vertriebsmitarbeiter übergeben — dein Deal mit der Person ist beendet.',
           'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Lead.',
@@ -2328,6 +2358,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'application.received': '{name} hat sich als dein Lead angemeldet.',
           'mentor_application.new': '{name} hat sich als Vertriebsmitarbeiter beworben.',
           'mentor_application.approved': 'Deine Bewerbung als Vertriebsmitarbeiter wurde angenommen — willkommen an Bord!',
+        },
+        mentorOfferEmail: {
+          newSubject: '{mentorName} bietet an, deine Ansprechperson zu sein',
+          reminderSubject: 'Das Angebot von {mentorName} läuft bald ab',
+          heading: 'Ein Vertriebsmitarbeiter möchte dich betreuen',
+          newBody: '{mentorName} hat dein Profil gelesen und bietet an, deine Ansprechperson zu sein. Du kannst im Portal annehmen oder ablehnen — eine Begründung braucht es in keinem Fall.',
+          why: 'Du bekommst diese E-Mail, weil du Vertriebsmitarbeitern erlaubt hast, dich anzusprechen. Du kannst es jederzeit im Profil ausschalten.',
         },
         menteeAssignedEmail: {
           subject: 'Neuer Lead zugewiesen: {mentee}',

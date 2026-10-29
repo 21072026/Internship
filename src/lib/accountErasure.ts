@@ -484,6 +484,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // The mentee's own words in their self-serve mentorship request, and the
     // reason they gave when asking for a different mentor (#2098).
     prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null } }),
+    // A mentor's own words in a Mentor Offer (#1809), written to a mentee: about
+    // the mentee when the mentee is erased, the mentor's text when the mentor is.
+    prisma.mentorOffer.updateMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] }, data: { message: null } }),
     // Their own bell. A hard delete cascades it; anonymise used to keep every
     // rendered sentence ("Ayşe sent you a message", with the link) under a row
     // that claimed to be anonymous. Theirs alone, so deleted (#2106).

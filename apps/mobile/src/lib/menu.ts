@@ -64,6 +64,7 @@ const ICONS: Record<string, string> = {
   apiExplorer: 'code-slash',
   operations: 'server',
   applications: 'document-text',
+  mentorOffers: 'hand-left',
   cohorts: 'layers',
   contributorTerms: 'document-lock',
   documents: 'document',

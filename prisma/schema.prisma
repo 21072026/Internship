@@ -239,6 +239,7 @@ model Organization {
   skillEdges              SkillEdge[]
   unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
+  mentorOffers            MentorOffer[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
   documentReviews         DocumentReview[]
@@ -790,6 +791,10 @@ model User {
   // limit (mentorCapacity alone). Never applies to an admin assigning them;
   // judged by getMentorAvailability(context: 'self_select').
   selfMatchLimit          Int?
+  // A MENTEE's opt-in to being offered mentorship by a mentor (#1809). Off by
+  // default: a mentee who has not switched it on is never listed to a mentor,
+  // never offerable and never mailed by the Mentor Offers feature.
+  openToOffers            Boolean       @default(false)
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.
@@ -951,6 +956,8 @@ model User {
   preferredInRequests               MentorshipRequest[]            @relation("PreferredMentorRequests")
   decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
   screenedMentorApplications        MentorApplication[]            @relation("ScreenedMentorApplications")
+  mentorOffersSent                  MentorOffer[]                  @relation("MentorOffersSent")
+  mentorOffersReceived              MentorOffer[]                  @relation("MentorOffersReceived")
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
   supportReports                    SupportReport[]                @relation("SupportReportAuthor")
@@ -8743,5 +8750,44 @@ model ChatDelivery {
   workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
+  @@index([orgId])
+}
+
+// A mentor volunteering to mentor an unmatched mentee (#1809, "Mentor Offers").
+// Only a mentee who opted in (User.openToOffers) can receive one; the quota
+// (3 pending, 5 per rolling 7 days) and every refusal live in the pure
+// src/lib/mentorOfferRule.ts, the writes in src/lib/mentorOffers.ts.
+// Accepting goes through the shared decideMentorshipRequest() path, so the
+// pairing gets the same plan gate, notifications and one-active-mentor guard
+// as any other. `message` is erased with either party.
+enum MentorOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  WITHDRAWN
+}
+
+model MentorOffer {
+  id         String            @id @default(cuid())
+  orgId      String?
+  org        Organization?     @relation(fields: [orgId], references: [id])
+  mentorId   String
+  menteeId   String
+  message    String?           @db.Text
+  status     MentorOfferStatus @default(PENDING)
+  // 14 days after creation; the daily sweep flips a PENDING offer past it to EXPIRED.
+  expiresAt  DateTime
+  // Set when the one reminder before expiry went out — never a second one.
+  remindedAt DateTime?
+  decidedAt  DateTime?
+  createdAt  DateTime          @default(now())
+
+  mentor User @relation("MentorOffersSent", fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee User @relation("MentorOffersReceived", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@index([mentorId, status])
+  @@index([menteeId, status])
+  @@index([status, expiresAt])
   @@index([orgId])
 }

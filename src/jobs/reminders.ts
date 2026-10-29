@@ -21,6 +21,7 @@ import { dormancySweepHandler } from './dormancyChain';
 import { counters, SWEEP_OPTS } from './summary';
 import { enqueue } from '@/lib/jobs/queue';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { sweepMentorOffers } from '@/lib/mentorOffers';
 import {
   checkCompanyNeedMatches,
   checkMentorInteractionReminders,
@@ -43,4 +44,7 @@ export function registerReminderJobs(): void {
   registerJob('reminders.stageDeadline', async () => counters(await checkStageDeadlineReminders()), SWEEP_OPTS);
   registerJob('reminders.retentionReconsent', async () => counters(await checkRetentionReminders()), SWEEP_OPTS);
   registerJob('matching.needMatchAlerts', async () => counters(await checkCompanyNeedMatches()), SWEEP_OPTS);
+  // A rerun expires nothing new and reminds nobody twice: the reminder is claimed
+  // by a conditional update on `remindedAt: null` (src/lib/mentorOffers.ts).
+  registerJob('mentorOffers.sweep', async () => counters(await sweepMentorOffers()), SWEEP_OPTS);
 }
