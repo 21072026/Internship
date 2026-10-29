@@ -101,6 +101,8 @@ test('the console refuses every non-operator at the route', { tag: '@smoke' }, a
   await gotoSettled(page, '/admin/operations');
   await expect(page.getByTestId('operations-operator-only')).toBeVisible();
   await expect(page.getByTestId('operations-schedules')).toHaveCount(0);
+  // …and the sidebar does not offer it.
+  await expect(page.locator('aside a[href="/admin/operations"]')).toHaveCount(0);
 });
 
 test('the default org admin sees its own runs only; the super admin sees the world', { tag: '@smoke' }, async ({ page }) => {
@@ -115,6 +117,13 @@ test('the default org admin sees its own runs only; the super admin sees the wor
   expect(own.body!.leases).toBeUndefined();
   // A platform job's re-run takes a super admin at /api/cron — not offered here.
   expect(own.body!.schedules.find((s) => s.key === 'jobs.deadLetterAlert')!.rerunKey).toBeNull();
+  // The default org's ADMIN is an operator: the sidebar offers the console.
+  await gotoSettled(page, '/admin');
+  await expect(page.locator('aside a[href="/admin/operations"]').first()).toBeAttached();
+  // The suite runs without ERROR_TRACKING_DSN: the card says so instead of linking.
+  await gotoSettled(page, '/admin/operations');
+  await expect(page.getByTestId('operations-tracker-off')).toBeVisible();
+  await expect(page.getByTestId('operations-tracker-link')).toHaveCount(0);
 
   await signInAsFreshUser(page, superAdminEmail, PW, '/admin');
   const world = await view(page);
