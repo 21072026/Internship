@@ -450,8 +450,16 @@ marketing names redirect there, and their apex now serves **mail only**.
   `sha256(userAgent)`, a notice is due only when the sign-in **created** the `SignInDevice` row
   and the account already had one — the first browser is the baseline, so rollout mails nobody.
   A notice never carries a token, hash, code, raw user-agent or geolocation; an admin-side
-  notice passes no `request` (the browser/IP would be the admin's). The router's e-mail
-  channel is still a stub (a job no worker consumes), which is why the mail is sent inline.
+  notice passes no `request` (the browser/IP would be the admin's). The mail is sent inline,
+  not through the router's e-mail channel: that channel renders one template line per event,
+  and a notice needs the device, the local time and the "not you?" block.
+- **The router's channels are adapters** (#1711, `src/lib/notifications/adapters/`): one
+  `ChannelAdapter` port, one entry per channel in `adapters/index.ts` — the router decides
+  (preferences, then the ledger claim) and the adapter only delivers. The e-mail adapter
+  enqueues a keyed `notification.email` job whose handler renders the event's template and
+  calls `sendEmail()` with the group's own `notify-<group>` category (`notifyEmailCategory()`),
+  so opt-out, lane and outbound hold are the group's; it settles the `NotificationDelivery`
+  row and drops a job older than a day as `stale`.
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve

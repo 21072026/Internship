@@ -186,6 +186,22 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'public-contact': { exempt: false, trigger: 'request', why: 'a profile enquiry forwarded by mail' },
   'company-inquiry': { exempt: false, trigger: 'request', why: 'a demo / company enquiry forwarded by mail' },
   'project-join-request': { exempt: false, trigger: 'request', why: 'a join request forwarded by mail' },
+  // The notification router's own mail, one category per e-mail group (#1711,
+  // `notifyEmailCategory()`): each decided like the hand-written mail of its group.
+  'notify-account-security': { exempt: true, why: `${ESSENTIAL} — a security notice routed through notifyEvent()` },
+  'notify-direct-messages': { exempt: false, trigger: 'message', why: 'a routed message notice' },
+  'notify-mentorship-lifecycle': { exempt: false, trigger: 'pipeline', why: 'a routed relationship notice' },
+  'notify-pipeline-updates': { exempt: false, trigger: 'pipeline', why: 'a routed stage notice' },
+  'notify-meeting-invites': { exempt: false, trigger: 'meeting', why: 'a routed meeting notice' },
+  'notify-meeting-reminders': { exempt: false, trigger: 'meeting', why: 'a routed meeting reminder' },
+  'notify-task-reminders': { exempt: false, trigger: 'deadline', why: 'a routed deadline or task reminder' },
+  'notify-digests': { exempt: false, trigger: 'digest', why: 'a routed round-up' },
+  'notify-reports-analytics': { exempt: false, trigger: 'digest', why: 'a routed report' },
+  'notify-opportunities': { exempt: false, trigger: 'digest', why: 'a routed match alert' },
+  'notify-inbound-requests': { exempt: false, trigger: 'request', why: 'a routed enquiry notice' },
+  'notify-newsletter': { exempt: false, trigger: 'content', why: 'a routed newsletter notice' },
+  'notify-surveys': { exempt: false, trigger: 'survey', why: 'a routed survey notice' },
+  'notify-announcements': { exempt: false, trigger: 'content', why: 'a routed announcement' },
 };
 
 export function triggerFor(category: string | null | undefined): OutboundTrigger {

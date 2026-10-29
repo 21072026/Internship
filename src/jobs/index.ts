@@ -16,6 +16,7 @@ import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { runEventDelivery } from '@/lib/events/emit';
 import { runWebhookDelivery } from '@/lib/webhookDelivery';
 import { runNudgeScan, runNudgeSend } from '@/lib/nudges/evaluate';
+import { runNotificationEmail } from '@/lib/notifications/adapters/email';
 import { runDelayedAutomation } from '@/lib/automation/evaluate';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
@@ -94,6 +95,15 @@ export function registerAllJobs(): void {
   // before it mails, so a rerun loses the claim and sends nothing.
   registerJob('nudge.evaluate', async () => counters(await runNudgeScan()), { timeoutMs: 10 * 60_000 });
   registerJob('nudge.send', async (payload) => ({ [await runNudgeSend(payload)]: 1 }), { timeoutMs: 60_000 });
+
+  // The notification router's e-mail channel (#1711). Keyed per delivery, so a
+  // re-delivered event enqueues nothing new; a rerun after sendEmail() accepted
+  // the mail sends it again — the queued-mail contract (docs/mail-queue.md).
+  // Rows older than a day are dropped as stale, never sent late.
+  registerJob('notification.email', async (payload, { attempt, job }) => {
+    const outcome = await runNotificationEmail(payload, { createdAt: job.createdAt, attempt, maxAttempts: job.maxAttempts });
+    return { [outcome]: 1 };
+  }, { timeoutMs: 60_000 });
 
   // A delayed stage-automation run (#1703). The run is claimed PENDING →
   // RUNNING in one guarded update before any action, so a rerun finds it taken

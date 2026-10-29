@@ -9015,6 +9015,9 @@ const en = {
     statusSKIPPED: "not delivered",
     guardedStage: "(ended — never nudged)",
   },
+  notificationEmail: {
+    cta: 'Open in the app',
+  },
   nudgeEmail: {
     ctaMentee: 'Open your portal',
     ctaMentor: 'Open your dashboard',
@@ -19238,6 +19241,9 @@ const tr: Dict = {
     statusSKIPPED: "iletilmedi",
     guardedStage: "(bitmiş — hatırlatma gitmez)",
   },
+  notificationEmail: {
+    cta: 'Uygulamada aç',
+  },
   nudgeEmail: {
     ctaMentee: 'Portalını aç',
     ctaMentor: 'Panonu aç',
@@ -29434,6 +29440,9 @@ const de: Dict = {
     statusHELD: "wartet auf Freigabe",
     statusSKIPPED: "nicht zugestellt",
     guardedStage: "(beendet — keine Erinnerung)",
+  },
+  notificationEmail: {
+    cta: 'In der App öffnen',
   },
   nudgeEmail: {
     ctaMentee: 'Portal öffnen',

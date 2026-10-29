@@ -147,6 +147,19 @@ export interface JobPayloadMap {
   /// One (event × webhook subscription) delivery (#1695, src/lib/webhookDelivery.ts).
   /// Each attempt writes a `WebhookDelivery` row; the queue's backoff spaces retries.
   'webhook.deliver': { eventId: string; webhookId: string };
+  /// One notification-router e-mail (#1711, src/lib/notifications/adapters/email.ts),
+  /// keyed `notify:<dedupeKey>`. The payload carries the rendered event's
+  /// inputs, never an address: the recipient is read when the job runs.
+  'notification.email': {
+    eventKey: string;
+    userId: string;
+    locale: string;
+    params: Record<string, string | number>;
+    link: string;
+    emailGroup: string;
+    delivery: string;
+    deliveryId?: string;
+  };
   /// The nightly nudge scan (#1684, src/lib/nudges/evaluate.ts): every enabled
   /// condition-scan NudgeRule of every org.
   'nudge.evaluate': Record<string, never>;
@@ -213,6 +226,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'webhook.deliver',
   'nudge.evaluate',
   'nudge.send',
+  'notification.email',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

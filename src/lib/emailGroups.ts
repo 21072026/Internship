@@ -99,6 +99,8 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
       // The IdP certificate-expiry warning to an org's admins (#1933): a lapsed
       // certificate locks the whole tenant out of single sign-on.
       'sso-certificate',
+      // The notification router's own mail per group (#1711): `notify-<group>`.
+      'notify-account-security',
     ],
     legacy: [],
   },
@@ -106,7 +108,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'direct_messages',
     essential: false,
     bulk: false,
-    categories: ['message', 'mentor-direct', 'support-report-update'],
+    categories: ['message', 'mentor-direct', 'support-report-update', 'notify-direct-messages'],
     legacy: ['messages'],
   },
   {
@@ -116,6 +118,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     categories: [
       'mentorship-request', 'mentorship-decision', 'mentor-assigned',
       'mentee-assigned', 'mentor-application', 'goals-evaluation',
+      'notify-mentorship-lifecycle',
     ],
     legacy: ['mentorship', 'goalsEvaluations'],
   },
@@ -123,7 +126,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'pipeline_updates',
     essential: false,
     bulk: false,
-    categories: ['stage-update', 'offer', 'outcome', 'document-review'],
+    categories: ['stage-update', 'offer', 'outcome', 'document-review', 'notify-pipeline-updates'],
     // 'mentorship' as well as 'stageUpdates': both offer mails (offerNotify.ts)
     // were gated on the coarse 'mentorship' key long before this taxonomy.
     legacy: ['stageUpdates', 'mentorship'],
@@ -140,7 +143,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // be the worse choice — an unclassified category is invisible to the
     // taxonomy, and the day someone invites a guest who does turn out to have an
     // account, the mail would silently ship without an opt-out.
-    categories: ['meeting-invite', 'meeting-guest-invite', 'meeting-request', 'meeting-request-decision'],
+    categories: ['meeting-invite', 'meeting-guest-invite', 'meeting-request', 'meeting-request-decision', 'notify-meeting-invites'],
     // 'meetingReminders' belongs here *as well as* to meeting_reminders: the
     // three invite send sites (a meeting request, its answer, an instant-meeting
     // invite) all gated on it, so for those readers it was the only opt-out
@@ -158,7 +161,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // receive keeps the better reputation while the recurring nudge does not
     // spend it. No header or footer is affected either way: a guest has no User
     // row, so `gated` is false and sendEmail emits none of the List-* markers.
-    categories: ['meeting-reminder', 'meeting-guest-reminder', 'meeting-series-reminder'],
+    categories: ['meeting-reminder', 'meeting-guest-reminder', 'meeting-series-reminder', 'notify-meeting-reminders'],
     legacy: ['meetingReminders'],
   },
   {
@@ -170,14 +173,14 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // the meeting reminders themselves, which live in their own group.
     // 'nudge' (#1684): an admin-authored reminder about the reader's own work;
     // non-essential by definition, so it always carries the reader's userId.
-    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge'],
+    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge', 'notify-task-reminders'],
     legacy: ['deadlines', 'documents', 'weeklyReports', 'interactions'],
   },
   {
     id: 'digests',
     essential: false,
     bulk: true,
-    categories: ['unread-digest', 'activity-digest', 'mentor-digest'],
+    categories: ['unread-digest', 'activity-digest', 'mentor-digest', 'notify-digests'],
     // 'messages' as well as 'digest': the unread-message digest was gated on the
     // messages key, which is the only opt-out its readers ever expressed.
     legacy: ['digest', 'messages'],
@@ -188,7 +191,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     bulk: true,
     // 'program-health' (#1901): the admin digest of relationships that turned
     // AT_RISK — an analytics mail to admins, under the same switch.
-    categories: ['analytics-report', 'program-health'],
+    categories: ['analytics-report', 'program-health', 'notify-reports-analytics'],
     // 'digest' was the only switch the weekly analytics report ever had.
     legacy: ['digest'],
   },
@@ -196,7 +199,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'opportunities',
     essential: false,
     bulk: true,
-    categories: ['company-need-alert'],
+    categories: ['company-need-alert', 'notify-opportunities'],
     // 'digest' was the only switch a company-need alert ever had.
     legacy: ['digest'],
   },
@@ -204,7 +207,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'inbound_requests',
     essential: false,
     bulk: false,
-    categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received', 'support-report'],
+    categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received', 'support-report', 'notify-inbound-requests'],
     // The two coarse keys these sites gated on: 'messages' for an enquiry
     // through a public profile, 'mentorship' for a project join request.
     legacy: ['messages', 'mentorship'],
@@ -225,7 +228,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'newsletter',
     essential: false,
     bulk: true,
-    categories: ['newsletter'],
+    categories: ['newsletter', 'notify-newsletter'],
     legacy: ['newsletter'],
   },
   {
@@ -236,7 +239,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'surveys',
     essential: false,
     bulk: true,
-    categories: ['survey-invite'],
+    categories: ['survey-invite', 'notify-surveys'],
     legacy: [],
   },
   {
@@ -248,7 +251,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // 're-engagement' because it is the same kind of mail — us writing to
     // somebody who has gone quiet, hoping they come back — and that is the
     // switch a reader who wants none of it reaches for.
-    categories: ['announcement', 're-engagement', 'dormant-check-in'],
+    categories: ['announcement', 're-engagement', 'dormant-check-in', 'notify-announcements'],
     legacy: ['announcements'],
   },
 ];
@@ -292,6 +295,16 @@ export function emailGroupDef(id: EmailGroupId): EmailGroupDef {
   const def = BY_ID.get(id);
   if (!def) throw new Error(`emailGroups: unknown group id "${String(id)}"`);
   return def;
+}
+
+/**
+ * The `sendEmail()` category of a notification-router mail in this group
+ * (#1711): `notify-<group>`, listed in the group's own `categories` above, so
+ * the lane, the transport, the opt-out and the outbound-approval decision all
+ * read the same taxonomy as every hand-written mail of that group.
+ */
+export function notifyEmailCategory(id: EmailGroupId): string {
+  return `notify-${id.replace(/_/g, '-')}`;
 }
 
 /** `null` for a missing or unrecognised category — see the fail-open note below. */

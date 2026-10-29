@@ -13,9 +13,9 @@
  * line cannot drift between nine routes.
  *
  * TWO CHANNELS, ONE CALL. The in-app row goes through notifyEvent() with the
- * channel pinned to `inApp` — the router's e-mail channel only enqueues a job
- * no worker consumes yet, so the mail is sent inline here instead. When that
- * worker lands, this is the one place to switch.
+ * channel pinned to `inApp`. The router's e-mail channel (#1711) renders one
+ * template line per event; a notice's mail needs the device, the time in the
+ * reader's zone and the "not you?" block, so it is still sent inline here.
  *
  * WHAT A NOTICE NEVER CARRIES: a token, a hash, a password, a recovery code,
  * the raw user-agent (only the label deviceLabel() composes from it), or a
