@@ -360,6 +360,36 @@ Kurallar:
 
 ### İzin kapısının arkasındaki uçlar / Routes behind the permission guard
 
+**Her uç kendi iznini adlandırır** (#1571): `/api/admin/*` altındaki her işlem ve
+izin katmanından geçen her paylaşılan rota, iç OpenAPI belgesinde (`/admin/api-explorer`,
+`GET /api/admin/openapi`) **`x-permission`** alanıyla ve açıklamasındaki "**Permission**"
+satırıyla hangi izni sorduğunu söyler — rota dosyasından build anında üretilir, elle
+tutulan bir tablo gibi bayatlamaz. `npm run check:openapi` izin adlandırmayan bir
+`/api/admin/` işlemini kırar; `npm run check:authz` rol metnine geri dönüşü.
+
+Alan → izin (okuma / yazma). Bir PROGRAM_ADMIN grant'leriyle daraltılmamış hiçbir uçtan
+geçemez (subject yok → `unscoped_subject`); bir OBSERVER yalnız sol sütunu tutar.
+
+| Alan | Okuma | Yazma |
+|---|---|---|
+| Kişiler (`users/**`, adaylar, kaynaklar, yetim başvurular, mentör limitleri, içe aktarma) | `user.read` | `user.write` · `user.erase` · `user.reset_password` · `user.impersonate` · `user.merge` |
+| Davetler | `user.read` | `org.invite` |
+| Programlar, eşleştirme, journey, kohortlar, mentörlük talepleri | `program.read` | `program.write` · `relation.write` · `pipeline.transition` |
+| Firmalar, teklifler, işe alım, talepler, mülakat panelleri | `company.read` | `company.write` |
+| Analitik, raporlar, sağlık, SLA, haftalık raporlar, 2FA kapsamı | `analytics.read` | `org.settings.write` (eşik/maliyet, AI üretimi) · `program.write` (SLA onay/erteleme, hatırlatma) |
+| Şablonlar ve içerik (formlar, anketler, bültenler, duyurular, beceriler, etiketler …) | `content.read` | `content.write` |
+| Posta (log, kuyruk, outbox, bastırma, CRM BCC) | `mail.read` | `mail.write` |
+| Destek / güvenlik bildirimleri | `support.read` · `safeguarding.read` | `support.write` · `safeguarding.write` |
+| Org ayarları, AI politikası, organizasyonlar, faturalama, planlar | `org.settings.read` | `org.settings.write` · `org.branding.write` |
+| Entegrasyonlar (webhook, audit drain, API anahtarı, roster feed, Klaviyo, chat) | `org.integrations.read` | `org.integrations.write` |
+| Etkinlik / denetim | `activity.read` · `audit.read` | `audit.export` |
+
+Süper-admin'e özgü uçlar (`organizations` POST, `billing/entitlements`, `plan-requests/[id]`,
+`openapi`) kapıda kiracı iznini sorar, ardından mevcut `isSuperAdmin*` kontrolü aynen
+çalışır — reddin cevabı (`super_admin_only`, başka dünya için 404) değişmesin diye.
+`platform.*` adlarına taşınmaları ayrı bir iş.
+
+
 | Uç | İzin | ORG_ADMIN | OBSERVER | PROGRAM_ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz |
 |---|---|---|---|---|---|---|
 | `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
