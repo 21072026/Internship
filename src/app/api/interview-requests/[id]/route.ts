@@ -9,6 +9,7 @@ import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { advanceApplicationOnInterview } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 
@@ -76,6 +77,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return { advanced };
     });
     if (!result) return NextResponse.json({ error: 'Request already decided', code: 'already_decided' }, { status: 409 });
+    // After the commit (#1998); the decline note never leaves the programme.
+    const decided = { requestId: current.id, requisitionId: current.requisitionId, menteeId: current.menteeId };
+    const actor = { id: session.user.id, type: 'user' as const };
+    if (nextStatus === 'APPROVED') await emit('interview_request.approved', decided, { orgId, actor });
+    else await emit('interview_request.declined', { ...decided, reasonCode: declineReasonCode! }, { orgId, actor });
     if (result.advanced) {
       await logActivity({
         action: 'application.stage.set',

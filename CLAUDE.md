@@ -503,6 +503,9 @@ marketing names redirect there, and their apex now serves **mail only**.
   (`capabilityGate.ts`, the per-vertical product gate). `platform.*` is held only by the per-world
   super admin (`isSuperAdmin`) — there is no SUPER_ADMIN tier — and no tenant permission crosses an
   org, the super admin's included. A PROGRAM_ADMIN with no grant gets nothing.
+  A route never compares `session.user.role` to `'ADMIN'` and never defines a private
+  `requireAdmin()`: `npm run check:authz` (CI, #1571) fails on a new one, and the sites not
+  moved yet are pinned in `scripts/authz-baseline.json`, which only shrinks (`-- --shrink`).
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to
