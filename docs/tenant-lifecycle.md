@@ -7,6 +7,7 @@ Story #1580 (tasks #1582, #1584). An organization is born through
 |-----|------|-----|------------|
 | Rename / change slug | `POST /api/admin/organizations/[id]/rename` | super admin of the org's world (`platform.org.write`) | yes |
 | Archive | `POST /api/admin/organizations/[id]/archive` | same | yes — `DELETE` on the same route |
+| Export | `GET /api/admin/organizations/[id]/export` | super admin (`platform.org.read`) **or the org's own ORG_ADMIN** (`org.export`) | n/a (reads only) |
 
 The rule (what may change) is pure in `src/lib/orgLifecycleRule.ts`
 (unit-tested, `scripts/test/org-lifecycle-rule.test.mjs`); the only writer is
@@ -56,3 +57,43 @@ an org-stamped `AuditLog` row naming old → new (`org.renamed`, `org.archived`,
 
 Background jobs keep running over an archived tenant's rows (retention,
 rollups); their mail is what stops.
+
+## Export
+
+`GET /api/admin/organizations/[id]/export` streams one JSON document — the
+tenant's answer to "how do we get our data out". Format
+`interncrm.tenant-export/1`:
+
+```
+{ "_meta":        { format, exportedAt, organization, encoding, omittedModels, omittedFields },
+  "organization": { …the org row… },
+  "collections":  { "<Model>": [ …rows… ], … },
+  "_summary":     { "<Model>": <row count>, … } }
+```
+
+- **What is in it** (`src/lib/orgExport.ts`): the walk is driven by Prisma's
+  own schema model, not a hand list — every model with this org's `orgId`, then,
+  level by level, every model reached by a single-column foreign key from rows
+  already exported (InteractionLog and Message through their relation,
+  MessageAttachment through its message, …). A model added to the schema is in
+  the next export without a code change. Rows are read in id-ordered pages and
+  written as they are read; only the key sets the next level needs stay in
+  memory. Bytes are base64, BigInt/Decimal strings, dates ISO-8601;
+  notifications carry a `renderedText` (#921 stores params, not text).
+- **What is never in it** (`src/lib/orgExportPolicy.ts`): credentials — the
+  password hash, TOTP secret, API key hash, webhook/drain signing secrets, OAuth
+  tokens, SSO keys and certificate, bearer tokens of invitations/RSVPs/reviews —
+  and whole credential tables (reset/sign-in/remember-me tokens, recovery codes,
+  push endpoints) plus the platform queue. All of it is listed in `_meta`. The
+  policy fails closed: `scripts/test/org-export-policy.test.mjs` runs it against
+  the real schema, and a new column whose name looks like a credential that
+  nobody decided fails the unit test.
+- **Whose PII**: only the tenant's own rows — its people, as data of that
+  tenant. The e2e spec asserts no id of a second tenant appears anywhere in the
+  file.
+- **Who**: the world's super admin, or the org's own ORG_ADMIN (`org.export`,
+  held by no narrower tier and never through impersonation). Another tenant's
+  admin gets 403 with an `authz.capability_denied` row. Every export writes
+  `org.exported` (ActivityLog + the tenant's AuditLog) before the first byte.
+- A tenant ADMIN finds the download on `/admin/organizations`; the operator on
+  the lifecycle card there.
