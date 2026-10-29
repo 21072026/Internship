@@ -12,7 +12,9 @@ import { teamsClient } from '@/lib/chat/client/teams';
 // code safe to store in ChatDelivery.error / ChatWorkspace.lastError — never a
 // token, never a response body.
 
-export { ChatClientError } from '@/lib/chat/client/errors';
+import { ChatClientError } from '@/lib/chat/client/errors';
+
+export { ChatClientError };
 
 export interface ChatTarget {
   /** DM or channel id (Slack D…/C…, Teams conversation id). */
@@ -33,8 +35,32 @@ export interface ChatPlatformClient {
 const DEFAULT_CLIENTS: Record<ChatPlatform, ChatPlatformClient> = { SLACK: slackClient, TEAMS: teamsClient };
 let overrides: Partial<Record<ChatPlatform, ChatPlatformClient>> = {};
 
+/**
+ * The e2e server's stand-in (CHAT_APPS_STUB_CLIENT=1, set only by
+ * playwright.config.ts — never on a deployment): no network at all, so CI never
+ * calls Slack or Microsoft. A token ending in `-revoke-fails` makes the revoke
+ * refuse, so the spec can prove a failed revoke is recorded and still removes
+ * our copy.
+ */
+const STUB_CLIENT: ChatPlatformClient = {
+  async postMessage() {
+    return { externalMessageId: 'stub-message' };
+  },
+  async openDm({ externalUserId }) {
+    return { id: `stub-dm-${externalUserId}` };
+  },
+  async revoke({ token }) {
+    if (token.endsWith('-revoke-fails')) {
+      throw new ChatClientError('invalid_auth');
+    }
+    return { revoked: true };
+  },
+};
+
 export function chatClientFor(platform: ChatPlatform): ChatPlatformClient {
-  return overrides[platform] ?? DEFAULT_CLIENTS[platform];
+  if (overrides[platform]) return overrides[platform]!;
+  if (process.env.CHAT_APPS_STUB_CLIENT === '1') return STUB_CLIENT;
+  return DEFAULT_CLIENTS[platform];
 }
 
 /**

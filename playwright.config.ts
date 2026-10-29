@@ -378,6 +378,9 @@ export default defineConfig({
           // as a receiver over plain http on a loopback port, which the URL
           // rule and the SSRF guard otherwise refuse. Test-only switch.
           AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS: '1',
+          // The chat apps (#1958): an in-process platform stand-in, so no spec
+          // ever calls Slack or Microsoft. Test-only switch.
+          CHAT_APPS_STUB_CLIENT: '1',
           // Bug-report session replay (#3131): off by default in a production
           // build, which is what the e2e server is — the replay spec needs it on.
           FEEDBACK_REPLAY_ENABLED: '1',

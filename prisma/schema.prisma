@@ -8730,7 +8730,10 @@ model ChatIdentity {
 model ChatDelivery {
   id                String             @id @default(cuid())
   orgId             String?
-  workspaceId       String
+  /// Nulled when the workspace is uninstalled (#1958): the attempt's metadata
+  /// stays for its retention window (the `chatDelivery` entry in
+  /// src/lib/retentionEntries.ts), with no path back to a token.
+  workspaceId       String?
   identityId        String?
   eventKey          String             @db.VarChar(96)
   /// DM or channel id.
@@ -8740,7 +8743,7 @@ model ChatDelivery {
   error             String?            @db.Text
   createdAt         DateTime           @default(now())
 
-  workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace ChatWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
   @@index([orgId])
