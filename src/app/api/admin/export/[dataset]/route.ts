@@ -10,9 +10,10 @@ import { GET as analyticsGET } from '@/app/api/admin/analytics/route';
 import { GET as agingGET } from '@/app/api/admin/analytics/aging/route';
 import { GET as funnelGET } from '@/app/api/admin/analytics/funnel/route';
 import { GET as dealValueGET } from '@/app/api/admin/analytics/deal-value/route';
+import { GET as skillsGapGET } from '@/app/api/admin/analytics/skills-gap/route';
 import { getServerDictionary } from '@/i18n/server';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
-import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook } from '@/lib/reports/workbooks';
+import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook, skillsGapSheet } from '@/lib/reports/workbooks';
 import { toCsv } from '@/lib/reports/render';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { loadSurveyOverview } from '@/lib/surveyOverview';
@@ -43,7 +44,7 @@ import { loadProgramScorecard } from '@/lib/programScorecardData';
 // paged candidate list, stay free to view. REPORT_EXPORT sells the file — the
 // whole filtered set in one workbook — not the right to read one's own data.
 
-const DATASETS = ['candidates', 'analytics', 'analytics-full', 'contributor-terms'] as const;
+const DATASETS = ['candidates', 'analytics', 'analytics-full', 'contributor-terms', 'skills-gap'] as const;
 type Dataset = (typeof DATASETS)[number];
 
 /** Call another route handler in-process with the caller's query string. */
@@ -92,6 +93,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
           });
         }
         return NextResponse.json({ sheets: [sheet] });
+      }
+      case 'skills-gap': {
+        // The report route itself, every row (#1823): its ADMIN, `mentorship`
+        // and ADVANCED_ANALYTICS gates answer for the file too.
+        const res = await internal(skillsGapGET, request, '/api/admin/analytics/skills-gap', { all: '1' });
+        if (!res.ok) return NextResponse.json({ error: 'Export failed' }, { status: res.status });
+        return NextResponse.json({ sheets: [skillsGapSheet(res.body.rows ?? [], t.skillsGap)] });
       }
       case 'contributor-terms': {
         const { rows } = await buildAcceptanceReport();
