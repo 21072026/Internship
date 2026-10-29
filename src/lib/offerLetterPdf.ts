@@ -11,7 +11,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { ResolvedBranding } from './branding';
 import { hexToRgb, tryEmbedImage, wrapText } from './certificatePdf';
-import { pdfSafeText } from './offerLetter';
+import { pdfSafeText } from './pdfText';
 
 const PAGE_WIDTH = 595.28; // A4 portrait
 const PAGE_HEIGHT = 841.89;
