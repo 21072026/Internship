@@ -525,6 +525,8 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         ['mentorshipRequest', 'decidedById'],
         ['mentorApplication', 'decidedById'],
         ['mentorApplication', 'screenedById'],
+        ['mentorOffer', 'mentorId'],
+        ['mentorOffer', 'menteeId'],
         ['companyInquiry', 'handledById'],
         ['offer', 'createdById'],
         ['offer', 'decidedById'],
