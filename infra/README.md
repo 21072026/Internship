@@ -307,7 +307,10 @@ belongs here, at the proxy, which counts real bytes.
 
 **Operator step (not applied by any deploy):** in each app site block — prod,
 preview, the marketing hosts and the `pr<N>` wildcard — add, inside the block
-and before `reverse_proxy`:
+and before `reverse_proxy`. The blocks to edit are the ones that proxy to the
+app; list them with
+`sudo grep -ln 'reverse_proxy 127.0.0.1:3[24]' /etc/caddy/Caddyfile /etc/caddy/sites/*.caddy`,
+and back each file up first (`sudo cp -a <file> <file>.bak-$(date +%F)`):
 
 ```caddyfile
 request_body {
