@@ -180,8 +180,9 @@ export default async function AdminDashboard() {
       {firstRun && <FirstRunPanel t={t.firstRun} community={community} />}
 
       {/* Pipeline distribution, and the lists below: empty on a brand-new
-          tenant, where the first-run panel above stands in for them. */}
-      {!firstRun && (<>
+          tenant, where the first-run panel above stands in for them. An org
+          that already has people but no pairing yet keeps its lists. */}
+      {!(firstRun && stats.menteeCount === 0) && (<>
       <Card className="mb-8">
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
