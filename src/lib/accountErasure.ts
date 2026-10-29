@@ -531,6 +531,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    // The fit sentence (#2042) is prose about the candidate; the score, the
+    // breakdown and the rule-set version stay — they are the explainability record.
+    prisma.requisitionFit.updateMany({ where: { menteeId: userId }, data: { reason: null, reasonSource: null } }),
     prisma.interviewRequest.updateMany({
       where: { menteeId: userId },
       data: { note: null, declineNote: null, cancelReason: null },
