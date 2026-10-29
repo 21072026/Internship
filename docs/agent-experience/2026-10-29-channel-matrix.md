@@ -20,3 +20,11 @@
 - A preference that removes a channel should still leave a ledger row
   (`SKIPPED channel_off`) — filtering it out before the claim made the opt-out
   invisible to the person asking why a mail never came.
+- **A controlled checkbox that waits for the server breaks Playwright's
+  `check()`/`uncheck()`** ("Clicking the checkbox did not change its state"):
+  update state optimistically and roll back on failure, like the other switch
+  lists on /account.
+- **`next dev` in this container collapses under a whole UI spec file**
+  (timeouts on first compile, then `ERR_CONNECTION_REFUSED` mid-run). For a
+  UI spec, `npm run build` once and run with `CI=1` so Playwright uses
+  `next start` — the failures that remain are then the real ones.

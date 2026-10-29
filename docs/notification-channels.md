@@ -48,6 +48,16 @@ overnight is skipped then. The in-app bell is never held.
   `notificationBlackoutWeekends`. A failed settings read holds nothing.
 - Nothing is held longer than 16 days: a calendar that is never open releases.
 
+## Where people set it
+
+- `/account` → Notifications → *Where to reach you*: `src/components/NotificationChannelMatrix.tsx`
+  (optimistic, rolled back on failure). A disabled box is a channel the category never
+  uses; push is offered only for categories that raise router notifications.
+- `/admin/settings`: the blackout dates (validated as real calendar dates by
+  `PUT /api/admin/settings`) and the weekends switch.
+- The one-click `/u/<token>` page is deliberately e-mail-groups only: a mail footer link
+  is about mail, and the matrix needs a signed-in account.
+
 ## API
 
 `GET /api/account/notification-channels` returns, per category and matrix

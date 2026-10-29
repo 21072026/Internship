@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Channel matrix and quiet hours on /account, blackout days in admin settings (#1714, slice 2/2):** new `NotificationChannelMatrix` (category × In app / E-mail / Push grid, quiet-hours row with the account's zone) reading and writing `/api/account/notification-channels` optimistically; a box a category never uses is disabled, and push is offered only for categories that raise notifications. `/admin/settings` gains `notificationBlackoutDates` (calendar dates only, validated in `PUT /api/admin/settings`) and `notificationBlackoutWeekends`. EN/TR/DE strings; `e2e/notif-prefs.spec.ts` covers the round trip, the profile PUT keeping both keys and the endpoint's refusals.",
+  "notes": {
+    "en": ["Choose per kind of notification whether it shows in the app, arrives by e-mail or as a push on your phone — and set quiet hours: e-mails and pushes raised then wait until they end. Admins can also set days the programme is closed."],
+    "tr": ["Her bildirim türü için uygulamada mı görüneceğini, e-postayla mı yoksa telefonunuza push olarak mı geleceğini seçin — ve sessiz saatler belirleyin: o aralıkta oluşan e-posta ve push'lar aralık bitene kadar bekler. Yöneticiler programın kapalı olduğu günleri de tanımlayabilir."],
+    "de": ["Legen Sie je Benachrichtigungsart fest, ob sie in der App, per E-Mail oder als Push auf Ihr Telefon kommt — und richten Sie Ruhezeiten ein: E-Mails und Pushes aus dieser Zeit warten, bis sie endet. Admins können zudem Tage festlegen, an denen das Programm geschlossen ist."]
+  }
+}
