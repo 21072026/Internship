@@ -358,6 +358,25 @@ function inlineHelpers(body, symbols, rounds = 2) {
 
 const ROLE_LITERALS = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'];
 
+// The permission catalogue (#1569/#1571), read from the rule file itself so the
+// explorer can name what each operation asks for without a second list. A
+// permission name only ever appears in a route as an argument to
+// requirePermission() / requireRoleOrPermission() / can() (or a local helper
+// that forwards it), so every catalogue literal in the handler's resolved text
+// is one it asks. Indicative, like x-roles: the route file is the authority.
+const PERMISSION_NAMES = (() => {
+  const rule = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'authzRule.ts'), 'utf8');
+  const block = rule.slice(rule.indexOf('export const PERMISSIONS = ['), rule.indexOf('] as const;'));
+  return new Set([...block.matchAll(/'([a-z_]+(?:\.[a-z_]+)+)'/g)].map((m) => m[1]));
+})();
+
+/** The catalogue permissions a handler's resolved source names, sorted. */
+function permissionsIn(text) {
+  const found = new Set();
+  for (const m of text.matchAll(/'([a-z_]+(?:\.[a-z_]+)+)'/g)) if (PERMISSION_NAMES.has(m[1])) found.add(m[1]);
+  return [...found].sort();
+}
+
 /**
  * Every `if (...)` in a chunk of handler text, paired with whether its FIRST
  * statement is a 401/403 rejection.
@@ -1201,7 +1220,13 @@ function buildSpec(repoRoot) {
       const authLine = auth.classes
         .map((c) => (c === 'role-session' ? AUTH_PROSE[c] + auth.roles.join(', ') + '.' : AUTH_PROSE[c]))
         .join(' ');
-      const parts = [description, `**Access** - ${authLine}`, ...auth.notes];
+      const permissions = permissionsIn(resolved);
+      const parts = [
+        description,
+        `**Access** - ${authLine}`,
+        ...(permissions.length ? [`**Permission** - ${permissions.map((p) => '`' + p + '`').join(', ')} (src/lib/authzRule.ts).`] : []),
+        ...auth.notes,
+      ];
       if (WRITE_VERBS.has(handler.method) && !verifyExempt(urlPath)) {
         parts.push('A signed-in user who has not verified their email address gets 403 on this write - enforced in middleware, before the handler runs.');
       }
@@ -1238,6 +1263,7 @@ function buildSpec(repoRoot) {
       op['x-auth'] = auth.classes[0];
       if (auth.classes.length > 1) op['x-auth-alternatives'] = auth.classes.slice(1);
       if (auth.roles.length) op['x-roles'] = auth.roles;
+      if (permissions.length) op['x-permission'] = permissions;
       if (auth.denied.length) op['x-roles-denied'] = auth.denied;
       // Roles that BYPASS a non-role guard rather than being required by it.
       if (auth.escapes.length) op['x-role-escape'] = auth.escapes;
