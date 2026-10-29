@@ -358,6 +358,14 @@ export const SETTING_DEFAULTS = {
   // oneCap, manyCap }, … }, tr: …, de: … }`, parsed (unknown keys dropped) by
   // parseTerminology() in src/lib/terminology.ts. '' = the dictionary's words.
   terminology: '',
+  // Notification blackout days (#1714, src/lib/notificationChannelPrefs.ts):
+  // the org's closed days as `YYYY-MM-DD` (comma separated), read in each
+  // recipient's own time zone. Mail, push and chat raised on such a day wait for
+  // the next open day — never dropped; the in-app bell and the essential
+  // account_security notices are never held. `notificationBlackoutWeekends`
+  // closes Saturday and Sunday the same way.
+  notificationBlackoutDates: '',
+  notificationBlackoutWeekends: 'false',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
@@ -465,6 +473,8 @@ export const SETTING_SCHEMA = {
   trialActivationDays: { type: 'number', scopes: O },
   outreachMonthlyQuota: { type: 'number', scopes: O },
   terminology: { type: 'string', scopes: P },
+  notificationBlackoutDates: { type: 'string', scopes: O },
+  notificationBlackoutWeekends: { type: 'boolean', scopes: O },
 } as const satisfies { readonly [K in SettingKey]: SettingSpec };
 
 type SpecValue<S> = S extends { type: 'number'; nullable: true }

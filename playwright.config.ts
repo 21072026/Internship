@@ -415,6 +415,11 @@ export default defineConfig({
           TEAMS_APP_PASSWORD: 'e2e-teams-password',
           // The Teams messaging endpoint's JWT check (#3322) against the stub above.
           TEAMS_OPENID_METADATA_URL: `http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}/openidconfiguration`,
+          // The Teams directory read (#3327): tenant token + Graph users from the
+          // same stub, behind its flag.
+          TEAMS_LOGIN_BASE: `http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}`,
+          GRAPH_API_BASE: `http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}`,
+          TEAMS_GRAPH_DIRECTORY_ENABLED: '1',
           // Bug-report session replay (#3131): off by default in a production
           // build, which is what the e2e server is — the replay spec needs it on.
           FEEDBACK_REPLAY_ENABLED: '1',
