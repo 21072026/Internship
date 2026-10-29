@@ -19,7 +19,7 @@ import { dispatchDueNewsletters } from '@/lib/newsletterDispatch';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import {
-  checkCompanyNeedMatches,
+  checkRequisitionMatches,
   checkMentorInteractionReminders,
   checkReEngagementReminders,
   checkRetentionReminders,
@@ -256,7 +256,7 @@ test.describe('mail safety net', () => {
     await run('sendWeeklyMentorDigests', () => sendWeeklyMentorDigests());
     await run('checkStageDeadlineReminders', () => checkStageDeadlineReminders());
     await run('checkRetentionReminders', () => checkRetentionReminders());
-    await run('checkCompanyNeedMatches', () => checkCompanyNeedMatches());
+    await run('checkRequisitionMatches', () => checkRequisitionMatches());
     await run('sendWeeklyMissingDocumentReminders', () => sendWeeklyMissingDocumentReminders());
     await run('expireOffers', () => expireOffers());
     await run('sendWeeklyReportReminders', () => sendWeeklyReportReminders());

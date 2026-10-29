@@ -116,6 +116,12 @@ export const AI_TASKS = {
   // same consent as CV processing (it is the same kind of personal text).
   content_draft: { label: 'Content draft from a brief', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1500 },
   profile_enrich: { label: 'Mentor profile suggestions', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 800 },
+  // One written sentence per top-ranked candidate for a requisition (#2042).
+  // Operator: the company's own hiring tool, billed to the AI pack. The payload
+  // is ANONYMOUS by construction (src/lib/matching/fitReason.ts builds it from
+  // the deterministic breakdown only) — no consent type, because no personal
+  // identifier is sent. The AI writes the sentence, never the order.
+  requisition_fit: { label: 'Requisition fit reasons', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
   company_enrich: { label: 'Company profile suggestions', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
   // Three next-step lines for the follow-up field of one record (#2875), read
   // from the mentee's interaction log — so the same consent as the summary of

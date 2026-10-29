@@ -21,6 +21,9 @@ import { capSkills } from '@/lib/skills';
 import { syncUserSkills } from '@/lib/skillsResolve';
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
+import { missingRequired, parseChecklist, parseRequired, type ScreeningItem } from '@/lib/mentorScreeningRule';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -55,7 +58,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // application answers 404, never its private note.
     const application = await prisma.mentorApplication.findFirst({ where: withinTenant({ id }, await tenantWhere(auth.session)) });
     if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ application });
+    // The org's screening policy (#1807) rides along, so the panel can mark
+    // which items gate approval without a second request.
+    const screeningRequired = parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: await settingsOrgOf(auth.session) }));
+    return NextResponse.json({ application, screeningRequired });
   });
 }
 
@@ -68,6 +74,14 @@ const decideSchema = z.object({
 // A signal (not a real error) used to unwind the approve transaction when the
 // email belongs to an account whose role we must not silently repurpose.
 class RoleConflictError extends Error {}
+
+// Unwinds the approve transaction when the org's screening policy (#1807)
+// names items that are not done yet.
+class ScreeningIncompleteError extends Error {
+  constructor(public missing: ScreeningItem[]) {
+    super('screening_incomplete');
+  }
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
@@ -186,7 +200,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // all). Resolved once, outside the transaction: it is a read of the
     // organization, not of anything this transaction writes.
     const applicationWorld = await worldOfOrg(application.orgId);
+    // The screening gate (#1807): the org may require checklist items before
+    // approval. Empty (the default) → no read, no refusal — approval exactly as
+    // before. The checklist is read inside the transaction that flips the
+    // status, so an item unticked a moment earlier cannot slip through.
+    const screeningRequired = parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: await settingsOrgOf(session) }));
     const result = await prisma.$transaction(async (tx) => {
+      if (screeningRequired.length > 0) {
+        const row = await tx.mentorApplication.findUnique({ where: { id }, select: { screeningChecklist: true } });
+        const missing = missingRequired(parseChecklist(row?.screeningChecklist), screeningRequired);
+        if (missing.length > 0) throw new ScreeningIncompleteError(missing);
+      }
       const updated = await tx.mentorApplication.updateMany({
         where: { id, status: { in: [...DECIDABLE] } },
         data: { status: 'APPROVED', decidedAt: new Date(), decidedById: session.user.id },
@@ -261,11 +285,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return { outcome: 'invited' as const, invitation };
     }).catch((e) => {
       if (e instanceof RoleConflictError) return { outcome: 'role_conflict' as const };
+      if (e instanceof ScreeningIncompleteError) return { outcome: 'screening_incomplete' as const, missing: e.missing };
       throw e;
     });
 
     if (result.outcome === 'already_decided') {
       return NextResponse.json({ error: 'Already decided', code: 'already_decided' }, { status: 409 });
+    }
+    if (result.outcome === 'screening_incomplete') {
+      return NextResponse.json(
+        { error: 'Required screening items are not done', code: 'screening_incomplete', missing: result.missing },
+        { status: 409 }
+      );
     }
     if (result.outcome === 'role_conflict') {
       return NextResponse.json(

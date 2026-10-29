@@ -37,6 +37,7 @@ interface View {
   schedules: ScheduleRow[];
   errors: { failedRunsLastHour: number; failedRunsLast24h: number; deadLetter: number };
   leases?: { name: string; holder: string; live: boolean; expiresAt: string }[];
+  tracker: { enabled: boolean; url: string | null };
 }
 
 const STATES: ConnectorState[] = ['ok', 'degraded', 'failing', 'not_configured'];
@@ -159,6 +160,22 @@ export function OperationsConsole() {
           ) : (
             <p className="text-sm text-gray-500">{o.loading}</p>
           )}
+          {view &&
+            (view.tracker.url ? (
+              <a
+                href={view.tracker.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block text-sm text-blue-700 hover:underline dark:text-blue-400"
+                data-testid="operations-tracker-link"
+              >
+                {o.trackerLink}
+              </a>
+            ) : (
+              <p className="mt-3 text-xs text-gray-500" data-testid="operations-tracker-off">
+                {o.trackerOff}
+              </p>
+            ))}
         </Card>
 
         <Card>

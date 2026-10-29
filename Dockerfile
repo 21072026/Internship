@@ -32,6 +32,8 @@ ARG RELEASE_STAMPS=""
 # own /api/telemetry/errors relay. Inlined at build time; empty = off. The DSN
 # itself is a runtime secret and never a build arg.
 ARG NEXT_PUBLIC_ERROR_TRACKING=""
+# Core Web Vitals sample rate (#1593), 0..1; empty = off. Inlined at build time.
+ARG NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE=""
 
 # Provide dummy env vars so Next.js can analyse routes without a live DB.
 # Real secrets are injected at runtime via `docker run -e`.
@@ -39,6 +41,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV \
     RELEASE_STAMPS=$RELEASE_STAMPS \
     NEXT_PUBLIC_ERROR_TRACKING=$NEXT_PUBLIC_ERROR_TRACKING \
+    NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE=$NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
     DATABASE_URL="mysql://build:build@127.0.0.1:3306/build" \
     NEXTAUTH_SECRET="build-placeholder" \
     NEXTAUTH_URL="http://localhost:3000"

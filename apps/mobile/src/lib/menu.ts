@@ -13,6 +13,7 @@ export interface MenuItem {
 const ICONS: Record<string, string> = {
   dashboard: 'grid',
   board: 'albums',
+  automations: 'flash',
   companies: 'business',
   myCompanies: 'business',
   hiring: 'file-tray-full',

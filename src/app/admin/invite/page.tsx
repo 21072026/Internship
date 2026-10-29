@@ -153,6 +153,7 @@ export default function InvitePage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<InviteData>({
     resolver: zodResolver(inviteSchema),
@@ -160,6 +161,14 @@ export default function InvitePage() {
     // a Turkish console, and its invitees read Turkish (#1720).
     defaultValues: { role: 'MENTEE', locale },
   });
+
+  // `?role=MENTOR` preselects the role — the first-run panel's "invite your
+  // mentors" step links here (#1751). Read once after mount rather than through
+  // useSearchParams, which would need a Suspense boundary around the page.
+  useEffect(() => {
+    const role = new URLSearchParams(window.location.search).get('role');
+    if (role === 'MENTOR' || role === 'MENTEE') setValue('role', role);
+  }, [setValue]);
 
   const watchedRole = watch('role');
 

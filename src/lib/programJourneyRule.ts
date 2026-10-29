@@ -55,6 +55,8 @@ export interface StepPayload {
   stageKey?: string;
   url?: string;
   agendaTemplateId?: string;
+  // GROUP_SESSION (#1856): the programme event the step announces.
+  eventId?: string;
   skipIf?: JourneySkipCondition;
 }
 
@@ -66,6 +68,7 @@ export function readStepPayload(value: unknown): StepPayload {
   if (typeof raw.stageKey === 'string' && raw.stageKey.length > 0 && raw.stageKey.length <= 64) out.stageKey = raw.stageKey;
   if (typeof raw.url === 'string' && isSafeContentUrl(raw.url)) out.url = raw.url;
   if (typeof raw.agendaTemplateId === 'string' && /^[a-z0-9]{1,40}$/i.test(raw.agendaTemplateId)) out.agendaTemplateId = raw.agendaTemplateId;
+  if (typeof raw.eventId === 'string' && /^[a-z0-9]{1,40}$/i.test(raw.eventId)) out.eventId = raw.eventId;
   if (isJourneySkipCondition(raw.skipIf)) out.skipIf = raw.skipIf;
   return out;
 }

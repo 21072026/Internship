@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test';
 import { nextSlot, scheduleAlarms, SCHEDULER_GRACE_MS, WORKER_GRACE_MS } from '@/lib/jobs/operationsRule';
 import { QUEUE_SCHEDULES } from '@/lib/jobs/schedules';
 import { manualKeyForJob, manualJobFor } from '@/lib/jobs/manualJobs';
+import { trackerOrigin } from '@/lib/errorTrackingRule';
 
 const at = (iso: string) => new Date(iso);
 const daily = '45 6 * * *';
@@ -79,5 +80,14 @@ test.describe('operations rule', { tag: '@smoke' }, () => {
       if (!m) continue;
       expect(manualJobFor(m.key, { orgId: 'org-1' })?.name, s.key).toBe(s.job);
     }
+  });
+
+  test('trackerOrigin links to the tracker without its key or project', () => {
+    expect(trackerOrigin('https://pub123@errors.example.test/42')).toBe('https://errors.example.test');
+    expect(trackerOrigin('https://k@errors.example.test/prefix/7')).toBe('https://errors.example.test/prefix');
+    for (const raw of [undefined, '', 'not a url', 'http://k@errors.example.test/1', 'https://errors.example.test/1']) {
+      expect(trackerOrigin(raw), String(raw)).toBeNull();
+    }
+    expect(trackerOrigin('https://secret-key@errors.example.test/42')).not.toContain('secret-key');
   });
 });

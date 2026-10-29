@@ -20,6 +20,7 @@ test.describe('group sessions', () => {
     const org = await prisma.organization.create({ data: { name: `Events Org ${stamp}`, slug: `events-${stamp}`, vertical: 'INTERNSHIP' } });
     orgId = org.id;
     const people: [string, 'ADMIN' | 'MENTOR' | 'MENTEE'][] = [
+      ['admin', 'ADMIN'],
       ['host', 'MENTOR'],
       ['otherMentor', 'MENTOR'],
       ['a', 'MENTEE'],
@@ -34,7 +35,10 @@ test.describe('group sessions', () => {
 
   test.afterAll(async () => {
     for (const ctx of contexts) await ctx.dispose();
+    await prisma.programStep.deleteMany({ where: { orgId } });
     await prisma.programEvent.deleteMany({ where: { orgId } });
+    await prisma.mentorshipRelation.deleteMany({ where: { orgId } });
+    await prisma.cohort.deleteMany({ where: { orgId } });
     for (const email of Object.values(emails)) await cleanupByEmail(email);
     await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
   });
@@ -95,6 +99,9 @@ test.describe('group sessions', () => {
     expect((await (await second.get(`/api/events/${eventId}`)).json()).event.myRegistration.state).toBe('REGISTERED');
     expect((await (await c.get(`/api/events/${eventId}`)).json()).event.myRegistration.state).toBe('WAITLISTED');
     await expect.poll(() => prisma.notification.count({ where: { userId: secondId, type: 'event.promoted' } })).toBe(1);
+    // …and mailed through sendEmail() — the delivery log has the row, whatever the transport did with it.
+    const secondEmail = second === a ? emails.a : emails.b;
+    await expect.poll(() => prisma.emailLog.count({ where: { to: secondEmail, category: 'meeting-invite', subject: { contains: 'Office hour' } } })).toBe(1);
 
     // Raising the cap fills from the waitlist too.
     expect((await host.patch(`/api/events/${eventId}`, { data: { capacity: 2 } })).status()).toBe(200);
@@ -136,5 +143,42 @@ test.describe('group sessions', () => {
     if (!link) throw new Error('a session without a place gets a room');
     await expect(card.getByRole('link', { name: /join/i })).toHaveAttribute('href', link);
     if (new URL(link).hostname === 'meet.jit.si') await expect(card.getByTestId(`event-video-note-${eventId}`)).toBeVisible();
+  });
+
+  test('a GROUP_SESSION journey step publishes its session and invites the pair; the calendar shows it', async ({ playwright }) => {
+    test.setTimeout(120_000);
+    const admin = await as(playwright, 'admin');
+    const mentee = await as(playwright, 'c');
+    const programId = (await prisma.cohort.create({ data: { orgId, name: 'Events programme' } })).id;
+    await prisma.mentorshipRelation.create({
+      data: { orgId, mentorId: ids.host, menteeId: ids.c, cohortId: programId, startDate: new Date(Date.now() - 3 * 24 * 3600_000) },
+    });
+
+    // A draft session of the programme, and a step that announces it.
+    const draft = await admin.post('/api/events', {
+      data: { title: 'Programme kickoff', startsAt: new Date(Date.now() + 7 * 24 * 3600_000).toISOString(), timeZone: 'Europe/Berlin', capacity: 10, audience: 'MENTEES', programId, location: 'Room 1' },
+    });
+    expect(draft.status()).toBe(201);
+    const eventId = (await draft.json()).event.id as string;
+    expect((await draft.json()).event.publishedAt).toBeNull();
+    // Another programme's (or no) session is refused for the step.
+    const base = { anchor: 'RELATION_START', offsetDays: 1, audience: 'BOTH', action: 'GROUP_SESSION', translations: { en: 'Join the kickoff' } };
+    expect((await (await admin.post(`/api/admin/programs/${programId}/journey`, { data: { ...base, eventId: 'nosuchevent1' } })).json()).code).toBe('invalid_event');
+    const step = await admin.post(`/api/admin/programs/${programId}/journey`, { data: { ...base, eventId } });
+    expect(step.status()).toBe(201);
+    expect((await admin.patch(`/api/admin/programs/${programId}/journey`, { data: { publish: 'all' } })).status()).toBe(200);
+
+    const sweep = await (await admin.get('/api/cron?job=program-journey')).json();
+    expect(sweep.programJourney).toMatchObject({ delivered: 1 });
+    const published = await prisma.programEvent.findUniqueOrThrow({ where: { id: eventId }, select: { publishedAt: true } });
+    expect(published.publishedAt).not.toBeNull();
+    // The mentee's invitation links to the session; the mentor is not its audience.
+    const invites = await prisma.notification.findMany({ where: { userId: { in: [ids.c, ids.host] }, link: { contains: eventId } }, select: { userId: true, link: true } });
+    expect(invites).toEqual([{ userId: ids.c, link: `/portal/events?event=${eventId}` }]);
+
+    // Registered, the session is on the mentee's calendar, linked to its page.
+    expect((await mentee.post(`/api/events/${eventId}/register`)).status()).toBe(201);
+    const cal = (await (await mentee.get('/api/calendar-events')).json()).events as { id: string; type: string; link: string }[];
+    expect(cal.find((e) => e.id === `group-${eventId}`)).toMatchObject({ type: 'group', link: `/portal/events?event=${eventId}` });
   });
 });

@@ -22,7 +22,7 @@ import { counters, SWEEP_OPTS } from './summary';
 import { enqueue } from '@/lib/jobs/queue';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import {
-  checkCompanyNeedMatches,
+  checkRequisitionMatches,
   checkMentorInteractionReminders,
   checkRetentionReminders,
   checkStageDeadlineReminders,
@@ -42,5 +42,5 @@ export function registerReminderJobs(): void {
   registerJob('reminders.mentorInteraction', async () => counters(await checkMentorInteractionReminders()), SWEEP_OPTS);
   registerJob('reminders.stageDeadline', async () => counters(await checkStageDeadlineReminders()), SWEEP_OPTS);
   registerJob('reminders.retentionReconsent', async () => counters(await checkRetentionReminders()), SWEEP_OPTS);
-  registerJob('matching.needMatchAlerts', async () => counters(await checkCompanyNeedMatches()), SWEEP_OPTS);
+  registerJob('matching.needMatchAlerts', async () => counters(await checkRequisitionMatches()), SWEEP_OPTS);
 }

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Group sessions on the calendar and in the programme journey (#1856, 3/4):** `/api/calendar-events` adds `type: 'group'` entries (hosted sessions and confirmed places; every live session for an admin) linking to the session page, with a purple chip and legend in `CalendarView`. A `GROUP_SESSION` journey step can name one of its programme's upcoming sessions (`payload.eventId`, validated by `stepColumns()` → `invalid_event`); delivering it publishes a draft session once and links the invitation to it for the audience the session is for.",
+  "notes": {
+    "en": ["Group sessions now appear on your calendar, and a programme journey step can announce a group session and invite the participants to register."],
+    "tr": ["Grup oturumları artık takviminde görünüyor; bir program adımı da grup oturumunu duyurup katılımcıları kayda davet edebiliyor."],
+    "de": ["Gruppensitzungen erscheinen jetzt im Kalender, und ein Programmschritt kann eine Gruppensitzung ankündigen und zur Anmeldung einladen."]
+  }
+}
