@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
-import { canSeeCompensation, compensationSelect, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
+import { canSeeCompensation, compensationSelect, isDeclineReasonCode, isOfferStatus, letterSelect } from '@/lib/offers';
 import { EMPTY_COMPENSATION, validateCompensation } from '@/lib/compensation';
 import { compensationInputShape, mergeCompensation, pickCompensationInput } from '@/lib/compensationInput';
 import { validateOfferRequisition } from '@/lib/requisitions';
@@ -159,7 +159,7 @@ export async function GET(request: Request) {
     }
 
     const select = canSeeCompensation({ role, isOwnMenteeOffer: role === 'MENTEE' })
-      ? { ...baseSelect, ...compensationSelect() }
+      ? { ...baseSelect, ...compensationSelect(), ...letterSelect() }
       : baseSelect;
     // The index shows who each offer is for, so ADMIN alone gets the mentee's
     // name joined in. Deliberately not folded into baseSelect: POST reuses it,

@@ -36,14 +36,14 @@ const PAGE_WIDTH = 841.89; // A4 landscape
 const PAGE_HEIGHT = 595.28;
 const MARGIN_X = 70;
 
-function hexToRgb(hex: string | null): RGB | null {
+export function hexToRgb(hex: string | null): RGB | null {
   if (!hex || !isHexColor(hex)) return null;
   let h = hex.trim().slice(1);
   if (h.length === 3) h = h.split('').map((ch) => ch + ch).join('');
   return rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255);
 }
 
-async function tryEmbedImage(doc: PDFDocument, url: string) {
+export async function tryEmbedImage(doc: PDFDocument, url: string) {
   try {
     let bytes: Uint8Array;
     if (url.startsWith('data:')) {
@@ -79,7 +79,7 @@ async function tryEmbedImage(doc: PDFDocument, url: string) {
   }
 }
 
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+export function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = '';

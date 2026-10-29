@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Offer letter (#1857):** `OfferTemplate` (tenant model) per org × locale with built-in EN/TR/DE letters (`src/lib/offerLetterTemplates.ts`); allowlisted merge tags rendered by the pure `src/lib/offerLetter.ts` (unknown tags stay literal, nothing evaluated). Sending an offer freezes `Offer.letterSnapshot` in the candidate's language; `GET /api/offers/[id]/letter` serves a branded A4 PDF (or `?format=json`) to ADMIN and the offer's own MENTEE only (`canSeeCompensation`, COMPANY 403). Accepting records `acceptedIp`/`acceptedUserAgent` — a click-to-accept record, explicitly not a qualified e-signature. Template editor on `/admin/settings` (`GET/PUT/DELETE /api/admin/offer-templates`), letter preview in the offer wizard, read/download on the portal offer card and the admin offer panel. Erasure clears the snapshot and the acceptance record. Docs: `docs/offer-letter.md`.",
+  "notes": {
+    "en": ["Offers now come with an offer letter from your own template: candidates read it on their offer card, download it as a PDF and accept it with a recorded click."],
+    "tr": ["Teklifler artık kendi şablonunuzdan üretilen bir teklif mektubuyla geliyor: aday mektubu teklif kartında okuyor, PDF olarak indiriyor ve kayıtlı bir tıklamayla kabul ediyor."],
+    "de": ["Angebote kommen jetzt mit einem Angebotsschreiben aus eurer eigenen Vorlage: Kandidat:innen lesen es auf ihrer Angebotskarte, laden es als PDF herunter und nehmen es mit einem protokollierten Klick an."]
+  }
+}
