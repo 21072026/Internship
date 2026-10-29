@@ -28,3 +28,8 @@
 - **Write the a11y spec before the CSS fix and watch it fail.** The Shift+Tab hit-test walk in
   `e2e/focus-not-obscured.spec.ts` reported `INPUT university at y=0 is entirely covered` before
   `scroll-padding-top` existed — proof the check can see the defect it guards.
+- **Giving a button an extra sr-only name changes its accessible name for every `getByRole(..., { name, exact: true })`**:
+  the language switcher went from "de" to "de Deutsch" and four specs needed the new name. Grep `e2e/`
+  for the old exact name before changing a shared control's text.
+- **`account-menu`, `i18n` and `i18n-de` specs fail locally on main** (2026-10-29: two
+  `button[aria-haspopup="menu"]`, and a seed-admin sign-in that never lands) — not a regression signal.

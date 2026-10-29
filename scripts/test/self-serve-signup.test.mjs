@@ -48,3 +48,19 @@ test('the organization comes from provisionOrganization() — no second creation
   assert.doesNotMatch(route, /organization\.create\(|slugify\(/);
   assert.doesNotMatch(route, /\$transaction\(/);
 });
+
+// The client half (#1751): with the flag off the page renders the honest
+// "opening soon" state, never the form, and the client falls back to it on a
+// 503 `not_enabled` too (the flag switched off after the page rendered).
+const page = readFileSync(new URL('../../src/app/signup/page.tsx', import.meta.url), 'utf8');
+const client = readFileSync(new URL('../../src/app/signup/SignupClient.tsx', import.meta.url), 'utf8');
+
+test('/signup shows the form only while the flag is on, and the opening-soon state otherwise', () => {
+  assert.match(page, /selfServeSignupEnabled\(\)\s*\?\s*<SignupClient \/>\s*:\s*<SignupSoon \/>/);
+  assert.match(client, /res\.status === 503 && body\?\.code === 'not_enabled'/);
+  assert.match(client, /href="\/for-companies#talk"/);
+});
+
+test('/signup never signs anyone in', () => {
+  assert.doesNotMatch(client, /signIn\(|next-auth/);
+});

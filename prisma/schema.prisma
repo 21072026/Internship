@@ -221,6 +221,13 @@ model Organization {
   // `db push`). Literal default, so `db push` fills existing rows itself.
   conferencingPolicy ConferencingPolicy @default(BUILTIN)
 
+  // Tenant lifecycle (#1582, docs/tenant-lifecycle.md). Set = archived: no
+  // sign-in on any door, no mail to its people, gone from operational lists,
+  // every row kept. Cleared = live again. Written only by
+  // src/lib/orgLifecycle.ts (super admin). Nullable — additive (#2298).
+  archivedAt   DateTime?
+  archivedById String?
+
   users                   User[]
   sources                 Source[]
   cohorts                 Cohort[]
@@ -323,6 +330,8 @@ model Organization {
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
   requisitionFits         RequisitionFit[]
+
+  @@index([archivedAt])
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -2659,45 +2668,52 @@ model ContactPermission {
   // Nullable like Company's own orgId. Registered in TENANT_MODELS; every
   // sessionless writer (the DOI click, an inquiry placed by the form, the
   // import) passes orgId itself — src/lib/contactPermission.ts.
-  orgId       String?
-  org         Organization?           @relation(fields: [orgId], references: [id])
-  id          String                  @id @default(cuid())
+  orgId           String?
+  org             Organization?           @relation(fields: [orgId], references: [id])
+  id              String                  @id @default(cuid())
   // Cascade: erasing the account erases its permission rows (#2559). The
   // opt-out stays provable where it matters — on the enquiry row, which keeps
   // its own `marketingOptOutAt` for as long as enquiries are retained.
-  companyId   String
-  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  channel     ContactChannel
-  basis       ContactPermissionBasis  @default(NONE)
-  source      ContactPermissionSource
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  channel         ContactChannel
+  basis           ContactPermissionBasis  @default(NONE)
+  source          ContactPermissionSource
   // The address (EMAIL) the basis was established for. A permission is for an
   // address, not for whatever `contactEmail` says later: if the contact
   // changes, the old confirmation does not cover the new person.
-  address     String?                 @db.VarChar(320)
+  address         String?                 @db.VarChar(320)
   // Evidence of a DOI: the opt-in wording version and language shown, when the
   // box was ticked and when the link was confirmed. No IP address (data
   // minimisation — the demo form promises none; the signed link bound to the
   // address plus the two timestamps is the proof).
-  textVersion String?
-  textLocale  String?                 @db.VarChar(5)
-  requestedAt DateTime?
-  confirmedAt DateTime?
+  textVersion     String?
+  textLocale      String?                 @db.VarChar(5)
+  requestedAt     DateTime?
+  confirmedAt     DateTime?
   // The enquiry the evidence came from. No foreign key: enquiries have their
   // own retention, and the copy above is what must survive them.
-  inquiryId   String?
+  inquiryId       String?
   // EXISTING_CUSTOMER_7_3 / manual changes: who and why. Plain id, no FK — the
   // ActivityLog carries the actor too.
-  grantedById String?
-  reason      String?                 @db.Text
+  grantedById     String?
+  reason          String?                 @db.Text
   // Revocation (opt-out link, or an admin). The basis is kept so the history
   // still says what was revoked; an effective permission needs this NULL.
-  revokedAt   DateTime?
-  revokedVia  String?                 @db.VarChar(16)
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  revokedAt       DateTime?
+  revokedVia      String?                 @db.VarChar(16)
+  // When the person this proof is about was erased (#2098): the account
+  // erasure and forgetCompanyContact() stamp it, a new basis written for the
+  // company clears it. From then on the row is kept ONLY as UWG § 7 evidence,
+  // and the `contactPermissionProof` retention entry deletes it three years
+  // after the end of that calendar year (src/lib/erasureRetentionRule.ts).
+  subjectErasedAt DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
   @@unique([companyId, channel])
   @@index([orgId, channel, basis])
+  @@index([subjectErasedAt])
 }
 
 // The per-recipient cap on confirmation mails (#2577, #2569 § 9): at most ONE
@@ -7293,6 +7309,21 @@ model OrgEntitlement {
 /// missed slot from one already handled. System-level, no `orgId` — a schedule
 /// is the deployment's, not a tenant's. Advanced only by one conditional write
 /// (`src/lib/jobs/scheduleStateStore.ts`), so it never moves backwards.
+/// One health sample of THIS deployment, written every 5 minutes by the
+/// `status.sample` job (#1604, src/lib/statusSample.ts) — the history behind
+/// the public /status page. Deployment-wide on purpose (no orgId): the web app,
+/// its database, its mail relay and its job queue are shared by every tenant.
+/// A missing slot is the signal: a sample can only be written when the app, its
+/// database and its scheduler are all running, so a gap is downtime.
+model StatusSample {
+  /// The slot start, floored to 5 minutes (UTC). Unique: a rerun of the same
+  /// slot overwrites instead of double-counting.
+  at   DateTime @id
+  /// 'ok' | 'degraded' — src/lib/statusRule.ts decides.
+  mail String   @db.VarChar(16)
+  jobs String   @db.VarChar(16)
+}
+
 model ScheduleState {
   /// The schedule key — `QueueSchedule.key`.
   name             String    @id @db.VarChar(64)
@@ -8537,6 +8568,12 @@ model AffiliatePartner {
   // IBAN and account holder, sealed by src/lib/secretBox.ts. ADMIN reads them for
   // the manual transfer; the partner sees the last four characters.
   payoutDetailsCipher String?                       @db.Text
+  // When the partner's ACCOUNT was erased (#2098). The payout details outlive
+  // it for the bookkeeping duty only; the `affiliatePayoutDetails` retention
+  // entry clears them ten years after the end of the calendar year of the last
+  // of: this stamp, the end of the partnership, the last payout
+  // (src/lib/erasureRetentionRule.ts).
+  accountErasedAt     DateTime?
   createdAt           DateTime                      @default(now())
   updatedAt           DateTime                      @updatedAt
   customers           AffiliateCustomer[]
@@ -8737,7 +8774,10 @@ model ChatIdentity {
 model ChatDelivery {
   id                String             @id @default(cuid())
   orgId             String?
-  workspaceId       String
+  /// Nulled when the workspace is uninstalled (#1958): the attempt's metadata
+  /// stays for its retention window (the `chatDelivery` entry in
+  /// src/lib/retentionEntries.ts), with no path back to a token.
+  workspaceId       String?
   identityId        String?
   eventKey          String             @db.VarChar(96)
   /// DM or channel id.
@@ -8747,7 +8787,7 @@ model ChatDelivery {
   error             String?            @db.Text
   createdAt         DateTime           @default(now())
 
-  workspace ChatWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace ChatWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
   @@index([orgId])

@@ -17,6 +17,7 @@ import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
 import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
+import { OrgLifecycleCard } from '@/components/admin/OrgLifecycleCard';
 
 interface Organization {
   id: string;
@@ -55,6 +56,7 @@ interface Organization {
     sessionsToEnd: number;
   };
   createdAt: string;
+  archivedAt: string | null;
   counts: {
     users: number;
     sources: number;
@@ -957,6 +959,13 @@ export default function AdminOrganizationsPage() {
           its own route: an org admin sets it for their own tenant, no plan gate. */}
       {orgs.length > 0 && <ConferencingPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
+      {superAdmin && orgs.length > 0 && (
+        <OrgLifecycleCard
+          orgs={orgs.map((o) => ({ id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt }))}
+          onChanged={load}
+        />
+      )}
+
       {!loading && orgs.length > 0 && (
         <div className="flex items-center mb-4">
           <input
@@ -1006,7 +1015,14 @@ export default function AdminOrganizationsPage() {
               <tbody>
                 {filtered.map((o) => (
                   <tr key={o.id} data-testid={`org-row-${o.id}`} className="border-b border-gray-50">
-                    <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">{o.name}</td>
+                    <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">
+                      {o.name}
+                      {o.archivedAt && (
+                        <span data-testid={`org-archived-${o.id}`} className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-normal text-gray-600">
+                          {t.orgLifecycle.archivedBadge}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 pr-4 text-gray-500"><code className="text-xs">{o.slug}</code></td>
                     <td className="py-2 pr-4">
                       <select

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { selfServeSignupEnabled } from '@/lib/selfServeSignup';
 import {
   ADDONS,
   EDUCATION_DISCOUNT_RATE,
@@ -73,6 +74,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const { locale, t } = await getServerDictionary();
   const p = t.pricing;
+  const selfServe = selfServeSignupEnabled();
 
   const eur = (amount: number) => formatEur(amount, locale);
   const pct = (share: number) => formatPercent(share, locale);
@@ -228,7 +230,7 @@ export default async function PricingPage() {
           </div>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
             {programPlans.map((plan) => (
-              <PlanCard key={plan.key} plan={plan} p={p} eur={eur} count={count} locale={locale} />
+              <PlanCard key={plan.key} plan={plan} p={p} eur={eur} count={count} locale={locale} selfServe={selfServe} />
             ))}
           </div>
           <p className="mt-6 text-center text-sm text-gray-500">{p.vatNote}</p>
@@ -508,9 +510,11 @@ function addonPrice(addon: Addon, p: PricingCopy, eur: (n: number) => string): s
  * a different thing.
  */
 function PlanCard({
-  plan, p, eur, count, locale,
+  plan, p, eur, count, locale, selfServe = false,
 }: {
   plan: Plan;
+  /** Self-serve signup is on (#1751): Community's button opens /signup. */
+  selfServe?: boolean;
   p: PricingCopy;
   eur: (n: number) => string;
   count: (v: number | null) => string;
@@ -518,6 +522,9 @@ function PlanCard({
 }) {
   const monthlyEquivalent = annualMonthlyEur(plan.key);
   const isFree = plan.prices.YEARLY === 0 && plan.prices.MONTHLY === 0;
+  // The programme's free tier is a whole tenant: with self-serve on, it starts
+  // at /signup. Off, it keeps the open registration it always linked.
+  const freeHref = selfServe && plan.key === 'community' ? '/signup' : '/auth/register';
   const saving = annualSavingEur(plan.key);
   const months = annualMonthsFree(plan.key);
   const isProgram = plan.audience === 'PROGRAM';
@@ -596,7 +603,8 @@ function PlanCard({
       </div>
 
       <Link
-        href={isFree ? '/auth/register' : '/for-companies#talk'}
+        href={isFree ? freeHref : '/for-companies#talk'}
+        data-testid={`plan-cta-${plan.key}`}
         className={`mt-5 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           isFree
             ? 'border border-gray-300 text-gray-700 hover:bg-gray-50'

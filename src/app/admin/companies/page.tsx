@@ -20,6 +20,7 @@ import { marketingEmailAllowed, type PermissionRow } from '@/lib/contactPermissi
 import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
 import { SavedViews } from '@/components/SavedViews';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import type { OpenPosition } from '@/lib/openPositions';
 
 interface Company {
   id: string;
@@ -27,7 +28,8 @@ interface Company {
   description?: string;
   contactEmail?: string;
   industry?: string;
-  needs: { id: string; position: string; count: number; period: string }[];
+  // Open positions — Requisition only (#1875).
+  requisitions: OpenPosition[];
   _count: { mentorships: number };
   // The EMAIL row only (#2577), for the permission badge.
   contactPermissions?: PermissionRow[];
@@ -225,7 +227,6 @@ export default function CompaniesPage() {
     description?: string;
     contactEmail?: string;
     industry?: string;
-    needs?: { position: string; count: number; period: string }[];
   }) => {
     const res = await fetch('/api/companies', {
       method: 'POST',
@@ -245,7 +246,6 @@ export default function CompaniesPage() {
     description?: string;
     contactEmail?: string;
     industry?: string;
-    needs?: { position: string; count: number; period: string }[];
   }) => {
     if (!editingCompany) return;
     const res = await fetch(`/api/companies/${editingCompany.id}`, {
@@ -357,7 +357,7 @@ export default function CompaniesPage() {
             setShowNewLead(false);
             // The edit dialog reads the full record from GET /api/companies/[id]
             // (the access-logged read, #2433); the row only has to name it.
-            void openEdit({ id: companyId, name: '', needs: [], _count: { mentorships: 0 } });
+            void openEdit({ id: companyId, name: '', requisitions: [], _count: { mentorships: 0 } });
           }}
         />
       )}
@@ -452,6 +452,7 @@ export default function CompaniesPage() {
                 onSubmit={editingCompany ? handleUpdate : handleCreate}
                 onCancel={closeCompanyForm}
                 isEditing={!!editingCompany}
+                companyId={editingCompany?.id}
               />
             )}
           </div>
@@ -696,7 +697,7 @@ export default function CompaniesPage() {
 
               <div className="flex items-center gap-2 mb-4">
                 <Badge variant="info">{company._count.mentorships} {t.companiesPage.mentorships}</Badge>
-                <Badge variant="default">{company.needs.length} {t.companiesPage.positions}</Badge>
+                <Badge variant="default">{company.requisitions.length} {t.companiesPage.positions}</Badge>
                 {company.contactEmail &&
                   marketingEmailAllowed(company.contactPermissions?.[0], company.contactEmail) && (
                     <Badge variant="success" data-testid={`company-email-permission-${company.id}`}>
@@ -705,20 +706,20 @@ export default function CompaniesPage() {
                   )}
               </div>
 
-              {company.needs.length > 0 && (
+              {company.requisitions.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                     {t.companiesPage.openPositions}
                   </p>
                   <div className="space-y-1.5">
-                    {company.needs.map((need) => (
+                    {company.requisitions.map((req) => (
                       <div
-                        key={need.id}
+                        key={req.id}
                         className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2"
                       >
-                        <span className="font-medium text-gray-700">{need.position}</span>
+                        <span className="font-medium text-gray-700">{req.title}</span>
                         <span className="text-gray-500">
-                          {need.count} × {need.period}
+                          {req.filled}/{req.openings}
                         </span>
                       </div>
                     ))}

@@ -305,6 +305,36 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: "A mentee's mentor changed — corrected in place, or a new pairing that carries the stage over.",
   },
+  // The rest of the offer lifecycle (#1998), same shape as offer.accepted —
+  // ids only, never the position or compensation. Producers: PATCH
+  // /api/offers/[id] and the expiry sweep, both through raiseOfferEvent().
+  {
+    name: 'offer.sent',
+    version: 1,
+    subjectType: 'Offer',
+    subjectKey: 'offerId',
+    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    visibility: 'public',
+    description: 'An offer was sent to the candidate.',
+  },
+  {
+    name: 'offer.withdrawn',
+    version: 1,
+    subjectType: 'Offer',
+    subjectKey: 'offerId',
+    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    visibility: 'public',
+    description: 'A sent offer was withdrawn before the candidate decided.',
+  },
+  {
+    name: 'offer.expired',
+    version: 1,
+    subjectType: 'Offer',
+    subjectKey: 'offerId',
+    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    visibility: 'public',
+    description: 'A sent offer passed its expiry date without a decision.',
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from

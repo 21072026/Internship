@@ -119,8 +119,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   CompanyNeed: {
     id: ID,
     companyId: ID,
-    position: { limit: 'companyNeedPosition', files: COMPANY_WRITERS },
-    period: { limit: 'companyNeedPeriod', files: COMPANY_WRITERS },
+    // No writer since #1875: open positions are Requisitions, and the table
+    // waits for its drop (the contract step). Only the deploy converter reads it.
+    position: { exempt: 'no writer since #1875 — CompanyNeed is read-only legacy data awaiting its drop; open positions are Requisitions.' },
+    period: { exempt: 'no writer since #1875 — CompanyNeed is read-only legacy data awaiting its drop; open positions are Requisitions.' },
   },
   ProjectTask: {
     id: ID,
@@ -293,8 +295,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     stripeCustomerId: ID,
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
     publicHostToken: SERVER_SET,
-    name: { exempt: 'capped at 120 by the create schema; tenants are created by a super-admin only' },
-    slug: { exempt: 'slugified and sliced to 60 by the route before it is written' },
+    archivedById: SERVER_SET,
+    name: { exempt: 'capped at 120 by the create schema and by planRename() (#1582); written by a super-admin only' },
+    slug: { exempt: 'slugified and sliced to 60 (slugifyOrg) before it is written, on create and on rename (#1582)' },
     vertical: ENUMERATED,
     ssoProvider: ENUMERATED,
     brandName: { limit: 'orgBrandName', files: ORG_WRITERS },

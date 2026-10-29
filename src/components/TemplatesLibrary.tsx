@@ -48,10 +48,16 @@ function printPdf(title: string, bodyHtml: string) {
   w.document.write(
     `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
     `<style>${PRINT_CSS}</style></head><body><main>${bodyHtml}</main>` +
-    `<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},150);};<\/script>` +
     `</body></html>`,
   );
   w.document.close();
+  // Printed from here rather than by an inline <script> in the written page:
+  // that page inherits our CSP, and the strict one (#1552) has no
+  // 'unsafe-inline' for it to run under.
+  setTimeout(() => {
+    w.focus();
+    w.print();
+  }, 150);
 }
 
 // Multilingual document templates with in-app preview and PDF / TXT / Markdown

@@ -140,6 +140,15 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 
 `/admin/affiliates` has one sidebar entry and its own tabs:
 
+- **Overview** (`src/lib/affiliateOverview.ts`, `/api/admin/affiliate/overview`,
+  #3173) — partners per state, referred customers, commission totals per status,
+  payouts and the latest one, with shortcuts to the commissions waiting for approval
+  (`/admin/affiliates/commissions?status=PENDING`) and to the approved ones to pay.
+  The totals are the Commissions tab's own query and the latest payout is the Payouts
+  tab's first row, so the screens cannot disagree. Six aggregate queries whatever the
+  programme's size (an e2e counts them at 1 and 25 partners). While the plan, the
+  contract or the first partner is missing it shows those setup steps.
+  `affiliate.read` (OBSERVER included).
 - **Settings** — the plan and the contract (above).
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,

@@ -42,6 +42,7 @@ const ICONS: Record<string, string> = {
   insights: 'bulb',
   myInsights: 'analytics',
   newsletters: 'newspaper',
+  nudges: 'notifications',
   mentees: 'people',
   availability: 'time',
   calendar: 'calendar',

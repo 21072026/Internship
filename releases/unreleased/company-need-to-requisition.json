@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Retire CompanyNeed, expand step (#1875):** open positions have ONE source — `Requisition`. The company form no longer edits a free-text needs list (it links to `/admin/requisitions?companyId=…`, which now pre-filters from the URL; hidden in a vertical without `placements`), `POST/PUT /api/companies` drop `needs` (the PUT's delete-and-recreate of every `CompanyNeed` is gone), company payloads carry `requisitions` (OPEN only, `src/lib/openPositions.ts`) instead of `needs`, and the premium match-alert job is `checkRequisitionMatches()`, reading Requisition only. The deploy backfill (0012) now adopts a converted twin whose source need was recreated by an old edit instead of minting a duplicate requisition (`findAdoptableTwin`, unit-tested). The table and the `Company.needs` relation stay — the drop is the separate, approval-gated contract step.",
+  "notes": {
+    "en": ["A company's open positions now come only from its requisitions — the company form links straight to them instead of keeping a separate list."],
+    "tr": ["Bir firmanın açık pozisyonları artık yalnızca iş taleplerinden geliyor — firma formu ayrı bir liste tutmak yerine doğrudan onlara bağlanıyor."],
+    "de": ["Die offenen Stellen eines Unternehmens kommen jetzt nur noch aus seinen Stellenanforderungen – das Unternehmensformular verlinkt direkt dorthin, statt eine eigene Liste zu führen."]
+  }
+}

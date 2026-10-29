@@ -11,9 +11,33 @@ every platform HTTP call sits behind the `ChatPlatformClient` port in
 `src/lib/chat/client/` (Slack Web API; Teams through the Bot Framework
 connector, whose `serviceUrl` is trusted only on Microsoft hosts). A disabled
 workspace or a platform refusal is recorded (`SKIPPED` / `FAILED` in
-`ChatDelivery`) and never touches the person's e-mail or in-app delivery. Still
-to come: the OAuth install (#1935), identity linking (#1937), the per-category
-channel matrix (#1707) and the console (#1958/#1960).
+`ChatDelivery`) and never touches the person's e-mail or in-app delivery. The
+**console** exists (#1958): the "Slack and Microsoft Teams" card on
+`/admin/integrations` (`GET /api/admin/integrations/chat/status`, never a token)
+with a per-workspace **switch** (`PATCH …/chat/[id] { enabled }` — the kill
+switch is `ChatWorkspace.enabled`, deliberately not a `Setting` row) and a real
+**uninstall** (`DELETE …/chat/[id]`: platform-side revoke first — Slack
+`auth.revoke`; Teams has no workspace token, recorded as `no_platform_revoke` —
+then the workspace, its sealed tokens and its identities are deleted; a revoke
+the platform refuses is recorded and our copy goes anyway). Writes need
+`org.integrations.write`; every install, enable, disable and uninstall is an
+`AuditLog` row (`CHAT_*`) with the org. Delivery history outlives an uninstall
+with `workspaceId` nulled and is pruned after 90 days (`chatDelivery` in the
+retention registry). The one writer is `src/lib/chat/workspaces.ts`
+(`recordChatInstall()` is what the OAuth callback will call). The e2e server
+runs with `CHAT_APPS_STUB_CLIENT=1` — a no-network platform stand-in no
+deployment sets. The
+**delivery ledger** is readable too (#1960): "Recent deliveries" under each
+workspace (`GET /api/admin/integrations/chat/deliveries?workspaceId=…`, the last
+50 attempts — event key, recipient name, outcome, reason; never the card body or
+a token). A failed row offers **Retry** (`POST …/deliveries/[id]/retry`,
+`org.integrations.write`), which goes through the router
+(`retryChatDelivery()`), rebuilds the card from the person's in-app
+notification of that event and **appends** a row — the failed one is never
+rewritten, a second retry of it is `409 already_retried`, and a retry whose
+source notification is gone is `409 source_gone` rather than a guess. Still to
+come: the OAuth install (#1935), identity linking (#1937) and the per-category
+channel matrix (#1707).
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the

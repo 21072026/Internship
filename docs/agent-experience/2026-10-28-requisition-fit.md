@@ -12,3 +12,13 @@
   on-path stages (`stageProgressOf`).
 - **Cold `next dev` compiles of role shells (/mentor, /company) can exceed the 60s test timeout here**
   — a `waitForURL` timeout on login is that, not the change; re-run with `--timeout=180000`.
+- **A stored AI sentence must die with the numbers it explained.** The fit store refreshes a row
+  when the score changes; without clearing `reason` in the same write, the next read compared the
+  NEW score against an OLD sentence and showed it. The board also checks score + rule-set version
+  before showing an AI sentence.
+- **Route files may export only handlers and route config.** A `export const FIT_REASON_TOP_N`
+  in `route.ts` type-checks but fails `next build`; keep such constants module-private.
+- **The `/ai` page has a hard count in `e2e/ai-transparency.spec.ts`** — a new AI task means a new
+  `ai.tasks` entry in all three locales and a bumped count in the same PR. The privacy notice's
+  `aiBody` must say the same thing (it is checked against `docs/ai.md`, which is checked against
+  the code).

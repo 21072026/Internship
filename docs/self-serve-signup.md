@@ -46,3 +46,20 @@ one notice to `ALERT_EMAIL_TO` (org name and slug only).
   which is what the new org starts with.
 - **Rate limit:** 5 per IP per hour (`SIGNUP_ORG_RATE_LIMIT`), spent before the
   body is parsed.
+
+## The client half (#1751)
+
+- **`/signup`** (`src/app/signup/`): a 404 on a vertical without `mentorship`.
+  The Community terms come from `getPlan('community')`, never from a typed
+  number. The flag on → `SignupClient` (posts, then shows "check your email");
+  off → `SignupSoon` ("opening soon" + `/for-companies#talk`). The client also
+  falls back to `SignupSoon` on a 503 `not_enabled`.
+- **Entry points** (cosmetic; the endpoint is the control): the public header's
+  "Start free" (`PublicShell` → `showSignup`) and the Community column on
+  `/pricing`, both only while the flag is on.
+- **First-run panel** (`src/components/FirstRunPanel.tsx`): on `/admin`, while
+  the org has **no** mentorship relation in any state and its product has
+  `mentorship`. It stands in for the pipeline card and the two recent lists,
+  links to `/admin/invite?role=MENTOR`, `/admin/invite?role=MENTEE` and
+  `/admin/mentorship`, shows the Community terms when the org is on `FREE`, and
+  writes nothing. The first relation removes it.

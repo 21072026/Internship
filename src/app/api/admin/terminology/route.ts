@@ -3,20 +3,26 @@ import { z } from 'zod';
 import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { writeSetting } from '@/lib/settingsWrite';
+import { revertSetting, writeSetting } from '@/lib/settingsWrite';
 import { logActivity } from '@/lib/activity';
 import { prisma } from '@/lib/prisma';
 import { TERM_DEFAULTS, TERM_TOKENS, parseTerminology, serializeTerminology } from '@/lib/terminology';
 import { resolveTerminology } from '@/lib/terminology.server';
 import { requireCapability } from '@/lib/capabilityGate';
+import { resolveSettingRaw, resolveSettings } from '@/lib/settingsResolver';
 
-// The org's (or one programme's) nouns (#1629): GET reads the stored document
+// The org's (or one programme's) nouns (#1629, #1631): GET reads the document
 // for a scope, PUT replaces it. One `terminology` setting row per layer, written
 // through writeSetting() — no second settings mechanism — to the CALLER's org
 // (never the global row, #2628) or one of its programmes. What is stored is the
 // parsed document: an unknown locale or token, or a token missing a form, is
-// dropped before the write (src/lib/terminology.ts). An empty document clears
-// the layer back to inheriting.
+// dropped before the write (src/lib/terminology.ts). An empty document DELETES
+// the row at that layer (revertSetting), so the parent's value flows down again.
+//
+// Plan gate (#1631): setting nouns is admin configuration on a paid plan, the
+// same rule as custom pipeline stages — refused HERE for a FREE org with a
+// machine-readable 403. Clearing is always allowed, so a downgraded tenant can
+// still go back to the default words.
 
 async function scopeOf(orgId: string, programId: string | null): Promise<{ programId: string | null } | null> {
   if (!programId) return { programId: null };
@@ -33,10 +39,24 @@ export async function GET(request: Request) {
   return withTenantScope(gate.session, async () => {
     const scope = await scopeOf(orgId, programId);
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const [org, programs, terminology, orgTerminology] = await Promise.all([
+      prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } }),
+      prisma.cohort.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
+      resolveTerminology({ orgId, programId: scope.programId }),
+      scope.programId ? resolveTerminology({ orgId }) : null,
+    ]);
     return NextResponse.json({
       tokens: TERM_TOKENS,
       defaults: TERM_DEFAULTS,
-      terminology: await resolveTerminology({ orgId, programId: scope.programId }),
+      plan: org?.plan ?? null,
+      programs,
+      // The effective document at this scope (a programme without its own row
+      // reads its org's), and — for a programme — whether it has its own row.
+      terminology,
+      inherited: scope.programId
+        ? (await resolveSettings({ orgId, programId: scope.programId })).sources.terminology !== 'program'
+        : undefined,
+      orgTerminology: orgTerminology ?? undefined,
     });
   });
 }
@@ -65,18 +85,34 @@ export async function PUT(request: Request) {
     const scope = await scopeOf(orgId, parsed.data.programId ?? null);
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const value = serializeTerminology(parseTerminology(parsed.data.terminology));
-    await writeSetting('terminology', value, orgId, {
+    const opts = {
       ...(scope.programId ? { programId: scope.programId } : {}),
       actor: { id: session.user.id, email: session.user.email ?? null },
-    });
+    };
+    if (value !== '') {
+      const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
+      if (org?.plan === 'FREE') {
+        return NextResponse.json(
+          { error: 'Custom terminology requires a paid plan', code: 'plan_required' as const, plan: org.plan },
+          { status: 403 },
+        );
+      }
+      await writeSetting('terminology', value, orgId, opts);
+    } else {
+      await revertSetting('terminology', orgId, opts);
+    }
     await logActivity({
       action: 'settings.terminology',
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
-      detail: scope.programId ? `program=${scope.programId}` : 'org',
+      detail: `${scope.programId ? `program=${scope.programId}` : 'org'} ${value === '' ? 'cleared' : 'set'}`,
       request,
       orgId,
     });
-    return NextResponse.json({ terminology: parseTerminology(value) });
+    // The effective value after the write (a cleared programme reads its org's).
+    return NextResponse.json({
+      terminology: parseTerminology(await resolveSettingRaw('terminology', { orgId, programId: scope.programId })),
+      inherited: scope.programId ? value === '' : undefined,
+    });
   });
 }

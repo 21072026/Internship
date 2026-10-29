@@ -7,6 +7,7 @@ import type { QueueScope } from '@/lib/mailOpsRule';
 import { QUEUE_SCHEDULES } from '@/lib/jobs/schedules';
 import { manualKeyForJob } from '@/lib/jobs/manualJobs';
 import { leaseSnapshot, type LeaseSnapshot } from '@/lib/jobs/lease';
+import { trackerOrigin } from '@/lib/errorTrackingRule';
 import { ERROR_WINDOWS, nextSlot, scheduleAlarms, type ScheduleAlarm } from '@/lib/jobs/operationsRule';
 
 // The operations console's reader (#1607): one view over what already exists —
@@ -58,6 +59,12 @@ export interface OperationsView {
   errors: { failedRunsLastHour: number; failedRunsLast24h: number; deadLetter: number };
   /** World scope only. */
   leases?: LeaseSnapshot[];
+  /**
+   * The error tracker (#1600): whether a DSN is configured, and its origin to
+   * link to. It counts nothing here — events live in the tracker, not in our
+   * database — so the counts above stay the job ledger's.
+   */
+  tracker: { enabled: boolean; url: string | null };
 }
 
 const RUN_SELECT = { startedAt: true, finishedAt: true, ok: true, durationMs: true, trigger: true, error: true } as const;
@@ -105,6 +112,7 @@ export async function operationsView(scope: QueueScope, now: Date = new Date()):
     scope.kind === 'world' ? leaseSnapshot().catch(() => []) : Promise.resolve(undefined),
   ]);
 
+  const tracker = trackerOrigin(process.env.ERROR_TRACKING_DSN);
   const stateByKey = new Map(states.map((s) => [s.name, s.lastEnqueuedSlot]));
   const runByJob = new Map(jobNames.map((n, i) => [n, lastRuns[i]]));
   const okByJob = new Map(jobNames.map((n, i) => [n, lastOks[i]]));
@@ -143,5 +151,6 @@ export async function operationsView(scope: QueueScope, now: Date = new Date()):
     schedules,
     errors: { failedRunsLastHour: failedHour, failedRunsLast24h: failedDay, deadLetter },
     ...(leases ? { leases } : {}),
+    tracker: { enabled: tracker !== null, url: tracker },
   };
 }

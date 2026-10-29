@@ -355,6 +355,7 @@ export default function AffiliateSettingsPage() {
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{localeLabel[l]}</span>
               <Textarea
                 rows={8}
+                lang={l}
                 value={contract[l] ?? ''}
                 onChange={(e) => setContract({ ...contract, [l]: e.target.value })}
                 data-testid={`affiliate-contract-${l}`}

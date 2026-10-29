@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Operations console for every operator (#1607):** the `/admin/operations` link is now `operatorOnly` — shown to a super admin and to the default organization's ADMIN, the same rule the page and its API already applied (`resolveQueueScope()`); `navAudienceAllows()` in `src/lib/navLinks.ts` judges `superAdminOnly` and `operatorOnly` for the sidebar, the command palette and the app menu. The Errors card now says whether the error tracker (#1600) is configured and links to its origin (`trackerOrigin()` in `errorTrackingRule.ts` — never the DSN's key or project).",
+  "notes": {
+    "en": ["The operations console now appears in the menu for the default organization's admins too, and links to the error tracker when one is set up."],
+    "tr": ["Operasyon konsolu artık varsayılan kurumun yöneticilerinin menüsünde de görünüyor ve kuruluysa hata izleyiciye bağlantı veriyor."],
+    "de": ["Die Betriebskonsole erscheint jetzt auch im Menü der Admins der Standardorganisation und verlinkt den Fehler-Tracker, wenn einer eingerichtet ist."]
+  }
+}

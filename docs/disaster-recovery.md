@@ -1,5 +1,8 @@
 # Disaster recovery — restoring the database
 
+> Data loss is one incident class. Severity, on-call, customer communication and the
+> postmortem are in [`docs/incident-response.md`](incident-response.md) (#1605).
+
 > Status: **runbook + automation**. The backup half is automated
 > (`infra/backup-db.sh`, wired into every prod/preview deploy plus a daily cron
 > — see [`infra/README.md`](../infra/README.md#5-database-backups--the-destructive-schema-gate)).
@@ -56,6 +59,40 @@ credentials, IBANs, queued mail) as ciphertext under keys derived from the
 come back while those credentials do not. Keep each environment's env file off the
 box next to its backups, and keep a rotated-out secret for as long as backups taken
 under it exist. See [`secrets-and-rotation.md`](secrets-and-rotation.md) § 6.
+
+## Off-site copy (#2169, #2058)
+
+The local dumps share a disk with the database; the off-site copy is what is
+left if the host is lost (2026-09-03 came close).
+
+| | |
+|---|---|
+| Where | a restic repository in Cloudflare R2 — a different company, not just a different machine (`infra/server/backup-offsite.sh`, set up by `backup-offsite-setup.yml`) |
+| What | every `*.sql.gz` in `BACKUP_DIR`, snapshotted with host `internship-crm`, tag `dumps` |
+| Encryption | restic's repository encryption (AES-256, key derived from `RESTIC_PASSWORD`). ⚠️ **Symmetric:** the server holds the password, so a compromised host can read its own off-site history. The password also lives as the `RESTIC_PASSWORD` repo secret — losing every copy of it loses the backups |
+| Kept | `forget --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune` — longer than the local 7 days |
+| Delete protection | ⚠️ **not yet.** The R2 token on the host can `forget`/`prune`, so a compromised host can erase history. Bucket versioning / object lock is an operator step (below) |
+| Verified | **daily, from a GitHub-hosted runner** (`backup-verify.yml` → `verify-offsite`, `infra/check-backups-offsite.sh`): newest snapshot ≤ 36 h, ≥ 3 distinct days, listing failure = red. Reads snapshot metadata only. Until the four R2/restic secrets exist it reports "not configured" and stays green |
+| Drilled | `restore-drill.sh --source offsite` — *Run workflow* → drill ✓, source `offsite`; fetches + decrypts the newest snapshot into a `0700` scratch dir, same three guards (checked **before** the fetch), RTO includes the fetch |
+
+**Operator steps still open** (not doable from the repo, each needs the R2 console
+or the box):
+
+1. Add the repo secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+   `RESTIC_PASSWORD` (and `vars.OFFSITE_BUCKET` if the bucket is not
+   `internship-crm-backups`) so the hosted check can run. A **read-only** R2 token
+   is enough for it — use one, not the host's write token.
+2. Turn on bucket versioning or an object-lock retention rule in R2, so the host's
+   token cannot destroy history.
+3. Run the off-site drill once (preview) and add its row to the Drill log below,
+   with `Source: offsite`.
+4. Decide whether the "server cannot decrypt" property is required (issue #2058
+   asks for it): restic cannot do public-key encryption, so it would mean
+   `age`-encrypting each dump to an operator-held public key before restic
+   uploads it — and the drill decrypting with a key fetched from outside the box.
+
+`docs/trust/security-overview.md` gets a sentence about the off-site copy only after
+step 3 has a measured row.
 
 ## Restore
 

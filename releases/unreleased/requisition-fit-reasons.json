@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Written fit reasons on the company applicant board (#2042, slice 2):** every applicant on `/company/requisitions/[id]` carries a sentence explaining the fit (`fitReason`, `RULE` from `ruleFitReason()` in `src/lib/matching/fitReason.ts`, always available) — never the score, weights or breakdown, which stay the operator's. `POST /api/company/requisitions/[id]/fit-reasons` (owning COMPANY or org ADMIN; another company's requisition is 404) ranks every visible applicant deterministically first, then asks the new operator AI task `requisition_fit` (billed to the AI pack via `runAiGated`, rate-limited, artefact-cached on the anonymous payload) for one sentence per top-5 label; `buildFitReasonPayload()` builds that payload from the breakdown alone, so no id, name, e-mail, photo, protected characteristic, score or programme stage can reach the provider (unit-tested). An AI sentence is stored on `RequisitionFit` (`reasonSource = AI`) and shown with a ✨ marker only while the numbers it was written for still hold; `recordRequisitionFits()` now clears a stored sentence when the numbers change. Without the pack, a provider or quota the board keeps its rule-based sentences and the button says why.",
+  "notes": {
+    "en": ["Companies now see a short written reason beside each applicant explaining how they fit the role — and, with the AI package, can have the top applicants' reasons written by AI. A person makes every decision."],
+    "tr": ["Şirketler artık her başvuranın yanında role nasıl uyduğunu açıklayan kısa bir gerekçe görüyor; AI paketiyle en üstteki adayların gerekçelerini yapay zekâya yazdırabiliyor. Her kararı bir insan veriyor."],
+    "de": ["Unternehmen sehen jetzt neben jeder Bewerbung eine kurze Begründung, wie sie zur Stelle passt — mit dem KI-Paket lassen sich die Begründungen der besten Bewerbungen von KI schreiben. Jede Entscheidung trifft ein Mensch."]
+  }
+}

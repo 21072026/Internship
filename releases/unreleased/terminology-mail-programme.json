@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Terminology reaches mail, programmes and the plan gate (#1631):** the role-naming mails (rematch notices, weekly-report reminder, dormant check-in, meeting and series reminders, offer mails, the overdue-to-do digest) read their copy through `emailDictionary(locale, orgId)` for the recipient's org, so a renamed noun and the vertical overlay reach the inbox; `npm run check:mail-dictionary` (CI) pins the remaining bare `getDictionary()` calls in mailing files as a ratchet. `PUT /api/admin/terminology` refuses a FREE org with `403 { code: 'plan_required' }` (clearing stays allowed) and an empty document now DELETES the layer's row (`revertSetting()` in `src/lib/settingsWrite.ts`), so a programme's reset lets the org's words flow down again. The Terminology card gains a programme picker (with an \"inherits the organization\" note), a per-language reset, a live preview sentence (`TERM_PREVIEW_SAMPLE`) and the plan notice.",
+  "notes": {
+    "en": ["Your own words now reach e-mails too, can differ per programme, and you can preview them before saving."],
+    "tr": ["Kendi kelimeleriniz artık e-postalarda da görünür, programa göre farklılaşabilir ve kaydetmeden önce önizlenebilir."],
+    "de": ["Ihre eigenen Begriffe erscheinen jetzt auch in E-Mails, können je Programm abweichen und lassen sich vor dem Speichern in der Vorschau prüfen."]
+  }
+}

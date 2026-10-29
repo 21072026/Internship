@@ -268,6 +268,8 @@ export const NOTIFICATION_EVENTS = [
   // applicant is told only that the programme is full, the org's admins are
   // told why. In-app only, at most one a day per admin (src/app/api/apply).
   { key: 'plan_limit.application_held', category: 'announcements', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['limit'] },
+  // The same for a project a mentee could not create at the project cap (#3270).
+  { key: 'plan_limit.project_held', category: 'announcements', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['limit'] },
   { key: 'signup.pendingApproval', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'signup.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   // An operational anomaly rather than news: somebody registered through an
