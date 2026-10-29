@@ -344,6 +344,11 @@ Kurallar:
   { subject, request })` route guard'ı, `can(actor, permission, subject)` ve kuralın
   saf hali `src/lib/authzRule.ts` (katalog `PERMISSIONS`, kademe tablosu
   `TIER_PERMISSIONS`, birim testli). Route'ların ona taşınması #1571.
+- **Karma rotalar** (admin + başka roller, #1571): `requireRoleOrPermission(['MENTOR'], izin, { request })`
+  — ADMIN izin kuralından geçer (OBSERVER yazamaz, ret denetlenir), listelenen rol rolüyle geçer,
+  diğer herkes 403. Cevaptaki `admin` hangi dalda olunduğunu söyler; "admin tüm org'u görür"
+  için `session.user.role` değil o kullanılır. Bir rotanın içindeki tek bir admin dalı için
+  `can(await actorFromSession(session), izin, …, session)`.
 - **`npm run check:authz`** (CI, #1571): `src/app/api/**/route.*` içinde çağıranın
   rolünü `'ADMIN'` ile karşılaştıran (`session.user.role !== 'ADMIN'`, çıplak
   `role === 'ADMIN'`, `['ADMIN', …].includes(role)`) ya da yerel bir `requireAdmin…`
