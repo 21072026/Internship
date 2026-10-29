@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { notifyEvent } from '@/lib/notifications/router';
+import { notifyEvent, runDeferredDelivery, type DeferredDelivery } from '@/lib/notifications/router';
 
 /**
  * The notification router, end to end against a real database (#1710).
@@ -46,8 +46,8 @@ async function ledgerFor(userId: string) {
  */
 async function mailJobsFor(userId: string) {
   const jobs = await prisma.job.findMany({
-    where: { name: 'notification.email' },
-    select: { id: true, payload: true, idempotencyKey: true },
+    where: { name: { in: ['notification.email', 'notification.deferred'] } },
+    select: { id: true, name: true, payload: true, idempotencyKey: true, runAt: true },
   });
   return jobs.filter((j) => (j.payload as { userId?: string } | null)?.userId === userId);
 }
@@ -208,6 +208,102 @@ test.describe('notification router', () => {
       expect(result).toMatchObject({ sent: 1, queued: 1, skipped: 0, failed: 0 });
       expect(await prisma.notification.count({ where: { userId: user.id } })).toBe(1);
       expect(await mailJobsFor(user.id)).toHaveLength(1);
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  // A quiet window around "now", in UTC, so the test does not depend on the clock.
+  function quietAroundNow() {
+    const hhmm = (d: Date) => d.toISOString().slice(11, 16);
+    const now = Date.now();
+    return { start: hhmm(new Date(now - 60 * 60 * 1000)), end: hhmm(new Date(now + 60 * 60 * 1000)), tz: 'UTC' };
+  }
+
+  test('the channel matrix is enforced by the router: e-mail off, push on for one category (#1714)', async () => {
+    const email = uniqueEmail('notify-matrix');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Matrix');
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { notificationPrefs: { channels: { deadlines: { email: false, push: true } } } },
+      });
+      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' });
+      const ledger = await ledgerFor(user.id);
+      expect(ledger.find((r) => r.channel === 'email')).toMatchObject({ status: 'SKIPPED', skipReason: 'channel_off' });
+      expect(ledger.find((r) => r.channel === 'inApp')).toMatchObject({ status: 'SENT' });
+      // Push was added by the person's choice; no device here, so it is recorded as such.
+      expect(ledger.find((r) => r.channel === 'push')).toMatchObject({ status: 'SKIPPED', skipReason: 'no_device' });
+      expect((await mailJobsFor(user.id)).filter((j) => j.name === 'notification.email')).toHaveLength(0);
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('quiet hours hold the e-mail to the window end exactly once; the bell goes now (#1714)', async () => {
+    const email = uniqueEmail('notify-quiet');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Quiet');
+    try {
+      const quiet = quietAroundNow();
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { quietHours: quiet } } });
+      const opts = { dedupeKey: 'quiet-1' };
+      const r = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' }, opts);
+      expect(r).toMatchObject({ sent: 1, queued: 1 });
+      // A replay of the same event holds nothing twice.
+      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' }, opts);
+
+      const jobs = await mailJobsFor(user.id);
+      expect(jobs.map((j) => j.name)).toEqual(['notification.deferred']);
+      const runAt = jobs[0].runAt;
+      expect(runAt.toISOString().slice(11, 16)).toBe(quiet.end);
+      expect(runAt.getTime()).toBeGreaterThan(Date.now());
+      expect((await ledgerFor(user.id)).find((r) => r.channel === 'email')).toMatchObject({ status: 'QUEUED' });
+
+      // When the window opens the held delivery goes through the e-mail adapter.
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: {} } });
+      expect(await runDeferredDelivery(jobs[0].payload as unknown as DeferredDelivery)).toBe('queued');
+      expect((await mailJobsFor(user.id)).map((j) => j.name).sort()).toEqual(['notification.deferred', 'notification.email']);
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('a held delivery re-reads the preferences: switched off overnight, it is skipped (#1714)', async () => {
+    const email = uniqueEmail('notify-quiet-off');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Quiet Off');
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { quietHours: quietAroundNow() } } });
+      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' });
+      const [held] = await mailJobsFor(user.id);
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { channels: { deadlines: { email: false } } } } });
+      expect(await runDeferredDelivery(held.payload as unknown as DeferredDelivery)).toBe('skipped');
+      expect((await ledgerFor(user.id)).find((r) => r.channel === 'email')).toMatchObject({ status: 'SKIPPED', skipReason: 'channel_off' });
+      // A rerun of the same job finds the row settled and does nothing.
+      expect(await runDeferredDelivery(held.payload as unknown as DeferredDelivery)).toBe('gone');
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('account_security ignores the matrix and the quiet hours (#1714)', async () => {
+    const email = uniqueEmail('notify-quiet-essential');
+    const user = await seedUser(email, PW, 'MENTEE', 'Notify Quiet Essential');
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          notificationPrefs: {
+            quietHours: quietAroundNow(),
+            channels: Object.fromEntries(
+              ['messages', 'announcements', 'mentorship', 'stageUpdates'].map((c) => [c, { inApp: false, email: false }]),
+            ),
+          },
+        },
+      });
+      const result = await notifyEvent(user.id, 'impersonation.accessed', {});
+      expect(result).toMatchObject({ sent: 1, queued: 1, skipped: 0, failed: 0 });
+      const jobs = await mailJobsFor(user.id);
+      expect(jobs.map((j) => j.name)).toEqual(['notification.email']);
     } finally {
       await cleanup(email);
     }

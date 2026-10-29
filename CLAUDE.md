@@ -458,6 +458,14 @@ marketing names redirect there, and their apex now serves **mail only**.
   (preferences, then the ledger claim, `ledger.ts`) and the adapter only delivers. A new
   channel is an adapter plus one registry line, never a router edit. The e-mail adapter only
   enqueues the keyed `notification.email` job; its consumer is `emailJob.ts` (#1719).
+- **Channel matrix and quiet hours are router rules** ([`docs/notification-channels.md`](docs/notification-channels.md),
+  #1714): `notificationPrefs.channels` (sparse per-category `inApp`/`email`/`push` overrides) and
+  `notificationPrefs.quietHours` are read only through `src/lib/notificationChannelPrefs.ts` and
+  enforced only in `channelAllowed()` / `notifyEvent()`. An off channel is recorded `SKIPPED
+  channel_off` (never filtered out), only push can be added, and e-mail/push/chat inside a quiet
+  window or an org blackout day are HELD as a keyed `notification.deferred` job that re-reads the
+  preferences — never dropped. `account_security` ignores all of it. `PUT /api/profile` must keep
+  carrying the two keys over (it replaces the column).
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve
