@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { requirePermission } from '@/lib/authz';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -332,6 +334,11 @@ export async function POST(request: Request) {
     }
 
     const { contactEmail, ...companyData } = parsed.data;
+
+    // The plan's company band (#1752): refuses the next company, never touches
+    // an existing one. Fails open for the default org and for MARKETING.
+    const companies = await enforceQuota(resolveOrgId(session), 'COMPANIES');
+    if (!companies.allowed) return NextResponse.json(quotaError(companies), { status: 403 });
 
     const company = await prisma.company.create({
       data: {

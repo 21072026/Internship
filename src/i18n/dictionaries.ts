@@ -1803,7 +1803,6 @@ const en = {
       duplicate_in_paste: 'Listed more than once in this paste',
       already_user: 'Already has an account',
       already_invited: 'Already has an open invitation',
-      seat_limit: 'Over the plan\u2019s user limit',
       too_many_rows: 'Beyond the 5 000-row limit',
       send_failed: 'The invitation email could not be sent',
     },
@@ -3331,6 +3330,7 @@ const en = {
     backHome: 'Back to the home page',
   },
   auth: {
+    adminSeatUnavailable: 'This organisation has no free administrator seat right now. Ask the person who invited you to free one up, then use the invitation again.',
     ssoTitle: 'Sign in with SSO',
     ssoSubtitle: 'Enter your organization code to continue to your identity provider.',
     ssoContinue: 'Continue',
@@ -8674,6 +8674,9 @@ const en = {
   upgrade: {
     limitTitle: 'You have reached your plan\'s limit',
     limitBody: 'You are using {usage} of {limit} active mentorships on the {plan} plan.',
+    limitBodySeats: 'You are using {usage} of {limit} admin seats on the {plan} plan. Only administrators are counted.',
+    limitBodyCompanies: 'Your organisation has {usage} of {limit} companies on the {plan} plan. Existing companies are unaffected.',
+    limitBodyPrograms: 'Your organisation runs {usage} of {limit} programmes on the {plan} plan. Existing programmes are unaffected.',
     featureTitle: '{feature} is not included in your plan',
     featureBody: '{feature} is included in {plan}.',
     featureNoPlan: 'It is available as an add-on — see the pricing page.',
@@ -12516,7 +12519,6 @@ const tr: Dict = {
       duplicate_in_paste: 'Bu listede birden fazla kez ge\u00e7iyor',
       already_user: 'Zaten hesab\u0131 var',
       already_invited: 'Zaten a\u00e7\u0131k bir daveti var',
-      seat_limit: 'Plan\u0131n kullan\u0131c\u0131 s\u0131n\u0131r\u0131n\u0131n \u00fczerinde',
       too_many_rows: '5 000 sat\u0131r s\u0131n\u0131r\u0131n\u0131n d\u0131\u015f\u0131nda',
       send_failed: 'Davet e-postas\u0131 g\u00f6nderilemedi',
     },
@@ -13999,6 +14001,7 @@ const tr: Dict = {
     backHome: 'Ana sayfaya dön',
   },
   auth: {
+    adminSeatUnavailable: 'Bu kuruluşta şu anda boş yönetici koltuğu yok. Sizi davet eden kişiden bir koltuk açmasını isteyin, sonra daveti yeniden kullanın.',
     ssoTitle: 'SSO ile giriş yap',
     ssoSubtitle: 'Kimlik sağlayıcınıza devam etmek için kuruluş kodunuzu girin.',
     ssoContinue: 'Devam et',
@@ -19232,6 +19235,9 @@ const tr: Dict = {
   upgrade: {
     limitTitle: 'Paketinizin sınırına ulaştınız',
     limitBody: '{plan} paketinde {limit} aktif mentorluktan {usage} tanesini kullanıyorsunuz.',
+    limitBodySeats: '{plan} paketinde {limit} yönetici koltuğundan {usage} tanesini kullanıyorsunuz. Yalnızca yöneticiler sayılır.',
+    limitBodyCompanies: 'Kuruluşunuzda {plan} paketinin {limit} şirketinden {usage} tanesi var. Mevcut şirketler etkilenmez.',
+    limitBodyPrograms: 'Kuruluşunuz {plan} paketinin {limit} programından {usage} tanesini yürütüyor. Mevcut programlar etkilenmez.',
     featureTitle: '{feature} paketinize dahil değil',
     featureBody: '{feature}, {plan} paketine dahil.',
     featureNoPlan: 'Ek paket olarak sunuluyor — fiyatlandırma sayfasına bakın.',
@@ -23041,7 +23047,6 @@ const de: Dict = {
       duplicate_in_paste: 'Kommt in dieser Liste mehrfach vor',
       already_user: 'Hat bereits ein Konto',
       already_invited: 'Hat bereits eine offene Einladung',
-      seat_limit: '\u00dcber dem Nutzerlimit des Tarifs',
       too_many_rows: 'Jenseits des Limits von 5 000 Zeilen',
       send_failed: 'Die Einladungs-E-Mail konnte nicht gesendet werden',
     },
@@ -24524,6 +24529,7 @@ const de: Dict = {
     backHome: 'Zurück zur Startseite',
   },
   auth: {
+    adminSeatUnavailable: 'Diese Organisation hat derzeit keinen freien Admin-Platz. Bitten Sie die einladende Person, einen freizugeben, und nutzen Sie die Einladung dann erneut.',
     ssoTitle: 'Mit SSO anmelden',
     ssoSubtitle: 'Geben Sie den Code Ihrer Organisation ein, um zu Ihrem Identitätsanbieter weiterzugehen.',
     ssoContinue: 'Weiter',
@@ -29759,6 +29765,9 @@ const de: Dict = {
   upgrade: {
     limitTitle: 'Sie haben das Limit Ihres Plans erreicht',
     limitBody: 'Sie nutzen {usage} von {limit} aktiven Mentorings im Plan {plan}.',
+    limitBodySeats: 'Sie nutzen {usage} von {limit} Admin-Plätzen im Plan {plan}. Nur Admins werden gezählt.',
+    limitBodyCompanies: 'Ihre Organisation hat {usage} von {limit} Unternehmen im Plan {plan}. Bestehende Unternehmen sind nicht betroffen.',
+    limitBodyPrograms: 'Ihre Organisation betreibt {usage} von {limit} Programmen im Plan {plan}. Bestehende Programme sind nicht betroffen.',
     featureTitle: '{feature} ist in Ihrem Plan nicht enthalten',
     featureBody: '{feature} ist in {plan} enthalten.',
     featureNoPlan: 'Als Zusatzpaket erhältlich — siehe Preisseite.',

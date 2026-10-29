@@ -9,6 +9,8 @@ import { Pencil, Route, Trash2 } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { outcomeStageKeysFrom } from '@/lib/pipeline';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
@@ -38,6 +40,8 @@ export default function AdminCohortsPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  const [gate, setGate] = useState<GateInfo | null>(null);
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -47,7 +51,9 @@ export default function AdminCohortsPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, term }),
       });
-      if (res.ok) { setName(''); setTerm(''); await load(); }
+      if (res.ok) { setName(''); setTerm(''); setGate(null); await load(); }
+      // The plan's programme band (#1752) — a prompt instead of a silent no-op.
+      else setGate(parseGateBody(await res.json().catch(() => null)));
     } finally {
       setSaving(false);
     }
@@ -101,6 +107,7 @@ export default function AdminCohortsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.cohorts.title}</h1>
         <p className="text-gray-500 mt-1">{t.cohorts.subtitle}</p>
       </div>
+      {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-6" />}
 
       <Card className="mb-6 max-w-xl">
         <CardHeader><CardTitle>{t.cohorts.newCohort}</CardTitle></CardHeader>
