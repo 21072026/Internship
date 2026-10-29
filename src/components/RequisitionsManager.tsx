@@ -50,7 +50,15 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  // `?companyId=` pre-filters the list — the company form links here (#1875).
+  // Read once on mount from the URL rather than useSearchParams(), which would
+  // need its own Suspense boundary on this statically rendered page.
   const [companyFilter, setCompanyFilter] = useState('');
+  useEffect(() => {
+    if (!admin) return;
+    const fromUrl = new URLSearchParams(window.location.search).get('companyId');
+    if (fromUrl) setCompanyFilter(fromUrl);
+  }, [admin]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
