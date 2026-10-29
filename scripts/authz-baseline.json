@@ -91,7 +91,6 @@
     "src/app/api/admin/invitations/bulk/route.ts": 1,
     "src/app/api/admin/invitations/route.ts": 1,
     "src/app/api/admin/invite/bulk/route.ts": 1,
-    "src/app/api/admin/lockouts/route.ts": 1,
     "src/app/api/admin/mail-queue/[id]/cancel/route.ts": 1,
     "src/app/api/admin/mail-queue/[id]/retry/route.ts": 1,
     "src/app/api/admin/mail-queue/route.ts": 1,
