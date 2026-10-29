@@ -145,6 +145,12 @@ export interface JobPayloadMap {
   /// One (event × webhook subscription) delivery (#1695, src/lib/webhookDelivery.ts).
   /// Each attempt writes a `WebhookDelivery` row; the queue's backoff spaces retries.
   'webhook.deliver': { eventId: string; webhookId: string };
+  /// The nightly nudge scan (#1684, src/lib/nudges/evaluate.ts): every enabled
+  /// condition-scan NudgeRule of every org.
+  'nudge.evaluate': Record<string, never>;
+  /// One nudge to one person (#1684). Keyed `nudge:<ruleId>:<userId>:<dedupeKey>`;
+  /// the NudgeSend row (unique on the same triple) is claimed before the send.
+  'nudge.send': { ruleId: string; userId: string; dedupeKey: string; eventId: string | null };
   /// One delayed stage-automation run (#1703, src/lib/automation/evaluate.ts).
   /// The `AutomationRun` row holds the rule, the relation and the org; the
   /// payload is only its id, keyed `automation:<runId>`.
@@ -201,6 +207,9 @@ export const JOB_NAMES: readonly JobName[] = [
   'programJourney.run',
   'event.deliver',
   'automation.run',
+  'webhook.deliver',
+  'nudge.evaluate',
+  'nudge.send',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { mentorshipAssignmentError } from '@/lib/mentorshipAssignmentError';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -71,6 +73,8 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
+  // A plan wall gets the upgrade prompt instead of a sentence (#1745).
+  const [gate, setGate] = useState<GateInfo | null>(null);
   // Approval held for confirmation (#942) when the picked mentor's server-
   // reported availability.status is at_capacity/not_accepting — same gate as
   // the direct-assignment flows, reusing their ConfirmDialog copy.
@@ -127,7 +131,9 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
         // the first collapsed into the generic line. Anything unrecognised
         // still falls back to it rather than publishing whatever text a route
         // happens to carry (#2283 follow-up).
-        setErr(mentorshipAssignmentError(t, d, t.common.error));
+        const wall = parseGateBody(d);
+        setGate(wall);
+        setErr(wall ? '' : mentorshipAssignmentError(t, d, t.common.error));
       }
     } catch {
       setErr(t.common.error);
@@ -222,6 +228,7 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
         </p>
       )}
       {err && <p className="text-sm text-red-600 mb-2">{err}</p>}
+      {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-3" />}
       <div className="divide-y divide-gray-50 dark:divide-gray-800">
         {visible.map((r) => {
           const preferredLanguages = Array.isArray(r.preferredLanguages)

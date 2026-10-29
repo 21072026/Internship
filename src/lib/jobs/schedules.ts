@@ -81,6 +81,7 @@ export const SCHEDULES: readonly Schedule[] = [
   // mentor interaction reminder — are CHAIN-ENQUEUED by `dormancy.sweep` on
   // success (src/jobs/reminders.ts), because they read the state the sweep
   // writes. They have no schedule of their own on purpose.
+  queue({ key: 'nudge.evaluate', cron: '20 9 * * *', job: 'nudge.evaluate', payload: {}, catchUp: 'latest', why: 'The admin-authored condition-scan nudges (#1684), after the 09:00 dormancy sweep has stamped who is dormant today — the dormancy guard reads that stamp.' }),
   queue({ key: 'dormancy.sweep', cron: '0 9 * * *', job: 'dormancy.sweep', payload: {}, catchUp: 'latest', why: 'The start of the working day. Decides who is a dormant first contact today, then enqueues dormancy.checkIn and reminders.mentorInteraction, which read that state.' }),
   queue({ key: 'reminders.stageDeadline', cron: '0 9 * * *', job: 'reminders.stageDeadline', payload: {}, catchUp: 'latest', why: 'Part of the 09:00 batch: stage service-level reminders and escalations (#817), at the start of the working day.' }),
   queue({ key: 'reminders.retentionReconsent', cron: '0 9 * * *', job: 'reminders.retentionReconsent', payload: {}, catchUp: 'latest', why: 'Part of the 09:00 batch: retention re-consent reminders, one per person per window.' }),
