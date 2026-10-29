@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin routes behind the permission layer — templates & authored content (#1571, story #1565):** `/api/admin/` `agenda-templates`, `agreements` (+ `acceptances`), `announcements/**`, `attributes` (+ `import`), `document-requirements/**`, `documents/missing`, `evaluation-templates`, `forms/**`, `goal-templates`, `message-templates`, `newsletters/**`, `post-campaigns/**`, `report-subscriptions/**`, `saved-views/**`, `skills/**`, `survey-campaigns/**`, `surveys/**` and `testimonials` authorize through `requirePermission()` (`content.read` for GET, `content.write` for everything else) instead of comparing the role to `'ADMIN'`. The private `requireAdmin()` / `adminSession()` helpers are gone; the postal-campaign `gate()` keeps its `companies` capability check. Behaviour-neutral for existing admins; a signed-in non-admin now gets 403 instead of 401."
+}

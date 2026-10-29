@@ -118,6 +118,11 @@ const DECISIONS = new Map([
   ['GoogleCalendarConnection.accessTokenEnc', ERASED],
   ['GoogleCalendarConnection.refreshTokenEnc', ERASED],
   ['GoogleCalendarConnection.lastError', ERASED],
+  // Its provider-neutral successor (#1989): disconnect() deletes both rows.
+  ['CalendarConnection.scope', ERASED],
+  ['CalendarConnection.accessTokenEnc', ERASED],
+  ['CalendarConnection.refreshTokenEnc', ERASED],
+  ['CalendarConnection.lastError', ERASED],
 
   // ── Reached another way ─────────────────────────────────────────────────────
   ['DocumentReview.note', 'cascades with its Document, which both erasure paths delete (Document.ownerId)'],

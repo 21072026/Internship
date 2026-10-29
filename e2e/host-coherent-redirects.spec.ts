@@ -260,7 +260,7 @@ test('a Google connect started on the marketing host is handed back there by the
     expect(hopLoc.pathname).toBe('/api/integrations/google/callback');
     expect(hopLoc.searchParams.get('state')).toBe(state);
     expect(hopLoc.searchParams.get('code')).toBe('ok');
-    expect(await prisma.googleCalendarConnection.count({ where: { userId: user.id } })).toBe(0);
+    expect(await prisma.calendarConnection.count({ where: { userId: user.id } })).toBe(0);
 
     // On the marketing host it does not hop again: it finishes there. Connected
     // with the local Google stub running, failed without it — either way the
@@ -282,7 +282,7 @@ test('a Google connect started on the marketing host is handed back there by the
     // session reads as signed out (#2590), so the callback stops at sign-in.
     expect(tamperedLoc.pathname).toBe('/auth/signin');
   } finally {
-    await prisma.googleCalendarConnection.deleteMany({ where: { userId: user.id } });
+    await prisma.calendarConnection.deleteMany({ where: { userId: user.id } });
     await cleanupByEmail(email);
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }

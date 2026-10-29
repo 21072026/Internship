@@ -191,8 +191,8 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
     // /account. Waiting on '/portal' only passed when the URL was caught
     // mid-bounce, which is why this read green locally and red on e2e-full.
     await signInAsFreshUser(page, menteeEmail, PW, '/account');
-    expect((await page.request.get('/api/admin/post-campaigns')).status()).toBe(401);
-    expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } })).status()).toBe(401);
+    expect((await page.request.get('/api/admin/post-campaigns')).status()).toBe(403);
+    expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } })).status()).toBe(403);
   } finally {
     await cleanupOrg(org.id, [adminEmail, menteeEmail]);
   }
