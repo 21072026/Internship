@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Affiliate import file pickers (#3175):** the three bare `<input type=\"file\">` on `/admin/affiliates/migration` are now the shared `FileField` (`src/components/ui/FileField.tsx`): the real input stays focusable but visually hidden, an outline-button label says \"Choose file\" in the app's language (`affiliateMigration.chooseFile` / `noFileChosen`, EN/TR/DE), the chosen file's name (or \"No file chosen\") is the input's description, and the focus ring is drawn on the button. A file refused as non-UTF-8 reads as none. `e2e/affiliate-migration.spec.ts` asserts the labels and the file name.",
+  "notes": {
+    "en": ["Affiliate import: the file pickers now speak the app's language and match light and dark mode."],
+    "tr": ["Affiliate içe aktarma: dosya seçiciler artık uygulamanın dilinde ve açık/koyu temaya uyumlu."],
+    "de": ["Affiliate-Import: Die Dateiauswahl spricht jetzt die Sprache der App und passt zum hellen und dunklen Design."]
+  }
+}

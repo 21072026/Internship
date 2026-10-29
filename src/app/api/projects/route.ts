@@ -14,6 +14,7 @@ import { createOrGetProjectConversation } from '@/lib/conversations';
 import { mergeTeam, internCount } from '@/lib/projectTeam';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { checkProjectLimit, projectLimitError } from '@/lib/planGate';
+import { notifyAdminsHeldByPlan } from '@/lib/planGateNotify';
 import { resolveOrgId } from '@/lib/orgScope';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -160,6 +161,13 @@ export async function POST(request: Request) {
   // that predates the org backfill must not lose the ability to create.
   const projectGate = await checkProjectLimit(resolveOrgId(session));
   if (!projectGate.allowed) {
+    // FREE CORE (#3270): a mentee is a participant, never a buyer — the answer
+    // is capacity-shaped (no plan, no quota, no upgrade) and the org's admins
+    // are told why. Staff keep the operator body the upgrade prompt reads.
+    if (session.user.role === 'MENTEE') {
+      await notifyAdminsHeldByPlan(resolveOrgId(session), 'plan_limit.project_held', projectGate.limit);
+      return NextResponse.json({ error: 'No new projects can be created right now', code: 'project_capacity' }, { status: 409 });
+    }
     return NextResponse.json(projectLimitError(projectGate), { status: 403 });
   }
   // A mentee creates only for themselves, and the two programme-level flags

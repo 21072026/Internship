@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Erasure: a clock for the two records it keeps (#2098).** `ContactPermission` gains `subjectErasedAt` and `AffiliatePartner` gains `accountErasedAt` (nullable, appliable); both erasure paths stamp them (`stampContactProofsErased()` in the table's one writer, `affiliatePayoutStampOp()`), and a new basis written for a company clears the stamp. Two retention entries end them: `contactPermissionProof` deletes the UWG § 7 proof 3 years after the end of the erasure's calendar year (§§ 195, 199 BGB), `affiliatePayoutDetails` clears the IBAN 10 years after the end of the year the relationship ended — the latest of erasure, termination and last payout (§ 257 HGB, § 147 AO). Pure rule in `src/lib/erasureRetentionRule.ts` (`scripts/test/erasure-retention.test.mjs`), end to end in `e2e/erasure-retained-records.spec.ts`. Also: `RequisitionFit` rows are deleted on anonymise (the coverage guard was red on `RequisitionFit.reason`). The privacy notice (version `2026-10-29`) now says what deleting an account reaches and that a name quoted in other users' own notes is reviewed on request.",
+  "notes": {
+    "en": ["The privacy notice now says exactly what deleting your account removes. After an account is deleted, the few records kept by law are themselves removed once their legal period is over."],
+    "tr": ["Gizlilik metni artık hesabınızı sildiğinizde neyin silindiğini açıkça söylüyor. Hesap silindikten sonra yasa gereği tutulan birkaç kayıt da yasal süreleri dolunca kendiliğinden siliniyor."],
+    "de": ["Die Datenschutzerklärung sagt jetzt genau, was beim Löschen Ihres Kontos entfernt wird. Die wenigen nach dem Löschen gesetzlich aufbewahrten Datensätze werden nach Ablauf ihrer Frist ebenfalls automatisch entfernt."]
+  }
+}

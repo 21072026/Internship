@@ -162,6 +162,10 @@ export const ORGANIZATION_DIFF_SPEC: DiffSpec = {
   ssoClientSecretEnc: 'redact',
   ssoJwksCache: 'ignore',
   ssoJwksFetchedAt: 'ignore',
+  // Tenant lifecycle (#1582): when it was archived is the change; who did it
+  // is the event's actor already.
+  archivedAt: 'record',
+  archivedById: 'ignore',
   updatedAt: 'ignore',
   createdAt: 'ignore',
 };

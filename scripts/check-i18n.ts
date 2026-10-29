@@ -114,6 +114,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   migration: '/admin/migrate (#2073) — gatePage closes it, and POST /api/admin/migrate refuses (requireCapability), for an org without the `mentorship` capability.',
+  nudges: '/admin/nudges (#1686) — gatePage closes it, and every /api/admin/nudges route refuses (requireCapability), for an org without the `mentorship` capability; a nudge\'s audience is mentors and mentees by definition.',
   adminInsights: '/admin/insights (#2046) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   adminAvailability: '/admin/availability (#2005) — gatePage closes it for an org without the `mentorship` capability, and the editor reads these keys only when an admin has picked a mentor there.',
   mentorLimitsImport: 'Read only by MentorLimitsImport on /admin/mentors (#1808) — gatePage closes that page, and POST /api/admin/mentors/limits/import refuses (requireCapability), for an org without the `mentorship` capability. Its column names are the CSV contract and cannot be overlaid.',

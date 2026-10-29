@@ -37,6 +37,9 @@ const PUBLISHED = [
   'mentorship.lifecycle_changed',
   'application.stage_changed',
   'mentorship.transferred',
+  'offer.sent',
+  'offer.withdrawn',
+  'offer.expired',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -66,6 +69,12 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['applicationStageEvents', 'application.stage_changed', { applicationId: 'a1', requisitionId: 'rq1', from: 'SHORTLISTED', to: 'INTERVIEW' }],
   ['mentorTransfer', 'mentorship.transferred', { relationId: 'r2', previousRelationId: 'r1', menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'transferred', reasonCode: 'mentor_capacity' }],
   ['mentorTransfer', 'mentorship.transferred', { relationId: 'r1', previousRelationId: null, menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'corrected', reasonCode: 'wrong_assignment' }],
+  ['offerEvents (route)', 'offer.sent', { offerId: 'o1', applicationId: null, requisitionId: null }],
+  ['offerEvents (route)', 'offer.withdrawn', { offerId: 'o1', applicationId: null, requisitionId: 'rq1' }],
+  ['offerEvents (route)', 'offer.accepted', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
+  ['offerEvents (route)', 'offer.declined', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
+  ['offerEvents (expiry sweep)', 'offer.expired', { offerId: 'o1', applicationId: null, requisitionId: null }],
+  ['api/offers/[id]', 'requisition.filled', { requisitionId: 'rq1', offerId: 'o1' }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {
