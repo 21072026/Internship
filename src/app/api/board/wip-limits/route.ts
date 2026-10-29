@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStageWipLimits } from '@/lib/stageSla';
@@ -15,11 +14,10 @@ import { resolveOrgWipLimit } from '@/lib/boardWip';
 // and escalation columns that editor also needs. MENTOR may read it because
 // the warning is advisory decoration on their own board; editing stays ADMIN
 // only, on /api/admin/stage-sla.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     const defaultWipLimit = resolveOrgWipLimit(await resolveSettingRaw('boardWipLimit', { orgId: await settingsOrgOf(session) }));

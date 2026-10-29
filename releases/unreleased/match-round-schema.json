@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Bulk matching rounds, staging area (#1793, story #1791):** new `MatchRound` (`DRAFT | REVIEW | PUBLISHED | DISCARDED`, optional cohort, rule-set id/version, `stats`) and `MatchProposal` (one per mentee per round — `@@unique([roundId, menteeId])` — `mentorId` nullable so an unmatched mentee keeps a row with `unmatchedReason`; score, breakdown, alternatives, state `DRAFT | LOCKED | DISCARDED | PUBLISHED`), both with `orgId` and in TENANT_MODELS. Lifecycle rules pure in `src/lib/matching/round.ts`: PUBLISHED and DISCARDED are terminal, only the publish path publishes. `GET/POST /api/admin/match-rounds` and `GET/PATCH/DELETE /api/admin/match-rounds/[id]` (`program.read` / `relation.write`, `mentorship` capability, tenant-scoped, guarded `updateMany` per transition): a published round answers 409 to every write; discarding deletes the proposals and creates nothing. No relation is created anywhere in this step."
+}
