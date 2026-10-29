@@ -9,7 +9,7 @@ import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { emit } from '@/lib/events/emit';
-import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { checkActiveRelationLimit } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
@@ -115,9 +115,19 @@ export async function POST(request: Request) {
   // the mentor's tenant. Checked here too (before an account is created) so an
   // over-limit org doesn't pile up applications nobody can accept; enforced
   // authoritatively again at accept time by the shared decision service.
+  //
+  // FREE CORE (#1745): the person hitting this wall is an applicant, so the
+  // answer is capacity-shaped — no plan name, no price, no limit, no upgrade
+  // call. The commercial half goes to the org's admins as a notification.
+  // e2e/upgrade-prompt.spec.ts fails if a plan name or a price ever reaches
+  // this response body.
   const gate = await checkActiveRelationLimit(mentor.orgId);
   if (!gate.allowed) {
-    return NextResponse.json(planLimitError(gate), { status: 403 });
+    await notifyAdminsOfHeldApplication(mentor.orgId, gate.limit);
+    return NextResponse.json(
+      { error: 'This programme is not taking new applications right now', code: 'program_full' },
+      { status: 409 },
+    );
   }
 
   const mentee = await prisma.user.create({
@@ -211,4 +221,17 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+// The org's active admins hear why an application was held — at most once a
+// day each, so a busy application link does not flood the bell.
+async function notifyAdminsOfHeldApplication(orgId: string | null, limit: number | null): Promise<void> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  for (const adminId of await tenantAdminIds(orgId)) {
+    const recent = await prisma.notification.findFirst({
+      where: { userId: adminId, type: 'plan_limit.application_held', createdAt: { gte: since } },
+      select: { id: true },
+    });
+    if (!recent) await notify(adminId, 'plan_limit.application_held', { limit: String(limit ?? '') }, '/admin/billing');
+  }
 }

@@ -20,7 +20,7 @@ Three companion documents, for the questions this file does not answer:
   SOC 2 report and none is in progress; here is the costed decision instead.
 
 The machine-readable pointer to all of it is
-[`/.well-known/security.txt`](public/.well-known/security.txt).
+[`/.well-known/security.txt`](src/lib/securityTxt.ts).
 
 ## Reporting a vulnerability
 

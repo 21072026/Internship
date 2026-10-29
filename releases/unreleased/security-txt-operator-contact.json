@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`/.well-known/security.txt` names the deployment's own contact** (#2031). The file is now built per request (`src/app/.well-known/security.txt/route.ts`, pure builder `src/lib/securityTxt.ts`) instead of served from `public/`: the GitHub advisory form stays the first, preferred `Contact:`, and a second `Contact: mailto:` follows the deployment's env — `SECURITY_CONTACT_EMAIL` when a dedicated mailbox exists, else the `/imprint` operator address (`OPERATOR_EMAIL`, per world), else no line. A self-hosted AGPL instance therefore never advertises this project's mailbox for its own data, and an address that could forge a field (a newline, a space) is never printed. `e2e/security-txt.unit.spec.ts` (`@smoke`, browserless) pins the precedence and the escaping."
+}

@@ -1,5 +1,7 @@
 'use client';
 
+import { MatchScoreBreakdown } from '@/components/matching/MatchScoreBreakdown';
+import type { MatchBreakdownEntry } from '@/lib/matching/types';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -30,6 +32,8 @@ type Match = {
   direct: string[];
   adjacent: { skill: string; via: string }[];
   application: { id: string; stage: string } | null;
+  // The fit score (#2042): orders the list, never removes anybody from it.
+  fit: { score: number; breakdown: MatchBreakdownEntry[]; ruleSetVersion: string };
 };
 type Requisition = {
   id: string; title: string; status: string; openings: number; filled: number; city: string | null;
@@ -144,6 +148,12 @@ export default function AdminRequisitionDetailPage() {
                     <div className="min-w-0">
                       <Link href={`/admin/candidates/${m.candidate.id}`} className="font-medium text-blue-700 hover:underline dark:text-blue-300">{m.candidate.fullName}</Link>
                       <p className="text-xs text-gray-600 dark:text-gray-400">{[m.candidate.targetPosition, m.candidate.city].filter(Boolean).join(' · ')}</p>
+                      <details className="mt-1" data-testid={`requisition-match-fit-${m.candidate.id}`}>
+                        <summary className="cursor-pointer list-none">
+                          <MatchScoreBreakdown compact score={m.fit.score} breakdown={m.fit.breakdown} blockedBy={[]} />
+                        </summary>
+                        <MatchScoreBreakdown className="mt-2" score={m.fit.score} breakdown={m.fit.breakdown} blockedBy={[]} />
+                      </details>
                       <div className="mt-1 flex flex-wrap gap-1" data-testid={`requisition-match-reason-${m.candidate.id}`}>
                         {m.via === 'title'
                           ? <Badge variant="info">{text.matchedOnTitle}</Badge>

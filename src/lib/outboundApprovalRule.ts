@@ -149,6 +149,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'document-review': { exempt: false, trigger: 'request', why: 'a review request to a named external reviewer' },
   'meeting-feedback': { exempt: false, trigger: 'meeting', why: 'the automated "how was it?" ask' },
   'dormant-check-in': { exempt: false, trigger: 'check_in', why: 'the "are you still interested?" mail' },
+  nudge: { exempt: false, trigger: 'check_in', why: 'an admin-authored nudge (#1684)' },
   're-engagement': { exempt: false, trigger: 'win_back', why: 'a win-back / re-engagement mail' },
   announcement: { exempt: false, trigger: 'content', why: 'a broadcast' },
   newsletter: { exempt: false, trigger: 'content', why: 'published content' },

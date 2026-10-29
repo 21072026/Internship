@@ -176,9 +176,35 @@ const DECISIONS = new Map([
   ['RosterRun.source', OPS],
   ['RosterRun.error', OPS],
   ['Job.lastError', OPS],
+  // Webhook delivery log (#1695): the receiver's status text and a truncated response body — the
+  // external system's answer to our signed payload, never text written about a person.
+  ['WebhookDelivery.error', OPS],
+  ['WebhookDelivery.responseBody', OPS],
+  // Chat workspace install (#1934): sealed bot tokens, the granted OAuth scope list and ops errors.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', CONFIG],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
   ['JobRun.error', OPS],
   // A failed automation action's message (#1703): codes and driver errors, never text about a person.
   ['AutomationRun.error', OPS],
+  // An admin-authored nudge's message (#1684): programme copy written for an
+  // audience, with `{name}` filled per reader at send time — never stored per person.
+  ['NudgeRule.bodyEn', CONFIG],
+  ['NudgeRule.bodyTr', CONFIG],
+  ['NudgeRule.bodyDe', CONFIG],
+  // A receiver's answer to a webhook POST and our transport error (#1695):
+  // truncated, and it goes with its DomainEvent under the event retention.
+  ['WebhookDelivery.responseBody', OPS],
+  // A chat workspace connection's sealed tokens, granted scope and last error,
+  // and one chat delivery's transport error: the integration's, not a person's.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', SECRET],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
+  ['WebhookDelivery.error', OPS],
   ['BackfillRun.lastError', OPS],
   ['NotificationDelivery.error', OPS],
 ]);
