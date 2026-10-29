@@ -35,6 +35,7 @@ const ERASURE_FILES = [
   'src/lib/externalProfileErasure.ts',
   'src/lib/outboundDrafts.ts',
   'src/lib/googleCalendarClient.ts',
+  'src/lib/microsoftCalendarClient.ts',
 ];
 
 const ERASED = 'ERASED';

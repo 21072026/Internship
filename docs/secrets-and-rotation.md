@@ -77,6 +77,7 @@ Blast radius is "what an attacker can do with this value alone".
 | `ANTHROPIC_API_KEY` | the AI provider account | spend on our bill; no access to our data |
 | `JAAS_PRIVATE_KEY` (with `JAAS_API_KEY_ID`, `JAAS_APP_ID`) | signs the JWT that opens a video room | join or create rooms on our JaaS tenant, spend our minutes |
 | `GOOGLE_CLIENT_SECRET` (with `GOOGLE_CLIENT_ID`) | the Calendar OAuth client | impersonate our OAuth app in a consent flow. **Not** the users' tokens — those are sealed (§ 3.1) |
+| `MICROSOFT_CLIENT_SECRET` (with `MICROSOFT_CLIENT_ID`) | the Microsoft 365 / Outlook calendar app registration (#1991) | impersonate our app in a delegated consent flow. **Not** the users' tokens — sealed under `microsoft-calendar` (§ 3.1) |
 | `SLACK_CLIENT_SECRET` (with `SLACK_CLIENT_ID`) | the Slack app's OAuth | same shape as Google's |
 | `TEAMS_APP_PASSWORD` (with `TEAMS_APP_ID`, `TEAMS_TENANT_ID`) | the Teams bot registration | post as our bot where it is installed |
 | `KLAVIYO_PRIVATE_API_KEY` | the env-level Klaviyo key (read-only scopes) — per-org keys are sealed in `ExternalConnection.sealedKey` | read that Klaviyo account's profiles — personal data |
@@ -110,7 +111,7 @@ These are **not secrets**. They are listed so nobody has to wonder.
 - Shipped to every browser: `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_GA4_MEASUREMENT_ID`,
   `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`, `NEXT_PUBLIC_PLAUSIBLE_HOST`, `NEXT_PUBLIC_POSTHOG_HOST`,
   `NEXT_PUBLIC_POSTHOG_KEY` (a write-only project key), `VAPID_PUBLIC_KEY`.
-- Public identifiers of an app: `GOOGLE_CLIENT_ID`, `SLACK_CLIENT_ID`, `TEAMS_APP_ID`,
+- Public identifiers of an app: `GOOGLE_CLIENT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT`, `SLACK_CLIENT_ID`, `TEAMS_APP_ID`,
   `TEAMS_TENANT_ID`, `JAAS_APP_ID`, `JAAS_API_KEY_ID`, `KLAVIYO_ORG_ID`.
 - Published legal notice (Impressum): `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL`,
   `OPERATOR_PHONE`, `OPERATOR_REGISTER`, `OPERATOR_RESPONSIBLE`, `OPERATOR_VAT_ID`,
@@ -121,12 +122,13 @@ These are **not secrets**. They are listed so nobody has to wonder.
 - Hosts and URLs: `NEXTAUTH_URL`, `APP_ROOT_DOMAIN`, `MARKETING_HOSTS`, `MARKETING_HOSTS_NONE`,
   `INBOUND_EMAIL_DOMAIN`, `CHAT_OAUTH_REDIRECT_URI`, `GOOGLE_OAUTH_REDIRECT_URI`,
   `GOOGLE_OAUTH_REVOKE_URL`, `GOOGLE_OAUTH_TOKEN_URL`, `GOOGLE_CALENDAR_API_BASE`,
-  `SLACK_API_BASE`, `SLACK_OAUTH_AUTHORIZE_URL`, `TEAMS_LOGIN_BASE`, `CHAT_APPS_STUB_CLIENT`, `ANDROID_APP_LINKS`, `MAIL_SINK_HOST`, `MAIL_SINK_PORT`,
+  `MICROSOFT_OAUTH_REDIRECT_URI`, `MICROSOFT_OAUTH_AUTHORIZE_URL`, `MICROSOFT_OAUTH_TOKEN_URL`, `MICROSOFT_GRAPH_API_BASE`,
+  `SLACK_API_BASE`, `SLACK_OAUTH_AUTHORIZE_URL`, `TEAMS_LOGIN_BASE`, `TEAMS_OPENID_METADATA_URL`, `GRAPH_API_BASE`, `CHAT_APPS_STUB_CLIENT`, `ANDROID_APP_LINKS`, `MAIL_SINK_HOST`, `MAIL_SINK_PORT`,
   `ALERT_EMAIL_TO`.
 - Switches and tuning: `CRON_ENABLED`, `JOBS_WORKER_ENABLED`, `JOBS_CONCURRENCY`,
   `MAIL_WORKER_ENABLED`, `INBOUND_IMAP_POLL_SECONDS`, `MAIL_BURST`, `MAIL_DAILY_CAP`, `MAIL_RATE_PER_MIN`,
   `MAIL_URGENT_RESERVE`, `MAIL_QUEUE_LANES`, `MAIL_INLINE_TIMEOUT_MS`, `MAIL_METER_MODE`,
-  `MAIL_RECIPIENT_ALLOWLIST`, `GOOGLE_CALENDAR_ENABLED`, `CHAT_APPS_ENABLED`,
+  `MAIL_RECIPIENT_ALLOWLIST`, `GOOGLE_CALENDAR_ENABLED`, `MICROSOFT_CALENDAR_ENABLED`, `CHAT_APPS_ENABLED`,
   `FEEDBACK_REPLAY_ENABLED`, `FEEDBACK_REPLAY_SECONDS`, `SUPPORT_REPORT_NOTIFY`,
   `JAAS_MONTHLY_ACTIVE_LIMIT`, `MT_ENFORCE_ISOLATION`, `SELF_SERVE_SIGNUP`, `DEMO_MODE`, `TRUSTED_PROXY_COUNT`,
   `REPLICA_ID`, `APP_TIMEZONE`, `LOG_LEVEL`, `ERROR_TRACKING_ENVIRONMENT`, `NEXT_PUBLIC_ERROR_TRACKING`, `NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE`, `DB_SLOW_QUERY_MS`, `DB_QUERY_WARN_CEILING`,
@@ -165,6 +167,7 @@ Changing it does all of the following at the moment of the restart:
 | **2FA recovery codes stop matching** | stored as `HMAC(NEXTAUTH_SECRET, code)` (`src/lib/recoveryCodes.ts`) | TOTP keeps working (its secret is not derived). Tell 2FA users to **regenerate recovery codes** after the rotation |
 | **sealed columns become unreadable** (`open()` returns null) | `seal()`/`open()` key = HKDF(`NEXTAUTH_SECRET`, purpose) (`src/lib/secretBox.ts`) | re-encrypt or re-enter, per row type below |
 | ↳ Google Calendar tokens (`CalendarConnection`, `provider = GOOGLE`; the old `GoogleCalendarConnection` until #1989's contract step) | | users reconnect; the old grants stay live at Google until revoked there, so do that **before** the rotation if the rotation is because of a leak (`disconnect()` cannot decrypt afterwards) |
+| ↳ Microsoft 365 calendar tokens (`CalendarConnection`, `provider = MICROSOFT`, #1991) | | users reconnect; the delegated grant stays listed on their Microsoft account until they remove the app there |
 | ↳ SSO SP signing key (`Organization.ssoSpKey`) | `src/lib/ssoSpKey.ts` | regenerate per org and **re-upload the SP metadata at each IdP**. Coordinate with every SSO customer |
 | ↳ roster-feed secrets, Klaviyo keys (`RosterFeed.secretEnc`, `ExternalConnection.sealedKey`) | | admins re-enter them; feeds and syncs fail until then |
 | ↳ affiliate payout details (`AffiliatePartner.payoutDetailsCipher`) | `src/lib/affiliatePayoutDetails.ts` | partners re-enter their IBAN |
@@ -210,7 +213,7 @@ nothing more.
 | `SMTP_PASS`, `SMTP_BULK_PASS` | the mail provider's panel. Also update the GitHub `SMTP_*` secrets if they are the same account | send a password-reset mail to yourself |
 | `INBOUND_IMAP_PASS` | the mailbox provider | the IMAP poll log shows a successful login |
 | `INBOUND_SECRET`, `EMAIL_WEBHOOK_SECRET`, `JAAS_WEBHOOK_SECRET` | random value; set the **same** one in the provider's webhook config in the same minute (deliveries in between get 401 and are retried by the provider) | the provider's delivery log shows 2xx |
-| `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_SECRET`, `TEAMS_APP_PASSWORD`, `GOOGLE_CLIENT_SECRET` | the provider's app console ("regenerate"). Users' existing grants stay valid | connect a test workspace/calendar |
+| `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_SECRET`, `TEAMS_APP_PASSWORD`, `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_SECRET` | the provider's app console ("regenerate"). Users' existing grants stay valid | connect a test workspace/calendar |
 | `CRON_SECRET`, `HEALTH_TOKEN` | random value. `HEALTH_TOKEN` is also read by the deploy drift gates from the same env file, so it moves together | next deploy's gate reads the sha |
 | `ANTHROPIC_API_KEY`, `KLAVIYO_PRIVATE_API_KEY`, `ERROR_TRACKING_DSN`, `EXPO_ACCESS_TOKEN`, `SUPPORT_GITHUB_TOKEN`, `SUPPORT_REPORT_SLACK_WEBHOOK_URL` | the provider's console (new key, then delete old) | one AI call / one sync / one push / one test report |
 | `JAAS_PRIVATE_KEY` + `JAAS_API_KEY_ID` | JaaS console: new key pair. **Both** values change together | open a meeting room |

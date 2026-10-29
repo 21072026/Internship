@@ -54,6 +54,21 @@ import { chatCapableUsers, deliverChat } from '@/lib/notifications/adapters/chat
 import { CHANNEL_ADAPTERS } from '@/lib/notifications/adapters';
 import type { SkipReason } from '@/lib/notifications/adapters/types';
 import { claimDelivery, recordSkipped, settleDelivery, type LedgerRow } from '@/lib/notifications/ledger';
+import { getSetting } from '@/lib/settings';
+import { enqueue } from '@/lib/jobs/queue';
+import { prismaQueueStore } from '@/lib/jobs/queueStore';
+import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
+import {
+  DEFERRABLE_CHANNELS,
+  channelOffInMatrix,
+  isValidTimeZone,
+  nextOpenInstant,
+  parseBlackoutDates,
+  readChannelMap,
+  readQuietHours,
+  resolveChannels,
+  type Calendar,
+} from '@/lib/notificationChannelPrefs';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import {
   eventDef,
@@ -88,6 +103,8 @@ export interface NotifyRecipient {
   emailNotifications?: boolean | null;
   notificationPrefs?: unknown;
   orgId?: string | null;
+  /** IANA zone (#1714): the default zone of the person's quiet hours. */
+  timezone?: string | null;
 }
 
 export interface NotifyOptions {
@@ -157,10 +174,11 @@ const RECIPIENT_SELECT = {
   emailNotifications: true,
   notificationPrefs: true,
   orgId: true,
+  timezone: true,
 } as const;
 
 function needsHydration(r: NotifyRecipient): boolean {
-  return r.notificationPrefs === undefined || r.emailNotifications === undefined || r.role === undefined;
+  return r.notificationPrefs === undefined || r.emailNotifications === undefined || r.role === undefined || r.timezone === undefined;
 }
 
 async function hydrate(recipients: NotifyRecipient[]): Promise<Map<string, NotifyRecipient>> {
@@ -195,7 +213,7 @@ async function hydrate(recipients: NotifyRecipient[]): Promise<Map<string, Notif
  * Is this channel allowed for this recipient? The one place the preference
  * axes are combined, and it runs before anything is claimed or sent.
  */
-function channelAllowed(
+export function channelAllowed(
   def: NotificationEventDef,
   channel: NotificationChannel,
   user: NotifyRecipient
@@ -204,27 +222,122 @@ function channelAllowed(
   // twin. See MANDATORY EVENTS at the top of the file.
   if (isEssentialGroup(def.emailGroup)) return channel === 'email' && !user.email ? 'no_address' : null;
 
-  if (channel === 'inApp' || channel === 'chat') {
-    return notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)
-      ? null
-      : 'category_off';
-  }
+  // The category switch outranks everything below it: one /account toggle
+  // silences an event on every channel (#886). Then the per-category channel
+  // matrix (#1714): a channel the person switched off for this category stays
+  // off even when a caller pinned it.
+  if (!notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)) return 'category_off';
+  if (channelOffInMatrix(readChannelMap(user.notificationPrefs, NOTIFICATION_CATEGORIES), def.category, channel)) return 'channel_off';
+
+  // Push (#1715) answers to the same switches as the bell.
+  if (channel === 'inApp' || channel === 'chat' || channel === 'push') return null;
 
   if (channel === 'email') {
     if (!user.email) return 'no_address';
     if (user.emailNotifications === false) return 'email_off';
-    // Both axes, in the order a reader would expect them to apply: the coarse
-    // in-app category switch still means what it always meant (#886), and the
-    // e-mail group taxonomy (#1444) is what the footer link and the settings UI
-    // actually speak in.
-    if (!notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)) {
-      return 'category_off';
-    }
+    // The e-mail group taxonomy (#1444) is what the footer link and the
+    // settings UI actually speak in.
     if (!emailGroupAllowed(user, def.emailGroup)) return 'group_off';
     return null;
   }
 
   return 'no_adapter';
+}
+
+// ── Quiet hours and blackout days (#1714) ───────────────────────────────────
+
+type Blackout = { dates: string[]; weekends: boolean };
+
+/** One settings read per org for a whole fan-out. */
+function blackoutMemo(): (orgId: string | null) => Promise<Blackout> {
+  const cache = new Map<string, Promise<Blackout>>();
+  return (orgId) => {
+    if (!orgId) return Promise.resolve({ dates: [], weekends: false });
+    let hit = cache.get(orgId);
+    if (!hit) {
+      hit = Promise.all([getSetting('notificationBlackoutDates', orgId), getSetting('notificationBlackoutWeekends', orgId)])
+        .then(([dates, weekends]) => ({ dates: parseBlackoutDates(dates), weekends: weekends === 'true' }))
+        // A settings read that fails holds nothing: an outage must not silence mail.
+        .catch(() => ({ dates: [], weekends: false }));
+      cache.set(orgId, hit);
+    }
+    return hit;
+  };
+}
+
+async function calendarFor(user: NotifyRecipient, orgId: string | null, blackoutOf: (orgId: string | null) => Promise<Blackout>): Promise<Calendar> {
+  const quiet = readQuietHours(user.notificationPrefs);
+  const tz = quiet?.tz ?? (isValidTimeZone(user.timezone) ? user.timezone : 'UTC');
+  const b = await blackoutOf(orgId);
+  return { quiet, tz, blackoutDates: b.dates, blackoutWeekends: b.weekends };
+}
+
+export interface DeferredDelivery {
+  deliveryId: string;
+  channel: NotificationChannel;
+  eventKey: string;
+  userId: string;
+  orgId: string | null;
+  locale: Locale;
+  params: NotificationParams;
+  link: string;
+  dedupeKey: string;
+}
+
+/** Hold one claimed delivery until `openAt`. Keyed per delivery: held once, sent once. */
+async function deferDelivery(d: DeferredDelivery, openAt: Date): Promise<boolean> {
+  try {
+    await enqueue('notification.deferred', d, {
+      store: prismaQueueStore(),
+      orgId: d.orgId,
+      runAt: openAt,
+      idempotencyKey: `notify-deferred:${d.dedupeKey}`,
+      trigger: 'event',
+    });
+    return true;
+  } catch (e) {
+    logger.error('Failed to hold a notification for quiet hours', { eventKey: d.eventKey, error: String(e) });
+    return false;
+  }
+}
+
+/**
+ * The `notification.deferred` job (registered in src/jobs/index.ts): deliver a
+ * held delivery when its window opens. The person's preferences are read AGAIN
+ * — a channel switched off overnight stays off — and the ledger row is settled
+ * exactly like an immediate delivery. Rerun-safe: a row no longer QUEUED was
+ * settled by an earlier run and is left alone.
+ */
+export async function runDeferredDelivery(d: DeferredDelivery): Promise<'sent' | 'queued' | 'skipped' | 'failed' | 'gone'> {
+  const def = eventDef(d.eventKey as NotificationEventKey);
+  const row = await prisma.notificationDelivery.findUnique({ where: { id: d.deliveryId }, select: { status: true } });
+  if (!def || !row || row.status !== 'QUEUED') return 'gone';
+  const user = await prisma.user.findUnique({ where: { id: d.userId }, select: RECIPIENT_SELECT });
+  if (!user) {
+    await settleDelivery(d.deliveryId, 'SKIPPED', { skipReason: 'no_address' });
+    return 'skipped';
+  }
+  const skip = channelAllowed(def, d.channel, user);
+  if (skip) {
+    await settleDelivery(d.deliveryId, 'SKIPPED', { skipReason: skip });
+    return 'skipped';
+  }
+  const adapter = CHANNEL_ADAPTERS[d.channel];
+  const outcome = await adapter
+    .deliver({ deliveryId: d.deliveryId, def, userId: d.userId, orgId: d.orgId, locale: d.locale, params: d.params, link: d.link, dedupeKey: d.dedupeKey })
+    .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
+  const templateId = `notifications.events.${def.key}`;
+  if (outcome.status === 'SENT') {
+    await settleDelivery(d.deliveryId, 'SENT', { templateId });
+    return 'sent';
+  }
+  if (outcome.status === 'QUEUED') return 'queued';
+  if (outcome.status === 'SKIPPED') {
+    await settleDelivery(d.deliveryId, 'SKIPPED', { skipReason: outcome.reason });
+    return 'skipped';
+  }
+  await settleDelivery(d.deliveryId, 'FAILED', { error: outcome.error });
+  return 'failed';
 }
 
 /**
@@ -326,14 +439,22 @@ export async function notifyEvent<K extends NotificationEventKey>(
     // The recipient's vertical shapes the deep link (a MARKETING rep's record
     // is /sales/leads/<id>, #2580); one lookup per org for the whole fan-out.
     const capabilitiesOf = capabilitiesMemo();
+    const blackoutOf = blackoutMemo();
     for (const rec of normalized) {
       const user = hydrated.get(rec.id) ?? rec;
       const orgId = user.orgId ?? rec.orgId ?? opts?.orgId ?? null;
       const locale = asLocale(user.preferredLanguage);
       const link = notificationLink(asRole(user.role), def.link, linkIds, { capabilities: await capabilitiesOf(orgId) });
 
+      // The person's channel matrix (#1714) can add push to the defaults; a
+      // channel they switched off is recorded as skipped by channelAllowed. A
+      // caller that pinned channels keeps them, and essential events ignore it.
+      const base: readonly NotificationChannel[] =
+        opts?.channels || isEssentialGroup(def.emailGroup)
+          ? channels
+          : resolveChannels(readChannelMap(user.notificationPrefs, NOTIFICATION_CATEGORIES), def.category, channels);
       const recipientChannels: readonly NotificationChannel[] =
-        chatUsers.has(rec.id) && !channels.includes('chat') ? [...channels, 'chat'] : channels;
+        chatUsers.has(rec.id) && !base.includes('chat') ? [...base, 'chat'] : base;
       for (const channel of recipientChannels) {
         const row: LedgerRow = {
           orgId,
@@ -355,6 +476,24 @@ export async function notifyEvent<K extends NotificationEventKey>(
         if (!deliveryId) {
           result.deduped += 1;
           continue;
+        }
+
+        // Quiet hours and org blackout days (#1714): an interrupting channel is
+        // HELD to the next open instant, never dropped — a keyed deferred job,
+        // the ledger row QUEUED meanwhile. The bell and essential events go now.
+        if (DEFERRABLE_CHANNELS.includes(channel) && !isEssentialGroup(def.emailGroup)) {
+          const openAt = nextOpenInstant(new Date(), await calendarFor(user, orgId, blackoutOf));
+          if (openAt) {
+            const held = await deferDelivery({ deliveryId, channel, eventKey: def.key, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey }, openAt);
+            if (held) {
+              result.queued += 1;
+              await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
+            } else {
+              result.failed += 1;
+              await settleDelivery(deliveryId, 'FAILED', { error: 'could not hold for quiet hours' });
+            }
+            continue;
+          }
         }
 
         // The channel's own adapter performs it (#1711, ./adapters): the router

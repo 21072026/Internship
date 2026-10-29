@@ -138,6 +138,23 @@ export function ChatAppsCard() {
     await load();
   };
 
+  // "Find people" (#1937): propose links from the workspace's directory.
+  const [proposal, setProposal] = useState<string | null>(null);
+  const propose = async (ws: ChatWorkspaceView) => {
+    setBusy(ws.id);
+    const res = await fetch(`/api/admin/integrations/chat/${ws.id}/propose`, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    setProposal(
+      res.ok
+        ? interpolate(c.proposeResult, { proposed: String(body.proposed ?? 0), linked: String(body.alreadyLinked ?? 0), unmatched: String(body.unmatched ?? 0) })
+        : body.code === 'not_supported'
+          ? c.proposeUnsupported
+          : c.actionError,
+    );
+    await load();
+  };
+
   const uninstall = async () => {
     if (!confirm) return;
     setBusy(confirm.id);
@@ -190,6 +207,11 @@ export function ChatAppsCard() {
               </a>
             ))}
         </div>
+      )}
+      {proposal && (
+        <p role="status" className="mt-3 text-sm text-gray-700 dark:text-gray-200" data-testid="chat-propose-result">
+          {proposal}
+        </p>
       )}
       {error && (
         <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -244,6 +266,9 @@ export function ChatAppsCard() {
             <div className="mt-2 flex gap-2">
               <Button size="sm" variant="outline" disabled={busy === ws.id} onClick={() => toggle(ws)} data-testid={`chat-toggle-${ws.id}`}>
                 {ws.enabled ? c.disable : c.enable}
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy === ws.id || !ws.enabled} onClick={() => propose(ws)} data-testid={`chat-propose-${ws.id}`}>
+                {c.propose}
               </Button>
               <Button size="sm" variant="danger" disabled={busy === ws.id} onClick={() => setConfirm(ws)} data-testid={`chat-uninstall-${ws.id}`}>
                 {c.uninstall}

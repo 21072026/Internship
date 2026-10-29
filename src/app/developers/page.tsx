@@ -8,6 +8,9 @@ import { GET as publicSpec } from '@/app/api/v1/openapi.json/route';
 import type { ApiErrorType } from '@/lib/api/v1';
 import { API_DEPRECATIONS, DEPRECATION_WINDOW_MONTHS } from '@/lib/api/v1Lifecycle';
 import { WEBHOOK_VERIFY_NODE } from '@/lib/api/webhookRecipe';
+import { SANDBOX_DAILY_QUOTA, SANDBOX_KEY_TTL_MS, sandboxEnabled } from '@/lib/api/sandboxKeyRule';
+import { DEMO_URL } from '@/lib/demoMode';
+import { SandboxKeyButton } from '@/components/developers/SandboxKeyButton';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.developers.title, description: t.developers.subtitle }));
@@ -30,6 +33,7 @@ const ERROR_STATUS: Record<ApiErrorType, string> = {
   org_unbound: '403',
   feature_locked: '403',
   invalid_link: '403',
+  company_key_not_allowed: '403',
   not_found: '404',
   validation_failed: '400 / 422',
   idempotency_key_reused: '409',
@@ -96,6 +100,24 @@ export default async function DevelopersPage() {
           <p className="text-sm text-gray-700 dark:text-gray-300">{D.authBody}</p>
           <h3 className="mt-4 font-semibold text-gray-900 dark:text-gray-100">{D.limitsTitle}</h3>
           <p className="text-sm text-gray-700 dark:text-gray-300">{D.limitsBody}</p>
+        </section>
+
+        <section aria-labelledby="dev-sandbox" data-testid="developers-sandbox">
+          <h2 id="dev-sandbox" className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">{D.sandboxTitle}</h2>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            {D.sandboxBody.replace('{hours}', String(SANDBOX_KEY_TTL_MS / 3_600_000)).replace('{quota}', String(SANDBOX_DAILY_QUOTA))}
+          </p>
+          {/* Only the demo mints (sandboxKeyRule.ts); everywhere else this points there. */}
+          {sandboxEnabled(process.env) ? (
+            <SandboxKeyButton />
+          ) : (
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+              {D.sandboxElsewhere}{' '}
+              <a href={`${DEMO_URL}/developers`} className="text-blue-700 hover:underline dark:text-blue-400" data-testid="developers-sandbox-demo-link">
+                {D.sandboxDemoLink}
+              </a>
+            </p>
+          )}
         </section>
 
         <section aria-labelledby="dev-conventions">

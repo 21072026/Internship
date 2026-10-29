@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
@@ -39,14 +38,10 @@ import { parseQuotaInput } from '@/lib/apiKeyQuotaRules';
 // middleware alone let any tenant's admin read every tenant's keys (with the
 // creator's e-mail) and revoke them by id.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Never return the key/hash.
   const keys = await prisma.apiKey.findMany({
     where: withinTenant({}, await tenantWhere(session)),
@@ -63,6 +58,8 @@ export async function GET() {
       quotaPeriod: true,
       quotaLimit: true,
       createdBy: { select: { id: true, fullName: true, email: true } },
+      // Self-served by a COMPANY owner (#2006): the admin sees whose and can revoke it.
+      company: { select: { id: true, name: true } },
     },
   });
   const now = new Date();
@@ -79,6 +76,7 @@ export async function GET() {
       lastUsedAt: k.lastUsedAt,
       createdAt: k.createdAt,
       createdBy: k.createdBy ? { name: k.createdBy.fullName, email: k.createdBy.email } : null,
+      company: k.company ? { id: k.company.id, name: k.company.name } : null,
       status: apiKeyStatus(k, now),
       quotaPeriod: k.quotaPeriod,
       quotaLimit: k.quotaLimit,
@@ -100,8 +98,9 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
@@ -182,8 +181,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   // Soft revoke — never `delete`. Already-revoked keys keep their first
   // revocation timestamp (the `revokedAt: null` filter makes this idempotent).
@@ -215,8 +215,9 @@ const quotaSchema = z.object({ quotaPeriod: z.string().nullish(), quotaLimit: z.
 // scopes and expiry are fixed at minting, by design (#1545). Tenant-scoped
 // like the revoke, so another tenant's id matches nothing.
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const parsed = quotaSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

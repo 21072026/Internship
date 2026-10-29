@@ -11,7 +11,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
 import { inheritedSla, resolveSlaDays, resolveSlaEscalations, slaScopeKey, type SlaScope } from '@/lib/stageSlaRule';
-import { loadStageSlaRows } from '@/lib/stageSla';
+import { loadStageSlaRows, resolveSlaDayRule } from '@/lib/stageSla';
 import { fillOrgStageDeadlines } from '../../../../../prisma/stage-deadline-fill.mjs';
 import { z } from 'zod';
 
@@ -93,7 +93,8 @@ async function verifiedScope(orgId: string, raw: SlaScope): Promise<SlaScope | n
  */
 async function fillDeadlines(orgId: string): Promise<number> {
   try {
-    return (await fillOrgStageDeadlines(prisma, orgId, { apply: true })).total;
+    // Each relation's deadline in its programme's day mode (#1638).
+    return (await fillOrgStageDeadlines(prisma, orgId, { apply: true, dayRuleFor: (cohortId: string | null) => resolveSlaDayRule({ orgId, cohortId }) })).total;
   } catch (e) {
     console.error('Stage deadline fill after SLA save failed:', e);
     return 0;

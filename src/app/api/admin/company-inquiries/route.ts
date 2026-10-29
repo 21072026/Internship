@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 
 // Admin view of the enquiries left on /for-companies (#1104). Read + a status
 // change; the reply itself happens by email (the notification mail is sent with
@@ -24,10 +23,9 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 const STATUSES = ['NEW', 'CONTACTED', 'CLOSED'] as const;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const status = new URL(request.url).searchParams.get('status');
@@ -71,10 +69,9 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('company.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

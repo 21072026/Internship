@@ -145,6 +145,30 @@ key-owned subscription stops receiving the moment its key is revoked or expires.
 `/api/v1/hooks` is on the demo blocklist for the same reason as
 `/api/admin/webhooks`.
 
+## Company-owned keys (#2006, `src/lib/companyApiKeyRule.ts`)
+
+A COMPANY owner mints keys for their own data at
+`POST/GET/DELETE /api/company/integrations/api-keys` — no ADMIN involved. Such a
+key carries `ApiKey.companyId` and three rules hold for it:
+
+- **Ceiling.** Its scopes never exceed `COMPANY_KEY_SCOPE_CEILING` (`hiring:read`
+  today). A request above it is `403 scope_above_ceiling` naming the scopes, never
+  a narrowed grant. Self-served keys always expire (≤ 12 months).
+- **Fail-closed door.** `withApiKey(request, scope, handler, { companyScoped: true })`
+  is how a route says "I narrow every read to `key.companyId`" (via
+  `companyOnly(key)`). A company key on any other route — exports included, though
+  its scope would match — answers `403 company_key_not_allowed`. A new route is
+  therefore closed to company keys until it opts in **and** filters.
+- **Oversight.** The admin key list (`/api/admin/api-keys`) shows the company a
+  key belongs to and who issued it; the admin can revoke it like any other. The
+  company list and revoke only ever match the caller's own company (another
+  company's id is a 404). Mint and revoke write `apikey.created` /
+  `apikey.revoked` at `warning`, like the admin path.
+
+Today's company-scoped routes: `/requisitions`, `/offers`, `/interview-requests`
+(list and item) and `/me`. Self-served webhooks and SOURCE owners are later
+slices of #2006 — webhook delivery would first need to filter events by company.
+
 ## Bulk candidate import (#3015, `src/lib/api/v1Imports.ts`)
 
 - **`POST /imports/candidates`** `{ candidates: [...≤500], dryRun? }` →
@@ -213,6 +237,17 @@ A full snapshot of one resource without walking the cursor:
   was given. A tampered, expired or orphaned link answers `403 invalid_link`.
 - Expired exports are deleted in the nightly 03:40 slot
   (`purgeExpiredExports`); they stop being served at `expiresAt`.
+
+## Sandbox key (#1992, `src/lib/api/sandboxKeyRule.ts`)
+
+`POST /api/developers/sandbox-key` (no session — the `/developers` button) mints a key **only on
+the public demo**: `DEMO_MODE=true` **and** a database whose name ends in `_demo` (the guard
+`prisma/reset-demo.mjs` uses). Everywhere else it answers 404, so it cannot mint against a real
+organisation even with the flag set by mistake. The key holds every `*:read` scope and nothing
+that writes (`interactions:read_notes` is not a `:read` scope), is bound to the deployment's
+default org (the synthetic seed), expires after 24 h and carries a daily allowance of 1000; minting
+is limited to 3 an hour per address and 200 live keys. The demo seed grants the default org
+`INTEGRATIONS_API` so those reads are not `feature_locked`.
 
 ## Deprecations
 

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Microsoft 365 / Outlook calendar (#1991, #1989):** a second calendar provider behind a `CalendarSyncProvider` interface (`src/lib/calendar/provider.ts`, Google + Microsoft implementations). `pushMeeting` / `removeMeeting` now loop over every enabled provider a person has connected, so a meeting reaches Google and Outlook from one push with one create-or-patch / dead-pointer / record-the-error policy. Delegated Graph OAuth (`offline_access User.Read Calendars.ReadWrite`), tokens sealed under a new `microsoft-calendar` secretBox purpose with the same 60 s early refresh; routes `/api/integrations/microsoft/{connect,callback,connection}`; Graph events carry a LOCAL wall clock + zone name (`src/lib/calendar/microsoftEvent.ts`, unit-tested across DST). `MICROSOFT_CALENDAR_ENABLED` defaults off; env names in `.env.example` and `docs/microsoft-calendar.md`. Account erasure disconnects Microsoft too. Pinned by `e2e/microsoft-calendar.spec.ts` against a local Graph stub and `e2e/microsoft-calendar-event.unit.spec.ts`.",
+  "notes": {
+    "en": ["Connect your Microsoft 365 / Outlook calendar on your account page — meetings appear there, move when they move and disappear when they are cancelled. Available once your organisation's operator switches it on."],
+    "tr": ["Hesap sayfandan Microsoft 365 / Outlook takvimini bağla — toplantılar orada görünür, taşınınca taşınır, iptal edilince kaybolur. Kurulumu yöneten kişi açtığında kullanılabilir."],
+    "de": ["Verbinde deinen Microsoft-365-/Outlook-Kalender auf deiner Kontoseite — Meetings erscheinen dort, wandern mit, wenn sie sich verschieben, und verschwinden, wenn sie abgesagt werden. Verfügbar, sobald der Betreiber es einschaltet."]
+  }
+}

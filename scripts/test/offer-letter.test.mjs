@@ -2,7 +2,8 @@
 // and text the PDF's WinAnsi fonts can always draw.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MERGE_TAGS, compensationLine, pdfSafeText, renderOfferLetter, sampleMergeValues, unknownMergeTags } from '../../src/lib/offerLetter.ts';
+import { MERGE_TAGS, compensationLine, renderOfferLetter, sampleMergeValues, unknownMergeTags } from '../../src/lib/offerLetter.ts';
+import { pdfSafeText } from '../../src/lib/pdfText.ts';
 import { BUILT_IN_OFFER_LETTERS } from '../../src/lib/offerLetterTemplates.ts';
 
 const values = sampleMergeValues('en');
@@ -36,6 +37,8 @@ test('Turkish letters the standard fonts cannot draw are folded; others survive'
   assert.equal(pdfSafeText('Ağır Şişli İğdır ıı'), 'Agir Sisli Igdir ii');
   assert.equal(pdfSafeText('Müller Größe Çağ — €5 “ok”'), 'Müller Größe Çag — €5 “ok”');
   assert.equal(pdfSafeText('emoji 😀 漢'), 'emoji ? ?');
+  // Beyond Turkish: decomposable letters keep their base, a few are mapped by hand.
+  assert.equal(pdfSafeText('Dvořák Łódź Đorđe Nguyễn'), 'Dvorák Lódz Dorde Nguyen');
 });
 
 test('the compensation line reads the structured figures, then the note', () => {
