@@ -293,6 +293,8 @@ model Organization {
   webhooks                Webhook[]
   domainEvents            DomainEvent[]
   webhookDeliveries       WebhookDelivery[]
+  nudgeRules              NudgeRule[]
+  nudgeSends              NudgeSend[]
   automationRules         AutomationRule[]
   automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
@@ -319,6 +321,7 @@ model Organization {
   affiliateCommissions    AffiliateCommission[]
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
+  requisitionFits         RequisitionFit[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -1028,6 +1031,8 @@ model User {
   // per-world rule in src/lib/userWorld.ts (`emailTakenInWorld`) is what stops
   // a second one, and it is checked on every create path.
   stageSlaOverrides StageSla[] @relation("StageSlaMentor")
+
+  requisitionFits RequisitionFit[] @relation("RequisitionFitMentee")
 
   @@unique([email, orgId])
   @@index([role])
@@ -3256,6 +3261,74 @@ model AutomationRule {
   @@index([orgId, stageKey, enabled])
 }
 
+// An admin-authored nudge (#1684): "to the people this segment describes, when
+// this trigger fires, after this delay, send this message — at most so often".
+// The vocabulary is pure in src/lib/nudges/rule.ts (trigger and segment are
+// allowlisted JSON, refused at write time when they do not parse); the
+// evaluator is src/lib/nudges/evaluate.ts. Stage-triggered rules are
+// AutomationRule (#1703), never this model. Off until an admin enables it.
+model NudgeRule {
+  id                  String        @id @default(cuid())
+  orgId               String?
+  org                 Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name                String        @db.VarChar(120)
+  enabled             Boolean       @default(false)
+  // { kind: 'event', event } | { kind: 'scan' }
+  trigger             Json
+  // { conditions: [{ field, op, value }] } — SEGMENT_FIELDS
+  segment             Json
+  delayMinutes        Int           @default(0)
+  channel             NudgeChannel  @default(EMAIL)
+  // Per language; a missing one falls back to English (the editor flags it).
+  subjectEn           String?       @db.VarChar(191)
+  subjectTr           String?       @db.VarChar(191)
+  subjectDe           String?       @db.VarChar(191)
+  bodyEn              String?       @db.Text
+  bodyTr              String?       @db.Text
+  bodyDe              String?       @db.Text
+  // Counted over EVERY nudge the person got in this org, not only this rule's.
+  maxPerUserPer30Days Int           @default(2)
+  cooldownDays        Int           @default(7)
+  lastEvaluatedAt     DateTime?
+  createdById         String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  sends NudgeSend[]
+
+  @@index([orgId, enabled])
+}
+
+// One nudge one person received (#1684). Unique on (ruleId, userId, dedupeKey)
+// — `evt:<eventId>` for an event rule, `scan` for a scan rule — so a
+// re-evaluated rule, a redelivered event or a rerun send job can never send it
+// twice: the send job inserts this row BEFORE it mails. `status` SENT | HELD
+// (outbound approval) | SKIPPED (the mail gate refused); the caps count SENT
+// and HELD. `eventId` is the triggering DomainEvent, when there was one.
+model NudgeSend {
+  id        String        @id @default(cuid())
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ruleId    String
+  rule      NudgeRule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  userId    String
+  dedupeKey String        @db.VarChar(64)
+  eventId   String?
+  channel   NudgeChannel
+  status    String        @default("SENT") @db.VarChar(16)
+  sentAt    DateTime      @default(now())
+
+  @@unique([ruleId, userId, dedupeKey])
+  @@index([orgId, userId, sentAt])
+  @@index([ruleId, sentAt])
+}
+
+enum NudgeChannel {
+  EMAIL
+  IN_APP
+  BOTH
+}
+
 // One evaluation of one rule for one stage-change event (#1703). Unique on
 // (ruleId, eventId): a redelivered event can never produce a second run. Status
 // PENDING (waiting for its delay) → RUNNING (claimed by one guarded update) →
@@ -3488,6 +3561,29 @@ model Setting {
   @@unique([orgId, programId, key])
   @@index([orgId, key])
   @@index([programId])
+}
+
+// One row per real settings change (#1623): the settings-shaped read model
+// behind the admin's per-key history and "revert to inherited". Written ONLY by
+// writeSetting() / revertSetting() (src/lib/settingsWrite.ts), in the same
+// transaction as the Setting row, from #1699's redactedDiff() — so a key flagged
+// `redact` in SETTING_SCHEMA is stored as "[redacted]", never its value. A
+// no-op save writes nothing. `newValue` null = the row at this scope was
+// deleted (reverted to the inherited value); `oldValue` null = there was none.
+// orgId null = the global layer (an operator's change).
+model SettingChange {
+  id        String   @id @default(cuid())
+  orgId     String?
+  programId String?
+  key       String
+  oldValue  String?  @db.Text
+  newValue  String?  @db.Text
+  // An id only, resolved live by the history route: an address copied here
+  // would outlive the person's erasure.
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, key, createdAt])
 }
 
 enum ProjectStatus {
@@ -6422,12 +6518,42 @@ model Requisition {
   applications      Application[]
   // Canonical twin of `requiredSkills` (#1815), written alongside it.
   skills            RequisitionSkill[]
+  fits              RequisitionFit[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
   // The /api/v1 keyset (#1990).
   @@index([orgId, updatedAt, id])
+}
+
+// The fit score a candidate had against a requisition when somebody was shown
+// it (#2042) — score, per-dimension breakdown and the rule-set version, so a
+// ranking a company or an admin acted on can be explained months later (EU AI
+// Act / NYC LL144). One row per pair, refreshed when the numbers change; the
+// only writer is src/lib/requisitionFitStore.ts. `reason` is the written
+// sentence (`reasonSource` AI | RULE). A score never removes anybody from a
+// list and nothing reads this row to decide — it is the record, not the gate.
+model RequisitionFit {
+  id             String   @id @default(cuid())
+  orgId          String
+  requisitionId  String
+  menteeId       String
+  score          Int
+  breakdown      Json
+  ruleSetVersion String   @db.VarChar(64)
+  reason         String?  @db.Text
+  reasonSource   String?  @db.VarChar(16)
+  computedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User         @relation("RequisitionFitMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, menteeId])
+  @@index([orgId])
+  @@index([menteeId])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted

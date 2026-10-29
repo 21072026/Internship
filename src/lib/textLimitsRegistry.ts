@@ -98,6 +98,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
       exempt:
         'no person ever types it (#2446 is the column; the nightly usage sync that stamps it is #2447, the account-event ingest #2450). The machine feeds match on it and fill it as a gap, so the cap belongs on their validator, which the data contracts fix at the column width: docs/usage-feed.md and docs/integrations/account-events.md (EXTERNAL_ID_MAX in src/lib/accountEventRule.ts, enforced by src/lib/accountEventSchema.ts). A form or route that ever offers this field to a person replaces this exemption with a limit.',
     },
+    productPlan: {
+      exempt:
+        'written by the account-event writer only (#2846): the feed carries the plan as 1–40 characters of A–Z a–z 0–9 . _ - (src/lib/accountEventSchema.ts), the width of this column. No person and no form writes it.',
+    },
     createdBySource: {
       exempt:
         'written by the server only (#2959): the account-event writer stamps the slug of the registered IntegrationSource it resolved, and a slug is 2–40 characters by SOURCE_SLUG_PATTERN (src/lib/accountEventRule.ts), the width of this column and of IntegrationEvent.provider. No person and no request body writes it.',
