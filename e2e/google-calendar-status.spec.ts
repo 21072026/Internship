@@ -44,7 +44,7 @@ test('non-admin cannot read google calendar status', async ({ page }) => {
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 });
 
-    expect((await page.request.get('/api/admin/integrations/google/status')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/integrations/google/status')).status()).toBe(403);
   } finally {
     await cleanupByEmail(menteeEmail);
   }

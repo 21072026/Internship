@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withRequestScope } from '@/lib/requestContext';
 import { klaviyoAdminGate } from '@/lib/klaviyoGate';
 import { checkKlaviyoKey } from '@/lib/klaviyoRule';
@@ -15,9 +14,9 @@ const bodySchema = z.object({ key: z.string().max(300).optional() });
 
 export async function POST(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('org.integrations.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const g = await klaviyoAdminGate(session);
     if (!g.ok) return g.response;
     const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
