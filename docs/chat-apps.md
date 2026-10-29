@@ -47,7 +47,7 @@ may remove any link of their org). Only a confirmed identity is delivered to;
 disconnecting stops chat and leaves e-mail and the bell untouched. Teams has no
 directory proposal yet (it needs Microsoft Graph application permissions).
 Account erasure deletes the person's chat identities. Still to come: the
-per-category channel matrix (#1707) and the Teams uninstall activity.
+per-category channel matrix (#1707).
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
@@ -208,8 +208,18 @@ That is #1923's Story 4, not an operator setting.
   switches the workspace off, clears its sealed tokens and writes
   `CHAT_PLATFORM_UNINSTALL`; the row stays for the admin to remove or reinstall.
   Point **Event Subscriptions → Request URL** at it and subscribe to those two
-  bot events. The Teams equivalent (an `installationUpdate` activity with a
-  Microsoft-signed JWT) is **not built yet** — that path answers 404.
+  bot events.
+- **Teams removal** (#3322) — the bot's **messaging endpoint** is
+  `POST /api/integrations/chat/teams/messages` (Azure Bot → Configuration →
+  Messaging endpoint). Every activity there must carry the Bot Framework's RS256
+  JWT: signature against the keys behind its OpenID metadata
+  (`TEAMS_OPENID_METADATA_URL`, real default; keys cached an hour, refetched on
+  an unknown `kid`, an unreachable JWKS refuses — fail closed), `iss`
+  `https://api.botframework.com`, `aud` = `TEAMS_APP_ID`, `nbf`/`exp` (±5 min) and
+  a `serviceUrl` claim equal to the activity's (`src/lib/chat/botFrameworkAuth.ts`).
+  A verified `installationUpdate` / `remove` switches that tenant's workspace off
+  and clears it (`CHAT_PLATFORM_UNINSTALL`); every other activity is a 200 that
+  does nothing yet. The e2e signs its tokens with `e2e/support/botframework-mock.mjs`.
 - **Token rotation** — `src/lib/chat/tokenRefresh.ts` trades a rotating Slack
   install's refresh token a minute before the bot token expires, before each
   send; a failed refresh is the workspace's `lastError`.
