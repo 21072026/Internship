@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { seal } from '@/lib/secretBox';
@@ -35,6 +33,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { isAccentColor } from '@/lib/accent';
 import { BRAND_ACCENT, normalizeHex, paletteIsReadable, parsePalette } from '@/lib/brandRule';
 import { invalidateBrandCache } from '@/lib/hostBrand';
+import { requirePermission } from '@/lib/authz';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -61,9 +60,10 @@ function ssoCertificateSummary(pem: string | null, now: Date) {
 // vice versa; a plain tenant ADMIN sees exactly their own organisation, and
 // nothing at all when they belong to none (#1535). A tenant's OWN bill — plan,
 // active-pair meter, history — is GET /api/org/billing (#1739), not this list.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const world = await superAdminWorld(session);
   const superAdmin = world !== null;
@@ -229,11 +229,11 @@ const createSchema = z.object({
 // POST — create an organization. Creating tenants is an instance-level act, so
 // it is super-admin only (#1535).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Signed in but not an administrator: refused whatever the body carries
   // (#2065) — the wizard's extra fields add no way around this line.
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const world = await superAdminWorld(session);
   if (!world) {
     await logCrossTenantDenial(session, 'POST /api/admin/organizations', null);
@@ -374,8 +374,9 @@ function isPureClear(values: (string | boolean | undefined)[]): boolean {
 // tenant ADMIN only their own. A super admin of the other world is, for this
 // org, a tenant admin of somewhere else — refused like one.
 export async function PATCH(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 

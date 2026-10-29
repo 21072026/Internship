@@ -4,7 +4,12 @@
     "Checked by scripts/check-authz.mjs (npm run check:authz). pending only shrinks: lower or delete an entry with  npm run check:authz -- --shrink  after converting a route; never add one.",
     "allowed: a site that branches on the caller role for DATA SHAPE, not access — { count, reason }."
   ],
-  "allowed": {},
+  "allowed": {
+    "src/app/api/admin/organizations/[id]/sso-role-mappings/route.ts": {
+      "count": 1,
+      "reason": "`role === 'ADMIN'` is the TARGET role of an SSO claim mapping in the request body (refused: admin_mapping_unavailable), not the caller's role"
+    }
+  },
   "pending": {
     "src/app/api/account/route.ts": 1,
     "src/app/api/admin/agenda-templates/route.ts": 2,
@@ -24,7 +29,6 @@
     "src/app/api/admin/audit-drains/rotate-secret/route.ts": 2,
     "src/app/api/admin/audit-drains/route.ts": 2,
     "src/app/api/admin/audit-drains/test/route.ts": 2,
-    "src/app/api/admin/billing/entitlements/route.ts": 1,
     "src/app/api/admin/broadcast-quota/route.ts": 1,
     "src/app/api/admin/candidates/bulk/route.ts": 1,
     "src/app/api/admin/companies/[id]/channels/route.ts": 1,
@@ -87,18 +91,6 @@
     "src/app/api/admin/newsletters/route.ts": 2,
     "src/app/api/admin/newsletters/templates/route.ts": 1,
     "src/app/api/admin/offers/benchmark/route.ts": 1,
-    "src/app/api/admin/openapi/route.ts": 2,
-    "src/app/api/admin/organizations/[id]/brand-mark/route.ts": 2,
-    "src/app/api/admin/organizations/[id]/conferencing/route.ts": 2,
-    "src/app/api/admin/organizations/[id]/invite-admin/route.ts": 1,
-    "src/app/api/admin/organizations/[id]/pipeline-stages/route.ts": 2,
-    "src/app/api/admin/organizations/[id]/sample-data/route.ts": 1,
-    "src/app/api/admin/organizations/[id]/sso-role-mappings/route.ts": 3,
-    "src/app/api/admin/organizations/[id]/sso/metadata/route.ts": 1,
-    "src/app/api/admin/organizations/[id]/sso/test/route.ts": 1,
-    "src/app/api/admin/organizations/[id]/starter-pack/route.ts": 1,
-    "src/app/api/admin/organizations/route.ts": 3,
-    "src/app/api/admin/organizations/slug-availability/route.ts": 1,
     "src/app/api/admin/orphan-applicants/route.ts": 1,
     "src/app/api/admin/outbox/[id]/discard/route.ts": 1,
     "src/app/api/admin/outbox/[id]/route.ts": 1,
@@ -106,8 +98,6 @@
     "src/app/api/admin/outbox/[id]/send/route.ts": 1,
     "src/app/api/admin/outbox/bulk/route.ts": 1,
     "src/app/api/admin/outbox/route.ts": 1,
-    "src/app/api/admin/plan-requests/[id]/route.ts": 1,
-    "src/app/api/admin/plan-requests/route.ts": 1,
     "src/app/api/admin/post-campaigns/[id]/candidates/route.ts": 1,
     "src/app/api/admin/post-campaigns/[id]/recipients/route.ts": 1,
     "src/app/api/admin/post-campaigns/[id]/route.ts": 1,
