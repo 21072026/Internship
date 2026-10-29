@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import crypto from 'crypto';
-import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
@@ -34,33 +32,27 @@ import { missingRequired, parseChecklist, parseRequired, type ScreeningItem } fr
 
 const DECIDABLE = ['PENDING', 'UNDER_REVIEW'] as const;
 
-async function requireAdmin(): Promise<{ session: Session } | { error: NextResponse }> {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requirePermission('user.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // A mentorship module (#2352): refused for a vertical that does not carry it.
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
-  if (capGate) return { error: capGate };
-  return { session };
-}
-
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
-  if ('error' in auth) return auth.error;
+  if (capGate) return capGate;
   const { id } = await params;
 
-  return await withTenantScope(auth.session, async () => {
+  return await withTenantScope(session, async () => {
     // No `select`: every column comes back, which includes both admin-only
     // free-text fields — `rejectReason` (why the decision went the way it did)
     // and `adminNote` (private review commentary, #1806). This route is
     // admin-gated above; neither field is reachable by an applicant.
     // By id AND inside the caller's tenant (#2542) — another tenant's
     // application answers 404, never its private note.
-    const application = await prisma.mentorApplication.findFirst({ where: withinTenant({ id }, await tenantWhere(auth.session)) });
+    const application = await prisma.mentorApplication.findFirst({ where: withinTenant({ id }, await tenantWhere(session)) });
     if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // The org's screening policy (#1807) rides along, so the panel can mark
     // which items gate approval without a second request.
-    const screeningRequired = parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: await settingsOrgOf(auth.session) }));
+    const screeningRequired = parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: await settingsOrgOf(session) }));
     return NextResponse.json({ application, screeningRequired });
   });
 }
@@ -84,9 +76,12 @@ class ScreeningIncompleteError extends Error {
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
-  if ('error' in auth) return auth.error;
-  const { session } = auth;
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
+  // A mentorship module (#2352): refused for a vertical that does not carry it.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
 
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));

@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 import { notify, notifyIfAllowed } from '@/lib/notify';
@@ -19,7 +20,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // Placement write (#2364).
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
+  if ('error' in gate) return gate.error;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
   const parsed = decideInterviewRequestSchema.safeParse(await request.json().catch(() => null));

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`/company/integrations` (#2006, 2/n):** the company area gets an \"API keys\" page over `/api/company/integrations/api-keys` — create a key (name + expiry, at most a year; the only access offered is the company ceiling, `hiring:read`), copy it from the one-time panel, see each key's status, expiry and last use, and revoke it. An ADMIN opening the page is pointed to the organisation's Integrations screen; a plan without API access says so. EN/TR/DE strings (`companyIntegrations`), nav entry, and the integrations feature card mentions self-served company keys.",
+  "notes": {
+    "en": ["Companies have a new \"API keys\" page: create a time-limited key for their requisitions, offers and interview requests, copy it once, and revoke it any time."],
+    "tr": ["Şirketlerin yeni bir \"API anahtarları\" sayfası var: iş talepleri, teklifler ve mülakat talepleri için süreli bir anahtar oluşturun, bir kez kopyalayın ve istediğiniz zaman iptal edin."],
+    "de": ["Unternehmen haben eine neue Seite „API-Schlüssel“: befristete Schlüssel für Stellen, Angebote und Interviewanfragen erstellen, einmal kopieren und jederzeit widerrufen."]
+  }
+}

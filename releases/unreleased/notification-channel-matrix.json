@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Channel matrix, quiet hours and blackout days in the notification router (#1714, slice 1/2):** `User.notificationPrefs` gains two sparse keys — `channels` (category × `inApp`/`email`/`push` overrides) and `quietHours` (`{ start, end, tz? }`) — read by the pure `src/lib/notificationChannelPrefs.ts`. The router records a channel switched off as SKIPPED `channel_off`, adds push only when the person turned it on, and HOLDS e-mail/push/chat raised inside the quiet window or on an org blackout day (`notificationBlackoutDates`, `notificationBlackoutWeekends`) as a keyed `notification.deferred` job to the next open minute; the job re-reads the preferences before delivering. `account_security` ignores all three. New `GET/PUT /api/account/notification-channels` (merging, refused under impersonation); `PUT /api/profile` now carries the two keys over instead of wiping them. Docs: `docs/notification-channels.md`. UI follows in slice 2."
+}

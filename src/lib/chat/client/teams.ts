@@ -1,4 +1,4 @@
-import type { ChatPlatformClient, ChatTarget } from '@/lib/chat/client';
+import type { ChatMember, ChatPlatformClient, ChatTarget } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
 
 // Microsoft Teams through the Bot Framework connector, behind the
@@ -90,10 +90,93 @@ export const teamsClient: ChatPlatformClient = {
   async revoke() {
     return { revoked: false, note: 'teams_has_no_workspace_token' };
   },
-  async listMembers() {
-    // Reading a tenant's directory needs Microsoft Graph application
-    // permissions the bot registration does not hold (yet): no proposals for
-    // Teams rather than a guess at who is who.
-    throw new ChatClientError('not_supported');
+  async listMembers({ externalId }) {
+    // Reading a tenant's directory needs the Graph `User.Read.All`
+    // application permission with the tenant admin's consent — opt-in per
+    // deployment (#3327). Without the flag: no proposals for Teams rather than
+    // a guess at who is who.
+    if (process.env.TEAMS_GRAPH_DIRECTORY_ENABLED !== '1') throw new ChatClientError('not_supported');
+    return listTenantMembers(externalId);
   },
 };
+
+// ── The tenant directory (Microsoft Graph, #3327) ──────────────────────────
+// Endpoints from env with the real defaults (the e2e points them at a stub).
+
+function graphBase(): string {
+  return (process.env.GRAPH_API_BASE || 'https://graph.microsoft.com').replace(/\/$/, '');
+}
+function loginBase(): string {
+  return (process.env.TEAMS_LOGIN_BASE || 'https://login.microsoftonline.com').replace(/\/$/, '');
+}
+const GRAPH_PAGES = 10;
+const TENANT_ID = /^[A-Za-z0-9-]{1,128}$/;
+
+async function graphToken(tenant: string): Promise<string> {
+  const id = process.env.TEAMS_APP_ID;
+  const secret = process.env.TEAMS_APP_PASSWORD;
+  if (!id || !secret) throw new ChatClientError('not_configured');
+  let res: Response;
+  try {
+    res = await fetch(`${loginBase()}/${encodeURIComponent(tenant)}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: id, client_secret: secret, scope: 'https://graph.microsoft.com/.default' }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {
+    throw new ChatClientError('network_error');
+  }
+  const json = (await res.json().catch(() => null)) as { access_token?: unknown } | null;
+  if (!res.ok || typeof json?.access_token !== 'string') throw new ChatClientError(`graph_token_http_${res.status}`);
+  return json.access_token;
+}
+
+interface GraphUser {
+  id?: unknown;
+  displayName?: unknown;
+  mail?: unknown;
+  accountEnabled?: unknown;
+}
+
+/**
+ * Every enabled user of the tenant with a mailbox address. `mail` is the
+ * address the TENANT manages (its admins set it), which is what we accept as
+ * platform-verified; `userPrincipalName` is a sign-in name and never matched.
+ * A `@odata.nextLink` is only followed on the configured Graph host — a link
+ * in a response body is data, not configuration.
+ */
+async function listTenantMembers(tenant: string): Promise<ChatMember[]> {
+  if (!TENANT_ID.test(tenant)) throw new ChatClientError('bad_tenant');
+  const token = await graphToken(tenant);
+  const host = new URL(graphBase()).host;
+  const out: ChatMember[] = [];
+  let next: string | null = `${graphBase()}/v1.0/users?$select=id,displayName,mail,accountEnabled&$top=999`;
+  for (let page = 0; next && page < GRAPH_PAGES; page++) {
+    let res: Response;
+    try {
+      res = await fetch(next, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch {
+      throw new ChatClientError('network_error');
+    }
+    if (!res.ok) throw new ChatClientError(`graph_http_${res.status}`);
+    const json = (await res.json().catch(() => null)) as { value?: GraphUser[]; '@odata.nextLink'?: unknown } | null;
+    for (const u of json?.value ?? []) {
+      if (u.accountEnabled === false || typeof u.id !== 'string') continue;
+      const mail = typeof u.mail === 'string' ? u.mail.trim().toLowerCase() : '';
+      if (!mail) continue;
+      out.push({ externalUserId: u.id, displayName: String(u.displayName || mail).slice(0, 191), verifiedEmail: mail });
+    }
+    const link = json?.['@odata.nextLink'];
+    next = null;
+    if (typeof link === 'string') {
+      try {
+        if (new URL(link).host === host) next = link;
+      } catch {
+        next = null;
+      }
+    }
+  }
+  return out;
+}
+

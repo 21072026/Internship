@@ -5,6 +5,11 @@
 // verification — signature, issuer, audience, expiry, serviceUrl — runs for
 // real with no secret anywhere. `{ foreign: true }` signs with a key it does
 // NOT publish, under a published kid, to prove a forged token is refused.
+//
+// It also stands in for the two Microsoft endpoints the Teams directory read
+// uses (#3327) — the tenant token (`POST /<tenant>/oauth2/v2.0/token`) and
+// Graph `GET /v1.0/users`, two users per page with an `@odata.nextLink` — fed
+// by the spec through `POST /__graph-users { tenant, users, foreignNextLink }`.
 import { createServer } from 'node:http';
 import { generateKeyPairSync, createSign } from 'node:crypto';
 
@@ -28,6 +33,8 @@ function sign(claims, { foreign: useForeign = false, kid = KID, alg = 'RS256' } 
   return `${head}.${s.sign(useForeign ? foreign.privateKey : published.privateKey).toString('base64url')}`;
 }
 
+const directories = new Map(); // tenant -> { users, foreignNextLink }
+
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const chunks = [];
@@ -36,6 +43,31 @@ createServer(async (req, res) => {
   if (url.pathname === '/__state') return json(res, 200, { ok: true });
   if (url.pathname === '/openidconfiguration') return json(res, 200, { issuer: 'https://api.botframework.com', jwks_uri: `http://127.0.0.1:${PORT}/keys` });
   if (url.pathname === '/keys') return json(res, 200, { keys: [jwk] });
+  if (url.pathname === '/__graph-users' && req.method === 'POST') {
+    const { tenant, users, foreignNextLink = false } = JSON.parse(body || '{}');
+    directories.set(tenant, { users: users ?? [], foreignNextLink });
+    return json(res, 200, { ok: true });
+  }
+  const tokenPath = /^\/([A-Za-z0-9-]+)\/oauth2\/v2\.0\/token$/.exec(url.pathname);
+  if (tokenPath && req.method === 'POST') {
+    const form = new URLSearchParams(body);
+    if (form.get('grant_type') !== 'client_credentials' || !form.get('client_secret')) return json(res, 400, { error: 'invalid_request' });
+    return json(res, 200, { access_token: `graph-mock-${tokenPath[1]}`, expires_in: 3600 });
+  }
+  if (url.pathname === '/v1.0/users') {
+    const tenant = (req.headers.authorization ?? '').replace(/^Bearer graph-mock-/, '');
+    const dir = directories.get(tenant);
+    if (!dir) return json(res, 401, { error: 'unknown_tenant' });
+    const skip = Number(url.searchParams.get('skip') || 0);
+    const page = dir.users.slice(skip, skip + 2);
+    const more = skip + 2 < dir.users.length;
+    const nextLink = more
+      ? dir.foreignNextLink
+        ? `http://evil.example/v1.0/users?skip=${skip + 2}`
+        : `http://127.0.0.1:${PORT}/v1.0/users?skip=${skip + 2}`
+      : undefined;
+    return json(res, 200, { value: page, ...(nextLink ? { '@odata.nextLink': nextLink } : {}) });
+  }
   if (url.pathname === '/__sign' && req.method === 'POST') {
     const { claims, ...opts } = JSON.parse(body || '{}');
     return json(res, 200, { token: sign(claims, opts) });

@@ -172,6 +172,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Matching rule sets and their rules (#1781) — one org's weights.
   'MatchRuleSet',
   'MatchRule',
+  // The per-pairing audit record (#1789).
+  'MatchDecision',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
   // readers — /api/health's counters and the daily dead-letter alert — run
@@ -376,6 +378,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Stage automation (#1703): a tenant's rules and their run log. The evaluator
   // runs in the worker with no session and passes orgId itself.
   'AutomationRule',
+  // Business-day SLA holiday calendars (#1638); Holiday rows are reached through them.
+  'HolidayCalendar',
   'AutomationRun',
   // Admin-authored nudges (#1684) and what they sent. The evaluator and the
   // send job run in the worker with no session and pass orgId themselves.

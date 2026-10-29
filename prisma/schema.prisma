@@ -300,6 +300,7 @@ model Organization {
   matchFeedback           MatchFeedback[]
   matchRuleSets           MatchRuleSet[]
   matchRules              MatchRule[]
+  matchDecisions          MatchDecision[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -323,6 +324,7 @@ model Organization {
   nudgeRules              NudgeRule[]
   nudgeSends              NudgeSend[]
   automationRules         AutomationRule[]
+  holidayCalendars        HolidayCalendar[]
   automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
@@ -2166,6 +2168,9 @@ model Company {
   adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
+  // API keys a COMPANY owner minted for their own data (#2006).
+  apiKeys ApiKey[]
+
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
@@ -3297,6 +3302,35 @@ model DomainEvent {
   @@index([createdAt])
 }
 
+// A tenant's holiday calendar for business-day stage SLAs (#1638). Entered by
+// hand or pasted (`YYYY-MM-DD, label` per line) — no third-party holiday API.
+// Chosen per org or per programme through the `slaHolidayCalendarId` setting;
+// only read when `slaDayMode = 'business'`. docs/business-day-slas.md.
+model HolidayCalendar {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String       @db.VarChar(120)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  holidays  Holiday[]
+
+  @@index([orgId])
+}
+
+// One non-working date of a calendar, a LOCAL calendar day (no time, no zone):
+// the SLA judges it in the scope's `slaTimeZone`. Reached through its calendar,
+// which carries the org — deliberately not a tenant model of its own.
+model Holiday {
+  id         String          @id @default(cuid())
+  calendarId String
+  date       DateTime        @db.Date
+  label      String          @db.VarChar(120)
+  calendar   HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
+}
+
 // A stage automation rule (#1703): "when a relation enters/leaves stage X and
 // these conditions hold, run these allowlisted actions". The vocabulary, the
 // write-time gate and the condition evaluator are src/lib/automation/rule.ts;
@@ -3463,6 +3497,12 @@ model ApiKey {
   // recorded owner, and a deleted admin must not take the key's history away.
   createdById     String?
   createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  // Set when a COMPANY owner minted the key for their own data (#2006): the
+  // door then admits it only on routes that filter by this company, and its
+  // scopes never exceed the company ceiling (src/lib/companyApiKeyRule.ts).
+  // Null = an org-wide key an ADMIN minted. Additive and nullable.
+  companyId       String?
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Null means "never expires" — allowed, but flagged in the admin UI.
   expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
@@ -3482,6 +3522,7 @@ model ApiKey {
 
   @@index([orgId])
   @@index([createdById])
+  @@index([companyId])
 }
 
 // Requests per API key per quota period (#2010) — the only counter model the
@@ -6962,6 +7003,55 @@ model MatchFeedback {
 /// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
 /// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
 /// rule named — never a silent drop.
+/// Where a pairing was decided (#1789). The human step, named.
+enum MatchDecisionSource {
+  ADMIN_DIRECT
+  REQUEST_APPROVAL
+  MENTOR_ACCEPT
+  BULK_ROUND
+  MENTEE_PREFERENCE
+}
+
+/// The auditable record of one pairing (#1789): who was paired, on what score,
+/// by which rule set, whether the human overrode the ranking, and why. One row
+/// per pairing, written by `recordMatchDecision()` (src/lib/matching/decision.ts)
+/// and nothing else. `breakdown` is a FROZEN copy of the rule contributions at
+/// decision time — editing or archiving the rule set later never rewrites it,
+/// which is why the score is copied here instead of recomputed on read.
+/// `overrodeSuggestion` is computed server-side from the suggestion batch the
+/// client was shown (MatchFeedback rows), never taken from the client. Ids are
+/// bare (no FK) on purpose: the audit row must outlive the relation, the people
+/// and the rule set it names.
+model MatchDecision {
+  id                 String              @id @default(cuid())
+  orgId              String?
+  relationId         String?
+  menteeId           String
+  mentorId           String
+  requestId          String?
+  /// #1791's bulk round, once it exists.
+  roundId            String?
+  source             MatchDecisionSource
+  score              Int?
+  breakdown          Json                @default("[]")
+  blockedBy          Json                @default("[]")
+  ruleSetId          String?
+  ruleSetVersion     Int?
+  /// Where the chosen mentor sat in the shown ranking; null = not scored/shown.
+  suggestedRank      Int?
+  overrodeSuggestion Boolean             @default(false)
+  /// The coordinator's own note — "why this mentor". Stored here and nowhere else.
+  note               String?             @db.Text
+  decidedById        String
+  decidedAt          DateTime            @default(now())
+
+  org Organization? @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, decidedAt])
+  @@index([relationId])
+  @@index([menteeId])
+}
+
 enum MatchRuleKind {
   WEIGHTED
   HARD_REQUIRE

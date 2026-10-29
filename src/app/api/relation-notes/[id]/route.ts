@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 
@@ -13,6 +14,9 @@ const patchSchema = z.object({ body: z.string().min(1).max(5000) });
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Admin reach from the permission rule, not the role string (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
 
   const { id } = await params;
   const note = await prisma.relationNote.findUnique({
@@ -24,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!note || !(await inCallerTenant(note.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (note.authorId !== session.user.id && session.user.role !== 'ADMIN') {
+  if (note.authorId !== session.user.id && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -43,6 +47,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Admin reach from the permission rule, not the role string (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
 
   const { id } = await params;
   const note = await prisma.relationNote.findUnique({
@@ -54,7 +61,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!note || !(await inCallerTenant(note.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (note.authorId !== session.user.id && session.user.role !== 'ADMIN') {
+  if (note.authorId !== session.user.id && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

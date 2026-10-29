@@ -33,6 +33,7 @@ const ERROR_STATUS: Record<ApiErrorType, string> = {
   org_unbound: '403',
   feature_locked: '403',
   invalid_link: '403',
+  company_key_not_allowed: '403',
   not_found: '404',
   validation_failed: '400 / 422',
   idempotency_key_reused: '409',
