@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -45,10 +44,10 @@ const bodySchema = z
 
 // GET — this organization's stages, so the screen can offer them as stage-map
 // targets before the first preview. Same gate as POST.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
   if (capGate) return capGate;
   const stages = await resolvePipelineStages(await settingsOrgOf(session), await getLocale());
@@ -56,9 +55,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
   if (capGate) return capGate;
   // A migration is a few runs, not a stream: rehearsal, fixes, the real one.

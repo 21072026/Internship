@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Business-day stage SLAs (#1638):** new settings `slaDayMode` (`calendar` default — unchanged behaviour — or `business`), `slaWorkingDays`, `slaTimeZone`, `slaHolidayCalendarId` on the programme → org → global chain, and `HolidayCalendar`/`Holiday` models (pasted `YYYY-MM-DD, label` lists, no external API). One pure `addBusinessDays()` in `prisma/business-days.mjs` (typed by `src/lib/businessDays.ts`) is used by every stage move and the admin's SLA-save deadline fill; it keeps the local wall-clock time across DST and never double-counts a weekend holiday. Admin card under the SLA editor with a live preview; the overdue mail says when a date was counted in business days. `docs/business-day-slas.md`.",
+  "notes": {
+    "en": ["Stage deadlines can now count business days: choose your working days and a holiday calendar, and a 3-day deadline started on Thursday is due on Tuesday, not Sunday."],
+    "tr": ["Aşama son tarihleri artık iş günü sayabilir: çalışma günlerinizi ve bir tatil takvimi seçin; perşembe başlayan 3 günlük bir süre pazar değil salı günü dolar."],
+    "de": ["Phasenfristen können jetzt in Arbeitstagen zählen: Arbeitstage und einen Feiertagskalender wählen – eine am Donnerstag begonnene 3-Tage-Frist ist am Dienstag fällig, nicht am Sonntag."]
+  }
+}

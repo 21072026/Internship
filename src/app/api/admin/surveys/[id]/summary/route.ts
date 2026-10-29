@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -10,6 +8,7 @@ import { getLocale } from '@/i18n/server';
 import { loadSurveyResults } from '@/lib/surveyResults';
 import { runOpenTextSummary } from '@/lib/ai/summarizeOpenText';
 import { AI_PACK_FEATURE } from '@/lib/aiGate';
+import { requirePermission } from '@/lib/authz';
 
 // "Summarise these answers" (#1910) — an admin-triggered AI summary of one
 // free-text question, on the open-text engine since #2046 part 2: themes with
@@ -37,9 +36,9 @@ import { AI_PACK_FEATURE } from '@/lib/aiGate';
 const bodySchema = z.object({ questionKey: z.string().min(1).max(64), regenerate: z.boolean().optional() }).strict();
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 });
   const { id } = await params;

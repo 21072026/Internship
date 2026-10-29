@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -12,7 +11,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
 import { inheritedSla, resolveSlaDays, resolveSlaEscalations, slaScopeKey, type SlaScope } from '@/lib/stageSlaRule';
-import { loadStageSlaRows } from '@/lib/stageSla';
+import { loadStageSlaRows, resolveSlaDayRule } from '@/lib/stageSla';
 import { fillOrgStageDeadlines } from '../../../../../prisma/stage-deadline-fill.mjs';
 import { z } from 'zod';
 
@@ -94,7 +93,8 @@ async function verifiedScope(orgId: string, raw: SlaScope): Promise<SlaScope | n
  */
 async function fillDeadlines(orgId: string): Promise<number> {
   try {
-    return (await fillOrgStageDeadlines(prisma, orgId, { apply: true })).total;
+    // Each relation's deadline in its programme's day mode (#1638).
+    return (await fillOrgStageDeadlines(prisma, orgId, { apply: true, dayRuleFor: (cohortId: string | null) => resolveSlaDayRule({ orgId, cohortId }) })).total;
   } catch (e) {
     console.error('Stage deadline fill after SLA save failed:', e);
     return 0;
@@ -102,10 +102,9 @@ async function fillDeadlines(orgId: string): Promise<number> {
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     // The labels are printed straight into the settings card, so they need the
@@ -175,10 +174,9 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });

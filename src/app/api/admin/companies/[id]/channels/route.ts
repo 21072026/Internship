@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -9,6 +7,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { CHANNEL_STATUSES, isChannelKey } from '@/lib/salesChannels';
+import { requirePermission } from '@/lib/authz';
 
 /**
  * An account's sales channels (#2408), by hand — ADMIN only, `companies` module.
@@ -17,11 +16,10 @@ import { CHANNEL_STATUSES, isChannelKey } from '@/lib/salesChannels';
  * (src/lib/salesChannels.ts). Another tenant's company id is the same 404 as
  * one that does not exist; the row is written with the company's own orgId.
  */
-async function gate() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const;
-  }
+async function gate(request: Request) {
+  const auth = await requirePermission('company.write', { request });
+  if ('error' in auth) return { error: auth.error } as const;
+  const { session } = auth;
   const gated = await requireCapability(session.user.orgId, 'companies');
   if (gated) return { error: gated } as const;
   return { session } as const;
@@ -33,7 +31,7 @@ const deleteSchema = z.object({ channel: channelField });
 
 async function handle(request: Request, params: Promise<{ id: string }>, method: 'PUT' | 'DELETE') {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate(request);
     if ('error' in g) return g.error;
     const { session } = g;
     const { id } = await params;

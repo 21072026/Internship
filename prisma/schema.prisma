@@ -237,8 +237,14 @@ model Organization {
   // sign-in on any door, no mail to its people, gone from operational lists,
   // every row kept. Cleared = live again. Written only by
   // src/lib/orgLifecycle.ts (super admin). Nullable — additive (#2298).
-  archivedAt   DateTime?
-  archivedById String?
+  archivedAt            DateTime?
+  archivedById          String?
+  // Hard delete, stage 1 (#1584): when — and by whom — permanent deletion was
+  // requested. Execution waits TENANT_HARD_DELETE_WAIT_HOURS after this, needs
+  // the deployment switch TENANT_HARD_DELETE_ENABLED (off by default) and is
+  // cleared by unarchiving. Rule: src/lib/orgDeletionRule.ts. Nullable — additive.
+  deletionRequestedAt   DateTime?
+  deletionRequestedById String?
 
   users                   User[]
   sources                 Source[]
@@ -285,6 +291,7 @@ model Organization {
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
   offers                  Offer[]
+  offerTemplates          OfferTemplate[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
   applications            Application[]
@@ -293,6 +300,7 @@ model Organization {
   matchFeedback           MatchFeedback[]
   matchRuleSets           MatchRuleSet[]
   matchRules              MatchRule[]
+  matchDecisions          MatchDecision[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -316,6 +324,7 @@ model Organization {
   nudgeRules              NudgeRule[]
   nudgeSends              NudgeSend[]
   automationRules         AutomationRule[]
+  holidayCalendars        HolidayCalendar[]
   automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
@@ -968,6 +977,7 @@ model User {
   contributorTermsAcceptances       ContributorTermsAcceptance[]
   mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
+  calendarConnections               CalendarConnection[]
   companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
   // Company → candidate message requests (#1840); removed with the person.
   candidateOutreach                 CandidateOutreach[]            @relation("CandidateOutreachMentee")
@@ -2158,6 +2168,9 @@ model Company {
   adminScopeGrants   AdminScopeGrant[]
 
   // Org-scoped, not global — see the `vatId` comment above.
+  // API keys a COMPANY owner minted for their own data (#2006).
+  apiKeys ApiKey[]
+
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
@@ -2948,6 +2961,17 @@ model Offer {
   createdBy            User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
   decidedById          String?
   decidedBy            User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  // The offer letter (#1857). `letterSnapshot` is the exact rendered markdown
+  // FROZEN when the offer is sent (a later template edit never changes what
+  // was sent), in `letterLocale`. It contains compensation, so it rides the
+  // canSeeCompensation rule (src/lib/offers.ts, OFFER_LETTER_FIELDS) — never
+  // SELECTed for COMPANY. Accepting stamps `decidedAt` (already the time)
+  // plus the IP and user agent: a click-to-accept record, NOT a qualified
+  // electronic signature. Both are ADMIN-only reads.
+  letterSnapshot       String?            @db.Text
+  letterLocale         String?            @db.VarChar(5)
+  acceptedIp           String?            @db.VarChar(64)
+  acceptedUserAgent    String?            @db.VarChar(512)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -2956,6 +2980,25 @@ model Offer {
   @@index([orgId, currency])
   // The /api/v1 keyset (#1990).
   @@index([updatedAt, id])
+}
+
+// An org's offer letter template per locale (#1857). An org with no row gets
+// the built-in letter (src/lib/offerLetterTemplates.ts) — "define nothing,
+// keep the built-in". The editor writes one row per locale (`isDefault`);
+// `name` keeps room for several named templates later.
+model OfferTemplate {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name         String       @db.VarChar(100)
+  locale       String       @db.VarChar(5)
+  bodyMarkdown String       @db.Text
+  isDefault    Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([orgId, locale, name])
+  @@index([orgId, locale, isDefault])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -3259,6 +3302,35 @@ model DomainEvent {
   @@index([createdAt])
 }
 
+// A tenant's holiday calendar for business-day stage SLAs (#1638). Entered by
+// hand or pasted (`YYYY-MM-DD, label` per line) — no third-party holiday API.
+// Chosen per org or per programme through the `slaHolidayCalendarId` setting;
+// only read when `slaDayMode = 'business'`. docs/business-day-slas.md.
+model HolidayCalendar {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String       @db.VarChar(120)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  holidays  Holiday[]
+
+  @@index([orgId])
+}
+
+// One non-working date of a calendar, a LOCAL calendar day (no time, no zone):
+// the SLA judges it in the scope's `slaTimeZone`. Reached through its calendar,
+// which carries the org — deliberately not a tenant model of its own.
+model Holiday {
+  id         String          @id @default(cuid())
+  calendarId String
+  date       DateTime        @db.Date
+  label      String          @db.VarChar(120)
+  calendar   HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
+}
+
 // A stage automation rule (#1703): "when a relation enters/leaves stage X and
 // these conditions hold, run these allowlisted actions". The vocabulary, the
 // write-time gate and the condition evaluator are src/lib/automation/rule.ts;
@@ -3425,6 +3497,12 @@ model ApiKey {
   // recorded owner, and a deleted admin must not take the key's history away.
   createdById     String?
   createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  // Set when a COMPANY owner minted the key for their own data (#2006): the
+  // door then admits it only on routes that filter by this company, and its
+  // scopes never exceed the company ceiling (src/lib/companyApiKeyRule.ts).
+  // Null = an org-wide key an ADMIN minted. Additive and nullable.
+  companyId       String?
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Null means "never expires" — allowed, but flagged in the admin UI.
   expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
@@ -3444,6 +3522,7 @@ model ApiKey {
 
   @@index([orgId])
   @@index([createdById])
+  @@index([companyId])
 }
 
 // Requests per API key per quota period (#2010) — the only counter model the
@@ -4923,6 +5002,7 @@ model Meeting {
   interaction      InteractionLog?
   notes            PersonalNote[]
   googleEvents     GoogleCalendarEventLink[]
+  calendarEvents   CalendarEventLink[]
   guests           MeetingGuest[]
   feedback         MeetingFeedback[]
   attendance       MeetingAttendance[]
@@ -5166,6 +5246,7 @@ model MeetingSeries {
   attendance    MeetingAttendance[]
   // The one recurring Google event per connected member (#2654).
   calendarLinks GoogleCalendarEventLink[]
+  providerLinks CalendarEventLink[]
 
   @@index([projectId])
   @@index([relationId])
@@ -6762,6 +6843,81 @@ model GoogleCalendarEventLink {
   @@index([connectionId])
 }
 
+/// Which calendar service a connection talks to (#1989).
+enum CalendarProviderKind {
+  GOOGLE
+  MICROSOFT
+}
+
+/// One person's consent to mirror meetings into ONE provider's calendar (#1989).
+///
+/// EXPAND phase of a provider-neutral connection layer: this replaces
+/// GoogleCalendarConnection, which stays in the schema, untouched and no longer
+/// written, until a separate contract PR drops it after production counts match
+/// (prisma/backfill-calendar-connections.mjs copies it across once). Renaming
+/// the old model would have been a drop-and-recreate under `db push
+/// --accept-data-loss` and destroyed every stored consent.
+///
+/// The key is (userId, provider): a person may hold a Google AND a Microsoft
+/// connection at once; the old `userId @unique` allowed one calendar per person.
+///
+/// No `orgId`, deliberately: like MeetingGuest this hangs off a scoped parent
+/// (the User) and is never listed across people, so it is not in TENANT_MODELS
+/// (src/lib/orgContext.ts) and gets no automatic tenant protection — every
+/// reader looks a row up by its own userId, on purpose.
+model CalendarConnection {
+  id       String               @id @default(cuid())
+  userId   String
+  provider CalendarProviderKind
+
+  /// The account that granted consent — shown back to the person so they can
+  /// tell WHICH calendar this is before they trust it or disconnect it.
+  accountEmail String
+  /// 'primary' unless the operator points it elsewhere.
+  calendarId   String @default("primary")
+  /// What the provider actually granted.
+  scope        String @db.Text
+
+  /// Sealed with lib/secretBox under the PROVIDER's own purpose string; never
+  /// written in the clear.
+  accessTokenEnc  String   @db.Text
+  refreshTokenEnc String?  @db.Text
+  expiresAt       DateTime
+
+  lastSyncAt DateTime?
+  lastError  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events CalendarEventLink[]
+
+  @@unique([userId, provider])
+  @@index([provider])
+}
+
+/// Which provider event a meeting (or a recurring series) became, on one
+/// connection's calendar (#1989) — the provider-neutral successor of
+/// GoogleCalendarEventLink, with the same shape: exactly one of `meetingId` /
+/// `seriesId` is set, one row per (meeting OR series) × connection.
+model CalendarEventLink {
+  id              String   @id @default(cuid())
+  meetingId       String?
+  seriesId        String?
+  connectionId    String
+  externalEventId String
+  pushedAt        DateTime @default(now())
+
+  meeting    Meeting?           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  series     MeetingSeries?     @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  connection CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, connectionId])
+  @@unique([seriesId, connectionId])
+  @@index([connectionId])
+}
+
 /// What happened to one mentor suggestion (#2040).
 /// SHOWN is written the moment the suggestion is returned; ACCEPTED/DISMISSED
 /// overwrite it when the admin acts. There is deliberately no "IGNORED": a row
@@ -6847,6 +7003,55 @@ model MatchFeedback {
 /// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
 /// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
 /// rule named — never a silent drop.
+/// Where a pairing was decided (#1789). The human step, named.
+enum MatchDecisionSource {
+  ADMIN_DIRECT
+  REQUEST_APPROVAL
+  MENTOR_ACCEPT
+  BULK_ROUND
+  MENTEE_PREFERENCE
+}
+
+/// The auditable record of one pairing (#1789): who was paired, on what score,
+/// by which rule set, whether the human overrode the ranking, and why. One row
+/// per pairing, written by `recordMatchDecision()` (src/lib/matching/decision.ts)
+/// and nothing else. `breakdown` is a FROZEN copy of the rule contributions at
+/// decision time — editing or archiving the rule set later never rewrites it,
+/// which is why the score is copied here instead of recomputed on read.
+/// `overrodeSuggestion` is computed server-side from the suggestion batch the
+/// client was shown (MatchFeedback rows), never taken from the client. Ids are
+/// bare (no FK) on purpose: the audit row must outlive the relation, the people
+/// and the rule set it names.
+model MatchDecision {
+  id                 String              @id @default(cuid())
+  orgId              String?
+  relationId         String?
+  menteeId           String
+  mentorId           String
+  requestId          String?
+  /// #1791's bulk round, once it exists.
+  roundId            String?
+  source             MatchDecisionSource
+  score              Int?
+  breakdown          Json                @default("[]")
+  blockedBy          Json                @default("[]")
+  ruleSetId          String?
+  ruleSetVersion     Int?
+  /// Where the chosen mentor sat in the shown ranking; null = not scored/shown.
+  suggestedRank      Int?
+  overrodeSuggestion Boolean             @default(false)
+  /// The coordinator's own note — "why this mentor". Stored here and nowhere else.
+  note               String?             @db.Text
+  decidedById        String
+  decidedAt          DateTime            @default(now())
+
+  org Organization? @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, decidedAt])
+  @@index([relationId])
+  @@index([menteeId])
+}
+
 enum MatchRuleKind {
   WEIGHTED
   HARD_REQUIRE
@@ -8550,6 +8755,11 @@ model AffiliateProgramSettings {
   // When the current plan version took effect. Payments RECORDED before it never
   // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
   planEffectiveAt DateTime?
+  // The re-evaluation of every partner after a plan change (#3170): the admin's
+  // progress report and the queued job's checkpoint, for the plan version it names
+  // (src/lib/affiliatePlanResyncRule.ts). Ids and counters only. Null before the
+  // first plan change.
+  planResync      Json?
   // The base URL a partner's referral link is built on (src/lib/affiliateReferralRule.ts):
   // https, the partner's code set as ?ref=. Null: the portal shows the code alone.
   referralUrl     String?      @db.VarChar(500)
@@ -8762,6 +8972,9 @@ model ChatIdentity {
   userId          String
   /// Slack U…, Teams AAD object id.
   externalUserId  String    @db.VarChar(128)
+  /// The member's name in the workspace, shown to the person on their own
+  /// account page ("Connected as …") so they can tell it is them (#1937).
+  displayName     String?   @db.VarChar(191)
   /// Opened lazily on the first DM and cached; Teams also needs a conversation
   /// reference before the bot may message proactively.
   dmChannelId     String?   @db.VarChar(128)

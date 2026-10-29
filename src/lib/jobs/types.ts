@@ -100,6 +100,12 @@ export interface JobPayloadMap {
   /// `ApiExport` row's file. The row carries everything else (org, key,
   /// resource), so a payload can never widen what the request was granted.
   'api.export': { exportId: string };
+  /// Re-evaluate every affiliate partner after a commission-plan change (#3170,
+  /// `src/lib/affiliatePlanResync.ts`). Enqueued with the org's `orgId`, keyed
+  /// on the org and the plan version; the state it reports and resumes from is
+  /// `AffiliateProgramSettings.planResync`. `actorId` is the admin who saved
+  /// the plan (the writer's audit rows name them).
+  'affiliate.planResync': { planVersion: number; actorId: string };
   /// The Klaviyo pull connector's tick (src/lib/klaviyoSync.ts): every enabled
   /// connection whose turn it is. Each connection takes its own lease.
   'klaviyo.sync': Record<string, never>;
@@ -172,6 +178,19 @@ export interface JobPayloadMap {
     emailGroup: string;
     delivery: 'immediate' | 'batched';
   };
+  /// A delivery held to the end of the recipient's quiet hours or an org
+  /// blackout day (#1714); the consumer is runDeferredDelivery() in the router.
+  'notification.deferred': {
+    deliveryId: string;
+    channel: string;
+    eventKey: string;
+    userId: string;
+    orgId: string | null;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string;
+    dedupeKey: string;
+  };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -191,6 +210,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'roster.sweep',
   'email.send',
   'api.export',
+  'affiliate.planResync',
   'api.import.candidates',
   'sso.certificateExpiry',
   'klaviyo.sync',
@@ -230,6 +250,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'nudge.evaluate',
   'nudge.send',
   'notification.email',
+  'notification.deferred',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

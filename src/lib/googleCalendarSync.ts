@@ -1,11 +1,15 @@
 import { prisma } from '@/lib/prisma';
-import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
-import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
 import { productNameForOrg } from '@/lib/orgBrand';
-import { meetingEnd } from '@/lib/meetingDuration';
+import { anyCalendarSyncEnabled, enabledSyncProviders, type CalendarSyncProvider } from '@/lib/calendar/provider';
+import type { PushableMeeting } from '@/lib/calendar/pushable';
+
+export { pushableSelect, type PushableMeeting } from '@/lib/calendar/pushable';
 
 /**
- * Pushing meetings into connected users' own Google Calendars (#709).
+ * Pushing meetings into connected users' own calendars (#709) — Google, and
+ * since #1991 Microsoft 365, through the CalendarSyncProvider interface
+ * (src/lib/calendar/provider.ts). The file keeps its historical name because
+ * every push site imports it; nothing in here speaks one provider's API.
  *
  * Every entry point here is a no-op unless the operator has switched the
  * integration on AND the person has connected their own account. Unconnected
@@ -20,45 +24,6 @@ import { meetingEnd } from '@/lib/meetingDuration';
  * convenience.
  */
 
-export interface PushableMeeting {
-  id: string;
-  title: string;
-  scheduledAt: Date | null;
-  timeZone: string | null;
-  meetLink: string | null;
-  // The stored length (#1984); null reads as the one default.
-  durationMinutes: number | null;
-}
-
-/**
- * The fields a push needs, as one Prisma `select` (#1986). Every push site
- * spreads this into its query, so a field added to the calendar event here
- * cannot be forgotten at one of them.
- */
-export const pushableSelect = {
-  id: true,
-  title: true,
-  scheduledAt: true,
-  timeZone: true,
-  meetLink: true,
-  durationMinutes: true,
-} as const satisfies Record<keyof PushableMeeting, true>;
-
-function eventBody(meeting: PushableMeeting, product: string) {
-  // A meeting with no time is a shared link, not a calendar entry — there is
-  // nothing to put in a slot. Those are skipped by the caller.
-  const start = meeting.scheduledAt!;
-  const end = meetingEnd(start, meeting);
-  return {
-    summary: meeting.title,
-    description: meeting.meetLink ? `Join: ${meeting.meetLink}` : undefined,
-    location: meeting.meetLink ?? undefined,
-    start: { dateTime: start.toISOString(), ...(meeting.timeZone ? { timeZone: meeting.timeZone } : {}) },
-    end: { dateTime: end.toISOString(), ...(meeting.timeZone ? { timeZone: meeting.timeZone } : {}) },
-    source: { title: product, url: meeting.meetLink ?? undefined },
-  };
-}
-
 /**
  * Create or update this meeting on each given user's calendar.
  *
@@ -66,53 +31,62 @@ function eventBody(meeting: PushableMeeting, product: string) {
  * calendar, which is the only place this app is allowed to write.
  */
 export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): Promise<number> {
-  if (!isGoogleCalendarEnabled()) return 0;
   if (!meeting.scheduledAt) return 0;
+  const providers = enabledSyncProviders();
+  if (providers.length === 0) return 0;
 
   let pushed = 0;
   for (const userId of [...new Set(userIds)]) {
-    const auth = await accessTokenFor(userId);
-    if (!auth) continue;
-
-    const link = await prisma.googleCalendarEventLink.findUnique({
-      where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
-    });
     // Named per RECIPIENT, not per meeting: the event lands in that person's
     // calendar and must name the product their account lives in.
-    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
-    const product = await productNameForOrg(owner?.orgId);
-    const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
-
-    const res = await calendarFetch(auth.token, path, {
-      method: link ? 'PATCH' : 'POST',
-      body: JSON.stringify(eventBody(meeting, product)),
-    }).catch(() => null);
-
-    if (!res || !res.ok) {
-      await noteError(auth.connectionId, res ? `Calendar write failed (${res.status})` : 'Calendar write failed');
-      // A remembered event id that Google no longer has is a dead pointer; drop
-      // it so the next push creates a fresh event instead of patching a ghost.
-      if (res?.status === 404 && link) {
-        await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
+    let product: string | null = null;
+    for (const provider of providers) {
+      const auth = await provider.accessTokenFor(userId);
+      if (!auth) continue;
+      if (product === null) {
+        const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+        product = await productNameForOrg(owner?.orgId);
       }
-      continue;
+      if (await pushOne(provider, auth, meeting, product)) pushed++;
     }
-
-    const eventId = typeof res.body.id === 'string' ? res.body.id : link?.googleEventId;
-    if (eventId) {
-      await prisma.googleCalendarEventLink.upsert({
-        where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
-        update: { googleEventId: eventId, pushedAt: new Date() },
-        create: { meetingId: meeting.id, connectionId: auth.connectionId, googleEventId: eventId },
-      });
-    }
-    await prisma.googleCalendarConnection.update({
-      where: { id: auth.connectionId },
-      data: { lastSyncAt: new Date(), lastError: null },
-    }).catch(() => {});
-    pushed++;
   }
   return pushed;
+}
+
+async function pushOne(
+  provider: CalendarSyncProvider,
+  auth: { token: string; connectionId: string; calendarId: string },
+  meeting: PushableMeeting,
+  product: string
+): Promise<boolean> {
+  const link = await prisma.calendarEventLink.findUnique({
+    where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
+  });
+  const res = await provider.writeEvent(auth, meeting, product, link?.externalEventId ?? null).catch(() => null);
+
+  if (!res || !res.ok) {
+    await provider.noteError(auth.connectionId, res?.status ? `Calendar write failed (${res.status})` : 'Calendar write failed');
+    // A remembered event id the provider no longer has is a dead pointer; drop
+    // it so the next push creates a fresh event instead of patching a ghost.
+    if (res?.status === 404 && link) {
+      await prisma.calendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
+    }
+    return false;
+  }
+
+  const eventId = res.eventId ?? link?.externalEventId;
+  if (eventId) {
+    await prisma.calendarEventLink.upsert({
+      where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
+      update: { externalEventId: eventId, pushedAt: new Date() },
+      create: { meetingId: meeting.id, connectionId: auth.connectionId, externalEventId: eventId },
+    });
+  }
+  await prisma.calendarConnection.update({
+    where: { id: auth.connectionId },
+    data: { lastSyncAt: new Date(), lastError: null },
+  }).catch(() => {});
+  return true;
 }
 
 /**
@@ -125,23 +99,18 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
  * `withdrawMeetings()` as well, never delete a mirrored `Meeting` row directly.
  */
 export async function removeMeeting(meetingId: string): Promise<void> {
-  if (!isGoogleCalendarEnabled()) return;
-  const links = await prisma.googleCalendarEventLink.findMany({
-    where: { meetingId },
-    include: { connection: { select: { userId: true, calendarId: true } } },
-  });
-  for (const link of links) {
-    const auth = await accessTokenFor(link.connection.userId);
-    if (auth) {
-      await calendarFetch(
-        auth.token,
-        `/calendars/${encodeURIComponent(link.connection.calendarId)}/events/${encodeURIComponent(link.googleEventId)}`,
-        { method: 'DELETE' }
-      ).catch(() => null);
+  for (const provider of enabledSyncProviders()) {
+    const links = await prisma.calendarEventLink.findMany({
+      where: { meetingId, connection: { provider: provider.kind } },
+      include: { connection: { select: { userId: true, calendarId: true } } },
+    });
+    for (const link of links) {
+      const auth = await provider.accessTokenFor(link.connection.userId);
+      if (auth) await provider.deleteEvent(auth, link.connection.calendarId, link.externalEventId).catch(() => {});
+      // Drop our record either way: the meeting is gone from this app, and a
+      // link pointing at an event we can no longer reach is worse than no link.
+      await prisma.calendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
     }
-    // Drop our record either way: the meeting is gone from this app, and a link
-    // pointing at an event we can no longer reach is worse than no link.
-    await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
   }
 }
 
@@ -160,7 +129,7 @@ export const CALENDAR_WITHDRAW_MS = 5_000;
  * unless the integration is switched on.
  */
 export async function withdrawMeetings(ids: string[], timeoutMs = CALENDAR_WITHDRAW_MS): Promise<void> {
-  if (!isGoogleCalendarEnabled() || ids.length === 0) return;
+  if (!anyCalendarSyncEnabled() || ids.length === 0) return;
   const work = Promise.allSettled(ids.map((id) => removeMeeting(id)));
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<void>((resolve) => {
@@ -177,6 +146,6 @@ export async function withdrawMeetings(ids: string[], timeoutMs = CALENDAR_WITHD
  * calendar API.
  */
 export function pushMeetingInBackground(meeting: PushableMeeting, userIds: string[]): void {
-  if (!isGoogleCalendarEnabled()) return;
-  void pushMeeting(meeting, userIds).catch((e) => console.error('Google Calendar push failed:', e));
+  if (!anyCalendarSyncEnabled()) return;
+  void pushMeeting(meeting, userIds).catch((e) => console.error('Calendar push failed:', e));
 }

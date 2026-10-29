@@ -132,6 +132,17 @@ test('every entry declares values from the real vocabularies', () => {
   }
 });
 
+test('digests, reports, newsletter issues and batched volume never push (#1715)', () => {
+  for (const entry of NOTIFICATION_EVENTS) {
+    if (!entry.defaultChannels.includes('push')) continue;
+    assert.ok(
+      !['digests', 'reports_analytics', 'newsletter'].includes(entry.emailGroup),
+      `${entry.key}: a ${entry.emailGroup} event must not push`
+    );
+    assert.equal(entry.delivery, 'immediate', `${entry.key}: a batched event must not push`);
+  }
+});
+
 test('an entry that ships e-mail is never in a newsletter-only group', () => {
   // The newsletter has its own send path, its own audience and its own archive
   // (#1469). An event routed into that group would inherit an opt-out reserved

@@ -144,8 +144,8 @@ test.describe('roster feed configuration API', { tag: '@smoke' }, () => {
     await seedUser(email, PASSWORD, 'MENTOR', 'Feed Mentor');
     try {
       await signInAndSettle(page, email, PASSWORD, '/mentor');
-      expect((await page.request.get('/api/admin/roster-feeds')).status()).toBe(401);
-      expect((await page.request.post('/api/admin/roster-feeds', { data: feedBody })).status()).toBe(401);
+      expect((await page.request.get('/api/admin/roster-feeds')).status()).toBe(403);
+      expect((await page.request.post('/api/admin/roster-feeds', { data: feedBody })).status()).toBe(403);
     } finally {
       await cleanupByEmail(email);
     }

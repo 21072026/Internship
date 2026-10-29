@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`mentorship.lifecycle_changed` is raised (#1998, 7/n):** registered with #1770 but never raised, it now leaves from every writer of a pairing's lifecycle state, after each one's commit, through `raiseLifecycleChanged()` (`src/lib/lifecycleEvents.ts`): the lifecycle endpoint (pause, resume, end with a reason code, reopen), a mentor handover (`ENDED_REASSIGNED`, with the transfer's reason code), a re-match approval (`ENDED_REMATCHED`) and a win-back (`ENDED_CHURNED`, raised only when `winBack()` owned its transaction — the ingest dry run, the one joined caller, never commits). The note never goes on the bus; the machine importer's initial states raise nothing.",
+  "notes": {
+    "en": ["Webhooks now fire when a pairing is paused, resumed, ended, reopened, handed to another mentor, re-matched or won back."],
+    "tr": ["Webhook'lar artık bir eşleşme duraklatıldığında, sürdürüldüğünde, sonlandırıldığında, yeniden açıldığında, başka bir mentöre devredildiğinde, yeniden eşleştirildiğinde veya geri kazanıldığında tetikleniyor."],
+    "de": ["Webhooks werden jetzt ausgelöst, wenn eine Begleitung pausiert, fortgesetzt, beendet, wieder geöffnet, an einen anderen Mentor übergeben, neu zugeordnet oder zurückgewonnen wird."]
+  }
+}

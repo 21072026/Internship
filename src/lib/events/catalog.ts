@@ -252,10 +252,11 @@ export const EVENT_CATALOG = [
     description: 'An acceptance took the last opening of a requisition.',
   },
   {
-    // A pairing paused, resumed, ended or reopened (#1770). Registered, not yet
-    // raised — its first producer calls emit() (a direct dispatcher call is
-    // refused by scripts/check-events.mjs). `from`/`to` are lifecycle states; `reasonCode` is set on an end
-    // only (LIFECYCLE_END_REASON_CODES), null otherwise.
+    // A pairing paused, resumed, ended or reopened (#1770). Raised by every
+    // writer of the lifecycle state through raiseLifecycleChanged()
+    // (src/lib/lifecycleEvents.ts, #1998). `from`/`to` are lifecycle states;
+    // `reasonCode` is a code on an end (LIFECYCLE_END_REASON_CODES, or a
+    // handover's admin code), null otherwise.
     name: 'mentorship.lifecycle_changed',
     version: 1,
     subjectType: 'MentorshipRelation',

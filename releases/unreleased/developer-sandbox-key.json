@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Sandbox key on /developers (#1992):** `POST /api/developers/sandbox-key` mints a read-only key (every `*:read` scope, never a write, 24 h, 1000 requests a day) bound to the default org — but only where `sandboxEnabled()` holds: `DEMO_MODE=true` AND a database named `*_demo` (`src/lib/api/sandboxKeyRule.ts`, unit-tested); elsewhere 404, so a key can never be minted against a real tenant. Rate-limited to 3 an hour per address and 200 live keys; the demo seed grants `INTEGRATIONS_API` so the key's reads are not `feature_locked`. Off the demo, the portal links to the demo's developer page.",
+  "notes": {
+    "en": ["The developer page now hands out a read-only sandbox key on the public demo, so you can try the API against synthetic data without an account."],
+    "tr": ["Geliştirici sayfası artık herkese açık demoda salt okunur bir sandbox anahtarı veriyor; API’yi hesap açmadan sentetik veriyle deneyebilirsiniz."],
+    "de": ["Die Entwicklerseite gibt auf der öffentlichen Demo jetzt einen schreibgeschützten Sandbox-Schlüssel aus, damit Sie die API ohne Konto mit synthetischen Daten testen können."]
+  }
+}

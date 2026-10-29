@@ -30,6 +30,19 @@ export interface ChatPlatformClient {
   openDm(input: { token: string; externalUserId: string; conversationRef?: unknown }): Promise<ChatTarget>;
   /** Revoke the installation's token on the platform's side (the real uninstall). */
   revoke(input: { token: string }): Promise<{ revoked: boolean; note?: string }>;
+  /**
+   * The workspace's people with the e-mail the PLATFORM verified (#1937) — the
+   * input to an identity proposal. Bots, deleted and guest-less members with
+   * no e-mail are left out; an address the platform did not verify is null.
+   */
+  listMembers(input: { token: string; externalId: string }): Promise<ChatMember[]>;
+}
+
+export interface ChatMember {
+  externalUserId: string;
+  displayName: string;
+  /** Lower-cased, and only when the platform says the address is confirmed. */
+  verifiedEmail: string | null;
 }
 
 const DEFAULT_CLIENTS: Record<ChatPlatform, ChatPlatformClient> = { SLACK: slackClient, TEAMS: teamsClient };
@@ -49,6 +62,11 @@ const STUB_CLIENT: ChatPlatformClient = {
   async openDm({ externalUserId }) {
     return { id: `stub-dm-${externalUserId}` };
   },
+  async listMembers() {
+    // The e2e server has no directory to read: proposals are exercised
+    // in-process (setChatClientsForTests) where the members are the spec's.
+    return [];
+  },
   async revoke({ token }) {
     if (token.endsWith('-revoke-fails')) {
       throw new ChatClientError('invalid_auth');
@@ -59,7 +77,11 @@ const STUB_CLIENT: ChatPlatformClient = {
 
 export function chatClientFor(platform: ChatPlatform): ChatPlatformClient {
   if (overrides[platform]) return overrides[platform]!;
-  if (process.env.CHAT_APPS_STUB_CLIENT === '1') return STUB_CLIENT;
+  // The Teams directory read (#3327) goes to GRAPH_API_BASE, which the e2e
+  // points at its own stub — so it keeps the real implementation even here.
+  if (process.env.CHAT_APPS_STUB_CLIENT === '1') {
+    return platform === 'TEAMS' ? { ...STUB_CLIENT, listMembers: teamsClient.listMembers } : STUB_CLIENT;
+  }
   return DEFAULT_CLIENTS[platform];
 }
 
