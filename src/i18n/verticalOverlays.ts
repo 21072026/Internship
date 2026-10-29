@@ -59,6 +59,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // #1745: the plan-wall prompt, in sales words (the active-pair cap is
+      // the internship meter; a MARKETING org sees it only if its plan has one).
+      upgrade: {
+        limitBody: 'You are using {usage} of {limit} active records on the {plan} plan.',
+        reassurance: 'Existing leads and accounts are unaffected — only adding a new active record is held.',
+      },
       // Document requirements: the role picker names the seats, not the enum.
       documentRequirements: { search: 'Search leads', roles: { MENTEE: 'Lead', MENTOR: 'Sales rep', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Sales rep' } },
       // The follow-up panel (#2563) in the rep's words (#2875): the sales
@@ -1185,6 +1191,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      upgrade: {
+        limitBody: '{plan} paketinde {limit} aktif kayıttan {usage} tanesini kullanıyorsunuz.',
+        reassurance: 'Mevcut lead ve hesaplar etkilenmez — yalnızca yeni bir aktif kayıt eklemek bekletilir.',
+      },
       documentRequirements: { search: 'Müşteri adayı ara', roles: { MENTEE: 'Müşteri adayı', MENTOR: 'Satış temsilcisi', COMPANY: 'Hesap' }, reviewerRoles: { MENTOR: 'Satış temsilcisi' } },
       // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
       // taşıdığı satış örneği ve notu kimin okuduğu.
@@ -2169,6 +2179,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      upgrade: {
+        limitBody: 'Sie nutzen {usage} von {limit} aktiven Datensätzen im Plan {plan}.',
+        reassurance: 'Bestehende Leads und Konten sind nicht betroffen — nur ein neuer aktiver Datensatz wird angehalten.',
+      },
       documentRequirements: { search: 'Leads suchen', roles: { MENTEE: 'Lead', MENTOR: 'Vertriebsmitarbeiter', COMPANY: 'Account' }, reviewerRoles: { MENTOR: 'Vertriebsmitarbeiter' } },
       // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
       // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die

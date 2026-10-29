@@ -10,6 +10,8 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
+import { parseGateError } from '@/lib/upgradePrompt';
+import type { PremiumFeature } from '@/lib/entitlementsCatalog';
 import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
 import { useLocale, useT } from '@/i18n/client';
 import { REPORT_DEFINITIONS } from '@/lib/reports/definitions';
@@ -70,6 +72,8 @@ export default function ReportSubscriptionsPage() {
   const toast = useToast();
   const [subs, setSubs] = useState<Subscription[] | null>(null);
   const [locked, setLocked] = useState(false);
+  // Which entitlement the 403 named (#1745): export or analytics, read from its `code` body.
+  const [lockedFeature, setLockedFeature] = useState<PremiumFeature>('REPORT_EXPORT');
   const [people, setPeople] = useState<{ id: string; fullName: string }[]>([]);
   const [form, setForm] = useState<typeof BLANK>({ ...BLANK, locale });
   const [formError, setFormError] = useState<string | null>(null);
@@ -79,7 +83,11 @@ export default function ReportSubscriptionsPage() {
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/report-subscriptions');
-    if (res.status === 403) { setLocked(true); setSubs([]); return; }
+    if (res.status === 403) {
+      const wall = await parseGateError(res);
+      if (wall?.code === 'feature_locked') setLockedFeature(wall.feature);
+      setLocked(true); setSubs([]); return;
+    }
     setSubs(res.ok ? (await res.json()).subscriptions : []);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -186,7 +194,7 @@ export default function ReportSubscriptionsPage() {
     return (
       <div>
         <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-100">{U.title}</h1>
-        <PremiumAnalyticsLocked title={U.title} />
+        <PremiumAnalyticsLocked feature={lockedFeature} />
       </div>
     );
   }

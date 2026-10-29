@@ -7,7 +7,7 @@ import { freshIp } from './helpers/rateLimit';
 // PUT /api/admin/settings writes the CALLER'S OWN org row (#2628).
 //
 // It used to write the global row (orgId = NULL): with MT_ENFORCE_ISOLATION off
-// — every deployment today — `withTenantScope` bound no org, so `setSetting`
+// — every deployment today — `withTenantScope` bound no org, so `writeSetting`
 // fell through to the global layer, which is the platform default every tenant
 // without its own override inherits. One MARKETING admin ticking a box
 // therefore switched it on for the INTERNSHIP tenant as well. (The key here

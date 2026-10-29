@@ -28,12 +28,13 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const SETTINGS_MODULES = new Set(['src/lib/settings.ts', 'src/lib/settingsResolver.ts']);
+// settingsWrite.ts holds the one writer (writeSetting / revertSetting, #1623).
+const SETTINGS_MODULES = new Set(['src/lib/settings.ts', 'src/lib/settingsResolver.ts', 'src/lib/settingsWrite.ts']);
 
 const ALLOWED_MODEL_ACCESS = new Map([
   [
     'src/lib/jobs/reportSubscriptions.ts',
-    'the legacy weekly-report seed claims an org with a marker row (LEGACY_SEED_KEY, not a catalogued setting) inside a Serializable transaction (#3078) — a claim, not a setting read, and setSetting() offers no claim',
+    'the legacy weekly-report seed claims an org with a marker row (LEGACY_SEED_KEY, not a catalogued setting) inside a Serializable transaction (#3078) — a claim, not a setting read, and writeSetting() offers no claim',
   ],
 ]);
 
@@ -94,7 +95,7 @@ if (problems.length) {
   console.error('Settings must be read through src/lib/settingsResolver.ts (#1621):');
   for (const p of problems) console.error(`  ${p}`);
   console.error(
-    '\nRead with resolveSetting(key, { orgId, programId }) — or resolveSettingRaw() when a rule module parses the string — and write with setSetting(). See docs/tenant-isolation.md § The programme layer and the typed accessor.',
+    '\nRead with resolveSetting(key, { orgId, programId }) — or resolveSettingRaw() when a rule module parses the string — and write with writeSetting() (src/lib/settingsWrite.ts). See docs/tenant-isolation.md § The programme layer and the typed accessor.',
   );
   process.exit(1);
 }

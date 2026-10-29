@@ -44,9 +44,10 @@ import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary, type Dictionary } from '@/i18n/dictionaries';
 import { emailDictionary, emailDictionaryMemo } from '@/i18n/emailDictionary';
-import { requisitionSkillMatch } from '@/lib/skillTaxonomyRule';
 import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
-import { CONSENTING_POOL_WHERE, titleMatchesTarget } from '@/lib/requisitionMatchRule';
+import { CONSENTING_POOL_WHERE, matchCandidate, type RequisitionMatch } from '@/lib/requisitionMatchRule';
+import { stageProgressOf } from '@/lib/matching/requisitionFit';
+import { recordRequisitionFits } from '@/lib/requisitionFitStore';
 import { isNextActionReminderDue, nextActionDueBefore } from '@/lib/nextActionRule';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
@@ -3566,6 +3567,56 @@ export async function sendRoleChangeEmail({
 // this only renders. Category `sso-certificate`, in the essential
 // account_security group: a lapsed certificate locks the whole tenant out of
 // single sign-on, so no preference may mute the two warnings.
+// One admin-authored nudge (#1684, src/lib/nudges/evaluate.ts). The subject and
+// body are the rule's own text in the reader's language (already chosen and
+// `{name}`-filled by the evaluator); here they are only escaped — nothing in
+// them is evaluated or rendered as markup. Category 'nudge' (task_reminders):
+// non-essential, so the reader's unsubscribe and the outbound approval hold
+// apply exactly as to every other reminder.
+export async function sendNudgeEmail({
+  to,
+  userId,
+  orgId,
+  locale,
+  subject,
+  body,
+  role,
+}: {
+  to: string;
+  userId: string;
+  orgId: string;
+  locale: string;
+  subject: string;
+  body: string;
+  role: 'MENTOR' | 'MENTEE';
+}): Promise<SendEmailResult> {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const loc = resolveLocale(locale);
+  const M = (await emailDictionary(loc, orgId)).nudgeEmail;
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  return sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'nudge',
+    locale: loc,
+    fromName: brand.name,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(subject))}
+        ${paragraphs}
+        ${ctaBlock(brand, `${base}${role === 'MENTOR' ? '/mentor' : '/portal'}`, esc(role === 'MENTOR' ? M.ctaMentor : M.ctaMentee))}
+        <p style="color:#666;font-size:12px;">${esc(M.why)}</p>
+      </div>
+    `,
+  });
+}
+
 // A webhook was auto-disabled after a failure streak (#1695,
 // src/lib/webhookDelivery.ts). Sent once per disable, to the org's admins,
 // as an operator alert: the integration is silently down until they act.
@@ -5974,6 +6025,11 @@ function escapeMailText(value: string): string {
 // FILLED / CANCELLED are all "do not send me candidates" (#1387).
 const ALERTABLE_REQUISITION_STATUS = 'OPEN';
 
+// The fit score (#2042) a requisition match needs before it is worth an e-mail.
+// A nudge threshold only: the admin list and the applicant board still show
+// every match, ordered — a low score never removes anybody from a list.
+const ALERT_MIN_FIT = 40;
+
 // Premium open-position match alerts (Faz 1, #530). For every company holding
 // the COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool
 // (the same publicProfile-only visibility as talent-pool search) for candidates
@@ -6014,7 +6070,16 @@ export async function checkRequisitionMatches() {
         // dropped: the API accepts status OPEN with filled === openings, and
         // Prisma cannot compare two columns in a `where`, so it is filtered
         // below in JS.
-        select: { title: true, openings: true, filled: true, skills: { select: { skillId: true } } },
+        select: {
+          id: true,
+          orgId: true,
+          title: true,
+          openings: true,
+          filled: true,
+          city: true,
+          workMode: true,
+          skills: { select: { skillId: true, required: true } },
+        },
       },
       users: {
         where: { role: 'COMPANY', isActive: true },
@@ -6042,11 +6107,24 @@ export async function checkRequisitionMatches() {
       orgId: true,
       fullName: true,
       targetPosition: true,
+      city: true,
       skills: true,
       skillRows: { select: { skillId: true } },
+      // The fit score's stage dimension (#2042).
+      menteeRelations: { where: activeRelationWhere(), select: { pipelineStatus: true }, take: 1 },
     },
   });
   if (pool.length === 0) return { companies: companies.length, alerts: 0 };
+  const stagesOfOrg = new Map<string, Promise<ResolvedStage[]>>();
+  const stagesFor = (orgId: string | null) => {
+    const key = orgId ?? '';
+    let hit = stagesOfOrg.get(key);
+    if (!hit) {
+      hit = resolvePipelineStages(orgId);
+      stagesOfOrg.set(key, hit);
+    }
+    return hit;
+  };
   // A company is matched against ITS OWN tenant's pool only: this cron binds no
   // tenant context, and an alert naming another tenant's (or world's) candidate
   // is a leak with a /p/<id> link attached. NULL is the default org either side.
@@ -6082,26 +6160,43 @@ export async function checkRequisitionMatches() {
     //     candidate's target position only (every row converted from the
     //     legacy CompanyNeed table lands here, #1875).
     const openReqs = company.requisitions.filter((r) => r.filled < r.openings);
-    const skillReqs = openReqs.filter((r) => r.skills.length > 0).map((r) => r.skills.map((x) => x.skillId));
-    const titleReqs = openReqs.filter((r) => r.skills.length === 0).map((r) => r.title);
     // Still reachable after the OR filter above: a company can match on having
     // open requisitions and then have every one of them fully staffed.
-    if (skillReqs.length === 0 && titleReqs.length === 0) continue;
+    if (openReqs.length === 0) continue;
     const skillOrg = company.orgId ?? defaultId;
-    const edges = skillReqs.length ? await loadSkillEdges(skillOrg, skillReqs.flat()) : [];
+    const allSkillIds = openReqs.flatMap((r) => r.skills.map((x) => x.skillId));
+    const edges = allSkillIds.length ? await loadSkillEdges(skillOrg, allSkillIds) : [];
+    const stages = await stagesFor(company.orgId);
 
     for (const cand of pool) {
       if (!sameTenant(cand.orgId, company.orgId, defaultId)) continue;
-      const candSkills = cand.skillRows.map((r) => r.skillId);
-      // The best skill match explains the alert; a title/need match has no skills to show.
-      let best: ReturnType<typeof requisitionSkillMatch> | null = null;
-      for (const required of skillReqs) {
-        const m = requisitionSkillMatch(required, candSkills, edges);
-        if (m.isMatch && (!best || m.score > best.score)) best = m;
+      // The one requisition rule (#1401) decides who matches; the fit score
+      // (#2042) picks the role this candidate fits BEST and is what the mail
+      // shows. Below ALERT_MIN_FIT the requisition match is not worth a nudge.
+      // The alert stays a nudge: no stage moves, no application is created.
+      const candidate = {
+        id: cand.id,
+        targetPosition: cand.targetPosition,
+        skillIds: cand.skillRows.map((r) => r.skillId),
+        city: cand.city,
+        stageProgress: stageProgressOf(cand.menteeRelations[0]?.pipelineStatus, stages),
+      };
+      let best: { requisition: (typeof openReqs)[number]; match: RequisitionMatch } | null = null;
+      for (const r of openReqs) {
+        const m = matchCandidate(
+          {
+            title: r.title,
+            requiredSkillIds: r.skills.map((x) => x.skillId),
+            niceSkillIds: r.skills.filter((x) => !x.required).map((x) => x.skillId),
+            city: r.city,
+            workMode: r.workMode,
+          },
+          candidate,
+          edges
+        );
+        if (m && m.fit.score >= ALERT_MIN_FIT && (!best || m.fit.score > best.match.fit.score)) best = { requisition: r, match: m };
       }
-      const matched =
-        !!best ||
-        titleReqs.some((title) => titleMatchesTarget(title, cand.targetPosition));
+      const matched = !!best;
       if (!matched) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
@@ -6113,6 +6208,10 @@ export async function checkRequisitionMatches() {
       if (created.count === 0) continue;
 
       alerts += 1;
+      // What the company was nudged with is kept, per pair (#2042).
+      if (best) {
+        await recordRequisitionFits(best.requisition.orgId, best.requisition.id, [{ menteeId: cand.id, fit: best.match.fit }]);
+      }
       const link = `/p/${cand.id}`;
       for (const u of company.users) {
         await notify(u.id, 'need_match.newCandidate', { candidateName: cand.fullName }, link);
@@ -6132,16 +6231,21 @@ export async function checkRequisitionMatches() {
           const locale = resolveLocale(u.preferredLanguage);
           const M = (await dictionaryOf(locale, u.orgId)).notifications.needMatchEmail;
           let skillsLine = '';
-          if (best) {
-            const ids = [...best.direct, ...best.adjacent.flatMap((x) => [x.skillId, x.via])];
+          if (best && best.match.via === 'skills') {
+            const ids = [...best.match.direct, ...best.match.adjacent.flatMap((x) => [x.skillId, x.via])];
             const names = await skillLabels(skillOrg, ids, locale);
             const name = (id: string) => escapeMailText(names.get(id) ?? id);
             const parts = [
-              ...best.direct.map(name),
-              ...best.adjacent.map((x) => M.related.replace('{skill}', name(x.skillId)).replace('{via}', name(x.via))),
+              ...best.match.direct.map(name),
+              ...best.match.adjacent.map((x) => M.related.replace('{skill}', name(x.skillId)).replace('{via}', name(x.via))),
             ];
             skillsLine = `<p>${M.skills.replace('{skills}', parts.join(', '))}</p>`;
           }
+          // The fit score and the role it is for (#2042) — a rule-satisfaction
+          // figure, said as one, never a prediction.
+          const fitLine = best
+            ? `<p>${M.fit.replace('{score}', String(best.match.fit.score)).replace('{position}', escapeMailText(best.requisition.title))}</p>`
+            : '';
           const body = M.body
             .replace('{candidate}', `<strong>${cand.fullName}</strong>`)
             .replace('{company}', company.name)
@@ -6157,6 +6261,7 @@ export async function checkRequisitionMatches() {
               ${worldHeading(brand, M.heading, `<h2 style="color:#2563eb;">${M.heading}</h2>`)}
               <p>${M.greeting.replace('{name}', u.fullName)}</p>
               <p>${body}</p>
+              ${fitLine}
               ${skillsLine}
               <p><a href="${base}${link}">${M.cta}</a></p>
             </div>`,
