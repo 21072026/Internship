@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
@@ -10,6 +8,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { bulkInvitationLane, fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
+import { requirePermission } from '@/lib/authz';
 import {
   deriveInvitationStatus,
   isInvitationDeletable,
@@ -75,9 +74,9 @@ async function pooled<T, R>(items: T[], width: number, task: (item: T) => Promis
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('org.invite', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     const limited = enforceRateLimit(request, 'invitations-bulk', { limit: 20, windowMs: 60_000 });
     if (limited) return limited;

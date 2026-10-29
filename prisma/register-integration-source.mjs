@@ -40,7 +40,7 @@
 import { PrismaClient } from '@prisma/client';
 
 export const SOURCE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
-export const RESERVED_SOURCE_SLUGS = ['calendar', 'google'];
+export const RESERVED_SOURCE_SLUGS = ['calendar', 'chat', 'google'];
 export const SOURCE_LABEL_MAX = 80;
 
 /** The mirror: the slug lower-cased, or null when no source may carry it. */

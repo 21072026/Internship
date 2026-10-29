@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { resolveQueueScope } from '@/lib/mailQueueAdmin';
 import { listSuppressions } from '@/lib/emailSuppression';
 import { withRequestScope } from '@/lib/requestContext';
@@ -18,8 +17,9 @@ export const dynamic = 'force-dynamic';
 // src/lib/emailSuppression.ts § The admin list.
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const gate = await requirePermission('mail.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const scope = await resolveQueueScope(session);
     if (!scope) return NextResponse.json({ error: 'Forbidden', code: 'mail_queue_operator_only' }, { status: 403 });
     const url = new URL(request.url);

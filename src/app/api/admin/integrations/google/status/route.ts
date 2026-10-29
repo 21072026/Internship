@@ -14,7 +14,7 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: Request) {
   const gate = await requirePermission('org.integrations.read', { request });
   if ('error' in gate) return gate.error;
-  const connections = await prisma.googleCalendarConnection.count();
+  const connections = await prisma.calendarConnection.count({ where: { provider: 'GOOGLE' } });
   return NextResponse.json({
     configured: isGoogleCalendarConfigured(),
     enabled: isGoogleCalendarEnabled(),
