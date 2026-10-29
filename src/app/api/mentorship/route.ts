@@ -29,6 +29,9 @@ import { refuseForeignTargets } from '@/lib/relationTargets';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { agreementStatusesFor, agreementStatusWhere, getActiveAgreement } from '@/lib/mentoringAgreement';
 import { isAgreementStatus } from '@/lib/mentoringAgreementRule';
+import { recordMatchDecision } from '@/lib/matching/decision';
+import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
+import { getLocale } from '@/i18n/server';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -38,6 +41,10 @@ const createRelationSchema = z.object({
   startDate: z.string().optional(),
   // PLACEMENT (default) | COACHING (#1503); whitelisted below, never z.enum.
   kind: z.string().max(16).optional(),
+  // The audit record (#1789): the suggestion batch the admin was shown and
+  // their note on why this mentor — stored on the decision row only.
+  suggestionBatchId: z.string().min(1).max(64).optional(),
+  decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
 });
 
 export async function GET(request: Request) {
@@ -222,7 +229,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind } = parsed.data;
+    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind, suggestionBatchId, decisionNote } = parsed.data;
     if (rawKind !== undefined && !isRelationKind(rawKind)) {
       return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
     }
@@ -349,6 +356,20 @@ export async function POST(request: Request) {
     }
 
     await emit('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
+
+    // The per-pairing audit record (#1789). Never throws: the pairing above is
+    // committed, and a failed audit write is logged, not returned.
+    await recordMatchDecision({
+      orgId: relation.orgId,
+      relationId: relation.id,
+      menteeId,
+      mentorId,
+      source: 'ADMIN_DIRECT',
+      decidedById: session.user.id,
+      suggestionBatchId: suggestionBatchId ?? null,
+      note: decisionNote ?? null,
+      locale: await getLocale(),
+    });
 
     // A direct admin assignment used to be completely silent — neither side heard
     // about it until they happened to log in (#668). In-app is unconditional,
