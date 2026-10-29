@@ -1,4 +1,4 @@
-import type { ChatPlatformClient } from '@/lib/chat/client';
+import type { ChatMember, ChatPlatformClient } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
 
 // Slack Web API, behind the ChatPlatformClient port. No URL here is ever built
@@ -48,7 +48,41 @@ export const slackClient: ChatPlatformClient = {
     const json = await call('auth.revoke', token, {});
     return { revoked: json.revoked === true };
   },
+  async listMembers({ token }) {
+    // users.list, paged, capped: a directory is read to PROPOSE links, and a
+    // proposal for a workspace larger than the cap is simply incomplete.
+    const out: ChatMember[] = [];
+    let cursor = '';
+    for (let page = 0; page < MEMBER_PAGES; page++) {
+      const json = await call('users.list', token, { limit: 200, ...(cursor ? { cursor } : {}) });
+      for (const m of (json.members as SlackMember[] | undefined) ?? []) {
+        if (m.deleted || m.is_bot || typeof m.id !== 'string' || m.id === 'USLACKBOT') continue;
+        // Slack only lists `profile.email` for an address its owner confirmed;
+        // users:read.email is the scope that exposes it.
+        const email = typeof m.profile?.email === 'string' ? m.profile.email.trim().toLowerCase() : '';
+        out.push({
+          externalUserId: m.id,
+          displayName: String(m.profile?.real_name || m.real_name || m.name || m.id).slice(0, 191),
+          verifiedEmail: email || null,
+        });
+      }
+      cursor = String((json.response_metadata as { next_cursor?: unknown } | undefined)?.next_cursor ?? '');
+      if (!cursor) break;
+    }
+    return out;
+  },
 };
+
+const MEMBER_PAGES = 10;
+
+interface SlackMember {
+  id?: unknown;
+  name?: string;
+  real_name?: string;
+  deleted?: boolean;
+  is_bot?: boolean;
+  profile?: { email?: unknown; real_name?: string };
+}
 
 export interface SlackInstall {
   accessToken: string;
