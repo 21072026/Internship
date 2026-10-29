@@ -199,7 +199,7 @@ export const NOTIFICATION_EVENTS = [
   { key: 'automation.stageReachedSelf', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['stage'] },
   { key: 'automation.documentRequired', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['document'] },
   // An admin-authored nudge (#1684). In-app copy of the rule's own text; the
-  // mail is the evaluator's, sent through sendEmail() under 'nudge'.
+  // mail is the evaluator's, sent through the one mail door under 'nudge'.
   { key: 'nudge.message', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['text'] },
   { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
   { key: 'outcome.noMatch', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
