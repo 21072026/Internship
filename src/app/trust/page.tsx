@@ -24,6 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 const DOC_BASE = `${GITHUB_URL}/blob/main/docs/trust`;
+const LEGAL_BASE = `${GITHUB_URL}/blob/main/docs/legal`;
 
 /**
  * /trust (#2027) — one URL a salesperson can paste into a procurement e-mail.
@@ -73,6 +74,17 @@ export default async function TrustPage() {
     // The measured history (#1604); the bare liveness probe stays linked too.
     { href: '/status', label: t.statusPage.title, external: false },
     { href: '/api/health', label: p.docs.health, external: false },
+  ];
+
+  // The processor pack (#2029): what a DPO or a works council asks for before
+  // any data enters the tool. Markdown in the repository, next to the code its
+  // retention figures are quoted from.
+  const legalLinks = [
+    { href: `${LEGAL_BASE}/dpa-template.md`, label: p.legal.dpa },
+    { href: `${LEGAL_BASE}/dpa-annex-sccs.md`, label: p.legal.sccs },
+    { href: `${LEGAL_BASE}/ropa.md`, label: p.legal.ropa },
+    { href: `${LEGAL_BASE}/dpia-starter.md`, label: p.legal.dpia },
+    { href: `${DOC_BASE}/data-lifecycle.md`, label: p.legal.lifecycle },
   ];
 
   return (
@@ -231,6 +243,21 @@ export default async function TrustPage() {
         {/* Assurance (#2031): disclosure policy, testing + open findings,
             questionnaire answers, the SOC 2 decision and security.txt. */}
         <AssuranceSection locale={locale} className="mb-10" />
+
+        <section className="mb-10" data-testid="trust-legal-docs">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{p.legalTitle}</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{p.legalIntro}</p>
+          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {legalLinks.map((l) => (
+              <li key={l.href} className="flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" aria-hidden="true" />
+                <a href={l.href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         {/* Link row */}
         <section data-testid="trust-docs">
