@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { requireCapability } from '@/lib/capabilityGate';
 import type { Session } from 'next-auth';
 import { z } from 'zod';
@@ -95,8 +96,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const withComp = await prisma.offer.findUnique({ where: { id }, select: { ...compensationSelect(), ...letterSelect() } });
       result = { ...offer, ...withComp };
     }
-    if (role === 'ADMIN') {
-      // The click-to-accept record (#1857): ADMIN-only.
+    // The click-to-accept record (#1857): IP and user agent of the person who
+    // accepted — an audit fact, so it is read through the permission layer
+    // (#1571), never the role string.
+    const actor = await actorFromSession(session);
+    if (actor && (await can(actor, 'audit.read', { orgId: offer.orgId ?? actor.orgId }))) {
       const record = await prisma.offer.findUnique({ where: { id }, select: { acceptedIp: true, acceptedUserAgent: true } });
       result = { ...result, ...record };
     }

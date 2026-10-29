@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 import { canSeeCompensation } from '@/lib/offers';
+import { actorFromSession, can } from '@/lib/authz';
 import { renderLetterForOffer } from '@/lib/offerLetterServer';
 import { generateOfferLetterPdf } from '@/lib/offerLetterPdf';
 import { getOrgBranding } from '@/lib/orgBranding';
@@ -47,7 +48,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     const isOwnMenteeOffer = role === 'MENTEE' && offer.relation.menteeId === session.user.id;
-    if (!canSeeCompensation({ role, isOwnMenteeOffer }) || (role !== 'ADMIN' && offer.status === 'DRAFT')) {
+    // A DRAFT is admin-internal staging (the same rule as GET /api/offers/[id]),
+    // asked through the permission layer (#1571), never the role string.
+    const actor = await actorFromSession(session);
+    const mayPreviewDraft = !!actor && (await can(actor, 'program.read', { orgId: offer.orgId ?? actor.orgId }));
+    if (!canSeeCompensation({ role, isOwnMenteeOffer }) || (!mayPreviewDraft && offer.status === 'DRAFT')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
