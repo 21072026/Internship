@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -24,10 +23,9 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 //   answer a question nobody asked ("who is in stage X *and* started in
 //   March"), so it stays unfiltered and the screen says so.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
 
   const locale = await getLocale();
 
@@ -37,7 +35,7 @@ export async function GET(request: Request) {
     // MT_ENFORCE_ISOLATION off was every tenant's relations (#2542 follow-up).
     // Interactions and goals have no orgId: their tenant is the relation's.
     const relationWhere = withinTenant<Prisma.MentorshipRelationWhereInput>(
-      session.user.role === 'ADMIN' ? {} : { mentorId: session.user.id },
+      admin ? {} : { mentorId: session.user.id },
       await tenantWhere(session),
     );
     const interactionWhere = { relation: relationWhere };

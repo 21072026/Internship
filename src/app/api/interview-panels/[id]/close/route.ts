@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
 import { isPanelComplete } from '@/lib/interviewPanel';
+import { requirePermission } from '@/lib/authz';
 
 // Close a panel early (#824). A no-show interviewer must not be able to hold
 // the calibration view hostage for ever, so an admin can end the collection —
@@ -20,9 +21,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // handler of the module.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  if (session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('company.write', { request });
+  if ('error' in gate) return gate.error;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
