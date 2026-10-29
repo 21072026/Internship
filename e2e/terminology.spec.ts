@@ -89,6 +89,8 @@ test('a FREE org is refused by the route, but may always go back to the defaults
     expect(await refused.json()).toMatchObject({ code: 'plan_required', plan: 'FREE' });
     // Nothing was written: the org value is unchanged.
     expect((await (await admin.get('/api/admin/terminology')).json()).terminology).toEqual({ en: { mentor: COACH } });
+    // Clearing is never refused.
+    expect((await admin.put('/api/admin/terminology', { data: { terminology: {}, programId: cohortId } })).status()).toBe(200);
   } finally {
     await prisma.organization.update({ where: { id: seeded.org.id }, data: { plan: 'PRO' } });
   }
