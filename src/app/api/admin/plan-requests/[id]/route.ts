@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { logActivity } from '@/lib/activity';
@@ -9,6 +7,7 @@ import { notify } from '@/lib/notify';
 import { getPlan } from '@/lib/plans';
 import { handlePlanChange } from '@/lib/planChange';
 import { PLAN_CHANGE_ACTIONS, PLAN_CHANGE_NOTE_MAX } from '@/lib/planChangeRule';
+import { requirePermission } from '@/lib/authz';
 
 // PATCH — an operator applies or rejects one open plan-change request (#1743).
 //
@@ -27,11 +26,11 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // A super admin is always an ADMIN; the role check comes first so a lesser
   // role never reaches the flag lookup at all.
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
 
   if (!(await isSuperAdmin(session))) {

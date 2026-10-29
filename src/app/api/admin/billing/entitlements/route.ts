@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { logActivity } from '@/lib/activity';
 import { KNOWN_GRANTABLE_FEATURES } from '@/lib/plans';
+import { requirePermission } from '@/lib/authz';
 
 // POST — grant or revoke a feature for an organization OUTSIDE its plan (#1734):
 // one `OrgEntitlement` row (a pilot, the AI pack, a contractual exception).
@@ -31,9 +30,9 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (!(await isSuperAdmin(session))) {
     await logCrossTenantDenial(session, 'POST /api/admin/billing/entitlements', null);
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

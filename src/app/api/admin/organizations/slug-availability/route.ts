@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { orgSlugAvailable } from '@/lib/orgProvisioning';
 import { slugifyOrg } from '@/lib/orgSlug';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { requirePermission } from '@/lib/authz';
 
 // GET ?slug= — is this organization slug free? (#2065) The provisioning wizard
 // asks as the name is typed, so a taken slug is reported before submit; create
@@ -14,8 +13,9 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 // an endpoint that answers "taken" for anyone would enumerate customers.
 // Slugs are global — not per world — because they key the SSO URLs.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const world = await superAdminWorld(session);
   if (!world) {
     await logCrossTenantDenial(session, 'GET /api/admin/organizations/slug-availability', null);
