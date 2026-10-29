@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Chat delivery ledger with retry (#1960):** \"Recent deliveries\" under each Slack/Teams workspace on `/admin/integrations` reads `GET /api/admin/integrations/chat/deliveries?workspaceId=…` (ADMIN, own org, last 50 attempts: event key, recipient name, outcome, reason — never the card body or a token). `POST /api/admin/integrations/chat/deliveries/[id]/retry` (`org.integrations.write`) re-sends a FAILED attempt through the notification router (`retryChatDelivery()`, its own ledger row keyed on the failed attempt) with the card rebuilt from the person's in-app notification, and appends a new `ChatDelivery` row; the failed row is never changed (`409` for a second retry, a non-failed row, a gone identity or a gone source notification). The e2e server now runs with `CHAT_APPS_ENABLED=1` beside the stub client.",
+  "notes": {
+    "en": ["When someone says a Slack or Teams message never arrived, admins can now see each recent delivery with its outcome and reason, and resend a failed one."],
+    "tr": ["Biri Slack veya Teams mesajının gelmediğini söylediğinde yöneticiler artık her son teslimatı sonucu ve sebebiyle görebiliyor ve başarısız olanı yeniden gönderebiliyor."],
+    "de": ["Wenn jemand sagt, eine Slack- oder Teams-Nachricht sei nie angekommen, sehen Admins jetzt jede letzte Zustellung mit Ergebnis und Grund und können eine fehlgeschlagene erneut senden."]
+  }
+}
