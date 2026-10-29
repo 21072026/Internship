@@ -14,6 +14,8 @@ import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
 import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { runEventDelivery } from '@/lib/events/emit';
+import { runWebhookDelivery } from '@/lib/webhookDelivery';
+import { runNudgeScan, runNudgeSend } from '@/lib/nudges/evaluate';
 import { runDelayedAutomation } from '@/lib/automation/evaluate';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
@@ -75,6 +77,23 @@ export function registerAllJobs(): void {
     const outcome = await runEventDelivery(payload);
     return { [outcome]: 1 };
   }, { timeoutMs: 60_000 });
+
+  // One webhook POST for one (event × subscription) (#1695). Each attempt
+  // writes its own WebhookDelivery row and every attempt carries the same
+  // X-Delivery-Id, so a rerun is a second delivery the receiver dedupes —
+  // at-least-once, documented in docs/api-explorer.md. A FAILED attempt throws
+  // and the backoff schedules the next; a DEAD one settles the job.
+  registerJob('webhook.deliver', async (payload, { attempt, job }) => {
+    const outcome = await runWebhookDelivery(payload, attempt, job.maxAttempts);
+    return { [outcome]: 1 };
+  }, { timeoutMs: 30_000 });
+
+  // Admin-authored nudges (#1684). The scan only enqueues keyed `nudge.send`
+  // jobs and skips anyone who already has the NudgeSend row, so a second scan
+  // the same night queues nothing new. A send claims its NudgeSend row (unique)
+  // before it mails, so a rerun loses the claim and sends nothing.
+  registerJob('nudge.evaluate', async () => counters(await runNudgeScan()), { timeoutMs: 10 * 60_000 });
+  registerJob('nudge.send', async (payload) => ({ [await runNudgeSend(payload)]: 1 }), { timeoutMs: 60_000 });
 
   // A delayed stage-automation run (#1703). The run is claimed PENDING →
   // RUNNING in one guarded update before any action, so a rerun finds it taken

@@ -3,11 +3,14 @@
 // Every route-level `error.tsx` (and the root `global-error.tsx`) calls this
 // from its `useEffect` instead of a bare `console.error`, so that wiring the
 // real error tracker (#1600) is one edit here rather than one edit per
-// boundary. Until that lands this is a structured console line — the shape
-// below is deliberately the payload a tracker would want.
+// boundary. It stays a structured console line, and since #1600 the same error
+// also goes to the tracker relay (`browserErrorReporter.ts`, inert unless the
+// build has NEXT_PUBLIC_ERROR_TRACKING=1).
 //
 // Client-side module on purpose: `lib/logger.ts` reads `process.env.LOG_LEVEL`,
 // which the browser bundle has no value for.
+
+import { reportBrowserError } from './browserErrorReporter';
 
 export type BoundaryErrorContext = {
   /** Which boundary caught it — the route tree, or 'global' for the root shell. */
@@ -32,4 +35,5 @@ export function reportBoundaryError(error: unknown, context: BoundaryErrorContex
     // Handy for correlating a report with what the person was actually doing.
     path: typeof window === 'undefined' ? null : window.location.pathname,
   });
+  reportBrowserError(err, { scope: context.scope, digest: digest ?? undefined });
 }

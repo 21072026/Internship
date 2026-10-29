@@ -78,3 +78,78 @@ requires an ADMIN session on the one that has it.
 Reviewed and left alone: `PageView` already has `[userId, createdAt]` for its only per-user
 reader; `MentorshipRelation`'s hot filters (`mentorId`, `menteeId`, `orgId`) are foreign keys
 MySQL indexes already, and its low-cardinality `status` adds little as a second column.
+
+# Error tracking (#1600)
+
+A runtime failure used to exist only as container stdout. Now it can also become a grouped
+event with a stack, a route, a role, an org id, a request id and a release — in any tracker that
+speaks the **Sentry envelope protocol**.
+
+## The decision: a protocol, not an SDK
+
+| | |
+|---|---|
+| Receiver | Anything that accepts Sentry envelopes: Sentry (hosted free tier to start), or self-hosted **GlitchTip** / **Bugsink** on our own box. Switching is a DSN change. |
+| Client | Ours — `src/lib/errorTrackingRule.ts` (rules, pure) + `src/lib/errorTracking.ts` (the one sender, `fetch` only). No vendor SDK. |
+| Why no SDK | It would have to load from `src/instrumentation.ts`, which Next also compiles for the edge runtime (see its header), and it auto-collects request bodies, headers and breadcrumbs that we would then have to scrub after the fact. An allowlist we own is easier to prove than a scrubber over someone else's payload. |
+| Performance traces | **Not collected** (sample rate 0). This is error tracking only; latency is the nightly k6 run's job (`docs/testing.md`). A future tracing slice must state its own sample rate here. |
+
+## Where events come from
+
+| Source | Hook | Tags |
+|---|---|---|
+| Server (uncaught throw in a route handler, server component, server action) | `onRequestError` in `src/instrumentation.ts` | `source=server`, `route` (the route **template**, e.g. `/api/users/[id]`), `method`, `role` (from the role shell `/admin`·`/mentor`·`/portal`·`/company`; none for `/api`), `requestId` (the `x-request-id` the middleware forwarded, #1601), `digest` |
+| Job worker — every failed attempt and the DEAD_LETTER | `onError` option of `createWorker()`, wired in `/api/jobs/worker/tick` | `source=job`, `job`, `attempt` (`2/5`), `outcome` (`retried` = warning, `dead_letter` = error), `orgId`; grouped per job name + outcome |
+| Browser (error boundaries, `window.onerror`, unhandled rejections) | `reportBoundaryError()` + `<ErrorTrackingListener>` → `POST /api/telemetry/errors` | `source=browser`, `route` (masked path), `scope`, `digest`, `role` + `orgId` **from the session** |
+
+Every event also carries `release` (`GIT_SHA`), the `version` tag (`APP_VERSION`) and
+`environment` (`ERROR_TRACKING_ENVIRONMENT`, else `NEXT_PUBLIC_APP_ENV`). `requestId`/`orgId`
+are filled from the ambient context when the caller does not pass them.
+
+A route that catches its own error and answers 500 is **not** reported — `onRequestError` only
+sees uncaught throws. Cron schedules run as jobs through the worker (#1676), so a throw in a
+scheduled body is a job failure and is reported.
+
+The browser never talks to the tracker: the relay keeps the DSN server-side, needs no CSP
+`connect-src` host (relevant to #1552), requires a session (signed-out visitors are not
+reported), is rate-limited to 30 per person per 10 min, and answers **204 doing nothing** when
+no DSN is set.
+
+## PII posture — what an event may carry
+
+An **allowlist**, not a scrubber over everything:
+
+- the error type, the **first line** of its message and its stack frames (file, function,
+  line, column). A multi-line message is where an ORM dumps the failed call's arguments
+  (`Invalid prisma.user.create() invocation: { data: { email: … } }`), so only line one survives;
+- masked by `maskText` / `maskUrl` from `src/lib/feedbackContext.ts` — the same and only masking
+  path as in-app bug reports (#3130): e-mail addresses, bearer tokens, JWTs, `password=`-style
+  pairs, query values, opaque token path segments;
+- tags from `TAG_KEYS` only, each value in a log-safe alphabet (an unsafe value is dropped,
+  never truncated);
+- release, version, environment.
+
+**Never:** a request body, a header, a cookie, a user object, an e-mail address, a name, a
+message body, CV text or a file name. `e2e/error-tracking.unit.spec.ts` (`@smoke`) builds an
+event from a representative failure and asserts none of it survives.
+
+A per-process throttle allows 10 events per error per minute, so a loop that throws on every
+request does not become a bill.
+
+**Retention:** set on the receiver, not here. Recommended: **30 days** for events (enough to
+compare two releases), no "store request data" option enabled on the project, and the
+receiver's IP-address collection turned off — our events carry no IP, but a hosted SDK default
+might add one on ingest.
+
+## Variables
+
+| Variable | Where | Default | Meaning |
+|---|---|---|---|
+| `ERROR_TRACKING_DSN` | server env (runtime) | unset → **off** | `https://<publicKey>@<host>[/<path>]/<projectId>`; https only (http for localhost). Malformed reads as off. |
+| `ERROR_TRACKING_ENVIRONMENT` | server env (runtime) | `NEXT_PUBLIC_APP_ENV` | The `environment` field. |
+| `NEXT_PUBLIC_ERROR_TRACKING` | build arg | unset → browser reporter off | `1` attaches the browser listeners. Inlined at build time; without a DSN the relay still does nothing. |
+
+With the DSN unset the app behaves exactly as before: `captureError()` returns before building
+anything — no fetch, no timer, no console line. A send that fails (wrong DSN, receiver down)
+logs one `[error-tracking] send failed` warning per process and is otherwise silent; it never
+fails the request or changes how a job settles.

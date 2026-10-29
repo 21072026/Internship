@@ -11,6 +11,7 @@ import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import { useToast } from '@/components/ui/Toast';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { useLocale, useT } from '@/i18n/client';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // /admin/weekly-reports (#1918) — "every intern's submission status this term"
 // on one screen. Every number comes from GET /api/admin/weekly-reports, i.e.
@@ -193,6 +194,10 @@ export default function AdminWeeklyReportsPage() {
   };
 
   const option = (items: { id: string; label: string }[]) => [{ value: '', label: T.all }, ...items.map((i) => ({ value: i.id, label: i.label }))];
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && search.trim() !== '' ? resultCountMessage(t.a11y, visible.length) : null);
 
   return (
     <div className="space-y-6" id="weekly-reports-print">

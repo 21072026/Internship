@@ -35,6 +35,8 @@ const PUBLISHED = [
   'offer.declined',
   'requisition.filled',
   'mentorship.lifecycle_changed',
+  'application.stage_changed',
+  'mentorship.transferred',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -61,6 +63,9 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['meetingCancel', 'meeting.cancelled', { meetingId: 'm1', scheduledAt: at, count: 3 }],
   ['api/meetings/[id] DELETE', 'meeting.cancelled', { meetingId: 'm1', scheduledAt: null, count: 1 }],
   ['api/meetings/[id] PATCH', 'meeting.rescheduled', { meetingId: 'm1', scheduledAt: at, previousScheduledAt: null }],
+  ['applicationStageEvents', 'application.stage_changed', { applicationId: 'a1', requisitionId: 'rq1', from: 'SHORTLISTED', to: 'INTERVIEW' }],
+  ['mentorTransfer', 'mentorship.transferred', { relationId: 'r2', previousRelationId: 'r1', menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'transferred', reasonCode: 'mentor_capacity' }],
+  ['mentorTransfer', 'mentorship.transferred', { relationId: 'r1', previousRelationId: null, menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'corrected', reasonCode: 'wrong_assignment' }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

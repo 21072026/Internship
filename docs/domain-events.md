@@ -97,13 +97,17 @@ every production subscriber is registered in `subscribers/index.ts`. Delivery
 is at-least-once — each subscriber says in its file what makes a rerun
 harmless.
 
-- **`webhook`** (`subscribers/webhook.ts`): every public event →
-  `dispatchWebhook(name, payload, orgId)`, exactly the arguments the producers
-  used to pass directly, so receivers get the same `event`, `data` and tenant
-  scoping. It never throws (a dead receiver is logged, not retried — per-receiver
-  retries and the delivery log are #1695), so one dead endpoint cannot make the
-  other receivers get the event twice. It is the one file besides
-  `src/lib/webhooks.ts` that may name the dispatcher (`npm run check:events`).
+- **`webhook`** (`subscribers/webhook.ts`): every public event → one
+  `webhook.deliver` job per live subscription of the event's tenant (#1695),
+  keyed `whk:<eventId>:<webhookId>` so a rerun of the fan-out enqueues nothing
+  twice. The job (`src/lib/webhookDelivery.ts`, rules in
+  `webhookDeliveryRule.ts`) signs and posts the same `event`/`data` the
+  producers used to pass directly, writes one `WebhookDelivery` row per attempt,
+  retries a 5xx/timeout with the queue's backoff and auto-disables a hook after
+  20 failures or 72h without a success. One slow receiver holds only its own
+  job. `src/lib/webhookDelivery.ts` is the one file besides `src/lib/webhooks.ts`
+  that may name the deliverer (`npm run check:events`); the retry semantics a
+  receiver sees are in [`api-explorer.md`](api-explorer.md) § Webhook delivery.
 - **`config-audit`** (`subscribers/configAudit.ts`, #1699): every
   configuration event (`CONFIG_AUDIT_EVENTS` — `org.config.changed`,
   `setting.changed`, `webhook.registered|updated|deleted`, `apikey.created|revoked`)
@@ -114,6 +118,18 @@ harmless.
 - **`automation`** (`subscribers/automation.ts`, #1703): `pipeline.stage_change`
   → the org's enabled stage automation rules for that move, one `AutomationRun` per
   (rule, event) — unique, so a rerun creates none. `docs/automation-rules.md`.
+
+### Inside a transaction: never `emit()` directly (#1998)
+
+`emit()` writes through the global Prisma client, so an `emit()` from inside an
+interactive transaction survives that transaction's rollback — a ghost event.
+`Application.stage` is always written inside its caller's transaction, so its
+writer `moveApplicationStage()` only **notes** each move
+(`noteStageMove()`, `src/lib/applicationStageEvents.ts`), and every caller
+opens its transaction with `stageTransaction(fn, options)` instead of
+`prisma.$transaction`: once the transaction resolves, one
+`application.stage_changed` per noted move is raised. A rejected transaction
+raises nothing; a move noted outside the wrapper throws outside production.
 
 ## Configuration diffs: `src/lib/events/diff.ts` (#1699)
 
@@ -158,6 +174,6 @@ What changed for a receiver is only *when*: the POST is sent by the job worker
 no longer slows the request that raised the event.
 
 `npm run check:events` (CI) refuses any other file that names
-`dispatchWebhook`/`deliverToWebhook` (the admin's test ping is the one
+`deliverToWebhook` (or the removed `dispatchWebhook`) (the admin's test ping is the one
 allowlisted deliverer) and any hand-written `activityLog`/`auditLog` create
 whose `action` is a catalogue event name.

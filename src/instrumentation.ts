@@ -14,6 +14,43 @@
 // Nothing here is awaited to completion: `register()` resolves before the server
 // starts accepting connections, so awaiting a request to ourselves would
 // deadlock. Both starts are deferred onto timers instead.
+//
+// `onRequestError` (#1600) is the one exception to "fetch-only via our own
+// endpoints": `lib/errorTracking.ts` is itself dependency-free (fetch + the
+// ambient seams), so importing it here is edge-safe. With no
+// ERROR_TRACKING_DSN it returns before doing anything.
+import type { Instrumentation } from 'next';
+import { captureError } from './lib/errorTracking';
+import { isValidRequestId, REQUEST_ID_HEADER } from './lib/requestId';
+
+// The role shell a route belongs to — every shell's layout gates on the role,
+// so the path prefix is the role of whoever could render it (impersonation and
+// the super admin aside). API routes have no shell and get no role tag.
+const SHELL_ROLES: [string, string][] = [
+  ['/admin', 'ADMIN'],
+  ['/mentor', 'MENTOR'],
+  ['/portal', 'MENTEE'],
+  ['/company', 'COMPANY'],
+];
+
+export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
+  const header = request.headers[REQUEST_ID_HEADER];
+  const requestId = typeof header === 'string' && isValidRequestId(header) ? header : undefined;
+  const route = context.routePath || request.path;
+  const role = SHELL_ROLES.find(([prefix]) => route === prefix || route.startsWith(`${prefix}/`))?.[1];
+  await captureError({
+    error,
+    tags: {
+      source: 'server',
+      route,
+      method: request.method,
+      role,
+      requestId,
+      digest: (error as { digest?: string } | null)?.digest,
+    },
+  });
+};
+
 export function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 

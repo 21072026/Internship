@@ -2,19 +2,18 @@
 // Guard: an event leaves the product through ONE door (#1697).
 //
 // WHY THIS EXISTS
-//   `dispatchWebhook()` posts straight to every subscribed receiver. A producer
-//   that calls it directly skips everything `emit()` (#1693) guarantees: the
+//   `dispatchWebhook()` posted straight to every subscribed receiver (it is gone
+//   since #1695; delivery is the `webhook.deliver` job). A producer that calls
+//   the delivery directly skips everything `emit()` (#1693) guarantees: the
 //   catalogue check, the `DomainEvent` row, the durable queue and every other
 //   subscriber. Since #1697 all ten historical producers raise their event
 //   through `emit()`, and the `webhook` subscriber is the only caller of the
 //   dispatcher. This guard keeps it that way.
 //
 // TWO IDENTIFIERS, NOT ONE
-//   `src/lib/webhooks.ts` exports two ways out: `dispatchWebhook(event, data)`
-//   (fan-out to subscribers) and `deliverToWebhook(hook, event, data)` (one
-//   signed POST to one receiver — the body dispatchWebhook itself sends). Six
-//   lines copied out of the dispatcher reach every receiver without ever naming
-//   `dispatchWebhook`, so both identifiers are scanned. The single legitimate
+//   `deliverToWebhook(hook, event, data)` is one signed POST to one receiver;
+//   the old fan-out `dispatchWebhook` stays on the scan so it cannot come back
+//   under its old name. Both identifiers are scanned. The single legitimate
 //   direct deliverer is the admin's test ping, allowlisted below.
 //
 // AUDIT ROWS FOR CATALOGUE EVENTS
@@ -42,8 +41,8 @@ const CATALOG = 'src/lib/events/catalog.ts';
 // The only two files that may name the dispatcher freely — one defines it, the
 // other is the single subscriber that turns a domain event into an HTTP delivery.
 const DISPATCHER_HOMES = [
-  ['src/lib/webhooks.ts', 'defines dispatchWebhook/deliverToWebhook'],
-  ['src/lib/events/subscribers/webhook.ts', 'the webhook subscriber (#1693) — the one legitimate caller'],
+  ['src/lib/webhooks.ts', 'defines deliverToWebhook'],
+  ['src/lib/webhookDelivery.ts', 'the webhook delivery job (#1695) — the one legitimate caller, behind the webhook subscriber'],
 ];
 
 // The one direct `deliverToWebhook` caller that is not a domain event at all:

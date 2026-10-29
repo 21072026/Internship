@@ -13,6 +13,7 @@ import { useT } from '@/i18n/client';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { SavedViews } from '@/components/SavedViews';
 import { MentorLimitsImport } from '@/components/MentorLimitsImport';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface MentorUser {
   id: string;
@@ -106,6 +107,10 @@ export default function MentorsPage() {
         m.email.toLowerCase().includes(q) ||
         (m.skills ?? []).some((s) => s.toLowerCase().includes(q)))
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, shown.length) : null);
 
   return (
     <div>

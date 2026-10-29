@@ -201,7 +201,7 @@ test.describe('the webhook subscriber delivers what the producers dispatched dir
     test(`${site}: same event, same data JSON, same org`, async () => {
       const calls: [string, Record<string, unknown>, string | null | undefined][] = [];
       const registry = createSubscriberRegistry();
-      registry.register(createWebhookSubscriber(async (e, data, orgId) => void calls.push([e, data, orgId])));
+      registry.register(createWebhookSubscriber(async (e) => void calls.push([e.name, e.payload, e.orgId])));
       const h = harness({ registry });
 
       await h.emit(event, payload, { orgId: 'org-a' });

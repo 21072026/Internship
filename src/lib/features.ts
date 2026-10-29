@@ -45,7 +45,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -115,6 +115,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'joinRequests', category: 'tracking', icon: Share2, color: 'rose', capability: 'projects', title: C.joinRequests.t, desc: C.joinRequests.d },
     { key: 'mentorSelfApply', category: 'tracking', icon: GraduationCap, color: 'blue', capability: 'mentorship', title: C.mentorSelfApply.t, desc: C.mentorSelfApply.d },
     { key: 'calendar', category: 'collaboration', icon: CalendarDays, color: 'indigo', title: C.calendar.t, desc: C.calendar.d },
+    // Group sessions and office hours (#1856): programme events — mentorship only.
+    { key: 'groupSessions', category: 'collaboration', icon: Presentation, color: 'teal', capability: 'mentorship', title: C.groupSessions.t, desc: C.groupSessions.d },
     { key: 'todos', category: 'collaboration', icon: ListChecks, color: 'green', capability: 'mentorship', title: C.todos.t, desc: C.todos.d },
     // The mentee's own completion certificate in the portal + LinkedIn's
     // add-to-profile link. An internship completion certificate: mentorship only.

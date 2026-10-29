@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage automation admin API (#1704, 1/2):** `/api/admin/automations` (list with the org's own stages and picker options, create — always disabled), `/[id]` (PATCH re-validates the merged rule; switching on needs a dry run since the last logic change, else `409 simulate_first`; DELETE), `/reorder`, `/runs` (the run log) and `/[id]/simulate` — a dry run against the org's last N real `StatusChange` rows through `simulateRule()` (`src/lib/automation/simulate.ts`), which imports only the rule vocabulary and so cannot execute an action. Every route: `org.settings.write` in the handler, org-scoped (another org's rule is 404), on the demo write blocklist."
+}

@@ -14,3 +14,8 @@
   `Meeting` has no `orgId` column to read it from.
 - **A DELETE is a cancellation from the receiver's side** when the row was still
   `SCHEDULED`; deleting an already-cancelled row is not announced again.
+- **Never `emit()` from inside an interactive transaction.** `emit()` writes through the
+  global client, so a rolled-back caller would leave a ghost event. For the stage writer
+  (which always runs in its caller's tx) the move is *noted* in an `AsyncLocalStorage`
+  and `stageTransaction()` raises it after `prisma.$transaction` resolves; noting
+  outside the wrapper throws in dev, so a forgotten caller is a red test.

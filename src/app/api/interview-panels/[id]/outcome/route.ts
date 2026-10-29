@@ -13,6 +13,7 @@ import { notifyIfAllowed } from '@/lib/notify';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isDispositionCode, requiresDispositionCode } from '@/lib/applications';
 import { moveApplicationStage } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 import { isInterviewOutcome, outcomeMayAdvancePipeline, outcomeNotificationKey, outcomeTargetStage } from '@/lib/interviewOutcome';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { onPathKeys } from '@/lib/pipeline';
@@ -112,7 +113,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       let move: { fromStage: string; toStage: string };
       try {
-        move = await prisma.$transaction(async (tx) => {
+        move = await stageTransaction(async (tx) => {
           const result = await moveApplicationStage(tx, {
             applicationId: application.id,
             expectedStage: application.stage,

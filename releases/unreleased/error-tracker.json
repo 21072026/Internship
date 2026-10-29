@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Error tracker (#1600):** uncaught server errors (`onRequestError` in `src/instrumentation.ts`), every failed job attempt and DEAD_LETTER (the worker's new `onError` hook) and browser errors (error boundaries, `window.onerror`, unhandled rejections → `POST /api/telemetry/errors`) become grouped events in any Sentry-protocol tracker (Sentry, GlitchTip, Bugsink). No SDK: `src/lib/errorTrackingRule.ts` builds an allowlisted event — first message line, masked stack frames, `TAG_KEYS` only — with the masking of `feedbackContext.ts`, and `src/lib/errorTracking.ts` is the one `fetch` sender. Tagged with release (`GIT_SHA`), version, environment, route, role, `orgId` and `requestId`; no e-mail, name, body or token, pinned by `e2e/error-tracking.unit.spec.ts`. Off unless `ERROR_TRACKING_DSN` is set (`NEXT_PUBLIC_ERROR_TRACKING=1` for the browser); docs in `docs/observability.md`."
+}

@@ -190,6 +190,7 @@ jobs:
             GIT_SHA=${{ inputs.ref }}
             NEXT_PUBLIC_APP_ENV=${{ inputs.app_env }}
             RELEASE_STAMPS=${{ needs.prep.outputs.stamps }}
+            NEXT_PUBLIC_ERROR_TRACKING=${{ vars.NEXT_PUBLIC_ERROR_TRACKING }}
           # No tag here: each leg pushes an untagged, digest-addressed image and
           # the merge job below binds the tag to the manifest list. Tagging both
           # legs would make them overwrite each other, and whichever finished

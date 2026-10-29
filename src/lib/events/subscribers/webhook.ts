@@ -1,25 +1,27 @@
-// The webhook subscriber (#1693): a public domain event → a signed POST to every
-// live subscription of the event's tenant. The one legitimate caller of
-// `dispatchWebhook` (scripts/check-events.mjs).
+// The webhook subscriber (#1693, #1695): a public domain event → one
+// `webhook.deliver` job per live subscription of the event's tenant. The
+// delivery itself — signing, the SSRF re-check, the attempt row, retry and
+// auto-disable — is src/lib/webhookDelivery.ts.
 //
-// It forwards exactly what a producer used to pass straight to the
-// dispatcher — `(name, payload, orgId)` — so receivers see the same `event`,
-// the same `data` and the same tenant scoping. Like the direct call it never
-// throws: a receiver that is down is logged by `dispatchWebhook`, not retried,
-// so a delivery job always settles SUCCEEDED and one dead endpoint cannot make
-// every other receiver of the event get it again. (Per-receiver retries and a
-// delivery log are #1695.) A rerun — a container killed mid-job — POSTs the
-// event again; receivers have always had to tolerate a repeat.
+// A rerun of this fan-out (a container killed mid-job) enqueues nothing twice:
+// each delivery job is keyed `whk:<eventId>:<webhookId>`. Fanning out instead
+// of posting here is what keeps one hanging receiver from delaying another
+// partner's delivery of the same event.
 
-import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from '@/lib/webhooks';
-import type { SubscriberDefinition } from '../subscribers';
+import { WEBHOOK_EVENTS } from '@/lib/webhooks';
+import type { DeliveredEvent, SubscriberDefinition } from '../subscribers';
 
-/** `dispatch` is injectable for the unit test only. */
-export function createWebhookSubscriber(dispatch: typeof dispatchWebhook = dispatchWebhook): SubscriberDefinition {
+type FanOut = (event: DeliveredEvent) => Promise<unknown>;
+
+/** `fanOut` is injectable for the unit test only. */
+export function createWebhookSubscriber(fanOut?: FanOut): SubscriberDefinition {
   return {
     name: 'webhook',
     events: WEBHOOK_EVENTS,
-    handle: (event) => dispatch(event.name as WebhookEvent, event.payload, event.orgId),
+    handle: async (event) => {
+      const run = fanOut ?? (await import('@/lib/webhookDelivery')).fanOutWebhookEvent;
+      await run(event);
+    },
   };
 }
 

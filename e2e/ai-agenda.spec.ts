@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInViaApi, signInAndSettle, gotoSettled } from './helpers/auth';
-import { setSetting } from '../src/lib/settings';
+import { writeSetting } from '../src/lib/settingsWrite';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -24,7 +24,7 @@ async function seedPair(prefix: string) {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const org = await prisma.organization.create({ data: { name: `AI agenda ${prefix}`, slug: `aiagenda-${stamp}` } });
   // The org's allowance is spent: every call degrades, none reaches a provider.
-  await setSetting('aiMonthlyQuota', '0', org.id);
+  await writeSetting('aiMonthlyQuota', '0', org.id);
   const mentorEmail = uniqueEmail(`${prefix}-mentor`);
   const menteeEmail = uniqueEmail(`${prefix}-mentee`);
   const strangerEmail = uniqueEmail(`${prefix}-stranger`);

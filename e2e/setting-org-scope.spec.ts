@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, uniqueEmail } from './helpers/db';
-import { getSetting, getSettings, setSetting, SETTING_DEFAULTS } from '../src/lib/settings';
+import { getSetting, getSettings, SETTING_DEFAULTS } from '../src/lib/settings';
+import { writeSetting } from '../src/lib/settingsWrite';
 import { runWithOrg } from '../src/lib/orgContext';
 
 // Per-tenant settings with a global fallback (#1553).
@@ -26,10 +27,10 @@ test('two orgs resolve their own values, and an unset key falls back to the glob
   try {
     // Tenant overrides: A requires 2FA of its admins on a 50-call AI budget,
     // B leaves 2FA off and buys 900 calls.
-    await setSetting('require2fa', 'admins', orgA.id);
-    await setSetting('aiMonthlyQuota', '50', orgA.id);
-    await setSetting('require2fa', 'off', orgB.id);
-    await setSetting('aiMonthlyQuota', '900', orgB.id);
+    await writeSetting('require2fa', 'admins', orgA.id);
+    await writeSetting('aiMonthlyQuota', '50', orgA.id);
+    await writeSetting('require2fa', 'off', orgB.id);
+    await writeSetting('aiMonthlyQuota', '900', orgB.id);
 
     // 1. Each org resolves its own row — one tenant's compliance policy is not
     //    the other's.
@@ -39,13 +40,13 @@ test('two orgs resolve their own values, and an unset key falls back to the glob
     expect(await getSetting('aiMonthlyQuota', orgB.id)).toBe('900');
 
     // 2. A key neither org overrode falls back to the GLOBAL row.
-    await setSetting('retentionMonths', '36', null);
+    await writeSetting('retentionMonths', '36', null);
     expect(await getSetting('retentionMonths', orgA.id)).toBe('36');
     expect(await getSetting('retentionMonths', orgB.id)).toBe('36');
     expect(await getSetting('retentionMonths', null)).toBe('36');
 
     // …and a tenant row still wins over that global row.
-    await setSetting('retentionMonths', '6', orgB.id);
+    await writeSetting('retentionMonths', '6', orgB.id);
     expect(await getSetting('retentionMonths', orgB.id)).toBe('6');
     expect(await getSetting('retentionMonths', orgA.id)).toBe('36');
 
@@ -88,8 +89,8 @@ test('the zero-argument readers follow the bound tenant and still see the global
   try {
     // Start from a known global layer: an earlier spec may have left a row here.
     await clearGlobal('aiMonthlyQuota');
-    await setSetting('aiMonthlyQuota', '77', org.id);
-    await setSetting('retentionMonths', '24', null);
+    await writeSetting('aiMonthlyQuota', '77', org.id);
+    await writeSetting('retentionMonths', '24', null);
 
     process.env.MT_ENFORCE_ISOLATION = 'true';
 
@@ -106,12 +107,12 @@ test('the zero-argument readers follow the bound tenant and still see the global
     expect(await runWithOrg(null, () => getSetting('retentionMonths'))).toBe('24');
 
     // A write with no org bound lands on the global row, not on a tenant's.
-    await runWithOrg(null, () => setSetting('aiMonthlyQuota', '111'));
+    await runWithOrg(null, () => writeSetting('aiMonthlyQuota', '111'));
     expect(await getSetting('aiMonthlyQuota', null)).toBe('111');
     expect(await getSetting('aiMonthlyQuota', org.id)).toBe('77');
 
     // A write made while bound to the org can only touch that org's row.
-    await runWithOrg(org.id, () => setSetting('aiMonthlyQuota', '88'));
+    await runWithOrg(org.id, () => writeSetting('aiMonthlyQuota', '88'));
     expect(await getSetting('aiMonthlyQuota', org.id)).toBe('88');
     expect(await getSetting('aiMonthlyQuota', null)).toBe('111');
   } finally {

@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**`chat` is a notification-router channel (#1939):** `src/lib/notifications/adapters/chat.ts` delivers a card (the bell's sentence + the link into the recipient's own product) to a person's confirmed `ChatIdentity`, through the new `ChatPlatformClient` port (`src/lib/chat/client/` — Slack Web API, Teams Bot Framework connector with a Microsoft-host allowlist on `serviceUrl`). The router adds `chat` per recipient only for confirmed identities and only with `CHAT_APPS_ENABLED=1`; a caller pinning `channels` gets exactly those. A disabled workspace records `SKIPPED` (`workspace_disabled`), a platform refusal `FAILED` with its code (also `ChatWorkspace.lastError`), and neither touches the e-mail or in-app delivery. Never gated on a plan (guard test)."
+}

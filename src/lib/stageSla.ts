@@ -13,7 +13,7 @@
 
 import { cache } from 'react';
 import { prisma } from './prisma';
-import { slaDaysByStage, type SlaScope, type StageSlaRow } from './stageSlaRule';
+import { resolveSlaEscalations, slaDaysByStage, type SlaScope, type StageSlaRow } from './stageSlaRule';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -42,7 +42,7 @@ export interface StageSlaScope extends SlaScope {
 export const loadStageSlaRows = cache(async (orgId: string): Promise<StageSlaRow[]> => {
   return prisma.stageSla.findMany({
     where: { orgId, days: { not: null } },
-    select: { stageKey: true, days: true, cohortId: true, mentorId: true },
+    select: { stageKey: true, days: true, escalateAfterDays: true, cohortId: true, mentorId: true },
   });
 });
 
@@ -65,18 +65,17 @@ export async function resolveStageSlas(scope: string | null | undefined | StageS
  * many days after a breach the org's administrators are told. Only stages that
  * also carry a service level — an escalation of a deadline nobody set means
  * nothing.
+ *
+ * Scoped like `resolveStageSlas` (#3204): a bare orgId reads the org's own
+ * rows, a scope resolves field by field (`resolveSlaEscalations`), so an
+ * override without a rung of its own inherits the org's.
  */
 export async function resolveStageEscalations(
-  orgId: string | null | undefined
+  scope: string | null | undefined | StageSlaScope
 ): Promise<Map<string, number>> {
+  const { orgId, cohortId, mentorId } = typeof scope === 'object' && scope !== null ? scope : { orgId: scope };
   if (!orgId) return new Map();
-  const rows = await prisma.stageSla.findMany({
-    where: { orgId, scope: 'org', days: { not: null }, escalateAfterDays: { not: null } },
-    select: { stageKey: true, escalateAfterDays: true },
-  });
-  return new Map(
-    rows.flatMap((r) => (r.escalateAfterDays == null ? [] : [[r.stageKey, r.escalateAfterDays] as [string, number]]))
-  );
+  return resolveSlaEscalations(await loadStageSlaRows(orgId), { cohortId, mentorId });
 }
 
 /**

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { setSetting } from '@/lib/settings';
+import { writeSetting } from '@/lib/settingsWrite';
 import { logActivity } from '@/lib/activity';
 import { prisma } from '@/lib/prisma';
 import { TERM_DEFAULTS, TERM_TOKENS, parseTerminology, serializeTerminology } from '@/lib/terminology';
@@ -12,7 +12,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 
 // The org's (or one programme's) nouns (#1629): GET reads the stored document
 // for a scope, PUT replaces it. One `terminology` setting row per layer, written
-// through setSetting() — no second settings mechanism — to the CALLER's org
+// through writeSetting() — no second settings mechanism — to the CALLER's org
 // (never the global row, #2628) or one of its programmes. What is stored is the
 // parsed document: an unknown locale or token, or a token missing a form, is
 // dropped before the write (src/lib/terminology.ts). An empty document clears
@@ -65,7 +65,10 @@ export async function PUT(request: Request) {
     const scope = await scopeOf(orgId, parsed.data.programId ?? null);
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const value = serializeTerminology(parseTerminology(parsed.data.terminology));
-    await setSetting('terminology', value, orgId, scope.programId ? { programId: scope.programId } : {});
+    await writeSetting('terminology', value, orgId, {
+      ...(scope.programId ? { programId: scope.programId } : {}),
+      actor: { id: session.user.id, email: session.user.email ?? null },
+    });
     await logActivity({
       action: 'settings.terminology',
       actorId: session.user.id,

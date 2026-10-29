@@ -1,5 +1,6 @@
 'use client';
 
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Search } from 'lucide-react';
@@ -29,6 +30,9 @@ export function StartConversationPicker({ candidates }: { candidates: Messageabl
     if (!q) return candidates;
     return candidates.filter((c) => c.fullName.toLowerCase().includes(q) || c.projectName.toLowerCase().includes(q));
   }, [candidates, filter]);
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(filter.trim() !== '' ? resultCountMessage(t.a11y, shown.length) : null);
 
   const start = async (userId: string) => {
     setBusyId(userId);

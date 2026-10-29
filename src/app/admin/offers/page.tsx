@@ -12,6 +12,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { DECLINE_REASON_CODES, OFFER_STATUSES } from '@/lib/offers';
 import { OfferBenchmarkCard } from '@/components/OfferBenchmarkCard';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface OfferRow {
   id: string;
@@ -186,6 +187,10 @@ function OffersIndex() {
     if (days <= 7) return <span className="text-orange-600 dark:text-orange-400">· {a.expiresInDays.replace('{n}', String(days))}</span>;
     return null;
   };
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && [...searchParams.keys()].some((k) => k !== 'page') ? resultCountMessage(t.a11y, total) : null);
 
   return (
     <div className="space-y-6">

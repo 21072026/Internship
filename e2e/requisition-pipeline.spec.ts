@@ -127,6 +127,12 @@ test('a company moves only its own applicants, along the legal path, and a stale
   expect(stale.status()).toBe(409);
   expect((await stale.json()).code).toBe('stage_conflict');
   expect((await prisma.application.findUniqueOrThrow({ where: { id: app.id } })).stage).toBe('SHORTLISTED');
+  // The bus (#1998): one `application.stage_changed` for the one committed
+  // move — ids and stage keys only, nothing for the refused or stale calls.
+  const raised = await prisma.domainEvent.findMany({ where: { name: 'application.stage_changed', subjectId: app.id } });
+  expect(raised).toHaveLength(1);
+  expect(raised[0].payload).toEqual({ applicationId: app.id, requisitionId: reqA.id, from: 'APPLIED', to: 'SHORTLISTED' });
+  expect(raised[0]).toMatchObject({ actorId: companyAUserId, actorType: 'user', subjectType: 'Application' });
 });
 
 test('two concurrent moves yield one success and one 409; a rejection needs a disposition code', async () => {

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`mentorship.transferred` on the event bus (#1998, 4/n):** a new public catalogue event raised by `transferMentorship()` after its commit — `{ relationId, previousRelationId, menteeId, fromMentorId, toMentorId, mode, reasonCode }`, where `mode` is `corrected` (fixed in place, `previousRelationId` null) or `transferred` (the old pairing closed as `ENDED_REASSIGNED`, `relationId` is the successor). The reason travels as its code only; the admin's note stays in the activity log.",
+  "notes": {
+    "en": ["Webhooks now fire when a mentee's mentor is changed."],
+    "tr": ["Webhook'lar artık bir mentee'nin mentörü değiştirildiğinde tetikleniyor."],
+    "de": ["Webhooks werden jetzt ausgelöst, wenn der Mentor eines Mentees gewechselt wird."]
+  }
+}

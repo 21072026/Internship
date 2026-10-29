@@ -7,7 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { stageClockStopped } from '@/lib/stageClock';
-import { resolveStageSlas } from '@/lib/stageSla';
+import { loadStageSlaRows } from '@/lib/stageSla';
+import { slaDaysByStage } from '@/lib/stageSlaRule';
 import { computeSlaCompliance, type ComplianceResult } from '@/lib/slaCompliance';
 import { daysOverdue } from '@/lib/slaLadderRule';
 
@@ -135,8 +136,10 @@ export async function slaCompliance(
 ): Promise<SlaComplianceReport> {
   const to = now;
   const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  const [slas, stages] = await Promise.all([resolveStageSlas(orgId), resolvePipelineStages(orgId)]);
-  if (slas.size === 0) {
+  // Every row in every scope (#3204): an org whose only service levels are
+  // cohort or mentor overrides still has a compliance rate.
+  const [rows, stages] = await Promise.all([orgId ? loadStageSlaRows(orgId) : Promise.resolve([]), resolvePipelineStages(orgId)]);
+  if (rows.length === 0) {
     return { met: 0, total: 0, rate: null, byStage: [], from: from.toISOString(), to: to.toISOString(), days };
   }
   // Only relations that moved in the window; their whole history, because a
@@ -152,9 +155,26 @@ export async function slaCompliance(
     ),
     select: {
       startDate: true,
+      cohortId: true,
+      mentorId: true,
       statusChanges: { orderBy: { createdAt: 'asc' }, select: { fromStatus: true, toStatus: true, createdAt: true } },
     },
   });
-  const result = computeSlaCompliance(relations, slas, { from, to }, (key) => stageClockStopped(key, stages));
+  // Each relation is judged against ITS OWN resolved service levels — its
+  // CURRENT cohort and mentor (a transfer of a relation with history starts a
+  // new relation, #2289, so moves stay with the mentor they happened under).
+  // Memoised per
+  // scope: one resolution per (cohort, mentor) pair, not per relation.
+  const byScope = new Map<string, Map<string, number>>();
+  const slasFor = (r: { cohortId?: string | null; mentorId?: string | null }) => {
+    const key = `${r.cohortId ?? ''}|${r.mentorId ?? ''}`;
+    let hit = byScope.get(key);
+    if (!hit) {
+      hit = slaDaysByStage(rows, { cohortId: r.cohortId, mentorId: r.mentorId });
+      byScope.set(key, hit);
+    }
+    return hit;
+  };
+  const result = computeSlaCompliance(relations, slasFor, { from, to }, (key) => stageClockStopped(key, stages));
   return { ...result, from: from.toISOString(), to: to.toISOString(), days };
 }

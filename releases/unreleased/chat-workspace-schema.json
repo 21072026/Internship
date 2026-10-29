@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Chat apps data model (#1934):** three additive, tenant-anchored models for the Slack / Teams adapters — `ChatWorkspace` (installed workspace, sealed bot/refresh tokens, granted scope, the per-workspace `enabled` kill switch, `lastError`/`lastDeliveryAt`), `ChatIdentity` (CRM user ↔ chat member, `@@unique([workspaceId, externalUserId])`, `verifiedAt`) and `ChatDelivery` (append-only ledger, never the card body), all in `TENANT_MODELS`. `src/lib/chat/tokens.ts` seals tokens through secretBox under dedicated purposes (`chat-bot-token`, `chat-refresh-token`)."
+}

@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { setSetting } from '@/lib/settings';
+import { writeSetting } from '@/lib/settingsWrite';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { logActivity } from '@/lib/activity';
 import { crmBccState } from '@/lib/crmBcc';
@@ -40,9 +40,9 @@ export async function POST(request: Request) {
       const orgId = await settingsOrgOf(session);
       const { action } = parsed.data;
       if (action === 'rotate') {
-        await setSetting('crmBccVersion', nextCrmBccVersion(await resolveSettingRaw('crmBccVersion', { orgId })), orgId);
+        await writeSetting('crmBccVersion', nextCrmBccVersion(await resolveSettingRaw('crmBccVersion', { orgId })), orgId, { actor: { id: session.user.id, email: session.user.email } });
       } else {
-        await setSetting('crmBccEnabled', action === 'enable' ? 'true' : action === 'disable' ? 'false' : '', orgId);
+        await writeSetting('crmBccEnabled', action === 'enable' ? 'true' : action === 'disable' ? 'false' : '', orgId, { actor: { id: session.user.id, email: session.user.email } });
       }
       await logActivity({
         action: `crmBcc.${action}`,
