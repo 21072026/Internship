@@ -45,7 +45,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -139,6 +139,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'publicProfiles', category: 'platform', icon: Share2, color: 'blue', capability: 'mentorship', title: C.publicProfiles.t, desc: C.publicProfiles.d },
     { key: 'stories', category: 'trust', icon: Quote, color: 'rose', capability: 'evaluations', title: C.stories.t, desc: C.stories.d },
     { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', capability: 'mentorship', title: C.newsletter.t, desc: C.newsletter.d },
+    // Admin-authored nudges (#1684/#1686): reminders to mentors and mentees — mentorship only.
+    { key: 'nudges', category: 'collaboration', icon: BellRing, color: 'amber', capability: 'mentorship', title: C.nudges.t, desc: C.nudges.d },
     { key: 'inviteLinks', category: 'tracking', icon: Link2, color: 'teal', title: C.inviteLinks.t, desc: C.inviteLinks.d },
     { key: 'invitationBoard', category: 'tracking', icon: MailCheck, color: 'blue', title: C.invitationBoard.t, desc: C.invitationBoard.d },
     { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', capability: 'placements', title: C.outcomeComms.t, desc: C.outcomeComms.d },
