@@ -22,7 +22,9 @@ export type SkipReason =
   // confirmed identity any more, or their workspace's admin disabled it.
   | 'chat_apps_off'
   | 'no_identity'
-  | 'workspace_disabled';
+  | 'workspace_disabled'
+  // The push adapter's (#1715): no subscribed browser and no app install.
+  | 'no_device';
 
 /** One claimed delivery, everything a channel needs to perform it. */
 export interface ChannelDelivery {
