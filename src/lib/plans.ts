@@ -347,6 +347,18 @@ export function planIncludingFeature(feature: PremiumFeature, audience: PlanAudi
   return PLANS.find((p) => p.audience === audience && p.features.includes(feature))?.key ?? null;
 }
 
+// The cheapest programme plan that fits a programme of this size — active
+// pairs and admin seats — for the public ROI calculator's cost side (#1755).
+// `null` limits are unlimited. Enterprise fits everything, so this never
+// returns undefined for a PROGRAM audience.
+export function smallestProgramPlanFor(need: { activePairs: number; adminSeats: number }): Plan {
+  const fits = (limit: number | null, wanted: number) => limit === null || wanted <= limit;
+  return (
+    PLANS.find((p) => p.audience === 'PROGRAM' && fits(p.limits.activePairs, need.activePairs) && fits(p.limits.adminSeats, need.adminSeats)) ??
+    (BY_KEY.get('enterprise') as Plan)
+  );
+}
+
 // ── Entitlement resolution — the one function ────────────────────────────────
 //
 // Every entitlement answer in the product comes from here. A feature check

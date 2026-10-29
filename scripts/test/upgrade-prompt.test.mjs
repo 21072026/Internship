@@ -58,3 +58,12 @@ test('plan names: legacy values map to the catalogue name', () => {
   assert.equal(planDisplayName('FREE'), 'Community');
   assert.equal(planDisplayName('UNKNOWN'), 'UNKNOWN');
 });
+
+// The ROI calculator's cost side (#1755) reads the same catalogue.
+const { smallestProgramPlanFor } = await import('../../src/lib/plans.ts');
+test('plan fit: the cheapest programme plan with room for the pairs and the admin seats', () => {
+  assert.equal(smallestProgramPlanFor({ activePairs: 10, adminSeats: 1 }).key, 'community');
+  assert.equal(smallestProgramPlanFor({ activePairs: 26, adminSeats: 1 }).key, 'program');
+  assert.equal(smallestProgramPlanFor({ activePairs: 10, adminSeats: 3 }).key, 'program');
+  assert.equal(smallestProgramPlanFor({ activePairs: 401, adminSeats: 1 }).key, 'enterprise');
+});
