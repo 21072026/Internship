@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { AI_PACK_FEATURE, runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
@@ -18,6 +16,7 @@ import { hashInput } from '@/lib/ai/artifacts';
 import { skillOverlap } from '@/lib/skillTaxonomyRule';
 import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
 import { getLocale } from '@/i18n/server';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({
   menteeId: z.string().min(1),
@@ -54,10 +53,9 @@ function decodeRanking(content: string): Ranking {
 // metering in src/lib/aiGate.ts — a bookkeeping failure must never cost the
 // admin their suggestions.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const userLimited = enforceRateLimit(request, 'ai:mentor_match', {
     ...AI_RATE_LIMITS.mentor_match,

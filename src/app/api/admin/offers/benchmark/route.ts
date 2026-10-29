@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { BENCHMARK_MIN_BUCKET, benchmarkBuckets, normalizeToMonthlyMinor, type BenchmarkInput } from '@/lib/compensation';
+import { requirePermission } from '@/lib/authz';
 
 // The offer benchmark read model (#1851): what accepted offers for a position
 // pay, as count / median / p25 / p75 of the base pay normalised to a month.
@@ -23,9 +22,9 @@ import { BENCHMARK_MIN_BUCKET, benchmarkBuckets, normalizeToMonthlyMinor, type B
 const BENCHMARK_SCAN = 5000;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const sp = new URL(request.url).searchParams;

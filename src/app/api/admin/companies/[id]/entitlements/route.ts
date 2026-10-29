@@ -1,15 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCompanyFeatureSources, type FeatureSource, type PremiumFeature } from '@/lib/entitlements';
 import { withTenantScope } from '@/lib/orgContext';
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
+import { requirePermission } from '@/lib/authz';
 
 // The resolved map ({ FEATURE: boolean } — org plan/grant OR the company's own
 // override) plus where each answer comes from, so the grid can tell "included
@@ -22,8 +15,9 @@ async function featurePayload(companyId: string) {
 
 // GET — the company's premium feature map and its sources.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('company.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
   const { id } = await params;
   const company = await prisma.company.findUnique({ where: { id }, select: { id: true } });

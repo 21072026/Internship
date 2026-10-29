@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin routes behind the permission layer — programmes & companies (#1571, story #1565):** `/api/admin/programs/[id]/journey/**`, `matching/{rule-sets,simulate}`, `mentor-suggest` (+ feedback), `mentorship-requests` (PUT → `relation.write`), `companies/[id]/{channels,contact-permission,entitlements}`, `company-contacts/forget`, `company-inquiries` (+ convert) and `offers/benchmark` authorize through `requirePermission()` (`program.read/write`, `relation.write`, `company.read/write`). Four private `requireAdmin()` helpers are gone; the `mentorship`/`companies` capability checks after the gate stay. A signed-in non-admin gets 403 instead of 401."
+}

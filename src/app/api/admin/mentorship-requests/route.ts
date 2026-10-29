@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { decideMentorshipRequest } from '@/lib/mentorshipDecision';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
+import { requirePermission } from '@/lib/authz';
 
 // Admin queue for mentee mentorship requests (#590): list PENDING requests,
 // approve (pick a mentor → MentorshipRelation) or reject. The mentee is
@@ -24,10 +23,9 @@ import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
 const REMATCH_STATS_DAYS = 90;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Mentorship requests only exist in a vertical with mentors (#2351): closed,
   // reads included, for every other one.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
@@ -115,10 +113,9 @@ const decideSchema = z.object({
 // PUT — decide a request. Approving requires a mentorId and creates the
 // MentorshipRelation (unless the mentee got one in the meantime).
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('relation.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Mentorship requests only exist in a vertical with mentors (#2351): closed,
   // reads included, for every other one.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
