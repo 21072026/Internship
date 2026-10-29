@@ -51,6 +51,9 @@ export default function AdminSettingsPage() {
   const [notificationRetentionDays, setNotificationRetentionDays] = useState('180');
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
+  // Notification blackout days (#1714).
+  const [blackoutDates, setBlackoutDates] = useState('');
+  const [blackoutWeekends, setBlackoutWeekends] = useState(false);
   const [require2fa, setRequire2fa] = useState('off');
   // The policy as last loaded/saved, the coverage rows the card reported, and
   // whether a stricter switch is waiting for the admin's confirmation (#1644).
@@ -270,6 +273,8 @@ export default function AdminSettingsPage() {
     setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
     setSupportEmail(settings.supportEmail ?? '');
     setWeeklyDigest(settings.weeklyDigest !== 'false');
+    setBlackoutDates(settings.notificationBlackoutDates ?? '');
+    setBlackoutWeekends(settings.notificationBlackoutWeekends === 'true');
     setRequire2fa(settings.require2fa ?? 'off');
     setLoadedRequire2fa(settings.require2fa ?? 'off');
     setSelfRegistration(settings.selfRegistration ?? 'auto');
@@ -384,7 +389,7 @@ export default function AdminSettingsPage() {
     const approvalChanged = hasTrialStage && outboundApproval !== loadedOutboundApproval;
     setSavingSettings(true);
     try {
-      const payload: Record<string, string> = { reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
+      const payload: Record<string, string> = { reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates.trim(), notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
       const changed = Object.fromEntries(Object.entries(payload).filter(([k, v]) => v !== loadedRaw[k]));
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -479,6 +484,15 @@ export default function AdminSettingsPage() {
               {t.settings.weeklyDigest}
             </label>
             <SettingProvenance settingKey="weeklyDigest" source={sources.weeklyDigest} onReverted={load} />
+            <div>
+              <Input label={t.settings.notificationBlackoutDates} value={blackoutDates} onChange={(e) => setBlackoutDates(e.target.value)} hint={t.settings.notificationBlackoutDatesHint} placeholder="2026-12-24, 2026-12-31" data-testid="notification-blackout-dates" />
+              <SettingProvenance settingKey="notificationBlackoutDates" source={sources.notificationBlackoutDates} onReverted={load} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={blackoutWeekends} onChange={(e) => setBlackoutWeekends(e.target.checked)} data-testid="notification-blackout-weekends" />
+              {t.settings.notificationBlackoutWeekends}
+            </label>
+            <SettingProvenance settingKey="notificationBlackoutWeekends" source={sources.notificationBlackoutWeekends} onReverted={load} />
             <div>
               <label htmlFor="self-registration" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.selfRegistration}</label>
               <select
