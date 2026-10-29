@@ -3,6 +3,7 @@ import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
 import { productNameForOrg } from '@/lib/orgBrand';
 import { meetingEnd } from '@/lib/meetingDuration';
+import { MEET_NOTE_PREFIX } from '@/lib/conferenceGeneration';
 
 /**
  * Pushing meetings into connected users' own Google Calendars (#709).
@@ -108,7 +109,14 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
     }
     await prisma.googleCalendarConnection.update({
       where: { id: auth.connectionId },
-      data: { lastSyncAt: new Date(), lastError: null },
+      data: { lastSyncAt: new Date() },
+    }).catch(() => {});
+    // A successful mirror clears a mirror error, never a Meet-generation note
+    // (#2009): that one says why the meeting got another room, and the push
+    // that follows it in the same request would otherwise erase it at once.
+    await prisma.googleCalendarConnection.updateMany({
+      where: { id: auth.connectionId, NOT: { lastError: { startsWith: MEET_NOTE_PREFIX } } },
+      data: { lastError: null },
     }).catch(() => {});
     pushed++;
   }

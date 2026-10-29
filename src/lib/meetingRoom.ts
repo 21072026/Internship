@@ -16,6 +16,7 @@ import { recordVideoUsage } from '@/lib/metering';
 import { prisma } from '@/lib/prisma';
 import { toVerticalKey } from '@/lib/verticals';
 import { brandForOrg, defaultBrand, productNameIn } from '@/lib/orgBrand';
+import { generateProviderConference, providerAvailableFor, type ConferenceContext, type GeneratedConference } from '@/lib/conferenceGeneration';
 
 // Where a meeting's video room comes from. Server-only (node:crypto); the
 // client-side link *checks* live in @/lib/meetingLink so components can import
@@ -136,7 +137,9 @@ export function checkPastedMeetingLink(raw: string | null | undefined): External
 }
 
 export type MeetingLinkOutcome =
-  | { ok: true; link: string; source: MeetingLinkSource }
+  // `conference` is set only for source 'provider': the organiser's calendar
+  // event that carries the room, for adoptProviderEvent().
+  | { ok: true; link: string; source: MeetingLinkSource; conference?: GeneratedConference }
   // A supplied link we will not send people to (http, credentials, our own
   // host, too long for the column). `reason` is the rule's word for why.
   | { ok: false; code: 'invalid_link'; reason: ExternalLinkRefusal }
@@ -192,6 +195,11 @@ export async function resolveMeetingLink(opts: {
   orgId?: string | null;
   organizerId?: string | null;
   pastedLink?: string | null;
+  /**
+   * The meeting's slot, for GENERATE_PROVIDER (#2009). Only a timed meeting
+   * can carry a calendar-generated room; omitted, that level is skipped.
+   */
+  conference?: ConferenceContext | null;
 }): Promise<MeetingLinkOutcome> {
   const pasted = opts.pastedLink?.trim();
   if (pasted) {
@@ -217,7 +225,15 @@ export async function resolveMeetingLink(opts: {
   ]);
   const policy = conferencingPolicyOf(org?.conferencingPolicy);
   const personalCheck = organizer?.personalMeetingUrl ? checkPastedMeetingLink(organizer.personalMeetingUrl) : null;
-  const choice = chooseMeetingLinkSource({ policy, personal: personalCheck?.ok ? personalCheck.url : null });
+  const personal = personalCheck?.ok ? personalCheck.url : null;
+  const providerAvailable = policy === 'GENERATE_PROVIDER' && Boolean(opts.conference) && (await providerAvailableFor(opts.organizerId));
+  let choice = chooseMeetingLinkSource({ policy, personal, providerAvailable });
+  if ('source' in choice && choice.source === 'provider') {
+    const generated = await generateProviderConference(opts.organizerId as string, opts.conference as ConferenceContext);
+    if (generated) return { ok: true, link: generated.link, source: 'provider', conference: generated };
+    // Google said no or was too slow: the same choice without that level.
+    choice = chooseMeetingLinkSource({ policy, personal, providerAvailable: false });
+  }
   if ('refused' in choice) return { ok: false, code: choice.refused };
   if (choice.source === 'personal') return { ok: true, link: choice.link, source: 'personal' };
 
