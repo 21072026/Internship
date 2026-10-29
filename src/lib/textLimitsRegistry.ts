@@ -296,6 +296,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
     publicHostToken: SERVER_SET,
     archivedById: SERVER_SET,
+    deletionRequestedById: SERVER_SET,
     name: { exempt: 'capped at 120 by the create schema and by planRename() (#1582); written by a super-admin only' },
     slug: { exempt: 'slugified and sliced to 60 (slugifyOrg) before it is written, on create and on rename (#1582)' },
     vertical: ENUMERATED,
