@@ -126,6 +126,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'offers', category: 'tracking', icon: Briefcase, color: 'orange', capability: 'placements', title: C.offers.t, desc: C.offers.d },
     { key: 'weeklyReports', category: 'tracking', icon: NotebookPen, color: 'teal', capability: 'evaluations', title: C.weeklyReports.t, desc: C.weeklyReports.d },
     { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', capability: 'placements', title: C.requisitions.t, desc: C.requisitions.d },
+    { key: 'requisitionFit', category: 'companies', icon: Target, color: 'purple', capability: 'placements', title: C.requisitionFit.t, desc: C.requisitionFit.d },
     { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', capability: 'placements', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
     { key: 'externalGuests', category: 'collaboration', icon: UserPlus, color: 'amber', title: C.externalGuests.t, desc: C.externalGuests.d },
