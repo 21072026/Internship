@@ -1,7 +1,7 @@
 import { test, expect, request as playwrightRequest, type APIRequestContext } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import { prisma, seedUser, setOrgFeature, uniqueEmail } from './helpers/db';
-import { signInViaApi } from './helpers/auth';
+import { gotoSettled, signInViaApi } from './helpers/auth';
 
 // Self-served company API keys (#2006). A COMPANY owner mints a key bound to
 // their own company; its scopes never exceed the company ceiling (above → 403,
@@ -121,4 +121,23 @@ test('a company owner mints a key for its own hiring records only; the ceiling a
   expect((await a.delete(`${url}?id=${keyId}`)).status()).toBe(200);
   expect(await prisma.activityLog.count({ where: { action: 'apikey.revoked', targetId: keyId, level: 'WARNING' } })).toBe(1);
   expect((await request.get('/api/v1/requisitions', { headers: auth })).status()).toBe(401);
+});
+
+test('the company integrations page creates a key, shows it once and revokes it', async ({ page }) => {
+  // The page's own cookie jar, signed in through the API (the redirect-driven
+  // browser sign-in is not what this test is about).
+  expect((await signInViaApi(page.request, emails.b, PW)).ok).toBe(true);
+  await gotoSettled(page, '/company/integrations');
+  await page.getByTestId('company-key-name').fill('Payroll bridge');
+  await page.getByTestId('company-key-create').click();
+  const fresh = page.getByTestId('company-key-fresh');
+  await expect(fresh).toBeVisible();
+  await expect(fresh.locator('code')).toHaveText(/^\S{20,}$/);
+  const row = await prisma.apiKey.findFirstOrThrow({ where: { orgId, name: 'Payroll bridge' } });
+  expect(row.companyId).toBe(companyBId);
+  expect(row.expiresAt).not.toBeNull();
+  page.once('dialog', (d) => d.accept());
+  await page.getByTestId(`company-key-revoke-${row.id}`).click();
+  await expect(page.getByTestId(`company-key-revoke-${row.id}`)).toHaveCount(0);
+  expect((await prisma.apiKey.findUniqueOrThrow({ where: { id: row.id } })).revokedAt).not.toBeNull();
 });
