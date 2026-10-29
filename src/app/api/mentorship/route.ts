@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
@@ -54,6 +55,10 @@ export async function GET(request: Request) {
     if (session.user.role === 'COMPANY' && !companyOrgId) {
       return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     }
+    // Does this caller read as an admin (the org-wide agreement column, the
+    // re-engagement flag)? The permission rule answers, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
     // Bind the request's tenant so every query below is auto-scoped once
     // MT_ENFORCE_ISOLATION is on (no-op while it's off). See orgContext.ts (#543).
@@ -64,7 +69,7 @@ export async function GET(request: Request) {
     // The mentoring agreement column and filter (#1792) — ADMIN only, and only
     // in a vertical with pairs. A report, never a gate on the relation.
     const agreementParam = searchParams.get('agreement');
-    const showsAgreement = session.user.role === 'ADMIN' && (await shellCapabilities(session.user.orgId)).includes('mentorship');
+    const showsAgreement = isAdmin && (await shellCapabilities(session.user.orgId)).includes('mentorship');
     const activeAgreement = showsAgreement ? await getActiveAgreement(resolveOrgId(session)) : null;
     // Pagination is opt-in: only applied when `page` is explicitly passed, so
     // the many callers that expect the full list (board views, mentee/mentor
@@ -154,7 +159,7 @@ export async function GET(request: Request) {
     // only the boolean ships, and only to the two roles that can already list
     // the pool through GET /api/re-engagement, so COMPANY and SOURCE callers
     // see exactly the payload they saw before.
-    const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+    const seesPool = isAdmin || session.user.role === 'MENTOR';
     const withStageClock = <
       T extends { mentorId: string; startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
     >(
@@ -205,11 +210,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('relation.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const body = await request.json();

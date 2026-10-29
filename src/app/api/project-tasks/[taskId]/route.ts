@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { z } from 'zod';
 import { canManageProject, isProjectMember, isProjectOwner } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
@@ -101,9 +102,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
   // "Lead" is whoever the to-do is answerable to: the project's owner, or — with
   // no project above it — whoever put it on the list. A to-do you wrote yourself
   // makes you both, which is why your own lines stay fully yours.
+  // Admin reach from the permission rule, not the role string (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'program.write', undefined, session));
   const lead = task.projectId
     ? await isProjectOwner(session.user, task.projectId)
-    : task.createdById === session.user.id || session.user.role === 'ADMIN';
+    : task.createdById === session.user.id || isAdmin;
   const mine = task.assigneeId === session.user.id;
 
   if (parsed.data.title !== undefined) {
@@ -212,9 +216,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     if (capGate) return capGate;
   }
 
+  // Admin reach from the permission rule, not the role string (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'program.write', undefined, session));
   const lead = task.projectId
     ? await isProjectOwner(session.user, task.projectId)
-    : task.createdById === session.user.id || session.user.role === 'ADMIN';
+    : task.createdById === session.user.id || isAdmin;
   // `!lead` first (#2270): the mentee carve-out is about a plain *member*, and
   // reading the role string alone locked a MENTEE **owner** out of to-dos on
   // their own project — including ones they wrote themselves. Mentor/admin
