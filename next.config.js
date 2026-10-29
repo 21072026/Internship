@@ -1,59 +1,15 @@
 /** @type {import('next').NextConfig} */
 
-// Pragmatic CSP: same-origin by default; allow inline/eval for Next's runtime
-// and styles, data:/blob: images (avatars, CV object URLs, CSV downloads).
-// The tawk.to live chat (#1174) is loaded on the landing page only, and only
-// after the visitor accepts marketing cookies — but CSP headers are per-request,
-// not per-component, so the hosts have to be allowed app-wide. Nothing is
-// fetched from them until the consent gate in src/components/TawkChat.tsx opens.
-const TAWK = 'https://*.tawk.to';
-// The chat's emoji picker is loaded from jsdelivr rather than from tawk's own
-// CDN. Pinned to that one path prefix — allowing all of cdn.jsdelivr.net would
-// mean allowing anything anyone has ever published to npm.
-const TAWK_EMOJI = 'https://cdn.jsdelivr.net/emojione/';
-// Our JaaS (Jitsi as a Service) tenant, #1237. Two things need it: the meeting
-// panel loads `<appId>/external_api.js` from this host (script-src), and that
-// script then builds the call as an iframe on the same host (frame-src). Listed
-// unconditionally rather than behind the JAAS_* env: these headers are baked at
-// build time and the credentials only exist at runtime. One exact host, and the
-// same one Permissions-Policy hands camera/microphone to.
-const JAAS = 'https://8x8.vc';
-
-// Growth analytics (#1242). Narrowed to the providers this build actually has:
-// NEXT_PUBLIC_* vars are inlined at build time, so unlike the JaaS host above we
-// CAN know here whether a provider is in play. A deployment with no analytics
-// configured therefore ships a CSP that allows no analytics host at all —
-// which was the objection that held #1221 back.
-const { analyticsCspHosts } = require('./src/lib/analyticsCsp.cjs');
-const ANALYTICS = analyticsCspHosts(process.env);
-const analyticsScript = ANALYTICS.script.join(' ');
-const analyticsConnect = ANALYTICS.connect.join(' ');
-
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${JAAS} ${TAWK} ${TAWK_EMOJI}${analyticsScript ? ` ${analyticsScript}` : ''}`,
-  `style-src 'self' 'unsafe-inline' ${TAWK} ${TAWK_EMOJI}`,
-  `img-src 'self' data: blob: ${TAWK} ${TAWK_EMOJI}`,
-  `font-src 'self' ${TAWK}`,
-  // wss: too — the chat holds a websocket open for incoming messages.
-  `connect-src 'self' ${TAWK} wss://*.tawk.to${analyticsConnect ? ` ${analyticsConnect}` : ''}`,
-  // The chat plays a notification sound; media-src has no fallback here other
-  // than default-src 'self', which would block it.
-  `media-src 'self' ${TAWK}`,
-  // The in-app meeting side panel embeds the Jitsi room we generate (#1054) —
-  // narrow on purpose: only the hosts we actually create links for, and only
-  // those hosts are allowed camera/microphone below (keep this in sync with
-  // EMBEDDABLE_MEETING_HOSTS in src/lib/meetingLink.ts). meet.jit.si carries
-  // group/bulk meetings and recurring series (hybrid routing — JaaS is 1:1
-  // only, src/lib/meetingRoom.ts), rooms created before the JaaS switch, and
-  // the free-room fallback when a JaaS call fails. The chat widget renders
-  // itself in an iframe, hence tawk.to here as well.
-  `frame-src 'self' https://meet.jit.si ${JAAS} ${TAWK}`,
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join('; ');
+// The Content-Security-Policy lives in src/lib/cspPolicy.cjs (#1552), which
+// also builds the strict nonce policy src/middleware.ts sends report-only on
+// page requests — one set of host lists, so the two cannot drift. This is the
+// ENFORCED policy: same-origin by default, inline/eval still allowed for
+// scripts until the report-only stream says the strict one is safe.
+//
+// Growth analytics (#1242): NEXT_PUBLIC_* vars are inlined at build time, so the
+// policy names only the providers this build actually has.
+const { buildCsp, JAAS } = require('./src/lib/cspPolicy.cjs');
+const csp = buildCsp(process.env);
 
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: csp },

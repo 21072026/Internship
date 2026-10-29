@@ -115,7 +115,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     bulk: false,
     categories: [
       'mentorship-request', 'mentorship-decision', 'mentor-assigned',
-      'mentee-assigned', 'mentor-application', 'goals-evaluation',
+      'mentee-assigned', 'mentor-application', 'goals-evaluation', 'mentor-offer',
     ],
     legacy: ['mentorship', 'goalsEvaluations'],
   },

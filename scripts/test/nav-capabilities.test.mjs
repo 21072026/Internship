@@ -51,16 +51,29 @@ test('every untagged link survives every vertical', () => {
 });
 
 test('a super-admin-only link is shown to a super admin alone (#1575)', () => {
-  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.superAdminOnly).map((l) => l.href), ['/admin/api-explorer', '/admin/operations']);
+  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.superAdminOnly).map((l) => l.href), ['/admin/api-explorer']);
   for (const caps of [INTERNSHIP, MARKETING]) {
-    for (const href of ['/admin/api-explorer', '/admin/operations']) {
-      assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps).some((l) => l.href === href));
-      assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: false }).some((l) => l.href === href));
-      assert.ok(visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: true }).some((l) => l.href === href));
-    }
+    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps).some((l) => l.href === '/admin/api-explorer'));
+    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: false }).some((l) => l.href === '/admin/api-explorer'));
+    // An operator who is not a super admin (the default org's ADMIN) does not get it.
+    assert.ok(!visibleNavLinks(ADMIN_NAV_LINKS, caps, { operator: true }).some((l) => l.href === '/admin/api-explorer'));
+    assert.ok(visibleNavLinks(ADMIN_NAV_LINKS, caps, { superAdmin: true }).some((l) => l.href === '/admin/api-explorer'));
   }
   assert.deepEqual(MENTOR_NAV_LINKS.filter((l) => l.superAdminOnly), []);
   assert.deepEqual(PORTAL_NAV_LINKS.filter((l) => l.superAdminOnly), []);
+});
+
+test('an operator-only link is shown to a super admin or the default org ADMIN (#1607)', () => {
+  assert.deepEqual(ADMIN_NAV_LINKS.filter((l) => l.operatorOnly).map((l) => l.href), ['/admin/operations']);
+  for (const caps of [INTERNSHIP, MARKETING]) {
+    const shown = (opts) => visibleNavLinks(ADMIN_NAV_LINKS, caps, opts).some((l) => l.href === '/admin/operations');
+    assert.equal(shown(undefined), false);
+    assert.equal(shown({ superAdmin: false, operator: false }), false);
+    assert.equal(shown({ operator: true }), true);
+    assert.equal(shown({ superAdmin: true }), true);
+  }
+  assert.deepEqual(MENTOR_NAV_LINKS.filter((l) => l.operatorOnly), []);
+  assert.deepEqual(PORTAL_NAV_LINKS.filter((l) => l.operatorOnly), []);
 });
 
 test('MARKETING drops the mentorship/placement/sourcing admin links, keeps the rest', () => {

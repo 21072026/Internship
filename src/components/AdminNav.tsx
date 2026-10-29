@@ -7,14 +7,22 @@ import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { useT } from '@/i18n/client';
-import { ADMIN_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
+import { ADMIN_NAV_LINKS, navAudienceAllows, visibleNavLinks } from '@/lib/navLinks';
 import type { VerticalCapability } from '@/lib/verticals';
 import { OutboxBadge, useOutboxPending } from '@/components/outbox/OutboxBadge';
 
 // The route list itself lives in lib/navLinks — shared with the command
 // palette's "Go to" group (#2079), so the two can never drift apart.
 
-export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: readonly VerticalCapability[]; superAdmin?: boolean }) {
+export function AdminNav({
+  capabilities,
+  superAdmin = false,
+  operator = false,
+}: {
+  capabilities?: readonly VerticalCapability[];
+  superAdmin?: boolean;
+  operator?: boolean;
+}) {
   const t = useT();
   // The vertical's capability set, resolved by the layout (#2351). Undefined
   // means "not passed" — treated as the full product, so nothing is hidden by
@@ -22,9 +30,9 @@ export function AdminNav({ capabilities, superAdmin = false }: { capabilities?: 
   const LINKS = useMemo(
     () =>
       capabilities
-        ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities, { superAdmin })
-        : ADMIN_NAV_LINKS.filter((l) => !l.superAdminOnly || superAdmin),
-    [capabilities, superAdmin],
+        ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities, { superAdmin, operator })
+        : ADMIN_NAV_LINKS.filter((l) => navAudienceAllows(l, { superAdmin, operator })),
+    [capabilities, superAdmin, operator],
   );
   const pathname = usePathname();
   const [q, setQ] = useState('');

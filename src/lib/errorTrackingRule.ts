@@ -85,6 +85,19 @@ export function parseDsn(raw: string | undefined | null): ParsedDsn | null {
   };
 }
 
+/**
+ * Where an operator opens the tracker (#1607): the DSN's origin and path prefix
+ * — never the public key, never the project id. Null when the DSN would not
+ * parse, so a console only links to a tracker this deployment actually sends to.
+ */
+export function trackerOrigin(raw: string | undefined | null): string | null {
+  if (!parseDsn(raw)) return null;
+  const u = new URL((raw || '').trim());
+  const parts = u.pathname.split('/').filter(Boolean);
+  parts.pop();
+  return `${u.protocol}//${u.host}${parts.length ? `/${parts.join('/')}` : ''}`;
+}
+
 export interface StackFrame {
   filename: string;
   function: string;

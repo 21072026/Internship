@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate overview tab (#3173):** `/admin/affiliates` replaces the #3112 placeholder with the programme's real state — partners per state, referred customers, commission totals per status, payouts and the latest one — read through `GET /api/admin/affiliate/overview` (`affiliate.read`, OBSERVER included) from `src/lib/affiliateOverview.ts`: six aggregate queries whatever the programme's size, the commission totals being the Commissions tab's own groupBy and the latest payout the Payouts tab's first row. Shortcuts open the pending commissions (`/admin/affiliates/commissions?status=…`, which the Commissions tab now reads) and the payouts tab; an unfinished setup (plan, contract, first partner) shows its steps. `e2e/affiliate-overview.spec.ts` compares the totals with the two tabs' APIs, counts the queries at 1 and 25 partners and walks the screen.",
+  "notes": {
+    "en": ["Affiliate programme: the Overview tab now shows your partners, customers, commission totals and the latest payout, with shortcuts to the commissions waiting for you — and the setup steps while the programme is new."],
+    "tr": ["Affiliate programı: Genel bakış sekmesi artık partnerleri, müşterileri, komisyon toplamlarını ve son payout'u gösteriyor; onay bekleyen komisyonlara kısayol var, yeni bir programda ise kurulum adımları görünüyor."],
+    "de": ["Partnerprogramm: Die Übersicht zeigt jetzt Partner, Kunden, Provisionssummen und die letzte Auszahlung, mit Abkürzungen zu den offenen Provisionen – und die Einrichtungsschritte, solange das Programm neu ist."]
+  }
+}

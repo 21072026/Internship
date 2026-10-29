@@ -220,6 +220,30 @@ A full snapshot of one resource without walking the cursor:
 |---|---|---|
 | `candidates` key on `GET /api/v1/candidates` (alias of `data`) | #1988 | 2027-01-31 |
 
+## Published contracts (#1611)
+
+Two tests stop a field rename from shipping green and silently breaking an integrator:
+
+- **Responses** — `e2e/api-v1-response-contract.spec.ts` (`@smoke`) fetches EVERY GET operation
+  in the served `/api/v1/openapi.json` with a key holding exactly the scopes those operations
+  declare, and validates each body against that operation's own 200 schema with a strict
+  validator (`e2e/helpers/strictSchema.ts`): every `required` key present and typed, and **no
+  key the schema does not list**. A new GET path fails it until a row is seeded for it.
+- **Webhooks** — each public event's payload is published under `x-webhooks.payloads`
+  (`name@version` → JSON Schema of `data`, from the catalogue's zod schema via
+  `src/lib/events/payloadSchema.ts`). `scripts/test/webhook-contract.test.mjs` compares them
+  with the committed `scripts/test/fixtures/webhook-payloads.json` and checks the delivery
+  itself: body `{ event, data, sentAt }`, `X-Signature` = hex HMAC-SHA256 of exactly that body
+  under the hook secret, `X-Event`, `X-Delivery-Id`.
+
+When one of them goes red, the fix is never to edit the test until it agrees with the code:
+
+- a **new** field in a response is documented in the schema in the same PR (additive);
+- a **renamed or removed** field, or any webhook payload change, is a breaking change: add a
+  new version (`version: 2` in `src/lib/events/catalog.ts`; a new field next to the old one with
+  an entry under § Deprecations), and record a new event version in the fixture with
+  `UPDATE_WEBHOOK_CONTRACT=1 npm run test:unit`.
+
 ## Adding an endpoint
 
 1. A scope in `API_SCOPES` with its `SCOPE_ENTITLEMENT` entry (`src/lib/apiScopes.ts`).
@@ -228,5 +252,6 @@ A full snapshot of one resource without walking the cursor:
    error.
 3. The path in `src/app/api/v1/openapi.json/route.ts`, reusing the
    `Limit`/`Cursor`/`UpdatedSince` parameters and the shared error responses.
-4. An e2e spec; a security boundary (scope, tenant) is tagged `@smoke`.
+4. An e2e spec; a security boundary (scope, tenant) is tagged `@smoke`. A new GET is picked up
+   by the response-contract spec automatically. Seed it a row there (§ Published contracts).
 5. Never add `/api/v1/*` to a k6 scenario (rate-limited, one shared runner IP).

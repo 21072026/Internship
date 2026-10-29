@@ -6,8 +6,10 @@ import { REMEMBER_COOKIES, REMEMBER_HINT_COOKIE, clearRememberCookies } from '@/
 import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/requestId';
 import { hostnameOf, servedHosts } from '@/lib/servedHosts';
 import { writeOriginVerdict } from '@/lib/writeOrigin';
+import { bodyLimitVerdict } from '@/lib/bodyLimitRule';
 import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, splitLocalePrefix } from '@/lib/localePath';
 import type { Locale } from '@/i18n/config';
+import { buildCsp } from '@/lib/cspPolicy.cjs';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -56,7 +58,10 @@ function isAllowlisted(pathname: string) {
     // Public profile view counter.
     pathname === '/api/profile-view' ||
     // Inbound email bridge (authenticated by HMAC reply token + shared secret).
-    pathname === '/api/inbound-email'
+    pathname === '/api/inbound-email' ||
+    // CSP violation reports (#1552): the browser sends them by itself, for an
+    // unverified account's pages too. Exact path.
+    pathname === '/api/csp-report'
   );
 }
 
@@ -121,22 +126,63 @@ function pageRouting(pathname: string): PageRouting | null {
   return { locale: null, path: pathname, rewriteTo: null };
 }
 
+/**
+ * The strict CSP, report-only, on every page request (#1552,
+ * src/lib/cspPolicy.cjs). A fresh nonce per request goes into the policy and
+ * into `x-nonce`; the policy rides on the REQUEST too, because that is where
+ * Next.js reads the nonce to stamp its own <script> tags (it accepts the
+ * report-only header for that). The browser enforces nothing from it — the
+ * enforced policy is still next.config.js's — it only reports to
+ * /api/csp-report what the strict one would block. `CSP_REPORT_ONLY=0` turns it
+ * off. The analytics variables are named one by one: the edge bundle inlines a
+ * NEXT_PUBLIC_* read only when it is spelled out.
+ */
+const CSP_NONCE_HEADER = 'x-nonce';
+const REPORT_ONLY_HEADER = 'content-security-policy-report-only';
+
+function reportOnlyPolicy(): { nonce: string; policy: string } | null {
+  if (process.env.CSP_REPORT_ONLY === '0') return null;
+  const nonce = btoa(crypto.randomUUID());
+  const env = {
+    NEXT_PUBLIC_PLAUSIBLE_DOMAIN: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
+    NEXT_PUBLIC_PLAUSIBLE_HOST: process.env.NEXT_PUBLIC_PLAUSIBLE_HOST,
+    NEXT_PUBLIC_GA4_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  };
+  return { nonce, policy: buildCsp(env, { nonce, dev: process.env.NODE_ENV !== 'production' }) };
+}
+
 function nextWithRequestId(req: NextRequest, requestId: string, page: PageRouting | null = null): NextResponse {
   const headers = new Headers(req.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   // Never trusted from outside: only this function says which language a URL is in.
   headers.delete(LOCALE_HEADER);
   headers.delete(LOCALE_PATH_HEADER);
+  // Nor which nonce a page carries: Next.js reads it from either CSP request
+  // header, the enforced one first, so a client-sent one must not survive.
+  headers.delete(CSP_NONCE_HEADER);
+  headers.delete(REPORT_ONLY_HEADER);
+  headers.delete('content-security-policy');
+  let res: NextResponse;
+  const csp = page ? reportOnlyPolicy() : null;
+  if (csp) {
+    headers.set(CSP_NONCE_HEADER, csp.nonce);
+    headers.set(REPORT_ONLY_HEADER, csp.policy);
+  }
   if (page) {
     headers.set(LOCALE_PATH_HEADER, page.path);
     if (page.locale) headers.set(LOCALE_HEADER, page.locale);
-    if (page.rewriteTo) {
-      const url = req.nextUrl.clone();
-      url.pathname = page.rewriteTo;
-      return NextResponse.rewrite(url, { request: { headers } });
-    }
   }
-  return NextResponse.next({ request: { headers } });
+  if (page?.rewriteTo) {
+    const url = req.nextUrl.clone();
+    url.pathname = page.rewriteTo;
+    res = NextResponse.rewrite(url, { request: { headers } });
+  } else {
+    res = NextResponse.next({ request: { headers } });
+  }
+  if (csp) res.headers.set(REPORT_ONLY_HEADER, csp.policy);
+  return res;
 }
 
 export async function middleware(req: NextRequest) {
@@ -191,6 +237,26 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
           ? { error: 'Send JSON (Content-Type: application/json).', code: verdict.code }
           : { error: 'Cross-site requests cannot change data here.', code: verdict.code },
         { status: verdict.status }
+      );
+    }
+  }
+
+  // Request-body ceiling (#3210): a JSON write that declares a body larger than
+  // the limit is refused before the handler buffers it. Rule, numbers and what
+  // it cannot see (chunked bodies — that half is the proxy's) are in
+  // src/lib/bodyLimitRule.ts.
+  if (pathname.startsWith('/api/')) {
+    const size = bodyLimitVerdict({
+      method: req.method,
+      pathname,
+      contentType: req.headers.get('content-type'),
+      contentLength: req.headers.get('content-length'),
+      env: process.env,
+    });
+    if (!size.ok) {
+      return NextResponse.json(
+        { error: 'Request body too large.', code: 'payload_too_large', limit: size.limit },
+        { status: 413 }
       );
     }
   }

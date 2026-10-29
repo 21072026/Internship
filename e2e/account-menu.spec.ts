@@ -29,5 +29,5 @@ test('sidebar account menu holds sign-out, language and theme behind one trigger
   // actual (lowercase) locale code — a loose substring match on 'DE' also
   // picks up other controls whose accessible name happens to contain "de"
   // (e.g. "Decrease font size").
-  await expect(menu.getByRole('button', { name: 'de', exact: true })).toBeVisible();
+  await expect(menu.getByRole('button', { name: 'de Deutsch', exact: true })).toBeVisible();
 });

@@ -33,10 +33,16 @@ export const PERMISSIONS = [
   'platform.openapi.read',
   'platform.benchmark.read',
   // The organization itself.
+  'org.settings.read',
   'org.settings.write',
   'org.branding.write',
   'org.invite',
+  'org.integrations.read',
   'org.integrations.write',
+  // The tenant's own offboarding export (#1584): every row of the org, no
+  // credentials. ORG_ADMIN only — it is a write-tier power although it writes
+  // nothing, because it hands out the whole tenant at once.
+  'org.export',
   // People.
   'user.read',
   'user.write',
@@ -50,6 +56,23 @@ export const PERMISSIONS = [
   'program.write',
   'relation.write',
   'pipeline.transition',
+  // Reporting: dashboards, analytics, health and SLA read-outs (#1571).
+  'analytics.read',
+  // Templates and authored content an admin publishes to the programme:
+  // forms, surveys, newsletters, announcements, message/goal/agenda templates,
+  // skills and attributes (#1571).
+  'content.read',
+  'content.write',
+  // The mail pipeline of the tenant: log, queue, held drafts, suppressions (#1571).
+  'mail.read',
+  'mail.write',
+  // In-app support tickets and bug reports, and safeguarding concerns (#1571).
+  // Safeguarding is its own pair: a report about a person's safety is not a
+  // support ticket, and a later tier may hold one without the other.
+  'support.read',
+  'support.write',
+  'safeguarding.read',
+  'safeguarding.write',
   // Trails.
   'audit.read',
   'audit.export',

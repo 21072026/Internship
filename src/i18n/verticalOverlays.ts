@@ -122,6 +122,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'This instrument asks sales reps a differently worded question, so it is one survey per role — create a second one for the other role.',
       },
       nav: {
+        mentorOffers: 'Offer to a lead',
         candidates: 'Leads',
         companyInquiries: 'Demo requests',
         myCompanies: 'My accounts',
@@ -148,6 +149,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorTitle: 'Invite a lead',
         mentorAutoAssign: 'Whoever registers through your link becomes your lead automatically — no assignment step. The link works once and expires after 7 days.',
       },
+      automations: {
+        actionTypes: {
+          notifyRole: { help: 'An in-app notification to the record\u2019s own rep, the lead, the customer\u2019s users or the admins. Each person\u2019s notification settings apply.' },
+          assignGoalFromTemplate: { help: 'Adds a goal from your goal templates to the record, worded in the lead\u2019s language.' },
+          requireDocument: { help: 'Tells the lead to upload one of your document requirements — unless it is already there.' },
+        },
+        roles: { mentor: 'Their rep' },
+        templates: { mentorCheckIn: 'To the rep: \u201cCheck in now\u201d' },
+        errors: { mentee_message_on_outcome_stage: 'On an outcome stage the lead hears from their rep, not from a rule — remove the steps addressed to the lead.' },
+      },
       notifications: {
         automationEmail: { mentorCheckIn: { cta: 'Open my leads' } },
         invitationEmail: {
@@ -162,6 +173,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'A company showed interest in your profile. Your contact person will get in touch with you.',
           'mentorship_request.mentorAssigned': 'You have been assigned a contact person: {mentorName}.',
           'mentorship_request.menteeAssigned': 'A new lead was assigned to you: {menteeName}.',
+          'mentor_offer.new': '{mentorName} offered to be your contact person.',
+          'mentor_offer.reminder': 'The offer from {mentorName} expires soon.',
+          'mentor_offer.accepted': '{menteeName} accepted your offer.',
+          'mentor_offer.declined': '{menteeName} declined your offer.',
           'mentorship.mentorChanged': 'Your contact person has changed — {mentorName} is looking after you now.',
           'mentorship.reassignedAway': '{menteeName} was handed over to another rep — your deal with them has ended.',
           'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your lead.',
@@ -190,6 +205,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         // The assignment mails (#2558): the rep is asked to book a demo; the
         // lead is a customer and gets a contact person, not a mentor.
+        mentorOfferEmail: {
+          newSubject: '{mentorName} offered to be your contact person',
+          reminderSubject: 'The offer from {mentorName} expires soon',
+          heading: 'A rep would like to look after you',
+          newBody: '{mentorName} read your profile and offered to be your contact person. You can accept or decline in your portal — no reason needed either way.',
+          why: 'You get this because you allowed reps to approach you. You can switch it off in your profile at any time.',
+        },
         menteeAssignedEmail: {
           subject: 'New lead assigned: {mentee}',
           heading: 'You have a new lead',
@@ -504,7 +526,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       companyForm: {
         quota: 'Need quota',
         needs: 'Account needs',
-        noNeeds: 'No needs added yet. Click "Add Need" to record what this account needs.',
       },
       entitlements: {
         subtitle: 'Enable premium features for {name}. Rep and lead features are always free.',
@@ -713,6 +734,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
         categories: { collaboration: 'Working together' },
         items: {
+          stageAutomation: { d: 'When a lead enters or leaves a stage, run fixed steps: notify the rep, send a ready-made e-mail, set a stage deadline, ask for a document, add a tag. Before switching a rule on, replay it against your real stage history to see exactly who it would have reached — and every run is logged, step by step.' },
           // `messaging` carries no capability tag — a shared inbox is core CRM
           // and MARKETING has it — so the capability filter cannot reach this
           // card, and its wording was the last place a marketing visitor read
@@ -1249,6 +1271,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'Bu anket satış temsilcilerine soruyu farklı sözcüklerle soruyor, bu yüzden her rol için ayrı bir anket gerekir — diğer rol için ikincisini oluşturun.',
       },
       nav: {
+        mentorOffers: 'Müşteri adayına teklif et',
         candidates: 'Müşteri Adayları',
         companyInquiries: 'Demo talepleri',
         myCompanies: 'Hesaplarım',
@@ -1269,6 +1292,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorTitle: 'Müşteri adayı davet et',
         mentorAutoAssign: 'Bağlantınla kaydolan kişi otomatik olarak senin müşteri adayın olur — ayrıca atama yapman gerekmez. Bağlantı tek kullanımlıktır ve 7 gün sonra geçersiz olur.',
       },
+      automations: {
+        actionTypes: {
+          notifyRole: { help: 'Kaydın kendi satış temsilcisine, lead\u2019e, müşterinin kullanıcılarına ya da adminlere uygulama içi bildirim. Herkesin bildirim ayarları geçerlidir.' },
+          assignGoalFromTemplate: { help: 'Hedef şablonlarından birini, lead\u2019in dilinde, kayda hedef olarak ekler.' },
+          requireDocument: { help: 'Belge gereksinimlerinden birini yüklemesini lead\u2019e söyler — zaten yüklüyse söylemez.' },
+        },
+        roles: { mentor: 'Satış temsilcisi' },
+        templates: { mentorCheckIn: 'Temsilciye: \u201cŞimdi iletişime geç\u201d' },
+        errors: { mentee_message_on_outcome_stage: 'Sonuç aşamasında lead haberi kuraldan değil temsilcisinden alır — lead\u2019e giden adımları kaldır.' },
+      },
       notifications: {
         automationEmail: { mentorCheckIn: { cta: "Lead'lerimi aç" } },
         invitationEmail: {
@@ -1283,6 +1316,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'Bir firma profilinle ilgilendi. Muhatabın seninle iletişime geçecek.',
           'mentorship_request.mentorAssigned': 'Sana bir muhatap atandı: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Sana yeni bir müşteri adayı atandı: {menteeName}.',
+          'mentor_offer.new': '{mentorName} senin ilgili kişin olmayı teklif etti.',
+          'mentor_offer.reminder': '{mentorName} adlı kişinin teklifinin süresi yakında doluyor.',
+          'mentor_offer.accepted': '{menteeName} teklifini kabul etti.',
+          'mentor_offer.declined': '{menteeName} teklifini kabul etmedi.',
           'mentorship.mentorChanged': 'Muhatabın değişti — artık {mentorName} seninle ilgileniyor.',
           'mentorship.reassignedAway': '{menteeName} başka bir temsilciye devredildi — onunla fırsatın sona erdi.',
           'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin müşteri adayın değil.',
@@ -1308,6 +1345,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'application.received': '{name} müşteri adayın olarak kaydoldu.',
           'mentor_application.new': '{name} satış temsilcisi olmak için başvurdu.',
           'mentor_application.approved': 'Satış temsilcisi başvurun onaylandı — aramıza hoş geldin!',
+        },
+        mentorOfferEmail: {
+          newSubject: '{mentorName} senin ilgili kişin olmayı teklif etti',
+          reminderSubject: '{mentorName} adlı kişinin teklifinin süresi yakında doluyor',
+          reminderBody: '{mentorName} adlı kişinin teklifi hâlâ açık ama birkaç gün içinde sona eriyor. Bu tek hatırlatma.',
+          heading: 'Bir temsilci seninle ilgilenmek istiyor',
+          newBody: '{mentorName} profilini okudu ve ilgili kişin olmayı teklif etti. Portalında kabul edebilir ya da reddedebilirsin — iki durumda da gerekçe gerekmez.',
+          why: 'Bu e-postayı temsilcilerin sana ulaşmasına izin verdiğin için alıyorsun. Profilinden istediğin zaman kapatabilirsin.',
         },
         menteeAssignedEmail: {
           subject: 'Yeni müşteri adayı atandı: {mentee}',
@@ -1563,7 +1608,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       companyForm: {
         quota: 'İhtiyaç kontenjanı',
         needs: 'Firma ihtiyaçları',
-        noNeeds: 'Henüz ihtiyaç eklenmedi. Bu firmanın neye ihtiyacı olduğunu kaydetmek için "İhtiyaç ekle"ye tıkla.',
       },
       entitlements: {
         subtitle: '{name} için premium özellikleri aç. Temsilci ve müşteri adayı özellikleri her zaman ücretsizdir.',
@@ -1723,6 +1767,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
         categories: { collaboration: 'Birlikte çalışma' },
         items: {
+          stageAutomation: { d: 'Bir lead bir aşamaya girdiğinde ya da çıktığında sabit adımlar çalışır: temsilciyi bilgilendir, hazır bir e-posta gönder, aşama son tarihi koy, belge iste, etiket ekle. Bir kuralı açmadan önce gerçek aşama geçmişinize karşı çalıştırıp kime ulaşacağını görün — her çalıştırma adım adım kaydedilir.' },
           messaging: { d: 'Fırsat başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir. Yarım kalan yanıt gönderilene kadar sohbet başına saklanır ve karşı taraf yazarken bunu görürsünüz. Sürekli verdiğiniz yanıtlar ortak bir hazır yanıt havuzunda durur — İngilizce, Türkçe ve Almanca bir kez yazılır, kendi dilinizde tek tıkla eklenir.' },
           videoCalls: { d: 'Bir müşteri adayı, firma ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kaydın yanındaki yan panelde kendi Jitsi kiracımızda açılır — hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
           externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
@@ -2237,6 +2282,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'Diese Vorlage fragt Vertriebsmitarbeiter mit anderem Wortlaut, daher ist es eine Umfrage pro Rolle — legen Sie für die andere Rolle eine zweite an.',
       },
       nav: {
+        mentorOffers: 'Lead ein Angebot machen',
         candidates: 'Leads',
         companyInquiries: 'Demo-Anfragen',
         myCompanies: 'Meine Accounts',
@@ -2257,6 +2303,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorTitle: 'Lead einladen',
         mentorAutoAssign: 'Wer sich über deinen Link registriert, wird automatisch dein Lead — kein Zuweisungsschritt. Der Link gilt einmalig und verfällt nach 7 Tagen.',
       },
+      automations: {
+        actionTypes: {
+          notifyRole: { help: 'Eine In-App-Benachrichtigung an den eigenen Vertriebler, den Lead, die Nutzer des Kunden oder die Admins. Die Benachrichtigungseinstellungen jeder Person gelten.' },
+          assignGoalFromTemplate: { help: 'Fügt dem Datensatz ein Ziel aus euren Zielvorlagen hinzu, in der Sprache des Leads.' },
+          requireDocument: { help: 'Bittet den Lead, eine eurer Dokumentanforderungen hochzuladen — außer es liegt schon vor.' },
+        },
+        roles: { mentor: 'Der Vertriebler' },
+        templates: { mentorCheckIn: 'An den Vertriebler: \u201eJetzt melden\u201c' },
+        errors: { mentee_message_on_outcome_stage: 'In einer Ergebnisphase hört der Lead von seinem Vertriebler, nicht von einer Regel — entferne die Schritte an den Lead.' },
+      },
       notifications: {
         automationEmail: { mentorCheckIn: { cta: 'Meine Leads öffnen' } },
         invitationEmail: {
@@ -2271,6 +2327,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'Ein Unternehmen hat Interesse an deinem Profil gezeigt. Deine Ansprechperson meldet sich bei dir.',
           'mentorship_request.mentorAssigned': 'Dir wurde eine Ansprechperson zugewiesen: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Dir wurde ein neuer Lead zugewiesen: {menteeName}.',
+          'mentor_offer.new': '{mentorName} bietet an, deine Ansprechperson zu sein.',
+          'mentor_offer.reminder': 'Das Angebot von {mentorName} läuft bald ab.',
+          'mentor_offer.accepted': '{menteeName} hat dein Angebot angenommen.',
+          'mentor_offer.declined': '{menteeName} hat dein Angebot abgelehnt.',
           'mentorship.mentorChanged': 'Deine Ansprechperson hat sich geändert — {mentorName} betreut dich jetzt.',
           'mentorship.reassignedAway': '{menteeName} wurde an einen anderen Vertriebsmitarbeiter übergeben — dein Deal mit der Person ist beendet.',
           'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Lead.',
@@ -2296,6 +2356,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'application.received': '{name} hat sich als dein Lead angemeldet.',
           'mentor_application.new': '{name} hat sich als Vertriebsmitarbeiter beworben.',
           'mentor_application.approved': 'Deine Bewerbung als Vertriebsmitarbeiter wurde angenommen — willkommen an Bord!',
+        },
+        mentorOfferEmail: {
+          newSubject: '{mentorName} bietet an, deine Ansprechperson zu sein',
+          reminderSubject: 'Das Angebot von {mentorName} läuft bald ab',
+          heading: 'Ein Vertriebsmitarbeiter möchte dich betreuen',
+          newBody: '{mentorName} hat dein Profil gelesen und bietet an, deine Ansprechperson zu sein. Du kannst im Portal annehmen oder ablehnen — eine Begründung braucht es in keinem Fall.',
+          why: 'Du bekommst diese E-Mail, weil du Vertriebsmitarbeitern erlaubt hast, dich anzusprechen. Du kannst es jederzeit im Profil ausschalten.',
         },
         menteeAssignedEmail: {
           subject: 'Neuer Lead zugewiesen: {mentee}',
@@ -2549,7 +2616,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       companyForm: {
         quota: 'Bedarfskontingent',
         needs: 'Bedarf des Accounts',
-        noNeeds: 'Noch kein Bedarf hinzugefügt. Klicke auf "Bedarf hinzufügen", um festzuhalten, was dieser Account braucht.',
       },
       entitlements: {
         subtitle: 'Premium-Funktionen für {name} aktivieren. Funktionen für Vertriebsmitarbeiter und Leads sind immer kostenlos.',
@@ -2709,6 +2775,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
         categories: { collaboration: 'Zusammenarbeit' },
         items: {
+          stageAutomation: { d: 'Betritt oder verlässt ein Lead eine Phase, laufen feste Schritte: den Vertriebler benachrichtigen, eine fertige E-Mail senden, eine Phasenfrist setzen, ein Dokument anfordern, ein Tag setzen. Bevor eine Regel eingeschaltet wird, läuft sie gegen Ihre echte Phasen-Historie — Sie sehen genau, wen sie erreicht hätte, und jede Ausführung wird Schritt für Schritt protokolliert.' },
           messaging: { d: 'Ein zentraler Posteingang mit einem Thread pro Deal, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen. Eine halb geschriebene Antwort bleibt pro Gespräch erhalten, bis du sie sendest, und du siehst, wenn die andere Person schreibt. Antworten, die du immer wieder gibst, liegen in einem gemeinsamen Pool vorgefertigter Antworten — einmal auf Englisch, Türkisch und Deutsch verfasst, mit einem Klick in deiner eigenen Sprache eingefügt.' },
           videoCalls: { d: 'Starte mit einem Klick einen Anruf mit einem Lead, einem Account-Team oder einem Chat — er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
           externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },

@@ -82,6 +82,10 @@
     "methods": ["POST"],
     "why": "Re-consent from the retention reminder email; verifyConsentRenewToken() is the credential and it can do exactly one thing — refresh that user's own consent stamp."
   },
+  "src/app/api/csp-report/route.ts": {
+    "methods": ["POST"],
+    "why": "CSP violation reports (#1552): the browser posts them on its own, for any visitor, with no session to present. Rate-limited to 60/10min per IP, body capped at 64 KB, nothing stored, and only sanitised fields (src/lib/cspReport.ts) reach the log."
+  },
   "src/app/api/cron/start/route.ts": {
     "methods": ["POST"],
     "why": "Registers the node-cron schedules in this server process, called once at boot by src/instrumentation.ts. A boot hook has no session; CRON_SECRET in a header, compared with timingSafeEqual, is the credential, and an unconfigured secret answers 503 rather than opening the door. (GET /api/cron, which RUNS the jobs, is admin-only and not on this list.)"
@@ -173,6 +177,10 @@
   "src/app/api/rsvp/route.ts": {
     "methods": ["GET", "POST"],
     "why": "Meeting RSVP from the emailed link (#1446). Meeting.rsvpToken and MeetingGuest.rsvpToken are the credentials — an external guest has no account — and are looked up separately, never as one query over a shared column, with identical answers so a revoked guest invitation cannot be told from a wrong token."
+  },
+  "src/app/api/telemetry/vitals/route.ts": {
+    "methods": ["POST"],
+    "why": "Core Web Vitals beacon (#1593). Anonymous by design: the landing page is the screen being measured and its visitors have no session. Accepts only a metric name, a number, a rating band and a route template (webVitalsRule.ts), writes one log line and nothing to the database, is rate-limited to 60/10min per IP, and answers 204 doing nothing unless the build set NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE."
   },
   "src/app/api/unsubscribe/one-click/route.ts": {
     "methods": ["GET", "POST"],

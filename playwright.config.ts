@@ -175,8 +175,20 @@ process.env.MARKETING_HOSTS = E2E_MARKETING_HOST;
 // (scripts/test/customer-mail-lock.test.mjs); no deployment sets this.
 process.env.MARKETING_CUSTOMER_MAIL_ENABLED = '1';
 
+// ── Quarantine (#1610) ──────────────────────────────────────────────────────
+// A test tagged `@quarantine` is known-flaky and on a deadline: it carries an
+// issue link and an expiry date (`npm run check:quarantine` fails without them
+// or once the date has passed). Every GATING run leaves it out — here, once, so
+// no workflow can forget a flag — and the scheduled full suite runs the
+// quarantined set again in a separate, non-gating step with
+// `E2E_QUARANTINE=only`, so it still runs and still reports. A CLI
+// `--grep-invert` replaces this default, which is fine: nothing in CI passes one.
+const quarantineOnly = process.env.E2E_QUARANTINE === 'only';
+const QUARANTINE = /@quarantine/;
+
 export default defineConfig({
   testDir: './e2e',
+  ...(quarantineOnly ? { grep: QUARANTINE } : { grepInvert: QUARANTINE }),
   timeout: 60_000,
   expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,
@@ -366,6 +378,11 @@ export default defineConfig({
           // as a receiver over plain http on a loopback port, which the URL
           // rule and the SSRF guard otherwise refuse. Test-only switch.
           AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS: '1',
+          // The chat apps (#1958): an in-process platform stand-in, so no spec
+          // ever calls Slack or Microsoft. Test-only switch.
+          CHAT_APPS_STUB_CLIENT: '1',
+          // …and delivering through it, so a ledger retry (#1960) really sends.
+          CHAT_APPS_ENABLED: '1',
           // Bug-report session replay (#3131): off by default in a production
           // build, which is what the e2e server is — the replay spec needs it on.
           FEEDBACK_REPLAY_ENABLED: '1',

@@ -80,7 +80,8 @@ async function seedFunnelFixture(orgId: string, vertical: string, personPrefix: 
       orgId,
       name: `Acme Retail ${Date.now()}`,
       industry: 'Retail',
-      needs: { create: [{ position: 'Seasonal campaign', count: 2, period: '2026 Q1' }] },
+      // Open positions are Requisitions since #1875.
+      requisitions: { create: [{ orgId, title: 'Seasonal campaign', status: 'OPEN', openings: 2, requiredSkills: [] }] },
     },
   });
   const ownerEmail = uniqueEmail(`${personPrefix}-owner`);
@@ -156,7 +157,9 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
     // button on every card said "Mentor and mentee features are always free".
     await page.getByRole('button', { name: 'Add company', exact: true }).click();
     await expect(page.locator('#company-form-title')).toBeVisible();
-    await expect(page.getByText('Account needs', { exact: true })).toBeVisible();
+    // No positions section at all: it links to /admin/requisitions, a
+    // `placements` page MARKETING does not have (#1875).
+    await expect(page.getByTestId('company-form-positions')).toHaveCount(0);
     await expect(page.getByText('Need quota', { exact: true })).toBeVisible();
     expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -173,10 +176,11 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
     // dependants by name, so it reintroduced "1 mentorships" and "1 open
     // positions" on a page whose acceptance is that neither word is left — the
     // exact blind spot the comment above describes, one click before an
-    // irreversible action. The fixture gives the account one need and one
-    // funnel record, so both sides of the dialog are populated.
+    // irreversible action. The fixture gives the account one open position (a
+    // requisition since #1875) and one funnel record, so both sides of the
+    // dialog are populated.
     await page.getByTestId(`delete-company-${fixture.companyId}`).click();
-    await expect(page.getByTestId('company-delete-cascade')).toContainText('1 open needs');
+    await expect(page.getByTestId('company-delete-cascade')).toContainText('1 requisitions');
     await expect(page.getByTestId('company-delete-detach')).toContainText('1 deals');
     expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
     await page.getByTestId('confirm-dialog-cancel').click();

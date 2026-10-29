@@ -50,7 +50,15 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  // `?companyId=` pre-filters the list — the company form links here (#1875).
+  // Read once on mount from the URL rather than useSearchParams(), which would
+  // need its own Suspense boundary on this statically rendered page.
   const [companyFilter, setCompanyFilter] = useState('');
+  useEffect(() => {
+    if (!admin) return;
+    const fromUrl = new URLSearchParams(window.location.search).get('companyId');
+    if (fromUrl) setCompanyFilter(fromUrl);
+  }, [admin]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -178,9 +186,9 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
           return (
             <div key={q.id} className="space-y-2 rounded-md bg-gray-50 p-2 dark:bg-gray-800/60" data-testid={`requisition-question-${index}`}>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Input label={r.screening.labelEn} value={q.en} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ en: e.target.value })} data-testid={`requisition-question-${index}-en`} />
-                <Input label={r.screening.labelTr} value={q.tr} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ tr: e.target.value })} data-testid={`requisition-question-${index}-tr`} />
-                <Input label={r.screening.labelDe} value={q.de} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ de: e.target.value })} data-testid={`requisition-question-${index}-de`} />
+                <Input label={r.screening.labelEn} lang="en" value={q.en} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ en: e.target.value })} data-testid={`requisition-question-${index}-en`} />
+                <Input label={r.screening.labelTr} lang="tr" value={q.tr} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ tr: e.target.value })} data-testid={`requisition-question-${index}-tr`} />
+                <Input label={r.screening.labelDe} lang="de" value={q.de} maxLength={SCREENING_LIMITS.label} onChange={(e) => patch({ de: e.target.value })} data-testid={`requisition-question-${index}-de`} />
               </div>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="w-40"><Select label={r.screening.type} value={q.type} onChange={(e) => patch({ type: e.target.value as ScreeningQuestionType })} options={SCREENING_QUESTION_TYPES.map((type) => ({ value: type, label: r.screening.types[type] }))} /></div>

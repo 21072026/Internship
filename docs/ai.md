@@ -95,7 +95,10 @@ paid add-on:
   The registry's audience is the floor and is never lowered per call.
 - **`operator`** — the admin tools: `mentor_match`, `survey_summary`,
   `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`,
-  `content_translate`, `content_draft`, `company_enrich`. The
+  `content_translate`, `content_draft`, `company_enrich`, and the company-side
+  `requisition_fit` (#2042: one sentence per top-ranked applicant, from an
+  anonymous payload built only from the deterministic breakdown — the AI writes
+  the sentence, never the order). The
   gate asks `entitled(orgId, 'AI_PACKAGE')` (#1733; the constant is
   `AI_PACK_FEATURE` in `aiGate.ts`) right after consent and **before the
   artefact cache** — a locked org is not answered from a stored copy of the

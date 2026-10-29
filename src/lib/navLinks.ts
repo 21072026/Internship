@@ -3,8 +3,8 @@ import {
   BookOpenCheck,
   Activity, AlarmClock, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
-  FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
-  Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
+  FolderKanban, GitMerge, GraduationCap, HeartHandshake, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
+  BellRing, Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   Receipt,
@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   Table2,
   RefreshCw,
+  Zap,
   type LucideIcon,
   ShieldAlert,
   FileSearch,
@@ -64,11 +65,35 @@ export interface NavLink {
    * Presentation only: the page and its API refuse a tenant admin themselves.
    */
   superAdminOnly?: boolean;
+  /**
+   * Shown to the deployment's operators (#1607): a super admin, or the ADMIN of
+   * the default organization — the mail queue's operator rule
+   * (`queueScopeFor()` in src/lib/mailOpsRule.ts). Presentation only, like
+   * `superAdminOnly`: the page and its API apply the rule themselves.
+   */
+  operatorOnly?: boolean;
+}
+
+/** Who is looking — the facts the audience tags above are judged against. */
+export interface NavAudience {
+  superAdmin?: boolean;
+  /** A super admin or the default organization's ADMIN (see `operatorOnly`). */
+  operator?: boolean;
+}
+
+/** Does the audience pass this link's `superAdminOnly` / `operatorOnly` tag? */
+export function navAudienceAllows(l: NavLink, opts: NavAudience = {}): boolean {
+  if (l.superAdminOnly && opts.superAdmin !== true) return false;
+  if (l.operatorOnly && opts.superAdmin !== true && opts.operator !== true) return false;
+  return true;
 }
 
 export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin', icon: LayoutDashboard, key: 'dashboard', exact: true },
   { href: '/admin/board', icon: Columns3, key: 'board' },
+  // Stage automation rules (#1703/#1704): what runs when a relation enters or
+  // leaves a stage. Every vertical with a pipeline has it.
+  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   // The partner programme (docs/affiliate-module.md), marketing CRM only.
   { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate' },
@@ -131,6 +156,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // key that always travels with the first is a key that can only drift.
   // Tagging also closes the URL (pageCapabilityGate) and the APIs gate on it.
   { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
+  // Admin-authored nudges (#1686): reminders to mentors and mentees, so `mentorship`.
+  // Stage-change rules are the automations screen (#1704), not this one.
+  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
   // Survey results (#1910). Untagged: a survey's audience may be companies, and
   // the engine (#1879) is not a mentorship module.
@@ -172,9 +200,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
-  // The operations console (#1607). The default organization's ADMIN may open
-  // it too (the mail queue's operator rule); the link stays with the super admin.
-  { href: '/admin/operations', icon: ServerCog, key: 'operations', superAdminOnly: true },
+  // The operations console (#1607): for the deployment's operators.
+  { href: '/admin/operations', icon: ServerCog, key: 'operations', operatorOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
@@ -198,6 +225,7 @@ export const MENTOR_NAV_LINKS: NavLink[] = [
   { href: '/mentor/board', icon: Columns3, key: 'board' },
   { href: '/mentor/mentees', icon: Users, key: 'myMentees' },
   { href: '/mentor/applications', icon: Inbox, key: 'applications' },
+  { href: '/mentor/offers', icon: HeartHandshake, key: 'mentorOffers' },
   { href: '/mentor/invite', icon: UserPlus, key: 'inviteMentee' },
   { href: '/mentor/profile', icon: User, key: 'myProfile' },
   { href: '/mentor/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
@@ -287,19 +315,19 @@ export function navLinksForRole(role: NavRole): NavLink[] {
  * the full capability set — which INTERNSHIP always has — keeps every link, so
  * this is a no-op for today's product and only thins the sidebar for a vertical
  * that switches a module off (e.g. MARKETING has no `mentorship`, so the mentor
- * and mentorship links fall away). A `superAdminOnly` link survives only when
- * the caller says it is one (`opts.superAdmin`). Pure: same inputs, same array,
+ * and mentorship links fall away). A `superAdminOnly` / `operatorOnly` link
+ * survives only when the caller says it is one (`navAudienceAllows()`). Pure: same inputs, same array,
  * no I/O.
  */
 export function visibleNavLinks(
   links: NavLink[],
   caps: readonly VerticalCapability[],
-  opts: { superAdmin?: boolean } = {},
+  opts: NavAudience = {},
 ): NavLink[] {
   return links.filter(
     (l) =>
       (!l.capability || caps.includes(l.capability)) &&
       (!l.withoutCapability || !caps.includes(l.withoutCapability)) &&
-      (!l.superAdminOnly || opts.superAdmin === true),
+      navAudienceAllows(l, opts),
   );
 }

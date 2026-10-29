@@ -45,7 +45,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing, Puzzle,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -107,6 +107,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'activityReport', category: 'insights', icon: Activity, color: 'green', capability: 'mentorship', title: C.activityReport.t, desc: C.activityReport.d },
     { key: 'menteeInsights', category: 'insights', icon: Eye, color: 'teal', capability: 'mentorship', title: C.menteeInsights.t, desc: C.menteeInsights.d },
     { key: 'menteeOwnProject', category: 'collaboration', icon: FolderKanban, color: 'purple', capability: 'projects', title: C.menteeOwnProject.t, desc: C.menteeOwnProject.d },
+    { key: 'skillsGap', category: 'insights', icon: Puzzle, color: 'sky', capability: 'mentorship', title: C.skillsGap.t, desc: C.skillsGap.d },
     { key: 'talentPool', category: 'companies', icon: Search, color: 'purple', capability: 'placements', title: C.talentPool.t, desc: C.talentPool.d },
     { key: 'aiPackage', category: 'insights', icon: Bot, color: 'indigo', capability: 'mentorship', title: C.aiPackage.t, desc: C.aiPackage.d },
     { key: 'security', category: 'trust', icon: KeyRound, color: 'amber', title: C.security.t, desc: C.security.d },
@@ -126,6 +127,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'offers', category: 'tracking', icon: Briefcase, color: 'orange', capability: 'placements', title: C.offers.t, desc: C.offers.d },
     { key: 'weeklyReports', category: 'tracking', icon: NotebookPen, color: 'teal', capability: 'evaluations', title: C.weeklyReports.t, desc: C.weeklyReports.d },
     { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', capability: 'placements', title: C.requisitions.t, desc: C.requisitions.d },
+    { key: 'requisitionFit', category: 'companies', icon: Target, color: 'purple', capability: 'placements', title: C.requisitionFit.t, desc: C.requisitionFit.d },
     { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', capability: 'placements', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
     { key: 'externalGuests', category: 'collaboration', icon: UserPlus, color: 'amber', title: C.externalGuests.t, desc: C.externalGuests.d },
@@ -139,6 +141,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'publicProfiles', category: 'platform', icon: Share2, color: 'blue', capability: 'mentorship', title: C.publicProfiles.t, desc: C.publicProfiles.d },
     { key: 'stories', category: 'trust', icon: Quote, color: 'rose', capability: 'evaluations', title: C.stories.t, desc: C.stories.d },
     { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', capability: 'mentorship', title: C.newsletter.t, desc: C.newsletter.d },
+    // Admin-authored nudges (#1684/#1686): reminders to mentors and mentees — mentorship only.
+    { key: 'nudges', category: 'collaboration', icon: BellRing, color: 'amber', capability: 'mentorship', title: C.nudges.t, desc: C.nudges.d },
     { key: 'inviteLinks', category: 'tracking', icon: Link2, color: 'teal', title: C.inviteLinks.t, desc: C.inviteLinks.d },
     { key: 'invitationBoard', category: 'tracking', icon: MailCheck, color: 'blue', title: C.invitationBoard.t, desc: C.invitationBoard.d },
     { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', capability: 'placements', title: C.outcomeComms.t, desc: C.outcomeComms.d },
@@ -212,6 +216,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'reportSegments', category: 'insights', icon: BarChart3, color: 'sky', title: C.reportSegments.t, desc: C.reportSegments.d },
     // #3130 — the floating feedback button: screenshot + masked console/network context, triaged by admins.
     { key: 'feedbackReports', category: 'trust', icon: MessageSquareWarning, color: 'blue', title: C.feedbackReports.t, desc: C.feedbackReports.d },
+    // Stage automation (#1703/#1704): every vertical has a pipeline; MARKETING overlays the mentor wording.
+    { key: 'stageAutomation', category: 'tracking', icon: Repeat2, color: 'indigo', title: C.stageAutomation.t, desc: C.stageAutomation.d },
     { key: 'terminology', category: 'platform', icon: Palette, color: 'violet', capability: 'mentorship', title: C.terminology.t, desc: C.terminology.d },
+    { key: 'notificationTemplates', category: 'platform', icon: MailCheck, color: 'blue', title: C.notificationTemplates.t, desc: C.notificationTemplates.d },
   ];
 }

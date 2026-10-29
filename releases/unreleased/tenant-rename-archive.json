@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Tenant rename + archive (#1582, story #1580):** `POST /api/admin/organizations/[id]/rename` (name + slug, `slug_taken` 409, the `default` org's slug fixed, an SSO tenant's slug locked unless `force: true`, audited `FORCED`) and `POST`/`DELETE …/[id]/archive`, both `requirePermission('platform.org.write')`. New nullable `Organization.archivedAt`/`archivedById` (+ index). An archived tenant: every sign-in door (password, SSO, remember-me, magic link, impersonation) refuses with its ordinary generic message, live sessions end in the jwt callback's existing per-request lookup, and `prepareEmail()` skips all its mail (`SKIPPED` / `Tenant archived`; account mails now pass the recipient `orgId`). Rule pure in `src/lib/orgLifecycleRule.ts` (unit-tested), one writer `src/lib/orgLifecycle.ts` (ActivityLog + org-stamped AuditLog + `org.config.changed`). Super-admin card on `/admin/organizations` (new `orgLifecycle` i18n namespace). `docs/tenant-lifecycle.md`; `e2e/tenant-lifecycle.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Operators can now rename an organization, change its address slug, and archive it: an archived organization's people can no longer sign in or receive mail, and everything comes back when it is unarchived."],
+    "tr": ["Operatörler artık bir organizasyonun adını ve slug’ını değiştirebiliyor ve onu arşivleyebiliyor: arşivli bir organizasyonun kişileri giriş yapamaz ve e-posta almaz; arşivden çıkarıldığında her şey geri gelir."],
+    "de": ["Betreiber können eine Organisation jetzt umbenennen, ihren Slug ändern und sie archivieren: Personen einer archivierten Organisation können sich nicht mehr anmelden und erhalten keine E-Mails; nach Aufhebung der Archivierung ist alles wieder da."]
+  }
+}

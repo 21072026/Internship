@@ -234,3 +234,14 @@ export function applyTerminologyMemo<T extends object>(
   memo.set(key, out);
   return out;
 }
+
+// One sentence per locale written in the catalogue's DEFAULT words, for the
+// admin card's live preview (#1631): swapTerms() over it shows what a draft
+// does before it is saved. Code, not dictionary copy, on purpose — a dictionary
+// string would already carry the org's saved terms and the preview would swap
+// nothing.
+export const TERM_PREVIEW_SAMPLE: Record<Locale, string> = {
+  en: 'Each mentor meets their mentees every week; the cohort follows one programme, and every mentorship starts with a goal.',
+  tr: 'Her mentor menteeler ile her hafta görüşür; kohort tek bir program izler ve her mentorluk bir hedefle başlar.',
+  de: 'Jeder Mentor trifft seine Mentees jede Woche; die Kohorte folgt einem Programm, und jedes Mentoring beginnt mit einem Ziel.',
+};

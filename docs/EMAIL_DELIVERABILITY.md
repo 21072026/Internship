@@ -360,7 +360,7 @@ unsubscribe token in it.
 When `sendEmail()` suppresses a mail it writes a `SKIPPED` `EmailLog` row whose
 error reads `Unsubscribed: <group>`. Until #2054 that row only existed on send
 sites with no call-site guard: the five bulk paths — `sendWeeklyMentorDigests`,
-`sendDailyActivityDigests`, `checkCompanyNeedMatches`, the report-subscription
+`sendDailyActivityDigests`, `checkRequisitionMatches`, the report-subscription
 job (which replaced `sendWeeklyAnalyticsReport`, #1905) and
 `POST /api/admin/announcements` — filtered the opted-out recipient out *before*
 `sendEmail()`, so the people who mattered most left no trace at all.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat, Download, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat, Download, Printer, Users } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -28,7 +28,7 @@ export type CalendarViewMode = 'month' | 'week' | 'day' | 'agenda';
 
 interface Ev {
   id: string;
-  type: 'meeting' | 'series' | 'deadline' | 'logged';
+  type: 'meeting' | 'series' | 'deadline' | 'logged' | 'group';
   title: string;
   who: string;
   date: string;
@@ -61,12 +61,14 @@ const CHIP: Record<Ev['type'], string> = {
   series: 'bg-indigo-100 text-indigo-700',
   logged: 'bg-emerald-100 text-emerald-700',
   deadline: 'bg-amber-100 text-amber-700',
+  group: 'bg-purple-100 text-purple-700',
 };
 const DOT: Record<Ev['type'], string> = {
   meeting: 'bg-blue-500',
   series: 'bg-indigo-500',
   logged: 'bg-emerald-500',
   deadline: 'bg-amber-500',
+  group: 'bg-purple-500',
 };
 
 function EventIcon({ type }: { type: Ev['type'] }) {
@@ -74,6 +76,7 @@ function EventIcon({ type }: { type: Ev['type'] }) {
   if (type === 'deadline') return <Flag className={cls} />;
   if (type === 'logged') return <CheckCircle2 className={cls} />;
   if (type === 'series') return <Repeat className={cls} />;
+  if (type === 'group') return <Users className={cls} />;
   return <Video className={cls} />;
 }
 
@@ -83,10 +86,10 @@ function EventIcon({ type }: { type: Ev['type'] }) {
  * used to be rendered once per mentee, under the mentee's name (#1110).
  */
 function primaryLabel(e: Ev) {
-  return e.type === 'series' ? e.title : e.who;
+  return e.type === 'series' || e.type === 'group' ? e.title : e.who;
 }
 function secondaryLabel(e: Ev) {
-  return e.type === 'series' ? e.who : e.title;
+  return e.type === 'series' || e.type === 'group' ? e.who : e.title;
 }
 
 /**
@@ -652,6 +655,10 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded bg-indigo-100" />
           {t.calendar.recurring}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded bg-purple-100" />
+          {t.calendar.groupSession}
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded bg-emerald-100" />

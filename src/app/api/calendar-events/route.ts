@@ -11,6 +11,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { resolveOrgId } from '@/lib/orgScope';
 import { isStageOverdue } from '@/lib/stageClock';
 import { interviewRequestActorWhere } from '@/lib/interviewRequests';
+import { eventLinkFor } from '@/lib/groupEvents';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Widest window a single request may ask for, so month-hopping can't pull a decade. */
@@ -89,7 +90,29 @@ export async function GET(request: Request) {
   // stages (#1884), not three default keys a renamed pipeline does not have.
   const stages = await resolvePipelineStages(resolveOrgId(session));
 
-  const [meetings, relations, loggedMeetings, series] = await Promise.all([
+  // Group sessions (#1856): the ones this person hosts or holds a confirmed
+  // place at — an admin sees every live session of the org. Never a company's,
+  // never a cancelled one, never a draft for anyone but its host.
+  const eventsOrgId = resolveOrgId(session);
+  const groupEventsQuery =
+    isCompany || !eventsOrgId
+      ? Promise.resolve([])
+      : prisma.programEvent.findMany({
+          where: {
+            orgId: eventsOrgId,
+            cancelledAt: null,
+            ...(from || to ? { startsAt: inWindow } : {}),
+            OR:
+              role === 'ADMIN'
+                ? [{ publishedAt: { not: null } }, { hostId: id }]
+                : [{ hostId: id }, { publishedAt: { not: null }, registrations: { some: { userId: id, state: 'REGISTERED' } } }],
+          },
+          select: { id: true, title: true, startsAt: true, durationMinutes: true, host: { select: { fullName: true } } },
+          orderBy: { startsAt: 'asc' },
+          take: 500,
+        });
+
+  const [meetings, relations, loggedMeetings, series, groupEvents] = await Promise.all([
     prisma.meeting.findMany({
       // `relationId: { not: null }` — since #1051 a meeting may instead hang off
       // a project or a conversation. Those are always time-less (instant rooms),
@@ -183,6 +206,7 @@ export async function GET(request: Request) {
         relation: { select: { mentee: { select: { fullName: true } }, mentor: { select: { fullName: true } } } },
       },
     }),
+    groupEventsQuery,
   ]);
 
   const events = [
@@ -228,6 +252,17 @@ export async function GET(request: Request) {
           : role === 'MENTOR'
             ? `/mentor/mentees/${i.relationId}`
             : null,
+    })),
+    // The session's own page, not the call link: the join link is the
+    // events API's to hand out (confirmed registrants only).
+    ...groupEvents.map((e) => ({
+      id: `group-${e.id}`,
+      type: 'group' as const,
+      title: e.title,
+      who: e.host.fullName,
+      date: e.startsAt.toISOString(),
+      durationMinutes: e.durationMinutes,
+      link: eventLinkFor(role, e.id),
     })),
     ...relations.map((r) => ({
       id: `deadline-${r.id}`,

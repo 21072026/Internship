@@ -42,6 +42,8 @@ export const TASK_TTL_MS: Record<string, number> = {
   analytics_narrative: 1 * DAY,
   interaction_summary: 1 * DAY,
   mentor_match: 1 * DAY,
+  // Keyed on the anonymous payload (#2042): any change in the ranking is a new question.
+  requisition_fit: 1 * DAY,
   // Conversation catch-up and suggested replies (#2048): keyed on the thread's
   // last message (and its last edit), so any new line is a new question; the
   // day only bounds how long one answer is re-read.

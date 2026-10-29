@@ -193,6 +193,8 @@ export function ProjectForm({
         // what they can DO about it, so it is rendered from its CODE in their
         // own language rather than from the server's English literal — the
         // rule src/lib/apiErrorMessage.ts exists for.
+        // A mentee at the cap gets a capacity sentence, never a plan (#3270).
+        if (data?.code === 'project_capacity') throw new Error(t.projects.capacityReached);
         if (data?.code === 'project_limit_reached') {
           throw new Error(
             t.projects.planLimitReached

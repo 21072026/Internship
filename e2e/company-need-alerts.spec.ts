@@ -36,30 +36,46 @@ test('need-match alerts fire once for premium companies only, on consenting cand
   await markSuperAdmin(adminEmail);
   const hash = await bcrypt.hash(pw, 10);
 
-  const premiumCo = await prisma.company.create({
-    data: {
-      name: `Premium Need Co ${stamp}`,
-      entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-      needs: { create: { position, count: 1, period: '2026' } },
-    },
-  });
-  const freeCo = await prisma.company.create({
-    data: {
-      name: `Free Need Co ${stamp}`,
-      needs: { create: { position, count: 1, period: '2026' } },
-    },
-  });
-
-  // #1387: a premium company whose only open role lives in Requisition, with no
-  // CompanyNeed row at all. Before the fix the job never queried Requisition, so
-  // this company matched nobody. Requisition.orgId is non-null while
-  // Company.orgId is nullable, so the org has to exist first.
+  // Requisition.orgId is non-null while Company.orgId is nullable, so the org
+  // has to exist first.
   const org = await prisma.organization.upsert({
     where: { slug: 'default' },
     update: {},
     create: { slug: 'default', name: 'Default Organization' },
     select: { id: true },
   });
+  // Open positions are Requisitions only since #1875 — the premium and the
+  // free company both hold an OPEN one; only the entitlement differs.
+  const openRole = { orgId: org.id, title: position, status: 'OPEN', openings: 1, filled: 0, requiredSkills: [] };
+  const premiumCo = await prisma.company.create({
+    data: {
+      name: `Premium Need Co ${stamp}`,
+      orgId: org.id,
+      entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+      requisitions: { create: openRole },
+    },
+  });
+  const freeCo = await prisma.company.create({
+    data: {
+      name: `Free Need Co ${stamp}`,
+      orgId: org.id,
+      requisitions: { create: openRole },
+    },
+  });
+  // #1875: a premium company whose only "position" is a legacy CompanyNeed row
+  // (not yet converted) is NOT alerted — the job reads Requisition only, so
+  // the number can come from one place. The deploy's backfill converts it.
+  const legacyCo = await prisma.company.create({
+    data: {
+      name: `Legacy Need Co ${stamp}`,
+      orgId: org.id,
+      entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+      needs: { create: { position, count: 1, period: '2026' } },
+    },
+  });
+
+  // #1387: a second premium company with an open requisition — the dedupe key
+  // is per company, so it is alerted independently of the first.
   const reqCo = await prisma.company.create({
     data: {
       name: `Requisition Need Co ${stamp}`,
@@ -70,7 +86,7 @@ test('need-match alerts fire once for premium companies only, on consenting cand
       },
     },
   });
-  // Negative cases, both premium and both with no CompanyNeed: an unpublished
+  // Negative cases, both premium: an unpublished
   // role must not alert, and neither must a role that is open on paper but
   // already fully staffed.
   const draftCo = await prisma.company.create({
@@ -131,9 +147,10 @@ test('need-match alerts fire once for premium companies only, on consenting cand
 
     // Free company: no entitlement → no alert.
     expect(await prisma.companyNeedAlert.count({ where: { companyId: freeCo.id } })).toBe(0);
+    // Legacy CompanyNeed only → no alert (#1875).
+    expect(await prisma.companyNeedAlert.count({ where: { companyId: legacyCo.id } })).toBe(0);
 
-    // #1387: the requisition-only premium company is alerted too. This is the
-    // assertion that fails on the old job, which queried CompanyNeed only.
+    // The second premium company is alerted too (#1387).
     await expect
       .poll(async () => prisma.companyNeedAlert.count({ where: { companyId: reqCo.id, menteeId: mentee.id } }), { timeout: 10_000 })
       .toBe(1);
@@ -149,11 +166,10 @@ test('need-match alerts fire once for premium companies only, on consenting cand
     expect(run2.ok()).toBeTruthy();
     expect(await prisma.companyNeedAlert.count({ where: { companyId: premiumCo.id, menteeId: mentee.id } })).toBe(1);
     expect(await alertsAbout(premiumUser.id, mentee.id)).toBe(1);
-    // The dedupe key is [companyId, menteeId], so it holds across the new
-    // source too — a second source must not mean a second alert.
+    // The dedupe key is [companyId, menteeId]: the second run alerts nobody again.
     expect(await prisma.companyNeedAlert.count({ where: { companyId: reqCo.id, menteeId: mentee.id } })).toBe(1);
   } finally {
-    const companyIds = [premiumCo.id, freeCo.id, reqCo.id, draftCo.id, filledCo.id];
+    const companyIds = [premiumCo.id, freeCo.id, legacyCo.id, reqCo.id, draftCo.id, filledCo.id];
     await prisma.notification.deleteMany({ where: { userId: { in: [premiumUser.id, reqUser.id] } } });
     await prisma.companyNeedAlert.deleteMany({ where: { menteeId: mentee.id } });
     await prisma.companyNeed.deleteMany({ where: { companyId: { in: companyIds } } });

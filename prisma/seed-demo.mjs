@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { assertSafeDemoTarget } from './demoTarget.mjs';
 import { assignDefaultOrg } from './backfill-organization.mjs';
 import { seedMarketingDemo } from './seed-demo-marketing.mjs';
+import { seedInternshipFeatures, seedAffiliateDemo } from './seed-demo-features.mjs';
 
 // Rich DEMO seed (#550) — fully synthetic data for local development and demos,
 // so nobody needs real user PII to work on the app. Idempotent: every record it
@@ -49,8 +50,8 @@ const MENTEES = [
 ];
 
 const COMPANIES = [
-  { name: 'Demo Yazılım A.Ş.', industry: 'Software', size: '50-100', needs: [{ position: 'Frontend Developer', count: 2, period: '2026 Summer' }, { position: 'Backend Developer', count: 1, period: '2026 Summer' }] },
-  { name: 'Demo Data GmbH', industry: 'Data & Analytics', size: '10-50', needs: [{ position: 'Data Engineer', count: 1, period: '2026 Fall' }] },
+  { name: 'Demo Yazılım A.Ş.', industry: 'Software', size: '50-100' },
+  { name: 'Demo Data GmbH', industry: 'Data & Analytics', size: '10-50' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -265,13 +266,14 @@ async function main() {
     }));
   }
 
-  // Companies (+ needs + one read-only company login each)
+  // Companies (+ one read-only company login each). Open positions are the
+  // requisitions seeded below — nothing writes CompanyNeed since #1875.
   const companies = [];
   for (const c of COMPANIES) {
     let company = await prisma.company.findFirst({ where: { name: c.name } });
     if (!company) {
       company = await prisma.company.create({
-        data: { name: c.name, industry: c.industry, size: c.size, needs: { create: c.needs } },
+        data: { name: c.name, industry: c.industry, size: c.size },
       });
       console.log(`created company: ${c.name}`);
     }
@@ -947,6 +949,20 @@ async function main() {
   }
   console.log(`programme economics: ${costsCreated} cost line(s), ${placementsCreated} placement(s) created`);
 
+  // The surfaces that shipped after this file was last widened (#2061): group
+  // sessions, stage automations, nudges, the billing usage history and hiring
+  // applications. Rules are seeded DISABLED, so a topic environment never
+  // mails anybody because it was seeded. See prisma/seed-demo-features.mjs.
+  const featureCounts = await seedInternshipFeatures({
+    prisma,
+    orgId: defaultOrg.id,
+    adminId: demoAdmin.id,
+    mentorIds: mentors.map((m) => m.id),
+    relations: demoRelations.filter((r) => r.orgId === defaultOrg.id),
+    cohortId: cohort.id,
+  });
+  console.log(`newer surfaces: ${JSON.stringify(featureCounts)}`);
+
   // ---------------------------------------------------------------------------
   // The SECOND tenant: the MARKETING vertical (#2443, story #2398). Everything
   // above is one INTERNSHIP organization; the shipped marketing funnel preset
@@ -981,6 +997,11 @@ async function main() {
   // narrative on /admin/analytics and the survey summary — neither of which
   // sits behind the `mentorship` capability, so it needs the pack as well.
   await grantAiPack(marketing.orgId, 'marketing');
+
+  // The affiliate programme is MARKETING-only (verticals.ts), so it hangs off
+  // this tenant and never off the internship one.
+  const affiliateCounts = await seedAffiliateDemo({ prisma, orgId: marketing.orgId, domain: DEMO_DOMAIN });
+  console.log(`affiliate programme: ${JSON.stringify(affiliateCounts)}`);
 
   // Contributor terms (#1025, #1026). The demo set portrays projects that have
   // been running for a while, and someone who has been on a project for months
