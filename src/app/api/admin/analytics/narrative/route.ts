@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
@@ -27,8 +26,9 @@ const day = z.string().max(40).optional();
 const bodySchema = z.object({ from: day, to: day, regenerate: z.boolean().optional() }).strict();
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const locale = await getLocale();
   const q = new URL(request.url).searchParams;
   return withTenantScope(session, async () => {
@@ -38,8 +38,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const userLimited = enforceRateLimit(request, 'ai:analytics_narrative', { ...AI_RATE_LIMITS.analytics_narrative, subject: session.user.id });
   if (userLimited) return userLimited;
   if (session.user.orgId) {

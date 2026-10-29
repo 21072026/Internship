@@ -112,9 +112,9 @@ test('a non-admin cannot edit or delete an announcement', async ({ page }) => {
     const patch = await page.request.patch(`/api/admin/announcements/${record.id}`, {
       data: { text: 'hijacked' },
     });
-    expect(patch.status()).toBe(401);
+    expect(patch.status()).toBe(403);
     const del = await page.request.delete(`/api/admin/announcements/${record.id}`);
-    expect(del.status()).toBe(401);
+    expect(del.status()).toBe(403);
 
     // Untouched.
     const still = await prisma.announcement.findUnique({ where: { id: record.id } });

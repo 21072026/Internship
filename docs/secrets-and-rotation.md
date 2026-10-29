@@ -121,7 +121,7 @@ These are **not secrets**. They are listed so nobody has to wonder.
 - Hosts and URLs: `NEXTAUTH_URL`, `APP_ROOT_DOMAIN`, `MARKETING_HOSTS`, `MARKETING_HOSTS_NONE`,
   `INBOUND_EMAIL_DOMAIN`, `CHAT_OAUTH_REDIRECT_URI`, `GOOGLE_OAUTH_REDIRECT_URI`,
   `GOOGLE_OAUTH_REVOKE_URL`, `GOOGLE_OAUTH_TOKEN_URL`, `GOOGLE_CALENDAR_API_BASE`,
-  `SLACK_API_BASE`, `TEAMS_API_BASE`, `ANDROID_APP_LINKS`, `MAIL_SINK_HOST`, `MAIL_SINK_PORT`,
+  `SLACK_API_BASE`, `SLACK_OAUTH_AUTHORIZE_URL`, `TEAMS_LOGIN_BASE`, `CHAT_APPS_STUB_CLIENT`, `ANDROID_APP_LINKS`, `MAIL_SINK_HOST`, `MAIL_SINK_PORT`,
   `ALERT_EMAIL_TO`.
 - Switches and tuning: `CRON_ENABLED`, `JOBS_WORKER_ENABLED`, `JOBS_CONCURRENCY`,
   `MAIL_WORKER_ENABLED`, `INBOUND_IMAP_POLL_SECONDS`, `MAIL_BURST`, `MAIL_DAILY_CAP`, `MAIL_RATE_PER_MIN`,
@@ -130,7 +130,8 @@ These are **not secrets**. They are listed so nobody has to wonder.
   `FEEDBACK_REPLAY_ENABLED`, `FEEDBACK_REPLAY_SECONDS`, `SUPPORT_REPORT_NOTIFY`,
   `JAAS_MONTHLY_ACTIVE_LIMIT`, `MT_ENFORCE_ISOLATION`, `SELF_SERVE_SIGNUP`, `DEMO_MODE`, `TRUSTED_PROXY_COUNT`,
   `REPLICA_ID`, `APP_TIMEZONE`, `LOG_LEVEL`, `ERROR_TRACKING_ENVIRONMENT`, `NEXT_PUBLIC_ERROR_TRACKING`, `NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE`, `DB_SLOW_QUERY_MS`, `DB_QUERY_WARN_CEILING`,
-  `STATUS_SLA_TARGET`,
+  `STATUS_SLA_TARGET`, `TENANT_HARD_DELETE_ENABLED` and `TENANT_HARD_DELETE_WAIT_HOURS` (irreversible
+  tenant deletion — off unless set, [`tenant-lifecycle.md`](tenant-lifecycle.md)),
   `KLAVIYO_REVISION`, `KLAVIYO_EVENT_METRICS`, `KLAVIYO_CONVERSION_METRIC`.
 - Security headers: `CSP_REPORT_ONLY` (the report-only nonce CSP, [`csp.md`](csp.md)).
 - Model selection: `ANTHROPIC_CV_MODEL`, `ANTHROPIC_SUMMARY_MODEL`, `AI_MODEL_TIER_FAST`,
@@ -163,7 +164,7 @@ Changing it does all of the following at the moment of the restart:
 | everyone is signed out, and remember-me devices stop working | JWT signature; trusted-device flow | announce a window; people sign in again |
 | **2FA recovery codes stop matching** | stored as `HMAC(NEXTAUTH_SECRET, code)` (`src/lib/recoveryCodes.ts`) | TOTP keeps working (its secret is not derived). Tell 2FA users to **regenerate recovery codes** after the rotation |
 | **sealed columns become unreadable** (`open()` returns null) | `seal()`/`open()` key = HKDF(`NEXTAUTH_SECRET`, purpose) (`src/lib/secretBox.ts`) | re-encrypt or re-enter, per row type below |
-| ↳ Google Calendar tokens (`GoogleCalendarConnection`) | | users reconnect; the old grants stay live at Google until revoked there, so do that **before** the rotation if the rotation is because of a leak (`disconnect()` cannot decrypt afterwards) |
+| ↳ Google Calendar tokens (`CalendarConnection`, `provider = GOOGLE`; the old `GoogleCalendarConnection` until #1989's contract step) | | users reconnect; the old grants stay live at Google until revoked there, so do that **before** the rotation if the rotation is because of a leak (`disconnect()` cannot decrypt afterwards) |
 | ↳ SSO SP signing key (`Organization.ssoSpKey`) | `src/lib/ssoSpKey.ts` | regenerate per org and **re-upload the SP metadata at each IdP**. Coordinate with every SSO customer |
 | ↳ roster-feed secrets, Klaviyo keys (`RosterFeed.secretEnc`, `ExternalConnection.sealedKey`) | | admins re-enter them; feeds and syncs fail until then |
 | ↳ affiliate payout details (`AffiliatePartner.payoutDetailsCipher`) | `src/lib/affiliatePayoutDetails.ts` | partners re-enter their IBAN |

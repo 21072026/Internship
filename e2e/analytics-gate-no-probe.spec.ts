@@ -119,7 +119,7 @@ test('a mentor cannot read the analytics entitlements', async ({ page }) => {
   await seedUser(mentorEmail, pw, 'MENTOR', 'Gate Probe Mentor');
   try {
     await signInAndSettle(page, mentorEmail, pw, '/mentor');
-    expect((await page.request.get('/api/admin/analytics/entitlements')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/analytics/entitlements')).status()).toBe(403);
   } finally {
     await cleanupByEmail(mentorEmail);
   }

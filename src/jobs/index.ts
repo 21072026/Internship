@@ -12,6 +12,7 @@ import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
 import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
+import { runPlanResync } from '@/lib/affiliatePlanResync';
 import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { runEventDelivery } from '@/lib/events/emit';
 import { runWebhookDelivery } from '@/lib/webhookDelivery';
@@ -69,6 +70,16 @@ export function registerAllJobs(): void {
   registerJob('api.export', async (payload, { signal }) => ({ ...(await runApiExport(payload.exportId, signal)) }), {
     timeoutMs: 10 * 60 * 1000,
   });
+
+  // Every affiliate partner re-evaluated after a plan change (#3170). The writer's
+  // reconciliation is idempotent, the stored state is the checkpoint (a rerun
+  // resumes after its cursor or runs its retry list) and every state write is
+  // guarded on the plan version, so a rerun — or an older version's job — changes
+  // nothing it should not. Outstanding partners throw, so the backoff retries them.
+  registerJob('affiliate.planResync', async (payload, { job, attempt, signal }) => {
+    if (!job.orgId) return { skipped: 1 };
+    return runPlanResync(payload, job.orgId, { attempt, maxAttempts: job.maxAttempts, signal });
+  }, { timeoutMs: 30 * 60 * 1000 });
 
   // One subscriber for one domain event (#1693). The enqueue is keyed
   // `<eventId>:<subscriber>`, so a retried emit makes no second row; a rerun of

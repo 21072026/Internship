@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -34,9 +33,9 @@ const BATCH = 500;
 const BANDS: readonly HealthBand[] = ['HEALTHY', 'WATCH', 'AT_RISK'];
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The page is closed by gatePage for a vertical without mentorship; the API
   // answers the same (the adminWeeklyReports precedent, #1918).
   const capGate = await requireCapability(session.user.orgId, 'mentorship');

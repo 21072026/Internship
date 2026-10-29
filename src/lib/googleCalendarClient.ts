@@ -82,10 +82,13 @@ export function emailFromIdToken(idToken: string | undefined): string | null {
   }
 }
 
+/** The one Google row of a person's connections (#1989: keyed by (userId, provider)). */
+const googleKey = (userId: string) => ({ userId_provider: { userId, provider: 'GOOGLE' as const } });
+
 export async function saveConnection(userId: string, tokens: TokenResponse, googleEmail: string) {
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
   const data = {
-    googleEmail,
+    accountEmail: googleEmail,
     scope: tokens.scope ?? '',
     accessTokenEnc: seal(tokens.access_token, PURPOSE),
     // Google only returns a refresh token on the FIRST consent. Re-consenting
@@ -95,10 +98,10 @@ export async function saveConnection(userId: string, tokens: TokenResponse, goog
     expiresAt,
     lastError: null,
   };
-  return prisma.googleCalendarConnection.upsert({
-    where: { userId },
+  return prisma.calendarConnection.upsert({
+    where: googleKey(userId),
     update: data,
-    create: { userId, ...data },
+    create: { userId, provider: 'GOOGLE', ...data },
   });
 }
 
@@ -112,7 +115,7 @@ export async function saveConnection(userId: string, tokens: TokenResponse, goog
  * one return value, not four exceptions.
  */
 export async function accessTokenFor(userId: string): Promise<{ token: string; connectionId: string; calendarId: string } | null> {
-  const conn = await prisma.googleCalendarConnection.findUnique({ where: { userId } });
+  const conn = await prisma.calendarConnection.findUnique({ where: googleKey(userId) });
   if (!conn) return null;
 
   if (conn.expiresAt.getTime() - REFRESH_SKEW_MS > Date.now()) {
@@ -127,7 +130,7 @@ export async function accessTokenFor(userId: string): Promise<{ token: string; c
   }
   try {
     const tokens = await refresh(refreshToken);
-    const updated = await prisma.googleCalendarConnection.update({
+    const updated = await prisma.calendarConnection.update({
       where: { id: conn.id },
       data: {
         accessTokenEnc: seal(tokens.access_token, PURPOSE),
@@ -144,7 +147,7 @@ export async function accessTokenFor(userId: string): Promise<{ token: string; c
 }
 
 export async function noteError(connectionId: string, message: string) {
-  await prisma.googleCalendarConnection
+  await prisma.calendarConnection
     .update({ where: { id: connectionId }, data: { lastError: message.slice(0, 500) } })
     .catch(() => {});
 }
@@ -164,7 +167,10 @@ export async function calendarFetch(
 
 /** Revoke at Google, then forget locally. Local deletion happens either way. */
 export async function disconnect(userId: string): Promise<void> {
-  const conn = await prisma.googleCalendarConnection.findUnique({ where: { userId } });
+  const conn = await prisma.calendarConnection.findUnique({ where: googleKey(userId) });
+  // The pre-#1989 row too: it is no longer read, but a token the person asked us
+  // to forget must not survive in the old table until the contract PR drops it.
+  await prisma.googleCalendarConnection.deleteMany({ where: { userId } }).catch(() => {});
   if (!conn) return;
   const token = (conn.refreshTokenEnc ? open(conn.refreshTokenEnc, PURPOSE) : null) ?? open(conn.accessTokenEnc, PURPOSE);
   if (token) {
@@ -176,5 +182,5 @@ export async function disconnect(userId: string): Promise<void> {
       body: new URLSearchParams({ token }),
     }).catch(() => {});
   }
-  await prisma.googleCalendarConnection.delete({ where: { id: conn.id } }).catch(() => {});
+  await prisma.calendarConnection.delete({ where: { id: conn.id } }).catch(() => {});
 }

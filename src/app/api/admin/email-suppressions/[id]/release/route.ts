@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { resolveQueueScope } from '@/lib/mailQueueAdmin';
 import { releaseSuppression } from '@/lib/emailSuppression';
 import { cleanReleaseReason } from '@/lib/emailSuppressionRule';
@@ -15,8 +14,9 @@ export const dynamic = 'force-dynamic';
 // outside it is 404, never a 403 that confirms the id.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const gate = await requirePermission('mail.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const scope = await resolveQueueScope(session);
     if (!scope) return NextResponse.json({ error: 'Forbidden', code: 'mail_queue_operator_only' }, { status: 403 });
     const body = (await request.json().catch(() => null)) as { reason?: unknown; confirm?: unknown } | null;

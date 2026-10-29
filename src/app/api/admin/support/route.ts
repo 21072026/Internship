@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { sendSupportPush } from '@/lib/messagePush';
@@ -35,16 +34,11 @@ const updateSchema = z.object({
   assignToMe: z.boolean().optional(),
 });
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
-
 // GET — the full queue, optionally filtered: ?status=OPEN|IN_PROGRESS|CLOSED.
 export async function GET(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const statusParam = new URL(request.url).searchParams.get('status');
   const status = ['OPEN', 'IN_PROGRESS', 'CLOSED'].includes(statusParam ?? '')
@@ -83,8 +77,9 @@ export async function GET(request: Request) {
 // takes assignment if the ticket has none, marks the requester's messages
 // read, and notifies the requester.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   let payload: unknown;
   let files: File[] = [];
@@ -182,8 +177,9 @@ export async function POST(request: Request) {
 
 // PUT — status transitions and assignment.
 export async function PUT(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || (!parsed.data.status && !parsed.data.assignToMe)) {
