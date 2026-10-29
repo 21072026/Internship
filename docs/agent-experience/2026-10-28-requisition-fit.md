@@ -18,3 +18,7 @@
   before showing an AI sentence.
 - **Route files may export only handlers and route config.** A `export const FIT_REASON_TOP_N`
   in `route.ts` type-checks but fails `next build`; keep such constants module-private.
+- **The `/ai` page has a hard count in `e2e/ai-transparency.spec.ts`** — a new AI task means a new
+  `ai.tasks` entry in all three locales and a bumped count in the same PR. The privacy notice's
+  `aiBody` must say the same thing (it is checked against `docs/ai.md`, which is checked against
+  the code).
