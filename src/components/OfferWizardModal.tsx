@@ -5,11 +5,15 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { CompensationSummary } from '@/components/CompensationSummary';
-import { parseMinorUnits } from '@/lib/money';
+import { OfferLetterView } from '@/components/OfferLetterView';
+import { compensationLine, renderOfferLetter } from '@/lib/offerLetter';
+import { BUILT_IN_OFFER_LETTERS } from '@/lib/offerLetterTemplates';
+import { formatDate } from '@/lib/relativeTime';
+import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import {
   BASE_PERIODS,
   CONTRACT_TYPES,
@@ -88,8 +92,12 @@ interface OfferWizardModalProps {
 // two writes stay in the same place as every other transition.
 export function OfferWizardModal({ open, relationId, menteeName, companyName, companyId, existing, onClose, onSaved }: OfferWizardModalProps) {
   const t = useT();
+  const locale = useLocale();
   const toast = useToast();
   const [step, setStep] = useState(1);
+  // The letter preview (#1857): the org's template for the admin's language,
+  // else the built-in. A reader without settings access sees the built-in.
+  const [letterTemplate, setLetterTemplate] = useState<string>(BUILT_IN_OFFER_LETTERS[locale]);
   const [fields, setFields] = useState<OfferDraftFields>(existing ?? EMPTY);
   const [busy, setBusy] = useState<'draft' | 'send' | null>(null);
   const [requisitions, setRequisitions] = useState<{ id: string; title: string }[]>([]);
@@ -131,6 +139,19 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
       });
     return () => controller.abort();
   }, [open, companyId]);
+
+  useEffect(() => {
+    if (!open || step !== 3) return;
+    const controller = new AbortController();
+    fetch('/api/admin/offer-templates', { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { templates?: { locale: string; bodyMarkdown: string }[] } | null) => {
+        const mine = data?.templates?.find((x) => x.locale === locale);
+        if (mine) setLetterTemplate(mine.bodyMarkdown);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [open, step, locale]);
 
   if (!open) return null;
 
@@ -365,6 +386,27 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
               )}
             </div>
             <p className="mt-2 text-xs text-gray-400">{t.offers.sensitiveNote}</p>
+            <div className="mt-4 rounded-xl border border-gray-100 dark:border-gray-700 p-4" data-testid="offer-wizard-letter-preview">
+              <p className="text-xs font-medium text-gray-500 mb-2">{t.offers.letter.title}</p>
+              <div className="max-h-72 overflow-y-auto">
+                <OfferLetterView
+                  markdown={renderOfferLetter(letterTemplate, {
+                    candidateName: menteeName,
+                    position: fields.position,
+                    companyName: companyName ?? '—',
+                    startDate: fields.startDate ? formatDate(`${fields.startDate}T00:00:00Z`, locale, { month: 'long', timeZone: 'UTC' }) : '—',
+                    compensation: compensationLine(
+                      { ...(figures === 'invalid' ? {} : figures), compensationNote: fields.compensationNote },
+                      t.offers.compensation,
+                      (m, cur) => formatMinorAmount(m, cur, locale),
+                    ),
+                    expiresAt: fields.expiresAt ? formatDate(`${fields.expiresAt}T00:00:00Z`, locale, { month: 'long', timeZone: 'UTC' }) : '—',
+                    programName: '',
+                  })}
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-400">{t.offers.letter.previewHint}</p>
+            </div>
           </div>
         )}
 
