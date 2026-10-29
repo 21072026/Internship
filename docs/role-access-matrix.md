@@ -344,6 +344,14 @@ Kurallar:
   { subject, request })` route guard'ı, `can(actor, permission, subject)` ve kuralın
   saf hali `src/lib/authzRule.ts` (katalog `PERMISSIONS`, kademe tablosu
   `TIER_PERMISSIONS`, birim testli). Route'ların ona taşınması #1571.
+- **`npm run check:authz`** (CI, #1571): `src/app/api/**/route.*` içinde çağıranın
+  rolünü `'ADMIN'` ile karşılaştıran (`session.user.role !== 'ADMIN'`, çıplak
+  `role === 'ADMIN'`, `['ADMIN', …].includes(role)`) ya da yerel bir `requireAdmin…`
+  yardımcısı tanımlayan her yer sayılır. Henüz taşınmamış olanlar dosya başına
+  `scripts/authz-baseline.json`'da `pending` olarak sabittir ve liste **yalnız
+  küçülür**: listede olmayan veya sayısı artan dosya kırmızıdır; sayısı düşen dosya
+  da `npm run check:authz -- --shrink` ile sayı indirilene kadar kırmızıdır. Rolü
+  erişim için değil **veri şekli** için okuyan bir yer `allowed`'a gerekçesiyle girer.
 
 ### İzin kapısının arkasındaki uçlar / Routes behind the permission guard
 
