@@ -7,12 +7,13 @@ import { prisma } from '@/lib/prisma';
 import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { createInterviewRequestSchema, interviewActiveKey } from '@/lib/interviewRequests';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'COMPANY', 'MENTOR'].includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['COMPANY', 'MENTOR'], 'company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (session.user.role === 'COMPANY' && !session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission, type Permission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -18,17 +17,17 @@ import { OFFERABLE_MENTEE_SELECT, createMentorOffer, offerableMenteesWhere } fro
 // request, with profile fields only (never an address or a phone number).
 // This is not a mentee directory: nobody who did not opt in is listed.
 
-async function guard() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+async function guard(request: Request, permission: Permission) {
+  const gate = await requireRoleOrPermission(['MENTOR'], permission, { request });
+  if ('error' in gate) return { error: gate.error };
+  const { session } = gate;
   const denied = await requireCapability(resolveOrgId(session), 'mentorship');
   if (denied) return { error: denied };
   return { session };
 }
 
-export async function GET() {
-  const g = await guard();
+export async function GET(request: Request) {
+  const g = await guard(request, 'program.read');
   if ('error' in g) return g.error;
   const { session } = g;
   return withTenantScope(session, async () => {
@@ -59,7 +58,7 @@ const schema = z.object({
 }).strict();
 
 export async function POST(request: Request) {
-  const g = await guard();
+  const g = await guard(request, 'program.write');
   if ('error' in g) return g.error;
   const { session } = g;
   const parsed = schema.safeParse(await request.json().catch(() => null));

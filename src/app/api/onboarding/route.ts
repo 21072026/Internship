@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { checklistGuidanceKey, isGuidanceDismissed } from '@/lib/guidance';
+import { actorFromSession, can } from '@/lib/authz';
 
 // GET — role-aware first-run checklist state for the current user.
 // Returns ordered steps with { key, done, href, optional?, guideKey } plus the
@@ -33,6 +34,8 @@ function withGuides(steps: Omit<Step, 'guideKey'>[]): Step[] {
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
   return await withTenantScope(session, async () => {
     const { id, role } = session.user;
@@ -76,7 +79,7 @@ export async function GET() {
       });
     }
 
-    if (role === 'ADMIN') {
+    if (isAdmin) {
       // The launch list a programme owner actually has to work through, not the
       // three rows the dashboard happened to have. StageSla / PipelineStage /
       // DocumentRequirement / EvaluationTemplate carry a REQUIRED orgId and are
