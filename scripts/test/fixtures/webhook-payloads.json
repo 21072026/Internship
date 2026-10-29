@@ -564,5 +564,125 @@
       "requisitionId"
     ],
     "additionalProperties": false
+  },
+  "interview_request.created@1": {
+    "type": "object",
+    "properties": {
+      "requestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "menteeId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "companyId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "requestId",
+      "requisitionId",
+      "menteeId",
+      "companyId"
+    ],
+    "additionalProperties": false
+  },
+  "interview_request.approved@1": {
+    "type": "object",
+    "properties": {
+      "requestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "menteeId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "requestId",
+      "requisitionId",
+      "menteeId"
+    ],
+    "additionalProperties": false
+  },
+  "interview_request.declined@1": {
+    "type": "object",
+    "properties": {
+      "requestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "menteeId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "reasonCode": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requestId",
+      "requisitionId",
+      "menteeId",
+      "reasonCode"
+    ],
+    "additionalProperties": false
+  },
+  "company_interest.changed@1": {
+    "type": "object",
+    "properties": {
+      "interestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "companyId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "menteeId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "from": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "to": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "interestId",
+      "companyId",
+      "menteeId",
+      "requisitionId",
+      "from",
+      "to"
+    ],
+    "additionalProperties": false
   }
 }

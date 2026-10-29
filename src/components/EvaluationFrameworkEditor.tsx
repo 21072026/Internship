@@ -156,6 +156,7 @@ export function EvaluationFrameworkEditor() {
                       <label key={l} className="text-xs text-gray-500">
                         {l.toUpperCase()}
                         <input
+                          lang={l}
                           value={row.labels[l] ?? ''}
                           onChange={(e) => patchRow(scope, i, { labels: { ...row.labels, [l]: e.target.value } })}
                           placeholder={row.builtIn ? builtInLabel(row.key) : ''}

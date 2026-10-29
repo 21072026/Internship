@@ -248,6 +248,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     referenceContact: { limit: 'mentorScreeningReference', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
     referenceOutcome: { limit: 'mentorScreeningReferenceOutcome', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
   },
+  MentorOffer: {
+    id: ID,
+    orgId: ID,
+    mentorId: ID,
+    menteeId: ID,
+    message: { limit: 'mentorOfferMessage', files: ['src/app/api/mentor/offers/route.ts'] },
+  },
   CompanyInquiry: {
     id: ID,
     orgId: ID,
