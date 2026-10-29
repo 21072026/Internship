@@ -4455,6 +4455,14 @@ const en = {
       expiry: 'This link expires in 24 hours. Until you verify, your account has read-only access.',
       copyLink: 'Or copy this link:',
     },
+    groupEventEmail: {
+      promotedSubject: 'A place opened up: {title}',
+      promotedBody: 'Someone gave up their place, and you were first on the waitlist — you are now registered.',
+      cancelledSubject: 'Cancelled: {title}',
+      cancelledBody: 'This group session has been called off. You do not need to do anything.',
+      when: 'When:',
+      open: 'Open the session',
+    },
     meetingChangeEmail: {
       movedSubject: 'Moved: {title}',
       movedBody: 'This meeting has a new time.',
@@ -14508,6 +14516,14 @@ const tr: Dict = {
       expiry: 'Bu bağlantı 24 saat içinde geçerliliğini yitirir. Doğrulayana kadar hesabınız yalnızca görüntüleme yetkisine sahiptir.',
       copyLink: 'Ya da bu bağlantıyı kopyalayın:',
     },
+    groupEventEmail: {
+      promotedSubject: 'Bir yer açıldı: {title}',
+      promotedBody: 'Biri yerini bıraktı ve yedek listede ilk sıradaydın — artık kayıtlısın.',
+      cancelledSubject: 'İptal edildi: {title}',
+      cancelledBody: 'Bu grup oturumu iptal edildi. Senin bir şey yapmana gerek yok.',
+      when: 'Zaman:',
+      open: 'Oturumu aç',
+    },
     meetingChangeEmail: {
       movedSubject: 'Taşındı: {title}',
       movedBody: 'Bu toplantının saati değişti.',
@@ -24465,6 +24481,14 @@ const de: Dict = {
       cta: 'E-Mail bestätigen',
       expiry: 'Dieser Link läuft in 24 Stunden ab. Bis zur Bestätigung hat dein Konto nur Lesezugriff.',
       copyLink: 'Oder kopiere diesen Link:',
+    },
+    groupEventEmail: {
+      promotedSubject: 'Ein Platz ist frei: {title}',
+      promotedBody: 'Jemand hat seinen Platz freigegeben, und du warst als Erste:r auf der Warteliste — du bist jetzt angemeldet.',
+      cancelledSubject: 'Abgesagt: {title}',
+      cancelledBody: 'Diese Gruppensitzung wurde abgesagt. Du musst nichts weiter tun.',
+      when: 'Wann:',
+      open: 'Sitzung öffnen',
     },
     meetingChangeEmail: {
       movedSubject: 'Verschoben: {title}',

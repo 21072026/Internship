@@ -2487,6 +2487,62 @@ export async function sendMeetingCancelledEmail({
   });
 }
 
+// Group sessions (#1856): a waitlist promotion, or the session called off.
+// Category `meeting-invite` on purpose — it is an invitation to a time, the
+// same opt-out a person already chose for meeting invitations, and it reuses
+// that category's outbound-approval and lane entries instead of adding one.
+export async function sendGroupEventEmail({
+  to,
+  fullName,
+  kind,
+  title,
+  startsAt,
+  timeZone,
+  path,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  kind: 'promoted' | 'cancelled';
+  title: string;
+  startsAt: Date;
+  timeZone?: string | null;
+  /** The session's in-app page for this recipient's role (eventLinkFor). */
+  path: string;
+  userId: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const E = D.notifications.groupEventEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const subject = (kind === 'promoted' ? E.promotedSubject : E.cancelledSubject).replace('{title}', title);
+  const when = formatInTimeZone(startsAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved));
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(kind === 'promoted' ? E.promotedBody : E.cancelledBody)}</p>
+        <p><strong>${esc(E.when)}</strong> ${kind === 'cancelled' ? `<s>${when}</s>` : when}</p>
+        ${kind === 'promoted' ? `<p><a href="${esc(`${base}${path}`)}">${esc(E.open)}</a></p>` : ''}
+        ${timeZoneNote(timeZone, resolved, base)}
+      </div>
+    `,
+  });
+}
+
 // The guest siblings — see sendMeetingGuestInviteEmail for why they are separate
 // functions and not a flag: no saved zone (the organizer's clock, named), no
 // /account link, and the mail says who changed it.

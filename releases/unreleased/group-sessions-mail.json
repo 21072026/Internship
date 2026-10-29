@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Group sessions, mail (#1856, 4/4):** a waitlist promotion and a cancelled session are now also mailed through `sendEmail()` (`sendGroupEventEmail()`, category `meeting-invite`, EN/TR/DE `notifications.groupEventEmail`), on the recipient's clock and in their language, with a link to the session for a promotion. A publish stays in-app only.",
+  "notes": {
+    "en": ["When a place opens up in a full group session, the first person on the waitlist now also gets an e-mail — and everyone registered is e-mailed if the session is cancelled."],
+    "tr": ["Dolu bir grup oturumunda yer açılınca yedek listedeki ilk kişiye artık e-posta da gidiyor; oturum iptal edilirse kayıtlı herkese e-posta gönderiliyor."],
+    "de": ["Wird in einer vollen Gruppensitzung ein Platz frei, bekommt die erste Person auf der Warteliste jetzt auch eine E-Mail — und alle Angemeldeten werden per E-Mail informiert, wenn die Sitzung abgesagt wird."]
+  }
+}
