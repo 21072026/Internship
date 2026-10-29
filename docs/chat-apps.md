@@ -44,8 +44,15 @@ unmatched or unverified address creates nothing, and no member ever becomes a
 user. The person confirms (or rejects) on their account page ("Chat apps" card,
 `GET/POST/DELETE /api/integrations/chat/identity`, own identities only; an ADMIN
 may remove any link of their org). Only a confirmed identity is delivered to;
-disconnecting stops chat and leaves e-mail and the bell untouched. Teams has no
-directory proposal yet (it needs Microsoft Graph application permissions).
+disconnecting stops chat and leaves e-mail and the bell untouched. For Teams the
+directory is read through Microsoft Graph (#3327), **only with
+`TEAMS_GRAPH_DIRECTORY_ENABLED=1`** — it needs the `User.Read.All` application
+permission on the app registration with the tenant admin's consent: a
+client-credentials token for the workspace's tenant
+(`<TEAMS_LOGIN_BASE>/<tenant>/oauth2/v2.0/token`), then `GET /v1.0/users`
+paged, a `@odata.nextLink` followed only on the Graph host. Enabled users with
+a `mail` are matched on that tenant-managed address (never the
+`userPrincipalName`). Without the flag Teams answers `not_supported`.
 Account erasure deletes the person's chat identities. Still to come: the
 per-category channel matrix (#1707).
 
