@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-import { setSetting } from '@/lib/settings';
+import { writeSetting } from '@/lib/settingsWrite';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { logActivity } from '@/lib/activity';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -40,7 +40,7 @@ export async function PUT(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const value = serializeRequired(parsed.data.required);
   return withTenantScope(g.session, async () => {
-    await setSetting('mentorScreeningRequired', value, g.orgId);
+    await writeSetting('mentorScreeningRequired', value, g.orgId, { actor: { id: g.session.user.id, email: g.session.user.email } });
     await logActivity({
       action: 'mentor_application.screening_policy',
       actorId: g.session.user.id,
