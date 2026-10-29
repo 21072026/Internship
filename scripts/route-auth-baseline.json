@@ -126,6 +126,10 @@
     "methods": ["POST"],
     "why": "One tick of the outbound mail queue drain (#2944), fired every 5 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process MAIL_DRAIN_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only delivers mail that is already queued and never takes input from the request."
   },
+  "src/app/api/developers/sandbox-key/route.ts": {
+    "methods": ["POST"],
+    "why": "The developer portal's sandbox key (#1992) is for a visitor with no account. It answers 404 everywhere but the public demo deployment (DEMO_MODE AND a database whose name ends in _demo, src/lib/api/sandboxKeyRule.ts), so it can never mint against a real organisation; on the demo the key is read-only, bound to the synthetic default org, expires in a day, carries a daily allowance, and minting is rate-limited per address and capped deployment-wide."
+  },
   "src/app/api/mentor-applications/route.ts": {
     "methods": ["POST"],
     "why": "The public 'become a mentor' application (#904): anyone may apply without an account, and no User is created until an admin approves (#905/#933). GET in the same file is the admin review queue and does take a session."
