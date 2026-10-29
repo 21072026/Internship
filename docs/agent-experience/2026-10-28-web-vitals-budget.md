@@ -8,7 +8,8 @@
 - To measure a page's *first* load after signing in, open a second browser context with the
   first one's `storageState` and its `baseURL` — a `browser.newContext()` does not inherit the
   project's `baseURL`, and the sign-in page has already warmed the shared chunks in the first one.
-- `check:route-auth` was red on main (a new public route without its baseline entry). Any
-  sibling's PR inherits that; porting the one baseline entry is cheaper than waiting.
+- `check:route-auth` was red on main for a while (a new public route without its baseline
+  entry). If you port the missing entry, re-check after merging main: the fix may land
+  there too and leave a duplicate key in the JSON, which `JSON.parse` silently accepts.
 - `scripts/route-auth-baseline.json` must be edited as text: a `json.dumps` round trip
   reformats its hand-wrapped arrays into a 200-line diff.

@@ -192,5 +192,8 @@ value it was set from:
 | `cls` | stable on a runner; a layout shift is a real regression |
 | `lcpMs` | runner-noisy — a ceiling for "something broke", not a tuning target. The runner is not throttled, so a 4G phone is slower than this number |
 
+**Known debt:** `/portal` measures a CLS of ~0.19–0.24 (Google's "good" is ≤ 0.1). The budget
+pins it at 0.3 so it cannot get worse; the fix lowers the budget in the same PR.
+
 A local `npm run dev` run skips it (unminified bundles); `PERF_BUDGET=1` runs it against a local
 `npm run start`. Raising a budget is a deliberate line in the PR that pays for it.

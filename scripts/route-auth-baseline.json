@@ -170,10 +170,6 @@
     "methods": ["GET"],
     "why": "The file that same external reviewer is asked to decide on (#1859), readable through the same token for exactly as long as the token can still decide its step."
   },
-  "src/app/api/public/signup/org/route.ts": {
-    "methods": ["POST"],
-    "why": "Self-serve tenant signup (#1749): the visitor has no account yet — creating the org and its first ADMIN is what the POST does. Off unless SELF_SERVE_SIGNUP=true (503), rate-limited (SIGNUP_ORG_RATE_LIMIT), never mints a session (the admin starts inactive and unverified and admits itself through the verification link), and answers a taken address like an unusable org name so it is no enumeration oracle."
-  },
   "src/app/api/rsvp/route.ts": {
     "methods": ["GET", "POST"],
     "why": "Meeting RSVP from the emailed link (#1446). Meeting.rsvpToken and MeetingGuest.rsvpToken are the credentials — an external guest has no account — and are looked up separately, never as one query over a shared column, with identical answers so a revoked guest invitation cannot be told from a wrong token."

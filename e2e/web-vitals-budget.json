@@ -1,1 +1,7 @@
-{ "pages": { "/": { "jsKb": 9999, "cls": 1, "lcpMs": 99999, "measured": { "jsKb": 0, "cls": 0, "lcpMs": 0 } }, "/portal": { "jsKb": 9999, "cls": 1, "lcpMs": 99999, "measured": { "jsKb": 0, "cls": 0, "lcpMs": 0 } } } }
+{
+  "_comment": "Budgets for e2e/web-vitals-budget.spec.ts (#1593). `measured` is what the production build gave when the budget was set (local `npm run start`, three runs, 2026-10-29). jsKb ≈ measured + 12 %; lcpMs is a 'something broke' ceiling (runners are noisy and unthrottled). /portal's CLS is ABOVE Google's 0.1 'good' line today — the budget pins it so it cannot get worse; lowering it is the fix's job.",
+  "pages": {
+    "/": { "jsKb": 200, "cls": 0.05, "lcpMs": 4000, "measured": { "jsKb": 176, "cls": 0, "lcpMs": 296 } },
+    "/portal": { "jsKb": 320, "cls": 0.3, "lcpMs": 4000, "measured": { "jsKb": 283, "cls": 0.236, "lcpMs": 584 } }
+  }
+}
