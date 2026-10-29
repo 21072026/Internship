@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -28,10 +27,10 @@ import { BILLING_METRICS, billingFeatureRows, buildBillingSummary, trailingPerio
 // list, and a MARKETING org has no plan gate and no checkout
 // (src/lib/marketingPlans.ts), so the route refuses an org without the
 // `mentorship` capability exactly like the page does.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 403 });
   const capGate = await requireCapability(orgId, 'mentorship');

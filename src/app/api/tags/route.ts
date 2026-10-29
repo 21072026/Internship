@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -16,11 +15,10 @@ import { isHexColor } from '@/lib/branding';
 // GET — the vocabulary plus how often each label is actually used. The count is
 // what tells an admin which tags are load-bearing and which are somebody's
 // abandoned experiment, so it is worth the join.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requireRoleOrPermission(['MENTOR'], 'content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ tags: [] });
@@ -46,10 +44,9 @@ const createSchema = z.object({
 // usually the mentor, and forcing that through an admin means the observation
 // is lost rather than recorded.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });

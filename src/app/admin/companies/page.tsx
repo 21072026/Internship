@@ -1,5 +1,7 @@
 'use client';
 import { useT } from "@/i18n/client";
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -95,6 +97,8 @@ export default function CompaniesPage() {
   const editForRef = useRef<string | null>(null);
   const [entitlingCompany, setEntitlingCompany] = useState<Company | null>(null);
   const [error, setError] = useState('');
+  // The plan's company band (#1752): the upgrade prompt above the list.
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [clCompanyId, setClCompanyId] = useState('');
   const [clEmail, setClEmail] = useState('');
   const [clName, setClName] = useState('');
@@ -235,8 +239,11 @@ export default function CompaniesPage() {
     });
     if (!res.ok) {
       const body = await res.json();
-      throw new Error(body.error || t.companiesPage.createFailed);
+      const wall = parseGateBody(body);
+      setGate(wall);
+      throw new Error(wall ? t.companiesPage.createFailed : body.error || t.companiesPage.createFailed);
     }
+    setGate(null);
     await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
     setShowForm(false);
   };
@@ -362,6 +369,7 @@ export default function CompaniesPage() {
         />
       )}
 
+      {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-4" />}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {error}

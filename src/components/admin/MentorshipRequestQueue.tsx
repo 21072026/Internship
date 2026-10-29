@@ -50,6 +50,8 @@ type Filter = 'all' | 'rematch' | 'new';
 interface RequestSuggestions {
   list: { mentorId: string; fullName: string; match: MatchScore }[];
   blockedTotal: number;
+  /** The MatchFeedback batch these were recorded under — echoed on approve (#1789). */
+  batchId: string | null;
 }
 
 interface MentorOption {
@@ -81,6 +83,8 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [suggested, setSuggested] = useState<Record<string, RequestSuggestions>>({});
   const [suggesting, setSuggesting] = useState<string | null>(null);
+  // Per-request decision note (#1789) — stored on the audit record only.
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
   // A plan wall gets the upgrade prompt instead of a sentence (#1745).
@@ -128,7 +132,16 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
       const res = await fetch('/api/admin/mentorship-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, action, mentorId: choices[requestId] || undefined }),
+        body: JSON.stringify({
+          requestId,
+          action,
+          mentorId: choices[requestId] || undefined,
+          // For the audit record of an approval (#1789): the suggestion batch
+          // shown for this request, if any, and the admin's note.
+          ...(action === 'approve'
+            ? { suggestionBatchId: suggested[requestId]?.batchId ?? undefined, decisionNote: notes[requestId]?.trim() || undefined }
+            : {}),
+        }),
       });
       if (res.ok) {
         load();
@@ -172,7 +185,7 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
       const d = await res.json();
       const list = ((d.suggestions ?? []) as { mentorId: string; fullName: string; match?: MatchScore }[])
         .filter((x): x is { mentorId: string; fullName: string; match: MatchScore } => !!x.match);
-      setSuggested((cur) => ({ ...cur, [r.id]: { list, blockedTotal: Number(d.blockedTotal) || 0 } }));
+      setSuggested((cur) => ({ ...cur, [r.id]: { list, blockedTotal: Number(d.blockedTotal) || 0, batchId: typeof d.batchId === 'string' ? d.batchId : null } }));
       if (list[0]) setChoices((c) => (c[r.id] ? c : { ...c, [r.id]: list[0].mentorId }));
     } catch {
       setErr(t.common.error);
@@ -390,6 +403,16 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
                   </option>
                 ))}
               </select>
+              <input
+                type="text"
+                value={notes[r.id] ?? ''}
+                maxLength={1000}
+                onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                placeholder={t.matchDecision.notePlaceholder}
+                aria-label={t.matchDecision.noteLabel}
+                data-testid={`request-decision-note-${r.id}`}
+                className="min-w-0 max-w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2.5 py-1.5 text-sm"
+              />
               <Button
                 size="sm"
                 variant="ghost"

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
@@ -29,6 +30,9 @@ import { refuseForeignTargets } from '@/lib/relationTargets';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { agreementStatusesFor, agreementStatusWhere, getActiveAgreement } from '@/lib/mentoringAgreement';
 import { isAgreementStatus } from '@/lib/mentoringAgreementRule';
+import { recordMatchDecision } from '@/lib/matching/decision';
+import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
+import { getLocale } from '@/i18n/server';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -38,6 +42,10 @@ const createRelationSchema = z.object({
   startDate: z.string().optional(),
   // PLACEMENT (default) | COACHING (#1503); whitelisted below, never z.enum.
   kind: z.string().max(16).optional(),
+  // The audit record (#1789): the suggestion batch the admin was shown and
+  // their note on why this mentor — stored on the decision row only.
+  suggestionBatchId: z.string().min(1).max(64).optional(),
+  decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
 });
 
 export async function GET(request: Request) {
@@ -54,6 +62,10 @@ export async function GET(request: Request) {
     if (session.user.role === 'COMPANY' && !companyOrgId) {
       return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     }
+    // Does this caller read as an admin (the org-wide agreement column, the
+    // re-engagement flag)? The permission rule answers, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
     // Bind the request's tenant so every query below is auto-scoped once
     // MT_ENFORCE_ISOLATION is on (no-op while it's off). See orgContext.ts (#543).
@@ -64,7 +76,7 @@ export async function GET(request: Request) {
     // The mentoring agreement column and filter (#1792) — ADMIN only, and only
     // in a vertical with pairs. A report, never a gate on the relation.
     const agreementParam = searchParams.get('agreement');
-    const showsAgreement = session.user.role === 'ADMIN' && (await shellCapabilities(session.user.orgId)).includes('mentorship');
+    const showsAgreement = isAdmin && (await shellCapabilities(session.user.orgId)).includes('mentorship');
     const activeAgreement = showsAgreement ? await getActiveAgreement(resolveOrgId(session)) : null;
     // Pagination is opt-in: only applied when `page` is explicitly passed, so
     // the many callers that expect the full list (board views, mentee/mentor
@@ -154,7 +166,7 @@ export async function GET(request: Request) {
     // only the boolean ships, and only to the two roles that can already list
     // the pool through GET /api/re-engagement, so COMPANY and SOURCE callers
     // see exactly the payload they saw before.
-    const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+    const seesPool = isAdmin || session.user.role === 'MENTOR';
     const withStageClock = <
       T extends { mentorId: string; startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
     >(
@@ -205,11 +217,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('relation.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const body = await request.json();
@@ -222,7 +232,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind } = parsed.data;
+    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind, suggestionBatchId, decisionNote } = parsed.data;
     if (rawKind !== undefined && !isRelationKind(rawKind)) {
       return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
     }
@@ -349,6 +359,20 @@ export async function POST(request: Request) {
     }
 
     await emit('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
+
+    // The per-pairing audit record (#1789). Never throws: the pairing above is
+    // committed, and a failed audit write is logged, not returned.
+    await recordMatchDecision({
+      orgId: relation.orgId,
+      relationId: relation.id,
+      menteeId,
+      mentorId,
+      source: 'ADMIN_DIRECT',
+      decidedById: session.user.id,
+      suggestionBatchId: suggestionBatchId ?? null,
+      note: decisionNote ?? null,
+      locale: await getLocale(),
+    });
 
     // A direct admin assignment used to be completely silent — neither side heard
     // about it until they happened to log in (#668). In-app is unconditional,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { canAccessMessage } from '@/lib/conversations';
@@ -70,8 +71,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   // scope === 'everyone'
   const isSender = message.senderId === session.user.id;
-  if (!isSender && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Only the sender can delete for everyone' }, { status: 403 });
+  if (!isSender) {
+    // Besides the sender, only an admin — the permission layer's answer (#1571).
+    const actor = await actorFromSession(session);
+    if (!actor || !(await can(actor, 'relation.write', undefined, session))) {
+      return NextResponse.json({ error: 'Only the sender can delete for everyone' }, { status: 403 });
+    }
   }
   if (!message.deletedForEveryoneAt) {
     // Drop the body and any attachments so the content can't be recovered.

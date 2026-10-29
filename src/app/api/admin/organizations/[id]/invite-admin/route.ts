@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 import { logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { superAdminReaches } from '@/lib/superAdminWorld';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
@@ -97,6 +99,11 @@ async function handlePost(request: Request, params: Promise<{ id: string }>) {
         );
       }
     }
+
+    // The target org's admin-seat quota (#1752) — the same gate as POST
+    // /api/invite. ADMIN seats only; an open ADMIN invitation holds a seat.
+    const seats = await enforceQuota(org.id, 'ADMIN_SEATS', { pendingAdminInvites: true });
+    if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
 
     // Same language rule as POST /api/invite (#1720): the form's choice, else
     // the inviter's own UI language, else the deployment default.

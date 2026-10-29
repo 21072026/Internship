@@ -7,6 +7,8 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { isLocale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { convertInquiryToCompanyAccount } from '@/lib/companyProvisioning';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { verticalFor } from '@/lib/verticalContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -87,6 +89,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : isLocale(admin?.preferredLanguage)
         ? admin.preferredLanguage
         : null;
+
+    // The conversion creates a company: the plan's company band (#1752).
+    const companies = await enforceQuota(orgId, 'COMPANIES');
+    if (!companies.allowed) return NextResponse.json(quotaError(companies), { status: 403 });
 
     const result = await convertInquiryToCompanyAccount({
       inquiryId: inquiry.id,

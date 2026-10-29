@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
@@ -14,11 +13,9 @@ import { resolveOrgId } from '@/lib/orgScope';
 // opted into a public profile (publicProfile=true) — the same visibility as the
 // public /p/[id] page — so no mentee is exposed without their own opt-in.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'COMPANY' && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireRoleOrPermission(['COMPANY'], 'user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   // Admins can always view (support); companies need the premium entitlement.
   if (session.user.role === 'COMPANY' && !(await hasFeature(session.user.companyId, 'TALENT_POOL_SEARCH'))) {
     // The shared gate shape (#1745), so the page renders the upgrade prompt from it.
@@ -62,7 +59,7 @@ export async function GET(request: Request) {
   // narrows the set the DB counts and paginates. Filtering it afterwards is
   // what made the old count wrong in the first place.
   const windowDays = parseInt(await resolveSettingRaw('earlyAccessWindowDays', { orgId: await settingsOrgOf(session) }), 10) || 0;
-  const hasEarlyAccess = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'EARLY_ACCESS'));
+  const hasEarlyAccess = admin || (await hasFeature(session.user.companyId, 'EARLY_ACCESS'));
   if (windowDays > 0 && !hasEarlyAccess) {
     const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
     where.NOT = {

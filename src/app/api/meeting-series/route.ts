@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can, requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { sendMeetingInviteEmail } from '@/services/emailService';
@@ -373,10 +374,15 @@ export async function GET(request: Request) {
     if (!project || !(await inCallerTenant(project.orgId, session.user.orgId))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    // "Admin" is the permission layer's answer (#1571), asked last so a
+    // manager or member costs no extra lookup.
     if (
-      session.user.role !== 'ADMIN' &&
       !canManageProject(session.user, project) &&
-      !(await isProjectMember(session.user, projectId))
+      !(await isProjectMember(session.user, projectId)) &&
+      !(await (async () => {
+        const actor = await actorFromSession(session);
+        return !!actor && (await can(actor, 'program.read', undefined, session));
+      })())
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -399,10 +405,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const raw = await request.json().catch(() => null);
   // The capability gate runs FIRST, before validation (e2e/vertical-write-gate):
   // a vertical without the module never even reaches a 400. Which module is the
@@ -479,10 +484,9 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const earlyGate = await eitherSeriesModule(session.user.orgId);
   if (earlyGate) return earlyGate;
 
@@ -600,10 +604,9 @@ export async function PUT(request: Request) {
 // the rule is deactivated *and* every occurrence it ever put in the database is
 // removed, so no ghost entry is left on anyone's calendar (#1110).
 export async function DELETE(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const earlyGate = await eitherSeriesModule(session.user.orgId);
   if (earlyGate) return earlyGate;
 
