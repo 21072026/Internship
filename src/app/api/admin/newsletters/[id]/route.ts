@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -13,6 +11,7 @@ import {
   normalizeNewsletterContent,
   writtenNewsletterLocales,
 } from '@/lib/newsletter';
+import { requirePermission } from '@/lib/authz';
 
 /**
  * One issue: read it, edit it while it can still change, cancel it, delete it
@@ -44,8 +43,9 @@ const patchSchema = z.object({
 // GET — the issue plus its delivery record. This is the "who was it sent to"
 // view, so the per-recipient rows come with it.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 
@@ -90,8 +90,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 // PATCH — edit a draft, (re)schedule it, disarm it, or cancel it.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 
@@ -172,8 +173,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // DELETE — only a draft or a canceled issue. See the header: a sent issue is
 // the record of what people received, and the module's job is to keep it.
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 

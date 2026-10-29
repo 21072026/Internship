@@ -215,7 +215,7 @@ test('non-admin cannot list or create organizations', async ({ page }) => {
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
     const list = await page.request.get('/api/admin/organizations');
-    expect(list.status()).toBe(401);
+    expect(list.status()).toBe(403);
 
     // Signed in, not an administrator: 403 (#2065), and the provisioning
     // fields the wizard posts change nothing about that.

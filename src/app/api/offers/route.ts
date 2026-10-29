@@ -7,11 +7,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
-import { canSeeCompensation, compensationSelect, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
+import { canSeeCompensation, compensationSelect, isDeclineReasonCode, isOfferStatus, letterSelect } from '@/lib/offers';
 import { EMPTY_COMPENSATION, validateCompensation } from '@/lib/compensation';
 import { compensationInputShape, mergeCompensation, pickCompensationInput } from '@/lib/compensationInput';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requirePermission, requireRoleOrPermission } from '@/lib/authz';
 
 // Fields every authorized caller may see. The compensation columns (the note
 // and, since #1851, the structured figures — OFFER_COMPENSATION_FIELDS) are
@@ -114,13 +115,11 @@ async function withRequisitionTitles<T extends { requisitionId: string | null }>
 //   MENTEE  — only offers on relations where they are the mentee.
 //   COMPANY — only offers on their own companyId; no companyId => 403.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireRoleOrPermission(['MENTEE', 'COMPANY'], 'company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
 
   const role = session.user.role;
-  if (role !== 'ADMIN' && role !== 'MENTEE' && role !== 'COMPANY') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
   if (role === 'COMPANY' && !session.user.companyId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -140,10 +139,10 @@ export async function GET(request: Request) {
     // cannot be forgotten wins. Flag off, the deployment is single-tenant and
     // nothing scopes — including a legacy row whose orgId was never backfilled,
     // which must not vanish from the only screen listing it.
-    const where: Prisma.OfferWhereInput = role === 'ADMIN' ? adminFilters(sp) : {};
+    const where: Prisma.OfferWhereInput = admin ? adminFilters(sp) : {};
     if (relationId) where.relationId = relationId;
 
-    if (role !== 'ADMIN') {
+    if (!admin) {
       const status = sp.get('status') || undefined;
       if (status) where.status = status;
 
@@ -159,16 +158,16 @@ export async function GET(request: Request) {
     }
 
     const select = canSeeCompensation({ role, isOwnMenteeOffer: role === 'MENTEE' })
-      ? { ...baseSelect, ...compensationSelect() }
+      ? { ...baseSelect, ...compensationSelect(), ...letterSelect() }
       : baseSelect;
     // The index shows who each offer is for, so ADMIN alone gets the mentee's
     // name joined in. Deliberately not folded into baseSelect: POST reuses it,
     // and no other role may gain a field because the admin list needed one.
-    const listSelect = role === 'ADMIN'
+    const listSelect = admin
       ? { ...select, relation: { select: { ...baseSelect.relation.select, mentee: { select: { id: true, fullName: true } } } } }
       : select;
 
-    if (role !== 'ADMIN') {
+    if (!admin) {
       const offers = await prisma.offer.findMany({ where, select: listSelect, orderBy: { createdAt: 'desc' } });
       return NextResponse.json({ offers: await withRequisitionTitles(offers, orgId) });
     }
@@ -220,9 +219,8 @@ export async function POST(request: Request) {
   // 'placements' is refused before the role check and before any write.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  if (session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requirePermission('company.write', { request });
+  if ('error' in gate) return gate.error;
 
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));

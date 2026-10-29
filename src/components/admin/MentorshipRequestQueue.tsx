@@ -12,6 +12,8 @@ import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { MatchScoreBreakdown } from '@/components/matching/MatchScoreBreakdown';
+import type { MatchScore } from '@/lib/matching/types';
 
 interface RequestRow {
   id: string;
@@ -44,6 +46,14 @@ interface RematchStats {
 
 type Filter = 'all' | 'rematch' | 'new';
 
+/** Scored suggestions for one request (#1787), fetched on demand — never for the whole queue. */
+interface RequestSuggestions {
+  list: { mentorId: string; fullName: string; match: MatchScore }[];
+  blockedTotal: number;
+  /** The MatchFeedback batch these were recorded under — echoed on approve (#1789). */
+  batchId: string | null;
+}
+
 interface MentorOption {
   id: string;
   fullName: string;
@@ -71,6 +81,10 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
   const [stats, setStats] = useState<RematchStats | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [choices, setChoices] = useState<Record<string, string>>({});
+  const [suggested, setSuggested] = useState<Record<string, RequestSuggestions>>({});
+  const [suggesting, setSuggesting] = useState<string | null>(null);
+  // Per-request decision note (#1789) — stored on the audit record only.
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
   // A plan wall gets the upgrade prompt instead of a sentence (#1745).
@@ -118,7 +132,16 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
       const res = await fetch('/api/admin/mentorship-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, action, mentorId: choices[requestId] || undefined }),
+        body: JSON.stringify({
+          requestId,
+          action,
+          mentorId: choices[requestId] || undefined,
+          // For the audit record of an approval (#1789): the suggestion batch
+          // shown for this request, if any, and the admin's note.
+          ...(action === 'approve'
+            ? { suggestionBatchId: suggested[requestId]?.batchId ?? undefined, decisionNote: notes[requestId]?.trim() || undefined }
+            : {}),
+        }),
       });
       if (res.ok) {
         load();
@@ -139,6 +162,35 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
       setErr(t.common.error);
     } finally {
       setBusy(null);
+    }
+  };
+
+  // "Suggest" on one request (#1787): the same scored ranking as the inline
+  // assign control, with this request's field and languages feeding the score.
+  // It fills the picker only when the admin has not chosen anybody yet — the
+  // mentee's preferred mentor, preselected above, stays the default.
+  const suggest = async (r: RequestRow) => {
+    setSuggesting(r.id);
+    setErr('');
+    try {
+      const res = await fetch('/api/admin/mentor-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menteeId: r.mentee.id, requestId: r.id }),
+      });
+      if (!res.ok) {
+        setErr(t.common.error);
+        return;
+      }
+      const d = await res.json();
+      const list = ((d.suggestions ?? []) as { mentorId: string; fullName: string; match?: MatchScore }[])
+        .filter((x): x is { mentorId: string; fullName: string; match: MatchScore } => !!x.match);
+      setSuggested((cur) => ({ ...cur, [r.id]: { list, blockedTotal: Number(d.blockedTotal) || 0, batchId: typeof d.batchId === 'string' ? d.batchId : null } }));
+      if (list[0]) setChoices((c) => (c[r.id] ? c : { ...c, [r.id]: list[0].mentorId }));
+    } catch {
+      setErr(t.common.error);
+    } finally {
+      setSuggesting(null);
     }
   };
 
@@ -300,6 +352,31 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
                   )}
                 </div>
               )}
+              {suggested[r.id] && (
+                <div className="mt-2 space-y-1" data-testid={`request-suggestions-${r.id}`}>
+                  {suggested[r.id].list.length === 0 && <p className="text-xs text-gray-500">{q.suggestNone}</p>}
+                  {suggested[r.id].list.map((s) => (
+                    <div key={s.mentorId} className="flex min-w-0 flex-wrap items-center gap-2 text-sm" data-testid={`request-suggestion-${s.mentorId}`}>
+                      <span className="min-w-0 truncate text-gray-800 dark:text-gray-200">{s.fullName}</span>
+                      <MatchScoreBreakdown {...s.match} compact />
+                      <button
+                        type="button"
+                        onClick={() => setChoices((c) => ({ ...c, [r.id]: s.mentorId }))}
+                        disabled={choices[r.id] === s.mentorId}
+                        className="text-xs text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline dark:text-blue-400"
+                        data-testid={`request-use-${s.mentorId}`}
+                      >
+                        {q.useSuggestion}
+                      </button>
+                    </div>
+                  ))}
+                  {suggested[r.id].blockedTotal > 0 && (
+                    <p className="text-xs text-gray-500" data-testid={`request-suggestions-blocked-${r.id}`}>
+                      {q.suggestBlocked.replace('{n}', String(suggested[r.id].blockedTotal))}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             {/* A <select> is as wide as its longest option, and a mentor's option
                 carries a translated availability note ("… · Pausiert bis …"), so
@@ -326,6 +403,25 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
                   </option>
                 ))}
               </select>
+              <input
+                type="text"
+                value={notes[r.id] ?? ''}
+                maxLength={1000}
+                onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                placeholder={t.matchDecision.notePlaceholder}
+                aria-label={t.matchDecision.noteLabel}
+                data-testid={`request-decision-note-${r.id}`}
+                className="min-w-0 max-w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2.5 py-1.5 text-sm"
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={suggesting === r.id}
+                onClick={() => suggest(r)}
+                data-testid={`request-suggest-${r.id}`}
+              >
+                {q.suggest}
+              </Button>
               <Button size="sm" loading={busy === r.id} disabled={!choices[r.id]} onClick={() => approve(r.id)}>
                 {q.approve}
               </Button>

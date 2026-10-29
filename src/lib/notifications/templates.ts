@@ -33,7 +33,7 @@ import {
 // No rows, no change: an org that never wrote a template resolves to exactly
 // the code default.
 
-export type TemplateSource = 'program' | 'org' | 'default';
+export type TemplateSource = 'program' | 'org' | 'default' | 'draft';
 
 export interface ResolvedTemplate {
   subject: string;
@@ -53,6 +53,12 @@ export interface TemplateContext {
   recipientName?: string | null;
   /** Fills `{{brand.name}}` / `{{brand.url}}`; read from the org when omitted. */
   brand?: { name: string; url: string };
+  /**
+   * An unsaved template the admin editor previews or test-sends (#1719). Used
+   * IN PLACE of the stored rows and rendered by the very same code, so the
+   * preview is the mail — not a second path that happens to look like it.
+   */
+  draft?: { subject: string; body: string };
 }
 
 /** The code default of one event, in one locale: subject and body from the dictionary line. */
@@ -77,22 +83,26 @@ export async function resolveTemplate(eventKey: string, localeIn: string | null 
     source: 'default',
     ...(fallback ? { fallback } : {}),
   });
-  if (!ctx.orgId) return fallbackDefault();
+  if (!ctx.orgId && !ctx.draft) return fallbackDefault();
 
   let rows: { id: string; programId: string; subject: string; body: string }[];
-  try {
-    rows = await prisma.notificationTemplate.findMany({
-      where: {
-        orgId: ctx.orgId,
-        eventKey,
-        locale,
-        programId: { in: ctx.programId ? ['', ctx.programId] : [''] },
-      },
-      select: { id: true, programId: true, subject: true, body: true },
-    });
-  } catch (e) {
-    logger.error('notification_template.read_failed', { eventKey, error: e instanceof Error ? e.message : String(e) });
-    return fallbackDefault('read_error');
+  if (ctx.draft) {
+    rows = [{ id: 'draft', programId: '', subject: ctx.draft.subject, body: ctx.draft.body }];
+  } else {
+    try {
+      rows = await prisma.notificationTemplate.findMany({
+        where: {
+          orgId: ctx.orgId!,
+          eventKey,
+          locale,
+          programId: { in: ctx.programId ? ['', ctx.programId] : [''] },
+        },
+        select: { id: true, programId: true, subject: true, body: true },
+      });
+    } catch (e) {
+      logger.error('notification_template.read_failed', { eventKey, error: e instanceof Error ? e.message : String(e) });
+      return fallbackDefault('read_error');
+    }
   }
   const row = pickTemplateRow(rows, ctx.programId);
   if (!row) return fallbackDefault();
@@ -110,6 +120,7 @@ export async function resolveTemplate(eventKey: string, localeIn: string | null 
       logger.warning('notification_template.fallback', { eventKey, locale, templateId: row.id, reason: out.reason });
       return { ...fallbackDefault(out.reason), templateId: row.id };
     }
+    if (ctx.draft) return { subject: out.subject, html: out.html, source: 'draft' };
     return { subject: out.subject, html: out.html, source: row.programId ? 'program' : 'org', templateId: row.id };
   } catch (e) {
     logger.error('notification_template.render_failed', { eventKey, locale, templateId: row.id, error: e instanceof Error ? e.message : String(e) });

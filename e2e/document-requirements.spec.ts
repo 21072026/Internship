@@ -152,7 +152,7 @@ test('missing state is derived from requirement links and preserves both version
     await signIn(page, foreignEmail); await page.waitForURL((url) => url.pathname.startsWith('/portal'));
     // Another org's document is 404, not 403 — a 403 would confirm the id (#2542).
     expect((await page.request.get(`/api/documents/${linkedId}`)).status()).toBe(404);
-    expect((await page.request.get(`/api/admin/document-requirements?orgId=${org.id}`)).status()).toBe(401);
+    expect((await page.request.get(`/api/admin/document-requirements?orgId=${org.id}`)).status()).toBe(403);
 
     await page.goto('/portal');
     await expect(page.getByTestId('missing-documents-card')).toHaveCount(0);

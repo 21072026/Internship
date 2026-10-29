@@ -57,6 +57,9 @@ export function ConnectedCalendarsCard() {
   // that also holds forms, that re-render loop resets fields under the user's
   // hands (it broke the account password spec before this was pinned down).
   const [flashKey, setFlashKey] = useState<string | null>(null);
+  // Whose words the flash uses: each provider's callback returns its own query
+  // key (`?google=` / `?microsoft=`, #1991).
+  const [flashProvider, setFlashProvider] = useState<'google' | 'microsoft'>('google');
 
   useEffect(() => {
     fetch('/api/integrations/calendar/status')
@@ -65,14 +68,17 @@ export function ConnectedCalendarsCard() {
       .catch(() => setRows([]));
     // The connect/callback flow is a redirect, so its outcome comes back in the
     // query string rather than in a fetch response.
-    const status = new URLSearchParams(window.location.search).get('google');
+    const params = new URLSearchParams(window.location.search);
+    const msStatus = params.get('microsoft');
+    const status = msStatus ?? params.get('google');
     if (status) {
+      setFlashProvider(msStatus ? 'microsoft' : 'google');
       setFlashKey(status);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  const g = t.googleCalendar;
+  const g = flashProvider === 'microsoft' ? t.microsoftCalendar : t.googleCalendar;
   const flash = flashKey
     ? (({
         connected: g.flashConnected,
@@ -95,6 +101,7 @@ export function ConnectedCalendarsCard() {
       // revoked" while the tokens are still stored and meetings still flowing:
       // the same untrue claim, told the other way round.
       const res = await fetch(row.disconnectPath, { method: 'DELETE' });
+      setFlashProvider(row.provider === 'microsoft' ? 'microsoft' : 'google');
       if (!res.ok) {
         setFlashKey('disconnectFailed');
         return;

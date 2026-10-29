@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -16,12 +15,12 @@ import { effectiveMinResponses } from '@/lib/surveyPrivacy';
 const WINDOW_DAYS = 90;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   return withTenantScope(session, async () => {
     let mentorId = session.user.id;
-    if (session.user.role === 'ADMIN') {
+    if (admin) {
       const asked = new URL(request.url).searchParams.get('mentorId');
       if (!asked) return NextResponse.json({ error: 'mentorId required' }, { status: 400 });
       const mentor = await prisma.user.findFirst({ where: withinTenant({ id: asked, role: 'MENTOR' as const }, await tenantWhere(session)), select: { id: true } });

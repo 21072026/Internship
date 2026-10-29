@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -12,9 +11,9 @@ import { parseScreeningQuestions } from '@/lib/screeningQuestions';
 // rule as the list; anything not visible — a draft, a full role, another org's
 // — is a 404, never a 403 that would confirm it exists.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTEE' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTEE'], 'company.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
   const orgId = resolveOrgId(session);

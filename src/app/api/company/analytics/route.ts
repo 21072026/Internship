@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature, entitled } from '@/lib/entitlements';
@@ -15,10 +14,9 @@ import { recruitingFunnel, recruitingTrend, resolveWindow, sourceBreakdown, time
 // source and monthly trend. The maths is src/lib/recruitingAnalytics.ts; the
 // benchmark is its own, entitlement-gated route (./benchmark).
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'COMPANY' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['COMPANY'], 'analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // A COMPANY user must be linked to a company; without it there is no scope to
   // apply, so fail closed rather than falling into the unscoped ADMIN branch and

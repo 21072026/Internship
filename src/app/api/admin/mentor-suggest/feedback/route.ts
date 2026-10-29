@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requirePermission } from '@/lib/authz';
 import {
   MATCH_REASON_NOTE_MAX,
   isMatchDismissReason,
@@ -36,10 +35,10 @@ const schema = z.object({
 //     rank means "we did not suggest this person", and the per-rank report
 //     counts only rows that have a rank.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Authorization at the route, never by hiding the control.
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => null));

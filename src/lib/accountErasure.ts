@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { disconnect as disconnectGoogleCalendar } from '@/lib/googleCalendarClient';
+import { disconnectMicrosoft as disconnectMicrosoftCalendar } from '@/lib/microsoftCalendarClient';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
@@ -564,7 +565,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
       data: { title: '', cancelReason: null },
     }),
     prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
-    prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
+    // The frozen letter names them and states their pay; the click-to-accept
+    // record is their IP and browser (#1857).
+    prisma.offer.updateMany({
+      where: asSubject,
+      data: { compensationNote: null, declineNote: null, letterSnapshot: null, acceptedIp: null, acceptedUserAgent: null },
+    }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
@@ -664,6 +670,8 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // Revoked at Google first (#2098): the cascade would drop our copy of the
   // token but leave the grant live on the person's Google account.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
   await prisma.user.delete({ where: { id: userId } });
 }
 
@@ -685,6 +693,10 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // delete cascades them; anonymise keeps the user row, so they went nowhere
     // until the housekeeping purge (#2098).
     prisma.signInDevice.deleteMany({ where: { userId } }),
+    // Who they are in a chat workspace (#1937): a chat member id and display
+    // name. A hard delete cascades them; anonymise keeps the user row, and a
+    // linked identity would keep delivering to a person who is gone.
+    prisma.chatIdentity.deleteMany({ where: { userId } }),
     // The remember-me rows carry the same two columns. They are revoked below
     // (outside this transaction, through the one revoker), not deleted: a
     // revoked row is what turns a replayed cookie into a refusal.
@@ -770,4 +782,6 @@ export async function anonymizeUser(userId: string): Promise<void> {
   // cascaded it — an erased account kept OAuth tokens to the person's own
   // Google calendar. Revoked at Google, then forgotten here.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
 }

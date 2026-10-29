@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { AI_PACK_FEATURE, runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
@@ -10,17 +8,24 @@ import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { MATCH_RULESET_VERSION } from '@/lib/matchFeedback';
+import { matchRuleSetTag } from '@/lib/matchFeedback';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { hashInput } from '@/lib/ai/artifacts';
 import { skillOverlap } from '@/lib/skillTaxonomyRule';
-import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
+import { loadMentees, loadMentorPool } from '@/lib/matching/pool';
+import { resolveRuleSet } from '@/lib/matching/ruleSet';
+import { suggestMentors } from '@/lib/matching/suggest';
+import { skillGraphFor, skillIdsByUser } from '@/lib/matching/skillContext';
 import { getLocale } from '@/i18n/server';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({
   menteeId: z.string().min(1),
+  // A pending mentorship request of this mentee (#1787): its preferences feed
+  // the score, and its preferred mentor comes back so the queue can pin it.
+  requestId: z.string().min(1).max(64).optional(),
   // The explicit Regenerate: skip the stored rationale for the same input (#2044).
   regenerate: z.boolean().optional(),
 });
@@ -54,10 +59,9 @@ function decodeRanking(content: string): Ranking {
 // metering in src/lib/aiGate.ts — a bookkeeping failure must never cost the
 // admin their suggestions.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const userLimited = enforceRateLimit(request, 'ai:mentor_match', {
     ...AI_RATE_LIMITS.mentor_match,
@@ -118,7 +122,7 @@ export async function POST(request: Request) {
           batchId,
           rank: i + 1,
           score: s.score,
-          ruleSetVersion: MATCH_RULESET_VERSION,
+          ruleSetVersion: matchRuleSetTag(ruleSet),
           aiUsed,
           action: 'SHOWN' as const,
         })),
@@ -127,66 +131,74 @@ export async function POST(request: Request) {
       .catch(() => {}); // bookkeeping must never break a good suggestion
   };
 
-  const mentors = await prisma.user.findMany({
-    where: withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant),
-    select: {
-      id: true,
-      fullName: true,
-      skills: true,
-      interests: true,
-      mentorCapacity: true,
-      skillRows: { select: { skillId: true } },
-      _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
-    },
+  // The pool and the mentee in the scorer's shape (#1787), plus each side's
+  // canonical skill ids — the `skills` dimension reads them with the org's
+  // skill graph, i.e. the adjacency-weighted overlap of #1821.
+  const [menteeRow] = await loadMentees(tenant, [mentee.id]);
+  if (!menteeRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const pool = await loadMentorPool(tenant);
+  const idsOf = await skillIdsByUser(pool.map((m) => m.id));
+  const mentors = pool.map((m) => ({ ...m, skillIds: idsOf.get(m.id) ?? [] }));
+
+  // A mentorship request's preferences feed the score (#1787): the field and
+  // languages the mentee asked for read in the `field` / `language`
+  // dimensions. The request must be this mentee's — anything else is a 404.
+  let mentReq: { preferredField: string | null; preferredLanguages: unknown; preferredMentorId: string | null } | null = null;
+  if (parsed.data.requestId) {
+    mentReq = await prisma.mentorshipRequest.findFirst({
+      where: { id: parsed.data.requestId, menteeId: mentee.id },
+      select: { preferredField: true, preferredLanguages: true, preferredMentorId: true },
+    });
+    if (!mentReq) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  const menteeSkillIds = mentee.skillRows.map((r) => r.skillId);
+  // The same graph the decision record scores with (#1789), loaded once.
+  const skillGraph = await skillGraphFor(orgId, menteeSkillIds, await getLocale());
+  const edges = skillGraph?.edges ?? [];
+  const label = skillGraph?.label ?? ((id: string) => id);
+
+  const ruleSet = await resolveRuleSet(orgId);
+  const scoreMentee = {
+    ...menteeRow,
+    skillIds: menteeSkillIds,
+    preferredField: mentReq?.preferredField ?? null,
+    preferredLanguages: mentReq?.preferredLanguages ?? [],
+  };
+  const { suggestions: rankedPool, blocked, blockedTotal } = suggestMentors(scoreMentee, mentors, ruleSet, {
+    now: new Date(),
+    // Canonical skills with adjacency when the mentee has any; a mentee not
+    // backfilled yet falls back to the free-text comparison, so nobody's
+    // suggestions go blank mid-migration.
+    ...(skillGraph ? { skillGraph } : {}),
   });
 
-  // Rule-based ranking (#1821): adjacency-weighted overlap of canonical skills
-  // first — an exact skill counts 1, a neighbour ("Frontend" for a mentee who
-  // has React) its SkillEdge weight — then the lighter load. The adjacency is
-  // data: remove the edge and the neighbour stops counting. A mentee with no
-  // canonical skills yet (not backfilled) falls back to the old exact match on
-  // the free text, so nobody's suggestions go blank mid-migration.
-  const menteeSkillIds = mentee.skillRows.map((r) => r.skillId);
-  const edges = orgId ? await loadSkillEdges(orgId, menteeSkillIds) : [];
-  const menteeFreeText = new Set(
-    (Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []).map((s) => s.toLowerCase())
-  );
-  const scored = mentors
-    .map((m) => {
-      const overCapacity = m.mentorCapacity != null && m._count.mentorRelations >= m.mentorCapacity;
-      if (menteeSkillIds.length > 0) {
-        const overlap = skillOverlap(menteeSkillIds, m.skillRows.map((r) => r.skillId), edges);
-        return { mentor: m, overCapacity, score: overlap.score, overlap, legacy: [] as string[] };
-      }
-      const legacy = (Array.isArray(m.skills) ? (m.skills as string[]) : []).filter((s) => menteeFreeText.has(s.toLowerCase()));
-      return { mentor: m, overCapacity, score: legacy.length, overlap: null, legacy };
-    })
-    .filter((x) => !x.overCapacity)
-    .sort((a, b) => b.score - a.score || a.mentor._count.mentorRelations - b.mentor._count.mentorRelations)
-    .slice(0, 5);
+  const ruleSetInfo = { ruleSetId: ruleSet.id, ruleSetVersion: ruleSet.version, ruleSetName: ruleSet.name };
+  const base = rankedPool.map(({ mentor, match }) => {
+    // Kept for the screens that list skills (#1821): exact ones, and the
+    // neighbours that stood in for a mentee skill, each named.
+    const overlap = menteeSkillIds.length > 0 ? skillOverlap(menteeSkillIds, mentor.skillIds, edges) : null;
+    return {
+      mentorId: mentor.id,
+      fullName: mentor.fullName,
+      activeMentees: mentor.activeMenteeCount,
+      capacity: mentor.mentorCapacity ?? null,
+      sharedSkills: overlap ? overlap.direct.map(label) : (match.breakdown.find((e) => e.dimension === 'skills')?.detail ?? []),
+      adjacentSkills: overlap ? overlap.adjacent.map((a) => ({ skill: label(a.skillId), via: label(a.via), weight: a.weight })) : [],
+      // The engine's 0-100 score and the per-rule rows behind it — the
+      // explanation travels with the number, always (#1779).
+      score: Math.round(match.score * 10) / 10,
+      match,
+      reason: null as string | null,
+    };
+  });
+  const blockedOut = {
+    blocked: blocked.map(({ mentor, match }) => ({ mentorId: mentor.id, fullName: mentor.fullName, match })),
+    blockedTotal,
+  };
+  const scored = rankedPool;
 
-  const labelIds = scored.flatMap((x) => (x.overlap ? [...x.overlap.direct, ...x.overlap.adjacent.flatMap((a) => [a.skillId, a.via])] : []));
-  const labels = orgId && labelIds.length ? await skillLabels(orgId, labelIds, await getLocale()) : new Map<string, string>();
-  const label = (id: string) => labels.get(id) ?? id;
-
-  const base = scored.map((x) => ({
-    mentorId: x.mentor.id,
-    fullName: x.mentor.fullName,
-    activeMentees: x.mentor._count.mentorRelations,
-    capacity: x.mentor.mentorCapacity,
-    // Exact matches, and — separately, so the UI can say "related" — the
-    // neighbours that stood in for a mentee skill.
-    sharedSkills: x.overlap ? x.overlap.direct.map(label) : x.legacy,
-    adjacentSkills: x.overlap
-      ? x.overlap.adjacent.map((a) => ({ skill: label(a.skillId), via: label(a.via), weight: a.weight }))
-      : [],
-    // The number the rule set actually ranked by, stored with the row so a
-    // future ranking can be compared against this one.
-    score: x.score,
-    reason: null as string | null,
-  }));
-
-  if (base.length === 0) return NextResponse.json({ batchId, suggestions: [], aiUsed: false });
+  if (base.length === 0) return NextResponse.json({ batchId, suggestions: [], aiUsed: false, ...ruleSetInfo, ...blockedOut, preferredMentorId: mentReq?.preferredMentorId ?? null });
 
   // AI deepening — anonymous labels only; personal identifiers never leave.
   const anonLabels = 'ABCDE';
@@ -194,8 +206,8 @@ export async function POST(request: Request) {
     label: anonLabels[i],
     skills: Array.isArray(x.mentor.skills) ? (x.mentor.skills as string[]) : [],
     interests: x.mentor.interests,
-    activeMentees: x.mentor._count.mentorRelations,
-    capacity: x.mentor.mentorCapacity,
+    activeMentees: x.mentor.activeMenteeCount,
+    capacity: x.mentor.mentorCapacity ?? null,
   }));
 
   const gated = await runAiGated({
@@ -232,7 +244,9 @@ export async function POST(request: Request) {
   if (!gated.ok) {
     // Graceful fallback: rule-based order, no rationale text.
     await recordShown(base, false);
-    const fallback: { batchId: string; suggestions: typeof base; aiUsed: false; locked?: typeof AI_PACK_FEATURE } = { batchId, suggestions: base, aiUsed: false };
+    const fallback: { batchId: string; suggestions: typeof base; aiUsed: false; locked?: typeof AI_PACK_FEATURE } & typeof ruleSetInfo & typeof blockedOut & { preferredMentorId: string | null } = {
+      batchId, suggestions: base, aiUsed: false, ...ruleSetInfo, ...blockedOut, preferredMentorId: mentReq?.preferredMentorId ?? null,
+    };
     if (gated.reason === 'not_entitled') fallback.locked = AI_PACK_FEATURE;
     return NextResponse.json(fallback);
   }
@@ -251,6 +265,10 @@ export async function POST(request: Request) {
 
   const suggestions = [...ranked, ...rest];
   await recordShown(suggestions, true);
-  return NextResponse.json({ batchId, suggestions, aiUsed: true, cached: !!gated.cached, artifact: gated.artifact ?? null });
+  // The AI re-orders and explains; it never rewrites a score (#1787).
+  return NextResponse.json({
+    batchId, suggestions, aiUsed: true, cached: !!gated.cached, artifact: gated.artifact ?? null,
+    ...ruleSetInfo, ...blockedOut, preferredMentorId: mentReq?.preferredMentorId ?? null,
+  });
   });
 }

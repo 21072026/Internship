@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -108,11 +107,9 @@ function withAccountState<T extends object>(users: T[]) {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'user.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     // Tenant (#2542). `User` is in TENANT_MODELS, so with MT_ENFORCE_ISOLATION
     // on the middleware scopes these reads too — but the flag is off in every

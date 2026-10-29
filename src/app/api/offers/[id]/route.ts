@@ -14,9 +14,11 @@ import {
   canSeeCompensation,
   compensationSelect,
   isDeclineReasonCode,
+  letterSelect,
   isOfferAction,
   transitionForAction,
 } from '@/lib/offers';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { validateCompensation, type CompensationFields } from '@/lib/compensation';
 import { compensationInputShape, mergeCompensation, pickCompensationInput } from '@/lib/compensationInput';
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
@@ -28,6 +30,8 @@ import { stageTransaction } from '@/lib/applicationStageEvents';
 import { raiseOfferEvent } from '@/lib/offerEvents';
 import { emit } from '@/lib/events/emit';
 import { logger } from '@/lib/logger';
+import { renderLetterForOffer } from '@/lib/offerLetterServer';
+import { clientIp } from '@/lib/clientIp';
 
 const baseSelect = {
   id: true,
@@ -55,7 +59,7 @@ const baseSelect = {
 
 // Loads the offer and decides the caller's authorization in one place, so
 // every handler below applies the exact same rule.
-async function loadAuthorized(id: string, session: Session) {
+async function loadAuthorized(id: string, session: Session, admin: boolean) {
   const role = session.user.role;
   const offer = await prisma.offer.findUnique({ where: { id }, select: baseSelect });
   if (!offer) return { offer: null, isOwnMenteeOffer: false, authorized: false };
@@ -65,22 +69,23 @@ async function loadAuthorized(id: string, session: Session) {
   // A DRAFT is admin-internal staging — never visible outside ADMIN, even by
   // guessing its id, until it has actually been sent.
   const authorized =
-    role === 'ADMIN' || ((isOwnMenteeOffer || isOwnCompanyOffer) && offer.status !== 'DRAFT');
+    admin || ((isOwnMenteeOffer || isOwnCompanyOffer) && offer.status !== 'DRAFT');
 
   return { offer, isOwnMenteeOffer, authorized };
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireRoleOrPermission(['MENTEE', 'COMPANY'], 'company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   const role = session.user.role;
   if (role === 'COMPANY' && !session.user.companyId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   return await withTenantScope(session, async () => {
-    const { offer, isOwnMenteeOffer, authorized } = await loadAuthorized(id, session);
+    const { offer, isOwnMenteeOffer, authorized } = await loadAuthorized(id, session, admin);
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     if (!authorized) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -88,8 +93,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (canSeeCompensation({ role, isOwnMenteeOffer })) {
       // The note AND the structured figures (#1851), from one list — a column
       // the list does not name is never read for anyone.
-      const withComp = await prisma.offer.findUnique({ where: { id }, select: compensationSelect() });
+      // The frozen letter states the pay, so it rides the same rule (#1857).
+      const withComp = await prisma.offer.findUnique({ where: { id }, select: { ...compensationSelect(), ...letterSelect() } });
       result = { ...offer, ...withComp };
+    }
+    if (admin) {
+      // The click-to-accept record (#1857): ADMIN-only.
+      const record = await prisma.offer.findUnique({ where: { id }, select: { acceptedIp: true, acceptedUserAgent: true } });
+      result = { ...result, ...record };
     }
 
     if (offer.requisitionId) {
@@ -101,7 +112,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     // Timeline history — ADMIN only (it also reveals actor identities).
-    if (role === 'ADMIN') {
+    if (admin) {
       const history = await prisma.auditLog.findMany({
         where: { targetId: id, action: { startsWith: 'offer.' } },
         orderBy: { createdAt: 'asc' },
@@ -141,11 +152,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // decline, withdraw — is refused for a vertical without 'placements'.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  const role = session.user.role;
   // COMPANY never mutates an offer — read-only per #809.
-  if (role !== 'ADMIN' && role !== 'MENTEE') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireRoleOrPermission(['MENTEE'], 'company.write', { request });
+  if ('error' in gate) return gate.error;
+  const { admin } = gate;
+  const role = session.user.role;
 
   return await withTenantScope(session, async () => {
     const raw = await request.json().catch(() => null);
@@ -153,7 +164,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
-    const { offer, isOwnMenteeOffer, authorized } = await loadAuthorized(id, session);
+    const { offer, isOwnMenteeOffer, authorized } = await loadAuthorized(id, session, admin);
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     if (!authorized) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -186,10 +197,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const { to } = transitionForAction(actionStr);
       const now = new Date();
       const data: Prisma.OfferUncheckedUpdateInput = { status: to };
-      if (actionStr === 'send') data.sentAt = now;
+      if (actionStr === 'send') {
+        data.sentAt = now;
+        // Freeze the letter as the candidate will read it (#1857): from here
+        // on the snapshot, not the template, is what was offered. Rendered
+        // from the DRAFT the checks above saw; the guarded flip below means a
+        // send that loses the race writes nothing.
+        const letter = await renderLetterForOffer(id);
+        data.letterSnapshot = letter.markdown;
+        data.letterLocale = letter.locale;
+      }
       if (actionStr === 'accept' || actionStr === 'decline') {
         data.decidedAt = now;
         data.decidedById = session.user.id;
+      }
+      if (actionStr === 'accept') {
+        // A click-to-accept record (#1857) — when (decidedAt), from where and
+        // with what. NOT a qualified electronic signature.
+        data.acceptedIp = clientIp(request).slice(0, 64);
+        data.acceptedUserAgent = (request.headers.get('user-agent') ?? '').slice(0, 512) || null;
       }
       if (actionStr === 'decline') {
         data.declineReasonCode = declineReasonCode;
@@ -270,7 +296,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Field edit — ADMIN only, and only while still a DRAFT (once sent, the
     // offer the mentee saw must not silently change under them).
-    if (role !== 'ADMIN') {
+    if (!admin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (offer.status !== 'DRAFT') {

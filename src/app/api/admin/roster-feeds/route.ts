@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
@@ -15,14 +14,10 @@ import { feedWriteData, listPublicFeeds, loadPublicFeed, prepareFeedWrite } from
 // public demo's write blocklist (src/lib/demoMode.ts): it stores a real remote
 // credential.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return withTenantScope(session, async () => {
     const feeds = await listPublicFeeds(await settingsOrgOf(session));
     return NextResponse.json({
@@ -35,8 +30,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   return withTenantScope(session, async () => {

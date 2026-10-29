@@ -18,7 +18,9 @@ import {
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
 import { Prisma } from '@prisma/client';
-import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
+import { ENDED_REMATCHED, effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
+import { recordMatchDecision } from '@/lib/matching/decision';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -50,6 +52,11 @@ export async function decideMentorshipRequest(opts: {
   // caller may not touch it (server-side authorization, not a UI filter).
   restrictToPreferredMentorId?: string;
   request?: Request;
+  // The audit record (#1789): the suggestion batch the decider was shown and
+  // their note. Both optional; the record is written either way.
+  suggestionBatchId?: string;
+  decisionNote?: string;
+  locale?: string;
 }): Promise<DecisionResult> {
   const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request } = opts;
 
@@ -69,6 +76,8 @@ export async function decideMentorshipRequest(opts: {
         select: {
           id: true,
           status: true,
+          lifecycleState: true,
+          orgId: true,
           mentor: {
             select: {
               id: true,
@@ -225,6 +234,30 @@ export async function decideMentorshipRequest(opts: {
         return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
       }
       throw e;
+    }
+    // The per-pairing audit record (#1789), after the commit — it never throws.
+    // The mentor's own accept is MENTOR_ACCEPT; an admin approving the mentor
+    // the mentee asked for is MENTEE_PREFERENCE; any other approval is
+    // REQUEST_APPROVAL.
+    await recordMatchDecision({
+      orgId: relation.orgId,
+      relationId: relation.id,
+      menteeId: req.menteeId,
+      mentorId,
+      requestId: req.id,
+      source: restrictToPreferredMentorId
+        ? 'MENTOR_ACCEPT'
+        : req.preferredMentorId === mentorId
+          ? 'MENTEE_PREFERENCE'
+          : 'REQUEST_APPROVAL',
+      decidedById: actorId,
+      suggestionBatchId: opts.suggestionBatchId ?? null,
+      note: opts.decisionNote ?? null,
+      locale: opts.locale,
+    });
+    // The replaced pairing ended as a re-match (#1998), after the commit.
+    if (replaced) {
+      await raiseLifecycleChanged({ relationId: replaced.id, orgId: replaced.orgId, from: effectiveLifecycleState(replaced), to: ENDED_REMATCHED, reasonCode: null, actorId });
     }
     await notify(
       req.menteeId,

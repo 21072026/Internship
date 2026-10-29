@@ -12,11 +12,14 @@ import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runAuditDrains } from '@/lib/auditDrain';
 import { runApiImport } from '@/lib/api/v1Imports';
 import { runApiExport } from '@/lib/api/v1Exports';
+import { runPlanResync } from '@/lib/affiliatePlanResync';
 import { sweepDueRosterFeeds } from '@/lib/rosterFeedRunner';
 import { runEventDelivery } from '@/lib/events/emit';
 import { runWebhookDelivery } from '@/lib/webhookDelivery';
 import { runNudgeScan, runNudgeSend } from '@/lib/nudges/evaluate';
 import { runDelayedAutomation } from '@/lib/automation/evaluate';
+import { runNotificationEmail } from '@/lib/notifications/emailJob';
+import { runDeferredDelivery, type DeferredDelivery } from '@/lib/notifications/router';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -69,6 +72,16 @@ export function registerAllJobs(): void {
     timeoutMs: 10 * 60 * 1000,
   });
 
+  // Every affiliate partner re-evaluated after a plan change (#3170). The writer's
+  // reconciliation is idempotent, the stored state is the checkpoint (a rerun
+  // resumes after its cursor or runs its retry list) and every state write is
+  // guarded on the plan version, so a rerun — or an older version's job — changes
+  // nothing it should not. Outstanding partners throw, so the backoff retries them.
+  registerJob('affiliate.planResync', async (payload, { job, attempt, signal }) => {
+    if (!job.orgId) return { skipped: 1 };
+    return runPlanResync(payload, job.orgId, { attempt, maxAttempts: job.maxAttempts, signal });
+  }, { timeoutMs: 30 * 60 * 1000 });
+
   // One subscriber for one domain event (#1693). The enqueue is keyed
   // `<eventId>:<subscriber>`, so a retried emit makes no second row; a rerun of
   // the row itself is the subscriber's to tolerate — each one says how in its
@@ -99,6 +112,16 @@ export function registerAllJobs(): void {
   // RUNNING in one guarded update before any action, so a rerun finds it taken
   // and does nothing — the actions are at-most-once by design (engine.ts).
   registerJob('automation.run', async (payload) => runDelayedAutomation(payload.runId), { timeoutMs: 120_000 });
+
+  // One event mail the notification router owes one person (#1719). The
+  // NotificationDelivery row is claimed QUEUED → SENT before the send, so a
+  // rerun of a job whose mail already left finds it taken and sends nothing.
+  registerJob('notification.email', async (payload, ctx) => ({ [await runNotificationEmail(payload, ctx.job)]: 1 }), { timeoutMs: 60_000 });
+
+  // A delivery held to the end of quiet hours or a blackout day (#1714).
+  // Rerun-safe: a ledger row no longer QUEUED was settled by an earlier run, and
+  // the e-mail it hands on is keyed `notify:<dedupeKey>`.
+  registerJob('notification.deferred', async (payload) => ({ [await runDeferredDelivery(payload as DeferredDelivery)]: 1 }), { timeoutMs: 60_000 });
 
   // Each feed runs under its own claim (one conditional UPDATE), and a feed
   // whose lastRunAt the first run already moved is no longer due — so a

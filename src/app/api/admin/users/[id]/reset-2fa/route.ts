@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -12,6 +10,7 @@ import { notify } from '@/lib/notify';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { sendTwoFactorResetEmail } from '@/services/emailService';
 import { evaluateTwoFactorReset } from '@/lib/twoFactorResetRule';
+import { requirePermission } from '@/lib/authz';
 
 // POST — an admin clears a locked-out user's second factor (#1543).
 //
@@ -40,10 +39,9 @@ import { evaluateTwoFactorReset } from '@/lib/twoFactorResetRule';
 // until they re-enrol (src/lib/twoFactorPolicy.ts). That is the point, not a
 // side effect.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.reset_password', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;

@@ -180,3 +180,51 @@ export async function requirePermission(
   }
   return { actor, session, grants };
 }
+
+/** A non-admin role a mixed route also admits (`Role` minus ADMIN). */
+export type NonAdminRole = 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
+
+/**
+ * The guard for a route that serves admins AND some other roles (#1571) —
+ * `role !== 'ADMIN' && role !== 'MENTOR'` written once. An ADMIN is judged by
+ * the permission rule exactly as requirePermission() judges it (so an
+ * OBSERVER asking for a write is refused and audited); an account whose role
+ * is in `roles` passes on its role, and the handler still narrows what it may
+ * touch, as before. Anyone else: 403 `permission_denied`, audited. 401 without
+ * a session (or for a deleted/inactive account).
+ *
+ * `admin` in the answer tells the handler which branch it is on — use it, not
+ * `session.user.role`, for "admins see the whole org".
+ */
+export async function requireRoleOrPermission(
+  roles: readonly NonAdminRole[],
+  action: Permission,
+  opts: { subject?: Subject; request?: Request | null } = {},
+): Promise<{ actor: Actor; session: Session; admin: boolean } | { error: NextResponse }> {
+  const session = await getServerSession(authOptions);
+  const actor = await actorFromSession(session);
+  if (!session || !actor) {
+    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  if (actor.role !== 'ADMIN' && (roles as readonly string[]).includes(actor.role)) {
+    return { actor, session, admin: false };
+  }
+  const { decision } = isPermission(action)
+    ? await decideFor(actor, action, opts.subject, session)
+    : { decision: { allow: false, reason: 'unknown_permission' } as Decision };
+  if (!decision.allow) {
+    await logPermissionDenial(
+      { ...actor, email: session.user?.email ?? null },
+      String(action),
+      routeOf(opts.request),
+      decision.reason,
+    );
+    return {
+      error: NextResponse.json(
+        { code: 'permission_denied' as const, permission: action, error: 'Forbidden' },
+        { status: 403 },
+      ),
+    };
+  }
+  return { actor, session, admin: true };
+}

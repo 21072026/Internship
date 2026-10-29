@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Notification e-mail templates: editor and sender (#1719):** `/admin/notification-templates` (linked from settings) edits each mailing event's subject and body per locale (and per programme), with the event's merge tags, a live preview in a sandboxed iframe, \"send me a test\" (caller's own address only — a `to` in the body is refused) and reset. `GET/PUT/DELETE /api/admin/notification-templates` (+ `/preview`, `/test`) are behind `org.settings.write`, tenant-scoped, audited, and refuse a template the resolver would not use. `renderNotificationEmail()` is the ONE renderer for the preview, the test and the new `notification.email` job — the consumer the router's e-mail channel had been enqueuing for without a reader; it claims the `NotificationDelivery` row QUEUED → SENT before sending, skips batched events and day-old jobs, and picks the category per e-mail group from `EVENT_MAIL_CATEGORY`. `resolveTemplate()` takes a `draft`.",
+  "notes": {
+    "en": ["Edit the notification e-mails in your own words, per language — with a live preview, a test to yourself and a one-click reset."],
+    "tr": ["Bildirim e-postalarını her dil için kendi kelimelerinizle düzenleyin — canlı önizleme, kendinize test ve tek tıkla sıfırlama ile."],
+    "de": ["Bearbeiten Sie die Benachrichtigungs-E-Mails in Ihren eigenen Worten, je Sprache — mit Live-Vorschau, Test an sich selbst und Zurücksetzen per Klick."]
+  }
+}

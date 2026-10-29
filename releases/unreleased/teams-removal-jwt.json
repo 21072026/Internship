@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Teams app removal is noticed (#3322):** `POST /api/integrations/chat/teams/messages` is the Teams bot's messaging endpoint. Every activity must carry a Bot Framework RS256 JWT verified in `src/lib/chat/botFrameworkAuth.ts` with `node:crypto` (keys from the OpenID metadata at `TEAMS_OPENID_METADATA_URL`, cached 1h, refetched on an unknown `kid`, fail-closed; `iss`, `aud` = `TEAMS_APP_ID`, `nbf`/`exp` ±5 min, `serviceUrl` must match the activity). A verified `installationUpdate`/`remove` switches the tenant's workspace off and clears its tokens (`CHAT_PLATFORM_UNINSTALL`); anything else unauthenticated is 401. e2e: `e2e/support/botframework-mock.mjs` (port 4607) publishes the JWKS and signs the spec's tokens.",
+  "notes": {
+    "en": ["When an organisation removes the Microsoft Teams app, it is now switched off here automatically too."],
+    "tr": ["Bir organizasyon Microsoft Teams uygulamasını kaldırdığında, uygulama artık burada da otomatik olarak kapatılıyor."],
+    "de": ["Wenn eine Organisation die Microsoft-Teams-App entfernt, wird sie jetzt auch hier automatisch abgeschaltet."]
+  }
+}

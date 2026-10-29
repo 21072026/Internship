@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Public developer portal (#1992):** `/developers` renders the public API without a session, straight from the handler of `GET /api/v1/openapi.json` (never the admin document): authentication, limits, conventions, every path with its scope, the error types with their status, the webhook events with their payload schemas and a Node.js signature check (`WEBHOOK_VERIFY_NODE`, executed against a real `deliverToWebhook()` delivery by `scripts/test/webhook-recipe.test.mjs`). The lifecycle policy is data in `src/lib/api/v1Lifecycle.ts` (6-month deprecation window, `Deprecation`/`Sunset` headers, `API_DEPRECATIONS`), published in `docs/api-lifecycle.md`, on the page and as `x-lifecycle` in the spec, whose `info.version` now comes from `src/lib/version.ts`. New `integrations` entry in the feature catalogue; `/developers` is listed in the sitemap.",
+  "notes": {
+    "en": ["New developer page: the public API and signed webhooks are documented for everyone, with every endpoint, error type and event, a signature check you can copy, and a written deprecation policy."],
+    "tr": ["Yeni geliştirici sayfası: herkese açık API ve imzalı webhook’lar artık herkes için belgelenmiş — her uç nokta, hata türü ve olay, kopyalanabilir bir imza doğrulaması ve yazılı bir kullanımdan kaldırma politikasıyla."],
+    "de": ["Neue Entwicklerseite: Die öffentliche API und die signierten Webhooks sind jetzt für alle dokumentiert — mit jedem Endpunkt, Fehlertyp und Ereignis, einer kopierbaren Signaturprüfung und einer schriftlichen Deprecation-Regel."]
+  }
+}

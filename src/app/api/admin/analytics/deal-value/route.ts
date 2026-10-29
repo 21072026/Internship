@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -30,10 +29,9 @@ import { isDealValueEnabled, valueByMonth, type ValueJourney } from '@/lib/dealV
 
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('analytics.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     try {
       return await withTenantScope(session, async () => {

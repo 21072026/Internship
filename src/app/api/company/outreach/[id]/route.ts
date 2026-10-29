@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { findOrCreateDirectConversation } from '@/lib/conversations';
 import { outreachActorWhere } from '@/lib/outreach';
+import { actorFromSession, can } from '@/lib/authz';
 import { canRevoke, decisionTarget } from '@/lib/outreachRule';
 
 // PATCH /api/company/outreach/[id] (#1840) — the gate and the candidate's control.
@@ -38,7 +39,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { action } = parsed.data;
   const role = session.user.role;
-  const allowed = action === 'revoke' ? role === 'MENTEE' : role === 'MENTOR' || role === 'ADMIN';
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.write', undefined, session));
+  const allowed = action === 'revoke' ? role === 'MENTEE' : role === 'MENTOR' || isAdmin;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const scope = outreachActorWhere({ role, userId: session.user.id, orgId, companyId: session.user.companyId });
   if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });

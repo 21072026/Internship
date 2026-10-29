@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
@@ -63,6 +65,8 @@ interface Organization {
   };
   createdAt: string;
   archivedAt: string | null;
+  deletionRequestedAt: string | null;
+  deletionEligibleAt: string | null;
   counts: {
     users: number;
     sources: number;
@@ -156,6 +160,7 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
   const [locale, setLocale] = useState<Locale>(uiLocale);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [result, setResult] = useState<{ registerUrl: string; emailSent: boolean; email: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   // Decided after mount: `navigator` does not exist during the server render,
@@ -176,6 +181,10 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
         body: JSON.stringify({ email: email.trim(), label: label.trim() || null, locale }),
       });
       const data = await res.json().catch(() => ({}));
+      // The target org's admin-seat quota (#1752).
+      const wall = res.ok ? null : parseGateBody(data);
+      setGate(wall);
+      if (wall) return;
       if (!res.ok) {
         setError(
           data.code === 'email_taken_in_world'
@@ -257,6 +266,7 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
             </select>
           </div>
           {error && <p className="text-sm text-red-600" data-testid="invite-admin-error">{error}</p>}
+          {gate && <UpgradePrompt gate={gate} viewer="admin" />}
           <Button type="submit" loading={busy} data-testid="invite-admin-submit" className="w-full sm:w-auto">
             {t.organizations.inviteSubmit}
           </Button>
@@ -330,6 +340,8 @@ export default function AdminOrganizationsPage() {
   // Whether this admin may manage every tenant (#1535). Presentation only — the
   // API refuses a cross-tenant write regardless of what is rendered here.
   const [superAdmin, setSuperAdmin] = useState(false);
+  // Permanent deletion (#1584): off unless the deployment switches it on.
+  const [hardDelete, setHardDelete] = useState<{ enabled: boolean; waitHours: number }>({ enabled: false, waitHours: 72 });
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   // Required (per-world super admins): the server offers only the verticals of
@@ -353,6 +365,7 @@ export default function AdminOrganizationsPage() {
       setVerticals(offered);
       setVertical((v) => (v && offered.includes(v) ? v : offered[0] ?? ''));
       setSuperAdmin(!!data.superAdmin);
+      if (data.hardDelete) setHardDelete(data.hardDelete);
     }
     setLoading(false);
   }, []);
@@ -1013,9 +1026,13 @@ export default function AdminOrganizationsPage() {
 
       {orgs.length > 0 && (
         <OrgLifecycleCard
-          orgs={orgs.map((o) => ({ id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt }))}
+          orgs={orgs.map((o) => ({
+            id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt,
+            deletionRequestedAt: o.deletionRequestedAt, deletionEligibleAt: o.deletionEligibleAt,
+          }))}
           onChanged={load}
           superAdmin={superAdmin}
+          hardDelete={hardDelete}
         />
       )}
 
