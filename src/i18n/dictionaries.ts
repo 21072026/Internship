@@ -5503,6 +5503,14 @@ const en = {
     flashFailed: 'The connection could not be completed. Please try again.',
     flashUnavailable: 'Google Calendar is not available on this installation.',
   },
+  // The Microsoft 365 / Outlook connect flow's outcomes (#1991).
+  microsoftCalendar: {
+    flashConnected: 'Microsoft Outlook calendar connected.',
+    flashDisconnected: 'Microsoft Outlook calendar disconnected — its tokens are deleted here.',
+    flashCancelled: 'Connection cancelled — nothing changed.',
+    flashFailed: 'The connection could not be completed. Please try again.',
+    flashUnavailable: 'Microsoft Outlook is not available on this installation.',
+  },
   connectedCalendars: {
     section: 'Connected calendars',
     description: 'Connect your own calendar and the meetings you are part of also appear in it. Nothing is written anywhere until you connect, and disconnecting revokes the access again.',
@@ -7721,6 +7729,7 @@ const en = {
       newsletter: { t: 'Career newsletter', d: 'Short, emoji-led issues of CV and interview advice, written once in English, Turkish and German and sent to each reader in their own language. Send by hand or on a weekly, fortnightly or monthly schedule; mentors get a coaching angle on the same issue, every send is kept on the record, and one press unsubscribes.' },
       mentorSelfApply: { t: 'Self-serve mentor applications', d: 'Anyone can apply to become a mentor without an account; admins review, take into review, approve or reject from a queue, and approval creates or upgrades the mentor\u2019s account automatically.' },
       calendar: { t: 'Calendar in four views', d: 'Meetings, recurring project calls and stage deadlines in one calendar — month, week, day or a plain upcoming list, with the upcoming list as the default on a phone. A recurring project meeting is kept as a rule, so it shows once under its own title, moves when you move it and disappears when you cancel it. Subscribe to the same calendar from your own app with a personal, revocable link — meetings, series occurrences and deadlines all travel with it — and every meeting invitation arrives with a .ics attachment. A company login gets a calendar of its own scheduled interviews — and only those. Any view downloads as a .ics file for the range on screen, and prints as a clean sheet for the wall. An admin sees and fixes anyone’s bookable hours from one screen, without signing in as them.' },
+      calendarSync: { t: 'Your own Google or Outlook calendar', d: 'Connect Google Calendar or Microsoft 365 / Outlook — or both — and every meeting you are part of appears there: added when it is scheduled, moved when it moves, removed when it is cancelled. You consent to your own calendar only, the access tokens are stored encrypted, and disconnecting deletes them. If a calendar service is down, scheduling still works and the card tells you the connection needs attention.' },
       groupSessions: { t: 'Group sessions and office hours', d: 'Publish a kickoff briefing, a mentor office hour or an employer info session to a programme or the whole organisation. People register for a place; past the cap they join a waitlist and move up automatically — and are told — when someone cancels. The host records who attended, and each participant sees their own record.' },
       offers: { t: 'Offer management', d: 'Create, preview and send a job offer from a candidate’s Mentorship card in three steps; the candidate accepts or declines (with a reason) from their portal, sees a persistent decision state, and overdue offers expire on their own — every step logged and notified. An admin offer index answers what is still outstanding, what expires this week and what was declined, and why. Every sent offer carries a branded offer letter from your own template, frozen when sent, with a recorded click-to-accept.' },
       multiTenancy: { t: 'Multi-tenant organisations', d: 'Keep each organisation’s data, plan and configuration separate in one CRM.' },
@@ -16002,6 +16011,13 @@ const tr: Dict = {
     flashFailed: 'Bağlantı tamamlanamadı. Lütfen tekrar dene.',
     flashUnavailable: 'Bu kurulumda Google Takvim kullanılamıyor.',
   },
+  microsoftCalendar: {
+    flashConnected: 'Microsoft Outlook takvimi bağlandı.',
+    flashDisconnected: 'Microsoft Outlook takvimi bağlantısı kaldırıldı — token\'lar burada silindi.',
+    flashCancelled: 'Bağlanmaktan vazgeçildi — hiçbir şey değişmedi.',
+    flashFailed: 'Bağlantı tamamlanamadı. Lütfen tekrar dene.',
+    flashUnavailable: 'Microsoft Outlook bu kurulumda kullanılamıyor.',
+  },
   connectedCalendars: {
     section: 'Bağlı takvimler',
     description: 'Kendi takvimini bağla, katıldığın toplantılar orada da görünsün. Sen bağlamadan hiçbir yere bir şey yazılmaz; bağlantıyı kaldırdığında erişim de geri alınır.',
@@ -18182,6 +18198,7 @@ const tr: Dict = {
       newsletter: { t: 'Kariyer bülteni', d: 'CV ve mülakat tavsiyelerini emojili, kısa sayılar hâlinde ulaştırır; İngilizce, Türkçe ve Almanca bir kez yazılır, her okuyucuya kendi dilinde gider. Elle ya da haftalık, iki haftalık, aylık programla gönderilir; mentörler aynı sayıda mentorluk bakışını da görür, her gönderim kayda geçer ve tek dokunuşla abonelik bırakılır.' },
       mentorSelfApply: { t: 'Self-servis mentör başvurusu', d: 'Herkes hesap açmadan mentör olmak için başvurabilir; adminler kuyruktan inceler, incelemeye alır, onaylar veya reddeder; onay, mentörün hesabını otomatik olarak oluşturur veya yükseltir.' },
       calendar: { t: 'Takvim: dört görünüm', d: 'Toplantılar, düzenli proje görüşmeleri ve aşama son tarihleri tek takvimde — aylık, haftalık, günlük ya da sade bir yaklaşan listesi; telefonda varsayılan olarak yaklaşan listesi açılır. Düzenli proje toplantısı bir kural olarak tutulur: takvimde bir kez, kendi başlığıyla görünür; taşıyınca taşınır, iptal edince kaybolur. Aynı takvime kendi uygulamandan kişisel, iptal edilebilir bir bağlantıyla abone olabilirsin — toplantılar, seri tekrarları ve son tarihler akışla birlikte gelir — ve her toplantı daveti bir .ics ekiyle ulaşır. Şirket hesabı da kendi planlanmış mülakatlarını — yalnızca onları — kendi takviminde görür. Her görünüm ekrandaki aralık için .ics dosyası olarak indirilir ve duvara asılacak sade bir sayfa olarak yazdırılır. Yönetici herkesin randevu saatlerini, onun hesabına girmeden tek ekrandan görür ve düzeltir.' },
+      calendarSync: { t: 'Kendi Google veya Outlook takvimin', d: 'Google Takvim’i ya da Microsoft 365 / Outlook’u — veya ikisini birden — bağla; katıldığın her toplantı orada görünsün: planlanınca eklenir, taşınınca taşınır, iptal edilince kaldırılır. Yalnızca kendi takvimin için izin verirsin, erişim token’ları şifreli saklanır ve bağlantıyı kaldırdığında silinir. Bir takvim servisi çökse bile planlama çalışmaya devam eder; kart bağlantının ilgi beklediğini söyler.' },
       groupSessions: { t: 'Grup oturumları ve ofis saatleri', d: 'Açılış brifingini, mentor ofis saatini ya da işveren tanıtımını bir programa veya tüm kuruma yayımla. Katılımcılar yer ayırır; kontenjan dolunca yedek listeye girer ve biri iptal ettiğinde otomatik olarak — haber verilerek — yukarı çıkar. Ev sahibi kimin katıldığını kaydeder, her katılımcı kendi kaydını görür.' },
       offers: { t: 'Teklif yönetimi', d: 'Bir adayın Mentorluk kartından üç adımda iş teklifi oluşturun, önizleyin ve gönderin; aday portalından kabul veya (nedeniyle) reddeder, kararı kalıcı olarak görünür kalır, süresi geçen teklifler kendiliğinden süresi doldu olur — her adım kaydedilir ve bildirilir. Yönetici teklif listesi hangi tekliflerin hâlâ beklediğini, hangilerinin bu hafta dolduğunu ve hangilerinin neden reddedildiğini yanıtlar. Gönderilen her teklif, kendi şablonunuzdan üretilen, gönderimde dondurulan markalı bir teklif mektubu ve kayıtlı bir tıklama-ile-kabul taşır.' },
       integrations: { t: 'Belgelenmiş bir API ve imzalı webhook’lar', d: 'Kendi sistemleriniz adayları, ilişkileri, etkileşimleri, toplantıları, şirketleri ve işe alım kayıtlarını okuyabilir; aday, aşama değişikliği ve etkileşim yazabilir; bir şey değiştiğinde imzalı webhook alabilir. Anahtarlar kaynak bazında yetkilendirilir ve kurumunuza bağlıdır, her liste imleçle sayfalanır ve sözleşmenin tamamı — yazılı bir kullanımdan kaldırma politikasıyla — geliştirici sayfasında herkese açıktır.' },
@@ -26412,6 +26429,13 @@ const de: Dict = {
     flashFailed: 'Die Verbindung konnte nicht abgeschlossen werden. Bitte versuche es erneut.',
     flashUnavailable: 'Google Kalender ist in dieser Installation nicht verfügbar.',
   },
+  microsoftCalendar: {
+    flashConnected: 'Microsoft-Outlook-Kalender verbunden.',
+    flashDisconnected: 'Microsoft-Outlook-Kalender getrennt — die Tokens wurden hier gelöscht.',
+    flashCancelled: 'Verbindung abgebrochen — nichts geändert.',
+    flashFailed: 'Die Verbindung konnte nicht abgeschlossen werden. Bitte versuche es erneut.',
+    flashUnavailable: 'Microsoft Outlook ist in dieser Installation nicht verfügbar.',
+  },
   connectedCalendars: {
     section: 'Verbundene Kalender',
     description: 'Verbinde deinen eigenen Kalender, dann erscheinen die Termine, an denen du teilnimmst, auch dort. Vor dem Verbinden wird nirgends etwas geschrieben, und beim Trennen wird der Zugriff wieder entzogen.',
@@ -28592,6 +28616,7 @@ const de: Dict = {
       newsletter: { t: 'Karriere-Newsletter', d: 'Kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt. Manuell oder wöchentlich, zweiwöchentlich, monatlich geplant; Mentoren erhalten zur gleichen Ausgabe die Coaching-Perspektive, jeder Versand wird archiviert, und ein Klick genügt zum Abmelden.' },
       mentorSelfApply: { t: 'Self-Service-Mentor-Bewerbungen', d: 'Jeder kann sich ohne Konto als Mentor bewerben; Admins prüfen die Warteschlange, starten die Prüfung, genehmigen oder lehnen ab — bei Genehmigung wird das Mentor-Konto automatisch erstellt oder hochgestuft.' },
       calendar: { t: 'Kalender in vier Ansichten', d: 'Meetings, wiederkehrende Projekt-Calls und Phasenfristen in einem Kalender — Monat, Woche, Tag oder eine schlichte Demnächst-Liste, auf dem Handy standardmäßig die Demnächst-Liste. Ein wiederkehrendes Projekt-Meeting wird als Regel geführt: Es erscheint einmal unter seinem eigenen Titel, wandert mit, wenn du es verschiebst, und verschwindet, wenn du es absagst. Denselben Kalender abonnierst du mit einem persönlichen, widerrufbaren Link in deiner eigenen App — Meetings, Serientermine und Fristen kommen mit — und jede Meeting-Einladung bringt eine .ics-Datei mit. Ein Firmenkonto sieht seine eigenen geplanten Vorstellungsgespräche — und nur diese — in einem eigenen Kalender. Jede Ansicht lässt sich für den angezeigten Zeitraum als .ics-Datei herunterladen und als aufgeräumtes Blatt für die Wand drucken. Ein Admin sieht und korrigiert die buchbaren Zeiten aller von einem Bildschirm aus, ohne sich als sie anzumelden.' },
+      calendarSync: { t: 'Dein eigener Google- oder Outlook-Kalender', d: 'Verbinde Google Kalender oder Microsoft 365 / Outlook — oder beide — und jedes Meeting, an dem du teilnimmst, erscheint dort: eingetragen, wenn es geplant wird, verschoben, wenn es sich verschiebt, entfernt, wenn es abgesagt wird. Du gibst nur deinen eigenen Kalender frei, die Zugriffstokens werden verschlüsselt gespeichert und beim Trennen gelöscht. Fällt ein Kalenderdienst aus, funktioniert die Planung weiter, und die Karte zeigt, dass die Verbindung Aufmerksamkeit braucht.' },
       groupSessions: { t: 'Gruppensitzungen und Sprechstunden', d: 'Veröffentliche ein Kickoff-Briefing, eine Mentoren-Sprechstunde oder eine Arbeitgeber-Infoveranstaltung für ein Programm oder die ganze Organisation. Teilnehmende melden sich für einen Platz an; über dem Limit kommen sie auf die Warteliste und rücken automatisch — mit Benachrichtigung — nach, wenn jemand absagt. Der Gastgeber erfasst die Teilnahme, und alle sehen ihren eigenen Eintrag.' },
       offers: { t: 'Angebotsverwaltung', d: 'Erstelle, prüfe in der Vorschau und sende ein Jobangebot in drei Schritten direkt von der Mentoring-Karte eines Kandidaten; der Kandidat nimmt im Portal an oder lehnt (mit Grund) ab, die Entscheidung bleibt dauerhaft sichtbar, und überfällige Angebote laufen von selbst ab — jeder Schritt wird protokolliert und gemeldet. Eine Angebotsübersicht für Admins beantwortet, was noch offen ist, was diese Woche abläuft und was warum abgelehnt wurde. Jedes gesendete Angebot trägt ein Angebotsschreiben aus eurer eigenen Vorlage, beim Senden eingefroren, mit protokollierter Klick-Zustimmung.' },
       integrations: { t: 'Eine dokumentierte API und signierte Webhooks', d: 'Ihre eigenen Systeme können Kandidaten, Beziehungen, Interaktionen, Termine, Unternehmen und die Recruiting-Daten lesen, Kandidaten, Phasenwechsel und Interaktionen zurückschreiben und signierte Webhooks empfangen, wenn sich etwas ändert. Schlüssel sind je Ressource berechtigt und an Ihre Organisation gebunden, jede Liste blättert per Cursor, und der ganze Vertrag — mit schriftlicher Deprecation-Regel — ist auf der Entwicklerseite öffentlich.' },

@@ -116,6 +116,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'joinRequests', category: 'tracking', icon: Share2, color: 'rose', capability: 'projects', title: C.joinRequests.t, desc: C.joinRequests.d },
     { key: 'mentorSelfApply', category: 'tracking', icon: GraduationCap, color: 'blue', capability: 'mentorship', title: C.mentorSelfApply.t, desc: C.mentorSelfApply.d },
     { key: 'calendar', category: 'collaboration', icon: CalendarDays, color: 'indigo', title: C.calendar.t, desc: C.calendar.d },
+    // Your own Google or Outlook calendar, kept in step with every meeting (#709, #1991).
+    { key: 'calendarSync', category: 'collaboration', icon: CalendarCheck, color: 'blue', title: C.calendarSync.t, desc: C.calendarSync.d },
     // Group sessions and office hours (#1856): programme events — mentorship only.
     { key: 'groupSessions', category: 'collaboration', icon: Presentation, color: 'teal', capability: 'mentorship', title: C.groupSessions.t, desc: C.groupSessions.d },
     { key: 'todos', category: 'collaboration', icon: ListChecks, color: 'green', capability: 'mentorship', title: C.todos.t, desc: C.todos.d },
