@@ -49,6 +49,18 @@ async function as(playwright: RequestFactory, baseURL: string | undefined, email
   return ctx;
 }
 
+/** Waits for the queued re-evaluation of plan version `v` to finish; its final state. */
+async function resyncOf(ctx: APIRequestContext, v: number) {
+  let state: { v: number; status: string } | null = null;
+  await expect
+    .poll(async () => {
+      state = (await (await ctx.get('/api/admin/affiliate/settings', { headers: host })).json()).planResync;
+      return state && state.v === v ? state.status : null;
+    }, { timeout: 60_000, intervals: [500, 1_000, 2_000] })
+    .toMatch(/^(DONE|INCOMPLETE)$/);
+  return state;
+}
+
 test.beforeAll(async () => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   orgId = (await prisma.organization.create({ data: { name: `Acme Sales ${stamp}`, slug: `aff-admin-${stamp}`, vertical: 'MARKETING' } })).id;
@@ -114,13 +126,16 @@ test('a plan is validated, versioned only on a real change, and re-evaluates par
 
   const first = await put(PLAN);
   expect(first.status()).toBe(200);
-  expect(await first.json()).toMatchObject({ changed: true, planVersion: 1, partnersResynced: 1 });
+  expect(await first.json()).toMatchObject({ changed: true, planVersion: 1, resync: { v: 1 } });
+  // The partners are re-evaluated by a queued job (#3170); the settings report it.
+  expect(await resyncOf(owner, 1)).toMatchObject({ status: 'DONE', total: 1, done: 1, failed: 0 });
   expect(await (await put(PLAN)).json()).toMatchObject({ changed: false, planVersion: 1 });
 
   // A payment under v1, then a richer v2: the existing commission is frozen (drift), never changed.
   await recordAffiliatePayment({ orgId, partnerId, customerExternalRef: 'c-1', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-01T10:00:00Z'), externalPaymentRef: 'inv-1', source: 'MANUAL' });
   const second = await put({ ...PLAN, tiers: [{ upToMinor: 1_000, commissionMinor: 450 }] });
-  expect(await second.json()).toMatchObject({ changed: true, planVersion: 2, partnersResynced: 1, drift: 1 });
+  expect(await second.json()).toMatchObject({ changed: true, planVersion: 2 });
+  expect(await resyncOf(owner, 2)).toMatchObject({ status: 'DONE', done: 1, drift: 1 });
   const commission = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId } });
   expect([commission.amountMinor, commission.planVersion]).toEqual([300, 1]);
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.plan.update' } })).toBe(2);

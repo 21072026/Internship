@@ -37,7 +37,7 @@ whole organisation. The screens tell such an admin so instead of failing. **The 
 decision for the first release; the engine is currency-agnostic and widening is
 the one list `AFFILIATE_CURRENCIES`. A real plan change bumps `planVersion`, stamps
 `planEffectiveAt`, is audited (`affiliate.plan.update`) and re-evaluates every
-partner; an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
+partner on the queue (see "Re-evaluation after a plan change"); an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
 (same rule as `Offer` / `ProgramCost`). Shape:
 
 | Field | Meaning |
@@ -109,6 +109,34 @@ reconciliation.
 
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
+
+### Re-evaluation after a plan change (#3170)
+
+A plan save returns as soon as the plan is committed, whatever the number of
+partners. In the same transaction it writes `AffiliateProgramSettings.planResync`
+(QUEUED, for the new version), and after the commit it enqueues the job
+`affiliate.planResync` (keyed on the organisation and the version, 5 attempts).
+The job (`src/lib/affiliatePlanResync.ts`; the state rules are pure in
+`affiliatePlanResyncRule.ts`) walks the partners in id order, 100 at a time, each
+through `resyncPartnerCommissions()`. The writer is still the only code that
+touches a commission.
+
+- **Checkpoint.** After every batch the state stores the last partner done
+  (`cursor`), the counts (`total`, `done`, `failed`, `drift`), and the partners whose
+  lock was busy (`retry`, at most 500; past that, `overflow` makes the next attempt
+  walk everyone again). A rerun after a crash, a timeout or a redeploy resumes after
+  the cursor.
+- **Retries.** Partners still outstanding at the end of a pass mean the attempt
+  throws, and the worker backs off. The next attempt judges exactly the retry list.
+  On the last attempt the state ends INCOMPLETE: those partners are re-evaluated by
+  their next payment write, as the writer always does.
+- **Newer plan wins.** Every state write is guarded on the plan version. A job for an
+  older version stops at its first write after a newer plan is saved.
+- **At-least-once.** A second run over a partner changes nothing and reports the
+  same drift.
+- **Visible to the admin.** The settings API returns `planResync`, and the plan card
+  follows it every 3 s while it is QUEUED, RUNNING or RETRYING. It shows the
+  progress, then the result: re-evaluated, still failing, and the drift.
 
 ## Data model
 

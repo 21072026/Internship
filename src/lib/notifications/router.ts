@@ -45,13 +45,15 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import type { Prisma } from '@prisma/client';
-import { notify as notifyInApp, type NotificationParams } from '@/lib/notify';
+import type { NotificationParams } from '@/lib/notify';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowed, isEssentialGroup } from '@/lib/emailGroups';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo } from '@/lib/shellCapabilities';
 import { chatCapableUsers, deliverChat } from '@/lib/notifications/adapters/chat';
+import { CHANNEL_ADAPTERS } from '@/lib/notifications/adapters';
+import type { SkipReason } from '@/lib/notifications/adapters/types';
+import { claimDelivery, recordSkipped, settleDelivery, type LedgerRow } from '@/lib/notifications/ledger';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import {
   eventDef,
@@ -70,20 +72,7 @@ export { notify } from '@/lib/notify';
 export type { NotificationParams } from '@/lib/notify';
 export * from '@/lib/notifications/catalog';
 
-/** Why a delivery was not attempted. Mirrors `NotificationDelivery.skipReason`. */
-export type SkipReason =
-  | 'category_off'
-  | 'group_off'
-  | 'email_off'
-  | 'no_address'
-  | 'no_adapter'
-  | 'unknown_event'
-  | 'invalid_payload'
-  // The chat adapter's (#1939): the deployment switch is off, the person has no
-  // confirmed identity any more, or their workspace's admin disabled it.
-  | 'chat_apps_off'
-  | 'no_identity'
-  | 'workspace_disabled';
+export type { SkipReason } from '@/lib/notifications/adapters/types';
 
 /**
  * A recipient. Either a bare user id (the router reads what it needs) or a row
@@ -156,158 +145,6 @@ function deliveryDedupeKey(
 ): string {
   const scope = callerKey ?? randomUUID();
   return createHash('sha256').update([eventKey, userId, channel, scope].join('\u0000')).digest('hex');
-}
-
-// ── The ledger ───────────────────────────────────────────────────────────────
-
-interface LedgerRow {
-  orgId: string | null;
-  userId: string;
-  eventKey: string;
-  channel: NotificationChannel;
-  dedupeKey: string;
-}
-
-/**
- * Record a delivery that will not be attempted. Written with the same dedupe
- * key the send would have used, so a repeat of the same suppressed send does
- * not pile up rows — and so an operator reading the ledger sees one line per
- * (person, event, channel) whatever happened to it.
- */
-async function recordSkipped(row: LedgerRow, reason: SkipReason): Promise<void> {
-  try {
-    await prisma.notificationDelivery.create({
-      data: { ...row, status: 'SKIPPED', skipReason: reason },
-    });
-  } catch (e) {
-    // A duplicate here means the same suppressed send was already recorded:
-    // that is the idempotency working, not a failure worth logging loudly.
-    if (!isUniqueViolation(e)) {
-      logger.error('Failed to record skipped notification delivery', {
-        userId: row.userId,
-        eventKey: row.eventKey,
-        channel: row.channel,
-        error: String(e),
-      });
-    }
-  }
-}
-
-/**
- * Claim the right to send. Returns the row id when this call created it, and
- * `null` when an identical send already exists (or the ledger write failed —
- * see below).
- *
- * A failed claim FAILS CLOSED. If the ledger is unwritable we do not send: a
- * send whose record was lost is exactly the "did anybody actually tell them?"
- * hole this ledger exists to close, and a retry would have no way to know the
- * first attempt happened. The caller's own work has already committed either
- * way, so nothing is rolled back by declining to notify.
- */
-async function claimDelivery(row: LedgerRow): Promise<string | null> {
-  try {
-    const created = await prisma.notificationDelivery.create({ data: { ...row, status: 'QUEUED' } });
-    return created.id;
-  } catch (e) {
-    if (!isUniqueViolation(e)) {
-      logger.error('Failed to claim notification delivery', {
-        userId: row.userId,
-        eventKey: row.eventKey,
-        channel: row.channel,
-        error: String(e),
-      });
-    }
-    return null;
-  }
-}
-
-async function settleDelivery(
-  id: string,
-  status: 'SENT' | 'FAILED' | 'QUEUED' | 'SKIPPED',
-  extra?: { error?: string; templateId?: string; skipReason?: SkipReason }
-): Promise<void> {
-  try {
-    await prisma.notificationDelivery.update({
-      where: { id },
-      data: {
-        status,
-        error: extra?.error?.slice(0, 2000) ?? null,
-        templateId: extra?.templateId ?? null,
-        skipReason: extra?.skipReason ?? null,
-      },
-    });
-  } catch (e) {
-    logger.error('Failed to settle notification delivery', { id, status, error: String(e) });
-  }
-}
-
-function isUniqueViolation(e: unknown): boolean {
-  return !!e && typeof e === 'object' && (e as { code?: string }).code === 'P2002';
-}
-
-// ── Channels ─────────────────────────────────────────────────────────────────
-
-interface DeliveryContext {
-  def: NotificationEventDef;
-  recipient: Required<Pick<NotifyRecipient, 'id'>> & NotifyRecipient;
-  locale: Locale;
-  params: NotificationParams;
-  link: string;
-  orgId: string | null;
-  dedupeKey: string;
-}
-
-/**
- * The e-mail channel. It does NOT send: it enqueues, so a slow or dead SMTP
- * server can never sit inside the request that triggered the notification, and
- * a transient failure is retried by the worker instead of being lost.
- *
- * The insert is written against the `Job` table directly because the queue's
- * own `enqueue()` helper (#1671) is not in the tree yet — only the model, the
- * health counters and the dead-letter alert are. The shape is deliberately the
- * one `enqueue({ name, payload, idempotencyKey, orgId })` will take, so the day
- * that helper lands this function becomes a one-line call to it. The handler
- * that renders and sends the mail arrives with the worker; until then a row
- * here is a durable "this person is owed an e-mail", which is strictly more
- * than the nothing that was recorded before.
- *
- * WORLDS (#2590). `link` is stored RELATIVE ("/messages/…") and must stay so: it
- * is a path inside the recipient's product, not an address. Whoever renders the
- * queued mail (the worker handler this row is waiting for) must build the
- * absolute URL PER RECIPIENT from the recipient's own organization —
- * `appUrlFor(orgId)` in services/emailService.ts, the same resolver every other
- * mail uses — and never from NEXT_PUBLIC_APP_URL directly, or a marketing
- * account's notification mail opens the internship host. The row carries what
- * that needs: `userId` in the payload and `orgId` on the job itself.
- */
-async function enqueueEmail(ctx: DeliveryContext): Promise<{ ok: boolean; error?: string }> {
-  try {
-    await prisma.job.create({
-      data: {
-        name: 'notification.email',
-        payload: {
-          eventKey: ctx.def.key,
-          userId: ctx.recipient.id,
-          locale: ctx.locale,
-          params: ctx.params,
-          link: ctx.link,
-          emailGroup: ctx.def.emailGroup,
-          delivery: ctx.def.delivery,
-        } as Prisma.InputJsonValue,
-        // Prefixed so the notification namespace can never collide with another
-        // producer's key on the globally-unique column.
-        idempotencyKey: `notify:${ctx.dedupeKey}`,
-        orgId: ctx.orgId,
-      },
-    });
-    return { ok: true };
-  } catch (e) {
-    // A duplicate job for a delivery we just claimed means a previous attempt
-    // enqueued it and then failed before settling the ledger row. The mail is
-    // already owed exactly once, so this is a success, not a failure.
-    if (isUniqueViolation(e)) return { ok: true };
-    return { ok: false, error: String(e) };
-  }
 }
 
 // ── The router ───────────────────────────────────────────────────────────────
@@ -520,51 +357,32 @@ export async function notifyEvent<K extends NotificationEventKey>(
           continue;
         }
 
-        const ctx: DeliveryContext = { def, recipient: user, locale, params, link, orgId, dedupeKey: row.dedupeKey };
-
-        if (channel === 'inApp') {
-          // notify() swallows its own errors, so "it returned" is all the
-          // certainty there is here — the same certainty every existing call
-          // site has had, now at least written down.
-          await notifyInApp(rec.id, def.key, params, link);
+        // The channel's own adapter performs it (#1711, ./adapters): the router
+        // has decided and claimed; the adapter only knows how to deliver.
+        const adapter = CHANNEL_ADAPTERS[channel];
+        if (!adapter || !adapter.available()) {
+          result.skipped += 1;
+          await settleDelivery(deliveryId, 'SKIPPED', { skipReason: 'no_adapter' });
+          continue;
+        }
+        const outcome = await adapter
+          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey })
+          .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
+        const templateId = `notifications.events.${def.key}`;
+        if (outcome.status === 'SENT') {
           result.sent += 1;
-          await settleDelivery(deliveryId, 'SENT', { templateId: `notifications.events.${def.key}` });
-          continue;
+          await settleDelivery(deliveryId, 'SENT', { templateId });
+        } else if (outcome.status === 'QUEUED') {
+          // Stays QUEUED: the worker that performs it settles the row.
+          result.queued += 1;
+          await settleDelivery(deliveryId, 'QUEUED', { templateId });
+        } else if (outcome.status === 'SKIPPED') {
+          result.skipped += 1;
+          await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
+        } else {
+          result.failed += 1;
+          await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
         }
-
-        if (channel === 'email') {
-          const outcome = await enqueueEmail(ctx);
-          if (outcome.ok) {
-            result.queued += 1;
-            // Stays QUEUED: the job, not this function, decides whether the
-            // mail was actually handed to SMTP.
-            await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
-          } else {
-            result.failed += 1;
-            await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
-          }
-          continue;
-        }
-
-        if (channel === 'chat') {
-          // Its own ledger row and its own outcome: a disabled or failing
-          // workspace never touches the e-mail or in-app delivery above.
-          const outcome = await deliverChat({ userId: rec.id, orgId, eventKey: def.key, params, link, locale });
-          if (outcome.status === 'SENT') {
-            result.sent += 1;
-            await settleDelivery(deliveryId, 'SENT', { templateId: `notifications.events.${def.key}` });
-          } else if (outcome.status === 'SKIPPED') {
-            result.skipped += 1;
-            await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
-          } else {
-            result.failed += 1;
-            await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
-          }
-          continue;
-        }
-
-        result.skipped += 1;
-        await settleDelivery(deliveryId, 'SKIPPED', { skipReason: 'no_adapter' });
       }
     }
   } catch (e) {

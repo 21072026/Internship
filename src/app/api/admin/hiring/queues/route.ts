@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -38,9 +37,9 @@ import {
 //   emptyRoles           Requisition OPEN with a seat left and no open application
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('company.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const orgId = resolveOrgId(session);
