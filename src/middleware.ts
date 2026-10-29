@@ -6,6 +6,7 @@ import { REMEMBER_COOKIES, REMEMBER_HINT_COOKIE, clearRememberCookies } from '@/
 import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/requestId';
 import { hostnameOf, servedHosts } from '@/lib/servedHosts';
 import { writeOriginVerdict } from '@/lib/writeOrigin';
+import { bodyLimitVerdict } from '@/lib/bodyLimitRule';
 import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, splitLocalePrefix } from '@/lib/localePath';
 import type { Locale } from '@/i18n/config';
 import { buildCsp } from '@/lib/cspPolicy.cjs';
@@ -236,6 +237,26 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
           ? { error: 'Send JSON (Content-Type: application/json).', code: verdict.code }
           : { error: 'Cross-site requests cannot change data here.', code: verdict.code },
         { status: verdict.status }
+      );
+    }
+  }
+
+  // Request-body ceiling (#3210): a JSON write that declares a body larger than
+  // the limit is refused before the handler buffers it. Rule, numbers and what
+  // it cannot see (chunked bodies — that half is the proxy's) are in
+  // src/lib/bodyLimitRule.ts.
+  if (pathname.startsWith('/api/')) {
+    const size = bodyLimitVerdict({
+      method: req.method,
+      pathname,
+      contentType: req.headers.get('content-type'),
+      contentLength: req.headers.get('content-length'),
+      env: process.env,
+    });
+    if (!size.ok) {
+      return NextResponse.json(
+        { error: 'Request body too large.', code: 'payload_too_large', limit: size.limit },
+        { status: 413 }
       );
     }
   }

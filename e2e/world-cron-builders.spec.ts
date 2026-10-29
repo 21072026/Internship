@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import {
   __testable,
-  checkCompanyNeedMatches,
+  checkRequisitionMatches,
   emailBrand,
   sendDailyActivityDigests,
   sendWeeklyMentorDigests,
@@ -107,7 +107,8 @@ test.beforeAll(async () => {
         name: `Cron Mkt Co ${STAMP}`,
         orgId: mktOrgId,
         entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-        needs: { create: { position, count: 1, period: '2026' } },
+        // An open requisition: the match job's one source since #1875.
+        requisitions: { create: { orgId: mktOrgId, title: position, status: 'OPEN', openings: 1, filled: 0, requiredSkills: [] } },
       },
     })
   ).id;
@@ -119,7 +120,8 @@ test.beforeAll(async () => {
         name: `Cron Int Co ${STAMP}`,
         orgId: intOrgId,
         entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-        needs: { create: { position, count: 1, period: '2026' } },
+        // An open requisition: the match job's one source since #1875.
+        requisitions: { create: { orgId: intOrgId, title: position, status: 'OPEN', openings: 1, filled: 0, requiredSkills: [] } },
       },
     })
   ).id;
@@ -217,7 +219,7 @@ test.describe('admin digests and summaries describe one org', () => {
 });
 
 test('an open-position alert names only its own tenant’s candidate, and an org without placements gets none', async () => {
-  await checkCompanyNeedMatches();
+  await checkRequisitionMatches();
   const alertedOf = async (companyId: string) =>
     (await prisma.companyNeedAlert.findMany({ where: { companyId }, select: { menteeId: true } })).map((a) => a.menteeId);
   const bellOf = async (userId: string) =>

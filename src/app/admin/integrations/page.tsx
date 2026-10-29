@@ -13,6 +13,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
 import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
 import { KlaviyoCard } from '@/components/admin/KlaviyoCard';
+import { ChatAppsCard } from '@/components/admin/ChatAppsCard';
 import { WebhookDeliveries } from '@/components/admin/WebhookDeliveries';
 import { useVertical } from '@/lib/verticalClient';
 
@@ -278,6 +279,10 @@ export default function IntegrationsPage() {
           <KlaviyoCard />
         </div>
       )}
+
+      <div className="mb-6">
+        <ChatAppsCard />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

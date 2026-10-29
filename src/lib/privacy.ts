@@ -26,7 +26,10 @@
 // address only, never its content or attachments.
 // 2026-10-07: the same sentence covers a customer reply that staff FORWARD to
 // that address (#2815) — logged with its date, subject and sender address.
-export const PRIVACY_POLICY_VERSION = '2026-10-07';
+// 2026-10-29: the retention section says what deleting an account reaches —
+// every text the person wrote or that belongs to them — and that a name quoted
+// in another user's own notes is outside it and reviewed on request (#2098).
+export const PRIVACY_POLICY_VERSION = '2026-10-29';
 
 // Version of the product-news opt-in WORDING on the marketing demo form
 // (`companyInquiry.marketingOptIn` in the dictionaries, #2569). Separate from

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Public ROI calculator (#1755):** `/roi-calculator` (internship product only; `requireVerticalCapability('mentorship')`, sitemap `needs: 'mentorship'`) builds a business case from the visitor's own numbers with no account and no e-mail, computed in the browser through the one model, `computeRoi()` in `src/lib/roi.ts`. New in that module: an optional `timeSaved` value input (priced coordinator hours; absent from the internal report, whose figures and steps are unchanged) and `prospectRoiInput()`, the adapter that maps the calculator's fields onto `RoiInput` (hires = floor(interns × conversion gain), the visitor's cost per hire as the recruiter fee avoided). The cost side is the published annual price of the plan that fits, `smallestProgramPlanFor()` in `src/lib/plans.ts`. Fields without evidence (hours, hourly cost, conversion) start empty; the formula and every step are printed. New `roiCalculator` i18n block (EN/TR/DE, LEAK_EXEMPT) and `roi.steps.timeSavedValue`.",
+  "notes": {
+    "en": ["New public ROI calculator: build your business case with your own numbers, see every step of the arithmetic and our published price beside the result — no sign-up."],
+    "tr": ["Yeni herkese açık yatırım getirisi hesaplayıcı: kendi rakamlarınızla iş gerekçenizi kurun, hesabın her adımını ve yayımlanmış fiyatımızı sonucun yanında görün — kayıt gerekmez."],
+    "de": ["Neuer öffentlicher ROI-Rechner: Bauen Sie Ihren Business Case mit Ihren eigenen Zahlen, sehen Sie jeden Rechenschritt und unseren veröffentlichten Preis neben dem Ergebnis — ohne Anmeldung."]
+  }
+}

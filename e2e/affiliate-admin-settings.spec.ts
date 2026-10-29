@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
+import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
 import { prisma as appPrisma } from '../src/lib/prisma';
 import { recordAffiliatePayment, AffiliateWriteError } from '../src/lib/affiliatePaymentWriter';
 import { setPayoutDetails } from '../src/lib/affiliatePayoutDetails';
@@ -294,3 +294,18 @@ test('payouts: all or nothing under the lock, only APPROVED rows of that partner
   expect(partners.find((p: { id: string }) => p.id === partnerId).totals.PAID).toBe(body.amountMinor);
 });
 
+
+// #3176: the refusal clears as the address is fixed, so the example link comes back
+// before the next save. A screen nicety, not a boundary: no @smoke tag.
+test('the referral address error clears while it is being fixed', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(host);
+  await signInAndSettle(page, emails[0], PW, '/admin');
+  await gotoSettled(page, '/admin/affiliates/settings');
+  const field = page.getByTestId('affiliate-referral-url');
+  await field.fill('http://shop.example/start');
+  await field.blur();
+  await expect(page.getByText('The address must start with https://.')).toBeVisible();
+  await field.fill('https://shop.example/start');
+  await expect(page.getByText('The address must start with https://.')).toHaveCount(0);
+  await expect(page.getByText('https://shop.example/start?ref=CODE')).toBeVisible();
+});

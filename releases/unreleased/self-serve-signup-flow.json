@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Self-serve signup flow and first-run panel (#1751):** a public `/signup` page (EN/TR/DE, INTERNSHIP only) posts to `POST /api/public/signup/org` and ends in a \"check your email\" state — never a session. It states the Community terms from the price list (active pairs, admin seats, no card) and that mentors and mentees are free forever. With `SELF_SERVE_SIGNUP` off it renders an honest \"opening soon\" state with the enquiry form as the way in, and the client falls back to it on a 503 `not_enabled`. While the flag is on, the public header gets a \"Start free\" link and the pricing page's Community column opens `/signup`. A tenant with no mentorship relation sees a three-step first-run panel on `/admin` (invite mentors, invite mentees, first pairing) instead of empty lists; it renders links only and disappears after the first pairing. `/admin/invite?role=MENTOR` preselects the role.",
+  "notes": {
+    "en": ["A brand-new organization now opens on a three-step guide to its first mentor–mentee pair instead of empty lists."],
+    "tr": ["Yeni açılan bir organizasyon artık boş listeler yerine ilk mentor–mentee eşleşmesine giden üç adımlık bir rehberle açılıyor."],
+    "de": ["Eine neue Organisation öffnet jetzt mit einer Drei-Schritte-Anleitung zum ersten Mentor–Mentee-Paar statt mit leeren Listen."]
+  }
+}

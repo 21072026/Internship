@@ -44,8 +44,15 @@ export async function recordRequisitionFits(orgId: string, requisitionId: string
       ) {
         continue;
       }
+      // A sentence was written for particular numbers: when they change and no
+      // new sentence comes with them, the old one is cleared rather than left
+      // standing beside a score it no longer explains.
       const reasonData =
-        r.reason === undefined ? {} : { reason: r.reason?.text ?? null, reasonSource: r.reason?.source ?? null };
+        r.reason === undefined
+          ? prior
+            ? { reason: null, reasonSource: null }
+            : {}
+          : { reason: r.reason?.text ?? null, reasonSource: r.reason?.source ?? null };
       await prisma.requisitionFit.upsert({
         where: { requisitionId_menteeId: { requisitionId, menteeId: r.menteeId } },
         update: { score: r.fit.score, breakdown, ruleSetVersion: r.fit.ruleSetVersion, computedAt: new Date(), ...reasonData },

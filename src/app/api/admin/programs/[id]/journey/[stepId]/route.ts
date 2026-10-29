@@ -56,11 +56,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         translations: readStepTranslations(current.translations),
         stageKey: payload.stageKey ?? null,
         url: payload.url ?? null,
+        eventId: payload.eventId ?? null,
         skipIf: payload.skipIf ?? null,
         ...fields,
       });
       if (!merged.success) return NextResponse.json({ error: 'Validation failed', code: 'invalid' }, { status: 400 });
-      const columns = await stepColumns(merged.data, program.orgId);
+      const columns = await stepColumns(merged.data, program.orgId, program.id);
       if (!columns.ok) return NextResponse.json({ error: 'Validation failed', code: columns.code }, { status: 400 });
       Object.assign(data, columns.data);
     }

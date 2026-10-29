@@ -178,6 +178,10 @@
     "methods": ["GET", "POST"],
     "why": "Meeting RSVP from the emailed link (#1446). Meeting.rsvpToken and MeetingGuest.rsvpToken are the credentials — an external guest has no account — and are looked up separately, never as one query over a shared column, with identical answers so a revoked guest invitation cannot be told from a wrong token."
   },
+  "src/app/api/telemetry/vitals/route.ts": {
+    "methods": ["POST"],
+    "why": "Core Web Vitals beacon (#1593). Anonymous by design: the landing page is the screen being measured and its visitors have no session. Accepts only a metric name, a number, a rating band and a route template (webVitalsRule.ts), writes one log line and nothing to the database, is rate-limited to 60/10min per IP, and answers 204 doing nothing unless the build set NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE."
+  },
   "src/app/api/unsubscribe/one-click/route.ts": {
     "methods": ["GET", "POST"],
     "why": "RFC 8058 one-click unsubscribe — the URL advertised in List-Unsubscribe-Post and pressed by Gmail, Apple Mail and Outlook. They send no cookie and there is no user agent to challenge; the signed token is the whole credential. An authenticated one-click unsubscribe is a contradiction in terms (#1444)."

@@ -56,6 +56,9 @@ test('a satisfied step names its reason; the vocabularies are whitelists', async
   expect(satisfiedReason({ payload: { skipIf: 'meeting_exists' } }, { meeting_exists: false })).toBeNull();
   expect(satisfiedReason({ payload: { skipIf: 'rm -rf' } }, {})).toBeNull();
   expect(readStepPayload({ url: 'javascript:alert(1)', skipIf: 'nope', stageKey: 'X' })).toEqual({ stageKey: 'X' });
+  // A GROUP_SESSION step names its session by id (#1856); anything that is not an id reads as absent.
+  expect(readStepPayload({ eventId: 'ckabc123' })).toEqual({ eventId: 'ckabc123' });
+  expect(readStepPayload({ eventId: '../x' })).toEqual({});
   expect(isSafeContentUrl('/resources/week-6')).toBe(true);
   expect(isSafeContentUrl('//evil.example')).toBe(false);
   expect(isSafeContentUrl('https://user:pw@docs.example')).toBe(false);

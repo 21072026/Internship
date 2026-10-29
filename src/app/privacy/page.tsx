@@ -46,7 +46,10 @@ export default async function PrivacyPage() {
     // The public enquiry / demo forms (#2569): the row stamps this notice's
     // version as its consent record, so the notice must name what the row keeps.
     { title: p.enquiryTitle, body: p.enquiryBody },
-    { title: p.retentionTitle, body: p.retention },
+    // What an account deletion reaches, and the one thing it deliberately does
+    // not (#2098): a name quoted in someone else's own notes — see the COVERAGE
+    // block in src/lib/accountErasure.ts.
+    { title: p.retentionTitle, body: `${p.retention} ${p.erasureScope}` },
     { title: p.rightsTitle, body: p.rights },
     { title: p.contactTitle, body: contactBody },
   ];

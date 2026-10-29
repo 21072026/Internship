@@ -33,7 +33,8 @@
  *   Source (contactName, contactEmail)
  *   CompanyInquiry (contactName, email, phone, message)
  *   MentorApplication (fullName, email, phone, experience, motivation, linkedinUrl,
- *                      rejectReason, adminNote)
+ *                      rejectReason, adminNote, interviewNotes, referenceName,
+ *                      referenceContact, referenceOutcome)
  *   EmailLog (to, subject, error)
  *   MeetingGuest (email, name, rsvpToken) — an external invitee's address, and
  *                 the address is the ONLY identifier they have here: no account,
@@ -316,6 +317,12 @@ async function run() {
         // Private admin commentary about a real person (#1806) — same class of
         // free text as rejectReason, so it is dropped for the same reason.
         adminNote: null,
+        // The screening record (#1807): interview notes about the applicant
+        // and a third party's reference details.
+        interviewNotes: null,
+        referenceName: null,
+        referenceContact: null,
+        referenceOutcome: null,
       },
     });
   }

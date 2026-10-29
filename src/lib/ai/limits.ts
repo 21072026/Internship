@@ -88,6 +88,11 @@ export const AI_RATE_LIMITS = {
   content_draft: { limit: 20, windowMs: 10 * 60 * 1000 },
   profile_enrich: { limit: 5, windowMs: 10 * 60 * 1000 },
   company_enrich: { limit: 20, windowMs: 10 * 60 * 1000 },
+
+  // Requisition fit reasons (POST /api/company/requisitions/[id]/fit-reasons, #2042).
+  // 10 calls / 10 minutes: one call writes the sentences for a whole board's top
+  // candidates; an unchanged ranking is answered from the stored artefact.
+  requisition_fit: { limit: 10, windowMs: 10 * 60 * 1000 },
   // One practice interview is up to 7 calls (6 turns + the report), #2051.
   practice_interview: { limit: 20, windowMs: 10 * 60 * 1000 },
   // Personalised session agenda (POST /api/agendas/personalize, #1845).

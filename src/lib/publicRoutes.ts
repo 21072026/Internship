@@ -53,6 +53,8 @@ export const PUBLIC_ROUTES: readonly {
   // pages. `monthly` is honest: a published price list that changed weekly
   // would not be a published price list.
   { path: '/pricing', llms: 'Pricing: plans, how paying works, and free self-hosting under AGPL-3.0', priority: 0.8, changeFrequency: 'monthly' },
+  // The public ROI calculator (#1755): the business case beside the price.
+  { path: '/roi-calculator', llms: 'ROI calculator: build a business case with your own numbers and the published price', priority: 0.7, changeFrequency: 'monthly', needs: 'mentorship' },
   { path: '/apply-as-mentor', llms: 'Apply to mentor a student or graduate', priority: 0.8, changeFrequency: 'monthly', needs: 'mentorship' },
   { path: '/projects', llms: 'Public showcase of the projects interns work on', priority: 0.7, changeFrequency: 'weekly', needs: 'projects' },
   { path: '/release-notes', llms: 'What\'s new: every shipped release, dated', priority: 0.5, changeFrequency: 'daily', needs: 'default-vertical' },
