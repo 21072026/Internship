@@ -14,6 +14,8 @@ export type SkipReason =
   | 'category_off'
   | 'group_off'
   | 'email_off'
+  // The person switched this channel off for this category (#1714).
+  | 'channel_off'
   | 'no_address'
   | 'no_adapter'
   | 'unknown_event'
