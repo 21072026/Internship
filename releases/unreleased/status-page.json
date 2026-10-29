@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Public status page (#1604):** `/status` shows the current state of the web app + database, e-mail delivery and background jobs, a 90-day availability figure with daily bars, and an incident feed (`src/lib/statusIncidents.ts`, edited by PR). History comes from a new deployment-wide `StatusSample` table written every 5 minutes by the `status.sample` job (`src/lib/statusSample.ts`; no catch-up, no retry — a missing slot is downtime). Rules are pure in `src/lib/statusRule.ts`; the page never shows a version, sha, host or error and never calls `/api/health`. The uptime commitment appears only when `STATUS_SLA_TARGET` is set (default: none); definitions, exclusions and per-severity targets in `docs/sla.md`. Linked from the public footer and `/trust`.",
+  "notes": {
+    "en": ["New public status page: see whether the platform is up, how it did over the last 90 days and any incidents — linked from the footer."],
+    "tr": ["Yeni herkese açık durum sayfası: platformun şu an çalışıp çalışmadığını, son 90 gündeki erişilebilirliğini ve olayları görün — alt bilgiden bağlantılı."],
+    "de": ["Neue öffentliche Statusseite: ob die Plattform erreichbar ist, wie sie in den letzten 90 Tagen lief und welche Vorfälle es gab — im Footer verlinkt."]
+  }
+}

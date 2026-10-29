@@ -7302,6 +7302,21 @@ model OrgEntitlement {
 /// missed slot from one already handled. System-level, no `orgId` — a schedule
 /// is the deployment's, not a tenant's. Advanced only by one conditional write
 /// (`src/lib/jobs/scheduleStateStore.ts`), so it never moves backwards.
+/// One health sample of THIS deployment, written every 5 minutes by the
+/// `status.sample` job (#1604, src/lib/statusSample.ts) — the history behind
+/// the public /status page. Deployment-wide on purpose (no orgId): the web app,
+/// its database, its mail relay and its job queue are shared by every tenant.
+/// A missing slot is the signal: a sample can only be written when the app, its
+/// database and its scheduler are all running, so a gap is downtime.
+model StatusSample {
+  /// The slot start, floored to 5 minutes (UTC). Unique: a rerun of the same
+  /// slot overwrites instead of double-counting.
+  at   DateTime @id
+  /// 'ok' | 'degraded' — src/lib/statusRule.ts decides.
+  mail String   @db.VarChar(16)
+  jobs String   @db.VarChar(16)
+}
+
 model ScheduleState {
   /// The schedule key — `QueueSchedule.key`.
   name             String    @id @db.VarChar(64)
