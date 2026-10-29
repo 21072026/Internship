@@ -80,6 +80,11 @@ jobs:
       # keeps coming back (#1880); the guard makes a new one a red build.
       - name: no hardcoded pipeline stage keys (#1886)
         run: npm run check:stage-keys
+      # A quarantined e2e test is left out of every gate (#1610), so one that
+      # nobody comes back to is a deleted test. Each needs an issue and an
+      # expiry at most 30 days out; this fails without them or once it passed.
+      - name: e2e quarantines carry an issue and a live expiry (#1610)
+        run: npm run check:quarantine
       # A malformed release fragment must fail in the PR that adds it, not in
       # next.config.js during the deploy build (#1275).
       - name: release fragments are well-formed (#1275)
