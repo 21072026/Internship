@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Upgrade prompt rendered from the 403 body (#1745):** one component, `src/components/UpgradePrompt.tsx` (`data-testid=\"upgrade-prompt\"`), and one parser, `src/lib/upgradePrompt.ts` (`parseGateBody`/`parseGateError` read the `code`, never the English `error`; `upgradeOffer` names the plan that lifts the gate with its published price from `src/lib/plans.ts`). Wired to the admin mentorship assignment, the inline assign, the mentorship-request approval, the mentor's add-mentee form, the talent-pool lock (its 403 now carries `code: 'feature_locked', feature: 'TALENT_POOL_SEARCH'`), the premium-analytics locked panel and the report-subscriptions lock. Admins can file the upgrade request (`POST /api/org/plan-change`) from the prompt. **FREE CORE:** `POST /api/apply` at the plan cap now answers `409 { code: 'program_full' }` with no plan, price or limit, the apply page shows a translated capacity message, and the org's admins get a `plan_limit.application_held` notification (at most one a day each). New `upgrade` i18n block (EN/TR/DE) with MARKETING overlay entries.",
+  "notes": {
+    "en": ["When your plan's limit or a locked feature stops you, you now see what is blocked, which plan unlocks it and its price — and can request the upgrade in one click. Applicants are only ever told the programme is full."],
+    "tr": ["Paketinizin sınırına veya kilitli bir özelliğe takıldığınızda artık neyin engellendiğini, hangi paketin açtığını ve fiyatını görüyor, yükseltmeyi tek tıkla talep edebiliyorsunuz. Başvuranlara yalnızca programın dolu olduğu söyleniyor."],
+    "de": ["Wenn das Limit Ihres Plans oder eine gesperrte Funktion Sie stoppt, sehen Sie jetzt, was blockiert ist, welcher Plan es freischaltet und was er kostet — und können das Upgrade mit einem Klick anfragen. Bewerbenden wird nur mitgeteilt, dass das Programm voll ist."]
+  }
+}

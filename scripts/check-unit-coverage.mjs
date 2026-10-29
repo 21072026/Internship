@@ -228,6 +228,16 @@ const FLOORS = new Map([
     { floor: 85, measured: 87.86, why: 'canonical stage list + labels, reached through the stage clock (#2264)' },
   ],
   [
+    // Moved off Playwright onto the node runner (#1598): "5 dk. önce", the
+    // locale-following date helpers and the zone label on a meeting time.
+    'src/lib/relativeTime.ts',
+    {
+      floor: 90,
+      measured: 93.97,
+      why: 'a Turkish page printed "8/25/2026" (#1422) and a meeting time without its zone is two appointments (#1030)',
+    },
+  ],
+  [
     'src/lib/dateRange.ts',
     { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
   ],
@@ -430,11 +440,11 @@ const FLOORS = new Map([
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
-// The six modules Waves 0-1 are about to rewrite (#1592). Every one of them is
-// pure, and every one of them scores 0% under this runner today: `pipeline.ts`
-// and `relativeTime.ts` do have unit assertions, but those live in
-// e2e/*.unit.spec.ts and run under Playwright, which measures nothing. That
-// split is exactly what #1598 exists to close.
+// The modules Waves 0-1 are about to rewrite (#1592) that still score 0% under
+// this runner. Six started here; `pipeline.ts` (#2264) and `relativeTime.ts`
+// (#1598, its suites moved off Playwright, which measures nothing) have left.
+// The four that remain all reach Prisma, so a suite for them is a
+// database-free rule extracted first, not a port.
 //
 // They are listed here rather than given a floor of 0 because a floor of 0 can
 // never fail and would read, on the summary table, as coverage. An entry only
@@ -449,14 +459,13 @@ const AWAITING_TESTS = new Map([
   ['src/lib/entitlements.ts', 'wave-1 billing-subject collapse (#1592)'],
   ['src/lib/planGate.ts', 'wave-1 billing-subject collapse (#1592)'],
   ['src/lib/dormantFirstContact.ts', '"two mails, never a third" (docs/dormant-first-contacts.md)'],
-  ['src/lib/relativeTime.ts', 'assertions exist, but under Playwright — needs #1598'],
 ]);
 
 // How many entries AWAITING_TESTS is allowed to hold. Pinned as a literal for
 // the same reason check-tenant-models.mjs pins its pending set: a seventh
 // unfloored module cannot be waved through by appending a line, and the count
 // only moves in a diff a human approved.
-const EXPECTED_AWAITING = 5;
+const EXPECTED_AWAITING = 4;
 
 const TRACKED = [...FLOORS.keys(), ...AWAITING_TESTS.keys()];
 

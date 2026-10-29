@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { setSetting } from '../src/lib/settings';
+import { writeSetting } from '../src/lib/settingsWrite';
 import { getAttentionItems } from '../src/lib/mentorAttention';
 import { reminderDaysReader } from '../src/lib/relationHealthLive';
 import { prisma as appPrisma } from '../src/lib/prisma';
@@ -41,8 +41,8 @@ test('two programmes of one org nudge on their own reminderDays', async () => {
       await prisma.interactionLog.create({ data: { relationId, date: tenDaysAgo, notes: 'synthetic', type: 'Meeting' } });
     }
 
-    await setSetting('reminderDays', '30', org.id);
-    await setSetting('reminderDays', '7', org.id, { programId: tight.id });
+    await writeSetting('reminderDays', '30', org.id);
+    await writeSetting('reminderDays', '7', org.id, { programId: tight.id });
 
     const { items } = await getAttentionItems(mentor.id, { orgId: org.id });
     const reasonsOf = (id: string) => items.find((i) => i.relationId === id)?.reasons ?? [];
@@ -63,8 +63,8 @@ test('a sweep across two tenants reads each tenant its own value', async () => {
   const orgA = await prisma.organization.create({ data: { name: `Sweep A ${stamp}`, slug: `sweepa-${stamp}` } });
   const orgB = await prisma.organization.create({ data: { name: `Sweep B ${stamp}`, slug: `sweepb-${stamp}` } });
   try {
-    await setSetting('reminderDays', '5', orgA.id);
-    await setSetting('reminderDays', '21', orgB.id);
+    await writeSetting('reminderDays', '5', orgA.id);
+    await writeSetting('reminderDays', '21', orgB.id);
     // The reader the nightly health sweep and the admin monitor share: read
     // inside the loop, memoised per (org, programme) — never the first tenant's
     // value for everyone.

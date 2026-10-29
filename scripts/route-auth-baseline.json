@@ -142,6 +142,10 @@
     "methods": ["POST"],
     "why": "The contact form on a public profile: the sender has no account. Anti-spam is a honeypot field, a minimum render-to-submit time and 3 messages/hour/IP; the message goes to the profile owner's own notifications, nowhere else."
   },
+  "src/app/api/public/signup/org/route.ts": {
+    "methods": ["POST"],
+    "why": "Self-serve tenant signup (#1749): an unauthenticated visitor creates an organization and its first ADMIN, so there is no session to check. It is off unless SELF_SERVE_SIGNUP=true (503 not_enabled), rate-limited per IP, never mints a session (the account is created inactive and unverified and admits itself through the e-mail verification link), and answers a taken address exactly like an unusable organization name so it is not an enumeration oracle."
+  },
   "src/app/api/public/stats/route.ts": {
     "methods": ["GET"],
     "why": "The landing page's three integers (#1099) — no names, no ids, no PII of any kind. Backed by a 10-minute in-process cache so anonymous traffic cannot turn into count() storms, and rate-limited like every other public endpoint."

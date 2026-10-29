@@ -70,7 +70,7 @@ test('the Expires date is in the future and less than a year out', async ({ requ
   // Past: the file is formally invalid and researchers are told to distrust it.
   expect(
     expires.getTime(),
-    `security.txt expired on ${raw} — renew it (see the RENEWAL note in public/.well-known/security.txt)`
+    `security.txt expired on ${raw} — renew it (see RENEWAL in src/lib/securityTxt.ts)`
   ).toBeGreaterThan(now);
 
   // Too far out: RFC 9116 § 2.5.5 asks for less than a year, so a "renewal"
