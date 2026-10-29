@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
@@ -14,6 +12,7 @@ import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { locales } from '@/i18n/config';
 import { mailQueueNotice } from '@/lib/mailOutbox';
 import { bulkInvitationLane, fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
+import { requirePermission } from '@/lib/authz';
 import {
   BULK_INVITE_MAX_CHARS,
   BULK_INVITE_ROLES,
@@ -73,13 +72,11 @@ async function seatsAvailable(orgId: string | null): Promise<number | null> {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     // Checked in the handler, not in middleware: inviting a whole roster is an
     // admin act, and a MENTOR (who may invite a single mentee) gets a 403 here.
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requirePermission('org.invite', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     // Per user, not just per IP: several admins behind one office NAT should
     // not spend each other's budget, and one admin cannot loop the send.

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { withTenantScope } from '@/lib/orgContext';
@@ -37,12 +36,6 @@ const postSchema = z.object({
   body: z.string().max(ISSUE_BODY_MAX),
 });
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return { session, orgId: await reportAdminOrg(session) };
-}
-
 function gh(token: string, path: string, init?: RequestInit) {
   return fetch(`${API}${path}`, {
     ...init,
@@ -70,8 +63,9 @@ async function loadReport(id: string, orgId: string) {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
   const { id } = await params;
   return withTenantScope(admin.session, async () => {
     const report = await loadReport(id, admin.orgId);
@@ -99,8 +93,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.write', { request });
+  if ('error' in gate) return gate.error;
+  const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
   const parsed = postSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const config = githubConfig(process.env);

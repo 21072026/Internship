@@ -16,7 +16,8 @@ import {
   ALREADY_MENTORED_ERROR,
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
-import { ENDED_REASSIGNED, type AdminEndReasonCode } from '@/lib/relationLifecycle';
+import { ENDED_REASSIGNED, effectiveLifecycleState, type AdminEndReasonCode } from '@/lib/relationLifecycle';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { emit } from '@/lib/events/emit';
 import { carriedOverFields, hasRelationHistory } from '@/lib/relationHistory';
 
@@ -120,6 +121,7 @@ export async function transferMentorship(opts: {
       id: true,
       orgId: true,
       status: true,
+      lifecycleState: true,
       mentorId: true,
       menteeId: true,
       companyId: true,
@@ -350,6 +352,10 @@ export async function transferMentorship(opts: {
     },
     { orgId: relation.orgId, actor: { id: actorId, type: 'user' } },
   );
+  // A handover also ENDS the old pairing; a correction moves no state.
+  if (mode === 'transferred') {
+    await raiseLifecycleChanged({ relationId: relation.id, orgId: relation.orgId, from: effectiveLifecycleState(relation), to: ENDED_REASSIGNED, reasonCode, actorId });
+  }
 
   // The mentee. Told who their mentor is now — never the reason, which is the
   // admin's operational note and (in the `wrong_assignment` case) about the

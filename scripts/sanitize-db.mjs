@@ -219,6 +219,8 @@ async function run() {
     ['rosterRowResult', () => prisma.rosterRowResult.deleteMany({})],
     // A real person's Google Calendar grant, and the browsers they sign in from (#2098).
     ['googleCalendarConnection', () => prisma.googleCalendarConnection.deleteMany({})],
+    // Its provider-neutral successor (#1989): the same grants, sealed the same way.
+    ['calendarConnection', () => prisma.calendarConnection.deleteMany({})],
     ['signInDevice', () => prisma.signInDevice.deleteMany({})],
   ];
   for (const [label, fn] of deletions) {

@@ -18,7 +18,8 @@ import {
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
 import { Prisma } from '@prisma/client';
-import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
+import { ENDED_REMATCHED, effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -69,6 +70,8 @@ export async function decideMentorshipRequest(opts: {
         select: {
           id: true,
           status: true,
+          lifecycleState: true,
+          orgId: true,
           mentor: {
             select: {
               id: true,
@@ -225,6 +228,10 @@ export async function decideMentorshipRequest(opts: {
         return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
       }
       throw e;
+    }
+    // The replaced pairing ended as a re-match (#1998), after the commit.
+    if (replaced) {
+      await raiseLifecycleChanged({ relationId: replaced.id, orgId: replaced.orgId, from: effectiveLifecycleState(replaced), to: ENDED_REMATCHED, reasonCode: null, actorId });
     }
     await notify(
       req.menteeId,
