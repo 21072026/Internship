@@ -319,6 +319,15 @@ export const SETTING_DEFAULTS = {
   // Meeting attendance (#2014): a cancellation this many hours or fewer before
   // the start is recorded as LATE_CANCEL for whoever cancelled.
   lateCancelHours: '24',
+  // Business-day stage SLAs (#1638, docs/business-day-slas.md). `calendar` is
+  // what every installation did before, so nothing moves until an admin opts in.
+  slaDayMode: 'calendar',
+  // JS weekdays (0 = Sunday), comma-separated. Monday–Friday.
+  slaWorkingDays: '1,2,3,4,5',
+  // A HolidayCalendar id of the org, or '' for none.
+  slaHolidayCalendarId: '',
+  // IANA zone the weekday and the holidays are judged in; '' = APP_TIMEZONE.
+  slaTimeZone: '',
   // Evaluation due dates (#1891, src/lib/evaluationDue.ts). A stage KEY of the
   // tenant's own pipeline, never a label: '' means "the built-in default if
   // this pipeline has it" (INTERNSHIP_IN_PROGRESS_450 + 30 days for INTERIM,
@@ -462,6 +471,10 @@ export const SETTING_SCHEMA = {
   salesLeaderboardForReps: { type: 'boolean', scopes: O },
   outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
   lateCancelHours: { type: 'number', scopes: P },
+  slaDayMode: { type: 'enum', values: ['calendar', 'business'], scopes: P },
+  slaWorkingDays: { type: 'string', scopes: P },
+  slaHolidayCalendarId: { type: 'string', scopes: P },
+  slaTimeZone: { type: 'string', scopes: P },
   evaluationInterimStage: { type: 'string', scopes: P },
   evaluationInterimDays: { type: 'number', scopes: P },
   evaluationFinalStage: { type: 'string', scopes: P },
