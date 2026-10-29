@@ -95,7 +95,7 @@ import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
-import { resolveStageEscalations } from '@/lib/stageSla';
+import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
@@ -4527,6 +4527,17 @@ export async function checkStageDeadlineReminders() {
   };
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
+  // One business-day rule per programme for the tick (#1638).
+  const dayRules = new Map<string, ReturnType<typeof resolveSlaDayRule>>();
+  const dayRuleOf = (rel: { orgId: string | null; cohortId: string | null }) => {
+    const key = `${rel.orgId ?? ''}|${rel.cohortId ?? ''}`;
+    let hit = dayRules.get(key);
+    if (!hit) {
+      hit = resolveSlaDayRule({ orgId: rel.orgId, cohortId: rel.cohortId });
+      dayRules.set(key, hit);
+    }
+    return hit;
+  };
 
   const candidates = await prisma.mentorshipRelation.findMany({
     // Not a paused pair (#1772): its clock is frozen (stageClockPatch), this is the second guard.
@@ -4589,6 +4600,8 @@ export async function checkStageDeadlineReminders() {
             const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
             const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+            // Say which day mode produced the date, so a mentor questioning it can see why (#1638).
+            const dayNote = (await dayRuleOf(rel)).mode === 'business' ? `<p style="color:#6b7280;font-size:13px;">${esc(emailText.businessDays)}</p>` : '';
             await brandOf(rel.orgId).then((brand) => sendEmail({
               category: 'stage-deadline',
               userId: rel.mentorId,
@@ -4597,7 +4610,7 @@ export async function checkStageDeadlineReminders() {
               locale: rel.mentor.preferredLanguage,
               to: rel.mentor.email,
               subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
             })).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });
