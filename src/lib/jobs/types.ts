@@ -116,6 +116,7 @@ export interface JobPayloadMap {
   'reminders.stageDeadline': Record<string, never>;
   'reminders.retentionReconsent': Record<string, never>;
   'matching.needMatchAlerts': Record<string, never>;
+  'mentorOffers.sweep': Record<string, never>;
   'meetings.reminders': Record<string, never>;
   'meetings.seriesReminders': Record<string, never>;
   'meetings.autoLog': Record<string, never>;
@@ -170,6 +171,20 @@ export interface JobPayloadMap {
   /// The `AutomationRun` row holds the rule, the relation and the org; the
   /// payload is only its id, keyed `automation:<runId>`.
   'automation.run': { runId: string };
+  /// One event mail the notification router owes one person (#1710, sender
+  /// #1719). Enqueued by the router's e-mail channel (src/lib/notifications/
+  /// router.ts, keyed `notify:<dedupeKey>`); rendered by renderNotificationEmail()
+  /// — the same renderer the template editor's preview uses — and handed to
+  /// sendEmail(). The job's own `orgId` is the recipient's org.
+  'notification.email': {
+    eventKey: string;
+    userId: string;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string | null;
+    emailGroup: string;
+    delivery: 'immediate' | 'batched';
+  };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -198,6 +213,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'reminders.stageDeadline',
   'reminders.retentionReconsent',
   'matching.needMatchAlerts',
+  'mentorOffers.sweep',
   'meetings.reminders',
   'meetings.seriesReminders',
   'meetings.autoLog',

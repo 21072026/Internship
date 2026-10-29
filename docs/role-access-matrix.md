@@ -344,6 +344,14 @@ Kurallar:
   { subject, request })` route guard'ı, `can(actor, permission, subject)` ve kuralın
   saf hali `src/lib/authzRule.ts` (katalog `PERMISSIONS`, kademe tablosu
   `TIER_PERMISSIONS`, birim testli). Route'ların ona taşınması #1571.
+- **`npm run check:authz`** (CI, #1571): `src/app/api/**/route.*` içinde çağıranın
+  rolünü `'ADMIN'` ile karşılaştıran (`session.user.role !== 'ADMIN'`, çıplak
+  `role === 'ADMIN'`, `['ADMIN', …].includes(role)`) ya da yerel bir `requireAdmin…`
+  yardımcısı tanımlayan her yer sayılır. Henüz taşınmamış olanlar dosya başına
+  `scripts/authz-baseline.json`'da `pending` olarak sabittir ve liste **yalnız
+  küçülür**: listede olmayan veya sayısı artan dosya kırmızıdır; sayısı düşen dosya
+  da `npm run check:authz -- --shrink` ile sayı indirilene kadar kırmızıdır. Rolü
+  erişim için değil **veri şekli** için okuyan bir yer `allowed`'a gerekçesiyle girer.
 
 ### İzin kapısının arkasındaki uçlar / Routes behind the permission guard
 
@@ -351,6 +359,8 @@ Kurallar:
 |---|---|---|---|---|---|---|
 | `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
 | `GET /api/requisitions/[id]/matches` (`/admin/requisitions/[id]`, #1401) | `user.read` | ✅ kendi org'unun talebi; yalnız rızalı aday havuzu (`CONSENTING_POOL_WHERE`) | ✅ aynı | **403** (`unscoped_subject` — talebe göre kapsam henüz verilmiyor, fail-closed) | **403** | 401 |
+| `GET /api/admin/organizations/[id]/export` (#1584, `docs/tenant-lifecycle.md`) | `org.export` (veya dünyanın süper admini: `platform.org.read`) | ✅ yalnız kendi org'u; başka org **403** | **403** | **403** | **403** | 401 |
+| `POST /api/admin/organizations/[id]/rename`, `POST`/`DELETE …/archive` (#1582) | `platform.org.write` | **403** (kendi org'u dahil) | **403** | **403** | **403** | 401 |
 | `POST /api/requisitions/[id]/shortlist` (#1401) | `company.write` | ✅ kendi org'u; rızasız aday **409 `no_consent`**, kapalı talep 409 | **403** | **403** | **403** (COMPANY kendi kısa listesini `/api/company/interests` ile yazar) | 401 |
 
 Org her zaman oturumdan gelir; süper-admin de burada yalnız kendi org'unu okur.
