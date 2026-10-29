@@ -12,6 +12,7 @@ import { notify } from '@/lib/notify';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { sendTwoFactorResetEmail } from '@/services/emailService';
 import { evaluateTwoFactorReset } from '@/lib/twoFactorResetRule';
+import { withRequestScope } from '@/lib/requestContext';
 
 // POST — an admin clears a locked-out user's second factor (#1543).
 //
@@ -39,7 +40,7 @@ import { evaluateTwoFactorReset } from '@/lib/twoFactorResetRule';
 // A user inside the tenant's `require2fa` scope is then held at /security-setup
 // until they re-enrol (src/lib/twoFactorPolicy.ts). That is the point, not a
 // side effect.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePOST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -205,4 +206,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ ok: true, deletedRecoveryCodes: deletedCodes });
   });
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handlePOST(request, ctx));
 }

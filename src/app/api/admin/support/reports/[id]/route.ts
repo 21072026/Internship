@@ -8,6 +8,7 @@ import { STATUS_NOTE_MAX } from '@/lib/supportReportIntegrationRule';
 import { sendSupportReportUpdateEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { reportAdminOrg, SUPPORT_REPORT_STATUSES } from '@/lib/supportReportAccess';
+import { withRequestScope } from '@/lib/requestContext';
 
 // One bug report (#3130): GET the full record (context + file metadata, never
 // bytes), PATCH its status. Another org's id is 404, like a missing one.
@@ -25,7 +26,7 @@ async function requireAdmin() {
   return { session, orgId: await reportAdminOrg(session) };
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
@@ -42,7 +43,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
@@ -81,4 +82,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json({ ok: true, status: parsed.data.status, notified });
   });
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handleGET(request, ctx));
+}
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handlePATCH(request, ctx));
 }

@@ -18,6 +18,7 @@ import { sendEmail, sendVerificationEmail } from '@/services/emailService';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { selfServeSignupEnabled, SIGNUP_ORG_RATE_LIMIT } from '@/lib/selfServeSignup';
+import { withRequestScope } from '@/lib/requestContext';
 
 // Self-serve tenant signup (#1749, story #1747): one unauthenticated POST that
 // turns a form into a working tenant — an INTERNSHIP organization (Community =
@@ -68,7 +69,7 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (!selfServeSignupEnabled()) {
     return NextResponse.json({ error: 'Self-serve signup is not enabled', code: 'not_enabled' }, { status: 503 });
   }
@@ -203,4 +204,9 @@ async function notifyOperator(organization: { id: string; name: string; slug: st
   } catch (e) {
     logger.error('signup_org.operator_notice_failed', { orgId: organization.id, error: e instanceof Error ? e.name : 'unknown' });
   }
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function POST(request: Request) {
+  return withRequestScope(request, () => handlePOST(request));
 }
