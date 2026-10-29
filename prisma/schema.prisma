@@ -237,8 +237,14 @@ model Organization {
   // sign-in on any door, no mail to its people, gone from operational lists,
   // every row kept. Cleared = live again. Written only by
   // src/lib/orgLifecycle.ts (super admin). Nullable — additive (#2298).
-  archivedAt   DateTime?
-  archivedById String?
+  archivedAt            DateTime?
+  archivedById          String?
+  // Hard delete, stage 1 (#1584): when — and by whom — permanent deletion was
+  // requested. Execution waits TENANT_HARD_DELETE_WAIT_HOURS after this, needs
+  // the deployment switch TENANT_HARD_DELETE_ENABLED (off by default) and is
+  // cleared by unarchiving. Rule: src/lib/orgDeletionRule.ts. Nullable — additive.
+  deletionRequestedAt   DateTime?
+  deletionRequestedById String?
 
   users                   User[]
   sources                 Source[]
@@ -8581,6 +8587,11 @@ model AffiliateProgramSettings {
   // When the current plan version took effect. Payments RECORDED before it never
   // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
   planEffectiveAt DateTime?
+  // The re-evaluation of every partner after a plan change (#3170): the admin's
+  // progress report and the queued job's checkpoint, for the plan version it names
+  // (src/lib/affiliatePlanResyncRule.ts). Ids and counters only. Null before the
+  // first plan change.
+  planResync      Json?
   // The base URL a partner's referral link is built on (src/lib/affiliateReferralRule.ts):
   // https, the partner's code set as ?ref=. Null: the portal shows the code alone.
   referralUrl     String?      @db.VarChar(500)

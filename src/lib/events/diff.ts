@@ -166,6 +166,8 @@ export const ORGANIZATION_DIFF_SPEC: DiffSpec = {
   // is the event's actor already.
   archivedAt: 'record',
   archivedById: 'ignore',
+  deletionRequestedAt: 'record',
+  deletionRequestedById: 'ignore',
   updatedAt: 'ignore',
   createdAt: 'ignore',
 };

@@ -143,7 +143,11 @@ export async function setOrganizationArchived(
   // button, one writes and the other is told it already happened.
   const { count } = await prisma.organization.updateMany({
     where: { id: orgId, archivedAt: archive ? null : { not: null } },
-    data: { archivedAt, archivedById: archive ? actor.id : null },
+    // Unarchiving also withdraws a pending hard-delete request (#1584): a
+    // tenant that is live again must be archived and re-requested first.
+    data: archive
+      ? { archivedAt, archivedById: actor.id }
+      : { archivedAt, archivedById: null, deletionRequestedAt: null, deletionRequestedById: null },
   });
   forgetOrgArchive(orgId);
   if (count === 0) return { ok: false, code: archive ? 'already_archived' : 'not_archived' };
