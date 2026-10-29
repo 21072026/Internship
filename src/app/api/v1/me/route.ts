@@ -24,5 +24,5 @@ export async function GET(request: Request) {
       rateLimit: { limit: minute.limit, remaining: minute.remaining, resetAt: new Date(minute.resetAt).toISOString() },
       quota: key.quotaPeriod && key.quotaLimit != null ? { period: key.quotaPeriod, limit: key.quotaLimit } : null,
     });
-  });
+  }, { companyScoped: true });
 }

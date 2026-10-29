@@ -166,6 +166,10 @@ export const E2E_SLACK_MOCK_PORT = 4606;
 // Shared with e2e/chat-teams-messages.spec.ts (#3322): the Bot Framework's
 // OpenID metadata + JWKS, and a signer for the spec's tokens.
 export const E2E_BOTFRAMEWORK_MOCK_PORT = 4607;
+// Shared with e2e/microsoft-calendar.spec.ts (#1991): the Microsoft identity
+// platform token endpoint and the Graph calendar API, stubbed like Google's.
+export const E2E_MICROSOFT_MOCK_PORT = 4608;
+const microsoftMock = `http://127.0.0.1:${E2E_MICROSOFT_MOCK_PORT}`;
 // The marketing product's host (#2926). There is no built-in one any more, so the
 // suite names its own (e2e/helpers/marketingHost.ts). Set on process.env, not only
 // on a webServer's env, because three parties must agree on it: both app servers
@@ -312,6 +316,13 @@ export default defineConfig({
         env: { SLACK_MOCK_PORT: String(E2E_SLACK_MOCK_PORT) },
       },
       {
+        command: `node e2e/support/microsoft-mock.mjs`,
+        url: `${microsoftMock}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { MICROSOFT_MOCK_PORT: String(E2E_MICROSOFT_MOCK_PORT) },
+      },
+      {
         command: `node e2e/support/github-mock.mjs`,
         url: `http://127.0.0.1:${E2E_GITHUB_MOCK_PORT}/__state`,
         reuseExistingServer: !process.env.CI,
@@ -394,6 +405,14 @@ export default defineConfig({
           GOOGLE_OAUTH_TOKEN_URL: `${googleMock}/token`,
           GOOGLE_OAUTH_REVOKE_URL: `${googleMock}/revoke`,
           GOOGLE_CALENDAR_API_BASE: `${googleMock}/calendar/v3`,
+          // Microsoft 365 / Outlook (#1991): synthetic credentials that only the
+          // local stub accepts, plus its default-off master switch.
+          MICROSOFT_CLIENT_ID: 'e2e-microsoft-client',
+          MICROSOFT_CLIENT_SECRET: 'e2e-microsoft-secret',
+          MICROSOFT_CALENDAR_ENABLED: '1',
+          MICROSOFT_OAUTH_AUTHORIZE_URL: `${microsoftMock}/authorize`,
+          MICROSOFT_OAUTH_TOKEN_URL: `${microsoftMock}/token`,
+          MICROSOFT_GRAPH_API_BASE: `${microsoftMock}/v1.0`,
           // The audit stream (#2012): lets the local sink above be registered
           // as a receiver over plain http on a loopback port, which the URL
           // rule and the SSRF guard otherwise refuse. Test-only switch.

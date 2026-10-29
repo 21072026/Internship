@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { disconnect as disconnectGoogleCalendar } from '@/lib/googleCalendarClient';
+import { disconnectMicrosoft as disconnectMicrosoftCalendar } from '@/lib/microsoftCalendarClient';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
@@ -669,6 +670,8 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // Revoked at Google first (#2098): the cascade would drop our copy of the
   // token but leave the grant live on the person's Google account.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
   await prisma.user.delete({ where: { id: userId } });
 }
 
@@ -779,4 +782,6 @@ export async function anonymizeUser(userId: string): Promise<void> {
   // cascaded it — an erased account kept OAuth tokens to the person's own
   // Google calendar. Revoked at Google, then forgotten here.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
 }

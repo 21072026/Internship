@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -25,10 +24,9 @@ const DAY = 24 * 60 * 60 * 1000;
 const MAX_IDS = 100;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const role = session.user.role;
-  if (role !== 'ADMIN' && role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
   if (capGate) return capGate;
 
@@ -37,7 +35,7 @@ export async function GET(request: Request) {
   if (ids.length > MAX_IDS) return NextResponse.json({ error: 'too_many', code: 'too_many' }, { status: 400 });
 
   return withTenantScope(session, async () => {
-    const scope: Prisma.MentorshipRelationWhereInput = role === 'MENTOR' ? { mentorId: session.user.id } : {};
+    const scope: Prisma.MentorshipRelationWhereInput = admin ? {} : { mentorId: session.user.id };
     const rows = await prisma.mentorshipRelation.findMany({
       where: withinTenant({ id: { in: ids }, ...scope }, await tenantWhere(session)),
       select: HEALTH_RELATION_SELECT,

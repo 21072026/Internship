@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -45,10 +44,9 @@ const schema = z.object({
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     return await withTenantScope(session, async () => {
       const parsed = schema.safeParse(await request.json());
       if (!parsed.success) {

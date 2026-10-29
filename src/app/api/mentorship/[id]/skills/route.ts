@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -16,9 +15,9 @@ import { skillLevelsOf } from '@/lib/skillLevels';
 // 403, the same answer the confirm route gives. Free core: no entitlement.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
     const denied = await requireCapability(resolveOrgId(session), 'mentorship');
     if (denied) return denied;
     const { id } = await params;
@@ -30,7 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         where: { id },
         select: { orgId: true, mentorId: true, menteeId: true, status: true },
       });
-      const allowed = rel && (session.user.role === 'ADMIN' ? await inCallerTenant(rel.orgId, resolveOrgId(session)) : rel.mentorId === session.user.id);
+      const allowed = rel && (admin ? await inCallerTenant(rel.orgId, resolveOrgId(session)) : rel.mentorId === session.user.id);
       if (!rel || !allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       const skills = await skillLevelsOf(rel.menteeId, locale);
       // Confirming is for an ACTIVE pair only (the POST enforces it too).
