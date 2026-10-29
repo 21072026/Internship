@@ -469,7 +469,7 @@ function classifyAuth(text, ctx = {}) {
   const notes = [];
 
   // requirePermission() (src/lib/authz.ts, #1569) reads the session itself.
-  const hasSession = /\b(?:getServerSession|requirePermission)\s*\(/.test(text);
+  const hasSession = /\b(?:getServerSession|requirePermission|requireRoleOrPermission)\s*\(/.test(text);
 
   // Identifiers that hold the session role.
   const anchors = ['session\\s*[?.]*\\s*\\.\\s*user\\s*[?.]*\\s*\\.\\s*role'];
@@ -627,6 +627,12 @@ function classifyAuth(text, ctx = {}) {
   // requirePermission(): every permission it grants needs an admin tier, which
   // only an ADMIN holds (src/lib/authzRule.ts, adminTierFor).
   if (/\b(?:requireAdmin[A-Za-z]*|adminSession|requirePermission)\s*\(/.test(text)) allow.add('ADMIN');
+  // requireRoleOrPermission(['MENTOR', …], …) (#1571): ADMIN through the
+  // permission rule, plus exactly the roles its first argument lists.
+  for (const m of text.matchAll(/\brequireRoleOrPermission\s*\(\s*\[([^\]]*)\]/g)) {
+    allow.add('ADMIN');
+    for (const r of ROLE_LITERALS) if (new RegExp(`['"]${r}['"]`).test(m[1])) allow.add(r);
+  }
 
   for (const r of deny) {
     allow.delete(r);

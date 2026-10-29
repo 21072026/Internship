@@ -88,7 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { claim, matchValue, role, priority } = parsed.data;
   const offered = mappableRolesFor(verticalCapabilities(gate.org.vertical));
   if (!(offered as readonly string[]).includes(role)) {
-    const refusal = role === 'ADMIN'
+    const refusal = parsed.data.role === 'ADMIN'
       ? { error: 'Mapping an IdP claim to ADMIN is not available yet.', code: 'admin_mapping_unavailable' }
       : isMappableRole(role)
         ? { error: 'That role is not part of this product.', code: 'role_not_in_vertical' }
