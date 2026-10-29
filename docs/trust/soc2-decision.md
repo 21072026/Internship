@@ -74,7 +74,7 @@ This list is the reason the answer is "not yet" rather than "not worth it".
 | **Incident response** | No IR runbook, no severity ladder, no on-call, no communication templates. | [#1605](https://github.com/21072026/Internship/issues/1605) |
 | **Vendor management** | Subprocessors are known and published ([`subprocessors.md`](subprocessors.md)), but no DPAs are collected and no vendor-risk review exists. | [#2025](https://github.com/21072026/Internship/issues/2025) |
 | **HR controls** | No background checks, no security-training programme, no formal onboarding/offboarding record. Structurally hard for a project whose contributors are mentees — solvable, but a policy decision first. | [`docs/DATA_ACCESS_POLICY.md`](../DATA_ACCESS_POLICY.md) |
-| **Backup controls an auditor accepts** | Backups are taken, verified daily and drilled monthly — genuinely good — but they are **unencrypted and on the same host** as the database. | [`docs/disaster-recovery.md`](../disaster-recovery.md) |
+| **Backup controls an auditor accepts** | Backups are taken, verified daily and drilled monthly — genuinely good — and an encrypted off-site copy is built with a hosted freshness check — but no off-site restore has been drilled, the off-site bucket has no delete protection, and the server holds its own encryption key (#2058). | [`docs/disaster-recovery.md`](../disaster-recovery.md) |
 
 Note what this list is **not** saying. Most of these items are worth doing for
 their own sake — monitoring, migrations, incident response and access reviews
