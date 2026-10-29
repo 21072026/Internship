@@ -64,6 +64,27 @@ export interface NavLink {
    * Presentation only: the page and its API refuse a tenant admin themselves.
    */
   superAdminOnly?: boolean;
+  /**
+   * Shown to the deployment's operators (#1607): a super admin, or the ADMIN of
+   * the default organization — the mail queue's operator rule
+   * (`queueScopeFor()` in src/lib/mailOpsRule.ts). Presentation only, like
+   * `superAdminOnly`: the page and its API apply the rule themselves.
+   */
+  operatorOnly?: boolean;
+}
+
+/** Who is looking — the facts the audience tags above are judged against. */
+export interface NavAudience {
+  superAdmin?: boolean;
+  /** A super admin or the default organization's ADMIN (see `operatorOnly`). */
+  operator?: boolean;
+}
+
+/** Does the audience pass this link's `superAdminOnly` / `operatorOnly` tag? */
+export function navAudienceAllows(l: NavLink, opts: NavAudience = {}): boolean {
+  if (l.superAdminOnly && opts.superAdmin !== true) return false;
+  if (l.operatorOnly && opts.superAdmin !== true && opts.operator !== true) return false;
+  return true;
 }
 
 export const ADMIN_NAV_LINKS: NavLink[] = [
@@ -172,9 +193,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
-  // The operations console (#1607). The default organization's ADMIN may open
-  // it too (the mail queue's operator rule); the link stays with the super admin.
-  { href: '/admin/operations', icon: ServerCog, key: 'operations', superAdminOnly: true },
+  // The operations console (#1607): for the deployment's operators.
+  { href: '/admin/operations', icon: ServerCog, key: 'operations', operatorOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
@@ -287,19 +307,19 @@ export function navLinksForRole(role: NavRole): NavLink[] {
  * the full capability set — which INTERNSHIP always has — keeps every link, so
  * this is a no-op for today's product and only thins the sidebar for a vertical
  * that switches a module off (e.g. MARKETING has no `mentorship`, so the mentor
- * and mentorship links fall away). A `superAdminOnly` link survives only when
- * the caller says it is one (`opts.superAdmin`). Pure: same inputs, same array,
+ * and mentorship links fall away). A `superAdminOnly` / `operatorOnly` link
+ * survives only when the caller says it is one (`navAudienceAllows()`). Pure: same inputs, same array,
  * no I/O.
  */
 export function visibleNavLinks(
   links: NavLink[],
   caps: readonly VerticalCapability[],
-  opts: { superAdmin?: boolean } = {},
+  opts: NavAudience = {},
 ): NavLink[] {
   return links.filter(
     (l) =>
       (!l.capability || caps.includes(l.capability)) &&
       (!l.withoutCapability || !caps.includes(l.withoutCapability)) &&
-      (!l.superAdminOnly || opts.superAdmin === true),
+      navAudienceAllows(l, opts),
   );
 }
