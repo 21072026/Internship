@@ -127,9 +127,12 @@ project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a
 4×/day cadence, same drift gate, and its JSON report is named
 `e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
 (`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
-writing one is caught too). It is deliberately **not** in the PR gate: that gate is the
-`@smoke` subset, and a second `next build` + `next start` per PR for a project that only
-guards a flag which is still off in production is not worth the wall clock.
+writing one is caught too). Since #1568 it is **also on every PR**: the `Playwright
+tenant isolation gate` job in `e2e.yml` (own MySQL, own build, `--project=isolation`,
+the same docs-only skip as the smoke shards, no path filter). It stays outside the
+`@smoke` set — `@smoke` tags under `e2e/isolation/` would be unreachable anyway, the
+default project ignores that folder. The leak matrix it runs is described in
+[`docs/tenant-isolation.md`](tenant-isolation.md#the-leak-matrix-and-its-pr-gate-1568).
 
 **The two-tenant fixture.** `e2e/helpers/tenants.ts` → `seedTwoTenants()` creates two
 organizations (`iso-a-<stamp>` / `iso-b-<stamp>`), each with an ADMIN, MENTOR, MENTEE and

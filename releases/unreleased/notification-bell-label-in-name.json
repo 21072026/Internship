@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Notification bell accessible name:** `NotificationBell`'s `aria-label` now carries the unread badge text (\"Notifications 3\", \"Notifications 9+\"), so the visible label is part of the accessible name (WCAG 2.5.3, axe `label-content-name-mismatch`). Cleared the `a11y-scan.spec.ts` regression on `/portal` and `/messages`.",
+  "notes": {
+    "en": ["Screen readers now announce the number of unread notifications on the notification bell."],
+    "tr": ["Ekran okuyucular artık bildirim zilindeki okunmamış bildirim sayısını da okuyor."],
+    "de": ["Screenreader sagen an der Benachrichtigungsglocke jetzt auch die Anzahl ungelesener Benachrichtigungen an."]
+  }
+}

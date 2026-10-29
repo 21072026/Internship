@@ -321,6 +321,7 @@ model Organization {
   affiliateCommissions    AffiliateCommission[]
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
+  requisitionFits         RequisitionFit[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -1029,6 +1030,8 @@ model User {
   // per-world rule in src/lib/userWorld.ts (`emailTakenInWorld`) is what stops
   // a second one, and it is checked on every create path.
   stageSlaOverrides StageSla[] @relation("StageSlaMentor")
+
+  requisitionFits RequisitionFit[] @relation("RequisitionFitMentee")
 
   @@unique([email, orgId])
   @@index([role])
@@ -6498,12 +6501,42 @@ model Requisition {
   applications      Application[]
   // Canonical twin of `requiredSkills` (#1815), written alongside it.
   skills            RequisitionSkill[]
+  fits              RequisitionFit[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
   // The /api/v1 keyset (#1990).
   @@index([orgId, updatedAt, id])
+}
+
+// The fit score a candidate had against a requisition when somebody was shown
+// it (#2042) — score, per-dimension breakdown and the rule-set version, so a
+// ranking a company or an admin acted on can be explained months later (EU AI
+// Act / NYC LL144). One row per pair, refreshed when the numbers change; the
+// only writer is src/lib/requisitionFitStore.ts. `reason` is the written
+// sentence (`reasonSource` AI | RULE). A score never removes anybody from a
+// list and nothing reads this row to decide — it is the record, not the gate.
+model RequisitionFit {
+  id             String   @id @default(cuid())
+  orgId          String
+  requisitionId  String
+  menteeId       String
+  score          Int
+  breakdown      Json
+  ruleSetVersion String   @db.VarChar(64)
+  reason         String?  @db.Text
+  reasonSource   String?  @db.VarChar(16)
+  computedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User         @relation("RequisitionFitMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, menteeId])
+  @@index([orgId])
+  @@index([menteeId])
 }
 
 // A company asks the program/authorized mentor to interview one shortlisted

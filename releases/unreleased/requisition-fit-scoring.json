@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Requisition fit score (#2042, slice 1):** `scoreFit()` in `src/lib/matching/requisitionFit.ts` — deterministic, provider-free, the same `{ score, breakdown[] }` shape as `scoreMatch()` — weighs required skills (50), nice-to-have skills (15, `RequisitionSkill.required = false`), programme progress (15, the candidate's active stage along the org's on-path stages), target position (10) and location (10, remote = any city); a dimension with nothing to compare is not applicable and its weight is spread. `requisitionMatchRule.ts` (#1401) still decides WHO matches and now orders by the fit score; a low score never removes anybody. New tenant model `RequisitionFit` (one row per requisition × candidate: score, breakdown, `ruleSetVersion` `requisition-fit/1`, reason slot) written only by `recordRequisitionFits()` when a ranking is shown — the admin matches list and the match-alert mail. The daily alert picks each candidate's best-fitting role, nudges only from a fit of 40 and prints \"Fit for <role>: N/100 (rule-based, a person decides)\". `/admin/requisitions/[id]` renders the score and per-rule breakdown with `MatchScoreBreakdown`. The fit inputs are job-related only; a unit test pins that extra fields (gender, birth date, nationality, name, photo) cannot change a score.",
+  "notes": {
+    "en": ["Matching candidates for a requisition are now ranked by a fit score with a rule-by-rule explanation, and match alerts say how well the candidate fits which role."],
+    "tr": ["Bir iş talebine uyan adaylar artık kural kural açıklanan bir uygunluk puanına göre sıralanıyor; eşleşme uyarıları adayın hangi role ne kadar uyduğunu söylüyor."],
+    "de": ["Passende Kandidaten für eine Stellenanforderung werden jetzt nach einem Eignungswert mit Regel-für-Regel-Erklärung sortiert, und Match-Hinweise nennen, wie gut jemand zu welcher Stelle passt."]
+  }
+}

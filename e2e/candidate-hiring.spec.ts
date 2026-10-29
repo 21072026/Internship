@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, uniqueEmail } from './helpers/db';
-import { gotoSettled } from './helpers/auth';
+import { gotoSettled, submitSignInForm } from './helpers/auth';
 
 // #1398 — the candidate page's Hiring card and the read behind it:
 // GET /api/candidates/[id]/hiring, scoped on the server per role. A PASS never
@@ -16,11 +16,7 @@ const emails = {
 const ids: Record<string, string> = {};
 
 async function login(page: Page, email: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+  await submitSignInForm(page, email, password);
   await page.waitForURL((url) => !url.pathname.startsWith('/auth/signin'));
 }
 
