@@ -112,6 +112,8 @@ const VERIFY_EXEMPT = [
   // The double opt-in's two buttons (#2577), exact paths in both files.
   '/api/contact-permission/confirm',
   '/api/contact-permission/opt-out',
+  // CSP violation reports (#1552): sent by the browser itself, exact path.
+  '/api/csp-report',
 ];
 
 /**
