@@ -971,7 +971,7 @@ To run it locally, put the list in the environment and choose a mode:
 
 ## Ideas for further test types
 
-- **Contract / API tests** for `/api/v1/*` against the published OpenAPI spec.
+- ~~**Contract / API tests**~~ — built in #1611: see [`docs/public-api.md` § Published contracts](public-api.md#published-contracts-1611).
 - **Visual regression** (Playwright screenshots) to catch unintended UI drift.
 - **Dependency/SCA scanning** (`npm audit`, Dependabot) on a schedule.
 - **Load-with-auth** scenarios — both load tests are anonymous-GET-only by design. The

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Fit-ranking disclosure (#2042, slice 3):** the privacy notice (`privacy.aiBody`, EN/TR/DE) now tells candidates that a company sees applicants ordered by a rule-based fit score (skills, target position, location — never age, gender, nationality, photo or name) with a written reason, that the company's AI pack may have the top reasons written by AI from those anonymous facts only, and that the ranking never rejects anyone. `/ai` lists the `requisition_fit` task (who it is for, what is sent, what is withheld — including the score and the programme stage — and why no consent is asked); `e2e/ai-transparency.spec.ts` counts eight tasks. New feature-catalogue entry `requisitionFit` (companies, `placements`).",
+  "notes": {
+    "en": ["The privacy notice and the AI page now explain how applicants are ranked for companies, what an AI may see, and that a person makes every decision."],
+    "tr": ["Gizlilik bildirimi ve yapay zekâ sayfası artık başvuranların şirketler için nasıl sıralandığını, yapay zekânın neyi görebileceğini ve her kararı bir insanın verdiğini açıklıyor."],
+    "de": ["Die Datenschutzerklärung und die KI-Seite erklären jetzt, wie Bewerbungen für Unternehmen sortiert werden, was eine KI sehen darf und dass jede Entscheidung ein Mensch trifft."]
+  }
+}

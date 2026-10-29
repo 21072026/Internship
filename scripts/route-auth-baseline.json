@@ -82,6 +82,10 @@
     "methods": ["POST"],
     "why": "Re-consent from the retention reminder email; verifyConsentRenewToken() is the credential and it can do exactly one thing — refresh that user's own consent stamp."
   },
+  "src/app/api/csp-report/route.ts": {
+    "methods": ["POST"],
+    "why": "CSP violation reports (#1552): the browser posts them on its own, for any visitor, with no session to present. Rate-limited to 60/10min per IP, body capped at 64 KB, nothing stored, and only sanitised fields (src/lib/cspReport.ts) reach the log."
+  },
   "src/app/api/cron/start/route.ts": {
     "methods": ["POST"],
     "why": "Registers the node-cron schedules in this server process, called once at boot by src/instrumentation.ts. A boot hook has no session; CRON_SECRET in a header, compared with timingSafeEqual, is the credential, and an unconfigured secret answers 503 rather than opening the door. (GET /api/cron, which RUNS the jobs, is admin-only and not on this list.)"

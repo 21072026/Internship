@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Free core: the project cap never shows a mentee a plan (#3270).** `POST /api/projects` at the plan's project cap now answers a MENTEE `409 { code: 'project_capacity' }` with no plan, limit or usage, `ProjectForm` renders the neutral `projects.capacityReached` (EN/TR/DE), and the org's admins get `plan_limit.project_held` (in-app, at most one a day each). ADMIN and MENTOR callers keep `403 project_limit_reached`. The once-a-day admin fan-out is shared with `/api/apply` in `src/lib/planGateNotify.ts`.",
+  "notes": {
+    "en": ["Participants who reach the project limit now see a plain \"no new projects right now\" message, and your admins are told why."],
+    "tr": ["Proje sınırına ulaşan katılımcılar artık sade bir \"şu anda yeni proje oluşturulamıyor\" mesajı görüyor; nedeni yöneticilerinize bildiriliyor."],
+    "de": ["Teilnehmende, die das Projektlimit erreichen, sehen jetzt einen schlichten Hinweis „derzeit keine neuen Projekte“, und Ihre Admins erfahren den Grund."]
+  }
+}

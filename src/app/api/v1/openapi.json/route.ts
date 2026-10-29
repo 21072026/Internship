@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { publicEventPayloads } from '@/lib/events/payloadSchema';
 import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
@@ -719,9 +720,15 @@ export async function GET(request: Request) {
       scopes: API_SCOPES,
     },
     'x-webhooks': {
-      description: 'Outgoing webhooks are POSTed with an X-Signature (HMAC-SHA256 of the body) and X-Event header.',
+      description:
+        'Outgoing webhooks are POSTed as `{ event, data, sentAt }` with an `X-Signature` header (hex HMAC-SHA256 of the exact request body under the hook secret), `X-Event` and `X-Delivery-Id`. `payloads` gives the schema of `data` for each event, keyed `name@version`; a published version never changes shape — a breaking change ships as a new version (#1611).',
       events: WEBHOOK_EVENTS,
-      payload: { type: 'object', properties: { event: { type: 'string' }, data: { type: 'object' }, sentAt: { type: 'string', format: 'date-time' } } },
+      payload: {
+        type: 'object',
+        required: ['event', 'data', 'sentAt'],
+        properties: { event: { type: 'string' }, data: { type: 'object' }, sentAt: { type: 'string', format: 'date-time' } },
+      },
+      payloads: publicEventPayloads(),
     },
   };
   return NextResponse.json(spec, { headers: { Vary: 'X-Forwarded-Host, Host' } });
