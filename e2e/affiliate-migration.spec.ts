@@ -204,8 +204,14 @@ test('the import screen checks first and imports only what it checked', async ({
   await signInAndSettle(page, email, PW, '/admin');
   await gotoSettled(page, '/admin/affiliates/migration');
 
+  // #3175: the picker speaks the app's language, not the browser's, and names the chosen file.
+  await expect(page.getByText('No file chosen', { exact: true })).toHaveCount(3);
+  await expect(page.getByText('Choose file', { exact: true })).toHaveCount(3);
+
   const file = (name: string, text: string) => ({ name, mimeType: 'text/csv', buffer: Buffer.from(text) });
   await page.getByTestId('migration-file-partners').setInputFiles(file('partners.csv', PARTNERS));
+  await expect(page.getByText('partners.csv', { exact: true })).toBeVisible();
+  await expect(page.getByText('No file chosen', { exact: true })).toHaveCount(2);
   await page.getByTestId('migration-file-commissions').setInputFiles(file('commissions.csv', COMMISSIONS));
   await page.getByTestId('migration-file-payouts').setInputFiles(file('payouts.csv', PAYOUTS));
   await expect(page.getByTestId('migration-run')).toBeDisabled();
