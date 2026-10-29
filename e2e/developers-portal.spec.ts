@@ -24,6 +24,12 @@ test('/developers renders signed-out from the public spec, and the admin spec st
   await expect(page.getByTestId('developers-webhook-recipe')).toContainText('timingSafeEqual');
   await expect(page.getByTestId('developers-deprecations')).toContainText('2027-01-31');
 
+  // The sandbox key is minted only on the public demo (#1992): this deployment
+  // is not one, so the page points there and the route does not exist here.
+  await expect(page.getByTestId('developers-sandbox-demo-link')).toBeVisible();
+  await expect(page.getByTestId('developers-sandbox-button')).toHaveCount(0);
+  expect((await request.post('/api/developers/sandbox-key')).status()).toBe(404);
+
   // Nothing of the admin surface leaks onto the public page…
   const html = await page.content();
   expect(html).not.toContain('/api/admin/');
