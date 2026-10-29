@@ -86,28 +86,28 @@
     },
     {
       "model": "WeeklyReport",
-      "minRows": 0,
+      "minRows": 4,
       "target": 4,
       "screen": "/weekly-reports, /weekly-reports/print — mentee weekly reporting",
       "issue": "#1419"
     },
     {
       "model": "MentorQuestion",
-      "minRows": 0,
+      "minRows": 3,
       "target": 3,
       "screen": "mentee → mentor question inbox (unanswered questions drive the mentor queue)",
       "issue": "#1419"
     },
     {
       "model": "DocumentRequirement",
-      "minRows": 0,
+      "minRows": 3,
       "target": 3,
       "screen": "/admin/documents — required-document checklist and the missing-documents report",
       "issue": "#1419"
     },
     {
       "model": "Document",
-      "minRows": 0,
+      "minRows": 3,
       "target": 3,
       "screen": "/admin/documents, /portal/profile — uploaded documents against the requirements",
       "issue": "#1419"
@@ -188,6 +188,100 @@
       "target": 59,
       "screen": "the marketing attention queue and the 'no recent contact' badge (docs/last-contact.md)",
       "issue": "#2443"
+    },
+    {
+      "model": "ProgramEvent",
+      "minRows": 3,
+      "target": 3,
+      "screen": "/admin/events, /mentor/events, /portal/events — group sessions: a past briefing, a full office hour, an open session",
+      "issue": "#1856"
+    },
+    {
+      "model": "EventRegistration",
+      "where": { "state":  "WAITLISTED" },
+      "label": "EventRegistration(WAITLISTED)",
+      "minRows": 1,
+      "target": 1,
+      "screen": "group session waitlist — the full office hour keeps one person queued",
+      "issue": "#1856"
+    },
+    {
+      "model": "EventRegistration",
+      "where": { "attendance":  "ATTENDED" },
+      "label": "EventRegistration(ATTENDED)",
+      "minRows": 4,
+      "target": 4,
+      "screen": "group session attendance record on the past briefing",
+      "issue": "#1856"
+    },
+    {
+      "model": "AutomationRule",
+      "minRows": 2,
+      "target": 2,
+      "screen": "GET /api/admin/automations — stage automation rules, seeded disabled (the admin screen is #1704's second half)",
+      "issue": "#1704"
+    },
+    {
+      "model": "AutomationRun",
+      "minRows": 2,
+      "target": 2,
+      "screen": "the automation run log (GET /api/admin/automations) — one SUCCESS, one SKIPPED",
+      "issue": "#1704"
+    },
+    {
+      "model": "NudgeRule",
+      "minRows": 2,
+      "target": 2,
+      "screen": "nudge rules — a scan rule and an event rule, seeded disabled (no admin screen yet, #1684)",
+      "issue": "#1684"
+    },
+    {
+      "model": "NudgeSend",
+      "minRows": 2,
+      "target": 2,
+      "screen": "nudge send history — who got the scan rule's nudge",
+      "issue": "#1684"
+    },
+    {
+      "model": "UsageRollup",
+      "minRows": 18,
+      "target": 18,
+      "screen": "/admin/billing usage tab — three closed months of metered numbers",
+      "issue": "#1763"
+    },
+    {
+      "model": "Application",
+      "minRows": 4,
+      "target": 4,
+      "screen": "/admin/requisitions/[id], the candidate Hiring card — applications at APPLIED, INTERVIEW and SHORTLISTED",
+      "issue": "#1828"
+    },
+    {
+      "model": "AffiliatePartner",
+      "where": { "org":  { "vertical":  "MARKETING" }},
+      "label": "AffiliatePartner(MARKETING)",
+      "minRows": 2,
+      "target": 2,
+      "screen": "/admin/affiliates/partners on the marketing tenant",
+      "issue": "#3116"
+    },
+    {
+      "model": "AffiliateCommission",
+      "where": { "org":  { "vertical":  "MARKETING" }},
+      "label": "AffiliateCommission(MARKETING)",
+      "minRows": 5,
+      "target": 5,
+      "screen": "/admin/affiliates/commissions — PENDING, APPROVED, PAID and REJECTED",
+      "issue": "#3116"
+    },
+    {
+      "model": "AffiliatePayout",
+      "where": { "org":  { "vertical":  "MARKETING" }},
+      "label": "AffiliatePayout(MARKETING)",
+      "minRows": 1,
+      "target": 1,
+      "screen": "/admin/affiliates/payouts — one settled payout",
+      "issue": "#3116"
     }
   ]
 }

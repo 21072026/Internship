@@ -148,6 +148,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorTitle: 'Invite a lead',
         mentorAutoAssign: 'Whoever registers through your link becomes your lead automatically — no assignment step. The link works once and expires after 7 days.',
       },
+      automations: {
+        actionTypes: {
+          notifyRole: { help: 'An in-app notification to the record\u2019s own rep, the lead, the customer\u2019s users or the admins. Each person\u2019s notification settings apply.' },
+          assignGoalFromTemplate: { help: 'Adds a goal from your goal templates to the record, worded in the lead\u2019s language.' },
+          requireDocument: { help: 'Tells the lead to upload one of your document requirements — unless it is already there.' },
+        },
+        roles: { mentor: 'Their rep' },
+        templates: { mentorCheckIn: 'To the rep: \u201cCheck in now\u201d' },
+        errors: { mentee_message_on_outcome_stage: 'On an outcome stage the lead hears from their rep, not from a rule — remove the steps addressed to the lead.' },
+      },
       notifications: {
         automationEmail: { mentorCheckIn: { cta: 'Open my leads' } },
         invitationEmail: {
@@ -712,6 +722,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
         categories: { collaboration: 'Working together' },
         items: {
+          stageAutomation: { d: 'When a lead enters or leaves a stage, run fixed steps: notify the rep, send a ready-made e-mail, set a stage deadline, ask for a document, add a tag. Before switching a rule on, replay it against your real stage history to see exactly who it would have reached — and every run is logged, step by step.' },
           // `messaging` carries no capability tag — a shared inbox is core CRM
           // and MARKETING has it — so the capability filter cannot reach this
           // card, and its wording was the last place a marketing visitor read
@@ -1268,6 +1279,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorTitle: 'Müşteri adayı davet et',
         mentorAutoAssign: 'Bağlantınla kaydolan kişi otomatik olarak senin müşteri adayın olur — ayrıca atama yapman gerekmez. Bağlantı tek kullanımlıktır ve 7 gün sonra geçersiz olur.',
       },
+      automations: {
+        actionTypes: {
+          notifyRole: { help: 'Kaydın kendi satış temsilcisine, lead\u2019e, müşterinin kullanıcılarına ya da adminlere uygulama içi bildirim. Herkesin bildirim ayarları geçerlidir.' },
+          assignGoalFromTemplate: { help: 'Hedef şablonlarından birini, lead\u2019in dilinde, kayda hedef olarak ekler.' },
+          requireDocument: { help: 'Belge gereksinimlerinden birini yüklemesini lead\u2019e söyler — zaten yüklüyse söylemez.' },
+        },
+        roles: { mentor: 'Satış temsilcisi' },
+        templates: { mentorCheckIn: 'Temsilciye: \u201cŞimdi iletişime geç\u201d' },
+        errors: { mentee_message_on_outcome_stage: 'Sonuç aşamasında lead haberi kuraldan değil temsilcisinden alır — lead\u2019e giden adımları kaldır.' },
+      },
       notifications: {
         automationEmail: { mentorCheckIn: { cta: "Lead'lerimi aç" } },
         invitationEmail: {
@@ -1721,6 +1742,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
         categories: { collaboration: 'Birlikte çalışma' },
         items: {
+          stageAutomation: { d: 'Bir lead bir aşamaya girdiğinde ya da çıktığında sabit adımlar çalışır: temsilciyi bilgilendir, hazır bir e-posta gönder, aşama son tarihi koy, belge iste, etiket ekle. Bir kuralı açmadan önce gerçek aşama geçmişinize karşı çalıştırıp kime ulaşacağını görün — her çalıştırma adım adım kaydedilir.' },
           messaging: { d: 'Fırsat başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir. Yarım kalan yanıt gönderilene kadar sohbet başına saklanır ve karşı taraf yazarken bunu görürsünüz. Sürekli verdiğiniz yanıtlar ortak bir hazır yanıt havuzunda durur — İngilizce, Türkçe ve Almanca bir kez yazılır, kendi dilinizde tek tıkla eklenir.' },
           videoCalls: { d: 'Bir müşteri adayı, firma ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kaydın yanındaki yan panelde kendi Jitsi kiracımızda açılır — hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
           externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
@@ -2255,6 +2277,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorTitle: 'Lead einladen',
         mentorAutoAssign: 'Wer sich über deinen Link registriert, wird automatisch dein Lead — kein Zuweisungsschritt. Der Link gilt einmalig und verfällt nach 7 Tagen.',
       },
+      automations: {
+        actionTypes: {
+          notifyRole: { help: 'Eine In-App-Benachrichtigung an den eigenen Vertriebler, den Lead, die Nutzer des Kunden oder die Admins. Die Benachrichtigungseinstellungen jeder Person gelten.' },
+          assignGoalFromTemplate: { help: 'Fügt dem Datensatz ein Ziel aus euren Zielvorlagen hinzu, in der Sprache des Leads.' },
+          requireDocument: { help: 'Bittet den Lead, eine eurer Dokumentanforderungen hochzuladen — außer es liegt schon vor.' },
+        },
+        roles: { mentor: 'Der Vertriebler' },
+        templates: { mentorCheckIn: 'An den Vertriebler: \u201eJetzt melden\u201c' },
+        errors: { mentee_message_on_outcome_stage: 'In einer Ergebnisphase hört der Lead von seinem Vertriebler, nicht von einer Regel — entferne die Schritte an den Lead.' },
+      },
       notifications: {
         automationEmail: { mentorCheckIn: { cta: 'Meine Leads öffnen' } },
         invitationEmail: {
@@ -2706,6 +2738,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
         categories: { collaboration: 'Zusammenarbeit' },
         items: {
+          stageAutomation: { d: 'Betritt oder verlässt ein Lead eine Phase, laufen feste Schritte: den Vertriebler benachrichtigen, eine fertige E-Mail senden, eine Phasenfrist setzen, ein Dokument anfordern, ein Tag setzen. Bevor eine Regel eingeschaltet wird, läuft sie gegen Ihre echte Phasen-Historie — Sie sehen genau, wen sie erreicht hätte, und jede Ausführung wird Schritt für Schritt protokolliert.' },
           messaging: { d: 'Ein zentraler Posteingang mit einem Thread pro Deal, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen. Eine halb geschriebene Antwort bleibt pro Gespräch erhalten, bis du sie sendest, und du siehst, wenn die andere Person schreibt. Antworten, die du immer wieder gibst, liegen in einem gemeinsamen Pool vorgefertigter Antworten — einmal auf Englisch, Türkisch und Deutsch verfasst, mit einem Klick in deiner eigenen Sprache eingefügt.' },
           videoCalls: { d: 'Starte mit einem Klick einen Anruf mit einem Lead, einem Account-Team oder einem Chat — er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
           externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
