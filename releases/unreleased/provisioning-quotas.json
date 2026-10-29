@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Plan limits bind where admins, companies and programmes appear (#1752).** New `enforceQuota(orgId, 'ADMIN_SEATS' | 'COMPANIES' | 'PROGRAMS')` (`src/lib/quota.ts`, rule in `src/lib/quotaRule.ts`) reads the subscription plan's band from `src/lib/plans.ts` and a live count; it fails open for no org, the default organization (the installation's own tenant), an org without `mentorship` (MARKETING) and a null limit. Wired at `POST /api/invite` and the super admin's invite-admin (ADMIN role only; an open ADMIN invitation holds a seat), ADMIN invitation acceptance in `POST /api/register`, `POST /api/companies`, enquiry conversion and `POST /api/cohorts` — each answers `403 plan_limit_reached` with a `metric`, which the upgrade prompt now words per metric. **Free core:** inviting a MENTOR or MENTEE is never checked or counted — and the bulk invite's old `maxUsers` seat check, which counted and skipped mentees, is removed. A unit-test guard fails when a `PlanLimits` key has no enforcement site or argued exemption. `Company.quota` is unchanged (it is the outreach quota since #1840).",
+  "notes": {
+    "en": ["Plan limits for admin seats, companies and programmes now apply when you add one more — with an upgrade prompt that says which limit you reached. Inviting mentors and mentees is never limited."],
+    "tr": ["Yönetici koltuğu, şirket ve program için paket sınırları artık bir tane daha eklerken uygulanıyor — hangi sınıra ulaştığınızı söyleyen bir yükseltme kutusuyla. Mentor ve mentee davet etmek hiçbir zaman sınırlanmaz."],
+    "de": ["Planlimits für Admin-Plätze, Unternehmen und Programme greifen jetzt, wenn Sie ein weiteres hinzufügen — mit einem Upgrade-Hinweis, welches Limit erreicht ist. Mentor:innen und Mentees einzuladen ist nie begrenzt."]
+  }
+}
