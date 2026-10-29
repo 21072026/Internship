@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
@@ -13,6 +11,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { findOrCreateSource } from '@/lib/leadSource';
 import { SOURCE_NAME_MAX } from '@/lib/leadSourceName';
+import { requirePermission } from '@/lib/authz';
 
 // GET — all sources with lead counts + conversion breakdown (admin).
 //
@@ -28,9 +27,10 @@ import { SOURCE_NAME_MAX } from '@/lib/leadSourceName';
 // account speaks for rather than who referred it — so on this very screen, where
 // a partner institution having its own login is the normal case, a source with
 // one partner login and one hired lead reported 50% instead of 100%.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const locale = await getLocale();
 
@@ -93,8 +93,9 @@ const schema = z.object({
 
 // POST — create a source (admin).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

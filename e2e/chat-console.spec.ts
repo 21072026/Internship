@@ -101,6 +101,7 @@ test('install → disable → uninstall: real state, admin-only, nothing left be
       page.getByTestId(`chat-toggle-${wsId}`).click(),
     ]);
     expect(patched.status(), await patched.text()).toBe(200);
+    expect((await prisma.chatWorkspace.findUnique({ where: { id: wsId } }))?.enabled, 'the switch reached the database').toBe(false);
     await expect(row).toHaveAttribute('data-enabled', '0', { timeout: 15_000 });
     expect((await prisma.chatWorkspace.findUnique({ where: { id: wsId } }))?.enabled).toBe(false);
     // …and on again through the API, then malformed bodies are refused.
