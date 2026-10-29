@@ -388,6 +388,13 @@ jobs:
       # (#1200). Cheap to run here; the alternative is finding out on the server.
       - name: backup dump validation (#1200)
         run: bash infra/test/backup-db.test.sh
+      # The off-site half (#2058): the freshness verdict on restic snapshot
+      # lists (a listing failure must read red, never "no snapshots yet"), and
+      # the off-site drill's guards running before anything is fetched.
+      - name: off-site backup check and drill guards (#2058)
+        run: |
+          bash infra/test/check-backups-offsite.test.sh
+          bash infra/test/restore-drill-offsite.test.sh
       # Same reasoning for the destructive-schema gate: it only ever runs on the
       # server mid-deploy, and being too broad is as costly as being too narrow
       # — it silently stops prod from deploying at all (#1230).
