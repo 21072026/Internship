@@ -14,6 +14,7 @@ import {
   canSeeCompensation,
   compensationSelect,
   isDeclineReasonCode,
+  letterSelect,
   isOfferAction,
   transitionForAction,
 } from '@/lib/offers';
@@ -26,6 +27,8 @@ import { advanceOnAcceptedOffer } from '@/lib/offerAutoAdvance';
 import { advanceApplicationOnAcceptedOffer } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 import { logger } from '@/lib/logger';
+import { renderLetterForOffer } from '@/lib/offerLetterServer';
+import { clientIp } from '@/lib/clientIp';
 
 const baseSelect = {
   id: true,
@@ -86,8 +89,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (canSeeCompensation({ role, isOwnMenteeOffer })) {
       // The note AND the structured figures (#1851), from one list — a column
       // the list does not name is never read for anyone.
-      const withComp = await prisma.offer.findUnique({ where: { id }, select: compensationSelect() });
+      // The frozen letter states the pay, so it rides the same rule (#1857).
+      const withComp = await prisma.offer.findUnique({ where: { id }, select: { ...compensationSelect(), ...letterSelect() } });
       result = { ...offer, ...withComp };
+    }
+    if (role === 'ADMIN') {
+      // The click-to-accept record (#1857): ADMIN-only.
+      const record = await prisma.offer.findUnique({ where: { id }, select: { acceptedIp: true, acceptedUserAgent: true } });
+      result = { ...result, ...record };
     }
 
     if (offer.requisitionId) {
@@ -184,10 +193,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const { to } = transitionForAction(actionStr);
       const now = new Date();
       const data: Prisma.OfferUncheckedUpdateInput = { status: to };
-      if (actionStr === 'send') data.sentAt = now;
+      if (actionStr === 'send') {
+        data.sentAt = now;
+        // Freeze the letter as the candidate will read it (#1857): from here
+        // on the snapshot, not the template, is what was offered. Rendered
+        // from the DRAFT the checks above saw; the guarded flip below means a
+        // send that loses the race writes nothing.
+        const letter = await renderLetterForOffer(id);
+        data.letterSnapshot = letter.markdown;
+        data.letterLocale = letter.locale;
+      }
       if (actionStr === 'accept' || actionStr === 'decline') {
         data.decidedAt = now;
         data.decidedById = session.user.id;
+      }
+      if (actionStr === 'accept') {
+        // A click-to-accept record (#1857) — when (decidedAt), from where and
+        // with what. NOT a qualified electronic signature.
+        data.acceptedIp = clientIp(request).slice(0, 64);
+        data.acceptedUserAgent = (request.headers.get('user-agent') ?? '').slice(0, 512) || null;
       }
       if (actionStr === 'decline') {
         data.declineReasonCode = declineReasonCode;

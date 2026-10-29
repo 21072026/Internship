@@ -65,6 +65,8 @@ const DECISIONS = new Map([
   ['MentorApplication.adminNote', ERASED],
   ['Offer.compensationNote', ERASED],
   ['Offer.declineNote', ERASED],
+  // The frozen offer letter names the person and states their pay (#1857).
+  ['Offer.letterSnapshot', ERASED],
   ['AiArtifact.content', ERASED],
   ['CompanyInterest.note', ERASED],
   ['CandidateOutreach.firstMessage', ERASED],
@@ -139,6 +141,7 @@ const DECISIONS = new Map([
   ['Organization.ssoSpKey', CONFIG],
   ['Organization.ssoSpCert', CONFIG],
   ['NotificationTemplate.body', CONFIG],
+  ['OfferTemplate.bodyMarkdown', CONFIG],
   ['ContributorTerms.body', CONFIG],
   ['MentoringAgreement.body', CONFIG],
   ['Announcement.text', CONFIG],

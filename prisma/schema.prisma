@@ -265,6 +265,7 @@ model Organization {
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
   offers                  Offer[]
+  offerTemplates          OfferTemplate[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
   applications            Application[]
@@ -2896,6 +2897,17 @@ model Offer {
   createdBy            User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
   decidedById          String?
   decidedBy            User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  // The offer letter (#1857). `letterSnapshot` is the exact rendered markdown
+  // FROZEN when the offer is sent (a later template edit never changes what
+  // was sent), in `letterLocale`. It contains compensation, so it rides the
+  // canSeeCompensation rule (src/lib/offers.ts, OFFER_LETTER_FIELDS) — never
+  // SELECTed for COMPANY. Accepting stamps `decidedAt` (already the time)
+  // plus the IP and user agent: a click-to-accept record, NOT a qualified
+  // electronic signature. Both are ADMIN-only reads.
+  letterSnapshot       String?            @db.Text
+  letterLocale         String?            @db.VarChar(5)
+  acceptedIp           String?            @db.VarChar(64)
+  acceptedUserAgent    String?            @db.VarChar(512)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -2904,6 +2916,25 @@ model Offer {
   @@index([orgId, currency])
   // The /api/v1 keyset (#1990).
   @@index([updatedAt, id])
+}
+
+// An org's offer letter template per locale (#1857). An org with no row gets
+// the built-in letter (src/lib/offerLetterTemplates.ts) — "define nothing,
+// keep the built-in". The editor writes one row per locale (`isDefault`);
+// `name` keeps room for several named templates later.
+model OfferTemplate {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name         String       @db.VarChar(100)
+  locale       String       @db.VarChar(5)
+  bodyMarkdown String       @db.Text
+  isDefault    Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([orgId, locale, name])
+  @@index([orgId, locale, isDefault])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
