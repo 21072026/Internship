@@ -110,6 +110,17 @@ test('each admin reads only its own org\'s bill; other roles and verticals are r
     await expect(page.getByTestId('billing-plan-name')).toHaveText('Community');
     await expect(page.getByTestId('billing-free-core')).toBeVisible();
     await expect(page.getByTestId(`billing-history-${period}`)).toContainText('11');
+
+    // 6. The definition next to the number links to the sentence /pricing
+    //    publishes (#1735), and the two say the same thing.
+    const defLink = page.getByTestId('billing-meter-definition-link');
+    await expect(defLink).toHaveAttribute('href', '/pricing#how-we-count');
+    await defLink.click();
+    await expect(page).toHaveURL(/\/pricing#how-we-count$/);
+    const published = page.locator('#how-we-count');
+    await expect(published).toBeVisible({ timeout: 20_000 });
+    await expect(published).toContainText('ACTIVE state with any logged activity during the calendar month');
+    await expect(published).toContainText('paused, benched and completed pairs');
   } finally {
     for (const ctx of jars) await ctx.dispose();
     for (const email of Object.values(emails)) await cleanupByEmail(email);

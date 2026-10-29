@@ -19,6 +19,8 @@ import {
   type LucideIcon,
   ShieldAlert,
   FileSearch,
+  ServerCog,
+  Presentation,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -118,6 +120,10 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/users', icon: UserCog, key: 'users' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
+  // Every mentor's hours, run by the admin without impersonation (#2005).
+  { href: '/admin/availability', icon: CalendarRange, key: 'availability', capability: 'mentorship' },
+  // Group sessions and office hours (#1856) — programme events, an internship module.
+  { href: '/admin/events', icon: Presentation, key: 'groupEvents', capability: 'mentorship' },
   { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
   // The newsletter is career content for MENTEE/MENTOR audiences (#1469): an
   // internship module. Tagged `mentorship` rather than a new `newsletter`
@@ -166,6 +172,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
   // The whole deployment's API map — the operator's (#1575).
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
+  // The operations console (#1607). The default organization's ADMIN may open
+  // it too (the mail queue's operator rule); the link stays with the super admin.
+  { href: '/admin/operations', icon: ServerCog, key: 'operations', superAdminOnly: true },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
@@ -200,6 +209,7 @@ export const MENTOR_NAV_LINKS: NavLink[] = [
   { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' },
   { href: '/mentor/availability', icon: CalendarRange, key: 'availability' },
   { href: '/mentor/calendar', icon: CalendarDays, key: 'calendar' },
+  { href: '/mentor/events', icon: Presentation, key: 'groupEvents', capability: 'mentorship' },
   { href: '/mentor/mentee-activity', icon: Activity, key: 'menteeActivity' },
   { href: '/mentor/analytics', icon: BarChart3, key: 'analytics' },
   { href: '/mentor/feedback', icon: MessageSquareText, key: 'feedback' },
@@ -222,6 +232,8 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   { href: '/messages', icon: MessageSquare, key: 'messages' },
   { href: '/portal/interactions', icon: BookOpen, key: 'interactionLogs' },
   { href: '/portal/notes', icon: Lock, key: 'myNotes' },
+  // Group sessions open to them (#1856).
+  { href: '/portal/events', icon: Presentation, key: 'groupEvents', capability: 'mentorship' },
   // Their own copy of the activity report their mentor and admin already
   // read about them (#1915) — transparency, not a scoreboard.
   { href: '/portal/insights', icon: Activity, key: 'myInsights' },

@@ -8,6 +8,7 @@ import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { resolveMeetingLink, meetingLinkRefusal } from '@/lib/meetingRoom';
@@ -266,9 +267,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         request,
         orgId,
       });
-      // `interview_request.scheduled` is REGISTERED in WEBHOOK_EVENTS but not
-      // dispatched from here: scripts/check-events.mjs (#1697) caps direct
-      // callers of the dispatcher, and an event leaves through emit() (#1693).
+      // Ids only (#1998): no title, guest address or mentee name on the bus.
+      await emit(
+        'interview_request.scheduled',
+        { requestId: current.id, meetingId: meeting.id, scheduledAt: when.toISOString(), panelId: created.panelId },
+        { orgId, actor: { id: session.user.id, type: 'user' } },
+      );
 
       return NextResponse.json({
         ok: true,

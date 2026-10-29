@@ -46,8 +46,10 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 // must not decide anything with cross-user weight (tenant scoping, roles, data
 // access). There are exactly THREE permitted authz-adjacent uses, each chosen
 // because its worst case under a forged header harms only the forger:
-//   1. /api/register refusing a token-less sign-up on a MARKETING host (#2501):
-//      a forged header refuses the forger's own request, nothing else.
+//   1. /api/register refusing a token-less sign-up on a MARKETING host (#2501),
+//      and /api/public/signup/org refusing a self-serve tenant signup there
+//      (#1749 — the new tenant is always INTERNSHIP, never read from the
+//      header): a forged header refuses the forger's own request, nothing else.
 //   2. The public enquiry / demo form choosing WHICH tenant's inbox a brand-new
 //      unauthenticated request is filed into (#2569, src/lib/publicHostOrg.ts):
 //      the host is looked up in an explicit `Organization.publicHost` mapping

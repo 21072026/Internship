@@ -85,6 +85,7 @@ Blast radius is "what an attacker can do with this value alone".
 | `SUPPORT_GITHUB_TOKEN` (with `SUPPORT_GITHUB_REPO`) | issues from bug reports (fine-grained, Issues only) | open/edit issues on that one repository |
 | `SUPPORT_REPORT_SLACK_WEBHOOK_URL` | the URL **is** the credential | post into that Slack channel |
 | `SEED_ADMIN_PASSWORD` (with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_NAME`) | the first ADMIN, once, at `prisma db seed` | none once the admin has changed their password — **do that right after seeding**, then delete the value from the env file |
+| `ERROR_TRACKING_DSN` | the error tracker project (#1600, `docs/observability.md`) | post fake events into our tracker, spend its quota. Reads nothing: a DSN key is write-only. Server-side only so the browser cannot spam it — the browser goes through `/api/telemetry/errors` |
 
 ### 2.6 GitHub repository secrets (CI and ops, never the app runtime)
 
@@ -127,8 +128,8 @@ These are **not secrets**. They are listed so nobody has to wonder.
   `MAIL_URGENT_RESERVE`, `MAIL_QUEUE_LANES`, `MAIL_INLINE_TIMEOUT_MS`, `MAIL_METER_MODE`,
   `MAIL_RECIPIENT_ALLOWLIST`, `GOOGLE_CALENDAR_ENABLED`, `CHAT_APPS_ENABLED`,
   `FEEDBACK_REPLAY_ENABLED`, `FEEDBACK_REPLAY_SECONDS`, `SUPPORT_REPORT_NOTIFY`,
-  `JAAS_MONTHLY_ACTIVE_LIMIT`, `MT_ENFORCE_ISOLATION`, `DEMO_MODE`, `TRUSTED_PROXY_COUNT`,
-  `REPLICA_ID`, `CSP_REPORT_ONLY`, `APP_TIMEZONE`, `LOG_LEVEL`, `DB_SLOW_QUERY_MS`, `DB_QUERY_WARN_CEILING`,
+  `JAAS_MONTHLY_ACTIVE_LIMIT`, `MT_ENFORCE_ISOLATION`, `SELF_SERVE_SIGNUP`, `DEMO_MODE`, `TRUSTED_PROXY_COUNT`,
+  `REPLICA_ID`, `CSP_REPORT_ONLY`, `APP_TIMEZONE`, `LOG_LEVEL`, `ERROR_TRACKING_ENVIRONMENT`, `NEXT_PUBLIC_ERROR_TRACKING`, `DB_SLOW_QUERY_MS`, `DB_QUERY_WARN_CEILING`,
   `KLAVIYO_REVISION`, `KLAVIYO_EVENT_METRICS`, `KLAVIYO_CONVERSION_METRIC`.
 - Model selection: `ANTHROPIC_CV_MODEL`, `ANTHROPIC_SUMMARY_MODEL`, `AI_MODEL_TIER_FAST`,
   `AI_MODEL_TIER_BALANCED`, `AI_MODEL_TIER_STRONG`, `AI_MODEL_CV_EXTRACT`,
@@ -208,7 +209,7 @@ nothing more.
 | `INBOUND_SECRET`, `EMAIL_WEBHOOK_SECRET`, `JAAS_WEBHOOK_SECRET` | random value; set the **same** one in the provider's webhook config in the same minute (deliveries in between get 401 and are retried by the provider) | the provider's delivery log shows 2xx |
 | `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_SECRET`, `TEAMS_APP_PASSWORD`, `GOOGLE_CLIENT_SECRET` | the provider's app console ("regenerate"). Users' existing grants stay valid | connect a test workspace/calendar |
 | `CRON_SECRET`, `HEALTH_TOKEN` | random value. `HEALTH_TOKEN` is also read by the deploy drift gates from the same env file, so it moves together | next deploy's gate reads the sha |
-| `ANTHROPIC_API_KEY`, `KLAVIYO_PRIVATE_API_KEY`, `EXPO_ACCESS_TOKEN`, `SUPPORT_GITHUB_TOKEN`, `SUPPORT_REPORT_SLACK_WEBHOOK_URL` | the provider's console (new key, then delete old) | one AI call / one sync / one push / one test report |
+| `ANTHROPIC_API_KEY`, `KLAVIYO_PRIVATE_API_KEY`, `ERROR_TRACKING_DSN`, `EXPO_ACCESS_TOKEN`, `SUPPORT_GITHUB_TOKEN`, `SUPPORT_REPORT_SLACK_WEBHOOK_URL` | the provider's console (new key, then delete old) | one AI call / one sync / one push / one test report |
 | `JAAS_PRIVATE_KEY` + `JAAS_API_KEY_ID` | JaaS console: new key pair. **Both** values change together | open a meeting room |
 | `VAPID_PRIVATE_KEY` + `VAPID_PUBLIC_KEY` | `npx web-push generate-vapid-keys` | **not seamless**: every existing web-push subscription is bound to the old public key and stops receiving. Browsers re-subscribe on their next visit. Rotate only on a leak |
 | `SEED_ADMIN_PASSWORD` | — | should not be in a live env file at all (§ 2.5) |

@@ -74,3 +74,31 @@ test('Turkish letters fold the same in the mirror as in the app', () => {
   assert.equal(mirrorFold('YAZILIM'), mirrorFold('yazilim'));
   assert.equal(mirrorFold('İş Güvenliği'), mirrorFold('is guvenligi'));
 });
+
+// ── Legacy level backfill (#1822) ────────────────────────────────────────────
+
+test('legacy levels: fills only an unrated row with no history, once per skill', () => {
+  const resolve = (folded) => ({ react: 's-react', reactjs: 's-react', sql: 's-sql', go: 's-go', rust: 's-rust' })[folded] ?? null;
+  const fold = (s) => s.toLowerCase().replace(/[^a-z]/g, '');
+  const held = new Map([
+    ['s-react', { id: 'us-react', level: null, hasHistory: false }],
+    ['s-sql', { id: 'us-sql', level: 2, hasHistory: true }],     // set since → untouched
+    ['s-go', { id: 'us-go', level: null, hasHistory: true }],    // cleared since → untouched
+  ]);
+  const plan = lib.planLegacyLevels({
+    levels: { React: 4, 'React.js': 1, SQL: 5, Go: 3, Rust: 2, Unknown: 3, Bad: 9 },
+    resolve, fold, held,
+  });
+  assert.deepEqual(plan, [{ userSkillId: 'us-react', toLevel: 4 }]);
+});
+
+test('legacy levels: a re-run after the fill plans nothing', () => {
+  const held = new Map([['s', { id: 'us', level: 4, hasHistory: true }]]);
+  assert.deepEqual(lib.planLegacyLevels({ levels: { X: 4 }, resolve: () => 's', fold: (x) => x, held }), []);
+});
+
+test('legacy levels: a non-object column plans nothing', () => {
+  for (const levels of [null, [], 'x', 3]) {
+    assert.deepEqual(lib.planLegacyLevels({ levels, resolve: () => 's', fold: (x) => x, held: new Map() }), []);
+  }
+});

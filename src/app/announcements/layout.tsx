@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { roleHome } from '@/lib/roleHome';
+import { I18nScope } from '@/i18n/scope';
 
 // Announcement history is available to any authenticated role.
-export default async function AnnouncementsLayout({ children }: { children: React.ReactNode }) {
+async function AnnouncementsLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
 
@@ -23,5 +24,15 @@ export default async function AnnouncementsLayout({ children }: { children: Reac
         {children}
       </div>
     </div>
+  );
+}
+
+// The segment's dictionary namespaces wrap the WHOLE layout, its own chrome
+// included (#2987, src/i18n/scope.tsx).
+export default function ScopedAnnouncementsLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nScope scope="announcements">
+      <AnnouncementsLayout>{children}</AnnouncementsLayout>
+    </I18nScope>
   );
 }

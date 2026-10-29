@@ -119,6 +119,8 @@ const DECISIONS = new Map([
   // ── Kept, by decision (accountErasure.ts COVERAGE, docs/pii-access-lifecycle.md) ──
   ['AuditLog.detail', 'the audit trail is kept by decision (Art. 17(3)(b)/(e)); bounded by activityLogRetentionDays'],
   ['ActivityLog.userAgent', 'the audit trail is kept by decision (Art. 17(3)(b)/(e)); bounded by activityLogRetentionDays'],
+  ['SettingChange.oldValue', "an org's configuration history (#1623), not about a person: a key carrying personal data is flagged `redact` in SETTING_SCHEMA and stored as [redacted]; the actor is an id, read live"],
+  ['SettingChange.newValue', 'see SettingChange.oldValue'],
   ['EmailSuppression.detail', 'the suppression list must outlive erasure, or an erased bounce/complaint address is mailed again'],
   ['EmailSuppression.releaseReason', "an admin's audited delist reason on the suppression list (see EmailSuppression.detail)"],
   ['EmailDeliveryEvent.detail', 'provider webhook log behind the suppression list; bounded by the emailDeliveryEvent retention entry'],
@@ -144,6 +146,7 @@ const DECISIONS = new Map([
   ['AgendaTemplateItem.guidance', CONFIG],
   ['MatchRuleSet.description', CONFIG],
   ['Project.description', CONFIG],
+  ['ProgramEvent.description', CONFIG],
   ['Project.goals', CONFIG],
   ['Requisition.description', CONFIG],
   ['Company.description', 'describes the company, not its contact person (the contact columns are erased)'],
@@ -173,7 +176,35 @@ const DECISIONS = new Map([
   ['RosterRun.source', OPS],
   ['RosterRun.error', OPS],
   ['Job.lastError', OPS],
+  // Webhook delivery log (#1695): the receiver's status text and a truncated response body — the
+  // external system's answer to our signed payload, never text written about a person.
+  ['WebhookDelivery.error', OPS],
+  ['WebhookDelivery.responseBody', OPS],
+  // Chat workspace install (#1934): sealed bot tokens, the granted OAuth scope list and ops errors.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', CONFIG],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
   ['JobRun.error', OPS],
+  // A failed automation action's message (#1703): codes and driver errors, never text about a person.
+  ['AutomationRun.error', OPS],
+  // An admin-authored nudge's message (#1684): programme copy written for an
+  // audience, with `{name}` filled per reader at send time — never stored per person.
+  ['NudgeRule.bodyEn', CONFIG],
+  ['NudgeRule.bodyTr', CONFIG],
+  ['NudgeRule.bodyDe', CONFIG],
+  // A receiver's answer to a webhook POST and our transport error (#1695):
+  // truncated, and it goes with its DomainEvent under the event retention.
+  ['WebhookDelivery.responseBody', OPS],
+  // A chat workspace connection's sealed tokens, granted scope and last error,
+  // and one chat delivery's transport error: the integration's, not a person's.
+  ['ChatWorkspace.botTokenEnc', SECRET],
+  ['ChatWorkspace.refreshTokenEnc', SECRET],
+  ['ChatWorkspace.scope', SECRET],
+  ['ChatWorkspace.lastError', OPS],
+  ['ChatDelivery.error', OPS],
+  ['WebhookDelivery.error', OPS],
   ['BackfillRun.lastError', OPS],
   ['NotificationDelivery.error', OPS],
 ]);

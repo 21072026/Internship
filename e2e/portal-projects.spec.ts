@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
+import { settleStreamedSuspense } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -55,6 +56,9 @@ test('mentee portal: own private projects are listed, foreign ones are not', asy
     await page.fill('input[type="password"]', pw);
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+    // Reached by a redirect: the streamed Suspense copy of /portal can still be
+    // in the document (#3059).
+    await settleStreamedSuspense(page);
 
     // The dashboard now says the mentee has projects at all.
     const card = page.getByTestId('portal-projects-card');

@@ -27,6 +27,7 @@ import type { MarketingPlanKey } from '@/lib/marketingPlans';
 import type { PriceListPlan } from '@/lib/marketingPriceListRule';
 import { marketingPriceListForHost } from '@/lib/marketingPriceList';
 import { requestHostHeader } from '@/lib/publicHostOrg';
+import { METERING_DEFINITION_ANCHOR } from '@/lib/meteringRules';
 
 export const dynamic = 'force-dynamic';
 
@@ -235,7 +236,7 @@ export default async function PricingPage() {
 
         {/* How we count — the section that makes the free-core promise
             checkable instead of merely stated. */}
-        <section className="mt-16 rounded-2xl bg-blue-50 border border-blue-200 p-6 sm:p-8" data-testid="pricing-metering">
+        <section id={METERING_DEFINITION_ANCHOR} className="mt-16 scroll-mt-24 rounded-2xl bg-blue-50 border border-blue-200 p-6 sm:p-8" data-testid="pricing-metering">
           <h2 className="inline-flex items-center gap-2 text-2xl font-bold text-blue-900">
             <Info className="h-6 w-6 text-blue-600 flex-shrink-0" />
             {p.meteringTitle}

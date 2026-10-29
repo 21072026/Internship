@@ -16,6 +16,7 @@ import {
   requiresDispositionCode,
 } from '@/lib/applications';
 import { APPLICATION_SELECT, actorFlagsFor, moveApplicationStage, visibleApplicationsWhere } from '@/lib/applicationStage';
+import { stageTransaction } from '@/lib/applicationStageEvents';
 
 const bodySchema = z.object({
   toStage: z.string().trim().min(1).max(32),
@@ -74,7 +75,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       const code = requiresDispositionCode(toStage) && dispositionCode && isDispositionCode(dispositionCode) ? dispositionCode : null;
 
-      const result = await prisma.$transaction((tx) =>
+      const result = await stageTransaction((tx) =>
         moveApplicationStage(tx, { applicationId: current.id, expectedStage, toStage, actorId: session.user.id, note, dispositionCode: code }),
       );
       if (!result.ok) {

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Own bill links to the published definition (#1735):** the active-pair definition on both billing tabs now links to `/pricing#how-we-count` (`METERING_DEFINITION_HREF` in `src/lib/meteringRules.ts`), the section that publishes how pairs are counted, so a customer can check the number against the published sentence in one click; `e2e/org-billing.spec.ts` asserts the link and that the section states the same rule.",
+  "notes": {
+    "en": ["On the billing page, \"How pricing works\" now takes you straight to the section that explains how active pairs are counted."],
+    "tr": ["Faturalandırma sayfasındaki \"Fiyatlandırma nasıl işler\" bağlantısı artık doğrudan aktif çiftlerin nasıl sayıldığını anlatan bölüme götürüyor."],
+    "de": ["Auf der Abrechnungsseite führt „So funktioniert die Preisgestaltung“ jetzt direkt zu dem Abschnitt, der erklärt, wie aktive Paare gezählt werden."]
+  }
+}

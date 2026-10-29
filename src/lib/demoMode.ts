@@ -61,6 +61,8 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/admin\/users\/[^\/]+\/reset-password$/, 'rotates a shared password'],
   // 2. reach outside the demo
   [/^\/api\/admin\/webhooks/, 'would POST from the production host to any URL'],
+  // Stage automation (#1704): a rule mails and notifies people on every stage move.
+  [/^\/api\/admin\/automations/, 'would mail and notify people automatically on every stage move'],
   // The key-owned twin (#2002). Unreachable today — the demo mints no API key
   // (/api/admin/api-keys above) — and listed anyway, because the reason is the
   // same and a demo key must never become the way round it.

@@ -18,7 +18,7 @@ restore is a procedure you follow rather than one you invent at 2 a.m.
 |---|---|
 | Location | `/var/backups/internship-crm` on the app server (`BACKUP_DIR`) |
 | Naming | `<env>-<UTC stamp>.sql.gz` — e.g. `prod-20260806T2312Z.sql.gz` |
-| Taken | before every prod/preview deploy; prod also daily at 02:40 UTC (`internship-backup.timer`, infra/README.md → Daily backup). Preview has **no** daily run |
+| Taken | before every prod/preview deploy; daily — prod at 02:40 UTC (`internship-backup.timer`), preview at 02:50 UTC (`internship-backup-preview.timer`, #3166); infra/README.md → Daily backup |
 | Kept | `KEEP_DAYS` days (default 7) |
 | Contents | a full `mysqldump` — **real personal data**: CVs, phone numbers, mentor notes |
 | Permissions | files `0600`, directory `0700` |
@@ -118,8 +118,7 @@ personal data):
 
 1. is there a dump at all;
 2. is the newest one younger than `MAX_AGE_HOURS` (36 by default — the daily
-   timer plus deploy hooks make anything older a signal, not a fluctuation;
-   preview has only the deploy hook, see the table below);
+   timer plus deploy hooks make anything older a signal, not a fluctuation);
 3. is it at least `MIN_BYTES` and a valid gzip stream (a truncated dump
    restores nothing while looking like a backup);
 4. does the set cover at least `MIN_HISTORY_DAYS` distinct days — one fresh
@@ -149,7 +148,7 @@ they are fine — a false alarm costs the same trust as a missed one.
 | Report says | What it means | First move |
 |---|---|---|
 | `no dump found` | backups never ran here, or the directory moved | check `crontab -l` and `BACKUP_DIR` |
-| `stale: Nh old` | prod: the timer stopped; preview: nothing was deployed for that long — preview is dumped only by its deploy hook, so a quiet stretch of `main` with no merge reads stale (#3166) | prod: `systemctl status internship-backup.timer` and `journalctl -u internship-backup`; preview: a merge or a manual `deploy-preview.yml` run takes a dump |
+| `stale: Nh old` | the daily timer stopped (or, on a box bootstrapped before #3166, preview has no timer and nothing was deployed for that long) | `systemctl list-timers 'internship-backup*'`, `journalctl -u internship-backup -u internship-backup-preview`; a missing preview timer → infra/README.md → Daily backup |
 | `too small` / `not a valid gzip stream` | the dump is being truncated — disk full, or mysqldump dying mid-stream | `df -h`, then run `infra/backup-db.sh` by hand and read the error |
 | `unreadable by <user> (owner root, mode 600)` | the dump exists but the check's user cannot read it — the daily timer ran a `/opt/internship-crm/bin/backup-db.sh` fetched before #2989, which leaves its dumps root-owned (#3166) | re-fetch the script (infra/README.md → Daily backup), then `sudo chown --reference=/var/backups/internship-crm /var/backups/internship-crm/*.sql.gz` |
 | `history covers only N day(s)` | rotation is deleting faster than it writes, or the box was down | check `KEEP_DAYS` and the log for gaps |

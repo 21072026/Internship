@@ -12,6 +12,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateText } from '@/lib/agendasRule';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // Management for the guided-conversation library (#1843): the session guides
 // a pair picks from (AgendaPanel, #1841). A guide is a title, a "when to use
@@ -229,6 +230,10 @@ export default function AdminAgendaTemplatesPage() {
         (v) => v?.toLowerCase().includes(q)
       )
   );
+
+  // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
+  // so the new result count is spoken (debounced) while a filter is active.
+  useFilterAnnouncement(!loading && q !== '' ? resultCountMessage(t.a11y, filtered.length) : null);
 
   return (
     <>

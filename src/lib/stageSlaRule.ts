@@ -28,6 +28,8 @@ export type SlaSource = 'mentorCohort' | 'mentor' | 'cohort' | 'org';
 export interface StageSlaRow {
   stageKey: string;
   days: number | null;
+  /** The escalation rung (#1722); only meaningful on a row that carries `days`. */
+  escalateAfterDays?: number | null;
   cohortId?: string | null;
   mentorId?: string | null;
 }
@@ -109,4 +111,26 @@ export function inheritedSla(rows: ReadonlyArray<StageSlaRow>, scope: SlaScope):
     rows.filter((r) => slaScopeKey(r) !== own),
     scope
   );
+}
+
+/**
+ * The escalation rung per stage for a relation in `scope` (#3204): the same
+ * precedence as `days`, but resolved FIELD BY FIELD — an override that sets
+ * its own days and no rung of its own inherits the next scope's rung, so a
+ * cohort's shorter clock does not silently switch the admins' escalation off.
+ * Only rows that carry `days` take part (an escalation of a deadline nobody
+ * set means nothing). With only org rows this is exactly the org's rung, as
+ * before.
+ */
+export function resolveSlaEscalations(rows: ReadonlyArray<StageSlaRow>, scope: SlaScope = {}): Map<string, number> {
+  const held = new Map<string, { value: number; rank: number }>();
+  for (const row of rows) {
+    if (row.days == null || row.escalateAfterDays == null || row.escalateAfterDays <= 0) continue;
+    const source = rowSource(row, scope);
+    if (!source) continue;
+    const rank = SLA_PRECEDENCE.indexOf(source);
+    const current = held.get(row.stageKey);
+    if (!current || rank < current.rank) held.set(row.stageKey, { value: row.escalateAfterDays, rank });
+  }
+  return new Map(Array.from(held, ([key, v]) => [key, v.value]));
 }

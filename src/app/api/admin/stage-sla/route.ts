@@ -11,8 +11,9 @@ import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
-import { inheritedSla, resolveSlaDays, slaScopeKey, type SlaScope } from '@/lib/stageSlaRule';
+import { inheritedSla, resolveSlaDays, resolveSlaEscalations, slaScopeKey, type SlaScope } from '@/lib/stageSlaRule';
 import { loadStageSlaRows } from '@/lib/stageSla';
+import { fillOrgStageDeadlines } from '../../../../../prisma/stage-deadline-fill.mjs';
 import { z } from 'zod';
 
 // The org's own rows. Per-cohort / per-mentor overrides (#1640) are other
@@ -82,6 +83,24 @@ async function verifiedScope(orgId: string, raw: SlaScope): Promise<SlaScope | n
   return { cohortId, mentorId };
 }
 
+/**
+ * Give this org's relations already sitting in a stage the deadline the saved
+ * rule now implies (#3203) — the same fill the deploy ran once for everybody
+ * (prisma/stage-deadline-fill.mjs): dated from the stage entry, idempotent,
+ * and a past-due one stamped so no reminder mail goes out for it. Only ever
+ * fills an EMPTY deadline: a stricter rule saved later never rewrites one a
+ * move or a person already set. Never fails the save — the rule is stored,
+ * and the next save or stage move catches up.
+ */
+async function fillDeadlines(orgId: string): Promise<number> {
+  try {
+    return (await fillOrgStageDeadlines(prisma, orgId, { apply: true })).total;
+  } catch (e) {
+    console.error('Stage deadline fill after SLA save failed:', e);
+    return 0;
+  }
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
@@ -108,8 +127,13 @@ export async function GET(request: Request) {
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const isOverride = slaScopeKey(scope) !== ORG_SCOPE;
     const rows = orgId ? await loadStageSlaRows(orgId) : [];
-    const own = new Map(
-      rows.filter((r) => slaScopeKey(r) === slaScopeKey(scope) && r.days != null).map((r) => [r.stageKey, r.days as number])
+    const ownRows = rows.filter((r) => slaScopeKey(r) === slaScopeKey(scope) && r.days != null);
+    const own = new Map(ownRows.map((r) => [r.stageKey, r.days as number]));
+    const ownEscalation = new Map(ownRows.map((r) => [r.stageKey, r.escalateAfterDays ?? null]));
+    // The rung an override row would fall back to without one of its own (#3204).
+    const inheritedEscalation = resolveSlaEscalations(
+      rows.filter((r) => slaScopeKey(r) !== slaScopeKey(scope)),
+      scope
     );
     const effective = resolveSlaDays(rows, scope);
     const inherited = inheritedSla(rows, scope);
@@ -143,7 +167,8 @@ export async function GET(request: Request) {
         effective: effective.get(s.key) ?? null,
         inherited: inherited.get(s.key) ?? null,
         wipLimit: wipLimits.get(s.key) ?? null,
-        escalateAfterDays: escalations.get(s.key) ?? null,
+        escalateAfterDays: isOverride ? (ownEscalation.get(s.key) ?? null) : (escalations.get(s.key) ?? null),
+        inheritedEscalateAfterDays: isOverride ? (inheritedEscalation.get(s.key) ?? null) : null,
       })),
     });
   });
@@ -176,9 +201,10 @@ export async function PUT(request: Request) {
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const scopeKey = slaScopeKey(scope);
     if (scopeKey !== ORG_SCOPE) {
-      // An override carries a service level only: escalation rungs and board
-      // WIP limits stay organisation-wide (resolveStageEscalations /
-      // resolveStageWipLimits read the org scope), so they are ignored here.
+      // An override carries a service level and, optionally, its own escalation
+      // rung (#3204; omitted = keep what is stored, null/0 = inherit the next
+      // scope's). Board WIP limits stay organisation-wide
+      // (resolveStageWipLimits reads the org scope), so they are ignored here.
       const set = parsed.data.slas.filter((s) => s.days != null && s.days > 0);
       const cleared = parsed.data.slas.filter((s) => !(s.days != null && s.days > 0)).map((s) => s.stageKey);
       await prisma.$transaction([
@@ -188,11 +214,15 @@ export async function PUT(request: Request) {
         ...set.map((s) =>
           prisma.stageSla.upsert({
             where: { orgId_stageKey_scope: { orgId, stageKey: s.stageKey, scope: scopeKey } },
-            update: { days: s.days },
+            update: {
+              days: s.days,
+              ...(s.escalateAfterDays === undefined ? {} : { escalateAfterDays: s.escalateAfterDays || null }),
+            },
             create: {
               orgId,
               stageKey: s.stageKey,
               days: s.days,
+              escalateAfterDays: s.escalateAfterDays || null,
               cohortId: scope.cohortId ?? null,
               mentorId: scope.mentorId ?? null,
               scope: scopeKey,
@@ -209,7 +239,7 @@ export async function PUT(request: Request) {
         detail: `scope ${scopeKey}: ${set.length} service levels, ${cleared.length} inherited`,
         request,
       });
-      return NextResponse.json({ ok: true, configured: set.length, wipConfigured: 0 });
+      return NextResponse.json({ ok: true, configured: set.length, wipConfigured: 0, deadlinesSet: await fillDeadlines(orgId) });
     }
 
     // The row now carries two independent numbers (#1439), so what to do with
@@ -266,6 +296,6 @@ export async function PUT(request: Request) {
       request,
     });
 
-    return NextResponse.json({ ok: true, configured: withSla, wipConfigured: withWip });
+    return NextResponse.json({ ok: true, configured: withSla, wipConfigured: withWip, deadlinesSet: await fillDeadlines(orgId) });
   });
 }

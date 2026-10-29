@@ -294,6 +294,42 @@ Two things that will surprise you in the UI:
 
 ---
 
+## Webhook delivery: retries, the log and replay (#1695)
+
+What an integrator's receiver can rely on — the contract behind the
+`x-webhooks` entries:
+
+- **At-least-once.** Every event is delivered at least once and may arrive
+  more than once: a retry after a timeout whose request did reach you, a
+  container restart between the POST and the bookkeeping, or an admin's replay.
+  **Receivers must be idempotent.** Every attempt for one (event ×
+  subscription) carries the same **`X-Delivery-Id`** header — dedupe on it.
+  The body (`{ event, data, sentAt }`), `X-Signature` (HMAC-SHA256 of exactly
+  that body with the subscription's secret) and `X-Event` are unchanged;
+  `sentAt` is the time of *this* attempt.
+- **What retries.** A `5xx`, `408`, `429`, a timeout (5 s) or a network error
+  is retried with exponential backoff and jitter (30 s doubling, capped at
+  1 h) for up to 8 attempts, then the delivery is `DEAD`. Any other answer —
+  a `4xx`, or a `3xx` (redirects are never followed: the SSRF check judged the
+  registered URL, not where it points) — is `DEAD` at once. The URL is
+  re-checked against private/internal addresses on every attempt.
+- **Order.** Each subscription is its own queue job, so a slow receiver never
+  delays another one — and deliveries to one receiver are not guaranteed to
+  arrive in event order. Order by the payload's own timestamps.
+- **Auto-disable.** After 20 consecutive failed attempts, or 72 hours of
+  failures without one success, the subscription is switched off, the org's
+  admins get one e-mail, and nothing more is sent until an admin re-enables it
+  on `/admin/integrations` (which resets the failure streak). Events raised
+  meanwhile stay recorded and can be replayed.
+- **The log and replay.** `/admin/integrations` → *Deliveries* lists the last
+  attempts per webhook (event, status `PENDING|SUCCESS|FAILED|DEAD`, response
+  code, attempt, duration, error; stored response bodies are cut at 2,000
+  characters). *Replay* re-sends one delivery
+  (`POST /api/admin/webhooks/deliveries/[id]/replay`); *Replay last events*
+  re-sends the subscription's last N (≤ 50) events from the event record
+  (`POST /api/admin/webhooks/replay-events?id=…`). Both are ADMIN-only, scoped
+  to the caller's org, and keep the original `X-Delivery-Id`.
+
 ## Which plan includes the API (#1744)
 
 The public API is the `INTEGRATIONS_API` feature — in Program Plus, Enterprise

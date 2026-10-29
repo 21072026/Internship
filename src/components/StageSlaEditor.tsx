@@ -26,6 +26,8 @@ interface StageRow {
   // The ladder's second rung (#1722): days after the breach before the org's
   // administrators are told. null = only the mentor is reminded.
   escalateAfterDays: number | null;
+  // In an override scope: the rung this row falls back to without its own (#3204).
+  inheritedEscalateAfterDays?: number | null;
   // Override scopes (#1640): what applies here, and what would without this
   // scope's own row. Server-resolved — the precedence lives in stageSlaRule.ts.
   effective?: ResolvedSla | null;
@@ -217,10 +219,14 @@ export function StageSlaEditor() {
               min={0}
               max={365}
               value={r.escalateAfterDays ?? ''}
-              placeholder={t.stageSla.noRule}
+              placeholder={
+                isOverride && r.inheritedEscalateAfterDays != null
+                  ? t.stageSla.inherits.replace('{n}', String(r.inheritedEscalateAfterDays))
+                  : t.stageSla.noRule
+              }
               /* Escalation hangs off the service level: no days, no breach. */
-              /* An override carries the service level only (#1640). */
-              disabled={isOverride || r.days == null || r.days <= 0}
+              /* An override may carry its own rung or inherit one (#3204). */
+              disabled={r.days == null || r.days <= 0}
               aria-label={`${r.label} — ${t.stageSla.escalateAfter}`}
               data-testid={`escalate-${r.key}`}
               onChange={(e) => {

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 /**
  * WCAG 4.1.3 (Status Messages), #2047.
@@ -76,6 +77,48 @@ test('the app-wide live region is mounted empty and receives the filter result c
     });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+// #2864: every list with a search box speaks its result count through the same
+// hook (`check:` in the VPAT's 4.1.3 row keeps it that way). Two of its shapes:
+// a server-paginated list (/admin/users, the count is the API's total) and a
+// client-side filter (the admin sidebar's own nav filter).
+test('server-side and client-side list filters announce their result count', async ({ page }) => {
+  const nonce = Date.now().toString(36);
+  const adminEmail = uniqueEmail('lr-lists');
+  const pw = 'LiveRegion123!';
+  await seedUser(adminEmail, pw, 'ADMIN', `Live Region Lists ${nonce}`);
+  try {
+    await page.goto('/auth/signin');
+    await page.evaluate(() => { document.cookie = 'locale=en;path=/'; });
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', adminEmail);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    const region = page.getByTestId('live-region-polite');
+
+    await gotoSettled(page, '/admin/users');
+    // The list has loaded (and the page hydrated) once a row's action shows —
+    // the name alone also matches the account menu in the sidebar.
+    await expect(page.getByRole('button', { name: 'Deactivate' }).first()).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('users-search').fill(nonce);
+    await expect
+      .poll(async () => (await region.textContent())?.trim(), { timeout: 10_000 })
+      .toBe('1 result shown');
+    await page.getByTestId('users-search').fill(`${nonce}-nobody-matches-this`);
+    await expect
+      .poll(async () => (await region.textContent())?.trim(), { timeout: 10_000 })
+      .toBe('No results');
+
+    // The sidebar filter is on every admin page; nothing in it matches this.
+    await page.getByRole('searchbox', { name: /Filter menu/ }).fill('zzzz-no-such-page');
+    await expect
+      .poll(async () => (await region.textContent())?.trim(), { timeout: 10_000 })
+      .toBe('No results');
+  } finally {
     await cleanupByEmail(adminEmail);
   }
 });

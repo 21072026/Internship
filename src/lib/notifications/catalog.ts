@@ -47,8 +47,13 @@ import type { NotificationCategory } from '@/lib/notificationPrefs';
 import type { EmailGroupId } from '@/lib/emailGroups';
 import type { LinkKind } from '@/lib/notificationLink';
 
-/** The channels a notification can travel on. One adapter each, in router.ts. */
-export const NOTIFICATION_CHANNELS = ['inApp', 'email'] as const;
+/**
+ * The channels a notification can travel on. One adapter each, in router.ts.
+ * `chat` (#1939, Slack/Teams) is never in an event's `defaultChannels`: the
+ * router adds it per recipient, only for a person who confirmed a chat
+ * identity — installing an app must not start messaging anybody.
+ */
+export const NOTIFICATION_CHANNELS = ['inApp', 'email', 'chat'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 /**
@@ -134,6 +139,12 @@ export const NOTIFICATION_EVENTS = [
   // The one neutral note to someone marked absent (#2014) — in-app only, no
   // score, sent once per record (MeetingAttendance.noShowNotifiedAt).
   { key: 'meeting.noShow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
+  // Group sessions (#1856): the publish notice to the audience, a waitlist
+  // promotion, a call-off and a move. In-app only — a seat change is a bell line.
+  { key: 'event.published', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'event.promoted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'event.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'event.updated', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
   { key: 'meeting_reminder.seriesSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_reminder.seriesTomorrow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'project', params: ['title', 'project', 'when'] },
@@ -182,6 +193,14 @@ export const NOTIFICATION_EVENTS = [
   { key: 'integration.newLeads', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['count', 'provider'] },
 
   // Pipeline: where a candidate stands, and what came of it.
+  // Stage automation (#1703): an admin's rule told the relation's own people.
+  // In-app only — the rule's mail action is a separate, catalogued template.
+  { key: 'automation.stageReached', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['name', 'stage'] },
+  { key: 'automation.stageReachedSelf', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['stage'] },
+  { key: 'automation.documentRequired', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['document'] },
+  // An admin-authored nudge (#1684). In-app copy of the rule's own text; the
+  // mail is the evaluator's, sent through sendEmail() under 'nudge'.
+  { key: 'nudge.message', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['text'] },
   { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
   { key: 'outcome.noMatch', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'outcome.placedElsewhere', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
@@ -238,6 +257,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'plan_change.requested', category: 'announcements', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['org', 'plan'] },
   { key: 'plan_change.applied', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['plan'] },
   { key: 'plan_change.rejected', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['plan'] },
+  // A public application held at the plan's active-pair cap (#1745): the
+  // applicant is told only that the programme is full, the org's admins are
+  // told why. In-app only, at most one a day per admin (src/app/api/apply).
+  { key: 'plan_limit.application_held', category: 'announcements', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['limit'] },
   { key: 'signup.pendingApproval', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'signup.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   // An operational anomaly rather than news: somebody registered through an

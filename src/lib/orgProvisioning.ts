@@ -7,7 +7,9 @@
 //   the Organization row (name, slug, plan, product, branding) → the product's
 //   starting stage preset (#2353) → the starter pack (#2066) and, if asked, its
 //   sample programme → the first administrator's ADMIN invitation. Any failure
-//   rolls ALL of it back: a half-provisioned organization — a row with no
+//   rolls ALL of it back — and so does a failure in the caller's own
+//   `firstAdminAccount` step (the public self-serve signup's ADMIN account,
+//   #1749), which runs inside the same transaction: a half-provisioned organization — a row with no
 //   stages, or stages with no organization anyone can sign in to — is worse
 //   than none. The mail and the audit lines come after the commit (an
 //   `org.created` line for a rolled-back org would be a lie in the one record
@@ -35,8 +37,16 @@ import { deliverInvitation, invitationRegisterUrl, logInvitationCreated, persist
 import { emailTakenInWorld } from '@/lib/userWorld';
 import type { VerticalKey } from '@/lib/verticals';
 
+/** A transaction client, as `prisma.$transaction(async (tx) => …)` hands it out. */
+export type ProvisionTx = Prisma.TransactionClient;
+
 export interface ProvisionInput {
-  actor: { id: string; email?: string | null };
+  /**
+   * Who is provisioning — the audit actor and the invitation's sender. Absent
+   * only for the public self-serve signup (#1749), whose actor is the account
+   * `firstAdminAccount` creates.
+   */
+  actor?: { id: string; email?: string | null } | null;
   name: string;
   slug?: string | null;
   /** Already checked against the caller's world. */
@@ -46,6 +56,19 @@ export interface ProvisionInput {
   starterPack?: boolean;
   sampleProgram?: boolean;
   firstAdmin?: { email: string; locale?: string | null } | null;
+  /**
+   * The self-serve signup's first administrator (#1749): an ACCOUNT, not an
+   * invitation, created by the caller INSIDE this transaction once the
+   * organization exists — so a failure there rolls the organization back too.
+   * The caller owns the account's shape (password, consent, verification); this
+   * module only checks the address is free in the product first, exactly as for
+   * `firstAdmin`, and files the audit lines under the account it returns.
+   * Mutually exclusive with `firstAdmin`.
+   */
+  firstAdminAccount?: {
+    email: string;
+    create: (tx: ProvisionTx, organization: { id: string; vertical: string }) => Promise<{ id: string; email: string }>;
+  } | null;
   /** The language the stage labels and the starter pack are written in. */
   locale: Locale;
   request?: Request;
@@ -62,6 +85,8 @@ export interface Provisioned {
   organization: { id: string; name: string; slug: string; plan: string; vertical: string };
   starterPack: StarterSummary | null;
   invitation: { invitationId: string; registerUrl: string; emailSent: boolean } | null;
+  /** The account `firstAdminAccount` created, if one was asked for. */
+  account: { id: string; email: string } | null;
 }
 
 const blankToNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
@@ -87,7 +112,9 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
   if (brandColor && !isHexColor(brandColor)) return { ok: false, refusal: { code: 'invalid_brand_color', status: 400 } };
   if (brandLogoUrl && !isSafeBrandLogoUrl(brandLogoUrl)) return { ok: false, refusal: { code: 'invalid_brand_logo', status: 400 } };
 
-  const adminEmail = blankToNull(input.firstAdmin?.email)?.toLowerCase() ?? null;
+  if (input.firstAdmin && input.firstAdminAccount) throw new Error('provisionOrganization: firstAdmin and firstAdminAccount are exclusive');
+  if (input.firstAdmin && !input.actor) throw new Error('provisionOrganization: an invitation needs an actor');
+  const adminEmail = blankToNull(input.firstAdmin?.email ?? input.firstAdminAccount?.email)?.toLowerCase() ?? null;
   // "Already registered" means IN THIS PRODUCT (#2590): the same mailbox may
   // hold an account in the other world and still be invited here.
   if (adminEmail && (await emailTakenInWorld(adminEmail, input.vertical))) {
@@ -96,7 +123,7 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
   if (!(await orgSlugAvailable(slug))) return { ok: false, refusal: { code: 'slug_taken', status: 409 } };
 
   const invitationInput = (orgId: string): CreateInvitationInput => ({
-    actor: input.actor,
+    actor: input.actor!,
     orgId,
     email: adminEmail,
     label: null,
@@ -105,7 +132,12 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
     request: input.request,
   });
 
-  let created: { organization: Provisioned['organization']; starterPack: StarterSummary | null; persisted: Awaited<ReturnType<typeof persistInvitation>> | null };
+  let created: {
+    organization: Provisioned['organization'];
+    starterPack: StarterSummary | null;
+    persisted: Awaited<ReturnType<typeof persistInvitation>> | null;
+    account: Provisioned['account'];
+  };
   try {
     created = await prisma.$transaction(
       async (tx) => {
@@ -121,8 +153,9 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
         const starterPack = input.starterPack
           ? await applyOrgStarterPack(organization.id, { tx, locale: input.locale, sampleProgram: input.sampleProgram === true })
           : null;
-        const persisted = adminEmail ? await persistInvitation(invitationInput(organization.id), tx) : null;
-        return { organization, starterPack, persisted };
+        const persisted = adminEmail && input.firstAdmin ? await persistInvitation(invitationInput(organization.id), tx) : null;
+        const account = input.firstAdminAccount ? await input.firstAdminAccount.create(tx, organization) : null;
+        return { organization, starterPack, persisted, account };
       },
       { timeout: 30_000 },
     );
@@ -135,13 +168,16 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
     throw e;
   }
 
+  // The self-serve signer is its own actor (#1749).
+  const actor = input.actor ?? created.account;
+
   // Filed under the NEW organization (#1575): left to the actor's org, the
   // customer's name landed in the operator org's own activity feed.
   await recordOrgWrite({
     orgId: created.organization.id,
     action: 'org.created',
-    actorId: input.actor.id,
-    actorEmail: input.actor.email ?? null,
+    actorId: actor?.id ?? null,
+    actorEmail: actor?.email ?? null,
     detail: created.organization.name,
     request: input.request,
   });
@@ -154,8 +190,8 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
     await recordOrgWrite({
       orgId: created.organization.id,
       action: 'organization.admin_invited',
-      actorId: input.actor.id,
-      actorEmail: input.actor.email ?? null,
+      actorId: input.actor!.id,
+      actorEmail: input.actor!.email ?? null,
       detail: `ADMIN · email · invitation ${created.persisted.invitationId}`,
       request: input.request,
     });
@@ -166,5 +202,5 @@ export async function provisionOrganization(input: ProvisionInput): Promise<{ ok
     };
   }
 
-  return { ok: true, value: { organization: created.organization, starterPack: created.starterPack, invitation } };
+  return { ok: true, value: { organization: created.organization, starterPack: created.starterPack, invitation, account: created.account } };
 }

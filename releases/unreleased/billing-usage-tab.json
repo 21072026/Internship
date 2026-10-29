@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Usage tab on /admin/billing (#1763):** `GET /api/org/usage` (own org only, from the session; reads `UsageRollup` only) returns active pairs, admin seats, companies, programmes, AI calls, broadcast recipients and video rooms/participants against the plan's limits with four periods of history; `src/lib/usageSummary.ts` (pure) decides ok / approaching (≥80%) / over, and a `null` limit reads unlimited, never 0 or over. The nightly rollup gains four COMPUTED metrics — `COMPANIES`, `PROGRAMS`, `AI_CALLS` (the quota's own count) and `BROADCAST_RECIPIENTS` (`broadcastRecipientsInRange()`, the quota's per-category rules) — so no request scans a domain table. The tab prints the active-pair definition and what is never metered, and an over-limit row offers the plan change.",
+  "notes": {
+    "en": ["A new Usage tab under Billing shows everything your plan measures — active pairs, admin seats, companies, programmes, AI calls, broadcast recipients and video — against its limit, with the last four months."],
+    "tr": ["Faturalandırma altındaki yeni Kullanım sekmesi, planınızın ölçtüğü her şeyi — aktif çiftler, admin koltukları, şirketler, programlar, AI çağrıları, toplu gönderim alıcıları ve video — limitiyle ve son dört ayla birlikte gösterir."],
+    "de": ["Der neue Tab „Verbrauch“ unter Abrechnung zeigt alles, was Ihr Plan misst — aktive Paare, Admin-Plätze, Unternehmen, Programme, KI-Aufrufe, Empfänger von Rundsendungen und Video — mit Limit und den letzten vier Monaten."]
+  }
+}

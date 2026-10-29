@@ -28,11 +28,17 @@ ARG NEXT_PUBLIC_APP_ENV=production
 # rolled `docker build`): the versions are still derived, just undated.
 ARG RELEASE_STAMPS=""
 
+# Browser error reporter (#1600): "1" attaches the listeners that post to our
+# own /api/telemetry/errors relay. Inlined at build time; empty = off. The DSN
+# itself is a runtime secret and never a build arg.
+ARG NEXT_PUBLIC_ERROR_TRACKING=""
+
 # Provide dummy env vars so Next.js can analyse routes without a live DB.
 # Real secrets are injected at runtime via `docker run -e`.
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV \
     RELEASE_STAMPS=$RELEASE_STAMPS \
+    NEXT_PUBLIC_ERROR_TRACKING=$NEXT_PUBLIC_ERROR_TRACKING \
     DATABASE_URL="mysql://build:build@127.0.0.1:3306/build" \
     NEXTAUTH_SECRET="build-placeholder" \
     NEXTAUTH_URL="http://localhost:3000"
