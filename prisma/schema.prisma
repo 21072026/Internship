@@ -950,6 +950,7 @@ model User {
   decidedRequests                   MentorshipRequest[]            @relation("DecidedMentorshipRequests")
   preferredInRequests               MentorshipRequest[]            @relation("PreferredMentorRequests")
   decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
+  screenedMentorApplications        MentorApplication[]            @relation("ScreenedMentorApplications")
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
   supportReports                    SupportReport[]                @relation("SupportReportAuthor")
@@ -2830,7 +2831,23 @@ model MentorApplication {
   consentAt    DateTime?
   createdAt    DateTime                @default(now())
 
-  decidedBy User? @relation("DecidedMentorApplications", fields: [decidedById], references: [id])
+  // The screening record (#1807) — admin-only, NEVER read by an e-mail or
+  // shown to the applicant. The checklist is { <item>: { done, by, at } } over
+  // SCREENING_ITEMS (src/lib/mentorScreeningRule.ts); which items must be done
+  // before approval is the org setting `mentorScreeningRequired`, enforced in
+  // the approve handler. The reference is personal data about a third party
+  // who never signed up: two short fields, erased with the application
+  // (src/lib/accountErasure.ts).
+  screeningChecklist Json?
+  interviewAt        DateTime?
+  interviewNotes     String?   @db.Text
+  referenceName      String?   @db.VarChar(191)
+  referenceContact   String?   @db.VarChar(191)
+  referenceOutcome   String?   @db.Text
+  screenedById       String?
+
+  decidedBy  User? @relation("DecidedMentorApplications", fields: [decidedById], references: [id])
+  screenedBy User? @relation("ScreenedMentorApplications", fields: [screenedById], references: [id])
 
   @@index([status])
   @@index([email])

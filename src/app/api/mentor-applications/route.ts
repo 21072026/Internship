@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
+import { parseRequired } from '@/lib/mentorScreeningRule';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -188,6 +191,8 @@ export async function GET(request: Request) {
       prisma.mentorApplication.count({ where }),
     ]);
 
-    return NextResponse.json({ items, total, page, pageSize: PAGE_SIZE });
+    // The screening policy (#1807) for the queue's "ready to decide" badge.
+    const screeningRequired = parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: await settingsOrgOf(session) }));
+    return NextResponse.json({ items, total, page, pageSize: PAGE_SIZE, screeningRequired });
   });
 }

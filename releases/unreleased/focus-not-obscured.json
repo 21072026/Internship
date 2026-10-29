@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Focus is never hidden under the mobile top bar (WCAG 2.4.11, #2864):** `html` now carries a `scroll-padding` of the sticky shell bar + impersonation banner (top, below `lg`) and of the floating report button + fixed bottom bars (bottom), so a control focus scrolls into view lands clear of them. `e2e/focus-not-obscured.spec.ts` walks `/portal/profile` backwards with Shift+Tab at phone width and hit-tests every focused control (it failed before the fix: an input landed at y=0 under the bar). VPAT 2.4.11 now reads `Supports`."
+}

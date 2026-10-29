@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`/api/*` refuses an oversized JSON body before parsing it** (#3210). App Router handlers call `request.json()` unbounded and nothing in front of the app set a limit, which is the door GHSA-mrhx-c7xc-m3w5 (zod 3 memory exhaustion on oversized constrained collections) walks through. The edge middleware now answers `413 payload_too_large` to a JSON/text write whose declared `Content-Length` exceeds 1 MiB (32 MiB under `/api/admin/`, whose importers take a whole CSV as a JSON string); multipart uploads keep their per-route limits. The rule is pure in `src/lib/bodyLimitRule.ts` (`JSON_BODY_MAX_BYTES` / `JSON_BODY_MAX_BYTES_ADMIN` tune it) and pinned by `e2e/body-limit.unit.spec.ts` (`@smoke`). A chunked body declares no length, so the complete fix is the proxy's: `infra/README.md` § Request body limit is the Caddy `request_body` runbook. The zod 3 → 4 migration itself stays #3210."
+}

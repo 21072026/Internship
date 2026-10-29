@@ -149,6 +149,17 @@ if (reportError) {
     lines.push('', 'Her şey yolunda — başarısız test yok. 🎉');
   }
 }
+// The least reliable tests over the last runs (#1610), written by
+// scripts/e2e-reliability.mjs in the same job. Optional: absent on a first run
+// or when the history step failed, and then the mail is what it always was.
+if (process.env.E2E_RELIABILITY_FILE) {
+  try {
+    const table = readFileSync(process.env.E2E_RELIABILITY_FILE, 'utf8').trim();
+    if (table) lines.push('', '--- Güvenilirlik (son koşular) ---', table);
+  } catch {
+    // no history this run
+  }
+}
 const detail = lines.join('\n');
 
 function escapeHtml(s) {

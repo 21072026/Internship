@@ -831,13 +831,18 @@ marketing names redirect there, and their apex now serves **mail only**.
   this before the wait existed. Deleting a `loading.tsx` that buys nothing (a `'use client'`
   page with no server data, e.g. `/account`) removes the window at the source — verified: that
   route's served HTML no longer carries an `S:` container at all.
-- **Known pre-existing CI flakes**: `e2e/account-self-service.spec.ts:52` and
-  `e2e/sign-out-all.spec.ts:24` fail intermittently in the Playwright smoke job (usually
-  preceded by a `[WebServer] TypeError: Cannot read properties of null (reading 'user')`
-  warning) — unrelated to most changes. `gh run rerun <run-id> --failed` and it typically
-  passes; other specs have occasionally failed-then-passed-on-retry too, so one flaky run
-  isn't itself a regression signal — check the actual failure log before concluding a change
-  broke something.
+- **Flaky tests are quarantined, not re-run** ([`docs/testing.md` § Flaky tests](docs/testing.md), #1610):
+  a red run is a bug report, and so is a green gate that needed a re-run. A known flake gets a
+  `@quarantine` tag with `// quarantine: #<issue> until YYYY-MM-DD — reason` directly above it.
+  `playwright.config.ts` leaves it out of every gating run. The scheduled full suite runs it
+  again in a non-gating step (`E2E_QUARANTINE=only`), and `npm run check:quarantine` (CI) fails
+  when the issue is missing or the expiry has passed or is more than 30 days out. At the expiry
+  the test is fixed or deleted, never re-dated. Per-test pass and retry rates over the last 40
+  scheduled runs come from the `test-history` branch (`scripts/e2e-reliability.mjs`) and appear
+  in the e2e-full job summary, the `ci-alert` issue and the e-mail. Read that table before
+  calling a failure "flaky". The two specs this paragraph used to list
+  (`account-self-service`, `sign-out-all`) were hardened since, and the scheduled run of
+  2026-10-27 shows neither flaky nor the `reading 'user'` warning.
 - **zsh gotcha**: `for f in $(cmd)` does **not** split on newlines in zsh (unlike bash), so
   iterating multi-line command output silently processes it as one word. Use
   `cmd | while IFS= read -r f; do ...; done` instead.
