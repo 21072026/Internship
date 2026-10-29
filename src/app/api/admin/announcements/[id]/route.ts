@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { normalizeMachineList } from '@/lib/machineTranslation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -19,6 +17,7 @@ import {
   canonicalAnnouncementText,
   resolveAnnouncementText,
 } from '@/lib/announcementText';
+import { requirePermission } from '@/lib/authz';
 
 // Editing and deleting a published announcement (#1162). Until this existed a
 // typo in a broadcast was permanent and a superseded one stayed on everyone's
@@ -84,8 +83,9 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
@@ -180,8 +180,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
