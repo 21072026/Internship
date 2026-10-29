@@ -14,8 +14,11 @@ import { purgeExpiredExports } from '@/lib/api/v1Exports';
 import { purgeExpiredImports } from '@/lib/api/v1Imports';
 import { sweepAiArtifacts } from '@/lib/ai/artifacts';
 import { runRetentionPrune } from '@/lib/retentionEntries';
+import { recordStatusSample } from '@/lib/statusSample';
 
 export function registerHousekeepingJobs(): void {
+  // An upsert on the slot start: a rerun rewrites the same row (#1604).
+  registerJob('status.sample', async () => recordStatusSample());
   registerJob('email.healthCheck', async () => {
     await runEmailHealthCheck();
   }, SWEEP_OPTS);

@@ -128,6 +128,8 @@ export interface JobPayloadMap {
   'email.healthCheck': Record<string, never>;
   'outbound.expireDrafts': Record<string, never>;
   'auth.trustedDevicePurge': Record<string, never>;
+  /// One health sample for the public /status page (#1604, src/lib/statusSample.ts).
+  'status.sample': Record<string, never>;
   'ai.artifactRetention': Record<string, never>;
   'newsletter.dispatch': Record<string, never>;
   'newsletter.queue': Record<string, never>;
@@ -195,6 +197,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'email.healthCheck',
   'outbound.expireDrafts',
   'auth.trustedDevicePurge',
+  'status.sample',
   'ai.artifactRetention',
   'newsletter.dispatch',
   'newsletter.queue',
