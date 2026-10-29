@@ -1,6 +1,6 @@
 // Who fits a requisition? (#1401) — the pure half, shared by the admin
 // "matching candidates" list and the premium match-alert cron
-// (checkCompanyNeedMatches in src/services/emailService.ts), so the screen and
+// (checkRequisitionMatches in src/services/emailService.ts), so the screen and
 // the e-mail can never disagree about who matches.
 //
 // The rule, in one place:

@@ -6073,25 +6073,6 @@ ${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
   return { checked: people.length, reminded };
 }
 
-// Does a consenting candidate match any of a company's CompanyNeed positions? A
-// match is a loose, case-insensitive overlap between a need's position and the
-// candidate's target position or one of their skills — deliberately generous
-// (the alert is a "worth a look" nudge, not a hard filter). Since #1821 this is
-// the CompanyNeed path only: a CompanyNeed has no skills to compare, while a
-// Requisition is matched on its canonical required skills (below).
-function candidateMatchesNeeds(
-  positions: string[],
-  cand: { targetPosition?: string | null; skills: unknown }
-): boolean {
-  const target = (cand.targetPosition || '').toLowerCase().trim();
-  const skills = (Array.isArray(cand.skills) ? cand.skills : []).map((s) => String(s).toLowerCase().trim()).filter(Boolean);
-  return positions.some((pos) => {
-    if (!pos) return false;
-    if (target && (target.includes(pos) || pos.includes(target))) return true;
-    return skills.some((sk) => sk && (pos.includes(sk) || sk.includes(pos)));
-  });
-}
-
 // The title fallback (a requisition without required skills) lives with the
 // rest of the match rule in src/lib/requisitionMatchRule.ts (#1401), shared
 // with the admin's matching-candidates list.
@@ -6117,34 +6098,32 @@ const ALERT_MIN_FIT = 40;
 // unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
 // makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
 //
-// Positions come from BOTH tables (#1387). The job used to read CompanyNeed
-// only, so a role opened through the Requisition screen — the newer of the two,
-// and the one the product is migrating to — never matched anybody: a premium
-// company could have five open requisitions and receive nothing at all.
-// CompanyNeed is NOT dead and is not being dropped here: the admin company form
-// still writes those rows (src/app/api/companies/[id]/route.ts), and the
-// CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
-// adds a source rather than replacing one; the [companyId, menteeId] dedupe key
-// means a company with the same role in both tables still alerts once.
+// Positions come from Requisition ONLY (#1875). Until then the job also read
+// the legacy CompanyNeed table (#1387 added Requisition as a second source);
+// the admin form no longer writes CompanyNeed and the deploy converts every
+// remaining row into a Requisition (backfill 0012, keyed on
+// legacyCompanyNeedId), so a converted role still alerts — through the title
+// fallback below, since a converted row has no required skills. The
+// [companyId, menteeId] dedupe key is unchanged, so nobody already alerted is
+// alerted again.
 //
 // WHO IS ENTITLED (#1733): a company whose ORG may use the feature (its plan or
 // an org grant — orgIdsEntitledTo(), the set form of entitled()), OR a company
 // with a legacy per-company CompanyEntitlement row (grandfathered, the same
 // rule hasFeature() applies).
-export async function checkCompanyNeedMatches() {
+export async function checkRequisitionMatches() {
   const entitledOrgIds = await orgIdsEntitledTo('COMPANY_NEED_MATCH_ALERTS');
   const companies = await prisma.company.findMany({
     where: {
       AND: [
         { OR: [{ orgId: { in: entitledOrgIds } }, { entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } } }] },
-        { OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }] },
+        { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } },
       ],
     },
     select: {
       id: true,
       orgId: true,
       name: true,
-      needs: { select: { position: true } },
       requisitions: {
         where: { status: ALERTABLE_REQUISITION_STATUS },
         // `openings`/`filled` so a role that is open-but-fully-staffed can be
@@ -6238,13 +6217,12 @@ export async function checkCompanyNeedMatches() {
     //     required skills were left out on purpose. Canonical ids remove that
     //     objection: "Go" is one skill, not two letters.
     //   - a Requisition without skills falls back to its title, against the
-    //     candidate's target position only; a CompanyNeed (no skills at all,
-    //     not retired here — #1359) keeps the old generous heuristic.
+    //     candidate's target position only (every row converted from the
+    //     legacy CompanyNeed table lands here, #1875).
     const openReqs = company.requisitions.filter((r) => r.filled < r.openings);
-    const needTerms = [...new Set(company.needs.map((n) => (n.position ?? '').toLowerCase().trim()).filter(Boolean))];
     // Still reachable after the OR filter above: a company can match on having
     // open requisitions and then have every one of them fully staffed.
-    if (openReqs.length === 0 && needTerms.length === 0) continue;
+    if (openReqs.length === 0) continue;
     const skillOrg = company.orgId ?? defaultId;
     const allSkillIds = openReqs.flatMap((r) => r.skills.map((x) => x.skillId));
     const edges = allSkillIds.length ? await loadSkillEdges(skillOrg, allSkillIds) : [];
@@ -6278,7 +6256,7 @@ export async function checkCompanyNeedMatches() {
         );
         if (m && m.fit.score >= ALERT_MIN_FIT && (!best || m.fit.score > best.match.fit.score)) best = { requisition: r, match: m };
       }
-      const matched = !!best || (needTerms.length > 0 && candidateMatchesNeeds(needTerms, cand));
+      const matched = !!best;
       if (!matched) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
@@ -6348,7 +6326,7 @@ export async function checkCompanyNeedMatches() {
               <p><a href="${base}${link}">${M.cta}</a></p>
             </div>`,
           })).catch((error) => {
-            console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });
+            console.error('checkRequisitionMatches email failed:', { companyId: company.id, userId: u.id, error });
           });
         }
       }
