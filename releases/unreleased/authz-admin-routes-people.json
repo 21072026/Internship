@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin routes behind the permission layer — people (#1571, story #1565):** `/api/admin/users/[id]/*` (reset-2fa, reset-password, erase, lockout, sign-out-all, sso-exempt), `impersonate`, `invite/bulk`, `invitations` (+ `bulk`), `candidates/bulk`, `duplicates` (+ `merge`), `orphan-applicants`, `source-users`, `company-users`, `sources`, `import` (+ `marketing-accounts`), `mentors/limits/import` and `export/[dataset]` authorize through `requirePermission()` (`user.*`, `org.invite`, `company.*`, `audit.export`) instead of comparing the role to `'ADMIN'`. Behaviour-neutral for existing admins (ORG_ADMIN holds every tenant permission); an OBSERVER now keeps reads only, a PROGRAM_ADMIN is refused until these routes narrow to grants, and a signed-in non-admin gets **403** instead of 401. Every refusal writes an `authz.capability_denied` row."
+}
