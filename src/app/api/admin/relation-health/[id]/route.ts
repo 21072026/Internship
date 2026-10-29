@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -15,8 +14,9 @@ import { HEALTH_RULES_VERSION } from '@/lib/relationHealth';
 // ADMIN, and the relation must be the caller's tenant's — another tenant's id
 // is a 404, so ids cannot be probed.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   const relation = await prisma.mentorshipRelation.findUnique({ where: { id }, select: { orgId: true } });
   if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {

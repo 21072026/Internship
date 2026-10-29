@@ -12,6 +12,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { parseReferralUrl, referralLink, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
+import { resyncInFlight, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { AffiliateTabs } from '../AffiliateTabs';
 
 // The programme's settings (docs/affiliate-module.md, #3116): the commission plan
@@ -35,6 +36,8 @@ interface Plan {
 interface Settings {
   plan: Plan | null;
   planVersion: number;
+  /** The partners' re-evaluation after the last plan change, run on the queue (#3170). */
+  planResync: PlanResyncState | null;
   contract: Record<string, string>;
   contractVersion: number;
   referralUrl: string | null;
@@ -142,6 +145,20 @@ export default function AffiliateSettingsPage() {
     void load();
   }, [load]);
 
+  // While the queued re-evaluation runs, follow its progress — only that field,
+  // so a form being edited is never reset under the admin's hands.
+  const following = resyncInFlight(settings?.planResync ?? null);
+  useEffect(() => {
+    if (!following) return;
+    const timer = setTimeout(async () => {
+      const res = await fetch('/api/admin/affiliate/settings').catch(() => null);
+      if (!res?.ok) return;
+      const s = (await res.json()) as Settings;
+      setSettings((prev) => (prev ? { ...prev, planResync: s.planResync } : prev));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [following, settings?.planResync]);
+
   if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{t.affiliateAdmin.noAccess}</p>;
   if (failed) return <p className="text-sm text-red-600" role="alert">{L.loadFailed}</p>;
   if (!settings || !form) return <SkeletonRows rows={6} />;
@@ -170,9 +187,7 @@ export default function AffiliateSettingsPage() {
       if (res.ok) {
         if (!body.changed) toast(L.planUnchanged);
         else {
-          toast(interpolate(L.planSaved, { n: String(body.planVersion), partners: String(body.partnersResynced) }));
-          if (body.drift > 0) toast(interpolate(L.planDrift, { n: String(body.drift) }), 'error');
-          if (body.resyncFailed > 0) toast(interpolate(L.resyncFailed, { n: String(body.resyncFailed) }), 'error');
+          toast(interpolate(L.planSaved, { n: String(body.planVersion) }));
           await load();
         }
       } else if (body.code === 'invalid_plan') {
@@ -299,6 +314,7 @@ export default function AffiliateSettingsPage() {
               { value: 'RUN_OUT', label: L.afterNoticeRunOut },
             ]}
           />
+          {settings.planResync && <ResyncStatus state={settings.planResync} L={L} />}
           {!readOnly && (
             <Button type="button" onClick={() => void savePlan()} disabled={busy !== null} data-testid="affiliate-save-plan">
               {L.savePlan}
@@ -369,6 +385,28 @@ export default function AffiliateSettingsPage() {
           )}
         </fieldset>
       </Card>
+    </div>
+  );
+}
+
+// Where the partners' re-evaluation after the last plan change stands (#3170).
+function ResyncStatus({ state, L }: { state: PlanResyncState; L: ReturnType<typeof useT>['affiliateSettings'] }) {
+  const n = (x: number | null) => String(x ?? 0);
+  const text =
+    state.status === 'QUEUED'
+      ? L.resyncQueued
+      : state.status === 'RUNNING'
+        ? interpolate(L.resyncRunning, { done: n(state.done), total: n(state.total) })
+        : state.status === 'RETRYING'
+          ? interpolate(L.resyncRetrying, { done: n(state.done), failed: n(state.failed) })
+          : state.status === 'DONE'
+            ? interpolate(L.resyncDone, { n: String(state.v), done: n(state.done) })
+            : interpolate(L.resyncFailed, { n: n(state.failed) });
+  const warn = state.status === 'INCOMPLETE' || (state.status === 'DONE' && state.drift > 0);
+  return (
+    <div className={`text-sm ${warn ? 'text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`} role="status" data-testid="affiliate-plan-resync" data-status={state.status}>
+      <p>{text}</p>
+      {state.drift > 0 && state.status !== 'QUEUED' && <p>{interpolate(L.planDrift, { n: String(state.drift) })}</p>}
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/capabilityGate';
 import { withTenantScope } from '@/lib/orgContext';
@@ -19,9 +18,9 @@ import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE } from '@/lib/weeklyReportCo
 // outside the owed weeks (the running week's draft, say) are listed apart, so
 // nothing a mentee wrote is hidden from the reader.
 export async function GET(_request: Request, { params }: { params: Promise<{ relationId: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('analytics.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
   if (capGate) return capGate;
   const { relationId } = await params;

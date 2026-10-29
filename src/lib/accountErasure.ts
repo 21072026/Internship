@@ -564,7 +564,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
       data: { title: '', cancelReason: null },
     }),
     prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
-    prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
+    // The frozen letter names them and states their pay; the click-to-accept
+    // record is their IP and browser (#1857).
+    prisma.offer.updateMany({
+      where: asSubject,
+      data: { compensationNote: null, declineNote: null, letterSnapshot: null, acceptedIp: null, acceptedUserAgent: null },
+    }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),

@@ -58,7 +58,7 @@ test('non-admin cannot read the benchmark', async ({ page }) => {
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
-    expect((await page.request.get('/api/admin/analytics/benchmark')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/analytics/benchmark')).status()).toBe(403);
   } finally {
     await cleanupByEmail(mentorEmail);
   }
