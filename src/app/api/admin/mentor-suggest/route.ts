@@ -17,7 +17,7 @@ import { skillOverlap } from '@/lib/skillTaxonomyRule';
 import { loadMentees, loadMentorPool } from '@/lib/matching/pool';
 import { resolveRuleSet } from '@/lib/matching/ruleSet';
 import { suggestMentors } from '@/lib/matching/suggest';
-import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
+import { skillGraphFor, skillIdsByUser } from '@/lib/matching/skillContext';
 import { getLocale } from '@/i18n/server';
 import { requirePermission } from '@/lib/authz';
 
@@ -137,12 +137,7 @@ export async function POST(request: Request) {
   const [menteeRow] = await loadMentees(tenant, [mentee.id]);
   if (!menteeRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const pool = await loadMentorPool(tenant);
-  const skillRows = await prisma.userSkill.findMany({
-    where: { userId: { in: pool.map((m) => m.id) } },
-    select: { userId: true, skillId: true },
-  });
-  const idsOf = new Map<string, string[]>();
-  for (const r of skillRows) idsOf.set(r.userId, [...(idsOf.get(r.userId) ?? []), r.skillId]);
+  const idsOf = await skillIdsByUser(pool.map((m) => m.id));
   const mentors = pool.map((m) => ({ ...m, skillIds: idsOf.get(m.id) ?? [] }));
 
   // A mentorship request's preferences feed the score (#1787): the field and
@@ -158,10 +153,10 @@ export async function POST(request: Request) {
   }
 
   const menteeSkillIds = mentee.skillRows.map((r) => r.skillId);
-  const edges = orgId ? await loadSkillEdges(orgId, menteeSkillIds) : [];
-  const labelIds = [...new Set([...menteeSkillIds, ...edges.flatMap((e) => [e.fromSkillId, e.toSkillId])])];
-  const labels = orgId && labelIds.length ? await skillLabels(orgId, labelIds, await getLocale()) : new Map<string, string>();
-  const label = (id: string) => labels.get(id) ?? id;
+  // The same graph the decision record scores with (#1789), loaded once.
+  const skillGraph = await skillGraphFor(orgId, menteeSkillIds, await getLocale());
+  const edges = skillGraph?.edges ?? [];
+  const label = skillGraph?.label ?? ((id: string) => id);
 
   const ruleSet = await resolveRuleSet(orgId);
   const scoreMentee = {
@@ -175,7 +170,7 @@ export async function POST(request: Request) {
     // Canonical skills with adjacency when the mentee has any; a mentee not
     // backfilled yet falls back to the free-text comparison, so nobody's
     // suggestions go blank mid-migration.
-    ...(menteeSkillIds.length > 0 ? { skillGraph: { edges, label } } : {}),
+    ...(skillGraph ? { skillGraph } : {}),
   });
 
   const ruleSetInfo = { ruleSetId: ruleSet.id, ruleSetVersion: ruleSet.version, ruleSetName: ruleSet.name };

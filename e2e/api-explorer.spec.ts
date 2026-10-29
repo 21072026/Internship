@@ -36,7 +36,7 @@ test('the API description is not readable without an admin session', { tag: '@sm
   try {
     await login(page, email, pw);
     const asMentee = await page.request.get('/api/admin/openapi');
-    expect(asMentee.status()).toBe(401);
+    expect(asMentee.status()).toBe(403);
 
     // And the page itself bounces a non-admin out of /admin.
     await page.goto('/admin/api-explorer');

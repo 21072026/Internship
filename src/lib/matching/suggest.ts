@@ -17,7 +17,7 @@
 
 import type { MatchScore } from './types';
 import type { MatchMentee, MatchMentor, ScoreContext } from './dimensions';
-import { compareMatches, rankMatches, type MatchRuleSetInput, type RankedMatch } from './score';
+import { compareMatches, rankMatches, scoreMatch, type MatchRuleSetInput, type RankedMatch } from './score';
 
 export const SUGGESTION_LIMIT = 5;
 /** Bounds the payload; a blocked list longer than this is summarised by its count. */
@@ -38,6 +38,12 @@ export function honourNotAccepting(match: MatchScore): MatchScore {
     breakdown: breakdown.map((e) => ({ ...e, contribution: 0 })),
     blockedBy: match.blockedBy.includes('capacityHeadroom') ? match.blockedBy : [...match.blockedBy, 'capacityHeadroom'],
   };
+}
+
+/** One pair, exactly as a suggestion list would score it (#1789 records this). */
+export function scoreSuggestionPair(mentee: MatchMentee, mentor: MatchMentor, ruleSet: MatchRuleSetInput, ctx: ScoreContext): MatchScore {
+  const match = scoreMatch(mentee, mentor, ruleSet, ctx);
+  return mentor.acceptingMentees === false ? honourNotAccepting(match) : match;
 }
 
 export interface SuggestionSet<M extends MatchMentor> {
