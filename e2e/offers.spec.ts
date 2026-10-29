@@ -401,6 +401,12 @@ test('the expiry cron transitions a due offer exactly once across two runs', asy
 
     const notifications = await prisma.notification.findMany({ where: { userId: s.admin.id, type: 'offer_expired.admin' } });
     expect(notifications).toHaveLength(1);
+
+    // The cron is a writer too (#1998): one `offer.expired`, raised by the system.
+    const raised = await prisma.domainEvent.findMany({ where: { name: 'offer.expired', subjectId: offer.id } });
+    expect(raised).toHaveLength(1);
+    expect(raised[0]).toMatchObject({ actorType: 'system', actorId: null });
+    expect(raised[0].payload).toEqual({ offerId: offer.id, applicationId: null, requisitionId: null });
   } finally {
     await s.cleanup();
   }
@@ -455,6 +461,11 @@ test('accepted offers fill a requisition: once each, never past openings, and a 
     const decided = await prisma.offer.findMany({ where: { id: { in: racers.map((o) => o.id) } } });
     expect(decided.every((o) => o.status === 'ACCEPTED')).toBe(true);
     expect(decided.filter((o) => o.requisitionCountedAt !== null)).toHaveLength(2);
+    // The bus (#1998): every acceptance is announced, the requisition fills once.
+    expect(await prisma.domainEvent.count({ where: { name: 'offer.accepted', subjectId: { in: racers.map((o) => o.id) } } })).toBe(3);
+    const filledEvents = await prisma.domainEvent.findMany({ where: { name: 'requisition.filled', subjectId: req.id } });
+    expect(filledEvents).toHaveLength(1);
+    expect(racers.map((o) => o.id)).toContain((filledEvents[0].payload as { offerId: string }).offerId);
 
     // The refused count is on the record, where the admin reads the offer's history.
     const refused = decided.find((o) => o.requisitionCountedAt === null)!;

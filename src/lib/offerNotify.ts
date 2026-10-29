@@ -3,6 +3,7 @@
 // same in-app notification + email for a given transition.
 
 import { prisma } from '@/lib/prisma';
+import { raiseOfferEvent } from '@/lib/offerEvents';
 import { notify } from '@/lib/notify';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendOfferSentEmail, sendOfferDecisionEmail } from '@/services/emailService';
@@ -120,7 +121,7 @@ export async function expireOffers(): Promise<{ checked: number; expired: number
   const now = new Date();
   const due = await prisma.offer.findMany({
     where: { status: 'SENT', expiresAt: { lt: now } },
-    select: { id: true, orgId: true },
+    select: { id: true, orgId: true, requisitionId: true, relation: { select: { menteeId: true } } },
   });
 
   let expired = 0;
@@ -136,6 +137,9 @@ export async function expireOffers(): Promise<{ checked: number; expired: number
     // (#2012) — otherwise it would never reach that tenant's drain.
     await prisma.auditLog.create({ data: { actorId: 'system', action: 'offer.expire', targetId: o.id, orgId: o.orgId ?? null } });
     await notifyOfferDecided(o.id, 'EXPIRED');
+    // The cron path is a writer too (#1998): without this an integrator would
+    // see SENT offers that never end.
+    await raiseOfferEvent('offer.expired', { id: o.id, orgId: o.orgId, requisitionId: o.requisitionId, menteeId: o.relation.menteeId }, { id: null, type: 'system' });
   }
 
   return { checked: due.length, expired };
