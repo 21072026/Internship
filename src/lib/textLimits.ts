@@ -110,6 +110,14 @@ export const TEXT_LIMITS = {
   mentorApplicationExperience: 2000,
   /** MentorApplication.motivation — @db.Text */
   mentorApplicationMotivation: 2000,
+  /** MentorApplication.interviewNotes — @db.Text (#1807 screening) */
+  mentorScreeningInterviewNotes: 4000,
+  /** MentorApplication.referenceName / referenceContact — VarChar(191) (#1807) */
+  mentorScreeningReference: 191,
+  /** MentorApplication.referenceOutcome — @db.Text (#1807) */
+  mentorScreeningReferenceOutcome: 2000,
+  /** MentorOffer.message — @db.Text (#1809) */
+  mentorOfferMessage: 1000,
   /** WeeklyReport.summary — @db.Text */
   weeklyReportSummary: 10000,
   /** WeeklyReport.blockers — @db.Text */

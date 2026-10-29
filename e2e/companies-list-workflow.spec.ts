@@ -263,11 +263,20 @@ test('deleting a company asks in the app and names what is lost and what is only
   const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Company Delete Mentor');
   const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Company Delete Mentee');
 
+  // Cascade side: a requisition goes with the row (open positions are
+  // Requisitions since #1875). Requisition.orgId is required, so the company
+  // lives in the default org the admin was seeded into.
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { slug: 'default', name: 'Default Organization' },
+    select: { id: true },
+  });
   const company = await prisma.company.create({
     data: {
       name: `Doomed ${tag}`,
-      // Cascade side: a CompanyNeed goes with the row.
-      needs: { create: [{ position: 'Backend intern', count: 1, period: 'Summer' }] },
+      orgId: defaultOrg.id,
+      requisitions: { create: [{ orgId: defaultOrg.id, title: 'Backend intern', status: 'OPEN', openings: 1, requiredSkills: [] }] },
     },
   });
   // SetNull side: both of these survive the delete with their company link cleared.
@@ -293,7 +302,7 @@ test('deleting a company asks in the app and names what is lost and what is only
     await expect(confirmDialog(page)).toContainText(company.name);
 
     // The two consequences are stated SEPARATELY, each with its counts.
-    await expect(page.getByTestId('company-delete-cascade')).toContainText('1 open positions', {
+    await expect(page.getByTestId('company-delete-cascade')).toContainText('1 requisitions', {
       timeout: 20_000,
     });
     const detach = page.getByTestId('company-delete-detach');
@@ -310,7 +319,7 @@ test('deleting a company asks in the app and names what is lost and what is only
 
     expect(await prisma.company.count({ where: { id: company.id } })).toBe(0);
     // Cascade really cascaded, and the "kept" side really was kept.
-    expect(await prisma.companyNeed.count({ where: { companyId: company.id } })).toBe(0);
+    expect(await prisma.requisition.count({ where: { companyId: company.id } })).toBe(0);
     const survivor = await prisma.project.findUnique({ where: { id: project.id } });
     expect(survivor?.ownerCompanyId).toBeNull();
   } finally {

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Strict CSP, report-only (#1552, step 1):** the CSP now lives in `src/lib/cspPolicy.cjs` (the enforced header is byte-identical, pinned by a unit test). `src/middleware.ts` adds a per-request nonce policy as `Content-Security-Policy-Report-Only` on page requests — `script-src 'self' 'nonce-…' 'strict-dynamic'`, no `'unsafe-inline'`, `'unsafe-eval'` only outside production — which Next.js stamps onto its own scripts; the theme snippet in the root layout carries the nonce. Browsers report what it would block to the new `POST /api/csp-report` (rate-limited, 64 KB cap, logs sanitised `csp.violation` lines only, nothing stored). The template print popup no longer prints from an inline script. `CSP_REPORT_ONLY=0` turns the header off. Design: `docs/csp.md`."
+}

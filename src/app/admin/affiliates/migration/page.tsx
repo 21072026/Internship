@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { FileField } from '@/components/ui/FileField';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
@@ -122,12 +123,13 @@ export default function AffiliateMigrationPage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor={`migration-${f}`}>
                   {L.files[f]}
                 </label>
-                <input
+                <FileField
                   id={`migration-${f}`}
-                  type="file"
                   accept=".csv,text/csv,text/plain"
+                  chooseLabel={L.chooseFile}
+                  noneLabel={L.noFileChosen}
+                  fileName={texts[f]?.name ?? null}
                   onChange={(e) => void pick(f, e.target.files)}
-                  className="block w-full text-sm text-gray-700 dark:text-gray-300"
                   data-testid={`migration-file-${f}`}
                 />
                 <p className="text-xs text-gray-500">

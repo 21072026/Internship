@@ -25,6 +25,12 @@ import {
   orphanApplicantWhere,
 } from '@/lib/orphanApplicant';
 import {
+  CONTACT_PROOF_RETENTION_YEARS,
+  PAYOUT_DETAILS_RETENTION_YEARS,
+  retainedRecordCutoff,
+} from '@/lib/erasureRetentionRule';
+import { deleteExpiredContactProofs } from '@/lib/contactPermission';
+import {
   RETENTION_ACTIVITY_ACTION,
   formatRetentionSummary,
   pruneInBatches,
@@ -284,6 +290,33 @@ export async function pruneDomainEvents(
         })
       ).map((r) => r.id),
     handleBatch: async (ids) => (await prisma.domainEvent.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
+/**
+ * Settled stage-automation runs (#1703) older than the window, oldest first.
+ * Every tenant's rows in one pass by `createdAt` alone, like the event record
+ * the runs point at. A run still PENDING (a delayed step, at most 30 days out)
+ * or RUNNING is never touched, whatever its age: its actions have not happened.
+ */
+export const AUTOMATION_RUN_RETENTION_DAYS = 90;
+
+async function pruneAutomationRuns(ctx: RetentionContext): Promise<RetentionOutcome> {
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.automationRun.findMany({
+          where: { createdAt: { lt: ctx.cutoff }, status: { notIn: ['PENDING', 'RUNNING'] } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.automationRun.deleteMany({ where: { id: { in: ids }, status: { notIn: ['PENDING', 'RUNNING'] } } })).count,
   });
   return { deleted: processed, capped };
 }
@@ -838,6 +871,72 @@ export async function pruneAuditLog(ctx: RetentionContext): Promise<RetentionOut
   return { deleted: processed, capped };
 }
 
+/**
+ * The UWG § 7 proof of an ERASED person (#2098): kept after the erasure as
+ * evidence only, deleted three years after the end of the erasure's calendar
+ * year (src/lib/erasureRetentionRule.ts says why that anchor). `ctx.cutoff` is
+ * ignored — the window is a year count with a year-end start, which a day
+ * count cannot express.
+ *
+ * The ROW goes, not just `reason`: a basis with its evidence stripped is a
+ * permission claim without proof, and `marketingEmailPermissionFilter()` reads
+ * the basis without the address. No row reads as "no permission" everywhere.
+ * The delete itself is in src/lib/contactPermission.ts, the table's one writer.
+ */
+async function pruneErasedContactProofs(ctx: RetentionContext): Promise<RetentionOutcome> {
+  const cutoff = retainedRecordCutoff(ctx.now, CONTACT_PROOF_RETENTION_YEARS);
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.contactPermission.findMany({
+          where: { subjectErasedAt: { lt: cutoff } },
+          orderBy: { subjectErasedAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    // Through the table's one writer, which re-states the window.
+    handleBatch: (ids) => deleteExpiredContactProofs(ids, cutoff),
+  });
+  return { deleted: processed, capped };
+}
+
+/**
+ * An erased affiliate partner's IBAN and account holder (#2098): kept for the
+ * bookkeeping duty, cleared ten years after the end of the calendar year of the
+ * LAST of the account erasure, the termination taking effect and the last
+ * payout (`payoutDetailsAnchor()`, here as SQL: every one of the three before
+ * the cutoff). The partner row and its payouts stay — they are the bookings;
+ * only the bank details go, so the entry reports `masked`.
+ */
+async function clearErasedPayoutDetails(ctx: RetentionContext): Promise<RetentionOutcome> {
+  const cutoff = retainedRecordCutoff(ctx.now, PAYOUT_DETAILS_RETENTION_YEARS);
+  const where: Prisma.AffiliatePartnerWhereInput = {
+    payoutDetailsCipher: { not: null },
+    accountErasedAt: { lt: cutoff },
+    OR: [{ noticeEffectiveAt: null }, { noticeEffectiveAt: { lt: cutoff } }],
+    payouts: { none: { paidAt: { gte: cutoff } } },
+  };
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.affiliatePartner.findMany({ where, orderBy: { accountErasedAt: 'asc' }, select: { id: true }, take })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (
+        await prisma.affiliatePartner.updateMany({
+          where: { AND: [where, { id: { in: ids } }] },
+          data: { payoutDetailsCipher: null },
+        })
+      ).count,
+  });
+  return { deleted: 0, masked: processed, capped };
+}
+
 async function pruneRosterRowResults(ctx: RetentionContext) {
   // Row-level detail only: the RosterRun summary it hangs off is kept, so
   // "did the sync run that night and what did it change in total?" stays
@@ -927,6 +1026,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'An event row is a fact that something happened plus the ids it happened to — and the oldest public payloads (application.created) carry a name and an address. Its readers look back days, not years: a webhook receiver asks for a replay within a week or two (#1695), an automation run reads the event that triggered it (#1703). Ninety days covers a full quarter of "what fired, and why?" and matches the e-mail delivery log, the other "did it go out?" ledger. The durable history of a record is the record itself and its ActivityLog/AuditLog trail, not this table.',
     run: async (ctx) => pruneDomainEvents(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
+  },
+  {
+    key: 'automationRun',
+    // No setting: the window follows the DomainEvent record a run points at
+    // (docs/automation-rules.md), not an operator knob.
+    defaultDays: AUTOMATION_RUN_RETENTION_DAYS,
+    reason:
+      'A run row answers "what did this rule do, and did it fail?" for the admin\u2019s run log; it holds ids, stage keys and action codes, never a name or an address. Ninety days matches the domain-event record it points at, so a run never outlives the event that caused it. Runs still waiting for their delay or in flight are never pruned.',
+    run: pruneAutomationRuns,
   },
   {
     key: 'mailOutbox',
@@ -1054,6 +1162,25 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     run: pruneRosterRowResults,
   },
   {
+    key: 'chatDelivery',
+    // No setting: part of the chat apps' design (#1958, docs/chat-apps.md).
+    defaultDays: 90,
+    reason:
+      'One row per chat delivery attempt — an event key, a DM id and a status, never the card body — kept to answer "I never got the message" and to show a failing workspace. Ninety days matches the e-mail delivery log, the other "did it go out?" ledger; a row whose workspace was uninstalled keeps only that metadata until then.',
+    run: async (ctx) => {
+      const { processed, capped } = await pruneInBatches({
+        batchSize: ctx.batchSize,
+        budget: ctx.budget,
+        selectIds: async (take) =>
+          (
+            await prisma.chatDelivery.findMany({ where: { createdAt: { lt: ctx.cutoff } }, orderBy: { createdAt: 'asc' }, select: { id: true }, take })
+          ).map((r) => r.id),
+        handleBatch: async (ids) => (await prisma.chatDelivery.deleteMany({ where: { id: { in: ids } } })).count,
+      });
+      return { deleted: processed, capped };
+    },
+  },
+  {
     key: 'auditLog',
     // Resolved from the GLOBAL settings row, like activityLog: the sweep has no
     // org bound and takes every tenant's rows in one pass.
@@ -1062,6 +1189,24 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'The privileged-action trail (impersonation, admin password resets, merges, offer and interview decisions) is evidence, and evidence is asked about across audit cycles: two years covers two annual reviews, and no setting may take it under one. A row a tenant\'s audit drain has not shipped yet is never pruned, so a SIEM outage leaves a backlog rather than a gap; nothing else in the product deletes an audit row.',
     run: pruneAuditLog,
+  },
+  {
+    key: 'contactPermissionProof',
+    // No setting: a legal decision of the rights holder (#2098), not an
+    // operator knob. The runner's day count is nominal; the entry computes its
+    // own year-end cutoff (src/lib/erasureRetentionRule.ts).
+    defaultDays: CONTACT_PROOF_RETENTION_YEARS * 365,
+    reason:
+      'The UWG § 7 proof of a person who has been erased is kept only to answer a claim that a mail went out without permission — three years, the regular limitation period of that claim (§ 195 BGB), counted from the end of the calendar year of the erasure, after which no mail can reach them. Then the whole row goes: a basis without its proof would still read as a permission.',
+    run: pruneErasedContactProofs,
+  },
+  {
+    key: 'affiliatePayoutDetails',
+    // No setting, for the same reason as contactPermissionProof.
+    defaultDays: PAYOUT_DETAILS_RETENTION_YEARS * 365,
+    reason:
+      'An erased affiliate partner\'s IBAN and account holder outlive the account for the bookkeeping duty only (§ 257 HGB, § 147 AO: ten years for booking records), counted from the end of the calendar year in which the relationship ended — the latest of the erasure, the termination and the last payout. Then the details are cleared; the partner row and its payouts are the bookings and stay.',
+    run: clearErasedPayoutDetails,
   },
 ];
 

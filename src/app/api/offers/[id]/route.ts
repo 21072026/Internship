@@ -25,6 +25,8 @@ import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } fro
 import { advanceOnAcceptedOffer } from '@/lib/offerAutoAdvance';
 import { advanceApplicationOnAcceptedOffer } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
+import { raiseOfferEvent } from '@/lib/offerEvents';
+import { emit } from '@/lib/events/emit';
 import { logger } from '@/lib/logger';
 
 const baseSelect = {
@@ -253,14 +255,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       if (actionStr === 'decline') await notifyOfferDecided(id, 'DECLINED');
 
-      // `offer.accepted`, `offer.declined` and `requisition.filled` are
-      // REGISTERED in WEBHOOK_EVENTS (#1854) but deliberately not dispatched
-      // from here: `scripts/check-events.mjs` (#1697) caps direct callers of the
-      // webhook dispatcher at the ten that predate it, and an event has to leave
-      // through `emit()` (#1693), which is not in the tree yet. The same call as
-      // `meeting.cancelled` in /api/meetings/[id]. When the spine lands, raise
-      // them from here: `outcome.count` already says whether this acceptance
-      // took the requisition's last seat.
+      // On the bus (#1998), after the commit: one event per action, and the
+      // acceptance that took the requisition's last seat fills it.
+      const subject = { id, orgId: offer.orgId, requisitionId: offer.requisitionId, menteeId: offer.relation.menteeId };
+      const actor = { id: session.user.id, type: 'user' as const };
+      const eventName = ({ send: 'offer.sent', withdraw: 'offer.withdrawn', accept: 'offer.accepted', decline: 'offer.declined' } as const)[actionStr];
+      await raiseOfferEvent(eventName, subject, actor);
+      if (outcome.count.outcome === 'counted' && outcome.count.nowFilled) {
+        await emit('requisition.filled', { requisitionId: outcome.count.requisitionId, offerId: id }, { orgId: offer.orgId, actor });
+      }
 
       return NextResponse.json({ offer: updated });
     }

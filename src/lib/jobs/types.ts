@@ -116,6 +116,7 @@ export interface JobPayloadMap {
   'reminders.stageDeadline': Record<string, never>;
   'reminders.retentionReconsent': Record<string, never>;
   'matching.needMatchAlerts': Record<string, never>;
+  'mentorOffers.sweep': Record<string, never>;
   'meetings.reminders': Record<string, never>;
   'meetings.seriesReminders': Record<string, never>;
   'meetings.autoLog': Record<string, never>;
@@ -128,6 +129,8 @@ export interface JobPayloadMap {
   'email.healthCheck': Record<string, never>;
   'outbound.expireDrafts': Record<string, never>;
   'auth.trustedDevicePurge': Record<string, never>;
+  /// One health sample for the public /status page (#1604, src/lib/statusSample.ts).
+  'status.sample': Record<string, never>;
   'ai.artifactRetention': Record<string, never>;
   'newsletter.dispatch': Record<string, never>;
   'newsletter.queue': Record<string, never>;
@@ -183,6 +186,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'reminders.stageDeadline',
   'reminders.retentionReconsent',
   'matching.needMatchAlerts',
+  'mentorOffers.sweep',
   'meetings.reminders',
   'meetings.seriesReminders',
   'meetings.autoLog',
@@ -195,6 +199,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'email.healthCheck',
   'outbound.expireDrafts',
   'auth.trustedDevicePurge',
+  'status.sample',
   'ai.artifactRetention',
   'newsletter.dispatch',
   'newsletter.queue',

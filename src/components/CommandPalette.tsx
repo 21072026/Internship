@@ -6,7 +6,7 @@ import { Building2, Keyboard, Mail, MessageSquare, Search, Sun, User as UserIcon
 import { useT } from '@/i18n/client';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { ShortcutsSheet } from '@/components/ShortcutsSheet';
-import { navLinksForRole, visibleNavLinks, type NavRole } from '@/lib/navLinks';
+import { navAudienceAllows, navLinksForRole, visibleNavLinks, type NavRole } from '@/lib/navLinks';
 import type { VerticalCapability } from '@/lib/verticals';
 import { isMacPlatform, isTypingTarget, readSingleKeyShortcutsEnabled, writeSingleKeyShortcutsEnabled } from '@/lib/shortcuts';
 import { THEME_CYCLE, applyTheme, readStoredTheme } from '@/lib/theme';
@@ -57,11 +57,14 @@ export function CommandPalette({
   role,
   capabilities,
   superAdmin = false,
+  operator = false,
 }: {
   role: NavRole;
   capabilities?: readonly VerticalCapability[];
   /** Shows the super-admin-only destinations (#1575); off unless the layout says so. */
   superAdmin?: boolean;
+  /** Shows the operator destinations (#1607); off unless the layout says so. */
+  operator?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -204,8 +207,8 @@ export function CommandPalette({
     const matches = (label: string) => !needle || label.toLowerCase().includes(needle);
 
     const baseLinks = capabilities
-      ? visibleNavLinks(navLinksForRole(role), capabilities, { superAdmin })
-      : navLinksForRole(role).filter((l) => !l.superAdminOnly || superAdmin);
+      ? visibleNavLinks(navLinksForRole(role), capabilities, { superAdmin, operator })
+      : navLinksForRole(role).filter((l) => navAudienceAllows(l, { superAdmin, operator }));
     const links = baseLinks
       .map((l) => ({ link: l, label: navLabels[l.key] ?? l.key }))
       .filter(({ label }) => matches(label));
@@ -228,7 +231,7 @@ export function CommandPalette({
     ];
 
     return [...goTo, ...hits, ...actions.filter((a) => matches(a.label))];
-  }, [q, role, navLabels, users, companies, actions, t.search.company, capabilities, superAdmin]);
+  }, [q, role, navLabels, users, companies, actions, t.search.company, capabilities, superAdmin, operator]);
 
   // Reset the cursor whenever the candidate set changes shape, so the highlight
   // can never point past the end of the list.

@@ -13,6 +13,7 @@ export interface MenuItem {
 const ICONS: Record<string, string> = {
   dashboard: 'grid',
   board: 'albums',
+  automations: 'flash',
   companies: 'business',
   myCompanies: 'business',
   hiring: 'file-tray-full',
@@ -41,6 +42,7 @@ const ICONS: Record<string, string> = {
   insights: 'bulb',
   myInsights: 'analytics',
   newsletters: 'newspaper',
+  nudges: 'notifications',
   mentees: 'people',
   availability: 'time',
   calendar: 'calendar',
@@ -63,6 +65,7 @@ const ICONS: Record<string, string> = {
   apiExplorer: 'code-slash',
   operations: 'server',
   applications: 'document-text',
+  mentorOffers: 'hand-left',
   cohorts: 'layers',
   contributorTerms: 'document-lock',
   documents: 'document',

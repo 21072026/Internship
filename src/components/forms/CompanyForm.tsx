@@ -1,17 +1,19 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import Link from 'next/link';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { Button } from '@/components/ui/Button';
-import { Plus, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import { EnrichPanel } from '@/components/ai/EnrichPanel';
 import type { ClientDictionary } from '@/i18n/dictionaries';
+import { useVertical } from '@/lib/verticalClient';
+import { verticalHasCapability } from '@/lib/verticals';
 
 // Optional free-text field. Prisma returns `null` for empty nullable columns,
 // so when editing an existing company those nulls reach the form. Plain
@@ -58,19 +60,6 @@ function buildCompanySchema(t: ClientDictionary) {
     size: boundedOptional(TEXT_LIMITS.companySize),
     address: boundedOptional(TEXT_LIMITS.companyAddress),
     quota: z.coerce.number().int().min(0).nullish(),
-    needs: z.array(
-      z.object({
-        position: z
-          .string()
-          .min(1, 'Position is required')
-          .max(TEXT_LIMITS.companyNeedPosition, tooLong(TEXT_LIMITS.companyNeedPosition)),
-        count: z.coerce.number().int().min(1, 'Count must be at least 1'),
-        period: z
-          .string()
-          .min(1, 'Period is required')
-          .max(TEXT_LIMITS.companyNeedPeriod, tooLong(TEXT_LIMITS.companyNeedPeriod)),
-      })
-    ).optional(),
   });
 }
 
@@ -82,26 +71,29 @@ interface CompanyFormProps {
   onSubmit: (data: CompanyFormData) => Promise<void>;
   onCancel: () => void;
   isEditing?: boolean;
+  /** The company being edited — scopes the "manage open positions" link. */
+  companyId?: string;
 }
 
-export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: CompanyFormProps) {
+export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing, companyId }: CompanyFormProps) {
   const t = useT();
+  // The requisitions screen is a `placements` page; a vertical without the
+  // module (MARKETING) gets no positions section at all rather than a link
+  // into a closed page.
+  const hasPositions = verticalHasCapability(useVertical(), 'placements');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const companySchema = useMemo(() => buildCompanySchema(t), [t]);
 
   const {
     register,
-    control,
     handleSubmit,
     setValue,
     formState: { errors },
   } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
-    defaultValues: defaultValues || { needs: [] },
+    defaultValues: defaultValues || {},
   });
-
-  const { fields, append, remove } = useFieldArray({ control, name: 'needs' });
 
   const handleFormSubmit = handleSubmit(async (data) => {
     setLoading(true);
@@ -199,62 +191,23 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
         />
       </div>
 
-      {/* Company Needs */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <label className="block text-sm font-medium text-gray-700">{t.companyForm.needs}</label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => append({ position: '', count: 1, period: '' })}
+      {/* Open positions are Requisitions (#1875) — the old free-text "needs"
+          list this form used to write is retired; it is managed on the
+          requisitions screen, filtered to this company when editing. */}
+      {hasPositions && (
+      <div className="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-600" data-testid="company-form-positions">
+        <p className="font-medium text-gray-700">{t.companyForm.needs}</p>
+        <p className="mt-1">
+          {t.companyForm.positionsMoved}{' '}
+          <Link
+            href={companyId ? `/admin/requisitions?companyId=${encodeURIComponent(companyId)}` : '/admin/requisitions'}
+            className="text-blue-600 hover:underline"
           >
-            <Plus className="h-4 w-4" />
-            {t.companyForm.addNeed}
-          </Button>
-        </div>
-        <div className="space-y-3">
-          {fields.map((field, index) => (
-            <div key={field.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="flex-1">
-                <Input
-                  placeholder={t.companyForm.positionPlaceholder}
-                  {...register(`needs.${index}.position`)}
-                  error={errors.needs?.[index]?.position?.message}
-                />
-              </div>
-              <div className="w-20">
-                <Input
-                  type="number"
-                  placeholder={t.companyForm.countPlaceholder}
-                  min={1}
-                  {...register(`needs.${index}.count`)}
-                  error={errors.needs?.[index]?.count?.message}
-                />
-              </div>
-              <div className="flex-1">
-                <Input
-                  placeholder={t.companyForm.periodPlaceholder}
-                  {...register(`needs.${index}.period`)}
-                  error={errors.needs?.[index]?.period?.message}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(index)}
-                className="mt-2.5 text-red-400 hover:text-red-600 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-          {fields.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
-              {t.companyForm.noNeeds}
-            </p>
-          )}
-        </div>
+            {t.companyForm.managePositions}
+          </Link>
+        </p>
       </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>

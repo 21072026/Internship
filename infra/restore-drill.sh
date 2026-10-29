@@ -27,7 +27,17 @@
 #     second copy of real personal data sitting on disk.
 #
 # USAGE
-#   DATABASE_URL=mysql://user:pass@host:3306/db ./infra/restore-drill.sh [--env prod] [--target internship_restore_test] [--keep]
+#   DATABASE_URL=mysql://user:pass@host:3306/db ./infra/restore-drill.sh [--env prod] [--target internship_restore_test] [--keep] [--source local|offsite]
+#
+#   --source offsite (#2058): restore from the encrypted restic/R2 copy written
+#   by infra/server/backup-offsite.sh instead of the local dump directory —
+#   the copy that has to work on the day this host is gone. The newest
+#   snapshot's <env> dumps are fetched and decrypted into a 0700 scratch
+#   directory, which is deleted on exit together with the scratch database.
+#   Credentials come from $OFFSITE_ENV (default
+#   /opt/internship-crm/secrets/offsite.env), never the command line. The three
+#   guards above run BEFORE anything is fetched, and the reported RTO includes
+#   the fetch, because on the real day the fetch is part of the restore.
 #
 #   DATABASE_URL is used ONLY for the server address and credentials; the drill
 #   never reads from or writes to the database named in it.
@@ -37,6 +47,8 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/internship-crm}"
 ENV_NAME="prod"
 TARGET_DB="${TARGET_DB:-internship_restore_test}"
 KEEP=0
+SOURCE="local"
+OFFSITE_ENV="${OFFSITE_ENV:-/opt/internship-crm/secrets/offsite.env}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -44,6 +56,7 @@ while [ $# -gt 0 ]; do
     --target) TARGET_DB="${2:?--target needs a value}"; shift 2 ;;
     --dir) BACKUP_DIR="${2:?--dir needs a value}"; shift 2 ;;
     --keep) KEEP=1; shift ;;
+    --source) SOURCE="${2:?--source needs a value}"; shift 2 ;;
     *) echo "Unknown flag: $1" >&2; exit 2 ;;
   esac
 done
@@ -76,6 +89,8 @@ if [ "$TARGET_DB" = "$live_db" ]; then
   exit 1
 fi
 
+case "$SOURCE" in local|offsite) : ;; *) echo "Unknown --source: $SOURCE (local | offsite)" >&2; exit 2 ;; esac
+
 command -v mysql >/dev/null || { echo "ERROR: mysql client not found on PATH" >&2; exit 1; }
 
 # The app user is not necessarily allowed to CREATE DATABASE — on the Plesk box
@@ -90,6 +105,27 @@ _admin_sql() {
   fi
   mysql --protocol=socket -u root --batch --skip-column-names -e "$1" 2>/dev/null
 }
+
+FETCH_DIR=""
+fetch_s=0
+if [ "$SOURCE" = offsite ]; then
+  command -v restic >/dev/null || { echo "ERROR: restic not found on PATH" >&2; exit 1; }
+  [ -r "$OFFSITE_ENV" ] || { echo "ERROR: cannot read $OFFSITE_ENV (RESTIC_REPOSITORY, RESTIC_PASSWORD, AWS_* keys)" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  set -a; . "$OFFSITE_ENV"; set +a
+  : "${RESTIC_REPOSITORY:?missing from $OFFSITE_ENV}"
+  : "${RESTIC_PASSWORD:?missing from $OFFSITE_ENV}"
+  FETCH_DIR="$(mktemp -d /var/tmp/restore-drill-offsite.XXXXXX)"
+  chmod 0700 "$FETCH_DIR"
+  # Decrypted dumps are real personal data on disk: they go when we do.
+  trap 'rm -rf "$FETCH_DIR"' EXIT
+  log "Fetching the newest off-site snapshot's ${ENV_NAME} dumps (restic, decrypting locally)"
+  fetch_start=$(date -u +%s)
+  restic restore latest --host internship-crm --tag dumps \
+    --include "${BACKUP_DIR}/${ENV_NAME}-*.sql.gz" --target "$FETCH_DIR" >/dev/null
+  fetch_s=$(( $(date -u +%s) - fetch_start ))
+  BACKUP_DIR="${FETCH_DIR}${BACKUP_DIR}"
+fi
 
 dump="$(ls -1 "$BACKUP_DIR/${ENV_NAME}-"*.sql.gz 2>/dev/null | sort | tail -1 || true)"
 [ -n "$dump" ] || { echo "ERROR: no ${ENV_NAME} dump in ${BACKUP_DIR}" >&2; exit 1; }
@@ -114,7 +150,7 @@ cleanup() {
     echo "NOTE: ${TARGET_DB} kept (--keep). Drop it yourself — it holds real personal data."
   fi
 }
-trap cleanup EXIT
+trap 'cleanup; [ -z "$FETCH_DIR" ] || rm -rf "$FETCH_DIR"' EXIT
 
 log "Dump: ${dump##*/} (taken ${rpo_min} minutes ago)"
 log "Restoring into scratch database ${TARGET_DB} on ${db_host}:${db_port}"
@@ -135,7 +171,7 @@ if ! run_sql -e "$CREATE_SQL" 2>/dev/null; then
   _admin_sql "FLUSH PRIVILEGES;" >/dev/null || true
 fi
 gzip -dc "$dump" | MYSQL_PWD="$db_pass" mysql -h "$db_host" -P "$db_port" -u "$db_user" "$TARGET_DB"
-rto_s=$(( $(date -u +%s) - start ))
+rto_s=$(( $(date -u +%s) - start + fetch_s ))
 
 # ── Verify. Row counts, never row CONTENTS: the point is that the history
 #    survived, and printing it would put personal data in a CI log. ──────────
@@ -161,17 +197,17 @@ done
 
 log "Drill result"
 printf 'RPO (age of dump used): %s minutes (%s hours)\n' "$rpo_min" "$((rpo_min / 60))"
-printf 'RTO (restore duration): %s seconds\n' "$rto_s"
+printf 'RTO (restore duration): %s seconds (source: %s, fetch %s s)\n' "$rto_s" "$SOURCE" "$fetch_s"
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
-    echo "### Restore drill — ${ENV_NAME}"
+    echo "### Restore drill — ${ENV_NAME} (source: ${SOURCE})"
     echo ""
     echo "| | |"
     echo "|---|---|"
     echo "| Dump | \`${dump##*/}\` |"
     echo "| RPO (dump age) | ${rpo_min} min |"
-    echo "| RTO (restore) | ${rto_s} s |"
+    echo "| RTO (fetch + restore) | ${rto_s} s (fetch ${fetch_s} s) |"
     echo "| Tables restored | ${tables} |"
     echo ""
     echo "Record these numbers in \`docs/disaster-recovery.md\` → Drill log."

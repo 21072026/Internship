@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -51,12 +52,22 @@ interface Drift {
   expected: { kind: 'TIER' | 'PERCENT'; amountMinor: number } | null;
 }
 
+// `?status=` opens a filter directly (the overview's shortcuts, #3173).
 export default function AffiliateCommissionsPage() {
+  return (
+    <Suspense fallback={<SkeletonRows rows={5} />}>
+      <AffiliateCommissions />
+    </Suspense>
+  );
+}
+
+function AffiliateCommissions() {
   const t = useT();
   const L = t.affiliateCommissions;
   const locale = useLocale();
   const toast = useToast();
-  const [status, setStatus] = useState<Status>('PENDING');
+  const asked = useSearchParams().get('status');
+  const [status, setStatus] = useState<Status>(() => STATUSES.find((s) => s === asked) ?? 'PENDING');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Data | null>(null);
   const [drift, setDrift] = useState<Drift[] | null>(null);

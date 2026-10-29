@@ -21,6 +21,11 @@ test('internship: every role gets its full web sidebar', () => {
   // vertical's outbox, #2960) — INTERNSHIP carries every module.
   assert.deepEqual(
     hrefs(appNavLinks('ADMIN', INTERNSHIP)),
+    hrefs(ADMIN_NAV_LINKS.filter((l) => internshipLink(l) && !l.superAdminOnly && !l.operatorOnly)),
+  );
+  // The operator destinations (#1607) for the default organization's ADMIN too.
+  assert.deepEqual(
+    hrefs(appNavLinks('ADMIN', INTERNSHIP, { operator: true })),
     hrefs(ADMIN_NAV_LINKS.filter((l) => internshipLink(l) && !l.superAdminOnly)),
   );
   // The deployment-wide destinations (#1575) only for a super admin.

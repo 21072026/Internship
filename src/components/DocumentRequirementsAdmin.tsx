@@ -130,9 +130,9 @@ export function DocumentRequirementsAdmin() {
       <CardHeader><CardTitle>{d.configurationTitle}</CardTitle></CardHeader>
       <form onSubmit={save} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
         <Input label={d.key} required value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
-        <Input label={d.labelEn} required value={form.en} onChange={(e) => setForm({ ...form, en: e.target.value })} />
-        <Input label={d.labelTr} required value={form.tr} onChange={(e) => setForm({ ...form, tr: e.target.value })} />
-        <Input label={d.labelDe} required value={form.de} onChange={(e) => setForm({ ...form, de: e.target.value })} />
+        <Input label={d.labelEn} lang="en" required value={form.en} onChange={(e) => setForm({ ...form, en: e.target.value })} />
+        <Input label={d.labelTr} lang="tr" required value={form.tr} onChange={(e) => setForm({ ...form, tr: e.target.value })} />
+        <Input label={d.labelDe} lang="de" required value={form.de} onChange={(e) => setForm({ ...form, de: e.target.value })} />
         <label className="text-sm text-gray-700 dark:text-gray-300">{d.stage}<select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })} className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"><option value="">{d.allStages}</option>{stages.map((stage) => <option key={stage.key} value={stage.key}>{stage.label}</option>)}</select></label>
         <label className="text-sm text-gray-700 dark:text-gray-300">{d.role}<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"><option value="">{d.allRoles}</option>{ROLES.map((role) => <option key={role} value={role}>{d.roles[role]}</option>)}</select></label>
         <Input label={d.order} type="number" min={0} value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} />

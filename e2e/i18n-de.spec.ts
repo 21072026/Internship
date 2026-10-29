@@ -26,7 +26,7 @@ test('German is available in the switcher and a saved preference is applied at s
 
     // A DE option is offered by the language switcher (inside the account menu).
     await page.locator('button[aria-haspopup="menu"]').click();
-    await expect(page.getByRole('button', { name: 'de', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'de Deutsch', exact: true })).toBeVisible();
   } finally {
     await cleanupByEmail(email);
   }

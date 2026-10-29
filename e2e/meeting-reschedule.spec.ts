@@ -60,7 +60,9 @@ async function seedMeeting(opts: {
   });
 }
 
-test('a mentor moves a meeting and then calls it off — a mentee may do neither', async ({ page }) => {
+// @smoke (#1972): move → cancel is the story's critical path, and "a mentee may
+// do neither" is an authorization boundary — both belong in the PR gate.
+test('a mentor moves a meeting and then calls it off — a mentee may do neither', { tag: '@smoke' }, async ({ page }) => {
   const { mentorEmail, menteeEmail, mentor, relation } = await seedPair('resched');
   const meeting = await seedMeeting({
     relationId: relation.id,

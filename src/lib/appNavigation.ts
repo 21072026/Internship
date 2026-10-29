@@ -5,6 +5,7 @@ import {
   PORTAL_NAV_LINKS,
   SALES_NAV_LINKS,
   visibleNavLinks,
+  type NavAudience,
   type NavLink,
 } from '@/lib/navLinks';
 import { hasSalesSurface } from '@/lib/salesSurface';
@@ -27,7 +28,7 @@ import type { VerticalCapability } from '@/lib/verticals';
 export function appNavLinks(
   role: string | null | undefined,
   capabilities: readonly VerticalCapability[],
-  opts: { superAdmin?: boolean } = {},
+  opts: NavAudience = {},
 ): NavLink[] {
   const links =
     role === 'ADMIN'

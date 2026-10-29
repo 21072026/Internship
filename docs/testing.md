@@ -590,6 +590,37 @@ threshold — the spec only proves the layout survives it.
 VPAT rows (#2037) can cite this section for WCAG 2.3.3 (Animation from Interactions),
 1.4.11 (Non-text Contrast) and 2.4.7 (Focus Visible) under forced colors.
 
+## Flaky tests: quarantine, history, fix-or-delete (#1610)
+
+A red run means something, or every gate in this file is worth nothing. The standing advice
+used to be "re-run it", which teaches everybody to read red as noise. Instead:
+
+- **Quarantine explicitly.** Tag the test `@quarantine` and put the note directly above it:
+
+  ```ts
+  // quarantine: #1234 until 2026-11-27 — races the session poll on a cold server
+  test('…', { tag: '@quarantine' }, async ({ page }) => { … });
+  ```
+
+  `playwright.config.ts` leaves every `@quarantine` test out of every gating run (the `@smoke`
+  PR gate and the scheduled shards), in one place, so no workflow can forget a flag. The
+  scheduled full suite runs the quarantined set again in a **non-gating** step
+  (`E2E_QUARANTINE=only npx playwright test --pass-with-no-tests`). A quarantined test still
+  runs and still reports, but it no longer decides the colour of the run.
+- **On a deadline.** `npm run check:quarantine` (CI) fails a quarantine with no issue link, an
+  expiry that has passed, or one more than **30 days** out. At the expiry the test is **fixed**
+  (and the tag removed) or **deleted**. Moving the date to get past this check breaks the rule.
+- **A green gate that needed a re-run is a bug report, not a pass.** Playwright retries once in
+  CI (`retries: 1`). Do not raise that: retries hide flakes. The retry is recorded instead.
+- **Reliability history.** After every scheduled full run, `scripts/e2e-reliability.mjs record`
+  appends one line per run to `history.jsonl` on the data-only `test-history` branch: every
+  test's status (first-try pass, flaky = passed on the retry, fail, skip), retries and duration,
+  with quarantined tests marked. It keeps the last 200 runs. It is a branch because artifacts
+  expire after 7 days and the cache gets evicted. `… report` reads it back: first-try pass
+  rate per test over the last 40 runs, least reliable first. The top 10 go into the job summary,
+  the `ci-alert` issue and the failure e-mail. Locally:
+  `git fetch origin test-history && git show origin/test-history:history.jsonl > /tmp/h.jsonl && npm run test:e2e:reliability -- --history /tmp/h.jsonl`.
+
 ## Scheduled full E2E summary email
 
 The scheduled full suite (`e2e-full.yml`, 4×/day, 4-way sharded) sends a **Turkish
@@ -858,6 +889,32 @@ the AT and browser versions, the date and the tester; file every finding as its 
 issue and link it from the findings table. If you did not actually run it, say so in
 the document — a fabricated manual-testing record is worse than an empty one.
 
+## Dark-mode guard (#1614)
+
+`npm run check:dark-mode` (`scripts/check-dark-mode.mjs`, CI) reads every `className` attribute under
+`src/app` and `src/components` with the TypeScript parser and fails on a **light background utility
+the `globals.css` retint layer does not cover, with no `dark:` background on the same element**.
+
+- *Light* = `bg-white`, the pale neutrals (`gray|slate|zinc|neutral|stone` 50–300) and every
+  `*-50` accent wash, with any `hover:`/`focus:` variant and an opacity of 50 % or more.
+  `bg-*-100` accent chips are left alone on purpose (they stay light in both themes).
+- *Covered* is read from `globals.css` (`html.dark .<utility>` selectors, compounds excluded), so
+  adding a retint rule there clears its findings without touching the script.
+- *Answered* = any `dark:…bg-…` utility on the element, a `dark:!bg-…` pin included — that pin is
+  how an element deliberately keeps a light colour.
+
+Fixing a finding: give the element a dark background, switch to a covered utility, or add a retint
+rule. **Before adding a flat `html.dark .bg-…` rule, list the elements that already pair that
+utility with their own `dark:bg-…`**: the flat rule outranks them (specificity, see the gray-400
+note in `globals.css`), so it must land on the colour they already chose — `bg-gray-200` was
+retinted to gray-700 for exactly that reason, `bg-gray-300` was not.
+
+It is a ratchet like `check:hardcoded-strings` (`scripts/dark-mode-baseline.json`, shrink-only),
+started at **zero** findings. The rule is unit-tested in `scripts/test/check-dark-mode.test.mjs`.
+It is a floor: classes assembled outside a `className` attribute are invisible to it, and text
+contrast is the axe scan's and `check:contrast`'s job. Screenshot baselines (#1614, part 2) are the
+net for everything else.
+
 ## Forbidden-terms guard (#2919)
 
 Some names must not appear on the visible surface of this repository. That covers
@@ -914,7 +971,7 @@ To run it locally, put the list in the environment and choose a mode:
 
 ## Ideas for further test types
 
-- **Contract / API tests** for `/api/v1/*` against the published OpenAPI spec.
+- ~~**Contract / API tests**~~ — built in #1611: see [`docs/public-api.md` § Published contracts](public-api.md#published-contracts-1611).
 - **Visual regression** (Playwright screenshots) to catch unintended UI drift.
 - **Dependency/SCA scanning** (`npm audit`, Dependabot) on a schedule.
 - **Load-with-auth** scenarios — both load tests are anonymous-GET-only by design. The
