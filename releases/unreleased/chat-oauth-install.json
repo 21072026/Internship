@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Slack / Teams app install (#1935):** `GET /api/integrations/chat/<slack|teams>/connect` (`org.integrations.write` on the route; `?chat=unavailable` without credentials or `CHAT_APPS_ENABLED=1`) redirects to Slack's `oauth/v2/authorize` (bot scopes `chat:write`, `im:write`, `users:read`, `users:read.email`, `commands`) or Entra ID admin consent, with a state signed over platform + org + user + 10 minutes (`src/lib/chat/oauthState.ts`). The callback exchanges the Slack code server-side (`oauth.v2.access`) into `recordChatInstall()` (sealed tokens, `CHAT_INSTALL` audit; another org's team → `?chat=conflict`); Teams consent records the tenant with no workspace token. `POST /api/integrations/chat/slack/uninstall` takes Slack's signed `app_uninstalled` / `tokens_revoked` (HMAC over the raw body, ±5 min; `url_verification` answered), switching the workspace off and clearing its tokens (`CHAT_PLATFORM_UNINSTALL`). Rotating Slack tokens are refreshed before each send (`src/lib/chat/tokenRefresh.ts`). The console offers \"Add to Slack / Teams\" and shows the callback outcome. e2e: `e2e/support/slack-mock.mjs` + `e2e/chat-install.spec.ts`.",
+  "notes": {
+    "en": ["Admins can now add the Slack or Microsoft Teams app to their organisation from the integrations page, and an app removed on Slack's side is switched off here automatically."],
+    "tr": ["Yöneticiler artık Slack veya Microsoft Teams uygulamasını entegrasyonlar sayfasından organizasyonlarına ekleyebiliyor; Slack tarafında kaldırılan uygulama burada otomatik olarak kapatılıyor."],
+    "de": ["Admins können die Slack- oder Microsoft-Teams-App jetzt über die Integrationsseite zu ihrer Organisation hinzufügen, und eine auf Slack-Seite entfernte App wird hier automatisch abgeschaltet."]
+  }
+}

@@ -104,6 +104,14 @@ export function ChatAppsCard() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ChatWorkspaceView | null>(null);
+  // The install callback (#1935) lands here with ?chat=<outcome>. Read once on
+  // mount from location (no Suspense boundary needed for a one-off banner).
+  const [banner, setBanner] = useState<keyof typeof c.banner | null>(null);
+  const banners = c.banner;
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('chat');
+    if (v && v in banners) setBanner(v as keyof typeof banners);
+  }, [banners]);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/integrations/chat/status');
@@ -158,6 +166,29 @@ export function ChatAppsCard() {
               {c.deliveryOff}
             </Badge>
           )}
+        </div>
+      )}
+      {banner && (
+        <p role="status" className="mt-3 text-sm text-gray-700 dark:text-gray-200" data-testid={`chat-banner-${banner}`}>
+          {c.banner[banner]}
+        </p>
+      )}
+      {data && data.deliveryEnabled && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.platforms
+            .filter((p) => p.configured)
+            .map((p) => (
+              // A plain link: the route answers with a redirect to the platform's
+              // consent screen, and decides on the server who may start it.
+              <a
+                key={p.platform}
+                href={`/api/integrations/chat/${p.platform === 'SLACK' ? 'slack' : 'teams'}/connect`}
+                className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                data-testid={`chat-install-${p.platform}`}
+              >
+                {interpolate(c.install, { platform: PLATFORM_LABEL[p.platform] })}
+              </a>
+            ))}
         </div>
       )}
       {error && (
