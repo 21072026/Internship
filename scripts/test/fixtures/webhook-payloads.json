@@ -1,0 +1,481 @@
+{
+  "application.created@1": {
+    "type": "object",
+    "properties": {
+      "mentorId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "menteeName": {
+        "type": "string"
+      },
+      "email": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "mentorId",
+      "menteeName",
+      "email"
+    ],
+    "additionalProperties": false
+  },
+  "pipeline.stage_change@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "relationId",
+      "from",
+      "to"
+    ],
+    "additionalProperties": false
+  },
+  "mentorship.created@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "mentorId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "menteeId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "companyId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "relationId",
+      "mentorId",
+      "menteeId",
+      "companyId"
+    ],
+    "additionalProperties": false
+  },
+  "interaction.logged@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "type": "string"
+      },
+      "date": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "autoLogged": {
+        "const": true
+      }
+    },
+    "required": [
+      "relationId",
+      "type",
+      "date"
+    ],
+    "additionalProperties": false
+  },
+  "evaluation.added@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "type": "string"
+      },
+      "authorId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "relationId",
+      "type",
+      "authorId"
+    ],
+    "additionalProperties": false
+  },
+  "meeting.scheduled@1": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "scheduledAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "instant": {
+        "const": true
+      },
+      "seriesId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "title",
+      "scheduledAt",
+      "count"
+    ],
+    "additionalProperties": false
+  },
+  "meeting.rescheduled@1": {
+    "type": "object",
+    "properties": {
+      "meetingId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "scheduledAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "previousScheduledAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "meetingId",
+      "scheduledAt",
+      "previousScheduledAt"
+    ],
+    "additionalProperties": false
+  },
+  "meeting.cancelled@1": {
+    "type": "object",
+    "properties": {
+      "meetingId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "scheduledAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "count": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      }
+    },
+    "required": [
+      "meetingId",
+      "scheduledAt",
+      "count"
+    ],
+    "additionalProperties": false
+  },
+  "interview_panel.completed@1": {
+    "type": "object",
+    "properties": {
+      "panelId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "subjectId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "panelId",
+      "subjectId"
+    ],
+    "additionalProperties": false
+  },
+  "interview_panel.outcome@1": {
+    "type": "object",
+    "properties": {
+      "panelId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "applicationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "ADVANCE",
+          "REJECT",
+          "OFFER"
+        ]
+      }
+    },
+    "required": [
+      "panelId",
+      "applicationId",
+      "outcome"
+    ],
+    "additionalProperties": false
+  },
+  "interview_request.scheduled@1": {
+    "type": "object",
+    "properties": {
+      "requestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "meetingId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "scheduledAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "panelId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "requestId",
+      "meetingId",
+      "scheduledAt",
+      "panelId"
+    ],
+    "additionalProperties": false
+  },
+  "interview_request.cancelled@1": {
+    "type": "object",
+    "properties": {
+      "requestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "meetingId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "requestId",
+      "meetingId"
+    ],
+    "additionalProperties": false
+  },
+  "offer.accepted@1": {
+    "type": "object",
+    "properties": {
+      "offerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "applicationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "offerId",
+      "applicationId",
+      "requisitionId"
+    ],
+    "additionalProperties": false
+  },
+  "offer.declined@1": {
+    "type": "object",
+    "properties": {
+      "offerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "applicationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "offerId",
+      "applicationId",
+      "requisitionId"
+    ],
+    "additionalProperties": false
+  },
+  "requisition.filled@1": {
+    "type": "object",
+    "properties": {
+      "requisitionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "offerId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "requisitionId",
+      "offerId"
+    ],
+    "additionalProperties": false
+  },
+  "mentorship.lifecycle_changed@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      },
+      "reasonCode": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "relationId",
+      "from",
+      "to",
+      "reasonCode"
+    ],
+    "additionalProperties": false
+  },
+  "application.stage_changed@1": {
+    "type": "object",
+    "properties": {
+      "applicationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "applicationId",
+      "requisitionId",
+      "from",
+      "to"
+    ],
+    "additionalProperties": false
+  },
+  "mentorship.transferred@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "previousRelationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "menteeId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "fromMentorId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "toMentorId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "corrected",
+          "transferred"
+        ]
+      },
+      "reasonCode": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "relationId",
+      "previousRelationId",
+      "menteeId",
+      "fromMentorId",
+      "toMentorId",
+      "mode",
+      "reasonCode"
+    ],
+    "additionalProperties": false
+  }
+}
