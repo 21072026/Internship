@@ -141,6 +141,8 @@ const DECISIONS = new Map([
   ['Organization.ssoLogoutUrl', CONFIG],
   ['Organization.ssoSpKey', CONFIG],
   ['Organization.ssoSpCert', CONFIG],
+  ['Organization.ssoClientSecretEnc', CONFIG],
+  ['Organization.ssoDiscoveryUrl', CONFIG],
   ['NotificationTemplate.body', CONFIG],
   ['ContributorTerms.body', CONFIG],
   ['MentoringAgreement.body', CONFIG],
