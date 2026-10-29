@@ -5985,6 +5985,10 @@ const en = {
     },
   },
   orgLifecycle: {
+    exportTitle: 'Export your organization',
+    exportHint: 'Download everything your organization holds in this application as one JSON file.',
+    exportDownload: 'Download full export (JSON)',
+    exportNote: 'Every record of the organization; passwords, keys, tokens and other credentials are left out and listed in the file. The download is recorded in the audit log.',
     title: 'Rename or archive an organization',
     hint: 'Rename a tenant, change its slug, or archive it. Archiving stops sign-in and mail for its people and keeps every record; it can be undone.',
     select: 'Organization',
@@ -16313,6 +16317,10 @@ const tr: Dict = {
     },
   },
   orgLifecycle: {
+    exportTitle: 'Organizasyonunu dışa aktar',
+    exportHint: 'Organizasyonunun bu uygulamadaki tüm verisini tek bir JSON dosyası olarak indir.',
+    exportDownload: 'Tam dışa aktarımı indir (JSON)',
+    exportNote: 'Organizasyonun tüm kayıtları; parolalar, anahtarlar, token’lar ve diğer kimlik bilgileri dahil edilmez ve dosyada listelenir. İndirme denetim kaydına yazılır.',
     title: 'Organizasyonu yeniden adlandır veya arşivle',
     hint: 'Bir kiracının adını veya slug’ını değiştir ya da onu arşivle. Arşivleme, kişilerinin girişini ve e-postalarını durdurur, hiçbir kaydı silmez; geri alınabilir.',
     select: 'Organizasyon',
@@ -26561,6 +26569,10 @@ const de: Dict = {
     },
   },
   orgLifecycle: {
+    exportTitle: 'Organisation exportieren',
+    exportHint: 'Lade alles, was deine Organisation in dieser Anwendung speichert, als eine JSON-Datei herunter.',
+    exportDownload: 'Vollständigen Export herunterladen (JSON)',
+    exportNote: 'Alle Datensätze der Organisation; Passwörter, Schlüssel, Tokens und andere Zugangsdaten sind ausgenommen und in der Datei aufgeführt. Der Download wird im Audit-Log festgehalten.',
     title: 'Organisation umbenennen oder archivieren',
     hint: 'Benenne einen Mandanten um, ändere seinen Slug oder archiviere ihn. Archivieren stoppt Anmeldung und E-Mails für seine Personen und behält alle Daten; es lässt sich rückgängig machen.',
     select: 'Organisation',

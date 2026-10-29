@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 
-// Tenant lifecycle (#1580, docs/tenant-lifecycle.md): rename / re-slug and
-// archive / unarchive one organization. Super admin only — the page mounts it
-// for a super admin, and the routes refuse everybody else regardless.
+// Tenant lifecycle (#1580, docs/tenant-lifecycle.md): rename / re-slug,
+// archive / unarchive and export one organization. Rename and archive are the
+// super admin's; the export is also the tenant's own ORG_ADMIN's (#1584). The
+// routes decide — this only hides what the account cannot use.
 
 export interface LifecycleOrgRow {
   id: string;
@@ -18,7 +19,16 @@ export interface LifecycleOrgRow {
   archivedAt: string | null;
 }
 
-export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[]; onChanged: () => Promise<void> | void }) {
+export function OrgLifecycleCard({
+  orgs,
+  onChanged,
+  superAdmin,
+}: {
+  orgs: LifecycleOrgRow[];
+  onChanged: () => Promise<void> | void;
+  /** A tenant ORG_ADMIN gets the export of its own org only (the route decides; this hides the rest). */
+  superAdmin: boolean;
+}) {
   const t = useT();
   const L = t.orgLifecycle;
   const [orgId, setOrgId] = useState('');
@@ -87,8 +97,8 @@ export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[];
 
   return (
     <Card className="mb-6 max-w-2xl" data-testid="org-lifecycle-card">
-      <CardHeader><CardTitle>{L.title}</CardTitle></CardHeader>
-      <p className="text-sm text-gray-500 mb-3">{L.hint}</p>
+      <CardHeader><CardTitle>{superAdmin ? L.title : L.exportTitle}</CardTitle></CardHeader>
+      <p className="text-sm text-gray-500 mb-3">{superAdmin ? L.hint : L.exportHint}</p>
       <div className="mb-3">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5" htmlFor="org-lifecycle-select">
           {L.select}
@@ -108,6 +118,21 @@ export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[];
       </div>
 
       {org && (
+        <div className="mb-4">
+          {/* A plain download: the route streams the file with its own name. */}
+          <a
+            href={`/api/admin/organizations/${org.id}/export`}
+            download
+            data-testid="org-lifecycle-export"
+            className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            {L.exportDownload}
+          </a>
+          <p className="mt-1 text-xs text-gray-500">{L.exportNote}</p>
+        </div>
+      )}
+
+      {org && superAdmin && (
         <div className="space-y-4">
           <form onSubmit={rename} className="space-y-3">
             <div className="flex flex-wrap gap-3">
