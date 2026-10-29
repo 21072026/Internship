@@ -106,6 +106,9 @@ export async function writeContactPermission(input: PermissionWrite, client: Cli
     reason: input.reason?.trim() || null,
     revokedAt: null,
     revokedVia: null,
+    // A basis written now is a new proof, about whoever this address is today:
+    // an erased person's retention clock (#2098) does not carry over to it.
+    subjectErasedAt: null,
   };
   await client.contactPermission.upsert({
     where: key,
@@ -279,4 +282,34 @@ export async function adminSetContactPermission(input: {
     ...(input.request ? { request: input.request } : {}),
   });
   return { kind: 'ok' };
+}
+
+// ── After an erasure (#2098) ─────────────────────────────────────────────────
+//
+// An erasure keeps the person's proof as UWG § 7 evidence and starts its clock;
+// the `contactPermissionProof` retention entry ends it three years after the end
+// of the erasure's calendar year (src/lib/erasureRetentionRule.ts). Neither is a
+// basis write, so neither goes through writeContactPermission() — but both live
+// here, because this file is the only one that touches the table.
+
+/**
+ * Stamp `subjectErasedAt` on the proofs `where` matches. Returns the op, so the
+ * erasure runs it inside its own $transaction, before the address it matches
+ * on is scrubbed. The first erasure's date wins: a re-run does not restart it.
+ */
+export function stampContactProofsErased(where: Prisma.ContactPermissionWhereInput, now: Date = new Date()) {
+  return prisma.contactPermission.updateMany({
+    where: { AND: [where, { subjectErasedAt: null }] },
+    data: { subjectErasedAt: now },
+  });
+}
+
+/**
+ * Delete the expired proofs among `ids` — the retention sweep's batch. The
+ * window is re-stated: a basis written meanwhile clears the stamp (it is a new
+ * person's proof, see writeContactPermission), and that row must not go.
+ */
+export async function deleteExpiredContactProofs(ids: string[], cutoff: Date): Promise<number> {
+  return (await prisma.contactPermission.deleteMany({ where: { id: { in: ids }, subjectErasedAt: { lt: cutoff } } }))
+    .count;
 }

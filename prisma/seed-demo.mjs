@@ -50,8 +50,8 @@ const MENTEES = [
 ];
 
 const COMPANIES = [
-  { name: 'Demo Yazılım A.Ş.', industry: 'Software', size: '50-100', needs: [{ position: 'Frontend Developer', count: 2, period: '2026 Summer' }, { position: 'Backend Developer', count: 1, period: '2026 Summer' }] },
-  { name: 'Demo Data GmbH', industry: 'Data & Analytics', size: '10-50', needs: [{ position: 'Data Engineer', count: 1, period: '2026 Fall' }] },
+  { name: 'Demo Yazılım A.Ş.', industry: 'Software', size: '50-100' },
+  { name: 'Demo Data GmbH', industry: 'Data & Analytics', size: '10-50' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -266,13 +266,14 @@ async function main() {
     }));
   }
 
-  // Companies (+ needs + one read-only company login each)
+  // Companies (+ one read-only company login each). Open positions are the
+  // requisitions seeded below — nothing writes CompanyNeed since #1875.
   const companies = [];
   for (const c of COMPANIES) {
     let company = await prisma.company.findFirst({ where: { name: c.name } });
     if (!company) {
       company = await prisma.company.create({
-        data: { name: c.name, industry: c.industry, size: c.size, needs: { create: c.needs } },
+        data: { name: c.name, industry: c.industry, size: c.size },
       });
       console.log(`created company: ${c.name}`);
     }

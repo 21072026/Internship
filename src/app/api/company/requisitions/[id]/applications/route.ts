@@ -10,6 +10,10 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { APPLICATION_STAGES, type ApplicationStage } from '@/lib/applications';
 import { visibleApplicationsWhere } from '@/lib/applicationStage';
 import { answerPath, answeredCount, columnsToLoad, matchedSkills, parseBoardFilters } from '@/lib/requisitionBoard';
+import { getServerDictionary } from '@/i18n/server';
+import { applicantFits } from '@/lib/requisitionFitApplicants';
+import { ruleFitReason } from '@/lib/matching/fitReason';
+import { recordRequisitionFits } from '@/lib/requisitionFitStore';
 
 // GET — one requisition's applicant board (#1838): every application to it,
 // grouped by stage, with a per-stage count and DB-side pagination per column.
@@ -107,6 +111,37 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           };
         }),
       );
+
+      // The written fit reason per applicant (#2042). A SENTENCE only — the
+      // score, weights and breakdown are the operator's view and never reach
+      // this response. The deterministic sentence is always there; an AI one
+      // (written on request through /fit-reasons, the company's AI pack) is
+      // shown instead while it was written for the same numbers.
+      const shownIds = Object.values(columns).flatMap((c) => (c?.items ?? []) as { mentee: { id: string } }[]).map((i) => i.mentee.id);
+      if (shownIds.length > 0) {
+        const { t, locale } = await getServerDictionary();
+        const { role, fits, label } = await applicantFits(orgId, requisition, shownIds, locale);
+        await recordRequisitionFits(orgId, requisition.id, Array.from(fits, ([menteeId, fit]) => ({ menteeId, fit })));
+        const stored = new Map(
+          (
+            await prisma.requisitionFit.findMany({
+              where: { orgId, requisitionId: requisition.id, menteeId: { in: shownIds }, reasonSource: 'AI' },
+              select: { menteeId: true, reason: true, score: true, ruleSetVersion: true },
+            })
+          ).map((r) => [r.menteeId, r])
+        );
+        for (const column of Object.values(columns)) {
+          for (const item of (column?.items ?? []) as { mentee: { id: string }; fitReason?: { text: string; source: 'AI' | 'RULE' } }[]) {
+            const fit = fits.get(item.mentee.id);
+            if (!fit) continue;
+            const ai = stored.get(item.mentee.id);
+            item.fitReason =
+              ai?.reason && ai.score === fit.score && ai.ruleSetVersion === fit.ruleSetVersion
+                ? { text: ai.reason, source: 'AI' }
+                : { text: ruleFitReason(fit, role, label, t.requisitionPipeline.fit), source: 'RULE' };
+          }
+        }
+      }
 
       return NextResponse.json({ requisition, counts, columns });
     });

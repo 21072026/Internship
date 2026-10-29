@@ -2487,6 +2487,62 @@ export async function sendMeetingCancelledEmail({
   });
 }
 
+// Group sessions (#1856): a waitlist promotion, or the session called off.
+// Category `meeting-invite` on purpose — it is an invitation to a time, the
+// same opt-out a person already chose for meeting invitations, and it reuses
+// that category's outbound-approval and lane entries instead of adding one.
+export async function sendGroupEventEmail({
+  to,
+  fullName,
+  kind,
+  title,
+  startsAt,
+  timeZone,
+  path,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  kind: 'promoted' | 'cancelled';
+  title: string;
+  startsAt: Date;
+  timeZone?: string | null;
+  /** The session's in-app page for this recipient's role (eventLinkFor). */
+  path: string;
+  userId: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const E = D.notifications.groupEventEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const subject = (kind === 'promoted' ? E.promotedSubject : E.cancelledSubject).replace('{title}', title);
+  const when = formatInTimeZone(startsAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved));
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(kind === 'promoted' ? E.promotedBody : E.cancelledBody)}</p>
+        <p><strong>${esc(E.when)}</strong> ${kind === 'cancelled' ? `<s>${when}</s>` : when}</p>
+        ${kind === 'promoted' ? `<p><a href="${esc(`${base}${path}`)}">${esc(E.open)}</a></p>` : ''}
+        ${timeZoneNote(timeZone, resolved, base)}
+      </div>
+    `,
+  });
+}
+
 // The guest siblings — see sendMeetingGuestInviteEmail for why they are separate
 // functions and not a flag: no saved zone (the organizer's clock, named), no
 // /account link, and the mail says who changed it.
@@ -3133,7 +3189,7 @@ export async function sendRematchRequestedEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
-  const R = getDictionary(resolved).notifications.rematchRequestedEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.rematchRequestedEmail;
   await sendEmail({
     to,
     userId,
@@ -3173,7 +3229,7 @@ export async function sendRematchMentorNoticeEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
-  const R = getDictionary(resolved).notifications.rematchMentorEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.rematchMentorEmail;
   await sendEmail({
     to,
     userId,
@@ -3390,7 +3446,7 @@ export async function sendOfferSentEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const loc = resolveLocale(locale);
-  const M = getDictionary(loc).offerEmail;
+  const M = (await emailDictionary(loc, orgId)).offerEmail;
   const start = formatOfferDate(startDate, loc);
   const expires = formatOfferDate(expiresAt, loc);
   await sendEmail({
@@ -3504,7 +3560,7 @@ export async function sendOfferDecisionEmail({
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
-  const M = getDictionary(resolveLocale(locale)).offerEmail;
+  const M = (await emailDictionary(resolveLocale(locale), orgId)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
   await sendEmail({
     to,
@@ -4736,6 +4792,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
   // organization (a Friday run reminds people of every tenant). Read before the
   // claims below, so a failed read leaves nobody claimed-but-unmailed.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(toRemind.map((relation) => relation.mentee.orgId));
   const claims = toRemind.map((relation) => ({ id: randomUUID(), relationId: relation.id, recipientId: relation.mentee.id, weekStart }));
   if (claims.length > 0) await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
@@ -4748,7 +4805,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
     remindedRelationIds.push(relation.id);
     const preferredLanguage = relation.mentee.preferredLanguage ?? undefined;
     const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-    const copy = getDictionary(locale).weeklyReports;
+    const copy = (await dictionaryOf(locale, relation.mentee.orgId)).weeklyReports;
     const formattedWeek = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(weekStart);
     if (notificationCategoryAllowed(relation.mentee, 'weeklyReports')) {
       await notify(relation.mentee.id, 'weekly_report_reminder.due', {}, '/portal');
@@ -4853,6 +4910,7 @@ export async function sendDormantCheckIns(now = new Date()) {
   // batch before the first nudge is claimed (a claim spends one of the person's
   // two-ever budget, so nothing may fail between claiming and having the link).
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(relations.map((relation) => relation.mentee.orgId));
 
   // THE CAP IS A PROMISE TO A PERSON, AND IT IS COUNTED PER PERSON (#2287).
@@ -4936,7 +4994,7 @@ export async function sendDormantCheckIns(now = new Date()) {
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
-    const copy = getDictionary(locale).dormantCheckIn;
+    const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
     // "Final" is the person's last nudge, not the relation's.
     const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
@@ -5030,6 +5088,7 @@ export async function sendMeetingReminders() {
   // from their own `orgId` (one batched read for the whole tick, before any
   // meeting is claimed) rather than assumed from the first one.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(
     meetings.flatMap((m) => [m.relation?.mentee?.orgId, m.relation?.mentor?.orgId]),
   );
@@ -5080,7 +5139,7 @@ export async function sendMeetingReminders() {
       try {
         const brand = await emailBrand(user.orgId);
         const base = await origins.urlFor(user.orgId);
-        const R = getDictionary(uLocale).notifications.meetingReminderEmail;
+        const R = (await dictionaryOf(uLocale, user.orgId)).notifications.meetingReminderEmail;
         const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
         await sendEmail({
           category: 'meeting-reminder',
@@ -5186,7 +5245,7 @@ async function sendMeetingGuestReminderEmail({
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
   const when = `${formatInTimeZone(scheduledAt, zone, undefined, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`;
-  const R = getDictionary(resolved).notifications.meetingReminderEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.meetingReminderEmail;
   const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
   const brand = await emailBrand(orgId);
   await sendEmail({
@@ -5280,6 +5339,7 @@ export async function sendProjectMeetingSeriesReminders() {
   // principle, but the link is still resolved per TEAM MEMBER from their own
   // `orgId` — one book for the whole tick, one query per distinct org.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
 
   for (const series of seriesList) {
     const oneToOne = !series.projectId ? series.relation : null;
@@ -5355,7 +5415,7 @@ export async function sendProjectMeetingSeriesReminders() {
         try {
           const brand = await emailBrand(series.project?.orgId ?? oneToOne?.orgId ?? null);
           const base = await origins.urlFor(user.orgId);
-          const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
+          const S = (await dictionaryOf(uLocale, user.orgId)).notifications.meetingSeriesReminderEmail;
           // Two sentences, because the project name is only appended when there
           // is one — and in Turkish and German that is not a suffix you can bolt
           // on to the end of the translated sentence.
@@ -5658,7 +5718,7 @@ async function sendOverdueTodoMail(
   const locale = resolveLocale(u.preferredLanguage);
   const block = await overdueTodoBlock(reach, locale, u.id, undefined, false);
   if (!block) return false;
-  const A = getDictionary(locale).notifications.activityDigestEmail;
+  const A = (await emailDictionary(locale, u.orgId)).notifications.activityDigestEmail;
   await sendEmail({
     category: 'activity-digest',
     userId: u.id,
@@ -6013,25 +6073,6 @@ ${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
   return { checked: people.length, reminded };
 }
 
-// Does a consenting candidate match any of a company's CompanyNeed positions? A
-// match is a loose, case-insensitive overlap between a need's position and the
-// candidate's target position or one of their skills — deliberately generous
-// (the alert is a "worth a look" nudge, not a hard filter). Since #1821 this is
-// the CompanyNeed path only: a CompanyNeed has no skills to compare, while a
-// Requisition is matched on its canonical required skills (below).
-function candidateMatchesNeeds(
-  positions: string[],
-  cand: { targetPosition?: string | null; skills: unknown }
-): boolean {
-  const target = (cand.targetPosition || '').toLowerCase().trim();
-  const skills = (Array.isArray(cand.skills) ? cand.skills : []).map((s) => String(s).toLowerCase().trim()).filter(Boolean);
-  return positions.some((pos) => {
-    if (!pos) return false;
-    if (target && (target.includes(pos) || pos.includes(target))) return true;
-    return skills.some((sk) => sk && (pos.includes(sk) || sk.includes(pos)));
-  });
-}
-
 // The title fallback (a requisition without required skills) lives with the
 // rest of the match rule in src/lib/requisitionMatchRule.ts (#1401), shared
 // with the admin's matching-candidates list.
@@ -6057,34 +6098,32 @@ const ALERT_MIN_FIT = 40;
 // unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
 // makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
 //
-// Positions come from BOTH tables (#1387). The job used to read CompanyNeed
-// only, so a role opened through the Requisition screen — the newer of the two,
-// and the one the product is migrating to — never matched anybody: a premium
-// company could have five open requisitions and receive nothing at all.
-// CompanyNeed is NOT dead and is not being dropped here: the admin company form
-// still writes those rows (src/app/api/companies/[id]/route.ts), and the
-// CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
-// adds a source rather than replacing one; the [companyId, menteeId] dedupe key
-// means a company with the same role in both tables still alerts once.
+// Positions come from Requisition ONLY (#1875). Until then the job also read
+// the legacy CompanyNeed table (#1387 added Requisition as a second source);
+// the admin form no longer writes CompanyNeed and the deploy converts every
+// remaining row into a Requisition (backfill 0012, keyed on
+// legacyCompanyNeedId), so a converted role still alerts — through the title
+// fallback below, since a converted row has no required skills. The
+// [companyId, menteeId] dedupe key is unchanged, so nobody already alerted is
+// alerted again.
 //
 // WHO IS ENTITLED (#1733): a company whose ORG may use the feature (its plan or
 // an org grant — orgIdsEntitledTo(), the set form of entitled()), OR a company
 // with a legacy per-company CompanyEntitlement row (grandfathered, the same
 // rule hasFeature() applies).
-export async function checkCompanyNeedMatches() {
+export async function checkRequisitionMatches() {
   const entitledOrgIds = await orgIdsEntitledTo('COMPANY_NEED_MATCH_ALERTS');
   const companies = await prisma.company.findMany({
     where: {
       AND: [
         { OR: [{ orgId: { in: entitledOrgIds } }, { entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } } }] },
-        { OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }] },
+        { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } },
       ],
     },
     select: {
       id: true,
       orgId: true,
       name: true,
-      needs: { select: { position: true } },
       requisitions: {
         where: { status: ALERTABLE_REQUISITION_STATUS },
         // `openings`/`filled` so a role that is open-but-fully-staffed can be
@@ -6178,13 +6217,12 @@ export async function checkCompanyNeedMatches() {
     //     required skills were left out on purpose. Canonical ids remove that
     //     objection: "Go" is one skill, not two letters.
     //   - a Requisition without skills falls back to its title, against the
-    //     candidate's target position only; a CompanyNeed (no skills at all,
-    //     not retired here — #1359) keeps the old generous heuristic.
+    //     candidate's target position only (every row converted from the
+    //     legacy CompanyNeed table lands here, #1875).
     const openReqs = company.requisitions.filter((r) => r.filled < r.openings);
-    const needTerms = [...new Set(company.needs.map((n) => (n.position ?? '').toLowerCase().trim()).filter(Boolean))];
     // Still reachable after the OR filter above: a company can match on having
     // open requisitions and then have every one of them fully staffed.
-    if (openReqs.length === 0 && needTerms.length === 0) continue;
+    if (openReqs.length === 0) continue;
     const skillOrg = company.orgId ?? defaultId;
     const allSkillIds = openReqs.flatMap((r) => r.skills.map((x) => x.skillId));
     const edges = allSkillIds.length ? await loadSkillEdges(skillOrg, allSkillIds) : [];
@@ -6218,7 +6256,7 @@ export async function checkCompanyNeedMatches() {
         );
         if (m && m.fit.score >= ALERT_MIN_FIT && (!best || m.fit.score > best.match.fit.score)) best = { requisition: r, match: m };
       }
-      const matched = !!best || (needTerms.length > 0 && candidateMatchesNeeds(needTerms, cand));
+      const matched = !!best;
       if (!matched) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
@@ -6288,7 +6326,7 @@ export async function checkCompanyNeedMatches() {
               <p><a href="${base}${link}">${M.cta}</a></p>
             </div>`,
           })).catch((error) => {
-            console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });
+            console.error('checkRequisitionMatches email failed:', { companyId: company.id, userId: u.id, error });
           });
         }
       }

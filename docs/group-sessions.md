@@ -38,6 +38,14 @@ mentees see published events whose audience includes their role, open to all or 
 programme they are in, plus events they host or hold a registration for. Not visible = 404.
 The join link is returned only to the host, admins and REGISTERED people.
 
+## Notices
+
+In-app (`notifyIfAllowed`, category `meetingReminders`): `event.published` to the audience,
+`event.promoted`, `event.cancelled`, `event.updated`. A **promotion** and a **call-off** are
+also mailed through `sendEmail()` (`sendGroupEventEmail()`, category `meeting-invite`, so the
+person's meeting-invitation opt-out, the lane and the outbound-approval entry all already
+apply). A publish is never mailed: the audience can be the whole org.
+
 ## Video
 
 JaaS is 1:1 only (`src/lib/meetingRoom.ts`), so a group session without a pasted link falls

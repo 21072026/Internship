@@ -57,6 +57,11 @@ jobs:
       # trilingual product (#1613). Pinned per file and shrink-only.
       - name: no new hardcoded user-facing strings (#1613)
         run: npm run check:hardcoded-strings
+      # A light surface the globals.css retint layer does not cover must carry
+      # its own dark: background — GlobalSearch shipped light-on-dark (#1614).
+      # Rule unit-tested in scripts/test/check-dark-mode.test.mjs (test:unit).
+      - name: light surfaces ship with their dark mode (#1614)
+        run: npm run check:dark-mode
       # Report registry (#1903): label keys in all three dictionaries, a loader
       # per definition, and a privacy floor that can actually suppress.
       - name: Report registry
@@ -358,6 +363,11 @@ jobs:
       # sendMail() anywhere else compiles and delivers while skipping all four.
       - name: mail leaves through one door (#2944)
         run: npm run check:direct-sendmail
+      # Mail copy carries the recipient org's vertical and terminology only when
+      # read through emailDictionary(locale, orgId) (#1631); bare
+      # getDictionary() calls in mailing files are a pinned ratchet.
+      - name: mail copy follows the recipient's org (#1631)
+        run: npm run check:mail-dictionary
       # Settings are read through ONE accessor, src/lib/settingsResolver.ts
       # (#1621): a direct prisma.setting read skips the org/programme chain
       # and reads the global row for every tenant. Legacy getSetting() readers
@@ -388,6 +398,13 @@ jobs:
       # (#1200). Cheap to run here; the alternative is finding out on the server.
       - name: backup dump validation (#1200)
         run: bash infra/test/backup-db.test.sh
+      # The off-site half (#2058): the freshness verdict on restic snapshot
+      # lists (a listing failure must read red, never "no snapshots yet"), and
+      # the off-site drill's guards running before anything is fetched.
+      - name: off-site backup check and drill guards (#2058)
+        run: |
+          bash infra/test/check-backups-offsite.test.sh
+          bash infra/test/restore-drill-offsite.test.sh
       # Same reasoning for the destructive-schema gate: it only ever runs on the
       # server mid-deploy, and being too broad is as costly as being too narrow
       # — it silently stops prod from deploying at all (#1230).

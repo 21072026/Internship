@@ -32,6 +32,11 @@ on:
         type: choice
         options: [preview, prod]
         default: preview
+      drill_source:
+        description: 'Restore from the local dumps or the encrypted off-site (restic/R2) copy (#2058)'
+        type: choice
+        options: [local, offsite]
+        default: local
 
 concurrency:
   group: backup-verify
@@ -120,6 +125,7 @@ jobs:
           # reads from or writes to the database named here.
           DRILL_ENV: ${{ github.event.inputs.env_name || 'preview' }}
           FORCE_DRILL: ${{ github.event.inputs.drill }}
+          DRILL_SOURCE: ${{ github.event.inputs.drill_source || 'local' }}
         run: |
           # Actions expressions have no date function, so the monthly cadence is
           # decided here: the 1st of the month, or whenever asked for by hand.
@@ -134,7 +140,52 @@ jobs:
           # backups are broken when the report two steps up says they are fine.
           # A false alarm costs the same trust as a missed one.
           echo "drill_ran=1" >> "$GITHUB_OUTPUT"
-          ./infra/restore-drill.sh --env "$DRILL_ENV" --target internship_restore_test
+          if [ "$DRILL_SOURCE" = offsite ]; then
+            # The restic credentials file is root-only (0600, written by
+            # backup-offsite-setup.yml), so the off-site drill runs under sudo
+            # with just the two variables it needs passed through.
+            sudo --preserve-env=DATABASE_URL,GITHUB_STEP_SUMMARY \
+              ./infra/restore-drill.sh --env "$DRILL_ENV" --target internship_restore_test --source offsite
+          else
+            ./infra/restore-drill.sh --env "$DRILL_ENV" --target internship_restore_test
+          fi
+
+  # The off-site copy (#2058), witnessed from OUTSIDE the box. The verify job
+  # above runs on the production host, so it cannot see that host being lost;
+  # this one runs GitHub-hosted, reads only snapshot metadata from the restic
+  # repository on R2 (written by infra/server/backup-offsite.sh) and goes red
+  # through the same issue and email. Until the R2 secrets exist it reports
+  # "not configured" and stays green — a check that cannot run must not page
+  # anyone, but it says so in the summary every day.
+  verify-offsite:
+    name: Check the off-site copy (from a hosted runner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      report: ${{ steps.check.outputs.report }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Off-site freshness
+        id: check
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+          BUCKET: ${{ vars.OFFSITE_BUCKET || 'internship-crm-backups' }}
+        run: |
+          set -o pipefail
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$RESTIC_PASSWORD" ]; then
+            msg="⚠️ off-site check not configured: set the R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and RESTIC_PASSWORD repository secrets (docs/disaster-recovery.md § Off-site copy)."
+            echo "::notice::$msg"; echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sudo apt-get install -y -qq restic >/dev/null
+          export RESTIC_REPOSITORY="s3:https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${BUCKET}"
+          if bash infra/check-backups-offsite.sh 2>&1 | tee /tmp/offsite.txt; then status=ok; else status=fail; fi
+          cat /tmp/offsite.txt >> "$GITHUB_STEP_SUMMARY"
+          { echo 'report<<EOF'; cat /tmp/offsite.txt; echo EOF; } >> "$GITHUB_OUTPUT"
+          [ "$status" = ok ]
 
   # The trail that does not need SMTP (#2322): one `ci-alert` issue while the
   # check is red, closed by the next green run. Its own job on a hosted runner
@@ -142,7 +193,7 @@ jobs:
   # from `notify` so a hanging SMTP connect there cannot starve it.
   alert-issue:
     name: Record the result as an issue
-    needs: [verify]
+    needs: [verify, verify-offsite]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
@@ -158,17 +209,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ALERT_KEY: backup-verify
-          ALERT_TITLE: ${{ needs.verify.outputs.drill_ran == '1' && '🛟 backup-verify — the restore DRILL is red (backups themselves are fine)' || '🛟 backup-verify — the backup freshness check is red' }}
+          ALERT_TITLE: ${{ (needs.verify.result == 'success' && needs.verify-offsite.result != 'success') && '🛟 backup-verify — the OFF-SITE copy is red (local backups are fine)' || needs.verify.outputs.drill_ran == '1' && '🛟 backup-verify — the restore DRILL is red (backups themselves are fine)' || '🛟 backup-verify — the backup freshness check is red' }}
           ALERT_SUMMARY: |
-            ${{ needs.verify.outputs.drill_ran == '1'
+            ${{ (needs.verify.result == 'success' && needs.verify-offsite.result != 'success')
+              && 'The off-site (restic/R2) check failed. Local dumps are fine, but if this host is lost there may be no surviving copy.'
+              || needs.verify.outputs.drill_ran == '1'
               && 'The restore drill failed. The freshness check passed, so the backups exist and look well-formed; what is unproven is that they restore.'
               || 'The backup freshness check failed. Until this is fixed, assume there is NO usable backup.' }}
+            ${{ needs.verify-offsite.outputs.report }}
             What to do: `docs/disaster-recovery.md` → "When the check fails".
-        run: node scripts/ci-alert-issue.mjs ${{ needs.verify.result == 'success' && 'green' || 'red' }}
+        run: node scripts/ci-alert-issue.mjs ${{ (needs.verify.result == 'success' && needs.verify-offsite.result == 'success') && 'green' || 'red' }}
 
   notify:
     name: Email alert on failure
-    needs: [verify]
+    needs: [verify, verify-offsite]
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -189,13 +243,14 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
-          ALERT_SUBJECT: ${{ needs.verify.outputs.drill_ran == '1' && '🛟 Internship CRM — RESTORE DRILL FAILED (backups themselves are fine)' || '🛟 Internship CRM — BACKUP CHECK FAILED' }}
+          ALERT_SUBJECT: ${{ (needs.verify.result == 'success' && needs.verify-offsite.result != 'success') && '🛟 Internship CRM — OFF-SITE BACKUP CHECK FAILED (local backups are fine)' || needs.verify.outputs.drill_ran == '1' && '🛟 Internship CRM — RESTORE DRILL FAILED (backups themselves are fine)' || '🛟 Internship CRM — BACKUP CHECK FAILED' }}
           ALERT_BODY: |
             ${{ needs.verify.outputs.drill_ran == '1'
               && 'The restore DRILL failed. The freshness check passed, so the backups exist and look well-formed — what is unproven is that they can be restored. Treat this as "recovery untested", not "no backups".'
               || 'The backup freshness check failed. Until this is fixed, assume there is NO usable backup.' }}
 
             ${{ needs.verify.outputs.report }}
+            ${{ needs.verify-offsite.outputs.report }}
 
             What to do: docs/disaster-recovery.md → "When the check fails".
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

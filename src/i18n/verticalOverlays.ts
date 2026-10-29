@@ -514,7 +514,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       companyForm: {
         quota: 'Need quota',
         needs: 'Account needs',
-        noNeeds: 'No needs added yet. Click "Add Need" to record what this account needs.',
       },
       entitlements: {
         subtitle: 'Enable premium features for {name}. Rep and lead features are always free.',
@@ -1584,7 +1583,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       companyForm: {
         quota: 'İhtiyaç kontenjanı',
         needs: 'Firma ihtiyaçları',
-        noNeeds: 'Henüz ihtiyaç eklenmedi. Bu firmanın neye ihtiyacı olduğunu kaydetmek için "İhtiyaç ekle"ye tıkla.',
       },
       entitlements: {
         subtitle: '{name} için premium özellikleri aç. Temsilci ve müşteri adayı özellikleri her zaman ücretsizdir.',
@@ -2581,7 +2579,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       companyForm: {
         quota: 'Bedarfskontingent',
         needs: 'Bedarf des Accounts',
-        noNeeds: 'Noch kein Bedarf hinzugefügt. Klicke auf "Bedarf hinzufügen", um festzuhalten, was dieser Account braucht.',
       },
       entitlements: {
         subtitle: 'Premium-Funktionen für {name} aktivieren. Funktionen für Vertriebsmitarbeiter und Leads sind immer kostenlos.',

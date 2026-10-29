@@ -296,7 +296,10 @@ serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
   ulaşır, arama da bir anahtar değildir: adaşları bulur, başka sözcüklerle
   yazılmışı kaçırır ve özel notlarda arama yapmak, yazarından istenmemiş bir
   metni okumak demektir. **Bilinçli olarak ulaşılmıyor**; gizlilik metni bunu
-  söylemeli (metnin ifadesi hak sahibinin kararıdır, kodun değil).
+  söylüyor (`/privacy` → "Ne kadar saklıyoruz", `privacy.erasureScope`, sürüm
+  `2026-10-29`): "Hesabınızı sildiğinizde sizin yazdığınız ve size ait tüm
+  metinler silinir; başka kullanıcıların kendi notlarında adınızı anması bu
+  kapsamın dışındadır ve talep üzerine ayrıca incelenir." İfade hak sahibinin.
 - `Meeting.meetLink` (bir oda adresi, kişisel veri değil), `MenteeOnboarding.steps`
   ve `Announcement` (kontrol listesi durumu ve kurum geneli duyuru metni).
 - **Başkalarının bildirimlerinde** kişinin adı ("Ayşe sana mesaj gönderdi"): ad
@@ -311,12 +314,29 @@ serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
   sınırlı (`activityLogRetentionDays`, varsayılan 365 gün). Bu kararı değiştirmeden
   silme bu tabloları yeniden yazmaya başlamamalı.
 
-- **Şirket tarafının kanıt kayıtları** (#2098): `ContactPermission.reason`
-  (UWG § 7 iletişim izninin kanıtı — şirket kaydına bağlı, kişiye değil) ve
-  `AffiliatePartner.payoutDetailsCipher` (ticari ortağın ödeme kaydı; defter
-  tutma yükümlülüğü hesaptan uzun yaşar). İkisi de **açık bir hukuki soru**:
-  kanıt kaydının kişinin silinmesinden sonra ne kadar tutulacağı hak sahibinin
-  kararı.
+- **Şirket tarafının kanıt kayıtları** (#2098) — silmeden sonra **belirli bir
+  süre** tutulur, sonra gece temizliği kaldırır (hak sahibinin kararı; kural ve
+  hukuki dayanak `src/lib/erasureRetentionRule.ts`, birim testi
+  `scripts/test/erasure-retention.test.mjs`, uçtan uca
+  `e2e/erasure-retained-records.spec.ts`):
+  - `ContactPermission` (`reason` ve UWG § 7 kanıtının geri kalanı): silme
+    `subjectErasedAt` damgasını basar (kişinin adresiyle kurulmuş satırlar ve
+    kişinin irtibat olduğu şirketin adressiz telefon/posta satırları). Satır,
+    silmenin yapıldığı **takvim yılının sonundan itibaren 3 yıl** sonra
+    `contactPermissionProof` saklama kaydıyla **tamamen silinir**. Sayaç silme
+    anında başlar: o andan sonra kişiye hiçbir posta gidemez, kanıtın
+    savunacağı son posta ondan önce gönderilmiştir; 3 yıl o talebin olağan
+    zamanaşımı (BGB § 195, başlangıç yıl sonu — § 199). Satırın tamamı gider,
+    yalnız `reason` değil: kanıtı sökülmüş bir basis hâlâ izin gibi okunur
+    (`marketingEmailPermissionFilter()` adrese bakmaz). Şirkete sonradan yeni bir
+    basis yazılırsa damga silinir — o yeni bir kişinin kanıtıdır.
+  - `AffiliatePartner.payoutDetailsCipher` (IBAN, hesap sahibi): silme
+    `accountErasedAt` damgasını basar (sert silmede `userId` SetNull olmadan
+    önce). Bilgi, **ilişkinin bittiği** takvim yılının sonundan itibaren
+    **10 yıl** sonra `affiliatePayoutDetails` saklama kaydıyla boşaltılır;
+    ilişkinin sonu silme, fesih (`noticeEffectiveAt`) ve son ödemenin (`paidAt`)
+    **en geç olanı** — saklama yükümlülüğü hesaba değil kayda bağlıdır
+    (HGB § 257, AO § 147). Ortak satırı ve ödemeleri kalır; onlar kayıttır.
 - **Bastırma listesi** (`EmailSuppression`, `EmailDeliveryEvent.detail`): silme
   bunu kaldırırsa, geri dönen ya da şikâyet eden bir adres yeniden posta alır.
   Olaylar `emailDeliveryEvent` saklama kaydıyla sınırlı.
@@ -420,6 +440,8 @@ ile değiştirilir.
 | `DomainEvent` | `domainEventRetentionDays` | 90 gün | Olay kaydı (#1691): bir şeyin olduğu ve hangi kimliklere olduğu. En eski halka açık yükler (`application.created`) bir ad ve adres taşıyor. Okuyucuları günlere bakıyor, yıllara değil: webhook alıcısının yeniden gönderim isteği (#1695), bir otomasyon koşusunun tetikleyicisi (#1703). 90 gün, diğer "gitti mi?" defteri olan `EmailLog` ile aynı. Bir kaydın kalıcı geçmişi kaydın kendisi ve ActivityLog/AuditLog izidir, bu tablo değil. Yalnızca **global** katmandan okunur. |
 | `SupportReport` (+ `SupportReportFile`) | `supportReportRetentionDays` | 90 gün | Uygulama içi hata bildirimleri (#3130–#3132): ekran görüntüsü, kişinin kendi açıklaması ve replay açıksa yaptıklarının kaydı — destek aracının tuttuğu en kişisel satır, ve yalnızca sorun üzerinde çalışılırken işe yarıyor. 90 gün, bir düzeltmenin release'e girmesine fazlasıyla yetiyor; daha uzun yaşaması gereken bir bildirimin GitHub issue'su var ve o, tasarım gereği bunların hiçbirini taşımıyor. Dosyalar rapora bağlı satırlar olduğu için onunla birlikte siliniyor. Yalnızca **global** katmandan okunur. |
 | `AuditLog` | `auditLogRetentionDays` | 730 gün (en az 365) | Ayrıcalıklı işlem izi (#1585): hesaba girme, admin parola sıfırlama, birleştirme, teklif/mülakat kararları. Kanıt niteliğinde, bu yüzden iki yıllık denetim döngüsü ve hiçbir ayar onu bir yılın altına indiremez. Bir tenant'ın audit drain'i (#2012) bir satırı henüz göndermediyse satır ne kadar eski olursa olsun **silinmez** — SIEM kesintisi boşluk değil birikme üretir; drain'i silmek satırları serbest bırakır. Ürünün başka hiçbir yolu tek bir audit satırı silmez. Yalnızca **global** katmandan okunur. |
+| `ContactPermission` (silinmiş kişinin UWG § 7 kanıtı) | *(ayar yok)* | 3 yıl, silme yılının sonundan | `contactPermissionProof` (#2098): silmeden sonra yalnızca "izinsiz posta" talebine karşı kanıt olarak tutulur; 3 yıl o talebin olağan zamanaşımı (BGB §§ 195, 199). Süre dolunca satırın tamamı silinir. Ayar değil, hak sahibinin hukuki kararı; kayıt gün sayısıyla değil yıl sonu başlangıcıyla kendi kesimini hesaplar (`src/lib/erasureRetentionRule.ts`). Yukarıdaki "Ulaşılamayanlar" listesine bakın. |
+| `AffiliatePartner.payoutDetailsCipher` (silinmiş ortağın IBAN'ı) | *(ayar yok)* | 10 yıl, ilişkinin bittiği yılın sonundan | `affiliatePayoutDetails` (#2098): defter tutma yükümlülüğü (HGB § 257, AO § 147). İlişkinin sonu = silme, fesih ve son ödemenin en geç olanı. Yalnızca ödeme bilgisi boşaltılır (`masked`); ortak satırı ve ödemeleri kayıttır, kalır. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
 | `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
 | `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki, kişisel veri taşımayan iki girdiden biri (#2414; diğeri `CompanyUsage`): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |

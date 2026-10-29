@@ -32,6 +32,7 @@ import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { logViewActivity } from '@/lib/activity';
 import { CONTACT_SELECT } from '@/lib/companyContacts';
 import type { HeaderSource } from '@/lib/clientIp';
+import { openPositionsInclude } from '@/lib/openPositions';
 
 /** Days of product usage the account page charts (#2448). */
 const USAGE_DAYS = 90;
@@ -65,7 +66,8 @@ export async function loadCompanyDetail({
         tenant,
       ),
       include: {
-        needs: true,
+        // Open positions: Requisition only (#1875).
+        requisitions: openPositionsInclude,
         // The address book beyond the primary contact (#2442). Each row carries
         // its own orgId: filtered on it like the relations below.
         contacts: {
