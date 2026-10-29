@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Language of parts (WCAG 3.1.2, #2864):** the language switcher's buttons carry `lang` and their own-language name (\"de Deutsch\") for screen readers, plus `aria-pressed`; every per-language EN/TR/DE field (goal, agenda and message templates, attributes, agreements, affiliate contract, terminology, evaluation framework, project goal templates, document requirements, screening questions, journey titles, skill labels) declares its `lang`. User-written content stays unmarked by design — #3283. VPAT 3.1.2 remark updated; it stays `Partially Supports` and now points at #3283."
+}
