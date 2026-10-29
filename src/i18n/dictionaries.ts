@@ -1634,6 +1634,16 @@ const en = {
     errors: { unauthorized: 'You cannot manage requisitions.', companyNotAssigned: 'Your account is not assigned to a company.', notFound: 'Requisition not found.', loadFailed: 'Requisitions could not be loaded.', saveFailed: 'Requisition could not be saved.' },
   },
   requisitionPipeline: {
+    // The written fit reason beside each applicant (#2042). A sentence, never the score.
+    fit: {
+      required: '{n} of {total} required skills: {skills}', requiredNone: '{n} of {total} required skills', nice: 'also {skills}',
+      title: 'aims for this kind of role', location: "based in the role's city", remote: 'open to a remote role',
+      fallback: 'Listed as an applicant for this role.',
+      aiMarker: '✨ AI-written', write: '✨ Write reasons for the top applicants', writing: 'Writing…',
+      locked: 'Written AI reasons need the AI package — the rule-based reasons stay.',
+      unavailable: 'AI is not available right now — the rule-based reasons stay.',
+      disclosure: 'Ranking assistance explains each applicant from the role’s requirements. It never rejects anybody; a person makes every decision.',
+    },
     openings: 'Openings', filled: 'Filled', fillProgress: '{filled} of {openings} filled',
     stages: { APPLIED: 'Applied', SCREENING: 'Screening', SHORTLISTED: 'Shortlisted', INTERVIEW: 'Interview', OFFER: 'Offer', HIRED: 'Hired', REJECTED: 'Rejected', WITHDRAWN: 'Withdrawn' },
     filters: { search: 'Search applicants by name', skill: 'Skill', city: 'City', stage: 'Stage', allStages: 'All stages', apply: 'Apply filters', reset: 'Reset' },
@@ -11660,6 +11670,15 @@ const tr: Dict = {
     errors: { unauthorized: 'İş taleplerini yönetme yetkin yok.', companyNotAssigned: 'Hesabın bir şirkete atanmamış.', notFound: 'İş talebi bulunamadı.', loadFailed: 'İş talepleri yüklenemedi.', saveFailed: 'İş talebi kaydedilemedi.' },
   },
   requisitionPipeline: {
+    fit: {
+      required: '{total} zorunlu beceriden {n} tanesi: {skills}', requiredNone: '{total} zorunlu beceriden {n} tanesi', nice: 'ayrıca {skills}',
+      title: 'bu tür bir rolü hedefliyor', location: 'rolün şehrinde', remote: 'uzaktan role açık',
+      fallback: 'Bu rol için başvuran olarak listelendi.',
+      aiMarker: '✨ Yapay zekâ yazdı', write: '✨ En üstteki adaylar için gerekçe yaz', writing: 'Yazılıyor…',
+      locked: 'Yapay zekâ gerekçeleri AI paketini gerektirir — kurala dayalı gerekçeler kalır.',
+      unavailable: 'Yapay zekâ şu anda kullanılamıyor — kurala dayalı gerekçeler kalır.',
+      disclosure: 'Sıralama yardımı her adayı rolün gereksinimlerinden açıklar. Kimseyi elemez; her kararı bir insan verir.',
+    },
     openings: 'Kontenjan', filled: 'Dolan', fillProgress: '{openings} kontenjanın {filled} tanesi doldu',
     stages: { APPLIED: 'Başvurdu', SCREENING: 'Ön eleme', SHORTLISTED: 'Kısa liste', INTERVIEW: 'Mülakat', OFFER: 'Teklif', HIRED: 'İşe alındı', REJECTED: 'Reddedildi', WITHDRAWN: 'Geri çekildi' },
     filters: { search: 'Adaylarda isimle ara', skill: 'Yetkinlik', city: 'Şehir', stage: 'Aşama', allStages: 'Tüm aşamalar', apply: 'Filtrele', reset: 'Sıfırla' },
@@ -21507,6 +21526,15 @@ const de: Dict = {
     errors: { unauthorized: 'Du darfst Stellenanforderungen nicht verwalten.', companyNotAssigned: 'Dein Konto ist keinem Unternehmen zugewiesen.', notFound: 'Stellenanforderung nicht gefunden.', loadFailed: 'Stellenanforderungen konnten nicht geladen werden.', saveFailed: 'Stellenanforderung konnte nicht gespeichert werden.' },
   },
   requisitionPipeline: {
+    fit: {
+      required: '{n} von {total} erforderlichen Fähigkeiten: {skills}', requiredNone: '{n} von {total} erforderlichen Fähigkeiten', nice: 'außerdem {skills}',
+      title: 'strebt diese Art von Stelle an', location: 'am Standort der Stelle', remote: 'offen für eine Remote-Stelle',
+      fallback: 'Als Bewerbung für diese Stelle gelistet.',
+      aiMarker: '✨ Von KI geschrieben', write: '✨ Begründungen für die besten Bewerbungen schreiben', writing: 'Wird geschrieben…',
+      locked: 'KI-Begründungen erfordern das KI-Paket — die regelbasierten Begründungen bleiben.',
+      unavailable: 'KI ist gerade nicht verfügbar — die regelbasierten Begründungen bleiben.',
+      disclosure: 'Die Ranking-Hilfe erklärt jede Bewerbung anhand der Anforderungen der Stelle. Sie lehnt niemanden ab; jede Entscheidung trifft ein Mensch.',
+    },
     openings: 'Stellen', filled: 'Besetzt', fillProgress: '{filled} von {openings} besetzt',
     stages: { APPLIED: 'Beworben', SCREENING: 'Vorauswahl', SHORTLISTED: 'Engere Wahl', INTERVIEW: 'Gespräch', OFFER: 'Angebot', HIRED: 'Eingestellt', REJECTED: 'Abgelehnt', WITHDRAWN: 'Zurückgezogen' },
     filters: { search: 'Bewerbungen nach Name suchen', skill: 'Kompetenz', city: 'Stadt', stage: 'Phase', allStages: 'Alle Phasen', apply: 'Filtern', reset: 'Zurücksetzen' },
