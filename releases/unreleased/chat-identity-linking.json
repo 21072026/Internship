@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Chat identity linking (#1937):** `src/lib/chat/identity.ts` proposes a `ChatIdentity` for each Slack member whose directory address (new `ChatPlatformClient.listMembers()`, `users.list`) matches a verified, active account of the workspace's own org — no row for an unmatched or unverified address, never a new user — and the person confirms it on their account page (\"Chat apps\" card, `GET/POST/DELETE /api/integrations/chat/identity`: own identity only, an org ADMIN may remove any of the org's; others 403). \"Find people\" on the console calls `POST /api/admin/integrations/chat/[id]/propose`. Only a confirmed identity is delivered to (`resolveTarget()` now opens/caches the DM for the adapter); disconnecting stops chat and e-mail still goes. New nullable `ChatIdentity.displayName`; account erasure deletes the person's chat identities. Teams proposals answer `not_supported` until Graph permissions exist.",
+  "notes": {
+    "en": ["If your organisation uses Slack, you can confirm your Slack account on your account page to get notifications there too — and disconnect it at any time."],
+    "tr": ["Organizasyonunuz Slack kullanıyorsa, bildirimleri orada da almak için hesap sayfanızdan Slack hesabınızı onaylayabilir ve dilediğiniz zaman bağlantıyı kaldırabilirsiniz."],
+    "de": ["Wenn Ihre Organisation Slack nutzt, können Sie Ihr Slack-Konto auf Ihrer Kontoseite bestätigen, um Benachrichtigungen auch dort zu erhalten — und es jederzeit trennen."]
+  }
+}

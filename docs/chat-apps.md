@@ -35,9 +35,19 @@ a token). A failed row offers **Retry** (`POST …/deliveries/[id]/retry`,
 (`retryChatDelivery()`), rebuilds the card from the person's in-app
 notification of that event and **appends** a row — the failed one is never
 rewritten, a second retry of it is `409 already_retried`, and a retry whose
-source notification is gone is `409 source_gone` rather than a guess. Still to
-come: the OAuth install (#1935), identity linking (#1937) and the per-category
-channel matrix (#1707).
+source notification is gone is `409 source_gone` rather than a guess. **Identity
+linking** exists too (#1937, `src/lib/chat/identity.ts`): "Find people" on a
+workspace (`POST /api/admin/integrations/chat/[id]/propose`) reads the Slack
+directory (`users.list`, `users:read.email`) and **proposes** a link for each
+member whose address matches a **verified, active** account of the same org — an
+unmatched or unverified address creates nothing, and no member ever becomes a
+user. The person confirms (or rejects) on their account page ("Chat apps" card,
+`GET/POST/DELETE /api/integrations/chat/identity`, own identities only; an ADMIN
+may remove any link of their org). Only a confirmed identity is delivered to;
+disconnecting stops chat and leaves e-mail and the bell untouched. Teams has no
+directory proposal yet (it needs Microsoft Graph application permissions).
+Account erasure deletes the person's chat identities. Still to come: the
+per-category channel matrix (#1707) and the Teams uninstall activity.
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
@@ -108,7 +118,7 @@ Calendar — `isGoogleCalendarConfigured()` vs `isGoogleCalendarEnabled()` in
 | `TEAMS_TENANT_ID` | Teams | the **Directory (tenant) ID**. Set it for a single-tenant app; leave it unset for a multi-tenant one. | single-tenant only |
 | `CHAT_OAUTH_REDIRECT_URI` | both | Optional override. Defaults to `<NEXTAUTH_URL>/api/integrations/chat/<platform>/callback`, the same derivation `googleRedirectUri()` uses. Set it only when the public URL differs from `NEXTAUTH_URL`. | no |
 | `CHAT_APPS_ENABLED` | both | The master switch. Unset or `0`: no install button, no delivery, inbound endpoints answer 404. | to deliver |
-| `SLACK_API_BASE` / `TEAMS_API_BASE` | both | **Test/staging only** — point the platform APIs at a local stub. Never set in a real deployment. | no |
+| `SLACK_API_BASE` / `SLACK_OAUTH_AUTHORIZE_URL` / `TEAMS_LOGIN_BASE` | both | **Test/staging only** — point the platform endpoints at a local stub. Never set in a real deployment. | no |
 
 Rules that are not negotiable: a bot or refresh token is sealed with
 `src/lib/secretBox.ts` (`seal()` / `open()`), never stored in the clear, never
@@ -174,6 +184,38 @@ That is #1923's Story 4, not an operator setting.
    derived from it. A chat member id is an identifier, never a credential —
    authorization is re-derived server-side from the linked CRM user.
 
+### What the install does (#1935)
+
+- **Connect** — `GET /api/integrations/chat/<slack|teams>/connect`: needs
+  `org.integrations.write` on the route (anyone else gets 403), and with no
+  credentials or no `CHAT_APPS_ENABLED=1` it sends the browser back to
+  `/admin/integrations?chat=unavailable` instead of failing. It redirects to
+  Slack's `oauth/v2/authorize` (scopes `chat:write`, `im:write`, `users:read`,
+  `users:read.email`, `commands`) or to Entra ID admin consent
+  (`<tenant or organizations>/adminconsent`).
+- **State** — `src/lib/chat/oauthState.ts` signs platform + org + user + a
+  10-minute expiry, so a callback replayed into another admin's session, a Slack
+  code on the Teams callback or an install aimed at another org installs nothing
+  (`?chat=failed`).
+- **Callback** — `GET …/callback` exchanges the Slack code server-side
+  (`oauth.v2.access`) and hands the tokens to `recordChatInstall()`, which seals
+  them and writes `CHAT_INSTALL`. Teams admin consent returns the tenant and no
+  token (the bot uses its own app credentials). A Slack team already installed
+  in another org is refused (`?chat=conflict`).
+- **Platform uninstall** — `POST /api/integrations/chat/slack/uninstall` is
+  Slack's Events API request URL for `app_uninstalled` / `tokens_revoked`,
+  authenticated by `SLACK_SIGNING_SECRET` over the raw body (±5 minutes). It
+  switches the workspace off, clears its sealed tokens and writes
+  `CHAT_PLATFORM_UNINSTALL`; the row stays for the admin to remove or reinstall.
+  Point **Event Subscriptions → Request URL** at it and subscribe to those two
+  bot events. The Teams equivalent (an `installationUpdate` activity with a
+  Microsoft-signed JWT) is **not built yet** — that path answers 404.
+- **Token rotation** — `src/lib/chat/tokenRefresh.ts` trades a rotating Slack
+  install's refresh token a minute before the bot token expires, before each
+  send; a failed refresh is the workspace's `lastError`.
+- The flow does not forward a callback across served hosts (Google does,
+  #2494): installing is an admin task on the internship host.
+
 ### Verifying, in this order
 
 1. Do the setup above on **preview**, with the preview URLs.
@@ -195,22 +237,17 @@ is not an uninstall.
 
 ## Running the local stub
 
-**The stub does not exist yet.** It is owned by the story that ships delivery
-(#1925), and it is the thing that will make this epic testable at all — the same
-lesson as Google Calendar, where the token exchange sat unfinished for months
-precisely because it was reachable only through live Google.
-
-The shape to copy is already in the repo: `e2e/support/google-mock.mjs`, wired in
-`playwright.config.ts` and reached through the test-only
-`GOOGLE_OAUTH_TOKEN_URL` / `GOOGLE_OAUTH_REVOKE_URL` / `GOOGLE_CALENDAR_API_BASE`
-overrides (see `.env.example`). For chat that means:
-
-- `e2e/support/chat-mock.mjs` — a small local HTTP server answering the OAuth
-  code exchange, `chat.postMessage` / the Bot Framework send, and `users.info`;
-- `SLACK_API_BASE` / `TEAMS_API_BASE` pointed at it, set **only** by
-  `playwright.config.ts`;
-- placeholder credentials plus `CHAT_APPS_ENABLED=1` in the test env, so the e2e
-  exercises the enabled path while every real deployment stays dormant.
+The Slack half exists (#1935): `e2e/support/slack-mock.mjs` (port 4606) answers
+`oauth.v2.access` — a code starting with `good-` installs team `T<rest>`, anything
+else is `invalid_code`, and `grant_type=refresh_token` rotates — and records every
+exchange so the spec can assert the client secret was sent and the
+`redirect_uri` matched. `playwright.config.ts` points `SLACK_API_BASE` and
+`SLACK_OAUTH_AUTHORIZE_URL` at it, sets synthetic credentials
+(`e2e-slack-client`, `e2e-slack-signing-secret`, `e2e-teams-app`) and
+`CHAT_APPS_ENABLED=1`; message sends and revokes go to the in-process
+`CHAT_APPS_STUB_CLIENT=1` stand-in. Teams admin consent is a redirect only, so it
+needs no stub. `e2e/chat-install.spec.ts` drives connect → callback → platform
+uninstall against it.
 
 What a stub can prove: the install round-trip, that a tampered signature is
 refused, that tokens are sealed at rest (assert the plaintext is **not** in the

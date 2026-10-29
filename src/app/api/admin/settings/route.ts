@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import { isGlobalSettingKey, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
 import { revertSetting, writeSetting, type SettingWriteResult } from '@/lib/settingsWrite';
@@ -23,9 +21,10 @@ import { OUTBOUND_APPROVAL_MODES, outboundApprovalApplies } from '@/lib/outbound
 // row → the code default (see src/lib/settings.ts). The org is passed
 // explicitly rather than read from the bound context, so an org-less session
 // reads the default org's values — the same org its PUT writes (#2628).
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = await settingsOrgOf(session);
   return withTenantScope(session, async () => {
     const resolved = await resolveSettings({ orgId });
@@ -185,8 +184,9 @@ const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps', '
 // definition; they are written to the global row, and only by a super admin. A
 // tenant admin posting one gets 403 and nothing in the request is written.
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

@@ -90,4 +90,10 @@ export const teamsClient: ChatPlatformClient = {
   async revoke() {
     return { revoked: false, note: 'teams_has_no_workspace_token' };
   },
+  async listMembers() {
+    // Reading a tenant's directory needs Microsoft Graph application
+    // permissions the bot registration does not hold (yet): no proposals for
+    // Teams rather than a guess at who is who.
+    throw new ChatClientError('not_supported');
+  },
 };

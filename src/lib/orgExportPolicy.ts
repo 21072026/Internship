@@ -49,6 +49,8 @@ export const OMITTED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
   'AuditDrain.secret': 'audit drain signing secret',
   'GoogleCalendarConnection.accessTokenEnc': 'OAuth token',
   'GoogleCalendarConnection.refreshTokenEnc': 'OAuth token',
+  'CalendarConnection.accessTokenEnc': 'OAuth token',
+  'CalendarConnection.refreshTokenEnc': 'OAuth token',
   'ChatWorkspace.botTokenEnc': 'OAuth token',
   'ChatWorkspace.refreshTokenEnc': 'OAuth token',
   'RosterFeed.secretEnc': 'feed credential',

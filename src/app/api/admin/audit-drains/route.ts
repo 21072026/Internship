@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
+import { requirePermission } from '@/lib/authz';
 import { randomBytes } from 'crypto';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -20,11 +19,6 @@ import { SsrfBlockedError } from '@/lib/ssrfGuard';
 // The org a drain belongs to is `settingsOrgOf(session)` — the default org for
 // an org-less admin token, never null — because AuditDrain.orgId is REQUIRED:
 // a drain whose tenant is unknown would stream nobody's rows, or everybody's.
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
 
 const LIST_SELECT = {
   id: true,
@@ -49,9 +43,10 @@ function urlRefusal(e: unknown): NextResponse {
   return NextResponse.json({ error: 'Invalid receiver URL', code: 'invalid' }, { status: 400 });
 }
 
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = await settingsOrgOf(session);
   const [drains, pending] = await Promise.all([
     prisma.auditDrain.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, select: LIST_SELECT }),
@@ -69,8 +64,9 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Streaming the audit trail out is an integration, and the paid feature
   // (#1744) — the same gate as a webhook subscription.
   const locked = await integrationsLocked(session);
@@ -114,8 +110,9 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
@@ -162,8 +159,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const orgId = await settingsOrgOf(session);
   const { count } = await prisma.auditDrain.deleteMany({ where: { id, orgId } });

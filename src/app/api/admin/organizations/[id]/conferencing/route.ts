@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
 import { CONFERENCING_POLICIES, conferencingPolicyOf } from '@/lib/conferencingRule';
+import { requirePermission } from '@/lib/authz';
 
 // /api/admin/organizations/[id]/conferencing (#2007) — the tenant's
 // conferencing policy: which video room its meetings get. The rule the
@@ -23,9 +22,9 @@ const bodySchema = z.object({ policy: z.enum(CONFERENCING_POLICIES) }).strict();
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.read', { request: _req });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await orgAdminRefusal(session, id, 'GET /api/admin/organizations/[id]/conferencing');
   if (refusal) return refusal;
   const org = await prisma.organization.findUnique({ where: { id }, select: { conferencingPolicy: true } });
@@ -34,9 +33,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request: req });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await orgAdminRefusal(session, id, 'PATCH /api/admin/organizations/[id]/conferencing');
   if (refusal) return refusal;
 

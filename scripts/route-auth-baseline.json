@@ -102,6 +102,10 @@
     "methods": ["POST"],
     "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."
   },
+  "src/app/api/integrations/chat/[platform]/uninstall/route.ts": {
+    "methods": ["POST"],
+    "why": "Slack's app_uninstalled / tokens_revoked event (#1935). Slack has no session; the caller is authenticated by Slack's HMAC signature over the raw body with SLACK_SIGNING_SECRET and a timestamp within 5 minutes — an unsigned or stale request is 401 and changes nothing. The only effect is switching that Slack team's workspace off and clearing its sealed tokens."
+  },
   "src/app/api/webhooks/email/[provider]/route.ts": {
     "methods": ["POST"],
     "why": "The mail provider's bounce/complaint webhook (#1692). A provider holds no session: the credential is the EMAIL_WEBHOOK_SECRET shared secret (header, bearer or Basic password; timingSafeEqual), required outright in production like the inbound-email webhook (#870). Rate-limited per IP before the body is read; it only ever writes suppression rows."
@@ -121,6 +125,10 @@
   "src/app/api/mail/drain/route.ts": {
     "methods": ["POST"],
     "why": "One tick of the outbound mail queue drain (#2944), fired every 5 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process MAIL_DRAIN_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only delivers mail that is already queued and never takes input from the request."
+  },
+  "src/app/api/developers/sandbox-key/route.ts": {
+    "methods": ["POST"],
+    "why": "The developer portal's sandbox key (#1992) is for a visitor with no account. It answers 404 everywhere but the public demo deployment (DEMO_MODE AND a database whose name ends in _demo, src/lib/api/sandboxKeyRule.ts), so it can never mint against a real organisation; on the demo the key is read-only, bound to the synthetic default org, expires in a day, carries a daily allowance, and minting is rate-limited per address and capped deployment-wide."
   },
   "src/app/api/mentor-applications/route.ts": {
     "methods": ["POST"],

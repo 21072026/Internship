@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
+import { requirePermission, type Permission } from '@/lib/authz';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { campaignUpdateSchema } from '@/lib/postCampaignInput';
@@ -20,11 +19,10 @@ import { worldOfOrg } from '@/lib/userWorld';
  * A SENT campaign is the record of what was posted to whom on what stated basis
  * (Art. 5 Abs. 2 DSGVO): it answers 409 `campaign_sent` to both.
  */
-async function gate() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const;
-  }
+async function gate(permission: Permission, request: Request) {
+  const authz = await requirePermission(permission, { request });
+  if ('error' in authz) return { error: authz.error } as const;
+  const { session } = authz;
   const gated = await requireCapability(session.user.orgId, 'companies');
   if (gated) return { error: gated } as const;
   return { session } as const;
@@ -35,7 +33,7 @@ const SENT = () => NextResponse.json({ error: 'A sent campaign cannot be changed
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.read', request);
     if ('error' in g) return g.error;
     const { session } = g;
     const { id } = await params;
@@ -77,7 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.write', request);
     if ('error' in g) return g.error;
     const { session } = g;
     const { id } = await params;
@@ -100,7 +98,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.write', request);
     if ('error' in g) return g.error;
     const { session } = g;
     const { id } = await params;

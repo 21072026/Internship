@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Push for the events that matter, through the router (#1715):** `push` is a fourth channel of `notifyEvent()` (`src/lib/notifications/adapters/push.ts`): the tray line is the bell's own sentence in the recipient's language (`renderNotification()`), the link the router's deep link, delivered through `sendPushToUser()` (web push when VAPID is set, native push always). It is listed, with the reasoning in `catalog.ts`, on meeting starting / moved / cancelled, offer sent and answered, the person's own stage change, the support reply, interview scheduled / cancelled and the act-now security notices; never on digests, reports, newsletter issues or any `batched` event (pinned by `notification-catalog.test.mjs`). The bell's category switch silences it too. No device is a SKIPPED `no_device` ledger row, not a silent no-op. The offer-sent notice is the first call site routed with push; new-message push is unchanged.",
+  "notes": {
+    "en": ["Your phone now tells you when an offer arrives — and the groundwork is laid for meeting, stage and support pushes."],
+    "tr": ["Bir teklif geldiğinde artık telefonun da haber veriyor — toplantı, aşama ve destek bildirimleri için de altyapı hazır."],
+    "de": ["Dein Handy meldet sich jetzt, wenn ein Angebot eintrifft — die Grundlage für Push zu Terminen, Phasen und Support-Antworten ist gelegt."]
+  }
+}
