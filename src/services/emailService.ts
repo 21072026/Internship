@@ -3189,7 +3189,7 @@ export async function sendRematchRequestedEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
-  const R = getDictionary(resolved).notifications.rematchRequestedEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.rematchRequestedEmail;
   await sendEmail({
     to,
     userId,
@@ -3229,7 +3229,7 @@ export async function sendRematchMentorNoticeEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
-  const R = getDictionary(resolved).notifications.rematchMentorEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.rematchMentorEmail;
   await sendEmail({
     to,
     userId,
@@ -3446,7 +3446,7 @@ export async function sendOfferSentEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const loc = resolveLocale(locale);
-  const M = getDictionary(loc).offerEmail;
+  const M = (await emailDictionary(loc, orgId)).offerEmail;
   const start = formatOfferDate(startDate, loc);
   const expires = formatOfferDate(expiresAt, loc);
   await sendEmail({
@@ -3560,7 +3560,7 @@ export async function sendOfferDecisionEmail({
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
-  const M = getDictionary(resolveLocale(locale)).offerEmail;
+  const M = (await emailDictionary(resolveLocale(locale), orgId)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
   await sendEmail({
     to,
@@ -4792,6 +4792,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
   // organization (a Friday run reminds people of every tenant). Read before the
   // claims below, so a failed read leaves nobody claimed-but-unmailed.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(toRemind.map((relation) => relation.mentee.orgId));
   const claims = toRemind.map((relation) => ({ id: randomUUID(), relationId: relation.id, recipientId: relation.mentee.id, weekStart }));
   if (claims.length > 0) await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
@@ -4804,7 +4805,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
     remindedRelationIds.push(relation.id);
     const preferredLanguage = relation.mentee.preferredLanguage ?? undefined;
     const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-    const copy = getDictionary(locale).weeklyReports;
+    const copy = (await dictionaryOf(locale, relation.mentee.orgId)).weeklyReports;
     const formattedWeek = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(weekStart);
     if (notificationCategoryAllowed(relation.mentee, 'weeklyReports')) {
       await notify(relation.mentee.id, 'weekly_report_reminder.due', {}, '/portal');
@@ -4909,6 +4910,7 @@ export async function sendDormantCheckIns(now = new Date()) {
   // batch before the first nudge is claimed (a claim spends one of the person's
   // two-ever budget, so nothing may fail between claiming and having the link).
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(relations.map((relation) => relation.mentee.orgId));
 
   // THE CAP IS A PROMISE TO A PERSON, AND IT IS COUNTED PER PERSON (#2287).
@@ -4992,7 +4994,7 @@ export async function sendDormantCheckIns(now = new Date()) {
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
-    const copy = getDictionary(locale).dormantCheckIn;
+    const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
     // "Final" is the person's last nudge, not the relation's.
     const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
@@ -5086,6 +5088,7 @@ export async function sendMeetingReminders() {
   // from their own `orgId` (one batched read for the whole tick, before any
   // meeting is claimed) rather than assumed from the first one.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(
     meetings.flatMap((m) => [m.relation?.mentee?.orgId, m.relation?.mentor?.orgId]),
   );
@@ -5136,7 +5139,7 @@ export async function sendMeetingReminders() {
       try {
         const brand = await emailBrand(user.orgId);
         const base = await origins.urlFor(user.orgId);
-        const R = getDictionary(uLocale).notifications.meetingReminderEmail;
+        const R = (await dictionaryOf(uLocale, user.orgId)).notifications.meetingReminderEmail;
         const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
         await sendEmail({
           category: 'meeting-reminder',
@@ -5242,7 +5245,7 @@ async function sendMeetingGuestReminderEmail({
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
   const when = `${formatInTimeZone(scheduledAt, zone, undefined, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`;
-  const R = getDictionary(resolved).notifications.meetingReminderEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.meetingReminderEmail;
   const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
   const brand = await emailBrand(orgId);
   await sendEmail({
@@ -5336,6 +5339,7 @@ export async function sendProjectMeetingSeriesReminders() {
   // principle, but the link is still resolved per TEAM MEMBER from their own
   // `orgId` — one book for the whole tick, one query per distinct org.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
 
   for (const series of seriesList) {
     const oneToOne = !series.projectId ? series.relation : null;
@@ -5411,7 +5415,7 @@ export async function sendProjectMeetingSeriesReminders() {
         try {
           const brand = await emailBrand(series.project?.orgId ?? oneToOne?.orgId ?? null);
           const base = await origins.urlFor(user.orgId);
-          const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
+          const S = (await dictionaryOf(uLocale, user.orgId)).notifications.meetingSeriesReminderEmail;
           // Two sentences, because the project name is only appended when there
           // is one — and in Turkish and German that is not a suffix you can bolt
           // on to the end of the translated sentence.
@@ -5714,7 +5718,7 @@ async function sendOverdueTodoMail(
   const locale = resolveLocale(u.preferredLanguage);
   const block = await overdueTodoBlock(reach, locale, u.id, undefined, false);
   if (!block) return false;
-  const A = getDictionary(locale).notifications.activityDigestEmail;
+  const A = (await emailDictionary(locale, u.orgId)).notifications.activityDigestEmail;
   await sendEmail({
     category: 'activity-digest',
     userId: u.id,
