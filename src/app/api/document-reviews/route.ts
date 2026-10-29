@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -18,13 +17,15 @@ const TAKE = 100;
 // step of a PENDING document counts — a step behind an undecided one is not
 // waiting on anybody yet. Bounded (`take`), oldest first.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // An admin is judged by the permission layer (#1571); MENTOR and COMPANY by role.
+  const gate = await requireRoleOrPermission(['MENTOR', 'COMPANY'], 'content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   const role = session.user.role;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
   let scope: Prisma.DocumentReviewWhereInput;
-  if (role === 'ADMIN') scope = { reviewerRole: { in: ['ADMIN', 'EXTERNAL'] } };
+  if (admin) scope = { reviewerRole: { in: ['ADMIN', 'EXTERNAL'] } };
   else if (role === 'MENTOR') scope = { reviewerRole: { in: ['MENTOR', 'EXTERNAL'] }, document: { owner: { menteeRelations: { some: { mentorId: session.user.id, status: 'ACTIVE' } } } } };
   else if (role === 'COMPANY' && session.user.companyId) scope = { reviewerRole: 'COMPANY', document: { owner: { menteeRelations: { some: { companyId: session.user.companyId, status: 'ACTIVE' } } } } };
   else return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

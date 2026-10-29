@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -265,7 +266,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // collide with its own old slot — and so is the rest of the same session.
     const retimed = when !== null || durationMinutes !== undefined;
     // Booking over a collision is the admin's or the pair's own mentor's call.
-    if (force && session.user.role !== 'ADMIN' && !targets.every((t) => t.relation?.mentorId === session.user.id)) {
+    // "Admin" is the permission layer's answer, asked only when it matters (#1571).
+    if (
+      force &&
+      !targets.every((t) => t.relation?.mentorId === session.user.id) &&
+      !(await (async () => {
+        const actor = await actorFromSession(session);
+        return !!actor && (await can(actor, 'relation.write', undefined, session));
+      })())
+    ) {
       return NextResponse.json({ error: 'Only an admin or the mentor may book over a conflict' }, { status: 403 });
     }
     const pairs = retimed ? targets.flatMap((t) => (t.relation ? [t.relation.mentorId, t.relation.menteeId] : [])) : [];

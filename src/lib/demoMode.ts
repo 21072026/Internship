@@ -72,6 +72,8 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/v1\/hooks/, 'would POST from the production host to any URL'],
   [/^\/api\/admin\/audit-drains/, 'would stream the audit trail from the production host to any URL'],
   [/^\/api\/admin\/api-keys/, 'mints a real API credential'],
+  // The COMPANY owner's self-served key (#2006): the same credential, minted by another role.
+  [/^\/api\/company\/integrations\/api-keys/, 'mints a real API credential for a company'],
   [/^\/api\/admin\/roster-feeds/, 'stores a real remote credential and fetches from the production host'],
   [/^\/api\/admin\/email-test$/, 'sends mail to an arbitrary address'],
   [/^\/api\/admin\/import$/, 'bulk-imports data from an uploaded file'],

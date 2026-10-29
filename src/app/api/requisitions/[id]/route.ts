@@ -8,12 +8,17 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { closedAtForStatus, normalizeSkills, protectedFields, requisitionPatchSchema } from '@/lib/requisitions';
 import { syncRequisitionSkills } from '@/lib/skillsResolve';
+import { requireRoleOrPermission, type Permission } from '@/lib/authz';
 
 type Context = { params: Promise<{ id: string }> };
 
-function scopeFor(session: Session | null) {
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'COMPANY') return { error: NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 }) };
+async function scopeFor(
+  request: Request,
+  permission: Permission,
+): Promise<{ error: NextResponse } | { session: Session; orgId: string }> {
+  const gate = await requireRoleOrPermission(['COMPANY'], permission, { request });
+  if ('error' in gate) return gate;
+  const { session } = gate;
   const orgId = resolveOrgId(session);
   if (!orgId) return { error: NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 }) };
   if (session.user.role === 'COMPANY' && !session.user.companyId) return { error: NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 }) };
@@ -22,7 +27,7 @@ function scopeFor(session: Session | null) {
 
 export async function GET(_request: Request, { params }: Context) {
   const { id } = await params;
-  const scope = scopeFor(await getServerSession(authOptions));
+  const scope = await scopeFor(_request, 'company.read');
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const requisition = await prisma.requisition.findFirst({
@@ -41,7 +46,7 @@ export async function PATCH(request: Request, { params }: Context) {
   // reason as POST /api/requisitions: one answer per module, not one per role.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  const scope = scopeFor(session);
+  const scope = await scopeFor(request, 'company.write');
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);

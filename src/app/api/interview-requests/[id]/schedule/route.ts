@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
 import { notify, notifyIfAllowed } from '@/lib/notify';
@@ -51,7 +52,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const role = session.user.role;
     // A COMPANY may cancel its own request (see ../cancel) but never schedules:
     // the interview is brokered by the programme (#807).
-    if (role !== 'ADMIN' && role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
+    if ('error' in gate) return gate.error;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const parsed = scheduleInterviewRequestSchema.safeParse(await request.json().catch(() => null));

@@ -19,6 +19,7 @@ import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEdito
 import { OfferLetterTemplateEditor } from '@/components/OfferLetterTemplateEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
+import { SlaDayModeCard } from '@/components/admin/SlaDayModeCard';
 import { CrmBccCard } from '@/components/CrmBccCard';
 import { TerminologyCard } from '@/components/admin/TerminologyCard';
 import Link from 'next/link';
@@ -1043,6 +1044,9 @@ export default function AdminSettingsPage() {
 
       {/* Per-stage service levels (#817) — how long anyone may wait. */}
       <StageSlaEditor />
+
+      {/* How those SLA days are counted: calendar or business days (#1638). */}
+      <SlaDayModeCard />
     </div>
   );
 }

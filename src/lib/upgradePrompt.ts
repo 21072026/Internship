@@ -12,8 +12,22 @@
 import { isPremiumFeature, type PremiumFeature } from './entitlementsCatalog';
 import { LEGACY_PLAN_MAP, PLANS, getPlan, planIncludingFeature, type PlanAudience, type PlanKey } from './plans';
 
+/**
+ * What a `plan_limit_reached` counts: the active-relation cap (planGate.ts, the
+ * original and the default when a body names no metric) or one of the
+ * provisioning quotas (#1752, src/lib/quotaRule.ts).
+ */
+export const GATE_METRICS = ['ACTIVE_PAIRS', 'ADMIN_SEATS', 'COMPANIES', 'PROGRAMS'] as const;
+export type GateMetric = (typeof GATE_METRICS)[number];
+const GATE_LIMIT_KEY: Record<GateMetric, 'activePairs' | 'adminSeats' | 'companies' | 'programs'> = {
+  ACTIVE_PAIRS: 'activePairs',
+  ADMIN_SEATS: 'adminSeats',
+  COMPANIES: 'companies',
+  PROGRAMS: 'programs',
+};
+
 export type GateInfo =
-  | { code: 'plan_limit_reached'; plan: string | null; limit: number | null; usage: number | null }
+  | { code: 'plan_limit_reached'; metric: GateMetric; plan: string | null; limit: number | null; usage: number | null }
   | { code: 'feature_locked'; feature: PremiumFeature };
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -23,7 +37,8 @@ export function parseGateBody(body: unknown): GateInfo | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
   if (b.code === 'plan_limit_reached') {
-    return { code: 'plan_limit_reached', plan: typeof b.plan === 'string' ? b.plan : null, limit: num(b.limit), usage: num(b.usage) };
+    const metric = (GATE_METRICS as readonly unknown[]).includes(b.metric) ? (b.metric as GateMetric) : 'ACTIVE_PAIRS';
+    return { code: 'plan_limit_reached', metric, plan: typeof b.plan === 'string' ? b.plan : null, limit: num(b.limit), usage: num(b.usage) };
   }
   if (b.code === 'feature_locked' && isPremiumFeature(b.feature)) return { code: 'feature_locked', feature: b.feature };
   return null;
@@ -63,20 +78,21 @@ export function currentPlanKey(plan: string | null): PlanKey | null {
 }
 
 /**
- * The plan that lifts this gate, with its published price. For the relation
- * cap: the cheapest plan of the programme wallet with more active pairs than
- * the limit that was hit. For a feature: the cheapest plan of the wallet that
- * includes it (an add-on such as the AI pack has none — null, and the prompt
+ * The plan that lifts this gate, with its published price. For a cap: the
+ * cheapest plan of the programme wallet with more of that metric (active pairs,
+ * admin seats, companies, programmes) than the limit that was hit. For a
+ * feature: the cheapest plan of the wallet that includes it (an add-on such as the AI pack has none — null, and the prompt
  * then offers the pricing page alone).
  */
 export function upgradeOffer(gate: GateInfo, audience: PlanAudience = 'PROGRAM'): UpgradeOffer | null {
   if (gate.code === 'feature_locked') return offerFor(planIncludingFeature(gate.feature, audience));
   const limit = gate.limit;
+  const key = GATE_LIMIT_KEY[gate.metric];
   const next = PLANS.find(
     (p) =>
       p.audience === 'PROGRAM' &&
       p.key !== currentPlanKey(gate.plan) &&
-      (p.limits.activePairs === null || limit === null || p.limits.activePairs > limit),
+      (p.limits[key] === null || limit === null || (p.limits[key] as number) > limit),
   );
   return offerFor(next?.key ?? null);
 }

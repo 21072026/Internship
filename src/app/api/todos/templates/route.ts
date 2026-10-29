@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { readTranslations } from '@/lib/goalTemplates';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -15,12 +14,10 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 // handed out from them.
 //
 // Only the caller's own tenant's pool (cross-world isolation).
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+export async function GET(request: Request) {
+  const gate = await requireRoleOrPermission(['MENTOR'], 'content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const rows = await prisma.projectTaskTemplate.findMany({

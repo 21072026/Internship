@@ -60,6 +60,9 @@ export function AssignMentorInline({
   // duplicate in the document. useId is per-instance.
   const reasonSelectId = useId();
   const [choice, setChoice] = useState('');
+  // The coordinator's "why this mentor" (#1789), kept on the audit record only.
+  const [note, setNote] = useState('');
+  const noteId = useId();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   // A plan wall gets the upgrade prompt instead of a sentence (#1745).
@@ -176,7 +179,9 @@ export function AssignMentorInline({
       const res = await fetch('/api/mentorship', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mentorId, menteeId }),
+        // The batch the admin was shown (the server reads its rows to decide
+        // whether this overrode the ranking) and the note, for the audit record.
+        body: JSON.stringify({ mentorId, menteeId, suggestionBatchId: batchId ?? undefined, decisionNote: note.trim() || undefined }),
       });
       if (res.ok) {
         // Report the acceptance before the parent re-renders this card away.
@@ -262,6 +267,19 @@ export function AssignMentorInline({
         <Button size="sm" variant="ghost" loading={suggesting} onClick={() => suggest()} title={a.suggestHint} data-testid="suggest-mentor">
           <Sparkles className="h-4 w-4" />
         </Button>
+      </div>
+      <div className="mt-1.5">
+        <label htmlFor={noteId} className="sr-only">{t.matchDecision.noteLabel}</label>
+        <input
+          id={noteId}
+          type="text"
+          value={note}
+          maxLength={1000}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t.matchDecision.notePlaceholder}
+          data-testid="assign-decision-note"
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2.5 py-1 text-xs"
+        />
       </div>
       {suggestion && (
         <div className="mt-1.5 flex items-start gap-1.5" data-testid="mentor-suggestion">
