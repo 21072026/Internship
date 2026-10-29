@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Tenant offboarding export (#1584, story #1580):** `GET /api/admin/organizations/[id]/export` streams the whole tenant as one JSON document (`interncrm.tenant-export/1`: `_meta`, `organization`, `collections`, `_summary`). The walk is schema-driven (Prisma DMMF): every model with the org's `orgId`, then every model reached by a single-column FK from exported rows, paged by id and written as read. Credentials are omitted and listed in `_meta` by a fail-closed policy (`src/lib/orgExportPolicy.ts`, unit-tested against the real schema: a new secret-looking column nobody decided fails). Allowed for the world's super admin (`platform.org.read`) or the org's own ORG_ADMIN (new permission `org.export`); another tenant's admin 403 with a denial row; every export writes `org.exported`. Download button on `/admin/organizations`. `e2e/tenant-export.spec.ts` (@smoke: completeness, no cross-tenant id, no credential, the 403s).",
+  "notes": {
+    "en": ["Organization admins and operators can download a complete export of an organization's data as one JSON file — passwords, keys and other credentials are left out."],
+    "tr": ["Organizasyon yöneticileri ve operatörler artık bir organizasyonun tüm verisini tek bir JSON dosyası olarak indirebiliyor — parolalar, anahtarlar ve diğer kimlik bilgileri dahil edilmiyor."],
+    "de": ["Organisations-Admins und Betreiber können jetzt einen vollständigen Export der Daten einer Organisation als eine JSON-Datei herunterladen — Passwörter, Schlüssel und andere Zugangsdaten sind ausgenommen."]
+  }
+}

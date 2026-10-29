@@ -5,6 +5,7 @@ import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { UpcomingMeetings } from '@/components/UpcomingMeetings';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
+import { MentorOffersPortalPanel } from '@/components/MentorOffersPortalPanel';
 import { OfferCard } from '@/components/OfferCard';
 import { JourneyTracker } from '@/components/JourneyTracker';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
@@ -168,6 +169,8 @@ export default async function PortalDashboard({
           to preselect the requested mentor (#1773). */}
       {(!relation || isArchived) ? (
         <Suspense fallback={null}>
+          {/* Mentor Offers (#1809): the opt-in and any open offers. */}
+          <MentorOffersPortalPanel />
           <MentorshipRequestPanel />
         </Suspense>
       ) : requestedMentorId ? (

@@ -81,6 +81,8 @@ const updateProfileSchema = z.object({
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
   // How many mentees may pick this mentor themselves (#1808); null = capacity alone.
   selfMatchLimit: z.number().int().min(0).max(100).nullable().optional(),
+  // A mentee's opt-in to Mentor Offers (#1809). Off unless they switch it on.
+  openToOffers: z.boolean().optional(),
   // Name display on a published testimonial (#1096): full name is an explicit
   // choice; null/unset renders initials (the privacy-first default).
   testimonialNameStyle: z.enum(['fullname', 'initials']).nullable().optional(),
@@ -103,7 +105,7 @@ const updateProfileSchema = z.object({
 });
 
 const PROFILE_FIELDS = new Set(Object.keys(updateProfileSchema.shape));
-const MENTEE_ONLY_FIELDS = new Set(['university', 'department', 'graduationYear', 'targetPosition', 'cvUrl']);
+const MENTEE_ONLY_FIELDS = new Set(['university', 'department', 'graduationYear', 'targetPosition', 'cvUrl', 'openToOffers']);
 // `interests` is deliberately absent: both roles fill it in (a mentee's areas of
 // interest, a mentor's areas of expertise), so it is not owned by either.
 const MENTOR_ONLY_FIELDS = new Set(['mentorCapacity', 'acceptingMentees', 'selfMatchLimit', 'languages']);
@@ -153,6 +155,7 @@ const PROFILE_SELECT = {
   mentorCapacity: true,
   acceptingMentees: true,
   selfMatchLimit: true,
+  openToOffers: true,
   testimonialNameStyle: true,
   emailNotifications: true,
   notificationPrefs: true,

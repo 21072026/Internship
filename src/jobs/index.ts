@@ -17,6 +17,7 @@ import { runEventDelivery } from '@/lib/events/emit';
 import { runWebhookDelivery } from '@/lib/webhookDelivery';
 import { runNudgeScan, runNudgeSend } from '@/lib/nudges/evaluate';
 import { runDelayedAutomation } from '@/lib/automation/evaluate';
+import { runNotificationEmail } from '@/lib/notifications/emailJob';
 import { counters } from './summary';
 import { registerReminderJobs } from './reminders';
 import { registerMeetingJobs } from './meetings';
@@ -99,6 +100,11 @@ export function registerAllJobs(): void {
   // RUNNING in one guarded update before any action, so a rerun finds it taken
   // and does nothing — the actions are at-most-once by design (engine.ts).
   registerJob('automation.run', async (payload) => runDelayedAutomation(payload.runId), { timeoutMs: 120_000 });
+
+  // One event mail the notification router owes one person (#1719). The
+  // NotificationDelivery row is claimed QUEUED → SENT before the send, so a
+  // rerun of a job whose mail already left finds it taken and sends nothing.
+  registerJob('notification.email', async (payload, ctx) => ({ [await runNotificationEmail(payload, ctx.job)]: 1 }), { timeoutMs: 60_000 });
 
   // Each feed runs under its own claim (one conditional UPDATE), and a feed
   // whose lastRunAt the first run already moved is no longer due — so a

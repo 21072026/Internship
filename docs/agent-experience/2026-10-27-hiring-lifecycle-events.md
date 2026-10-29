@@ -19,3 +19,11 @@
   (which always runs in its caller's tx) the move is *noted* in an `AsyncLocalStorage`
   and `stageTransaction()` raises it after `prisma.$transaction` resolves; noting
   outside the wrapper throws in dev, so a forgotten caller is a red test.
+- **A new public event also moves the webhook contract snapshot** (#1611):
+  `scripts/test/fixtures/webhook-payloads.json` pins every public payload, and
+  `scripts/test/webhook-contract.test.mjs` (in `npm run test:unit`) fails on an added
+  entry too. Regenerate with `UPDATE_WEBHOOK_CONTRACT=1 node --test --experimental-strip-types
+  scripts/test/webhook-contract.test.mjs` in the same PR as the catalogue entry, and check
+  the diff is additions only. Two of my slices merged without it and turned main red.
+- `pkill -f "next dev"` inside a Bash command kills that command's own shell (its command
+  line contains the pattern; exit 144). Use `kill $(pgrep -f 'next de[v]')`.
