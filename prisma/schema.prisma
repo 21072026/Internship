@@ -968,6 +968,7 @@ model User {
   contributorTermsAcceptances       ContributorTermsAcceptance[]
   mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
+  calendarConnections               CalendarConnection[]
   companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
   // Company → candidate message requests (#1840); removed with the person.
   candidateOutreach                 CandidateOutreach[]            @relation("CandidateOutreachMentee")
@@ -4923,6 +4924,7 @@ model Meeting {
   interaction      InteractionLog?
   notes            PersonalNote[]
   googleEvents     GoogleCalendarEventLink[]
+  calendarEvents   CalendarEventLink[]
   guests           MeetingGuest[]
   feedback         MeetingFeedback[]
   attendance       MeetingAttendance[]
@@ -5166,6 +5168,7 @@ model MeetingSeries {
   attendance    MeetingAttendance[]
   // The one recurring Google event per connected member (#2654).
   calendarLinks GoogleCalendarEventLink[]
+  providerLinks CalendarEventLink[]
 
   @@index([projectId])
   @@index([relationId])
@@ -6756,6 +6759,81 @@ model GoogleCalendarEventLink {
   meeting    Meeting?                 @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   series     MeetingSeries?           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   connection GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, connectionId])
+  @@unique([seriesId, connectionId])
+  @@index([connectionId])
+}
+
+/// Which calendar service a connection talks to (#1989).
+enum CalendarProviderKind {
+  GOOGLE
+  MICROSOFT
+}
+
+/// One person's consent to mirror meetings into ONE provider's calendar (#1989).
+///
+/// EXPAND phase of a provider-neutral connection layer: this replaces
+/// GoogleCalendarConnection, which stays in the schema, untouched and no longer
+/// written, until a separate contract PR drops it after production counts match
+/// (prisma/backfill-calendar-connections.mjs copies it across once). Renaming
+/// the old model would have been a drop-and-recreate under `db push
+/// --accept-data-loss` and destroyed every stored consent.
+///
+/// The key is (userId, provider): a person may hold a Google AND a Microsoft
+/// connection at once; the old `userId @unique` allowed one calendar per person.
+///
+/// No `orgId`, deliberately: like MeetingGuest this hangs off a scoped parent
+/// (the User) and is never listed across people, so it is not in TENANT_MODELS
+/// (src/lib/orgContext.ts) and gets no automatic tenant protection — every
+/// reader looks a row up by its own userId, on purpose.
+model CalendarConnection {
+  id       String               @id @default(cuid())
+  userId   String
+  provider CalendarProviderKind
+
+  /// The account that granted consent — shown back to the person so they can
+  /// tell WHICH calendar this is before they trust it or disconnect it.
+  accountEmail String
+  /// 'primary' unless the operator points it elsewhere.
+  calendarId   String @default("primary")
+  /// What the provider actually granted.
+  scope        String @db.Text
+
+  /// Sealed with lib/secretBox under the PROVIDER's own purpose string; never
+  /// written in the clear.
+  accessTokenEnc  String   @db.Text
+  refreshTokenEnc String?  @db.Text
+  expiresAt       DateTime
+
+  lastSyncAt DateTime?
+  lastError  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events CalendarEventLink[]
+
+  @@unique([userId, provider])
+  @@index([provider])
+}
+
+/// Which provider event a meeting (or a recurring series) became, on one
+/// connection's calendar (#1989) — the provider-neutral successor of
+/// GoogleCalendarEventLink, with the same shape: exactly one of `meetingId` /
+/// `seriesId` is set, one row per (meeting OR series) × connection.
+model CalendarEventLink {
+  id              String   @id @default(cuid())
+  meetingId       String?
+  seriesId        String?
+  connectionId    String
+  externalEventId String
+  pushedAt        DateTime @default(now())
+
+  meeting    Meeting?           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  series     MeetingSeries?     @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  connection CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, connectionId])
   @@unique([seriesId, connectionId])

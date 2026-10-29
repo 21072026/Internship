@@ -63,12 +63,12 @@ export const CALENDAR_PROVIDERS: readonly CalendarProvider[] = [
     connectPath: '/api/integrations/google/connect',
     disconnectPath: '/api/integrations/google/connection',
     async readConnection(userId) {
-      const conn = await prisma.googleCalendarConnection.findUnique({
-        where: { userId },
-        select: { googleEmail: true, lastSyncAt: true, lastError: true, scope: true },
+      const conn = await prisma.calendarConnection.findUnique({
+        where: { userId_provider: { userId, provider: 'GOOGLE' } },
+        select: { accountEmail: true, lastSyncAt: true, lastError: true, scope: true },
       });
       if (!conn) return null;
-      return { accountEmail: conn.googleEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError, freeBusy: scopeAllowsFreeBusy(conn.scope) };
+      return { accountEmail: conn.accountEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError, freeBusy: scopeAllowsFreeBusy(conn.scope) };
     },
   },
 ];

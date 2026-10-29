@@ -17,7 +17,7 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const connections = await prisma.googleCalendarConnection.count();
+  const connections = await prisma.calendarConnection.count({ where: { provider: 'GOOGLE' } });
   return NextResponse.json({
     configured: isGoogleCalendarConfigured(),
     enabled: isGoogleCalendarEnabled(),

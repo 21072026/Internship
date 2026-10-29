@@ -13,9 +13,9 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const conn = await prisma.googleCalendarConnection.findUnique({
-    where: { userId: session.user.id },
-    select: { googleEmail: true, calendarId: true, lastSyncAt: true, lastError: true, createdAt: true },
+  const conn = await prisma.calendarConnection.findUnique({
+    where: { userId_provider: { userId: session.user.id, provider: 'GOOGLE' } },
+    select: { accountEmail: true, calendarId: true, lastSyncAt: true, lastError: true, createdAt: true },
   });
   return NextResponse.json({
     configured: isGoogleCalendarConfigured(),

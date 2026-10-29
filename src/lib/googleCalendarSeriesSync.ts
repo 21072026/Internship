@@ -77,18 +77,18 @@ async function audienceOf(series: SyncableSeries): Promise<string[]> {
   return [...new Set(members.map((m) => m.userId))];
 }
 
-async function deleteLink(link: { id: string; googleEventId: string; connection: { userId: string; calendarId: string } }) {
+async function deleteLink(link: { id: string; externalEventId: string; connection: { userId: string; calendarId: string } }) {
   const auth = await accessTokenFor(link.connection.userId);
   if (auth) {
     await calendarFetch(
       auth.token,
-      `/calendars/${encodeURIComponent(link.connection.calendarId)}/events/${encodeURIComponent(link.googleEventId)}`,
+      `/calendars/${encodeURIComponent(link.connection.calendarId)}/events/${encodeURIComponent(link.externalEventId)}`,
       { method: 'DELETE' },
     ).catch(() => null);
   }
   // Dropped either way, for the reason removeMeeting() gives: a link to an
   // event we can no longer reach is worse than no link.
-  await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
+  await prisma.calendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
 }
 
 /**
@@ -114,14 +114,14 @@ export async function syncSeries(series: SyncableSeries): Promise<number> {
     if (!auth) continue;
     kept.add(auth.connectionId);
 
-    const link = await prisma.googleCalendarEventLink.findUnique({
+    const link = await prisma.calendarEventLink.findUnique({
       where: { seriesId_connectionId: { seriesId: series.id, connectionId: auth.connectionId } },
     });
     // Named per RECIPIENT: the event lands in that person's calendar and must
     // name the product their account lives in (docs/worlds.md).
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
     const product = await productNameForOrg(owner?.orgId);
-    const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
+    const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.externalEventId)}` : ''}`;
     const res = await calendarFetch(auth.token, path, {
       method: link ? 'PATCH' : 'POST',
       body: JSON.stringify(eventBody(series, first!, rrule!, product)),
@@ -132,20 +132,20 @@ export async function syncSeries(series: SyncableSeries): Promise<number> {
       // A remembered event Google no longer has: forget it, so the next sync
       // creates a fresh one instead of patching a ghost.
       if (res?.status === 404 && link) {
-        await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
+        await prisma.calendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
       }
       continue;
     }
 
-    const eventId = typeof res.body.id === 'string' ? res.body.id : link?.googleEventId;
+    const eventId = typeof res.body.id === 'string' ? res.body.id : link?.externalEventId;
     if (eventId) {
-      await prisma.googleCalendarEventLink.upsert({
+      await prisma.calendarEventLink.upsert({
         where: { seriesId_connectionId: { seriesId: series.id, connectionId: auth.connectionId } },
-        update: { googleEventId: eventId, pushedAt: new Date() },
-        create: { seriesId: series.id, connectionId: auth.connectionId, googleEventId: eventId },
+        update: { externalEventId: eventId, pushedAt: new Date() },
+        create: { seriesId: series.id, connectionId: auth.connectionId, externalEventId: eventId },
       });
     }
-    await prisma.googleCalendarConnection
+    await prisma.calendarConnection
       .update({ where: { id: auth.connectionId }, data: { lastSyncAt: new Date(), lastError: null } })
       .catch(() => {});
     pushed++;
@@ -153,8 +153,8 @@ export async function syncSeries(series: SyncableSeries): Promise<number> {
 
   // Everyone the series no longer reaches: cancelled, moved to another project,
   // removed from this one, or a rule with no weekday left.
-  const stale = await prisma.googleCalendarEventLink.findMany({
-    where: { seriesId: series.id, ...(kept.size > 0 ? { connectionId: { notIn: [...kept] } } : {}) },
+  const stale = await prisma.calendarEventLink.findMany({
+    where: { seriesId: series.id, connection: { provider: 'GOOGLE' }, ...(kept.size > 0 ? { connectionId: { notIn: [...kept] } } : {}) },
     include: { connection: { select: { userId: true, calendarId: true } } },
   });
   for (const link of stale) await deleteLink(link);
