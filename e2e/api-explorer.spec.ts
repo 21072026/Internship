@@ -260,7 +260,16 @@ test('a guarded operation asks before it fires, and declining sends nothing', as
     // have to repair. Scoped to the widget: AdminNav renders its own sidebar
     // filter box, so an unscoped input selector hits that instead (CLAUDE.md).
     await ui.locator('.filter input').fill('admin');
-    await ui.locator('.opblock-tag[data-tag="admin"]').click();
+    // The filter applies on a delay and re-renders the tag list closed, so a
+    // click that lands before it is undone and the operation below is never
+    // rendered (e2e-full, 2026-10-28/29). Open the tag until it STAYS open; the
+    // click is a toggle, so only click while it reads shut.
+    const tag = ui.locator('.opblock-tag[data-tag="admin"]');
+    await expect(async () => {
+      if ((await tag.getAttribute('data-is-open')) !== 'true') await tag.click();
+      await expect(tag).toHaveAttribute('data-is-open', 'true', { timeout: 2_000 });
+      await expect(ui.locator('.opblock').first()).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     const op = ui.locator('.opblock.opblock-delete', {
       has: page.locator('span.opblock-summary-path[data-path="/api/admin/api-keys"]'),
     });

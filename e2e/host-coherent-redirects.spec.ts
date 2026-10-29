@@ -47,7 +47,10 @@ test('a sign-out on a served host keeps the configured port — and no other (#3
   const otherPort = String(Number(base.port) + 1);
   expect(await signOutUrl(request, `${base.protocol}//${MARKETING}:${otherPort}/auth/signin`, AS_MARKETING_DEV))
     .toBe(`${base.protocol}//${MARKETING}/auth/signin`);
-  expect(await signOutUrl(request, `${base.protocol}//evil.example:${base.port}/auth/signin`, AS_MARKETING_DEV)).toBe(base.href);
+  // Compared as URLs: NextAuth hands back its bare baseUrl ("http://localhost:3000"),
+  // which `URL.href` spells with the trailing slash — the same place either way.
+  const refused = await signOutUrl(request, `${base.protocol}//evil.example:${base.port}/auth/signin`, AS_MARKETING_DEV);
+  expect(new URL(refused).href).toBe(base.href);
 });
 
 test('a sign-out callbackUrl on a host we do not serve falls back to baseUrl — no open redirect', async ({ request }) => {

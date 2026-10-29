@@ -187,7 +187,10 @@ test('a postal campaign: eligibility, objection + block list, print, lock, short
     expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: 'zu kurz' } })).status()).toBe(400);
 
     // Not for anyone but an admin.
-    await signInAsFreshUser(page, menteeEmail, PW, '/portal');
+    // A MARKETING lead has no mentee portal (#2351): /portal bounces it to
+    // /account. Waiting on '/portal' only passed when the URL was caught
+    // mid-bounce, which is why this read green locally and red on e2e-full.
+    await signInAsFreshUser(page, menteeEmail, PW, '/account');
     expect((await page.request.get('/api/admin/post-campaigns')).status()).toBe(401);
     expect((await page.request.put('/api/admin/post-campaigns/letter-template', { data: { letterBody: '' } })).status()).toBe(401);
   } finally {

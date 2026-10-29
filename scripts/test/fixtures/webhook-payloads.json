@@ -477,5 +477,92 @@
       "reasonCode"
     ],
     "additionalProperties": false
+  },
+  "offer.sent@1": {
+    "type": "object",
+    "properties": {
+      "offerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "applicationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "offerId",
+      "applicationId",
+      "requisitionId"
+    ],
+    "additionalProperties": false
+  },
+  "offer.withdrawn@1": {
+    "type": "object",
+    "properties": {
+      "offerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "applicationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "offerId",
+      "applicationId",
+      "requisitionId"
+    ],
+    "additionalProperties": false
+  },
+  "offer.expired@1": {
+    "type": "object",
+    "properties": {
+      "offerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "applicationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "requisitionId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [
+      "offerId",
+      "applicationId",
+      "requisitionId"
+    ],
+    "additionalProperties": false
   }
 }

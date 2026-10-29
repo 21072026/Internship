@@ -70,7 +70,6 @@ const DECISIONS = new Map([
   ['AiArtifact.content', ERASED],
   ['RequisitionFit.reason', ERASED],
   ['CompanyInterest.note', ERASED],
-  ['RequisitionFit.reason', ERASED],
   ['CandidateOutreach.firstMessage', ERASED],
   ['ProjectJoinRequest.message', ERASED],
   ['ProjectJoinRequest.decisionNote', ERASED],
