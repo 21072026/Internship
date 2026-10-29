@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
+import { requirePermission, type Permission } from '@/lib/authz';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -16,11 +15,10 @@ import { addRecipients, findCampaign } from '@/lib/postCampaign';
  * DELETE `?companyId=` — take one off a DRAFT.
  * A SENT campaign answers 409 `campaign_sent` to both (#2697).
  */
-async function gate() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const;
-  }
+async function gate(permission: Permission, request: Request) {
+  const authz = await requirePermission(permission, { request });
+  if ('error' in authz) return { error: authz.error } as const;
+  const { session } = authz;
   const gated = await requireCapability(session.user.orgId, 'companies');
   if (gated) return { error: gated } as const;
   return { session } as const;
@@ -31,7 +29,7 @@ const SENT = () => NextResponse.json({ error: 'A sent campaign cannot be changed
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.write', request);
     if ('error' in g) return g.error;
     const { session } = g;
     const { id } = await params;
@@ -56,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const g = await gate();
+    const g = await gate('content.write', request);
     if ('error' in g) return g.error;
     const { session } = g;
     const { id } = await params;

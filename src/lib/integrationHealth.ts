@@ -45,7 +45,7 @@ export interface ConnectorHealth {
   // token or a certificate body.
   lastError: string | null;
   // Connector-specific counters for the UI. Never an identity (no recipient, no
-  // googleEmail, no issuer) and never a secret or its length.
+  // accountEmail, no issuer) and never a secret or its length.
   detail: Record<string, string | number | boolean | null>;
 }
 
@@ -106,19 +106,19 @@ async function webhooksRow(orgId: string | null): Promise<ConnectorHealth> {
 async function googleCalendarRow(orgId: string | null): Promise<ConnectorHealth> {
   const configured = isGoogleCalendarConfigured();
   // A connection belongs to a person; the person to a tenant.
-  const mine = { user: { orgId } };
+  const mine = { provider: 'GOOGLE' as const, user: { orgId } };
   const [connections, broken, lastSync, lastFail] = await Promise.all([
-    prisma.googleCalendarConnection.count({ where: mine }),
-    prisma.googleCalendarConnection.count({ where: { ...mine, lastError: { not: null } } }),
-    prisma.googleCalendarConnection.findFirst({
+    prisma.calendarConnection.count({ where: mine }),
+    prisma.calendarConnection.count({ where: { ...mine, lastError: { not: null } } }),
+    prisma.calendarConnection.findFirst({
       where: { ...mine, lastSyncAt: { not: null } },
       orderBy: { lastSyncAt: 'desc' },
       select: { lastSyncAt: true },
     }),
-    prisma.googleCalendarConnection.findFirst({
+    prisma.calendarConnection.findFirst({
       where: { ...mine, lastError: { not: null } },
       orderBy: { updatedAt: 'desc' },
-      // Never googleEmail — the operator figure is "how many are broken", not
+      // Never accountEmail — the operator figure is "how many are broken", not
       // whose account it is.
       select: { updatedAt: true, lastError: true },
     }),

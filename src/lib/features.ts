@@ -159,6 +159,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     // every vertical, so untagged.
     { key: 'brandIcons', category: 'platform', icon: ImagePlus, color: 'purple', title: C.brandIcons.t, desc: C.brandIcons.d },
     { key: 'enterpriseSso', category: 'trust', icon: KeyRound, color: 'indigo', title: C.enterpriseSso.t, desc: C.enterpriseSso.d },
+    { key: 'integrations', category: 'platform', icon: Link2, color: 'indigo', title: C.integrations.t, desc: C.integrations.d },
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     // #2563 — core CRM (a person-written follow-up date on any record), so untagged.
     { key: 'followUps', category: 'tracking', icon: CalendarClock, color: 'amber', title: C.followUps.t, desc: C.followUps.d },

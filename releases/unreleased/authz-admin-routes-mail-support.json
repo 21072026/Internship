@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin routes behind the permission layer — mail, support & safeguarding (#1571, story #1565):** `/api/admin/email-log`, `email-health`, `email-suppressions` (+ release), `email-test`, `mail-queue` (+ retry/cancel), `broadcast-quota`, `crm-bcc`, `support` (+ `reports/**`) and `safeguarding/**` authorize through `requirePermission()` (`mail.read/write`, `support.read/write`, `safeguarding.read/write`; the CRM BCC address is a secret, so even its GET needs `mail.write`). The mail-queue operator scope and the super-admin checks after the gate are unchanged. Five private `requireAdmin()` helpers are gone. A signed-in non-admin gets 403 instead of 401. The outbox routes admit MENTOR too and stay in the baseline."
+}

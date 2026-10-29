@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Provider-neutral calendar tables, expand phase (#1989):** new `CalendarConnection` (`@@unique([userId, provider])`, enum `CalendarProviderKind { GOOGLE MICROSOFT }`) and `CalendarEventLink` (`externalEventId`, same `(meeting|series) × connection` keys). Every Google read and write moved to them; `GoogleCalendarConnection` / `GoogleCalendarEventLink` stay in the schema untouched as the rollback (Disconnect also deletes the person's old row). `prisma/backfill-calendar-connections.mjs` (registry `0035`, once, insert-only, prints old/new counts) copies them at deploy with the sealed tokens verbatim. Additive only — `check:schema-push` green. The contract (drop the old models) is a separate PR after production counts match. No user-visible change."
+}

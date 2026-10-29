@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       try {
-        const { newRelationId } = await winBack({ relationId: relation.id, toStage: plan.toStage, expect: { pipelineStatus: relation.pipelineStatus } });
+        const { newRelationId } = await winBack({ relationId: relation.id, toStage: plan.toStage, expect: { pipelineStatus: relation.pipelineStatus }, actorId: session.user.id });
         await logActivity({
           action: 'pipeline.win_back',
           actorId: session.user.id,

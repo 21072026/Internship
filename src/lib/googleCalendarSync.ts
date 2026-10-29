@@ -74,14 +74,14 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
     const auth = await accessTokenFor(userId);
     if (!auth) continue;
 
-    const link = await prisma.googleCalendarEventLink.findUnique({
+    const link = await prisma.calendarEventLink.findUnique({
       where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
     });
     // Named per RECIPIENT, not per meeting: the event lands in that person's
     // calendar and must name the product their account lives in.
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
     const product = await productNameForOrg(owner?.orgId);
-    const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
+    const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.externalEventId)}` : ''}`;
 
     const res = await calendarFetch(auth.token, path, {
       method: link ? 'PATCH' : 'POST',
@@ -93,20 +93,20 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
       // A remembered event id that Google no longer has is a dead pointer; drop
       // it so the next push creates a fresh event instead of patching a ghost.
       if (res?.status === 404 && link) {
-        await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
+        await prisma.calendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
       }
       continue;
     }
 
-    const eventId = typeof res.body.id === 'string' ? res.body.id : link?.googleEventId;
+    const eventId = typeof res.body.id === 'string' ? res.body.id : link?.externalEventId;
     if (eventId) {
-      await prisma.googleCalendarEventLink.upsert({
+      await prisma.calendarEventLink.upsert({
         where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
-        update: { googleEventId: eventId, pushedAt: new Date() },
-        create: { meetingId: meeting.id, connectionId: auth.connectionId, googleEventId: eventId },
+        update: { externalEventId: eventId, pushedAt: new Date() },
+        create: { meetingId: meeting.id, connectionId: auth.connectionId, externalEventId: eventId },
       });
     }
-    await prisma.googleCalendarConnection.update({
+    await prisma.calendarConnection.update({
       where: { id: auth.connectionId },
       data: { lastSyncAt: new Date(), lastError: null },
     }).catch(() => {});
@@ -126,8 +126,9 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
  */
 export async function removeMeeting(meetingId: string): Promise<void> {
   if (!isGoogleCalendarEnabled()) return;
-  const links = await prisma.googleCalendarEventLink.findMany({
-    where: { meetingId },
+  const links = await prisma.calendarEventLink.findMany({
+    // Google's links only: this module speaks Google's API (#1989).
+    where: { meetingId, connection: { provider: 'GOOGLE' } },
     include: { connection: { select: { userId: true, calendarId: true } } },
   });
   for (const link of links) {
@@ -135,13 +136,13 @@ export async function removeMeeting(meetingId: string): Promise<void> {
     if (auth) {
       await calendarFetch(
         auth.token,
-        `/calendars/${encodeURIComponent(link.connection.calendarId)}/events/${encodeURIComponent(link.googleEventId)}`,
+        `/calendars/${encodeURIComponent(link.connection.calendarId)}/events/${encodeURIComponent(link.externalEventId)}`,
         { method: 'DELETE' }
       ).catch(() => null);
     }
     // Drop our record either way: the meeting is gone from this app, and a link
     // pointing at an event we can no longer reach is worse than no link.
-    await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
+    await prisma.calendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
   }
 }
 

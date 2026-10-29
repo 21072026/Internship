@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { requirePermission } from '@/lib/authz';
 import {
   countInvitationStatuses,
   deriveInvitationStatus,
@@ -74,9 +73,9 @@ function iso(value: Date | null): string {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('user.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     const url = new URL(request.url);
     const format = url.searchParams.get('format');

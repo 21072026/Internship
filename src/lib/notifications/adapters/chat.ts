@@ -7,6 +7,7 @@ import { renderNotification } from '@/lib/notificationText';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { isChatAppsEnabled } from '@/lib/chat/config';
 import { openBotToken } from '@/lib/chat/tokens';
+import { freshSlackBotToken } from '@/lib/chat/tokenRefresh';
 import { chatClientFor } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
 
@@ -113,7 +114,14 @@ export async function deliverChat(input: {
     }
 
     const client = chatClientFor(ws.platform);
-    const token = openBotToken(ws.botTokenEnc) ?? '';
+    let token: string;
+    try {
+      token = (ws.platform === 'SLACK' ? await freshSlackBotToken(ws) : openBotToken(ws.botTokenEnc)) ?? '';
+    } catch (e) {
+      const code = errorCode(e);
+      await record('FAILED', identity.externalUserId, { error: code });
+      return { status: 'FAILED', error: code };
+    }
     if (ws.platform === 'SLACK' && !token) {
       await record('FAILED', identity.externalUserId, { error: 'no_token' });
       await prisma.chatWorkspace.update({ where: { id: ws.id }, data: { lastError: 'no_token' } });
