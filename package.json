@@ -80,6 +80,7 @@
     "check:user-email-lookups": "node scripts/check-user-email-lookups.mjs",
     "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:route-auth": "node scripts/check-route-auth.mjs",
+    "check:authz": "node scripts/check-authz.mjs",
     "check:capability-writers": "node scripts/check-capability-writers.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:locale-dates": "node scripts/check-locale-dates.mjs",

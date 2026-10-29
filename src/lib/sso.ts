@@ -11,6 +11,10 @@ import { certificateInfo } from '@/lib/ssoMetadata';
 
 export type SsoProvider = 'saml' | 'oidc';
 
+// secretBox purpose of the sealed OIDC client secret (#1926). Its own label,
+// so the key that seals it seals nothing else.
+export const OIDC_CLIENT_SECRET_PURPOSE = 'sso-oidc-client-secret';
+
 export interface SsoConfig {
   ssoEnabled: boolean;
   ssoProvider: string | null;
@@ -19,6 +23,11 @@ export interface SsoConfig {
   ssoCertificate: string | null;
   // The IdP's SingleLogoutService (#1952). Optional: SSO works without SLO.
   ssoLogoutUrl?: string | null;
+  // OpenID Connect (#1926). The secret is judged only for presence here — it
+  // is stored sealed, and this module never opens it.
+  ssoClientId?: string | null;
+  ssoClientSecretEnc?: string | null;
+  ssoDiscoveryUrl?: string | null;
 }
 
 // Every provider the config *vocabulary* knows about…
@@ -39,15 +48,37 @@ export function isSsoProviderImplemented(v: unknown): v is SsoProvider {
 
 // A config is "complete" when every field the provider needs is present. This is
 // independent of ssoEnabled — an admin can fill it in, validate, then flip the
-// switch. SAML needs issuer + entry point + signing cert; OIDC needs issuer +
-// entry point (discovery/authorization endpoint).
+// switch. Per provider (#1926):
+//   SAML — issuer + entry point + signing certificate (unchanged);
+//   OIDC — issuer + client ID + client secret + discovery URL. The discovery
+//          document names the authorization, token and JWKS endpoints, so an
+//          OIDC config has no entry point of its own. (An explicit endpoint
+//          triple instead of discovery is deliberately not offered: Entra ID,
+//          Google Workspace and Okta all publish discovery.)
+const has = (s: string | null | undefined) => typeof s === 'string' && s.trim().length > 0;
+
 export function isSsoConfigComplete(c: Partial<SsoConfig> | null | undefined): boolean {
   if (!c) return false;
-  const has = (s: string | null | undefined) => typeof s === 'string' && s.trim().length > 0;
   if (!isSsoProvider(c.ssoProvider)) return false;
-  if (!has(c.ssoIssuer) || !has(c.ssoEntryPoint)) return false;
-  if (c.ssoProvider === 'saml' && !has(c.ssoCertificate)) return false;
-  return true;
+  if (!has(c.ssoIssuer)) return false;
+  if (c.ssoProvider === 'saml') return has(c.ssoEntryPoint) && has(c.ssoCertificate);
+  return has(c.ssoClientId) && has(c.ssoClientSecretEnc) && has(c.ssoDiscoveryUrl);
+}
+
+/** What an incomplete config still lacks, for the refusal message. */
+export function missingSsoFields(c: Partial<SsoConfig>): string[] {
+  const out: string[] = [];
+  if (!isSsoProvider(c.ssoProvider)) return ['provider'];
+  if (!has(c.ssoIssuer)) out.push('issuer');
+  if (c.ssoProvider === 'saml') {
+    if (!has(c.ssoEntryPoint)) out.push('entry point');
+    if (!has(c.ssoCertificate)) out.push('certificate');
+  } else {
+    if (!has(c.ssoClientId)) out.push('client ID');
+    if (!has(c.ssoClientSecretEnc)) out.push('client secret');
+    if (!has(c.ssoDiscoveryUrl)) out.push('discovery URL');
+  }
+  return out;
 }
 
 // The tenant's stored config plus the plan it is on — an Organization row
@@ -121,8 +152,12 @@ export function validateSsoConfig(
   if (slo && !/^https:\/\//i.test(slo)) {
     return 'SSO logout URL must be an https URL';
   }
+  const discovery = (c.ssoDiscoveryUrl ?? '').trim();
+  if (discovery && !/^https:\/\//i.test(discovery)) {
+    return 'OIDC discovery URL must be an https URL';
+  }
   if (c.ssoEnabled && !isSsoConfigComplete(c)) {
-    return 'Cannot enable SSO until the provider, issuer, entry point (and certificate for SAML) are all set';
+    return `Cannot enable SSO until the configuration is complete — missing: ${missingSsoFields(c).join(', ')}`;
   }
   if (opts.checkCertificate && c.ssoProvider === 'saml' && c.ssoCertificate?.trim()) {
     return validateSsoCertificate(c.ssoCertificate, opts.now);

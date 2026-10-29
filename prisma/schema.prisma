@@ -97,15 +97,15 @@ enum PipelineStatus {
 // enforces isolation yet, so behaviour is unchanged. Enforcement (query
 // filtering, per-org uniqueness) lands in a later, guarded slice.
 model Organization {
-  id               String   @id @default(cuid())
-  name             String
-  slug             String   @unique
+  id                 String    @id @default(cuid())
+  name               String
+  slug               String    @unique
   // Per-tenant plan tier (#547). Limits per plan live in src/lib/orgPlans.ts
   // (client-safe catalogue), not the DB. New tenants start on FREE; the
   // backfilled legacy "default" org is grandfathered to ENTERPRISE (unlimited)
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
-  plan             OrgPlan  @default(FREE)
+  plan               OrgPlan   @default(FREE)
   // Which PRODUCT this tenant is (#2350, epic #2348). coreCRM is one core with
   // several verticals: INTERNSHIP is the mentorship/placement product this repo
   // started as, MARKETING the second one. It is a property of the TENANT, not of
@@ -120,16 +120,16 @@ model Organization {
   //
   // Literal default, so `db push` fills existing rows itself (#2298 only bites
   // client-side defaults and required columns without one).
-  vertical         String   @default("INTERNSHIP")
+  vertical           String    @default("INTERNSHIP")
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,
   // the #543 enforcement slice); until then they are managed but not applied to
   // the live single-tenant UI.
-  brandName        String?
-  brandLogoUrl     String?  @db.Text
-  brandColor       String?
-  supportEmail     String?
+  brandName          String?
+  brandLogoUrl       String?   @db.Text
+  brandColor         String?
+  supportEmail       String?
   // Per-organization brand (#2922, docs/white-label.md). The rule is pure in
   // src/lib/brandRule.ts: a field left null falls back to the vertical's
   // default on its own, and a row with none of them set IS the default. All
@@ -140,25 +140,25 @@ model Organization {
   //                    (super admin only; generated from brandColor when unset)
   //   brandMarkVersion the current generated icon set (BrandAsset.version);
   //                    null = the vertical's static files under public/
-  brandTileColor   String?
-  brandAccent      String?
-  brandPalette     String?  @db.Text
-  brandMarkVersion String?
+  brandTileColor     String?
+  brandAccent        String?
+  brandPalette       String?   @db.Text
+  brandMarkVersion   String?
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
   // library — see docs/sso-saml.md; this stores/validates the config and gates
   // the (documented, not-yet-wired) auth code path.
-  ssoEnabled       Boolean  @default(false)
-  ssoProvider      String? // 'saml' | 'oidc'
-  ssoIssuer        String? // IdP entity ID / issuer
-  ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
-  ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  ssoEnabled         Boolean   @default(false)
+  ssoProvider        String? // 'saml' | 'oidc'
+  ssoIssuer          String? // IdP entity ID / issuer
+  ssoEntryPoint      String?   @db.Text // IdP SSO sign-in URL
+  ssoCertificate     String?   @db.Text // IdP x509 signing certificate (PEM)
   // The certificate-expiry warning already mailed (#1933, src/lib/ssoCertificateRule.ts):
   // the SHA-256 fingerprint it was about and the mark (30 or 7 days). Keyed to the
   // fingerprint so a rotated certificate starts afresh and a redeploy never re-sends.
-  ssoCertWarnFp    String?  @db.VarChar(100)
-  ssoCertWarnStage Int?
+  ssoCertWarnFp      String?   @db.VarChar(100)
+  ssoCertWarnStage   Int?
   // Enforced SSO (#1950): when true, NO password-derived path may mint a
   // session for this tenant's users — sign-in, remember-me silent re-auth,
   // password reset/SET_INITIAL, invitation registration and password change all
@@ -168,31 +168,43 @@ model Organization {
   // ADMIN (anti-lockout), and enforcement only *applies* while SSO is still
   // active — a plan downgrade or a broken config falls back to password login
   // rather than locking the tenant out of its own data. See docs/sso-saml.md.
-  ssoEnforced      Boolean  @default(false)
+  ssoEnforced        Boolean   @default(false)
   // IdP role mapping (#1940): when true, a RETURNING SSO user's role is
   // re-resolved from their claims on every login (logged at warning level,
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
-  ssoSyncRole      Boolean  @default(false)
+  ssoSyncRole        Boolean   @default(false)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
   // sealed with secretBox (purpose 'sso-sp-signing-key'), the self-signed
   // public certificate published in the SP metadata.
-  ssoLogoutUrl     String?  @db.Text
-  ssoSpKey         String?  @db.Text
-  ssoSpCert        String?  @db.Text
+  ssoLogoutUrl       String?   @db.Text
+  ssoSpKey           String?   @db.Text
+  ssoSpCert          String?   @db.Text
+  // OpenID Connect (#1926; the flow is #1929, docs/sso-oidc.md). Used only when
+  // ssoProvider = 'oidc'; ssoIssuer is the OIDC `iss`. The client secret is
+  // SEALED (secretBox purpose 'sso-oidc-client-secret') and is a credential:
+  // ORG_CREDENTIAL_FIELDS keeps it out of every response. Scopes default to
+  // `openid email profile` when null. The JWKS cache spares a login one
+  // network hop; it is refreshed on a TTL and on an unknown `kid`.
+  ssoClientId        String?   @db.VarChar(255)
+  ssoClientSecretEnc String?   @db.Text
+  ssoDiscoveryUrl    String?   @db.Text
+  ssoScopes          String?   @db.VarChar(255)
+  ssoJwksCache       Json?
+  ssoJwksFetchedAt   DateTime?
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
   // yet — `stripeCustomerId` is the column the later checkout task fills, kept
   // unique so one customer can never be attached to two tenants.
-  stripeCustomerId String?  @unique
-  billingEmail     String?
-  vatId            String?
+  stripeCustomerId   String?   @unique
+  billingEmail       String?
+  vatId              String?
   // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
   // never inferred from an IP or a locale.
-  billingCountry   String?
+  billingCountry     String?
   // The public hostname whose sessionless forms write into THIS tenant (#2569):
   // the marketing landing's demo form on one of the marketing hosts
   // (MARKETING_HOSTS) lands in the org whose `publicHost` is exactly that host
@@ -202,9 +214,9 @@ model Organization {
   // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
   // one host can never name two tenants. Resolution + trust reasoning:
   // src/lib/publicHostOrg.ts. Nullable, so `db push` is additive (#2298).
-  publicHost       String?  @unique
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  publicHost         String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Ownership of `publicHost` as a TENANT's own domain (#1661). The mapping
   // above is an operator's word; a domain a tenant brings itself is proven with
@@ -246,6 +258,7 @@ model Organization {
   skillEdges              SkillEdge[]
   unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
+  mentorOffers            MentorOffer[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
   documentReviews         DocumentReview[]
@@ -800,6 +813,10 @@ model User {
   // limit (mentorCapacity alone). Never applies to an admin assigning them;
   // judged by getMentorAvailability(context: 'self_select').
   selfMatchLimit          Int?
+  // A MENTEE's opt-in to being offered mentorship by a mentor (#1809). Off by
+  // default: a mentee who has not switched it on is never listed to a mentor,
+  // never offerable and never mailed by the Mentor Offers feature.
+  openToOffers            Boolean       @default(false)
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.
@@ -961,6 +978,8 @@ model User {
   preferredInRequests               MentorshipRequest[]            @relation("PreferredMentorRequests")
   decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
   screenedMentorApplications        MentorApplication[]            @relation("ScreenedMentorApplications")
+  mentorOffersSent                  MentorOffer[]                  @relation("MentorOffersSent")
+  mentorOffersReceived              MentorOffer[]                  @relation("MentorOffersReceived")
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
   supportReports                    SupportReport[]                @relation("SupportReportAuthor")
@@ -7328,6 +7347,21 @@ model OrgEntitlement {
 /// missed slot from one already handled. System-level, no `orgId` — a schedule
 /// is the deployment's, not a tenant's. Advanced only by one conditional write
 /// (`src/lib/jobs/scheduleStateStore.ts`), so it never moves backwards.
+/// One health sample of THIS deployment, written every 5 minutes by the
+/// `status.sample` job (#1604, src/lib/statusSample.ts) — the history behind
+/// the public /status page. Deployment-wide on purpose (no orgId): the web app,
+/// its database, its mail relay and its job queue are shared by every tenant.
+/// A missing slot is the signal: a sample can only be written when the app, its
+/// database and its scheduler are all running, so a gap is downtime.
+model StatusSample {
+  /// The slot start, floored to 5 minutes (UTC). Unique: a rerun of the same
+  /// slot overwrites instead of double-counting.
+  at   DateTime @id
+  /// 'ok' | 'degraded' — src/lib/statusRule.ts decides.
+  mail String   @db.VarChar(16)
+  jobs String   @db.VarChar(16)
+}
+
 model ScheduleState {
   /// The schedule key — `QueueSchedule.key`.
   name             String    @id @db.VarChar(64)
@@ -8794,5 +8828,44 @@ model ChatDelivery {
   workspace ChatWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+  @@index([orgId])
+}
+
+// A mentor volunteering to mentor an unmatched mentee (#1809, "Mentor Offers").
+// Only a mentee who opted in (User.openToOffers) can receive one; the quota
+// (3 pending, 5 per rolling 7 days) and every refusal live in the pure
+// src/lib/mentorOfferRule.ts, the writes in src/lib/mentorOffers.ts.
+// Accepting goes through the shared decideMentorshipRequest() path, so the
+// pairing gets the same plan gate, notifications and one-active-mentor guard
+// as any other. `message` is erased with either party.
+enum MentorOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  WITHDRAWN
+}
+
+model MentorOffer {
+  id         String            @id @default(cuid())
+  orgId      String?
+  org        Organization?     @relation(fields: [orgId], references: [id])
+  mentorId   String
+  menteeId   String
+  message    String?           @db.Text
+  status     MentorOfferStatus @default(PENDING)
+  // 14 days after creation; the daily sweep flips a PENDING offer past it to EXPIRED.
+  expiresAt  DateTime
+  // Set when the one reminder before expiry went out — never a second one.
+  remindedAt DateTime?
+  decidedAt  DateTime?
+  createdAt  DateTime          @default(now())
+
+  mentor User @relation("MentorOffersSent", fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee User @relation("MentorOffersReceived", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@index([mentorId, status])
+  @@index([menteeId, status])
+  @@index([status, expiresAt])
   @@index([orgId])
 }

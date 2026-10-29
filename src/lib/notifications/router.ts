@@ -574,3 +574,45 @@ export async function notifyEvent<K extends NotificationEventKey>(
   }
   return result;
 }
+
+/**
+ * Re-send ONE failed chat delivery (#1960, the "Retry" button of the ledger on
+ * /admin/integrations) — through the router, never straight at the platform:
+ * it claims its own ledger row (keyed on the failed attempt, so a double click
+ * is one retry) and hands the chat adapter the same sentence and link the
+ * original notification carried. The adapter writes a NEW ChatDelivery row;
+ * the failed one is never rewritten (the ledger is append-only).
+ *
+ * The params and link come from the person's in-app notification of that event
+ * — the one place they are kept — so a retry is impossible once that row is
+ * gone (`source_gone`), rather than a guess at what the card said.
+ */
+export async function retryChatDelivery(input: {
+  failedDeliveryId: string;
+  userId: string;
+  orgId: string | null;
+  eventKey: string;
+  params: NotificationParams;
+  link: string;
+  locale: Locale;
+}): Promise<{ status: 'SENT' | 'SKIPPED' | 'FAILED' | 'DUPLICATE'; error?: string }> {
+  const def = eventDef(input.eventKey as NotificationEventKey);
+  const row: LedgerRow = {
+    orgId: input.orgId,
+    userId: input.userId,
+    eventKey: input.eventKey,
+    channel: 'chat',
+    dedupeKey: deliveryDedupeKey(input.eventKey, input.userId, 'chat', `retry:${input.failedDeliveryId}`),
+  };
+  const deliveryId = await claimDelivery(row);
+  if (!deliveryId) return { status: 'DUPLICATE' };
+  const params: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(input.params ?? {})) if (typeof v === 'string' || typeof v === 'number') params[k] = v;
+  const outcome = await deliverChat({ userId: input.userId, orgId: input.orgId, eventKey: input.eventKey, params, link: input.link, locale: input.locale });
+  const templateId = def ? `notifications.events.${def.key}` : undefined;
+  if (outcome.status === 'SENT') await settleDelivery(deliveryId, 'SENT', { templateId });
+  else if (outcome.status === 'SKIPPED') await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
+  else await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
+  return outcome.status === 'FAILED' ? { status: 'FAILED', error: outcome.error } : { status: outcome.status };
+}
+

@@ -7,7 +7,8 @@
 // field by field passes it through withoutOrgCredentials(). A new credential
 // column goes in this list, and e2e/admin-organizations.spec.ts asserts that
 // none of them reaches a response.
-export const ORG_CREDENTIAL_FIELDS = ['ssoSpKey'] as const;
+// The sealed OIDC client secret (#1926) is one too.
+export const ORG_CREDENTIAL_FIELDS = ['ssoSpKey', 'ssoClientSecretEnc'] as const;
 
 type CredentialField = (typeof ORG_CREDENTIAL_FIELDS)[number];
 

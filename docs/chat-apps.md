@@ -26,9 +26,18 @@ with `workspaceId` nulled and is pruned after 90 days (`chatDelivery` in the
 retention registry). The one writer is `src/lib/chat/workspaces.ts`
 (`recordChatInstall()` is what the OAuth callback will call). The e2e server
 runs with `CHAT_APPS_STUB_CLIENT=1` — a no-network platform stand-in no
-deployment sets. Still to come: the OAuth install (#1935), identity linking
-(#1937), the per-category channel matrix (#1707) and the delivery ledger table
-(#1960).
+deployment sets. The
+**delivery ledger** is readable too (#1960): "Recent deliveries" under each
+workspace (`GET /api/admin/integrations/chat/deliveries?workspaceId=…`, the last
+50 attempts — event key, recipient name, outcome, reason; never the card body or
+a token). A failed row offers **Retry** (`POST …/deliveries/[id]/retry`,
+`org.integrations.write`), which goes through the router
+(`retryChatDelivery()`), rebuilds the card from the person's in-app
+notification of that event and **appends** a row — the failed one is never
+rewritten, a second retry of it is `409 already_retried`, and a retry whose
+source notification is gone is `409 source_gone` rather than a guess. Still to
+come: the OAuth install (#1935), identity linking (#1937) and the per-category
+channel matrix (#1707).
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the

@@ -90,6 +90,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Cohort',
   'MentorshipRelation',
   'MentorApplication',
+  // Mentor Offers (#1809); created with the mentor's orgId, the sweep passes none.
+  'MentorOffer',
   'DocumentRequirement',
   // A document's review chain (#1859); the sweep and the token route bind no context and pass orgId.
   'DocumentReview',

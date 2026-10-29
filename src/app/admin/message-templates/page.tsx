@@ -123,6 +123,7 @@ export default function AdminMessageTemplatesPage() {
             rows={3}
             maxLength={MAX_TEMPLATE_BODY}
             showCounter
+            lang={l}
             value={value[l] ?? ''}
             onChange={(e) => {
             const next = { ...value, [l]: e.target.value };
