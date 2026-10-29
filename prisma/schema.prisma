@@ -8882,6 +8882,9 @@ model ChatIdentity {
   userId          String
   /// Slack U…, Teams AAD object id.
   externalUserId  String    @db.VarChar(128)
+  /// The member's name in the workspace, shown to the person on their own
+  /// account page ("Connected as …") so they can tell it is them (#1937).
+  displayName     String?   @db.VarChar(191)
   /// Opened lazily on the first DM and cached; Teams also needs a conversation
   /// reference before the bot may message proactively.
   dmChannelId     String?   @db.VarChar(128)

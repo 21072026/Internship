@@ -14,9 +14,9 @@ import { markChatWorkspaceRemovedByPlatform } from '@/lib/chat/workspaces';
 // its challenge. Every other event is acknowledged and ignored — Slack retries
 // anything that is not a 2xx.
 //
-// Teams: removal arrives as a Bot Framework `installationUpdate` activity,
-// authenticated by a Microsoft-signed JWT — not built yet, so the Teams path
-// is 404 rather than an unauthenticated door (docs/chat-apps.md).
+// Teams: removal arrives as a Bot Framework `installationUpdate` activity on
+// the bot's messaging endpoint, authenticated by a Microsoft-signed JWT —
+// that is …/teams/messages (#3322), so the Teams path here is 404.
 export async function POST(request: Request, { params }: { params: Promise<{ platform: string }> }) {
   const platform = platformFromSlug((await params).platform);
   if (platform !== 'SLACK') return NextResponse.json({ error: 'Not found' }, { status: 404 });

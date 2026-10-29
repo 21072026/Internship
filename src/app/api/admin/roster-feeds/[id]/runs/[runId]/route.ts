@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -17,11 +16,6 @@ type Status = (typeof STATUSES)[number];
 /** At most this many rows in one export — a roster is bounded by the 8 MiB file cap anyway. */
 const CSV_MAX_ROWS = 100_000;
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 type Ctx = { params: Promise<{ id: string; runId: string }> };
 
 // In the order they were written: the import's rows (file order within each
@@ -32,8 +26,9 @@ const ROW_ORDER = [{ createdAt: 'asc' as const }, { rowNumber: 'asc' as const }]
 const ROW_SELECT = { rowNumber: true, key: true, status: true, message: true, changed: true, userId: true } as const;
 
 export async function GET(request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id, runId } = await params;
   const url = new URL(request.url);
   const statusParam = url.searchParams.get('status');

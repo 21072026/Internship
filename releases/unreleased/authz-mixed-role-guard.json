@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**`requireRoleOrPermission()` for mixed-role routes (#1571, story #1565):** `src/lib/authz.ts` gains the guard for routes that serve admins *and* other roles — an ADMIN is judged by the permission rule (an OBSERVER asking for a write is refused and audited), a listed role passes on its role, anyone else gets 403 `permission_denied`. `check:route-auth` and `openapi-generate` recognise it (the OpenAPI class lists ADMIN plus the named roles). First users: the six `/api/admin/outbox` routes (`mail.read` / `mail.write` + MENTOR) and `/api/admin/duplicates/check` (`user.read` + MENTOR). The SSO role-mapping route's `role === 'ADMIN'` was a body field, not the caller, and now reads `parsed.data.role`. A signed-in caller of a role these routes never admitted gets 403 instead of 401."
+}

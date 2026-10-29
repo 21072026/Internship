@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { replayDelivery } from '@/lib/webhookDelivery';
@@ -10,9 +9,9 @@ import { replayDelivery } from '@/lib/webhookDelivery';
 // checked here; another tenant's delivery is 404, never 403 (the id stays
 // unconfirmed). Demo-blocked with the rest of /api/admin/webhooks.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   const result = await replayDelivery(id, resolveOrgId(session));
   if (!result.ok) {

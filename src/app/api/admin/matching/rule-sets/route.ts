@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -10,15 +8,16 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { matchRuleSetDraftSchema } from '@/lib/matching/ruleSetSchema';
 import { createRuleSet, ruleSetSelect, serializeRuleSet, updateRuleSet } from '@/lib/matching/ruleSetStore';
 import { DEFAULT_RULE_SET } from '@/lib/matching/score';
+import { requirePermission, type Permission } from '@/lib/authz';
 
 // The org's matching rule sets (#1783): list, create, edit, set default.
 // ADMIN only, checked here; archiving is DELETE on /[id]. Every write goes
 // through src/lib/matching/ruleSetStore.ts (version bump, one default).
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+async function ruleSetGate(permission: Permission, request: Request) {
+  const gate = await requirePermission(permission, { request });
+  if ('error' in gate) return { error: gate.error };
+  const { session } = gate;
   const refusal = await requireCapability(session.user.orgId, 'mentorship');
   if (refusal) return { error: refusal };
   return { session };
@@ -28,7 +27,7 @@ const createSchema = matchRuleSetDraftSchema.extend({ isDefault: z.boolean().opt
 const updateSchema = matchRuleSetDraftSchema.partial().extend({ id: z.string().min(1), isDefault: z.boolean().optional() });
 
 export async function GET(request: Request) {
-  const { session, error } = await requireAdmin();
+  const { session, error } = await ruleSetGate('program.read', request);
   if (error) return error;
   const includeArchived = new URL(request.url).searchParams.get('archived') === '1';
   return await withTenantScope(session, async () => {
@@ -45,7 +44,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { session, error } = await requireAdmin();
+  const { session, error } = await ruleSetGate('program.write', request);
   if (error) return error;
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const { session, error } = await requireAdmin();
+  const { session, error } = await ruleSetGate('program.write', request);
   if (error) return error;
   return await withTenantScope(session, async () => {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));

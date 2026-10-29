@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin routes behind the permission layer — organizations & platform (#1571, story #1565):** `/api/admin/organizations` (GET/POST/PATCH), `organizations/[id]/{conferencing,brand-mark,starter-pack,sample-data,invite-admin,pipeline-stages,sso-role-mappings,sso/metadata,sso/test}`, `organizations/slug-availability`, `billing/entitlements`, `plan-requests` (+ `[id]`) and `openapi` authorize through `requirePermission()` (`org.settings.read/write`, `org.branding.write`, `org.invite`, `org.integrations.read`). The super-admin / own-org checks that follow the gate are unchanged, so cross-tenant and platform-only answers stay what they were. The private `requireAdmin()` of `openapi` and the two `requireAdminOrg()` helpers are gone (the latter became `orgSettingsGate()` over `requirePermission()`). A signed-in non-admin gets 403 instead of 401."
+}
