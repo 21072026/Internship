@@ -8,6 +8,10 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
 import { loadSkillEdges, skillLabels } from '@/lib/skillsResolve';
 import { CONSENTING_POOL_WHERE, rankRequisitionMatches } from '@/lib/requisitionMatchRule';
+import { stageProgressOf } from '@/lib/matching/requisitionFit';
+import { recordRequisitionFits } from '@/lib/requisitionFitStore';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { activeRelationWhere } from '@/lib/relationLifecycle';
 
 // GET — the candidates who fit one requisition (#1401), for the admin's
 // requisition detail. The rule is requisitionMatchRule.ts, the same one the
@@ -38,27 +42,46 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const requisition = await prisma.requisition.findFirst({
         where: { id, orgId },
         select: {
-          id: true, title: true, status: true, openings: true, filled: true, requiredSkills: true, city: true,
+          id: true, title: true, status: true, openings: true, filled: true, requiredSkills: true, city: true, workMode: true,
           company: { select: { id: true, name: true } },
-          skills: { select: { skillId: true } },
+          skills: { select: { skillId: true, required: true } },
         },
       });
       if (!requisition) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
       const requiredSkillIds = requisition.skills.map((s) => s.skillId);
-      const [pool, edges, applications] = await Promise.all([
+      const niceSkillIds = requisition.skills.filter((s) => !s.required).map((s) => s.skillId);
+      const [pool, edges, applications, stages] = await Promise.all([
         prisma.user.findMany({
           where: { ...CONSENTING_POOL_WHERE, orgId },
-          select: { id: true, targetPosition: true, skillRows: { select: { skillId: true } } },
+          select: {
+            id: true,
+            targetPosition: true,
+            city: true,
+            skillRows: { select: { skillId: true } },
+            // The fit score's stage dimension (#2042): how far along the
+            // programme the candidate's active relation is.
+            menteeRelations: { where: activeRelationWhere(), select: { pipelineStatus: true }, take: 1 },
+          },
         }),
         loadSkillEdges(orgId, requiredSkillIds),
         prisma.application.findMany({ where: { orgId, requisitionId: requisition.id }, select: { id: true, menteeId: true, stage: true } }),
+        resolvePipelineStages(orgId),
       ]);
       const ranked = rankRequisitionMatches(
-        { title: requisition.title, requiredSkillIds },
-        pool.map((p) => ({ id: p.id, targetPosition: p.targetPosition, skillIds: p.skillRows.map((r) => r.skillId) })),
+        { title: requisition.title, requiredSkillIds, niceSkillIds, city: requisition.city, workMode: requisition.workMode },
+        pool.map((p) => ({
+          id: p.id,
+          targetPosition: p.targetPosition,
+          skillIds: p.skillRows.map((r) => r.skillId),
+          city: p.city,
+          stageProgress: stageProgressOf(p.menteeRelations[0]?.pipelineStatus, stages),
+        })),
         edges,
       );
+      // The ranking an admin is shown is kept, per pair, with its rule-set
+      // version (#2042) — only rows whose numbers changed are written.
+      await recordRequisitionFits(orgId, requisition.id, ranked.map((m) => ({ menteeId: m.candidateId, fit: m.fit })));
 
       const ids = ranked.map((m) => m.candidateId);
       const people = ids.length
@@ -68,7 +91,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const applicationOf = new Map(applications.map((a) => [a.menteeId, a]));
       const labels = await skillLabels(
         orgId,
-        ranked.flatMap((m) => [...m.direct, ...m.adjacent.flatMap((a) => [a.skillId, a.via])]),
+        ranked.flatMap((m) => [...m.direct, ...m.adjacent.flatMap((a) => [a.skillId, a.via]), ...m.fit.breakdown.flatMap((b) => b.detail)]),
         await getLocale(),
       );
       const label = (skillId: string) => labels.get(skillId) ?? skillId;
@@ -83,6 +106,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           score: m.score,
           direct: m.direct.map(label),
           adjacent: m.adjacent.map((a) => ({ skill: label(a.skillId), via: label(a.via) })),
+          // The fit score and its per-dimension breakdown (#2042), skill ids labelled.
+          fit: { ...m.fit, breakdown: m.fit.breakdown.map((b) => ({ ...b, detail: b.detail.map(label) })) },
           application: application ? { id: application.id, stage: application.stage } : null,
         }];
       });

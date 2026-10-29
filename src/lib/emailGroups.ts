@@ -168,7 +168,9 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // 'meeting-feedback' (#1896): the one "how was it?" ask after a meeting is a
     // nudge about the reader's own task — and declining it must not silence
     // the meeting reminders themselves, which live in their own group.
-    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback'],
+    // 'nudge' (#1684): an admin-authored reminder about the reader's own work;
+    // non-essential by definition, so it always carries the reader's userId.
+    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge'],
     legacy: ['deadlines', 'documents', 'weeklyReports', 'interactions'],
   },
   {

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { ImportPreview, type PreviewReport } from '@/components/ImportPreview';
 import { StarterPackCard } from '@/components/admin/StarterPackCard';
 import { RelativeTime } from '@/components/ui/RelativeTime';
+import { SettingProvenance } from '@/components/admin/SettingProvenance';
+import type { SettingSource } from '@/lib/settings';
 import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
 import { EmailOptOutProof } from '@/components/admin/EmailOptOutProof';
@@ -135,6 +137,11 @@ export default function AdminSettingsPage() {
   // either overwritten by the late load (the typed value silently lost — the
   // e2e-full failure) or posted the defaults over every stored setting.
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  // Which layer each value came from (#1623) — the badge next to a field.
+  const [sources, setSources] = useState<Partial<Record<string, SettingSource>>>({});
+  // The stored strings as loaded: a save sends only the keys that differ, so an
+  // untouched field never becomes an org row ("set here") or a history entry.
+  const [loadedRaw, setLoadedRaw] = useState<Record<string, string>>({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -254,6 +261,8 @@ export default function AdminSettingsPage() {
       setLoadState('error');
       return;
     }
+    setSources(body?.sources ?? {});
+    setLoadedRaw(settings);
     setReminderDays(settings.reminderDays ?? '14');
     setRetentionMonths(settings.retentionMonths ?? '12');
     setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
@@ -373,13 +382,20 @@ export default function AdminSettingsPage() {
     const approvalChanged = hasTrialStage && outboundApproval !== loadedOutboundApproval;
     setSavingSettings(true);
     try {
+      const payload: Record<string, string> = { reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
+      const changed = Object.fromEntries(Object.entries(payload).filter(([k, v]) => v !== loadedRaw[k]));
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) }),
+        body: JSON.stringify(changed),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
+      if (res.ok) {
+        const saved = await res.json().catch(() => null);
+        if (saved?.settings) setLoadedRaw(saved.settings);
+        if (saved?.sources) setSources(saved.sources);
+      }
       if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (windowChanged) setLoadedDecisionWindowDays(windowDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); if (approvalChanged) setLoadedOutboundApproval(outboundApproval); }
       else setSaveError(t.settings.saveFailed);
     } catch {
@@ -437,17 +453,30 @@ export default function AdminSettingsPage() {
             {/* A disabled fieldset disables every control inside it, the submit
                 button included, until the stored values are in (#2342). */}
             <fieldset disabled={loadState !== 'ready'} className="space-y-4 min-w-0">
-            <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
-            <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
+            <div>
+              <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
+              <SettingProvenance settingKey="reminderDays" source={sources.reminderDays} onReverted={load} />
+            </div>
+            <div>
+              <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
+              <SettingProvenance settingKey="retentionMonths" source={sources.retentionMonths} onReverted={load} />
+            </div>
             {/* Immediately below retentionMonths on purpose: the two are easy to
                 confuse (one is candidate records, the other in-app notification
                 rows) and reading them side by side is what tells them apart. */}
-            <Input label={t.settings.notificationRetentionDays} type="number" min={0} max={3650} value={notificationRetentionDays} onChange={(e) => setNotificationRetentionDays(e.target.value)} hint={t.settings.notificationRetentionDaysHint} data-testid="notification-retention-days" />
-            <Input label={t.settings.supportEmail} type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
+            <div>
+              <Input label={t.settings.notificationRetentionDays} type="number" min={0} max={3650} value={notificationRetentionDays} onChange={(e) => setNotificationRetentionDays(e.target.value)} hint={t.settings.notificationRetentionDaysHint} data-testid="notification-retention-days" />
+              <SettingProvenance settingKey="notificationRetentionDays" source={sources.notificationRetentionDays} onReverted={load} />
+            </div>
+            <div>
+              <Input label={t.settings.supportEmail} type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
+              <SettingProvenance settingKey="supportEmail" source={sources.supportEmail} onReverted={load} />
+            </div>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={weeklyDigest} onChange={(e) => setWeeklyDigest(e.target.checked)} />
               {t.settings.weeklyDigest}
             </label>
+            <SettingProvenance settingKey="weeklyDigest" source={sources.weeklyDigest} onReverted={load} />
             <div>
               <label htmlFor="self-registration" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.selfRegistration}</label>
               <select
@@ -461,6 +490,7 @@ export default function AdminSettingsPage() {
                 <option value="manual">{t.settings.selfRegistrationManual}</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.selfRegistrationHint}</p>
+              <SettingProvenance settingKey="selfRegistration" source={sources.selfRegistration} onReverted={load} />
             </div>
             {/* The auto-sent message is a placement outcome; without placements
                 emitOutcomeComms never sends it, so the switch would do nothing. */}
@@ -521,6 +551,7 @@ export default function AdminSettingsPage() {
                 <option value="all">{t.settings.require2faAll}</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
+              <SettingProvenance settingKey="require2fa" source={sources.require2fa} onReverted={load} />
               {require2fa === 'all' && <p className="text-xs text-gray-500 mt-1">{t.settings.require2faAllHint}</p>}
               {/* The coverage of the SELECTED mode, live (#1644): what the gate
                   would hold if this value were saved, not what is saved. */}
@@ -562,7 +593,10 @@ export default function AdminSettingsPage() {
             <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2" data-testid="password-policy">
               <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{t.settings.passwordPolicy}</legend>
               <p className="text-xs text-gray-500">{t.settings.passwordPolicyHint}</p>
-              <Input id="password-min-length" label={t.settings.passwordMinLength} type="number" min={8} max={128} value={passwordMinLength} onChange={(e) => setPasswordMinLength(e.target.value)} data-testid="password-min-length" />
+              <div>
+                <Input id="password-min-length" label={t.settings.passwordMinLength} type="number" min={8} max={128} value={passwordMinLength} onChange={(e) => setPasswordMinLength(e.target.value)} data-testid="password-min-length" />
+                <SettingProvenance settingKey="passwordMinLength" source={sources.passwordMinLength} onReverted={load} />
+              </div>
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <input type="checkbox" checked={passwordRequireUpper} onChange={(e) => setPasswordRequireUpper(e.target.checked)} data-testid="password-require-upper" /> {t.settings.passwordRequireUpper}
               </label>
@@ -580,13 +614,22 @@ export default function AdminSettingsPage() {
               </label>
               <p className="text-xs text-gray-500">{t.settings.breachedPasswordCheckHint}</p>
             </fieldset>
-            <Input label={t.settings.earlyAccessWindow} type="number" min={0} max={365} value={earlyAccessWindowDays} onChange={(e) => setEarlyAccessWindowDays(e.target.value)} hint={t.settings.earlyAccessWindowHint} />
+            <div>
+              <Input label={t.settings.earlyAccessWindow} type="number" min={0} max={365} value={earlyAccessWindowDays} onChange={(e) => setEarlyAccessWindowDays(e.target.value)} hint={t.settings.earlyAccessWindowHint} />
+              <SettingProvenance settingKey="earlyAccessWindowDays" source={sources.earlyAccessWindowDays} onReverted={load} />
+            </div>
             {/* max 999999 mirrors the API's `\d{1,6}` regex, which stays the
                 authority — the number attribute only keeps the form honest. */}
-            <Input label={t.settings.aiMonthlyQuota} type="number" min={0} max={999999} step={1} value={aiMonthlyQuota} onChange={(e) => { setAiMonthlyQuota(e.target.value); setQuotaError(null); }} hint={t.settings.aiMonthlyQuotaHint} error={quotaError ?? undefined} data-testid="ai-monthly-quota" />
+            <div>
+              <Input label={t.settings.aiMonthlyQuota} type="number" min={0} max={999999} step={1} value={aiMonthlyQuota} onChange={(e) => { setAiMonthlyQuota(e.target.value); setQuotaError(null); }} hint={t.settings.aiMonthlyQuotaHint} error={quotaError ?? undefined} data-testid="ai-monthly-quota" />
+              <SettingProvenance settingKey="aiMonthlyQuota" source={sources.aiMonthlyQuota} onReverted={load} />
+            </div>
             {/* max 9999 mirrors the API's `\d{1,4}`; the per-stage override for
                 this number is a row in the stage editor further down. */}
-            <Input label={t.settings.boardWipLimit} type="number" min={0} max={9999} step={1} value={boardWipLimit} onChange={(e) => { setBoardWipLimit(e.target.value); setWipLimitError(null); }} hint={t.settings.boardWipLimitHint} error={wipLimitError ?? undefined} data-testid="board-wip-limit" />
+            <div>
+              <Input label={t.settings.boardWipLimit} type="number" min={0} max={9999} step={1} value={boardWipLimit} onChange={(e) => { setBoardWipLimit(e.target.value); setWipLimitError(null); }} hint={t.settings.boardWipLimitHint} error={wipLimitError ?? undefined} data-testid="board-wip-limit" />
+              <SettingProvenance settingKey="boardWipLimit" source={sources.boardWipLimit} onReverted={load} />
+            </div>
             {/* Empty is a legal value here (follow the plan's band), so this
                 is a text box rather than a number one — a `type="number"`
                 input reports a cleared field as '' too, but reports a typo the

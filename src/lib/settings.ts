@@ -383,11 +383,18 @@ export type SettingKey = keyof typeof SETTING_DEFAULTS;
 export type SettingScope = 'global' | 'org' | 'program';
 
 export type SettingSpec =
-  | { type: 'number'; nullable?: boolean; scopes: readonly SettingScope[] }
-  | { type: 'boolean'; scopes: readonly SettingScope[] }
-  | { type: 'enum'; values: readonly string[]; scopes: readonly SettingScope[] }
-  | { type: 'string'; scopes: readonly SettingScope[] }
-  | { type: 'email'; scopes: readonly SettingScope[] };
+  | ({ type: 'number'; nullable?: boolean; scopes: readonly SettingScope[] } & SettingAudit)
+  | ({ type: 'boolean'; scopes: readonly SettingScope[] } & SettingAudit)
+  | ({ type: 'enum'; values: readonly string[]; scopes: readonly SettingScope[] } & SettingAudit)
+  | ({ type: 'string'; scopes: readonly SettingScope[] } & SettingAudit)
+  | ({ type: 'email'; scopes: readonly SettingScope[] } & SettingAudit);
+
+// `redact: true` (#1623): the settings history, the activity feed and the
+// `setting.changed` event record THAT the key changed — with a fingerprint —
+// never its value. The masking itself is #1699's redactedDiff()
+// (src/lib/events/diff.ts); this flag is only the policy it is handed, via
+// settingDiffSpec(). Personal data (an address) and anything token-shaped.
+type SettingAudit = { redact?: true };
 
 const G = ['global'] as const;
 const O = ['global', 'org'] as const;
@@ -395,7 +402,7 @@ const P = ['global', 'org', 'program'] as const;
 
 export const SETTING_SCHEMA = {
   reminderDays: { type: 'number', scopes: P },
-  supportEmail: { type: 'email', scopes: O },
+  supportEmail: { type: 'email', scopes: O, redact: true },
   weeklyDigest: { type: 'boolean', scopes: O },
   retentionMonths: { type: 'number', scopes: O },
   require2fa: { type: 'enum', values: ['off', 'admins', 'admins_mentors', 'all'], scopes: O },
@@ -513,7 +520,7 @@ export function settingAllowsScope(key: SettingKey, scope: SettingScope): boolea
 // decides how much of the shared audit trail is written (`viewLogWindowMinutes`).
 // A per-tenant row for one of them would be written and never be the number
 // that fires, so none may exist: reads resolve these from the global layer
-// alone, whatever org they are asked about, and `setSetting` refuses a tenant
+// alone, whatever org they are asked about, and `writeSetting` refuses a tenant
 // row for them. Writing them is a platform-operator (super admin) action — see
 // PUT /api/admin/settings. The list is the keys whose SETTING_SCHEMA scopes
 // stop at 'global' (today: the five telemetry retention windows,
@@ -538,8 +545,19 @@ export function settingOrgId(orgId?: string | null): string | null {
 // the global fallback row (orgId = NULL) is invisible to a scoped query. This
 // binds an empty tenant context, which the middleware skips; with enforcement
 // off (or the engine not loaded at all) it is a plain passthrough.
-function unscopedSettings<T>(fn: () => Promise<T>): Promise<T> {
+/** Run a settings query with the tenant context cleared — for this module and settingsWrite.ts only. */
+export function unscopedSettings<T>(fn: () => Promise<T>): Promise<T> {
   return runUnscoped(fn);
+}
+
+/**
+ * The field policy for one key's before/after diff (#1623): `record`, or
+ * `redact` when SETTING_SCHEMA flags it. Handed to redactedDiff() unchanged —
+ * the catalogue owns the flag, #1699's helper owns the masking.
+ */
+export function settingDiffSpec(key: SettingKey): Readonly<Record<string, 'record' | 'redact'>> {
+  const spec: SettingSpec = SETTING_SCHEMA[key];
+  return { [key]: spec.redact ? 'redact' : 'record' };
 }
 
 export type SettingRow = { orgId: string | null; programId: string | null; key: string; value: string };
@@ -556,7 +574,7 @@ export type ResolvedScope = { orgId: string | null; programId: string | null };
  * A programme row counts only for a key whose scopes include 'program', and
  * only under the org it was asked for; an org row only for a key that is not
  * deployment-global. When a layer holds more than one row for the key (the
- * MySQL NULL-distinct wrinkle, see `setSetting`), the first one wins — callers
+ * MySQL NULL-distinct wrinkle, see `writeSetting`), the first one wins — callers
  * load newest first, so that is the row the writer last touched.
  */
 export function pickSetting(
@@ -624,52 +642,12 @@ export async function getSetting(key: SettingKey, orgId?: string | null): Promis
   return pickSetting(await loadRows(scope, key), key, scope).raw;
 }
 
-// Write one setting into a single layer — the org resolved exactly as reads
-// resolve it, so a tenant admin can only ever write their own org's row and a
-// single-tenant installation keeps writing the global one.
-//
-// `orgId` is a SERVER-SIDE argument (seeds, jobs, tests). Never pass a value
-// that came from a request body: the authorization for this write is that the
-// org is derived from the session's bound context, not from input. The same
-// holds for `programId` (#1619): a programme row is written only for a key
-// whose scopes include 'program', only under an explicit org, and only for a
-// programme (Cohort) that belongs to that org — checked here, not trusted.
-//
-// Deliberately a read-modify-write rather than `prisma.setting.upsert`: the
-// natural key contains nullable columns, so the compound unique cannot address
-// an org row (programId = NULL) or the global row (both NULL). For the same
-// reason the unique index does NOT stop two org rows for one key — MySQL treats
-// NULLs as distinct — so this find-then-write is what keeps each layer single,
-// and this function must stay the only writer of org and global rows.
-export async function setSetting(
-  key: SettingKey,
-  value: string,
-  orgId?: string | null,
-  opts: { programId?: string } = {},
-): Promise<void> {
-  const org = settingOrgId(orgId);
-  const programId = opts.programId ?? null;
-  if (org !== null && isGlobalSettingKey(key)) {
-    throw new Error(`Setting "${key}" is deployment-global and has no per-tenant row (#2628)`);
-  }
-  if (programId !== null) {
-    if (!settingAllowsScope(key, 'program')) {
-      throw new Error(`Setting "${key}" has no per-programme row (#1619)`);
-    }
-    if (org === null) throw new Error('A programme setting needs its org (#1619)');
-  }
-  await unscopedSettings(async () => {
-    if (programId !== null) {
-      const program = await prisma.cohort.findFirst({ where: { id: programId, orgId: org }, select: { id: true } });
-      if (!program) throw new Error('Programme not found in this org (#1619)');
-    }
-    const existing = await prisma.setting.findFirst({
-      where: { orgId: org, programId, key },
-      select: { id: true },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-    });
-    if (existing) await prisma.setting.update({ where: { id: existing.id }, data: { value } });
-    else await prisma.setting.create({ data: { orgId: org, programId, key, value } });
-  });
+// Writing lives in src/lib/settingsWrite.ts (#1623): `writeSetting()` and
+// `revertSetting()` are the only writers of a Setting row, and each records the
+// change. Server-only — this module stays client-reachable, so it cannot import
+// the event stream they emit through.
+
+/** Called by settingsWrite.ts after every write, so the per-request cache drops what it holds. */
+export function noteSettingsWritten(): void {
   writeGeneration += 1;
 }

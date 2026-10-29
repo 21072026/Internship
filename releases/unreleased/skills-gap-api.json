@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Skills-gap report, API (#1823):** `GET /api/admin/analytics/skills-gap[?cohortId=]` — supply (the org's active mentees' canonical skills, avg level, confirmed count) against demand (required skills of HIRING requisitions: `OPEN` with `filled < openings`, weighted by remaining seats), with `underSupplied`, `unused` and `coverage` (requisitions whose whole required set one person holds). ADMIN only, `requireCapability('mentorship')`, gated on `ADVANCED_ANALYTICS` through `entitled()`; tenant-scoped, another tenant's cohort is a 404. Every definition is pure in `src/lib/skillsGapRule.ts` (unit-tested); e2e in `e2e/skills-gap.spec.ts`. The admin panel and export follow."
+}
