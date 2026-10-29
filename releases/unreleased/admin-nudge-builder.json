@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`/admin/nudges` — the nudge builder (#1686):** list (on/off, trigger, sends in 30 days, last scan), an editor (event or daily-scan trigger, the segment as allowlisted condition rows, delay, channel, per-person limits, EN/TR/DE subject and body with missing languages flagged), a dry run (`POST /api/admin/nudges/[id]/preview` — the same `evaluateNudgeRule()` call with a writer that does not write: count, a sample of up to 25 names and the drop reasons, no job, no `NudgeSend`, no mail), an audited on/off switch (`nudge.enabled` / `nudge.disabled` ActivityLog rows) and the send history. Every `/api/admin/nudges` route checks `org.settings.write` and the `mentorship` capability itself; stage-change triggers are refused (`stage_trigger`). New shared `ConditionRow` component for rule builders; writes are on the demo blocklist (the dry run is not). Nav entry, feature-catalogue card.",
+  "notes": {
+    "en": ["Write your own reminders under Nudges: pick who gets them and when, preview exactly who a rule would reach before switching it on, and see what it sent."],
+    "tr": ["Hatırlatmalar bölümünde kendi hatırlatmalarınızı yazın: kime ve ne zaman gideceğini seçin, bir kuralı açmadan önce tam olarak kime ulaşacağını önizleyin ve neler gönderdiğini görün."],
+    "de": ["Schreiben Sie unter „Erinnerungen“ Ihre eigenen Erinnerungen: wählen Sie, wer sie wann bekommt, sehen Sie vor dem Einschalten genau, wen eine Regel erreicht, und was sie gesendet hat."]
+  }
+}

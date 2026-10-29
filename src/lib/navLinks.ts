@@ -4,7 +4,7 @@ import {
   Activity, AlarmClock, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
-  Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
+  BellRing, Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   Receipt,
@@ -131,6 +131,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // key that always travels with the first is a key that can only drift.
   // Tagging also closes the URL (pageCapabilityGate) and the APIs gate on it.
   { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
+  // Admin-authored nudges (#1686): reminders to mentors and mentees, so `mentorship`.
+  // Stage-change rules are the automations screen (#1704), not this one.
+  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
   // Survey results (#1910). Untagged: a survey's audience may be companies, and
   // the engine (#1879) is not a mentorship module.
