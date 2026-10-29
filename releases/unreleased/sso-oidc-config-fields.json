@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**OIDC SSO configuration fields (#1926):** `Organization` gains `ssoClientId`, `ssoClientSecretEnc` (sealed with `secretBox`, purpose `sso-oidc-client-secret`), `ssoDiscoveryUrl`, `ssoScopes`, `ssoJwksCache` and `ssoJwksFetchedAt` — additive, optional columns. Completeness is now per provider: SAML is unchanged (issuer + entry point + certificate); OIDC needs issuer + client ID + client secret + an https discovery URL, and the enable refusal names the missing fields. `PATCH /api/admin/organizations` takes a write-only `ssoClientSecret` (super admin only, sealed before the write) and reads answer `ssoClientSecretSet`; the sealed column is in `ORG_CREDENTIAL_FIELDS` and the audit diff fingerprints it. OIDC sign-in itself stays refused until #1929."
+}

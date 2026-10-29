@@ -967,10 +967,11 @@ export default function AdminOrganizationsPage() {
           its own route: an org admin sets it for their own tenant, no plan gate. */}
       {orgs.length > 0 && <ConferencingPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
-      {superAdmin && orgs.length > 0 && (
+      {orgs.length > 0 && (
         <OrgLifecycleCard
           orgs={orgs.map((o) => ({ id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt }))}
           onChanged={load}
+          superAdmin={superAdmin}
         />
       )}
 

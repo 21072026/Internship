@@ -8,6 +8,10 @@ import { isPrefixablePath, localizePath, splitLocalePrefix } from '@/lib/localeP
 // rather than in the dictionaries because the switcher renders on pages that
 // sit outside the LocaleProvider (the public profile, #1386).
 const SWITCHER_LABEL: Record<Locale, string> = { en: 'Language', tr: 'Dil', de: 'Sprache' };
+// Each language's own name, spoken in that language (WCAG 3.1.2, #2864): the
+// button text is the two-letter code, which a screen reader would otherwise
+// read as a word of the current interface language.
+const NATIVE_NAME: Record<Locale, string> = { en: 'English', tr: 'Türkçe', de: 'Deutsch' };
 
 export function LanguageSwitcher({ current }: { current: Locale }) {
   const set = (locale: Locale) => {
@@ -34,11 +38,14 @@ export function LanguageSwitcher({ current }: { current: Locale }) {
           key={l}
           type="button"
           onClick={() => set(l)}
+          lang={l}
+          aria-pressed={l === current}
           className={`px-1.5 py-0.5 rounded uppercase transition-colors ${
             l === current ? 'bg-blue-100 text-blue-700 font-semibold' : 'text-gray-500 hover:text-gray-800'
           }`}
         >
           {l}
+          <span className="sr-only"> {NATIVE_NAME[l]}</span>
         </button>
       ))}
     </div>

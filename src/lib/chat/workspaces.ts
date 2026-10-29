@@ -5,6 +5,8 @@ import { isChatAppsEnabled, isChatPlatformConfigured } from '@/lib/chat/config';
 import { openBotToken, sealBotToken, sealRefreshToken } from '@/lib/chat/tokens';
 import { chatClientFor } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
+import { retryChatDelivery } from '@/lib/notifications/router';
+import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 // The governance of an installed chat app (#1958): see it, switch it off,
 // remove it so nothing is left. The ONE writer of ChatWorkspace rows; every
@@ -206,4 +208,100 @@ export async function uninstallChatWorkspace(
     return n.count;
   });
   return { revoke, identitiesRemoved };
+}
+
+// ── The delivery ledger (#1960) ────────────────────────────────────────────
+
+export const CHAT_LEDGER_MAX = 50;
+
+export interface ChatDeliveryView {
+  id: string;
+  eventKey: string;
+  /** The person it was for, by name — never the chat member id or the card. */
+  recipient: string | null;
+  status: 'SENT' | 'FAILED' | 'SKIPPED';
+  error: string | null;
+  createdAt: string;
+}
+
+/**
+ * The newest attempts of one workspace of this org: event key, recipient name,
+ * outcome, reason. Never the card body (it can carry candidate data) and never
+ * a token. Null when the workspace is not this org's.
+ */
+export async function listChatDeliveries(orgId: string, workspaceId: string, limit = CHAT_LEDGER_MAX): Promise<ChatDeliveryView[] | null> {
+  const ws = await prisma.chatWorkspace.findFirst({ where: { id: workspaceId, orgId }, select: { id: true } });
+  if (!ws) return null;
+  const rows = await prisma.chatDelivery.findMany({
+    where: { workspaceId, orgId },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: Math.max(1, Math.min(CHAT_LEDGER_MAX, Math.floor(limit) || CHAT_LEDGER_MAX)),
+    select: { id: true, eventKey: true, status: true, error: true, createdAt: true, identityId: true },
+  });
+  const identityIds = [...new Set(rows.map((r) => r.identityId).filter((x): x is string => Boolean(x)))];
+  const identities = identityIds.length
+    ? await prisma.chatIdentity.findMany({
+        where: { id: { in: identityIds }, workspaceId },
+        select: { id: true, user: { select: { fullName: true, email: true } } },
+      })
+    : [];
+  const nameOf = new Map(identities.map((i) => [i.id, i.user.fullName || i.user.email]));
+  return rows.map((r) => ({
+    id: r.id,
+    eventKey: r.eventKey,
+    recipient: r.identityId ? nameOf.get(r.identityId) ?? null : null,
+    status: r.status,
+    error: r.error,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+export type ChatRetryResult =
+  | { ok: true; status: 'SENT' | 'SKIPPED' | 'FAILED'; error?: string }
+  | { ok: false; code: 'not_found' | 'not_failed' | 'identity_gone' | 'source_gone' | 'already_retried' };
+
+/**
+ * Retry ONE failed delivery — through the router (retryChatDelivery), which
+ * writes a NEW ledger row; the failed row is never changed. The card is rebuilt
+ * from the person's in-app notification of the same event, created around the
+ * failed attempt (the router writes both in one pass).
+ */
+export async function retryChatDeliveryFor(orgId: string, deliveryId: string, actorId: string): Promise<ChatRetryResult> {
+  const d = await prisma.chatDelivery.findFirst({
+    where: { id: deliveryId, orgId, workspaceId: { not: null } },
+    select: { id: true, status: true, eventKey: true, identityId: true, createdAt: true, workspaceId: true },
+  });
+  if (!d) return { ok: false, code: 'not_found' };
+  if (d.status !== 'FAILED') return { ok: false, code: 'not_failed' };
+  const identity = d.identityId
+    ? await prisma.chatIdentity.findFirst({
+        where: { id: d.identityId, workspaceId: d.workspaceId! },
+        select: { userId: true, user: { select: { preferredLanguage: true, orgId: true } } },
+      })
+    : null;
+  if (!identity) return { ok: false, code: 'identity_gone' };
+  const source = await prisma.notification.findFirst({
+    where: {
+      userId: identity.userId,
+      type: d.eventKey,
+      createdAt: { gte: new Date(d.createdAt.getTime() - 5 * 60_000), lte: new Date(d.createdAt.getTime() + 60_000) },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { params: true, link: true },
+  });
+  if (!source) return { ok: false, code: 'source_gone' };
+
+  const lang = identity.user.preferredLanguage;
+  const out = await retryChatDelivery({
+    failedDeliveryId: d.id,
+    userId: identity.userId,
+    orgId: identity.user.orgId ?? orgId,
+    eventKey: d.eventKey,
+    params: (source.params && typeof source.params === 'object' && !Array.isArray(source.params) ? source.params : {}) as Record<string, string | number>,
+    link: source.link ?? '/',
+    locale: isLocale(lang ?? undefined) ? (lang as Locale) : defaultLocale,
+  });
+  if (out.status === 'DUPLICATE') return { ok: false, code: 'already_retried' };
+  logger.info('chat delivery retried', { deliveryId: d.id, actorId, status: out.status });
+  return { ok: true, status: out.status, error: out.error };
 }
