@@ -84,6 +84,7 @@
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:locale-dates": "node scripts/check-locale-dates.mjs",
     "check:hardcoded-strings": "node scripts/check-hardcoded-strings.mjs",
+    "check:dark-mode": "node scripts/check-dark-mode.mjs",
     "check:events": "node scripts/check-events.mjs",
     "check:k6": "node scripts/check-k6.mjs",
     "check:e2e-rate-limits": "node scripts/check-e2e-rate-limits.mjs",

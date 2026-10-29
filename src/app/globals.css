@@ -119,6 +119,13 @@ html.dark body { background-color: #030712; color: #f3f4f6; }
 html.dark .bg-white { background-color: #111827; }      /* gray-900 */
 html.dark .bg-gray-50 { background-color: #1f2937; }    /* gray-800 */
 html.dark .bg-gray-100 { background-color: #374151; }   /* gray-700 */
+/* #1614: the onboarding step circles and connectors. Left light, a pending
+   step was a pale disc under remapped light text. gray-700 is exactly what
+   every element pairing bg-gray-200 with its own dark: background already
+   chose (this flat rule outranks a dark: utility — see the gray-400 note), so
+   none of them moves. bg-gray-300 is deliberately NOT remapped here: its
+   elements pick gray-600 or gray-700 themselves. */
+html.dark .bg-gray-200 { background-color: #374151; }   /* gray-700 */
 html.dark .bg-gray-900 { background-color: #030712; }   /* keep deep */
 /* Soft accent boxes → dark tints (keep light text readable) */
 html.dark .bg-blue-50 { background-color: rgba(30,58,138,0.25); }
@@ -128,6 +135,9 @@ html.dark .bg-amber-50 { background-color: rgba(120,53,15,0.25); }
 html.dark .bg-red-50 { background-color: rgba(127,29,29,0.25); }
 html.dark .bg-purple-50 { background-color: rgba(88,28,135,0.25); }
 html.dark .bg-indigo-50 { background-color: rgba(49,46,129,0.25); }
+/* The AI-draft panels (agenda, thread catch-up, bulk e-mail) — #1614. Left
+   light, they were a pale box under the retinted light text. */
+html.dark .bg-violet-50 { background-color: rgba(76,29,149,0.25); }
 html.dark .bg-gradient-to-br { background-image: none; background-color: #030712; }
 /* Text */
 html.dark .text-gray-900 { color: #f3f4f6; }
@@ -140,6 +150,9 @@ html.dark .text-gray-500 { color: #9ca3af; }
    to gray-300 (7.5:1); gray-600 on a gray-900 surface keeps the rule above
    (#1412: /portal's "No response yet" pill, /portal/notes' filter pills). */
 html.dark .bg-gray-100.text-gray-600 { color: #d1d5db; }
+/* Same pair on the step circle above (#1614): gray-500 → #9ca3af on gray-700
+   is the same 4.05:1. */
+html.dark .bg-gray-200.text-gray-500 { color: #d1d5db; }
 /* Dark keeps gray-400 at #9ca3af (7.0:1 on gray-900): the light-mode raise
    above would be a REGRESSION here, dark text on a dark surface.
    NOTE the same trap the "Variant utilities" block below describes, in the
@@ -166,6 +179,10 @@ html.dark .bg-white\/70 { background-color: rgba(17,24,39,0.80); }
    #797f87 panel under `text-gray-800` text remapped to #e5e7eb, i.e. 3.26:1,
    the mirror image of the muted-text problem above. */
 html.dark .bg-white\/40 { background-color: rgba(17,24,39,0.60); }
+/* Message reaction chips and the edit/delete pills (#1614): a 90%-white pill
+   under `text-gray-700`, which the rule above remaps to #d1d5db — light on
+   light, unreadable. */
+html.dark .bg-white\/90 { background-color: rgba(31,41,55,0.90); }
 
 /*
  * Variant utilities (hover:/focus:) can't be reached by the base-name remaps
@@ -176,6 +193,11 @@ html.dark .hover\:bg-blue-50:hover { background-color: rgba(30,58,138,0.35); }
 html.dark .hover\:bg-gray-50:hover { background-color: #1f2937; }
 html.dark .hover\:bg-gray-100:hover { background-color: #374151; }
 html.dark .hover\:bg-red-50:hover { background-color: rgba(127,29,29,0.35); }
+/* #1614: found by scripts/check-dark-mode.mjs — each was a white or pale hover
+   under retinted light text. */
+html.dark .hover\:bg-white:hover { background-color: #1f2937; }
+html.dark .hover\:bg-gray-200:hover { background-color: #4b5563; }
+html.dark .hover\:bg-indigo-50:hover { background-color: rgba(49,46,129,0.35); }
 
 /* Colored heading text used on tinted cards → lighter for contrast on dark. */
 html.dark .text-red-900 { color: #fca5a5; }

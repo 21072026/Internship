@@ -360,6 +360,11 @@ marketing names redirect there, and their apex now serves **mail only**.
   add a compound override like the existing blue rules (`html.dark .bg-blue-50.text-blue-700
   { … }`); elements that must stay light in dark mode pin colors with `dark:!` utilities.
   Verify with the `dark-mode`/`landing-cta-dark` e2e specs or a computed-style check.
+  `npm run check:dark-mode` (CI, #1614) fails on a `className` that paints a light background the
+  retint layer does not cover (`bg-slate-50`, `bg-teal-50`, `bg-white/90`, `hover:bg-gray-300` …)
+  with no `dark:` background on the same element. It reads the covered list from `globals.css`
+  itself; a flat `html.dark .bg-…` rule there outranks every `dark:bg-…` written on an element, so
+  before adding one, check the elements that already pair that utility with their own dark colour.
 - **Claude Code web containers:** run `npm install` first (deps aren't preinstalled). If
   Playwright's pinned browser build is missing under `/opt/pw-browsers`, symlink the
   installed build into the expected version directory instead of `playwright install` (or

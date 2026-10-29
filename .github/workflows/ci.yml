@@ -57,6 +57,11 @@ jobs:
       # trilingual product (#1613). Pinned per file and shrink-only.
       - name: no new hardcoded user-facing strings (#1613)
         run: npm run check:hardcoded-strings
+      # A light surface the globals.css retint layer does not cover must carry
+      # its own dark: background — GlobalSearch shipped light-on-dark (#1614).
+      # Rule unit-tested in scripts/test/check-dark-mode.test.mjs (test:unit).
+      - name: light surfaces ship with their dark mode (#1614)
+        run: npm run check:dark-mode
       # Report registry (#1903): label keys in all three dictionaries, a loader
       # per definition, and a privacy floor that can actually suppress.
       - name: Report registry
