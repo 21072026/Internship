@@ -40,6 +40,7 @@ export const OMITTED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
   'Organization.ssoSpCert': 'SAML signing certificate (re-issued on re-setup)',
   'Organization.ssoClientSecretEnc': 'sealed OIDC client secret (#1926)',
   'Organization.publicHostToken': 'domain verification token',
+  'Organization.ssoClientSecretEnc': 'OIDC client secret',
   'User.password': 'password hash',
   'User.twoFactorSecret': 'TOTP secret',
   'User.lastTotpStep': 'TOTP replay floor',

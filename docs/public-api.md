@@ -216,6 +216,11 @@ A full snapshot of one resource without walking the cursor:
 
 ## Deprecations
 
+The policy (6-month window, `Deprecation`/`Sunset` headers, what counts as breaking) is
+[`api-lifecycle.md`](api-lifecycle.md); the list below is `API_DEPRECATIONS` in
+`src/lib/api/v1Lifecycle.ts` — add a row there and here together. The public portal is
+`/developers` (#1992), rendered from this API's own OpenAPI document, never the admin one.
+
 | What | Since | Removed on |
 |---|---|---|
 | `candidates` key on `GET /api/v1/candidates` (alias of `data`) | #1988 | 2027-01-31 |

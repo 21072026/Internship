@@ -47,6 +47,7 @@ export const PUBLIC_ROUTES: readonly {
 }[] = [
   { path: '/', llms: 'The home page: what the product is and who it is for', priority: 1.0, changeFrequency: 'weekly' },
   { path: '/features', llms: 'The full feature catalogue', priority: 0.8, changeFrequency: 'weekly' },
+  { path: '/developers', llms: 'Developers: the public API and webhooks, their contract, error types and deprecation policy', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/for-companies', llms: 'For companies that host interns: what they get and how to ask for a look', priority: 0.8, changeFrequency: 'monthly', needs: 'placements' },
   // The price is one of the two things a stranger searches for by name
   // (#1730), so it sits with /features rather than down among the legal
