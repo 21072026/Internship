@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { normalizeMachineList } from '@/lib/machineTranslation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -27,6 +25,7 @@ import {
   canonicalAnnouncementText,
   resolveAnnouncementText,
 } from '@/lib/announcementText';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({
   // Long-form announcements (release notes, articles) are allowed; the previous
@@ -107,8 +106,9 @@ export async function GET(request: Request) {
 }
 
 async function handleGet(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
@@ -161,8 +161,9 @@ export async function POST(request: Request) {
 }
 
 async function handlePost(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
   const { fields, image } = await readBody(request);

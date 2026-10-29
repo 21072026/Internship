@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
@@ -9,6 +7,7 @@ import { hasConsent } from '@/lib/consent';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 
 // Testimonial moderation (#1098). The pool NEVER shows an evaluation unless
 // BOTH the author and the subject hold an active TESTIMONIAL consent —
@@ -25,11 +24,10 @@ const ACTIVE_CONSENT = {
 //   pending:   excerpt drafted, author approval outstanding
 //   approved:  author approved, not yet published
 //   published: live
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Testimonials are mentorship quotes: a vertical without mentors has none,
   // so the whole surface is closed there, reads included (not only hidden).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
@@ -99,10 +97,9 @@ const patchSchema = z.object({
 // PATCH — the three moderation moves. Publish is server-side strict: excerpt
 // present, author approval present, both consents STILL active.
 export async function PATCH(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Testimonials are mentorship quotes: a vertical without mentors has none,
   // so the whole surface is closed there, reads included (not only hidden).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');

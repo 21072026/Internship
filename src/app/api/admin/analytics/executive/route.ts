@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -27,9 +26,9 @@ const validDay = (v: string | null) => (v && DATE_RE.test(v) && !Number.isNaN(Da
 const MAX_PERIOD_DAYS = 731;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const settingsOrg = await settingsOrgOf(session);
   if (!(await entitled(settingsOrg, 'ADVANCED_ANALYTICS'))) {
     return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });

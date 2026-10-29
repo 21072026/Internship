@@ -132,6 +132,6 @@ test.describe('report registry', () => {
 
   test('a mentor cannot read the registry', async ({ page }) => {
     await signInAndSettle(page, mentor, PW, '/mentor');
-    expect((await page.request.get('/api/admin/reports/cohort-comparison')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/reports/cohort-comparison')).status()).toBe(403);
   });
 });

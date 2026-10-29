@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
@@ -41,11 +40,10 @@ import { tenantWhere } from '@/lib/tenantFilter';
 //    vertical instead would be a second, parallel entitlement system whose rules
 //    nobody could state — and it would price a feature by which product the
 //    customer bought rather than by what they paid for.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The CALLER's tier, org passed explicitly: this runs before the tenant
   // scope binds, so a bare call read only the global row.
   if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {

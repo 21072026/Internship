@@ -18,6 +18,7 @@ import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 export const CHAT_AUDIT = {
   install: 'CHAT_INSTALL',
+  platformUninstall: 'CHAT_PLATFORM_UNINSTALL',
   enable: 'CHAT_ENABLE',
   disable: 'CHAT_DISABLE',
   uninstall: 'CHAT_UNINSTALL',
@@ -138,6 +139,35 @@ export async function recordChatInstall(input: {
     },
   });
   return row;
+}
+
+/**
+ * The platform told us the app is gone (#1935: Slack `app_uninstalled` /
+ * `tokens_revoked`). The workspace is switched off and its sealed tokens are
+ * cleared at once — retrying a dead token forever is the failure this ends —
+ * but the row stays, so the console shows what happened and the admin decides
+ * whether to remove it or reinstall. Answers how many workspaces it touched.
+ */
+export async function markChatWorkspaceRemovedByPlatform(platform: ChatPlatform, externalId: string, reason: string): Promise<number> {
+  const ws = await prisma.chatWorkspace.findUnique({
+    where: { platform_externalId: { platform, externalId } },
+    select: { id: true, orgId: true, name: true, installedById: true },
+  });
+  if (!ws) return 0;
+  await prisma.chatWorkspace.update({
+    where: { id: ws.id },
+    data: { enabled: false, botTokenEnc: null, refreshTokenEnc: null, tokenExpiresAt: null, lastError: reason.slice(0, 64) },
+  });
+  await prisma.auditLog.create({
+    data: {
+      orgId: ws.orgId,
+      // No person did this; the row names the platform as the actor.
+      actorId: `platform:${platform.toLowerCase()}`,
+      action: CHAT_AUDIT.platformUninstall,
+      detail: JSON.stringify({ workspaceId: ws.id, platform, name: ws.name, reason }),
+    },
+  });
+  return 1;
 }
 
 /** The kill switch. False when the workspace is not this org's. */

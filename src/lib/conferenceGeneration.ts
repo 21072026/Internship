@@ -1,129 +1,120 @@
-// A real Google Meet room for a scheduled meeting (#2009), created on the
-// organiser's OWN connected calendar — the `calendar.events` scope we already
-// hold (src/lib/googleCalendar.ts) is exactly the one Meet creation needs, so
-// nobody is asked to consent again.
+// A real Google Meet or Microsoft Teams room for a scheduled meeting (#2009),
+// created on the organiser's OWN connected calendar through the provider
+// interface (src/lib/calendar/provider.ts, `createConference`). The scopes we
+// already hold — Google `calendar.events`, Graph `Calendars.ReadWrite` — are
+// exactly the ones room creation needs, so nobody is asked to consent again.
 //
 // THE ORDERING PROBLEM, AND THE CHOICE MADE
 //   The calendar mirror is fire-and-forget by design (pushMeetingInBackground):
-//   a third party's API may never make scheduling fail or hang. But a Meet
-//   link only exists once Google has created the event, and the invite mail
-//   goes out in the same request. Two honest answers were on the table:
+//   a third party's API may never make scheduling fail or hang. But a provider
+//   room only exists once the provider has created the event, and the invite
+//   mail goes out in the same request. Two honest answers were on the table:
 //     (a) hold the invite for a short, BOUNDED window while the event is
-//         created, and use whatever came back — the Meet link, or our own
-//         room if Google was slow or said no;
+//         created, and use whatever came back — the provider's room, or
+//         another one if the provider was slow or said no;
 //     (b) put no raw URL in the invite, only a link to the app's meeting page.
 //   We take (a). Every existing surface — the invite mail, the .ics, the
 //   reminder, the dashboard banner, the subscription feed — already reads ONE
 //   `Meeting.meetLink`, so (a) changes nothing downstream, and (b) would have
 //   meant rewriting all of them. The bound is GENERATE_TIMEOUT_MS: past it the
-//   request continues with our room and the late Meet event is never adopted,
-//   so participants only ever see the one link they were sent. The worst case
-//   is a few seconds on a scheduling request whose tenant asked for this.
+//   request continues with the next room and the late event is deleted, never
+//   adopted, so participants only ever see the one link they were sent. The
+//   worst case is a few seconds on a scheduling request whose tenant asked for it.
 //
 // WHAT IT NEVER DOES
 //   - Fail a meeting: no connection, a refused token, an error or a timeout all
-//     return null, and the caller falls back (resolveMeetingLink). The reason
-//     is recorded on the connection (noteError), where /account shows it.
+//     return null and the caller falls back (resolveMeetingLink). The reason is
+//     recorded on the connection (CONFERENCE_NOTE_PREFIX), where /account shows it.
 //   - Send two links: a timed-out create is abandoned, never written back.
 //
-// Microsoft Teams (isOnlineMeeting + teamsForBusiness) follows when the Graph
-// connection (#1991) exists; Zoom is deferred by decision — docs/conferencing.md.
+// Zoom is deferred by decision — docs/conferencing.md.
 
-import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
-import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
+import { enabledSyncProviders, type CalendarAuth, type CalendarSyncProvider, type ConferenceSlot } from '@/lib/calendar/provider';
+import { CONFERENCE_NOTE_PREFIX } from '@/lib/calendar/conferenceNote';
+import type { CalendarProviderKind } from '@prisma/client';
 
-/** Every note this module leaves on the connection starts with it (the mirror push leaves those alone). */
-export const MEET_NOTE_PREFIX = 'Meet link generation';
+export type { ConferenceSlot } from '@/lib/calendar/provider';
 
-/** The longest a scheduling request waits for Google before using our room. */
+/** The longest a scheduling request waits for the provider before using another room. */
 export const GENERATE_TIMEOUT_MS = 4_000;
 
-export interface ConferenceContext {
-  title: string;
-  start: Date;
-  end: Date;
-  timeZone: string | null;
-}
-
 export interface GeneratedConference {
-  provider: 'google_meet';
+  provider: CalendarProviderKind;
   link: string;
   /** The event on the organiser's calendar that carries the room — adopted as the mirror. */
   connectionId: string;
   eventId: string;
 }
 
-/** Can this organiser get a generated room at all? Cheap: no call to Google. */
+/**
+ * The organiser's first connected provider that can make a room, with a usable
+ * token. Google before Microsoft, the registry's order, when both are connected.
+ */
+async function connectedProvider(organizerId: string): Promise<{ provider: CalendarSyncProvider; auth: CalendarAuth } | null> {
+  for (const provider of enabledSyncProviders()) {
+    const auth = await provider.accessTokenFor(organizerId).catch(() => null);
+    if (auth) return { provider, auth };
+  }
+  return null;
+}
+
+/** Can this organiser get a generated room at all? Cheap: no call to a provider. */
 export async function providerAvailableFor(organizerId: string | null | undefined): Promise<boolean> {
-  if (!organizerId || !isGoogleCalendarEnabled()) return false;
-  const conn = await prisma.googleCalendarConnection.findUnique({ where: { userId: organizerId }, select: { id: true } }).catch(() => null);
+  const kinds = enabledSyncProviders().map((p) => p.kind);
+  if (!organizerId || kinds.length === 0) return false;
+  const conn = await prisma.calendarConnection
+    .findFirst({ where: { userId: organizerId, provider: { in: kinds } }, select: { id: true } })
+    .catch(() => null);
   return Boolean(conn);
 }
 
-/** The join URL Google returned: `hangoutLink`, else the video entry point. */
-export function meetLinkFromEvent(body: Record<string, unknown>): string | null {
-  if (typeof body.hangoutLink === 'string' && body.hangoutLink.startsWith('https://')) return body.hangoutLink;
-  const data = body.conferenceData as { entryPoints?: { entryPointType?: string; uri?: string }[] } | undefined;
-  const video = data?.entryPoints?.find((e) => e.entryPointType === 'video' && typeof e.uri === 'string' && e.uri.startsWith('https://'));
-  return video?.uri ?? null;
-}
+const note = (provider: CalendarSyncProvider, connectionId: string, what: string) =>
+  provider.noteError(connectionId, `${CONFERENCE_NOTE_PREFIX} ${what} — the meeting used another room.`);
 
 /**
- * Create the organiser's calendar event with a Meet room, bounded by
+ * Create the organiser's calendar event with a provider room, bounded by
  * `timeoutMs`. Null on any failure — the caller falls back to another room.
  */
 export async function generateProviderConference(
   organizerId: string,
-  ctx: ConferenceContext,
+  slot: ConferenceSlot,
   timeoutMs = GENERATE_TIMEOUT_MS,
 ): Promise<GeneratedConference | null> {
-  if (!isGoogleCalendarEnabled()) return null;
-  const auth = await accessTokenFor(organizerId).catch(() => null);
-  if (!auth) return null;
-
-  const body = {
-    summary: ctx.title,
-    start: { dateTime: ctx.start.toISOString(), ...(ctx.timeZone ? { timeZone: ctx.timeZone } : {}) },
-    end: { dateTime: ctx.end.toISOString(), ...(ctx.timeZone ? { timeZone: ctx.timeZone } : {}) },
-    conferenceData: { createRequest: { requestId: randomBytes(12).toString('hex'), conferenceSolutionKey: { type: 'hangoutsMeet' } } },
-  };
-  const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events?conferenceDataVersion=1`;
+  const found = await connectedProvider(organizerId);
+  if (!found) return null;
+  const { provider, auth } = found;
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<'timeout'>((resolve) => {
     timer = setTimeout(() => resolve('timeout'), timeoutMs);
   });
-  const call = calendarFetch(auth.token, path, { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
+  const call = provider.createConference(auth, slot).catch(() => null);
   const res = await Promise.race([call, timeout]);
   if (timer) clearTimeout(timer);
 
   if (res === 'timeout') {
-    await noteError(auth.connectionId, 'Meet link generation timed out — the meeting used the built-in room.');
+    await note(provider, auth.connectionId, 'timed out');
     // The event may still land late; it carries a room nobody was sent, so remove it.
     void call.then((late) => {
-      const id = late?.ok && typeof late.body.id === 'string' ? late.body.id : null;
-      if (id) void calendarFetch(auth.token, `/calendars/${encodeURIComponent(auth.calendarId)}/events/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+      if (late?.ok && late.eventId) void provider.deleteEvent(auth, auth.calendarId, late.eventId).catch(() => {});
     });
     return null;
   }
   if (!res || !res.ok) {
-    await noteError(auth.connectionId, res ? `Meet link generation failed (${res.status}) — the meeting used the built-in room.` : 'Meet link generation failed — the meeting used the built-in room.');
+    await note(provider, auth.connectionId, res?.status ? `failed (${res.status})` : 'failed');
     return null;
   }
-  const link = meetLinkFromEvent(res.body);
-  const eventId = typeof res.body.id === 'string' ? res.body.id : null;
-  if (!link || !eventId) {
-    await noteError(auth.connectionId, 'Meet link generation returned no room — the meeting used the built-in room.');
-    if (eventId) void calendarFetch(auth.token, `/calendars/${encodeURIComponent(auth.calendarId)}/events/${encodeURIComponent(eventId)}`, { method: 'DELETE' }).catch(() => null);
+  if (!res.joinUrl || !res.eventId) {
+    await note(provider, auth.connectionId, 'returned no room');
+    if (res.eventId) void provider.deleteEvent(auth, auth.calendarId, res.eventId).catch(() => {});
     return null;
   }
   // A working generation retires an earlier failure note.
-  await prisma.googleCalendarConnection
-    .updateMany({ where: { id: auth.connectionId, lastError: { startsWith: MEET_NOTE_PREFIX } }, data: { lastError: null } })
+  await prisma.calendarConnection
+    .updateMany({ where: { id: auth.connectionId, lastError: { startsWith: CONFERENCE_NOTE_PREFIX } }, data: { lastError: null } })
     .catch(() => {});
-  return { provider: 'google_meet', link, connectionId: auth.connectionId, eventId };
+  return { provider: provider.kind, link: res.joinUrl, connectionId: auth.connectionId, eventId: res.eventId };
 }
 
 /**
@@ -134,11 +125,11 @@ export async function generateProviderConference(
 export async function adoptProviderEvent(meetingIds: string[], conference: GeneratedConference | undefined): Promise<void> {
   if (!conference) return;
   for (const meetingId of meetingIds) {
-    await prisma.googleCalendarEventLink
+    await prisma.calendarEventLink
       .upsert({
         where: { meetingId_connectionId: { meetingId, connectionId: conference.connectionId } },
-        update: { googleEventId: conference.eventId, pushedAt: new Date() },
-        create: { meetingId, connectionId: conference.connectionId, googleEventId: conference.eventId },
+        update: { externalEventId: conference.eventId, pushedAt: new Date() },
+        create: { meetingId, connectionId: conference.connectionId, externalEventId: conference.eventId },
       })
       .catch(() => {});
   }
@@ -150,7 +141,8 @@ export async function adoptProviderEvent(meetingIds: string[], conference: Gener
  */
 export async function discardProviderEvent(organizerId: string, conference: GeneratedConference | undefined): Promise<void> {
   if (!conference) return;
-  const auth = await accessTokenFor(organizerId).catch(() => null);
-  if (!auth) return;
-  await calendarFetch(auth.token, `/calendars/${encodeURIComponent(auth.calendarId)}/events/${encodeURIComponent(conference.eventId)}`, { method: 'DELETE' }).catch(() => null);
+  const provider = enabledSyncProviders().find((p) => p.kind === conference.provider);
+  if (!provider) return;
+  const auth = await provider.accessTokenFor(organizerId).catch(() => null);
+  if (auth) await provider.deleteEvent(auth, auth.calendarId, conference.eventId).catch(() => {});
 }

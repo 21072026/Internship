@@ -95,7 +95,7 @@ import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
-import { resolveStageEscalations } from '@/lib/stageSla';
+import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
@@ -3105,6 +3105,53 @@ export async function sendMenteeAssignedEmail({
   });
 }
 
+// Mentor Offers (#1809): a mentor offered to mentor this mentee, or the one
+// reminder before the offer expires. Sent only to a mentee who opted in
+// (User.openToOffers) — the caller checks that and the opt-out chain; the
+// footer says why the mail came and where to switch it off.
+export async function sendMentorOfferEmail({
+  to,
+  menteeName,
+  mentorName,
+  message,
+  kind,
+  orgId,
+  userId,
+  locale,
+}: {
+  to: string;
+  menteeName: string;
+  mentorName: string;
+  message?: string | null;
+  kind: 'new' | 'reminder';
+  orgId?: string | null;
+  userId: string;
+  locale?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.mentorOfferEmail;
+  const fill = (t: string) => t.replace('{mentorName}', mentorName).replace('{name}', menteeName);
+  await sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'mentor-offer',
+    fromName: brand.name,
+    subject: fill(kind === 'new' ? M.newSubject : M.reminderSubject),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.heading)}
+        <p>${esc(fill(M.greeting))}</p>
+        <p>${esc(fill(kind === 'new' ? M.newBody : M.reminderBody))}</p>
+        ${kind === 'new' && message ? `<p><strong>${esc(M.messageLabel)}</strong><br>${esc(message).replace(/\n/g, '<br>')}</p>` : ''}
+        ${ctaBlock(brand, `${base}/portal`, M.cta)}
+        <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+      </div>
+    `,
+  });
+}
+
 // An admin wiring up a mentorship directly (no prior mentee request, #668) —
 // the mentee never asked, so the request-approval copy would not fit.
 export async function sendMentorAssignedEmail({
@@ -4480,6 +4527,17 @@ export async function checkStageDeadlineReminders() {
   };
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
+  // One business-day rule per programme for the tick (#1638).
+  const dayRules = new Map<string, ReturnType<typeof resolveSlaDayRule>>();
+  const dayRuleOf = (rel: { orgId: string | null; cohortId: string | null }) => {
+    const key = `${rel.orgId ?? ''}|${rel.cohortId ?? ''}`;
+    let hit = dayRules.get(key);
+    if (!hit) {
+      hit = resolveSlaDayRule({ orgId: rel.orgId, cohortId: rel.cohortId });
+      dayRules.set(key, hit);
+    }
+    return hit;
+  };
 
   const candidates = await prisma.mentorshipRelation.findMany({
     // Not a paused pair (#1772): its clock is frozen (stageClockPatch), this is the second guard.
@@ -4542,6 +4600,8 @@ export async function checkStageDeadlineReminders() {
             const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
             const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+            // Say which day mode produced the date, so a mentor questioning it can see why (#1638).
+            const dayNote = (await dayRuleOf(rel)).mode === 'business' ? `<p style="color:#6b7280;font-size:13px;">${esc(emailText.businessDays)}</p>` : '';
             await brandOf(rel.orgId).then((brand) => sendEmail({
               category: 'stage-deadline',
               userId: rel.mentorId,
@@ -4550,7 +4610,7 @@ export async function checkStageDeadlineReminders() {
               locale: rel.mentor.preferredLanguage,
               to: rel.mentor.email,
               subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
             })).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });

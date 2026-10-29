@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Skills-gap report on /admin/analytics (#1823):** new `SkillsGapPanel` (premium tier, `mentorship` capability, same gate as the cohort card): coverage line, the most under-supplied skills and the skills held but asked for by no hiring position, each with open seats / positions / people / gap / avg. level / confirmed, a supply-vs-demand bar, a cohort filter and an empty state that names the cause. Export through the one admin export door: `GET /api/admin/export/skills-gap` (REPORT_EXPORT; calls the report route in-process with `all=1`, so its ADMIN / capability / ADVANCED_ANALYTICS gates answer for the file) → `skillsGapSheet()` in `src/lib/reports/workbooks.ts`. Feature-catalogue entry `skillsGap`. Topic environments now also run `backfill-skill-levels.mjs` after the taxonomy backfill; the demo set's OPEN requisitions and mentee skills already give the report content there.",
+  "notes": {
+    "en": ["New skills-gap report in analytics: see which skills your open, hiring positions need that your talent pool lacks — per cohort, exportable."],
+    "tr": ["Analitikte yeni beceri açığı raporu: açık, işe alım yapan pozisyonlarının istediği ama yetenek havuzunda eksik olan becerileri gör — döneme göre, dışa aktarılabilir."],
+    "de": ["Neuer Skill-Lücken-Bericht in der Analyse: Sieh, welche Skills deine offenen Stellen brauchen, die deinem Talent-Pool fehlen — je Kohorte, exportierbar."]
+  }
+}

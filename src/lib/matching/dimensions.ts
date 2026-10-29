@@ -15,6 +15,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { isValidTimeZone, offsetAt } from '@/lib/timezone';
 import { MATCH_DIMENSIONS, type MatchDimension } from './types';
 import { asStringList, lowercaseOnly, normalizeTerm, termMap, tokens } from './normalize';
+import { skillOverlap, type SkillEdgeRow } from '@/lib/skillTaxonomyRule';
 
 /** What every person on either side of a match may carry. All optional. */
 export interface MatchPerson {
@@ -29,6 +30,13 @@ export interface MatchPerson {
   interests?: string | null;
   targetPosition?: string | null;
   managerId?: string | null;
+  /**
+   * Canonical skill ids (`UserSkill`, #1815). Read by the `skills` dimension
+   * only when the caller also passes `ctx.skillGraph` (#1787) — then the
+   * comparison is the taxonomy's adjacency-weighted `skillOverlap()` (#1821)
+   * instead of the free-text one.
+   */
+  skillIds?: readonly string[];
 }
 
 export interface MatchMentee extends MatchPerson {
@@ -59,6 +67,13 @@ export interface DimensionResult {
 export interface ScoreContext {
   /** The instant zone offsets are read at. Fixed by the caller for determinism. */
   now: Date;
+  /**
+   * The org's skill graph, loaded by the caller (#1787). Present = score the
+   * `skills` dimension on canonical ids with adjacency, the same rule the
+   * requisition alerts use (#1821); absent = the free-text comparison, so a
+   * dry run or a preview without the graph scores exactly as before.
+   */
+  skillGraph?: { edges: readonly SkillEdgeRow[]; label?: (skillId: string) => string };
 }
 
 export type DimensionConfig = Record<string, unknown>;
@@ -94,13 +109,29 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
   // config.mode: 'normalized' (default — aliases, accents, punctuation) or
   // 'lowercase' (the pre-#1781 comparison, used by DEFAULT_RULE_SET).
   // config.minShared: how many shared skills count as a match (default 1).
-  skills: (mentee, mentor, config) =>
-    overlap(
+  // With ctx.skillGraph and a mentee who has canonical skills, the overlap is
+  // `skillOverlap()` over ids: an exact skill counts 1, a neighbour its edge
+  // weight, and the ratio is over the mentee's skills — `mode` is ignored, ids
+  // need no folding. The detail names the neighbour and what it stands in for.
+  skills: (mentee, mentor, config, ctx) => {
+    const ids = [...new Set(mentee.skillIds ?? [])];
+    if (ctx.skillGraph && ids.length > 0) {
+      const label = ctx.skillGraph.label ?? ((id: string) => id);
+      const o = skillOverlap(ids, mentor.skillIds ?? [], ctx.skillGraph.edges);
+      const hits = o.direct.length + o.adjacent.length;
+      return {
+        matched: hits >= Math.max(1, num(config.minShared, 1)),
+        ratio: clamp01(o.score / ids.length),
+        detail: [...o.direct.map(label), ...o.adjacent.map((a) => `${label(a.skillId)} ≈ ${label(a.via)}`)],
+      };
+    }
+    return overlap(
       asStringList(mentee.skills),
       asStringList(mentor.skills),
       config.mode === 'lowercase' ? lowercaseOnly : normalizeTerm,
       num(config.minShared, 1)
-    ),
+    );
+  },
 
   // The request's preferred languages win over the profile's spoken ones.
   language: (mentee, mentor) => {

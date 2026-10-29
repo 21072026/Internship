@@ -16,10 +16,13 @@ import { MailQueuePanel } from '@/components/admin/MailQueuePanel';
 import { EmailSuppressionPanel } from '@/components/admin/EmailSuppressionPanel';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
+import { OfferLetterTemplateEditor } from '@/components/OfferLetterTemplateEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
+import { SlaDayModeCard } from '@/components/admin/SlaDayModeCard';
 import { CrmBccCard } from '@/components/CrmBccCard';
 import { TerminologyCard } from '@/components/admin/TerminologyCard';
+import Link from 'next/link';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
 import { useSession } from 'next-auth/react';
@@ -1004,11 +1007,22 @@ export default function AdminSettingsPage() {
           MARKETING tenant's words come from its vertical overlay. */}
       {verticalHasCapability(vertical, 'mentorship') && <TerminologyCard />}
 
+      {/* The words of the event e-mails (#1719) live on their own screen. */}
+      <Card>
+        <CardHeader><CardTitle>{t.notificationTemplates.title}</CardTitle></CardHeader>
+        <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{t.notificationTemplates.subtitle}</p>
+        <Link href="/admin/notification-templates" className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300" data-testid="settings-notification-templates-link">
+          {t.notificationTemplates.title} →
+        </Link>
+      </Card>
+
       {/* The org's competency framework (#822) — criteria as data, not code.
           Only where the vertical scores anyone (#2558): MARKETING carries no
           `evaluations` capability, so its admins were offered criteria for
           "what a mentor scores a mentee on" in a product with neither. */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationFrameworkEditor />}
+      {/* Offer letters (#1857) exist only where offers do. */}
+      {verticalHasCapability(vertical, 'placements') && <OfferLetterTemplateEditor />}
       {/* When INTERIM/FINAL fall due, and their reminders (#1891). */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationScheduleEditor />}
       {/* The tenant starter pack (#2066): safe to apply again at any time. */}
@@ -1016,6 +1030,9 @@ export default function AdminSettingsPage() {
 
       {/* Per-stage service levels (#817) — how long anyone may wait. */}
       <StageSlaEditor />
+
+      {/* How those SLA days are counted: calendar or business days (#1638). */}
+      <SlaDayModeCard />
     </div>
   );
 }

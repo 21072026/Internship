@@ -100,6 +100,12 @@ export interface JobPayloadMap {
   /// `ApiExport` row's file. The row carries everything else (org, key,
   /// resource), so a payload can never widen what the request was granted.
   'api.export': { exportId: string };
+  /// Re-evaluate every affiliate partner after a commission-plan change (#3170,
+  /// `src/lib/affiliatePlanResync.ts`). Enqueued with the org's `orgId`, keyed
+  /// on the org and the plan version; the state it reports and resumes from is
+  /// `AffiliateProgramSettings.planResync`. `actorId` is the admin who saved
+  /// the plan (the writer's audit rows name them).
+  'affiliate.planResync': { planVersion: number; actorId: string };
   /// The Klaviyo pull connector's tick (src/lib/klaviyoSync.ts): every enabled
   /// connection whose turn it is. Each connection takes its own lease.
   'klaviyo.sync': Record<string, never>;
@@ -116,6 +122,7 @@ export interface JobPayloadMap {
   'reminders.stageDeadline': Record<string, never>;
   'reminders.retentionReconsent': Record<string, never>;
   'matching.needMatchAlerts': Record<string, never>;
+  'mentorOffers.sweep': Record<string, never>;
   'meetings.reminders': Record<string, never>;
   'meetings.seriesReminders': Record<string, never>;
   'meetings.autoLog': Record<string, never>;
@@ -157,6 +164,33 @@ export interface JobPayloadMap {
   /// The `AutomationRun` row holds the rule, the relation and the org; the
   /// payload is only its id, keyed `automation:<runId>`.
   'automation.run': { runId: string };
+  /// One event mail the notification router owes one person (#1710, sender
+  /// #1719). Enqueued by the router's e-mail channel (src/lib/notifications/
+  /// router.ts, keyed `notify:<dedupeKey>`); rendered by renderNotificationEmail()
+  /// — the same renderer the template editor's preview uses — and handed to
+  /// sendEmail(). The job's own `orgId` is the recipient's org.
+  'notification.email': {
+    eventKey: string;
+    userId: string;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string | null;
+    emailGroup: string;
+    delivery: 'immediate' | 'batched';
+  };
+  /// A delivery held to the end of the recipient's quiet hours or an org
+  /// blackout day (#1714); the consumer is runDeferredDelivery() in the router.
+  'notification.deferred': {
+    deliveryId: string;
+    channel: string;
+    eventKey: string;
+    userId: string;
+    orgId: string | null;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string;
+    dedupeKey: string;
+  };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -176,6 +210,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'roster.sweep',
   'email.send',
   'api.export',
+  'affiliate.planResync',
   'api.import.candidates',
   'sso.certificateExpiry',
   'klaviyo.sync',
@@ -185,6 +220,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'reminders.stageDeadline',
   'reminders.retentionReconsent',
   'matching.needMatchAlerts',
+  'mentorOffers.sweep',
   'meetings.reminders',
   'meetings.seriesReminders',
   'meetings.autoLog',
@@ -213,6 +249,8 @@ export const JOB_NAMES: readonly JobName[] = [
   'webhook.deliver',
   'nudge.evaluate',
   'nudge.send',
+  'notification.email',
+  'notification.deferred',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

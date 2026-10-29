@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { entitledFeatures } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
@@ -20,11 +19,10 @@ import { withTenantScope } from '@/lib/orgContext';
 // each still call entitled() server-side and still return 403 `feature_locked`
 // to an unentitled caller. A client that lies to itself about these flags gets
 // a nicer-looking page and not one extra row of premium data.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return withTenantScope(session, async () => {
     const features = await entitledFeatures(await settingsOrgOf(session));
     return NextResponse.json({

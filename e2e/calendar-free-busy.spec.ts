@@ -38,7 +38,7 @@ test('a block only in the real calendar refuses a booking; no scope or a failing
     const consent = await page.request.get('/api/integrations/google/connect', { maxRedirects: 0 });
     const state = new URL(consent.headers()['location']).searchParams.get('state')!;
     await page.request.get(`/api/integrations/google/callback?code=ok&state=${encodeURIComponent(state)}`, { maxRedirects: 0 });
-    const conn = await prisma.googleCalendarConnection.findUniqueOrThrow({ where: { userId: mentor.id } });
+    const conn = await prisma.calendarConnection.findUniqueOrThrow({ where: { userId_provider: { userId: mentor.id, provider: 'GOOGLE' } } });
     expect(conn.scope).toContain('calendar.freebusy');
 
     // Wednesday 10:00–11:00 is taken in the real calendar — something this app never saw.
@@ -63,7 +63,7 @@ test('a block only in the real calendar refuses a booking; no scope or a failing
     expect(JSON.stringify(await ask.json())).not.toContain('Dentist');
 
     // A connection granted before the scope existed: exactly today's behaviour.
-    await prisma.googleCalendarConnection.update({ where: { id: conn.id }, data: { scope: 'https://www.googleapis.com/auth/calendar.events openid email' } });
+    await prisma.calendarConnection.update({ where: { id: conn.id }, data: { scope: 'https://www.googleapis.com/auth/calendar.events openid email' } });
     const later = new Date(busyStart.getTime() + DAY);
     await request.post(`${MOCK}/__freebusy`, { data: { busy: [{ start: later.toISOString(), end: new Date(later.getTime() + HOUR).toISOString() }] } });
     await signInAsFreshUser(page, mentorEmail, PW, '/mentor');
@@ -73,7 +73,7 @@ test('a block only in the real calendar refuses a booking; no scope or a failing
     expect(status.providers.find((p: { provider: string }) => p.provider === 'google')).toMatchObject({ connected: true, freeBusy: false });
 
     // A failing provider degrades to the database answer and says so on the connection.
-    await prisma.googleCalendarConnection.update({ where: { id: conn.id }, data: { scope: conn.scope, lastError: null } });
+    await prisma.calendarConnection.update({ where: { id: conn.id }, data: { scope: conn.scope, lastError: null } });
     await request.post(`${MOCK}/__freebusy`, { data: { fail: true } });
     const evenLater = new Date(busyStart.getTime() + 2 * DAY);
     // Read on a path that pushes nothing to Google afterwards — a successful
@@ -81,7 +81,7 @@ test('a block only in the real calendar refuses a booking; no scope or a failing
     await signInAsFreshUser(page, menteeEmail, PW, '/portal');
     const degraded = await page.request.post('/api/meeting-requests', { data: { relationId: rel.id, topic: 'Provider down', proposedAt: evenLater.toISOString() } });
     expect(degraded.status()).toBe(201);
-    expect((await prisma.googleCalendarConnection.findUniqueOrThrow({ where: { id: conn.id } })).lastError).toContain('Free/busy unavailable');
+    expect((await prisma.calendarConnection.findUniqueOrThrow({ where: { id: conn.id } })).lastError).toContain('Free/busy unavailable');
 
     // Nothing from the provider was stored anywhere.
     expect(await prisma.meeting.count({ where: { relationId: rel.id, title: { contains: 'Dentist' } } })).toBe(0);
@@ -89,8 +89,8 @@ test('a block only in the real calendar refuses a booking; no scope or a failing
     await request.post(`${MOCK}/__freebusy`, { data: {} });
     await prisma.meeting.deleteMany({ where: { relationId: rel.id } });
     await prisma.meetingRequest.deleteMany({ where: { relationId: rel.id } });
-    await prisma.googleCalendarEventLink.deleteMany({ where: { connection: { userId: mentor.id } } }).catch(() => {});
-    await prisma.googleCalendarConnection.deleteMany({ where: { userId: mentor.id } });
+    await prisma.calendarEventLink.deleteMany({ where: { connection: { userId: mentor.id } } }).catch(() => {});
+    await prisma.calendarConnection.deleteMany({ where: { userId: mentor.id } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { isGoogleCalendarConfigured, isGoogleCalendarEnabled } from '@/lib/googleCalendar';
+import { isMicrosoftCalendarConfigured, isMicrosoftCalendarEnabled } from '@/lib/microsoftCalendar';
 import { scopeAllowsFreeBusy } from '@/lib/calendarFreeBusy';
 
 // The calendar provider registry (#1993).
@@ -20,7 +21,7 @@ import { scopeAllowsFreeBusy } from '@/lib/calendarFreeBusy';
 //                offering a button that cannot work.
 //   connected  — THIS PERSON has granted consent and there is a row for them.
 
-export type CalendarProviderId = 'google';
+export type CalendarProviderId = 'google' | 'microsoft';
 
 /** What a provider hands back about one person's connection. Never a token. */
 export interface CalendarConnectionSummary {
@@ -63,12 +64,31 @@ export const CALENDAR_PROVIDERS: readonly CalendarProvider[] = [
     connectPath: '/api/integrations/google/connect',
     disconnectPath: '/api/integrations/google/connection',
     async readConnection(userId) {
-      const conn = await prisma.googleCalendarConnection.findUnique({
-        where: { userId },
-        select: { googleEmail: true, lastSyncAt: true, lastError: true, scope: true },
+      const conn = await prisma.calendarConnection.findUnique({
+        where: { userId_provider: { userId, provider: 'GOOGLE' } },
+        select: { accountEmail: true, lastSyncAt: true, lastError: true, scope: true },
       });
       if (!conn) return null;
-      return { accountEmail: conn.googleEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError, freeBusy: scopeAllowsFreeBusy(conn.scope) };
+      return { accountEmail: conn.accountEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError, freeBusy: scopeAllowsFreeBusy(conn.scope) };
+    },
+  },
+  {
+    id: 'microsoft',
+    label: 'Microsoft Outlook',
+    isConfigured: isMicrosoftCalendarConfigured,
+    isEnabled: isMicrosoftCalendarEnabled,
+    connectPath: '/api/integrations/microsoft/connect',
+    disconnectPath: '/api/integrations/microsoft/connection',
+    async readConnection(userId) {
+      const conn = await prisma.calendarConnection.findUnique({
+        where: { userId_provider: { userId, provider: 'MICROSOFT' } },
+        select: { accountEmail: true, lastSyncAt: true, lastError: true },
+      });
+      if (!conn) return null;
+      // Free/busy from Graph is not read yet (#1991 ships the event mirror).
+      // `true`, not `false`: the card answers `false` with "reconnect to share
+      // busy times", and a Microsoft reconnect would change nothing.
+      return { accountEmail: conn.accountEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError, freeBusy: true };
     },
   },
 ];

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**AutomationRun retention (#1703 follow-up):** settled stage-automation runs are pruned after 90 days by the `automationRun` entry of the retention registry — the same window as the `DomainEvent` a run points at, no setting. PENDING and RUNNING runs are never touched."
+}

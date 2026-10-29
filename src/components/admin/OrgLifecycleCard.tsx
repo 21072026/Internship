@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
-// Tenant lifecycle (#1580, docs/tenant-lifecycle.md): rename / re-slug and
-// archive / unarchive one organization. Super admin only — the page mounts it
-// for a super admin, and the routes refuse everybody else regardless.
+// Tenant lifecycle (#1580, docs/tenant-lifecycle.md): rename / re-slug,
+// archive / unarchive and export one organization. Rename and archive are the
+// super admin's; the export is also the tenant's own ORG_ADMIN's (#1584). The
+// routes decide — this only hides what the account cannot use.
 
 export interface LifecycleOrgRow {
   id: string;
@@ -16,10 +17,25 @@ export interface LifecycleOrgRow {
   slug: string;
   ssoEnabled: boolean;
   archivedAt: string | null;
+  deletionRequestedAt?: string | null;
+  deletionEligibleAt?: string | null;
 }
 
-export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[]; onChanged: () => Promise<void> | void }) {
+export function OrgLifecycleCard({
+  orgs,
+  onChanged,
+  superAdmin,
+  hardDelete = { enabled: false, waitHours: 72 },
+}: {
+  orgs: LifecycleOrgRow[];
+  onChanged: () => Promise<void> | void;
+  /** Permanent deletion (#1584): shown only when the deployment switched it on. */
+  hardDelete?: { enabled: boolean; waitHours: number };
+  /** A tenant ORG_ADMIN gets the export of its own org only (the route decides; this hides the rest). */
+  superAdmin: boolean;
+}) {
   const t = useT();
+  const locale = useLocale();
   const L = t.orgLifecycle;
   const [orgId, setOrgId] = useState('');
   const org = orgs.find((o) => o.id === orgId) ?? null;
@@ -34,6 +50,45 @@ export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[];
     setSlug(org?.slug ?? '');
     setForce(false);
   }, [org?.id, org?.name, org?.slug]);
+
+  const [delSlug, setDelSlug] = useState('');
+  const [delPassword, setDelPassword] = useState('');
+  useEffect(() => { setDelSlug(''); setDelPassword(''); }, [org?.id]);
+
+  const deletion = async (method: 'POST' | 'DELETE' | 'EXECUTE') => {
+    if (!org) return;
+    if (method === 'EXECUTE' && !window.confirm(L.deleteFinalConfirm.replace('{org}', org.name))) return;
+    setBusy(true); setMsg(null);
+    try {
+      const res = method === 'EXECUTE'
+        ? await fetch(`/api/admin/organizations/${org.id}`, {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirmSlug: delSlug, password: delPassword }),
+          })
+        : await fetch(`/api/admin/organizations/${org.id}/deletion`, {
+            method, headers: { 'Content-Type': 'application/json' },
+            body: method === 'POST' ? JSON.stringify({ confirmSlug: delSlug }) : undefined,
+          });
+      const data = await res.json().catch(() => ({}));
+      setDelPassword('');
+      if (res.ok) {
+        setMsg({ ok: true, text: method === 'POST' ? L.deleteRequestedDone : method === 'DELETE' ? L.deleteCancelledDone : L.deleteDone });
+        if (method === 'EXECUTE') setOrgId('');
+        await onChanged();
+      } else {
+        const known: Record<string, string> = {
+          slug_mismatch: L.errDeleteSlug,
+          waiting_period: L.errDeleteWaiting,
+          export_required: L.errDeleteExport,
+          password_incorrect: L.errDeletePassword,
+          hard_delete_disabled: L.errDeleteDisabled,
+        };
+        setMsg({ ok: false, text: known[data.code] ?? data.error ?? t.common.error });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const slugChanging = !!org && slug.trim() !== '' && slug.trim() !== org.slug;
 
@@ -87,8 +142,8 @@ export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[];
 
   return (
     <Card className="mb-6 max-w-2xl" data-testid="org-lifecycle-card">
-      <CardHeader><CardTitle>{L.title}</CardTitle></CardHeader>
-      <p className="text-sm text-gray-500 mb-3">{L.hint}</p>
+      <CardHeader><CardTitle>{superAdmin ? L.title : L.exportTitle}</CardTitle></CardHeader>
+      <p className="text-sm text-gray-500 mb-3">{superAdmin ? L.hint : L.exportHint}</p>
       <div className="mb-3">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5" htmlFor="org-lifecycle-select">
           {L.select}
@@ -108,6 +163,21 @@ export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[];
       </div>
 
       {org && (
+        <div className="mb-4">
+          {/* A plain download: the route streams the file with its own name. */}
+          <a
+            href={`/api/admin/organizations/${org.id}/export`}
+            download
+            data-testid="org-lifecycle-export"
+            className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            {L.exportDownload}
+          </a>
+          <p className="mt-1 text-xs text-gray-500">{L.exportNote}</p>
+        </div>
+      )}
+
+      {org && superAdmin && (
         <div className="space-y-4">
           <form onSubmit={rename} className="space-y-3">
             <div className="flex flex-wrap gap-3">
@@ -142,6 +212,42 @@ export function OrgLifecycleCard({ orgs, onChanged }: { orgs: LifecycleOrgRow[];
               {org.archivedAt ? L.unarchive : L.archive}
             </Button>
           </div>
+
+          {hardDelete.enabled && org.archivedAt && (
+            <div className="border-t border-red-100 pt-4 dark:border-red-900" data-testid="org-lifecycle-delete">
+              <p className="text-sm font-medium text-red-700 dark:text-red-400">{L.deleteTitle}</p>
+              <p className="text-sm text-gray-500 mb-2">{L.deleteHint.replace('{hours}', String(hardDelete.waitHours))}</p>
+              {org.deletionRequestedAt && org.deletionEligibleAt && (
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                  {L.deleteRequestedState.replace('{when}', new Date(org.deletionEligibleAt).toLocaleString(locale))}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-3">
+                <div className="flex-1 min-w-[160px]">
+                  <Input label={L.deleteSlugLabel} value={delSlug} onChange={(e) => setDelSlug(e.target.value)} placeholder={org.slug} autoComplete="off" />
+                </div>
+                {org.deletionRequestedAt && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Input label={L.deletePasswordLabel} type="password" value={delPassword} onChange={(e) => setDelPassword(e.target.value)} autoComplete="current-password" />
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {!org.deletionRequestedAt ? (
+                  <Button type="button" variant="danger" loading={busy} disabled={delSlug.trim() !== org.slug} onClick={() => deletion('POST')}>
+                    {L.deleteRequest}
+                  </Button>
+                ) : (
+                  <>
+                    <Button type="button" variant="outline" loading={busy} onClick={() => deletion('DELETE')}>{L.deleteCancel}</Button>
+                    <Button type="button" variant="danger" loading={busy} disabled={delSlug.trim() !== org.slug || !delPassword} onClick={() => deletion('EXECUTE')}>
+                      {L.deleteExecute}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {msg && (

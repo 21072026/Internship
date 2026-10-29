@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -15,6 +13,7 @@ import {
 } from '@/lib/ssoMetadata';
 import { certificateStatus } from '@/lib/ssoCertificateRule';
 import { SsoFetchError, fetchPublicText } from '@/lib/ssoFetch';
+import { requirePermission } from '@/lib/authz';
 
 // POST /api/admin/organizations/[id]/sso/metadata — read an IdP's SAML metadata
 // (pasted/uploaded XML, or a URL we fetch) and answer with a PREVIEW of the
@@ -42,8 +41,9 @@ const bodySchema = z.union([
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Ownership before the row is touched, so a foreign id is never confirmed.
   if (!(await isSuperAdminFor(session, id))) {

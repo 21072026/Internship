@@ -450,8 +450,22 @@ marketing names redirect there, and their apex now serves **mail only**.
   `sha256(userAgent)`, a notice is due only when the sign-in **created** the `SignInDevice` row
   and the account already had one — the first browser is the baseline, so rollout mails nobody.
   A notice never carries a token, hash, code, raw user-agent or geolocation; an admin-side
-  notice passes no `request` (the browser/IP would be the admin's). The router's e-mail
-  channel is still a stub (a job no worker consumes), which is why the mail is sent inline.
+  notice passes no `request` (the browser/IP would be the admin's). The mail is sent inline,
+  not through the router's e-mail channel: that channel renders the event's template, and a
+  notice needs the device, the local time and the "not you?" block.
+- **The router's channels are adapters** (#1711, `src/lib/notifications/adapters/`): one
+  `ChannelAdapter` port, one entry per channel in `adapters/index.ts` — the router decides
+  (preferences, then the ledger claim, `ledger.ts`) and the adapter only delivers. A new
+  channel is an adapter plus one registry line, never a router edit. The e-mail adapter only
+  enqueues the keyed `notification.email` job; its consumer is `emailJob.ts` (#1719).
+- **Channel matrix and quiet hours are router rules** ([`docs/notification-channels.md`](docs/notification-channels.md),
+  #1714): `notificationPrefs.channels` (sparse per-category `inApp`/`email`/`push` overrides) and
+  `notificationPrefs.quietHours` are read only through `src/lib/notificationChannelPrefs.ts` and
+  enforced only in `channelAllowed()` / `notifyEvent()`. An off channel is recorded `SKIPPED
+  channel_off` (never filtered out), only push can be added, and e-mail/push/chat inside a quiet
+  window or an org blackout day are HELD as a keyed `notification.deferred` job that re-reads the
+  preferences — never dropped. `account_security` ignores all of it. `PUT /api/profile` must keep
+  carrying the two keys over (it replaces the column).
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve
@@ -503,6 +517,11 @@ marketing names redirect there, and their apex now serves **mail only**.
   (`capabilityGate.ts`, the per-vertical product gate). `platform.*` is held only by the per-world
   super admin (`isSuperAdmin`) — there is no SUPER_ADMIN tier — and no tenant permission crosses an
   org, the super admin's included. A PROGRAM_ADMIN with no grant gets nothing.
+  A route never compares `session.user.role` to `'ADMIN'` and never defines a private
+  `requireAdmin()`: `npm run check:authz` (CI, #1571) fails on a new one, and the sites not
+  moved yet are pinned in `scripts/authz-baseline.json`, which only shrinks (`-- --shrink`).
+  A route that also serves MENTOR/COMPANY/… uses `requireRoleOrPermission(roles, permission)`;
+  a single admin branch inside a shared route asks `can(actor, permission, subject, session)`.
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to

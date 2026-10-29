@@ -3,7 +3,7 @@
 - **A later success erases an earlier failure note.** `pushMeeting()` cleared
   `GoogleCalendarConnection.lastError` on every successful mirror. A Meet generation failure
   noted in the same request was therefore wiped a moment later, and the e2e saw `""`. Notes now
-  carry a prefix (`MEET_NOTE_PREFIX`), and the mirror only clears errors without it. Before you
+  carry a prefix (`CONFERENCE_NOTE_PREFIX`), and the mirror only clears errors without it. Before you
   rely on an error column, check who else writes `null` into it.
 - **A container restart stops MariaDB and leaves the dev server cold.** Run
   `service mariadb start` first. The first test of every run then hits Next's on-demand compile

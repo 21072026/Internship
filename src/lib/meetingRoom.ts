@@ -16,7 +16,7 @@ import { recordVideoUsage } from '@/lib/metering';
 import { prisma } from '@/lib/prisma';
 import { toVerticalKey } from '@/lib/verticals';
 import { brandForOrg, defaultBrand, productNameIn } from '@/lib/orgBrand';
-import { generateProviderConference, providerAvailableFor, type ConferenceContext, type GeneratedConference } from '@/lib/conferenceGeneration';
+import { generateProviderConference, providerAvailableFor, type ConferenceSlot, type GeneratedConference } from '@/lib/conferenceGeneration';
 
 // Where a meeting's video room comes from. Server-only (node:crypto); the
 // client-side link *checks* live in @/lib/meetingLink so components can import
@@ -199,7 +199,7 @@ export async function resolveMeetingLink(opts: {
    * The meeting's slot, for GENERATE_PROVIDER (#2009). Only a timed meeting
    * can carry a calendar-generated room; omitted, that level is skipped.
    */
-  conference?: ConferenceContext | null;
+  conference?: ConferenceSlot | null;
 }): Promise<MeetingLinkOutcome> {
   const pasted = opts.pastedLink?.trim();
   if (pasted) {
@@ -229,7 +229,7 @@ export async function resolveMeetingLink(opts: {
   const providerAvailable = policy === 'GENERATE_PROVIDER' && Boolean(opts.conference) && (await providerAvailableFor(opts.organizerId));
   let choice = chooseMeetingLinkSource({ policy, personal, providerAvailable });
   if ('source' in choice && choice.source === 'provider') {
-    const generated = await generateProviderConference(opts.organizerId as string, opts.conference as ConferenceContext);
+    const generated = await generateProviderConference(opts.organizerId as string, opts.conference as ConferenceSlot);
     if (generated) return { ok: true, link: generated.link, source: 'provider', conference: generated };
     // Google said no or was too slow: the same choice without that level.
     choice = chooseMeetingLinkSource({ policy, personal, providerAvailable: false });

@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
@@ -8,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { EVALUATION_SCOPES, defaultCriteria, isEvaluationScope } from '@/lib/evaluation';
 import { locales } from '@/i18n/config';
+import { requirePermission } from '@/lib/authz';
 
 // Admin management of the org's competency framework (#822).
 //
@@ -43,11 +42,10 @@ const bodySchema = z.object({
   criteria: z.array(criterionSchema).max(30),
 });
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     const templates = orgId
@@ -85,10 +83,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
