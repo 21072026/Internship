@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
 import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
-import { referralLink, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
+import { parseReferralUrl, referralLink, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
 import { AffiliateTabs } from '../AffiliateTabs';
 
 // The programme's settings (docs/affiliate-module.md, #3116): the commission plan
@@ -321,7 +321,16 @@ export default function AffiliateSettingsPage() {
             value={referralUrl}
             error={referralIssue ? L.referralErrors[referralIssue] : undefined}
             hint={referralPreview ? interpolate(L.referralExample, { code: L.referralSampleCode, link: referralPreview }) : undefined}
-            onChange={(e) => setReferralUrl(e.target.value)}
+            onChange={(e) => {
+              // A stale refusal would hide the example link while the address is being fixed (#3176).
+              setReferralUrl(e.target.value);
+              setReferralIssue(null);
+            }}
+            onBlur={() => {
+              // The server's own rule, so the hint never disagrees with the save; the server still decides.
+              const parsed = parseReferralUrl(referralUrl);
+              setReferralIssue(parsed.ok ? null : parsed.issue);
+            }}
             data-testid="affiliate-referral-url"
           />
           {!readOnly && (

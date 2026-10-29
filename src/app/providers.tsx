@@ -10,6 +10,7 @@ import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import { ErrorTrackingListener } from '@/components/ErrorTrackingListener';
+import { WebVitalsReporter } from '@/components/WebVitalsReporter';
 import { TimezoneSync } from '@/components/TimezoneSync';
 import { MeetingLauncherProvider } from '@/components/meeting/MeetingLauncher';
 import { FloatingNotesProvider } from '@/components/meeting/FloatingNotes';
@@ -62,6 +63,8 @@ export function Providers({
             <CookieConsent />
             {/* Renders nothing; inert without NEXT_PUBLIC_ERROR_TRACKING (#1600). */}
             <ErrorTrackingListener />
+            {/* Renders nothing; sends nothing without NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE (#1593). */}
+            <WebVitalsReporter />
             {/* Signed-in only; renders nothing otherwise (#3130). */}
             <FeedbackWidget replay={feedbackReplay} />
             {/* WCAG 2.2.1: warns five minutes before an idle session ends and
