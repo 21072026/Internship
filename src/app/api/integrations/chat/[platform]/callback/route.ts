@@ -8,6 +8,7 @@ import { verifyChatState } from '@/lib/chat/oauthState';
 import { exchangeSlackCode } from '@/lib/chat/client/slack';
 import { ChatClientError } from '@/lib/chat/client/errors';
 import { ChatInstallConflict, recordChatInstall } from '@/lib/chat/workspaces';
+import { withRequestScope } from '@/lib/requestContext';
 
 // GET — the platform sends the admin back here after consent (#1935).
 //
@@ -24,7 +25,7 @@ import { ChatInstallConflict, recordChatInstall } from '@/lib/chat/workspaces';
 // the tenant and holds no workspace token.
 const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
-export async function GET(request: Request, { params }: { params: Promise<{ platform: string }> }) {
+async function handleGET(request: Request, { params }: { params: Promise<{ platform: string }> }) {
   const here = requestOrigin((n) => request.headers.get(n));
   const back = (status: string) => NextResponse.redirect(new URL(`/admin/integrations?chat=${status}`, here));
   const platform = platformFromSlug((await params).platform);
@@ -79,4 +80,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ plat
     logger.warning('chat install failed', { platform, code: e instanceof ChatClientError ? e.code : 'internal_error' });
     return back('failed');
   }
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function GET(request: Request, ctx: { params: Promise<{ platform: string }> }) {
+  return withRequestScope(request, () => handleGET(request, ctx));
 }

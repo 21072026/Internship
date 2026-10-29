@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { logger } from '@/lib/logger';
 import { parseCspReports } from '@/lib/cspReport';
+import { withRequestScope } from '@/lib/requestContext';
 
 // Where browsers post what the report-only CSP would have blocked (#1552,
 // src/lib/cspPolicy.cjs). Anonymous by nature — a browser sends it on its own,
@@ -13,7 +14,7 @@ import { parseCspReports } from '@/lib/cspReport';
 
 const MAX_BODY = 64 * 1024;
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const limited = enforceRateLimit(request, 'csp-report', { limit: 60, windowMs: 10 * 60 * 1000 });
   if (limited) return limited;
 
@@ -36,4 +37,9 @@ export async function POST(request: Request) {
     logger.warning('csp.violation', { ...v });
   }
   return new NextResponse(null, { status: 204 });
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function POST(request: Request) {
+  return withRequestScope(request, () => handlePOST(request));
 }

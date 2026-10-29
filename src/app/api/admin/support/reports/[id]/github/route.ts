@@ -13,6 +13,7 @@ import {
   githubConfig,
   isIssueUrlOf,
 } from '@/lib/supportReportIntegrationRule';
+import { withRequestScope } from '@/lib/requestContext';
 
 // "Create GitHub issue" for one bug report (#3132).
 //   GET  — the default draft (public-safe by construction, see
@@ -62,7 +63,7 @@ async function loadReport(id: string, orgId: string) {
   });
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('support.read', { request: _request });
   if ('error' in gate) return gate.error;
   const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
@@ -92,7 +93,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePOST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('support.write', { request });
   if ('error' in gate) return gate.error;
   const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
@@ -129,4 +130,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'The issue could not be created', code: 'github_failed' }, { status: 502 });
     }
   });
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handleGET(request, ctx));
+}
+
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handlePOST(request, ctx));
 }

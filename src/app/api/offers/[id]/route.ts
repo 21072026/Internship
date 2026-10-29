@@ -31,6 +31,7 @@ import { emit } from '@/lib/events/emit';
 import { logger } from '@/lib/logger';
 import { renderLetterForOffer } from '@/lib/offerLetterServer';
 import { clientIp } from '@/lib/clientIp';
+import { withRequestScope } from '@/lib/requestContext';
 
 const baseSelect = {
   id: true,
@@ -73,7 +74,7 @@ async function loadAuthorized(id: string, session: Session) {
   return { offer, isOwnMenteeOffer, authorized };
 }
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -142,7 +143,7 @@ const actionSchema = z.object({
 // PATCH — either a field edit on a DRAFT offer (ADMIN only), or a state
 // transition via { action }. Which one runs is decided by whether `action` is
 // present in the body; both share the same load/authorize step above.
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -346,4 +347,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const updated = await prisma.offer.update({ where: { id }, data, select: { ...baseSelect, ...compensationSelect() } });
     return NextResponse.json({ offer: updated });
   });
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handleGET(request, ctx));
+}
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, () => handlePATCH(request, ctx));
 }

@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import { platformFromSlug } from '@/lib/chat/config';
 import { verifyBotFrameworkRequest } from '@/lib/chat/botFrameworkAuth';
 import { markChatWorkspaceRemovedByPlatform } from '@/lib/chat/workspaces';
+import { withRequestScope } from '@/lib/requestContext';
 
 // POST — the Teams bot's messaging endpoint (#3322). The Bot Framework posts
 // every activity here, authenticated by its signed JWT, never by a session
@@ -19,7 +20,7 @@ import { markChatWorkspaceRemovedByPlatform } from '@/lib/chat/workspaces';
 // (…/slack/uninstall); this path is Teams only.
 const SAFE_ID = /^[A-Za-z0-9-]{1,128}$/;
 
-export async function POST(request: Request, { params }: { params: Promise<{ platform: string }> }) {
+async function handlePOST(request: Request, { params }: { params: Promise<{ platform: string }> }) {
   if (platformFromSlug((await params).platform) !== 'TEAMS') return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   let activity: {
@@ -51,4 +52,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     }
   }
   return NextResponse.json({ ok: true, ignored: true });
+}
+
+// Every line this route logs carries its request id (#1601).
+export async function POST(request: Request, ctx: { params: Promise<{ platform: string }> }) {
+  return withRequestScope(request, () => handlePOST(request, ctx));
 }
