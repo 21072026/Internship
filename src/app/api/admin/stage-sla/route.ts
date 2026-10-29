@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -102,10 +101,9 @@ async function fillDeadlines(orgId: string): Promise<number> {
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     // The labels are printed straight into the settings card, so they need the
@@ -175,10 +173,9 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });

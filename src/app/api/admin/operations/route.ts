@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { resolveQueueScope } from '@/lib/mailQueueAdmin';
 import { operationsView } from '@/lib/operationsConsole';
 import { withRequestScope } from '@/lib/requestContext';
@@ -18,9 +17,9 @@ export const dynamic = 'force-dynamic';
 // a tenant ADMIN → 403.
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('analytics.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const scope = await resolveQueueScope(session);
     if (!scope) return NextResponse.json({ error: 'Forbidden', code: 'operations_operator_only' }, { status: 403 });
     return NextResponse.json(await operationsView(scope));

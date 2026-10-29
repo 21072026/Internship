@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -20,9 +19,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 // the last twelve months), with the knowledge rate next to every bucket and
 // the response floor applied per bucket.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const params = new URL(request.url).searchParams;
   const period = defaultOutcomePeriod();
   const from = params.get('from');
@@ -54,9 +53,9 @@ const setupSchema = z.object({ dayOffset: z.number().int().refine((n) => (OUTCOM
 // and a DAYS_AFTER_END campaign for it. Idempotent: an org that already has
 // the survey gets it back, plus a campaign at this offset if it lacked one.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = setupSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const dayOffset = parsed.data.dayOffset ?? OUTCOME_DEFAULT_OFFSET;
@@ -85,9 +84,9 @@ export async function POST(request: Request) {
 // docs/surveys.md § Retention): every response of theirs to the destination
 // survey, in this tenant, is deleted. They become eligible-and-unknown again.
 export async function DELETE(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const userId = new URL(request.url).searchParams.get('userId');
   if (!userId) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   return withTenantScope(session, async () => {
