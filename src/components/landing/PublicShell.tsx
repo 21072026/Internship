@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { selfServeSignupEnabled } from '@/lib/selfServeSignup';
 import { authOptions } from '@/lib/auth';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
@@ -91,7 +92,7 @@ export async function PublicShell({
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       {/* A marketing host is invitation-only (#2501): no self-serve Register
           button — token-less sign-up would mint a MENTEE in the internship org. */}
-      <PublicHeader showRegister={showRegister && !isMarketing} dashboardHref={dashboardHref} hideInternshipLinks={isMarketing} urlLocale={await urlLocale()} />
+      <PublicHeader showRegister={showRegister && !isMarketing} showSignup={!session && !isMarketing && selfServeSignupEnabled()} dashboardHref={dashboardHref} hideInternshipLinks={isMarketing} urlLocale={await urlLocale()} />
       <main id="main-content" className="flex-1">
         {children}
       </main>

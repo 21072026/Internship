@@ -123,6 +123,8 @@ const LEAK_EXEMPT: Record<string, string> = {
   adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   forecastCapacity: 'The capacity half of the forecast panel (#1897) — /api/admin/analytics/forecast returns `capacity: null` for an org without the `mentorship` capability, and the executive page renders these strings only when it is present.',
   evaluationDue: 'Sent only by src/lib/evaluationDue.ts, whose sweep skips every org without the `evaluations` capability — a MARKETING tenant is never reminded of an evaluation (#1891).',
+  signup: '/signup (#1751) — requireVerticalCapability(\'mentorship\') answers 404 on a vertical without the module, and POST /api/public/signup/org refuses a MARKETING host (invitation-only, #2501).',
+  firstRun: 'The /admin first-run panel (#1751) — FirstRunPanel renders only when the org has the `mentorship` capability (shellCapabilities); a MARKETING admin never sees it.',
   productTour: 'The internship landing\'s product tour (#1399): ProductTour reads it only for an INTERNSHIP host, and its screenshots show the internship product. The MARKETING tour reads `productTourMarketing`, which is deliberately not exempt.',
   // Internship-only surfaces a MARKETING org cannot reach (the bulk overlay pass).
   activityReport: '/admin/mentee-activity — gatePage closes it for an org without the `mentorship` capability; the only other reader, /mentor/mentee-activity (ActivityReportView\'s second mount), is in the mentor shell, whose layout sends a MARKETING MENTOR to /sales.',
