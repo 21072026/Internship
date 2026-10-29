@@ -8,6 +8,10 @@
     "src/app/api/weekly-reports/[id]/route.ts": {
       "count": 1,
       "reason": "PATCH refuses the ADMIN role a write (admins only read weekly reports): it narrows access, never widens it."
+    },
+    "src/app/api/company/outreach/route.ts": {
+      "count": 1,
+      "reason": "GET only picks which approval queue a decider sees (mentor/admin PENDING, mentee APPROVED); the rows any caller can reach come from outreachActorWhere(), not from this branch"
     }
   },
   "pending": {
@@ -20,7 +24,6 @@
     "src/app/api/avatar/route.ts": 1,
     "src/app/api/board/wip-limits/route.ts": 1,
     "src/app/api/calendar-events/route.ts": 5,
-    "src/app/api/company/outreach/route.ts": 1,
     "src/app/api/contributor-terms/keys/route.ts": 1,
     "src/app/api/contributor-terms/route.ts": 1,
     "src/app/api/cron/route.ts": 1,
