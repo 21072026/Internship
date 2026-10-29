@@ -295,6 +295,35 @@ which state a box is in with an admin session or the health token:
 multi-replica environment is a misconfiguration, and `"degraded": true` means
 the limits are per-process right now.
 
+### Request body limit (#3210)
+
+The app refuses a JSON/text write to `/api/*` whose **declared**
+`Content-Length` exceeds 1 MiB (32 MiB under `/api/admin/`, where the importers
+take a whole CSV as a JSON string) with `413 payload_too_large`
+(`src/lib/bodyLimitRule.ts`, tunable with `JSON_BODY_MAX_BYTES` /
+`JSON_BODY_MAX_BYTES_ADMIN`). Middleware only sees headers, so a **chunked**
+body with no length still reaches `request.json()` unbounded — that half
+belongs here, at the proxy, which counts real bytes.
+
+**Operator step (not applied by any deploy):** in each app site block — prod,
+preview, the marketing hosts and the `pr<N>` wildcard — add, inside the block
+and before `reverse_proxy`:
+
+```caddyfile
+request_body {
+    max_size 40MB
+}
+```
+
+40 MB clears the largest legitimate upload path (document and support
+attachments at 10 MB, the feedback replay's multipart form) with headroom;
+the per-route limits stay the app's job. Then `caddy validate --config
+/etc/caddy/Caddyfile && systemctl reload caddy`, and check one request:
+`head -c 50000000 /dev/zero | curl -s -o /dev/null -w '%{http_code}\n' -X POST
+-H 'content-type: application/octet-stream' --data-binary @- https://…/api/health`
+→ `413`. A refusal at the proxy has no JSON body and no `x-request-id`; that is
+expected.
+
 ### Two replicas behind one proxy (`REPLICAS`, #1701)
 
 Every environment is **one container by default, and that has not changed**.
