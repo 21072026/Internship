@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { openPositionsInclude } from '@/lib/openPositions';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
@@ -315,11 +318,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('company.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const body = await request.json();
@@ -333,6 +334,11 @@ export async function POST(request: Request) {
     }
 
     const { contactEmail, ...companyData } = parsed.data;
+
+    // The plan's company band (#1752): refuses the next company, never touches
+    // an existing one. Fails open for the default org and for MARKETING.
+    const companies = await enforceQuota(resolveOrgId(session), 'COMPANIES');
+    if (!companies.allowed) return NextResponse.json(quotaError(companies), { status: 403 });
 
     const company = await prisma.company.create({
       data: {

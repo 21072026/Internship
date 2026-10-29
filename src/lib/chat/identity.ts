@@ -44,7 +44,7 @@ export interface ProposeResult {
 export async function proposeIdentitiesForWorkspace(orgId: string, workspaceId: string, client?: ChatPlatformClient): Promise<ProposeResult> {
   const ws = await prisma.chatWorkspace.findFirst({
     where: { id: workspaceId, orgId },
-    select: { id: true, orgId: true, platform: true, botTokenEnc: true, refreshTokenEnc: true, tokenExpiresAt: true },
+    select: { id: true, orgId: true, platform: true, externalId: true, botTokenEnc: true, refreshTokenEnc: true, tokenExpiresAt: true },
   });
   if (!ws) throw new IdentityError('not_found');
   const platformClient = client ?? chatClientFor(ws.platform);
@@ -55,7 +55,7 @@ export async function proposeIdentitiesForWorkspace(orgId: string, workspaceId: 
   }
   let members;
   try {
-    members = await platformClient.listMembers({ token });
+    members = await platformClient.listMembers({ token, externalId: ws.externalId });
   } catch (e) {
     throw new IdentityError(e instanceof ChatClientError && e.code === 'not_supported' ? 'not_supported' : 'platform_error');
   }

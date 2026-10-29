@@ -58,6 +58,8 @@ export async function GET(request: Request) {
       quotaPeriod: true,
       quotaLimit: true,
       createdBy: { select: { id: true, fullName: true, email: true } },
+      // Self-served by a COMPANY owner (#2006): the admin sees whose and can revoke it.
+      company: { select: { id: true, name: true } },
     },
   });
   const now = new Date();
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
       lastUsedAt: k.lastUsedAt,
       createdAt: k.createdAt,
       createdBy: k.createdBy ? { name: k.createdBy.fullName, email: k.createdBy.email } : null,
+      company: k.company ? { id: k.company.id, name: k.company.name } : null,
       status: apiKeyStatus(k, now),
       quotaPeriod: k.quotaPeriod,
       quotaLimit: k.quotaLimit,

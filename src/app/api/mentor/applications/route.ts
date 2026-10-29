@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { decideMentorshipRequest } from '@/lib/mentorshipDecision';
 import { withTenantScope } from '@/lib/orgContext';
@@ -14,11 +13,10 @@ import { withTenantScope } from '@/lib/orgContext';
 // caller are visible or decidable.
 
 // GET — my pending applications, oldest first.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const requests = await prisma.mentorshipRequest.findMany({
       // `replacesRelationId: null` keeps re-match requests (#1801) out of a
@@ -50,10 +48,9 @@ const decideSchema = z.object({
 // PUT — accept (relation with ME) or reject. No mentorId parameter exists on
 // purpose: a mentor can only ever assign themself.
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const parsed = decideSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

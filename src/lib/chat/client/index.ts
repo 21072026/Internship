@@ -35,7 +35,7 @@ export interface ChatPlatformClient {
    * input to an identity proposal. Bots, deleted and guest-less members with
    * no e-mail are left out; an address the platform did not verify is null.
    */
-  listMembers(input: { token: string }): Promise<ChatMember[]>;
+  listMembers(input: { token: string; externalId: string }): Promise<ChatMember[]>;
 }
 
 export interface ChatMember {
@@ -77,7 +77,11 @@ const STUB_CLIENT: ChatPlatformClient = {
 
 export function chatClientFor(platform: ChatPlatform): ChatPlatformClient {
   if (overrides[platform]) return overrides[platform]!;
-  if (process.env.CHAT_APPS_STUB_CLIENT === '1') return STUB_CLIENT;
+  // The Teams directory read (#3327) goes to GRAPH_API_BASE, which the e2e
+  // points at its own stub — so it keeps the real implementation even here.
+  if (process.env.CHAT_APPS_STUB_CLIENT === '1') {
+    return platform === 'TEAMS' ? { ...STUB_CLIENT, listMembers: teamsClient.listMembers } : STUB_CLIENT;
+  }
   return DEFAULT_CLIENTS[platform];
 }
 

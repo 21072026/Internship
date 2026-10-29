@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -15,11 +14,10 @@ import { hasPoolConsent, joinPool, leavePool } from '@/lib/reEngagement';
 // GET — who is in the pool, soonest first. Its own list rather than a filter on
 // the candidate table: the question "who are we writing to next" is asked on
 // its own, and the aging report deliberately no longer shows these people.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requireRoleOrPermission(['MENTOR'], 'user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
@@ -49,10 +47,9 @@ const schema = z.object({
 
 // POST — put someone in the pool, or take them out.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;

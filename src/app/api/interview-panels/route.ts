@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { actorFromSession, can, requireRoleOrPermission } from '@/lib/authz';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -33,9 +34,8 @@ export async function POST(request: Request) {
   // the same answer here as on every other handler of the module.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
+  if ('error' in gate) return gate.error;
 
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
@@ -104,10 +104,11 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.read', undefined, session));
 
   return await withTenantScope(session, async () => {
     const subjectId = new URL(request.url).searchParams.get('subjectId');
-    const isAdmin = session.user.role === 'ADMIN';
     const panels = await prisma.interviewPanel.findMany({
       where: {
         ...(subjectId ? { subjectId } : {}),

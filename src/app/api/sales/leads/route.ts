@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope, runWithOrg } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -75,10 +74,10 @@ export async function POST(request: Request) {
 }
 
 async function handlePost(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const role = session.user.role;
-  if (role !== 'MENTOR' && role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const orgId = session.user.orgId ?? null;
   const denied =

@@ -11,8 +11,11 @@ const { parseGateBody, parseGateError, upgradeOffer, currentPlanKey, planDisplay
 
 test('the code decides, never the error text', () => {
   assert.deepEqual(parseGateBody({ error: 'Plan limit reached …', code: 'plan_limit_reached', limit: 25, usage: 25, plan: 'FREE' }), {
-    code: 'plan_limit_reached', plan: 'FREE', limit: 25, usage: 25,
+    code: 'plan_limit_reached', metric: 'ACTIVE_PAIRS', plan: 'FREE', limit: 25, usage: 25,
   });
+  // A provisioning quota (#1752) names its metric; an unknown one reads as the relation cap.
+  assert.equal(parseGateBody({ code: 'plan_limit_reached', metric: 'ADMIN_SEATS', limit: 2, usage: 2, plan: 'community' }).metric, 'ADMIN_SEATS');
+  assert.equal(parseGateBody({ code: 'plan_limit_reached', metric: 'NOPE' }).metric, 'ACTIVE_PAIRS');
   assert.deepEqual(parseGateBody({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }), {
     code: 'feature_locked', feature: 'ADVANCED_ANALYTICS',
   });
@@ -34,13 +37,21 @@ test('parseGateError reads only a 403, from a clone', async () => {
 });
 
 test('the relation cap offers the next plan with more active pairs, with its published price', () => {
-  const free = upgradeOffer({ code: 'plan_limit_reached', plan: 'FREE', limit: 25, usage: 25 });
+  const free = upgradeOffer({ code: 'plan_limit_reached', metric: 'ACTIVE_PAIRS', plan: 'FREE', limit: 25, usage: 25 });
   assert.equal(free.planKey, 'program');
   assert.equal(free.planName, 'Program');
   assert.equal(free.yearly, 1788);
   assert.equal(free.monthly, 189);
-  assert.equal(upgradeOffer({ code: 'plan_limit_reached', plan: 'PRO', limit: 100, usage: 100 }).planKey, 'program_plus');
-  assert.equal(upgradeOffer({ code: 'plan_limit_reached', plan: 'program_plus', limit: 400, usage: 400 }).planKey, 'enterprise');
+  assert.equal(upgradeOffer({ code: 'plan_limit_reached', metric: 'ACTIVE_PAIRS', plan: 'PRO', limit: 100, usage: 100 }).planKey, 'program_plus');
+  assert.equal(upgradeOffer({ code: 'plan_limit_reached', metric: 'ACTIVE_PAIRS', plan: 'program_plus', limit: 400, usage: 400 }).planKey, 'enterprise');
+});
+
+test('a provisioning quota offers the next plan with more of THAT metric (#1752)', () => {
+  assert.equal(upgradeOffer({ code: 'plan_limit_reached', metric: 'ADMIN_SEATS', plan: 'community', limit: 2, usage: 2 }).planKey, 'program');
+  assert.equal(upgradeOffer({ code: 'plan_limit_reached', metric: 'ADMIN_SEATS', plan: 'program', limit: 5, usage: 5 }).planKey, 'program_plus');
+  // Program already has unlimited companies: a Community org at 3 goes to Program.
+  assert.equal(upgradeOffer({ code: 'plan_limit_reached', metric: 'COMPANIES', plan: 'community', limit: 3, usage: 3 }).planKey, 'program');
+  assert.equal(upgradeOffer({ code: 'plan_limit_reached', metric: 'PROGRAMS', plan: 'community', limit: 1, usage: 1 }).planKey, 'program');
 });
 
 test('a locked feature offers the cheapest plan of its wallet that includes it', () => {

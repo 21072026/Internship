@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
+import { actorFromSession, can } from '@/lib/authz';
 
 // Reopen a panel that was closed too early (#1893) — the mirror of the close
 // route, for the interviewer who turned up after the admin gave up on them.
@@ -23,6 +24,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Placement write (#2364).
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.write', undefined, session));
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
@@ -41,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // be indistinguishable from "authorized".
     assertSameOrg(panel.orgId, requireOrg(session));
 
-    if (session.user.role !== 'ADMIN' && panel.createdById !== session.user.id) {
+    if (!isAdmin && panel.createdById !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (!panel.closedAt) return NextResponse.json({ ok: true, closedAt: null });

@@ -178,6 +178,19 @@ export interface JobPayloadMap {
     emailGroup: string;
     delivery: 'immediate' | 'batched';
   };
+  /// A delivery held to the end of the recipient's quiet hours or an org
+  /// blackout day (#1714); the consumer is runDeferredDelivery() in the router.
+  'notification.deferred': {
+    deliveryId: string;
+    channel: string;
+    eventKey: string;
+    userId: string;
+    orgId: string | null;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string;
+    dedupeKey: string;
+  };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -237,6 +250,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'nudge.evaluate',
   'nudge.send',
   'notification.email',
+  'notification.deferred',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

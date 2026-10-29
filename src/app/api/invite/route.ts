@@ -13,6 +13,8 @@ import { locales } from '@/i18n/config';
 import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
@@ -204,6 +206,14 @@ export async function POST(request: Request) {
             { status: 409 }
           );
         }
+      }
+
+      // The admin-seat quota (#1752). ADMIN only, on purpose: inviting a MENTOR
+      // or a MENTEE is the free core and is never checked or counted — do not
+      // widen this condition. An open ADMIN invitation holds a seat.
+      if (role === 'ADMIN') {
+        const seats = await enforceQuota(resolveOrgId(session), 'ADMIN_SEATS', { pendingAdminInvites: true });
+        if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
       }
 
       // Shared with the bulk endpoint (#2070) so the token, the tenant, the
