@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Affiliate referral address (#3176):** the refusal under the referral base URL clears as soon as the field changes, so the `?ref=CODE` example comes back while the address is being fixed; on blur the field checks itself with the server's own pure rule (`parseReferralUrl`). The server validation is unchanged. Pinned by an untagged UI test in `e2e/affiliate-admin-settings.spec.ts`.",
+  "notes": {
+    "en": ["Affiliate settings: the referral address error disappears as you fix the address, and the example link shows again."],
+    "tr": ["Affiliate ayarları: referans adresi hatası adresi düzeltirken kayboluyor ve örnek link yeniden görünüyor."],
+    "de": ["Affiliate-Einstellungen: Der Fehler zur Empfehlungsadresse verschwindet beim Korrigieren, und der Beispiellink erscheint wieder."]
+  }
+}

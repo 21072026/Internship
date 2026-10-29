@@ -9,6 +9,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { MentorScreeningPolicyCard } from '@/components/admin/MentorScreeningPolicyCard';
+import { parseChecklist, screeningProgress, type ScreeningItem } from '@/lib/mentorScreeningRule';
 
 interface ApplicationRow {
   id: string;
@@ -24,6 +26,7 @@ interface ApplicationRow {
   // saving a note wiped the reason.
   rejectReason: string | null;
   adminNote: string | null;
+  screeningChecklist: unknown;
 }
 
 const STATUS_TABS = ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'ALL'] as const;
@@ -42,13 +45,17 @@ export default function MentorApplicationsPage() {
   const [rows, setRows] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [screeningRequired, setScreeningRequired] = useState<ScreeningItem[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
     const qs = statusFilter === 'ALL' ? '' : `?status=${statusFilter}`;
     fetch(`/api/mentor-applications${qs}`)
       .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((d) => setRows(d.items ?? []))
+      .then((d) => {
+        setRows(d.items ?? []);
+        setScreeningRequired(d.screeningRequired ?? []);
+      })
       .finally(() => setLoading(false));
   }, [statusFilter]);
 
@@ -85,6 +92,8 @@ export default function MentorApplicationsPage() {
         placeholder={a.searchPlaceholder}
         className="mb-4 w-full sm:w-80 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
       />
+
+      <MentorScreeningPolicyCard onSaved={setScreeningRequired} />
 
       <div className="flex flex-wrap gap-2 mb-4">
         {STATUS_TABS.map((s) => (
@@ -165,6 +174,18 @@ export default function MentorApplicationsPage() {
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <Badge variant={STATUS_VARIANT[r.status] ?? 'default'}>{statusLabel(r.status)}</Badge>
+                  {(r.status === 'PENDING' || r.status === 'UNDER_REVIEW') && (() => {
+                    // Screening progress (#1807): how many items are done, and
+                    // whether the org's required ones are — i.e. whether
+                    // approval would go through.
+                    const p = screeningProgress(parseChecklist(r.screeningChecklist), screeningRequired);
+                    return (
+                      <span className="text-[11px] text-gray-500" data-testid={`mentor-application-screening-${r.id}`}>
+                        {a.screening.progress.replace('{done}', String(p.done)).replace('{total}', String(p.total))}
+                        {screeningRequired.length > 0 && p.ready ? ` · ${a.screening.ready}` : ''}
+                      </span>
+                    );
+                  })()}
                   {r.capacity != null && (
                     <span className="text-xs text-gray-500">{a.capacityLabel}: {r.capacity}</span>
                   )}

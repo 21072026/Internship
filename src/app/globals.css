@@ -26,6 +26,27 @@
     @apply bg-gray-50 text-gray-900 antialiased;
     padding-bottom: var(--fixed-bottom-inset);
   }
+
+  /*
+   * WCAG 2.4.11 Focus Not Obscured (#2864). When focus moves to a control that
+   * is off-screen, the browser scrolls it to the nearest viewport edge — and
+   * on a phone the top edge sits under the sticky shell bar (h-14 = 3.5rem,
+   * ResponsiveShell) and the impersonation banner. scroll-padding keeps that
+   * strip out of the "visible" area the browser scrolls into. At the bottom it
+   * clears the floating report button (3rem + 1rem, FeedbackWidget) and any
+   * fixed bottom bar. rem, so the font-size preference scales it with the bar.
+   * The embedded app hides the bar (data-app-chrome), so it keeps only the
+   * banner inset. Verified by e2e/focus-not-obscured.spec.ts.
+   */
+  html {
+    scroll-padding-top: var(--top-banner-inset);
+    scroll-padding-bottom: calc(var(--fixed-bottom-inset) + 5rem);
+  }
+  @media (max-width: 1023.98px) {
+    html:not([data-embedded-app]) {
+      scroll-padding-top: calc(var(--top-banner-inset) + 3.5rem);
+    }
+  }
 }
 
 /*
