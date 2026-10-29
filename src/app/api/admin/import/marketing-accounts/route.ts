@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -12,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
 import { MARKETING_IMPORT_MAX_ROWS, marketingImportMetrics } from '@/lib/marketingImport';
 import { MarketingImportError, runMarketingAccountImport } from '@/lib/marketingImportStore';
+import { requirePermission } from '@/lib/authz';
 
 // The marketing account import, runnable in production (#2552, story #2391).
 //
@@ -129,9 +128,9 @@ export async function POST(request: Request) {
 }
 
 async function handlePost(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ code: 'forbidden', error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const orgId = session.user.orgId ?? null;
   const denied =
