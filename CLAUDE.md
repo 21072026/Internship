@@ -520,6 +520,8 @@ marketing names redirect there, and their apex now serves **mail only**.
   A route never compares `session.user.role` to `'ADMIN'` and never defines a private
   `requireAdmin()`: `npm run check:authz` (CI, #1571) fails on a new one, and the sites not
   moved yet are pinned in `scripts/authz-baseline.json`, which only shrinks (`-- --shrink`).
+  A route that also serves MENTOR/COMPANY/… uses `requireRoleOrPermission(roles, permission)`;
+  a single admin branch inside a shared route asks `can(actor, permission, subject, session)`.
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to

@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { previewJourney } from '@/lib/programJourney';
 import { journeyProgramFor } from '@/lib/programJourneyAdmin';
+import { requirePermission } from '@/lib/authz';
 
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
 // GET ?relationId= — the dry-run timeline of the journey against one of the
 // programme's pairs (#1853): each step's computed date and what the sweep would
@@ -18,8 +11,9 @@ async function requireAdmin() {
 // never claims a ProgramStepRun, so previewing can never deliver anything.
 // `?at=` pins the clock (the same convention as GET /api/cron).
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const auth = await journeyProgramFor(session, (await params).id);
   if ('refusal' in auth) return auth.refusal;
   const { program } = auth;
