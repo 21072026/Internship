@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -21,8 +22,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!(await inCallerTenant(attachment.message.ticket.requester.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (session.user.role !== 'ADMIN' && attachment.message.ticket.requesterId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (attachment.message.ticket.requesterId !== session.user.id) {
+    // Someone else's ticket is the support desk's — the permission layer's answer (#1571).
+    const actor = await actorFromSession(session);
+    if (!actor || !(await can(actor, 'support.read', undefined, session))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const disposition = attachment.contentType.startsWith('image/') ? 'inline' : 'attachment';
