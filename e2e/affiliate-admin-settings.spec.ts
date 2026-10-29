@@ -98,7 +98,7 @@ test('read for every admin tier, write for the organisation admin only', { tag: 
   expect((await rep.get('/api/admin/affiliate/settings', { headers: host })).status()).toBe(403);
   // A PROGRAM_ADMIN's reach is its cohort/company grants; affiliate data is neither (docs).
   const prog = await as(playwright, baseURL, emails[3]);
-  for (const path of ['settings', 'partners', 'payments', 'commissions', 'payouts']) {
+  for (const path of ['overview', 'settings', 'partners', 'payments', 'commissions', 'payouts']) {
     expect((await prog.get(`/api/admin/affiliate/${path}`, { headers: host })).status(), path).toBe(403);
   }
 });
