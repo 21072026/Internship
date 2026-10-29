@@ -206,6 +206,7 @@ export function TerminologyCard() {
                   key={form}
                   id={`terminology-${lang}-${tok}-${form}`}
                   label={formLabels[form]}
+                  lang={lang}
                   value={draft[lang][tok][form]}
                   placeholder={TERM_DEFAULTS[lang][tok][form][0]}
                   maxLength={40}
