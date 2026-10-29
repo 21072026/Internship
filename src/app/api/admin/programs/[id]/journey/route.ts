@@ -57,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return await withTenantScope(session, async () => {
     const parsed = stepInputSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'invalid' }, { status: 400 });
-    const columns = await stepColumns(parsed.data, program.orgId);
+    const columns = await stepColumns(parsed.data, program.orgId, program.id);
     if (!columns.ok) return NextResponse.json({ error: 'Validation failed', code: columns.code }, { status: 400 });
     const count = await prisma.programStep.count({ where: { programId: program.id } });
     if (count >= MAX_STEPS) return NextResponse.json({ error: 'Too many steps', code: 'too_many' }, { status: 400 });

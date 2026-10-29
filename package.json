@@ -25,6 +25,8 @@
     "check:reports": "node --experimental-strip-types scripts/check-reports.ts",
     "check:skills": "node --experimental-strip-types scripts/check-skills.mjs",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
+    "check:quarantine": "node scripts/check-quarantine.mjs",
+    "test:e2e:reliability": "node scripts/e2e-reliability.mjs report",
     "check:active-mentors": "node prisma/check-active-mentor-duplicates.mjs",
     "check:stage-keys": "node scripts/check-stage-keys.mjs",
     "check:tenant-models": "node scripts/check-tenant-models.mjs",

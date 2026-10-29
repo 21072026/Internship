@@ -59,12 +59,13 @@ interface Draft {
   audience: JourneyAudience;
   action: JourneyAction;
   url: string;
+  eventId: string;
   skipIf: JourneySkipCondition | '';
   en: string;
   tr: string;
   de: string;
 }
-const EMPTY: Draft = { milestone: '', anchor: 'RELATION_START', offsetDays: '0', stageKey: '', audience: 'BOTH', action: 'NUDGE', url: '', skipIf: '', en: '', tr: '', de: '' };
+const EMPTY: Draft = { milestone: '', anchor: 'RELATION_START', offsetDays: '0', stageKey: '', audience: 'BOTH', action: 'NUDGE', url: '', eventId: '', skipIf: '', en: '', tr: '', de: '' };
 
 function draftOf(s: Step): Draft {
   return {
@@ -75,6 +76,7 @@ function draftOf(s: Step): Draft {
     audience: s.audience,
     action: s.action,
     url: s.payload.url ?? '',
+    eventId: s.payload.eventId ?? '',
     skipIf: s.payload.skipIf ?? '',
     en: s.translations.en ?? '',
     tr: s.translations.tr ?? '',
@@ -115,6 +117,17 @@ export default function ProgramJourneyPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
+  // This programme's upcoming sessions, for a GROUP_SESSION step (#1856).
+  const [sessions, setSessions] = useState<{ id: string; title: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/events')
+      .then((r) => (r.ok ? r.json() : { events: [] }))
+      .then((b: { events?: { id: string; title: string; cancelledAt: string | null; program: { id: string } | null }[] }) =>
+        setSessions((b.events ?? []).filter((e) => e.program?.id === id && !e.cancelledAt).map((e) => ({ id: e.id, title: e.title }))),
+      )
+      .catch(() => setSessions([]));
+  }, [id]);
+
   const loadPreview = useCallback(async () => {
     if (!relationId) { setTimeline(new Map()); return; }
     const res = await fetch(`/api/admin/programs/${id}/journey/preview?relationId=${encodeURIComponent(relationId)}`);
@@ -154,6 +167,7 @@ export default function ProgramJourneyPage() {
       translations: { en: draft.en, tr: draft.tr, de: draft.de },
       stageKey: draft.anchor === 'STAGE_ENTRY' ? draft.stageKey || null : null,
       url: draft.action === 'PUBLISH_CONTENT' ? draft.url || null : null,
+      eventId: draft.action === 'GROUP_SESSION' ? draft.eventId || null : null,
       skipIf: draft.skipIf || null,
     };
     const ok = editing
@@ -200,6 +214,16 @@ export default function ProgramJourneyPage() {
           <Select label={T.audience} value={draft.audience} onChange={(e) => set('audience', e.target.value as JourneyAudience)} options={JOURNEY_AUDIENCES.map((a) => ({ value: a, label: T.audiences[a] }))} data-testid="journey-audience" />
           {draft.action === 'PUBLISH_CONTENT' && (
             <Input label={T.url} hint={T.urlHint} value={draft.url} maxLength={500} onChange={(e) => set('url', e.target.value)} data-testid="journey-url" />
+          )}
+          {draft.action === 'GROUP_SESSION' && (
+            <Select
+              label={T.event}
+              hint={T.eventHint}
+              value={draft.eventId}
+              onChange={(e) => set('eventId', e.target.value)}
+              options={[{ value: '', label: T.noEvent }, ...sessions.map((s) => ({ value: s.id, label: s.title }))]}
+              data-testid="journey-event"
+            />
           )}
           <Select
             label={T.skipIf}

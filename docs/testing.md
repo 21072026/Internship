@@ -590,6 +590,37 @@ threshold — the spec only proves the layout survives it.
 VPAT rows (#2037) can cite this section for WCAG 2.3.3 (Animation from Interactions),
 1.4.11 (Non-text Contrast) and 2.4.7 (Focus Visible) under forced colors.
 
+## Flaky tests: quarantine, history, fix-or-delete (#1610)
+
+A red run means something, or every gate in this file is worth nothing. The standing advice
+used to be "re-run it", which teaches everybody to read red as noise. Instead:
+
+- **Quarantine explicitly.** Tag the test `@quarantine` and put the note directly above it:
+
+  ```ts
+  // quarantine: #1234 until 2026-11-27 — races the session poll on a cold server
+  test('…', { tag: '@quarantine' }, async ({ page }) => { … });
+  ```
+
+  `playwright.config.ts` leaves every `@quarantine` test out of every gating run (the `@smoke`
+  PR gate and the scheduled shards), in one place, so no workflow can forget a flag. The
+  scheduled full suite runs the quarantined set again in a **non-gating** step
+  (`E2E_QUARANTINE=only npx playwright test --pass-with-no-tests`). A quarantined test still
+  runs and still reports, but it no longer decides the colour of the run.
+- **On a deadline.** `npm run check:quarantine` (CI) fails a quarantine with no issue link, an
+  expiry that has passed, or one more than **30 days** out. At the expiry the test is **fixed**
+  (and the tag removed) or **deleted**. Moving the date to get past this check breaks the rule.
+- **A green gate that needed a re-run is a bug report, not a pass.** Playwright retries once in
+  CI (`retries: 1`). Do not raise that: retries hide flakes. The retry is recorded instead.
+- **Reliability history.** After every scheduled full run, `scripts/e2e-reliability.mjs record`
+  appends one line per run to `history.jsonl` on the data-only `test-history` branch: every
+  test's status (first-try pass, flaky = passed on the retry, fail, skip), retries and duration,
+  with quarantined tests marked. It keeps the last 200 runs. It is a branch because artifacts
+  expire after 7 days and the cache gets evicted. `… report` reads it back: first-try pass
+  rate per test over the last 40 runs, least reliable first. The top 10 go into the job summary,
+  the `ci-alert` issue and the failure e-mail. Locally:
+  `git fetch origin test-history && git show origin/test-history:history.jsonl > /tmp/h.jsonl && npm run test:e2e:reliability -- --history /tmp/h.jsonl`.
+
 ## Scheduled full E2E summary email
 
 The scheduled full suite (`e2e-full.yml`, 4×/day, 4-way sharded) sends a **Turkish

@@ -29,6 +29,8 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { notifyIfAllowed } from '@/lib/notify';
 import { notificationLink } from '@/lib/notificationLink';
+import { eventLinkFor } from '@/lib/groupEvents';
+import { audienceIncludesRole } from '@/lib/groupEventRule';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { defaultLocale, isLocale } from '@/i18n/config';
@@ -207,8 +209,20 @@ export async function materialise(step: StepRow, rel: Pick<RelationRow, 'id' | '
     });
   }
 
+  // A group session step (#1856) points at one of the programme's own
+  // sessions: delivering it publishes that session if it is still a draft, and
+  // the invitation links to the session — to the people of the pair its
+  // audience includes. A session that was called off, has started or left the
+  // programme announces nothing; the step falls back to its plain nudge.
+  const event = action === 'GROUP_SESSION' && payload.eventId ? await groupSessionFor(payload.eventId, rel.orgId) : null;
+
   for (const user of users) {
     const role = user.id === rel.mentorId ? 'MENTOR' : 'MENTEE';
+    if (event) {
+      if (!audienceIncludesRole(event.audience, role)) continue;
+      await notifyIfAllowed(user.id, 'mentorship', notificationTypeFor(action), { title: stepTitle(step, localeOf(user.preferredLanguage)) }, eventLinkFor(role, event.id));
+      continue;
+    }
     // The bell routes inside the app, so only a same-app path becomes the
     // link; an external document is opened from the step's own page (#1855).
     const link = action === 'PUBLISH_CONTENT' && payload.url?.startsWith('/')
@@ -216,6 +230,18 @@ export async function materialise(step: StepRow, rel: Pick<RelationRow, 'id' | '
       : notificationLink(role, 'relation', { relationId: rel.id }, { capabilities });
     await notifyIfAllowed(user.id, 'mentorship', notificationTypeFor(action), { title: stepTitle(step, localeOf(user.preferredLanguage)) }, link);
   }
+}
+
+/** The live session a GROUP_SESSION step announces, published on first delivery; null when it cannot be. */
+async function groupSessionFor(eventId: string, orgId: string | null, now = new Date()) {
+  const event = await prisma.programEvent.findFirst({
+    where: { id: eventId, orgId, cancelledAt: null, startsAt: { gt: now } },
+    select: { id: true, audience: true, publishedAt: true },
+  });
+  if (!event) return null;
+  // Guarded on `publishedAt: null`: two pairs delivered on the same tick publish it once.
+  if (!event.publishedAt) await prisma.programEvent.updateMany({ where: { id: event.id, publishedAt: null }, data: { publishedAt: now } });
+  return event;
 }
 
 /** Claim, check, deliver and record one (step, relation). */

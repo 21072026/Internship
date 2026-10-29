@@ -37,6 +37,7 @@ export const stepInputSchema = z.object({
   translations: z.object({ en: title, tr: title, de: title }),
   stageKey: z.string().trim().max(64).nullable().optional(),
   url: z.string().trim().max(500).nullable().optional(),
+  eventId: z.string().trim().max(40).nullable().optional(),
   skipIf: z.enum(JOURNEY_SKIP_CONDITIONS).nullable().optional(),
 });
 export type StepInput = z.infer<typeof stepInputSchema>;
@@ -70,7 +71,7 @@ export async function journeyProgramFor(session: Session, programId: string): Pr
  * step the org could never schedule (a stage its pipeline lacks, a programme
  * without a start date) is refused here rather than saved to fire never.
  */
-export async function stepColumns(input: StepInput, orgId: string | null): Promise<
+export async function stepColumns(input: StepInput, orgId: string | null, programId?: string): Promise<
   | { ok: true; data: { milestone: string | null; anchor: string; offsetDays: number; audience: string; action: string; title: string; translations: Prisma.InputJsonObject; payload: Prisma.InputJsonObject } }
   | { ok: false; code: string }
 > {
@@ -81,9 +82,20 @@ export async function stepColumns(input: StepInput, orgId: string | null): Promi
   const payload: StepPayload = readStepPayload({
     stageKey: input.anchor === 'STAGE_ENTRY' ? input.stageKey ?? undefined : undefined,
     url: input.action === 'PUBLISH_CONTENT' ? input.url ?? undefined : undefined,
+    eventId: input.action === 'GROUP_SESSION' ? input.eventId ?? undefined : undefined,
     skipIf: input.skipIf ?? undefined,
   });
   if (input.action === 'PUBLISH_CONTENT' && !payload.url) return { ok: false, code: 'url_required' };
+  // A group session step announces one of THIS programme's own sessions (#1856),
+  // never another programme's or another org's, and never one already called off.
+  if (input.eventId && !payload.eventId) return { ok: false, code: 'invalid_event' };
+  if (payload.eventId) {
+    const event = await prisma.programEvent.findFirst({
+      where: { id: payload.eventId, orgId, cancelledAt: null, ...(programId ? { programId } : {}) },
+      select: { id: true },
+    });
+    if (!event) return { ok: false, code: 'invalid_event' };
+  }
   const stageKeys = new Set((await resolvePipelineStages(orgId)).map((s) => s.key));
   const unresolvable = stepUnresolvable({ anchor: input.anchor, offsetDays: input.offsetDays, payload }, stageKeys);
   if (unresolvable) return { ok: false, code: unresolvable };
