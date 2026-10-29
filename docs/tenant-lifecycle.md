@@ -7,6 +7,7 @@ Story #1580 (tasks #1582, #1584). An organization is born through
 |-----|------|-----|------------|
 | Rename / change slug | `POST /api/admin/organizations/[id]/rename` | super admin of the org's world (`platform.org.write`) | yes |
 | Archive | `POST /api/admin/organizations/[id]/archive` | same | yes — `DELETE` on the same route |
+| Hard delete (stage 1 / 2) | `POST`/`DELETE …/[id]/deletion`, then `DELETE /api/admin/organizations/[id]` | super admin, **only when the deployment sets `TENANT_HARD_DELETE_ENABLED`** (off by default) | **no** |
 | Export | `GET /api/admin/organizations/[id]/export` | super admin (`platform.org.read`) **or the org's own ORG_ADMIN** (`org.export`) | n/a (reads only) |
 
 The rule (what may change) is pure in `src/lib/orgLifecycleRule.ts`
@@ -97,3 +98,46 @@ tenant's answer to "how do we get our data out". Format
   `org.exported` (ActivityLog + the tenant's AuditLog) before the first byte.
 - A tenant ADMIN finds the download on `/admin/organizations`; the operator on
   the lifecycle card there.
+
+## Hard delete — off by default
+
+Permanent deletion is written, tested and **switched off**: every door answers
+`403 hard_delete_disabled` unless the deployment sets
+`TENANT_HARD_DELETE_ENABLED=1`. Nothing in this repository sets it — not CI,
+not the topic environments, not preview or production. Turning it on is the
+maintainer's decision, per deployment.
+
+With the switch on, four locks, all required (`src/lib/orgDeletionRule.ts`,
+unit-tested):
+
+1. the tenant is **archived** (and unarchiving withdraws a pending request);
+2. **stage 1** — `POST …/[id]/deletion { confirmSlug }` records
+   `deletionRequestedAt` (audited `org.deletion_requested`); `DELETE` on the same
+   route withdraws it;
+3. **stage 2** — `DELETE /api/admin/organizations/[id] { confirmSlug, password }`
+   runs only `TENANT_HARD_DELETE_WAIT_HOURS` (default 72, floor 24) after the
+   request, only if a **full export was taken after the request**
+   (`org.exported`), and only with the operator's **own password**;
+4. never the `default` org, never the operator's own org; super admin of the
+   org's world only (`platform.org.write`).
+
+**What is deleted** is planned from the schema (`planDeletion()`), never left to
+`db push` or to `onDelete` cascades: every model with this org's `orgId`, then
+every model without an `orgId` that hangs off those rows by a single-column
+foreign key, to a fixed point, plus three bearer-grant tables that hold a user
+id without a declared relation (`SOFT_LINKS`). Every optional link into that set
+is nulled first — a row of another org that only points here keeps living —
+except the ownership column `orgId` itself, which is how the org-scoped rows are
+found. The deletes run children-first in a topological order of the required
+links, in **one transaction** (`src/lib/orgDeletionExec.ts`): any failure rolls
+everything back. A cycle of required links or a multi-column link into the
+tenant is a plan error, and the unit test runs the plan on the real schema so it
+surfaces in CI. `e2e/tenant-hard-delete.spec.ts` runs the real executor on a
+synthetic tenant and checks that no `orgId` model references the org afterwards
+and that the second tenant is untouched.
+
+**What is kept**: `org.deleted` — written **before** the transaction to the
+**operator's** org (everything stamped with the deleted org goes with it), naming
+the tenant's id, slug and name; a rolled-back run adds `org.delete_failed`.
+Mail already queued is part of the deleted `Job` rows. Off-site backups follow
+their own retention (`docs/disaster-recovery.md`).

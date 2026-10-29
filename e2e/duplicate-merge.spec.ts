@@ -113,6 +113,20 @@ test('merge moves every linked record and deletes the duplicate', async ({ page 
     data: { userId: duplicate.id, type: 'PRIVACY_POLICY', grantedAt: new Date() },
   });
 
+  // Canonical skill rows (#1822): both hold React — the primary self-rated 2,
+  // the duplicate mentor-confirmed 4 with one history row; only the
+  // duplicate holds Go. The merge must keep the confirmed level and the
+  // history, and move Go as is.
+  const react = await prisma.skill.create({ data: { orgId: org.id, key: 'react', labelEn: 'React', labelTr: 'React', labelDe: 'React' } });
+  const go = await prisma.skill.create({ data: { orgId: org.id, key: 'go', labelEn: 'Go', labelTr: 'Go', labelDe: 'Go' } });
+  const confirmedAt = new Date('2026-10-01T00:00:00Z');
+  const primaryReact = await prisma.userSkill.create({ data: { userId: primary.id, skillId: react.id, level: 2, levelSource: 'SELF' } });
+  const dupReact = await prisma.userSkill.create({
+    data: { userId: duplicate.id, skillId: react.id, level: 4, levelSource: 'MENTOR', verifiedById: mentor.id, verifiedAt: confirmedAt },
+  });
+  await prisma.userSkillLevelChange.create({ data: { userSkillId: dupReact.id, fromLevel: 3, toLevel: 4, source: 'MENTOR', changedById: mentor.id } });
+  const dupGo = await prisma.userSkill.create({ data: { userId: duplicate.id, skillId: go.id, level: 3, levelSource: 'SELF' } });
+
   await signIn(page, admin.email, ADMIN_PASSWORD, '/admin');
 
   const res = await page.request.post('/api/admin/duplicates/merge', {
@@ -128,6 +142,14 @@ test('merge moves every linked record and deletes the duplicate', async ({ page 
 
   // The duplicate row is gone.
   expect(await prisma.user.findUnique({ where: { id: duplicate.id } })).toBeNull();
+
+  // Skill rows: React folded into the primary's row with the confirmed level
+  // and the history; Go moved as is.
+  const reactAfter = await prisma.userSkill.findUnique({ where: { id: primaryReact.id } });
+  expect(reactAfter).toMatchObject({ userId: primary.id, level: 4, levelSource: 'MENTOR', verifiedById: mentor.id });
+  expect(await prisma.userSkill.findUnique({ where: { id: dupReact.id } })).toBeNull();
+  expect(await prisma.userSkillLevelChange.count({ where: { userSkillId: primaryReact.id } })).toBe(1);
+  expect(await prisma.userSkill.findUnique({ where: { id: dupGo.id } })).toMatchObject({ userId: primary.id, level: 3 });
 
   // The two relations to the same mentor collapsed into exactly one — the
   // primary's original relation survives.

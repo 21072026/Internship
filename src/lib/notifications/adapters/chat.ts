@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { ChannelAdapter } from './types';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/i18n/dictionaries';
 import type { Locale } from '@/i18n/config';
@@ -142,3 +143,14 @@ export async function deliverChat(input: {
     return { status: 'FAILED', error: 'internal_error' };
   }
 }
+
+/** The chat channel behind the adapter port (#1711). Skips are the adapter's own (`chat_apps_off`, …). */
+export const chatAdapter: ChannelAdapter = {
+  id: 'chat',
+  available: () => true,
+  deliver: async (d) => {
+    const outcome = await deliverChat({ userId: d.userId, orgId: d.orgId, eventKey: d.def.key, params: d.params, link: d.link, locale: d.locale });
+    if (outcome.status === 'SENT') return { status: 'SENT' };
+    return outcome.status === 'SKIPPED' ? { status: 'SKIPPED', reason: outcome.reason } : { status: 'FAILED', error: outcome.error };
+  },
+};
