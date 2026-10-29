@@ -42,8 +42,7 @@ const TAWK_EMOJI = 'https://cdn.jsdelivr.net/emojione/';
 // same one Permissions-Policy hands camera/microphone to.
 const JAAS = 'https://8x8.vc';
 
-// CommonJS on purpose: next.config.js requires this file before any TS toolchain
-// exists, so its own dependency is a require() too.
+// A CommonJS module (next.config.js loads it before any bundler runs), so require() is the import.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { analyticsCspHosts } = require('./analyticsCsp.cjs');
 
