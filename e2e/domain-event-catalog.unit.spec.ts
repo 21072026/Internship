@@ -40,6 +40,10 @@ const PUBLISHED = [
   'offer.sent',
   'offer.withdrawn',
   'offer.expired',
+  'interview_request.created',
+  'interview_request.approved',
+  'interview_request.declined',
+  'company_interest.changed',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -75,6 +79,10 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['offerEvents (route)', 'offer.declined', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
   ['offerEvents (expiry sweep)', 'offer.expired', { offerId: 'o1', applicationId: null, requisitionId: null }],
   ['api/offers/[id]', 'requisition.filled', { requisitionId: 'rq1', offerId: 'o1' }],
+  ['api/interview-requests', 'interview_request.created', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', companyId: 'c1' }],
+  ['api/interview-requests/[id]', 'interview_request.approved', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2' }],
+  ['api/interview-requests/[id]', 'interview_request.declined', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', reasonCode: 'not_ready' }],
+  ['api/company/interests', 'company_interest.changed', { interestId: 'i1', companyId: 'c1', menteeId: 'u2', requisitionId: null, from: null, to: 'INTERESTED' }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

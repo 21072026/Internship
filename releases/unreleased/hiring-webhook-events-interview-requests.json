@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Interview requests and company interest on the event bus (#1998, 6/n):** four new public catalogue events — `interview_request.created` (the company asks, `POST /api/interview-requests`), `interview_request.approved` / `interview_request.declined` (the programme decides, with the decline `reasonCode`, never the note) and `company_interest.changed` (`{ interestId, companyId, menteeId, requisitionId, from, to }`, raised only on a real status change — a note-only save raises nothing, and the note never goes on the bus).",
+  "notes": {
+    "en": ["Webhooks now fire when a company requests an interview, when the request is approved or declined, and when a company flags, shortlists or passes on a candidate."],
+    "tr": ["Webhook'lar artık bir şirket mülakat talep ettiğinde, talep onaylandığında veya reddedildiğinde ve bir şirket bir adayı işaretlediğinde, kısa listeye aldığında veya elediğinde tetikleniyor."],
+    "de": ["Webhooks werden jetzt ausgelöst, wenn ein Unternehmen ein Interview anfragt, die Anfrage genehmigt oder abgelehnt wird und wenn ein Unternehmen einen Kandidaten markiert, auf die Shortlist setzt oder absagt."]
+  }
+}

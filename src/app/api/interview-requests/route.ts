@@ -4,6 +4,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { createInterviewRequestSchema, interviewActiveKey } from '@/lib/interviewRequests';
@@ -95,6 +96,11 @@ export async function POST(request: Request) {
       const created = await prisma.interviewRequest.create({
         data: { requisitionId, menteeId, companyId: session.user.companyId!, orgId, note: note || null, proposedSlots: proposedSlots ?? undefined, activeKey: interviewActiveKey(requisitionId, menteeId) },
       });
+      await emit(
+        'interview_request.created',
+        { requestId: created.id, requisitionId, menteeId, companyId: created.companyId },
+        { orgId, actor: { id: session.user.id, type: 'user' } },
+      );
       return NextResponse.json({ request: created }, { status: 201 });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return NextResponse.json({ error: 'A pending request already exists', code: 'already_pending' }, { status: 409 });
