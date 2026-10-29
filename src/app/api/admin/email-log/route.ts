@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
-import { authOptions } from '@/lib/auth';
 import { superAdminWorld } from '@/lib/superAdmin';
 import { worldOrgWhere, worldUserWhere } from '@/lib/userWorld';
 
@@ -38,10 +37,9 @@ const STATUSES = ['SENT', 'FAILED', 'SKIPPED', 'DEFERRED'] as const;
 const OPT_OUT_PREFIX = 'Unsubscribed:';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('mail.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const world = await superAdminWorld(session);
   if (!world) {
     return NextResponse.json({ error: 'Forbidden', code: 'super_admin_only' }, { status: 403 });
