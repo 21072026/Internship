@@ -11,6 +11,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
 import { isSuperAdmin } from '@/lib/superAdmin';
+import { resolveQueueScope } from '@/lib/mailQueueAdmin';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes } from '@/lib/dualRole';
@@ -51,6 +52,9 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
   // Whether the deployment-wide destinations (#1575) are shown. Presentation
   // only — each of those pages and APIs checks it again itself.
   const superAdmin = await isSuperAdmin(session);
+  // The deployment's operators (#1607): a super admin, or the default
+  // organization's ADMIN — the mail queue's rule. Presentation only, too.
+  const operator = superAdmin || (await resolveQueueScope(session)) !== null;
 
   // Auth hardening: when the org requires 2FA for this role, hold the user at a
   // setup gate until they enable it. Skipped while impersonating (the admin is
@@ -62,7 +66,7 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
-      <CommandPalette role="ADMIN" capabilities={capabilities} superAdmin={superAdmin} />
+      <CommandPalette role="ADMIN" capabilities={capabilities} superAdmin={superAdmin} operator={operator} />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
@@ -76,7 +80,7 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-gray-500 mt-1">{t.panel.admin}</p>
         </div>
 
-        <AdminNav capabilities={capabilities} superAdmin={superAdmin} />
+        <AdminNav capabilities={capabilities} superAdmin={superAdmin} operator={operator} />
 
         <ModeSwitcher modes={modes} />
 

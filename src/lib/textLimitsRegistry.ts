@@ -242,6 +242,11 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     linkedinUrl: { limit: 'profileUrl', files: ['src/app/api/mentor-applications/route.ts'] },
     rejectReason: { exempt: '@db.Text, written by an admin decision route' },
     adminNote: { exempt: '@db.Text, written by an admin decision route' },
+    screenedById: ID,
+    interviewNotes: { limit: 'mentorScreeningInterviewNotes', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
+    referenceName: { limit: 'mentorScreeningReference', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
+    referenceContact: { limit: 'mentorScreeningReference', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
+    referenceOutcome: { limit: 'mentorScreeningReferenceOutcome', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
   },
   CompanyInquiry: {
     id: ID,

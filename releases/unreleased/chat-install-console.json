@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Chat apps install console, kill switch and real uninstall (#1958):** a \"Slack and Microsoft Teams\" card on `/admin/integrations` reads `GET /api/admin/integrations/chat/status` (platform configured, `CHAT_APPS_ENABLED`, every workspace of the caller's org — installer, granted scopes, enabled, confirmed identities, last error/delivery; never a token). `PATCH /api/admin/integrations/chat/[id] { enabled }` is the per-workspace kill switch (`ChatWorkspace.enabled`); `DELETE` revokes on the platform (Slack `auth.revoke`), then deletes the workspace, its sealed tokens and its identities, recording a refused revoke instead of keeping the token. Writes need `org.integrations.write`; another org's id is 404. `src/lib/chat/workspaces.ts` is the one writer and writes `CHAT_INSTALL` / `CHAT_ENABLE` / `CHAT_DISABLE` / `CHAT_UNINSTALL` AuditLog rows with the org. `ChatDelivery.workspaceId` is now nullable (SetNull) so history outlives an uninstall, pruned after 90 days by the new `chatDelivery` retention entry. The e2e server uses `CHAT_APPS_STUB_CLIENT=1`.",
+  "notes": {
+    "en": ["Admins can see which Slack or Teams workspace is connected, who installed it and what it may do, switch it off without uninstalling, and uninstall it so its access is revoked and nothing is left behind."],
+    "tr": ["Yöneticiler hangi Slack veya Teams çalışma alanının bağlı olduğunu, kimin kurduğunu ve neye izni olduğunu görebilir; kaldırmadan kapatabilir ve kaldırdığında erişim iptal edilir, geride hiçbir şey kalmaz."],
+    "de": ["Admins sehen, welcher Slack- oder Teams-Workspace verbunden ist, wer ihn installiert hat und was er darf, können ihn abschalten, ohne ihn zu deinstallieren, und ihn so deinstallieren, dass der Zugriff widerrufen wird und nichts zurückbleibt."]
+  }
+}
