@@ -68,9 +68,9 @@ test('feedback widget: send with screenshot + masked context, admin triages it',
     expect(stored).not.toContain('hunter2-e2e');
 
     // The reporter is not an admin: the inbox and the record are closed to them.
-    expect((await page.request.get('/api/admin/support/reports')).status()).toBe(401);
-    expect((await page.request.get(`/api/admin/support/reports/${report.id}`)).status()).toBe(401);
-    expect((await page.request.patch(`/api/admin/support/reports/${report.id}`, { data: { status: 'RESOLVED' } })).status()).toBe(401);
+    expect((await page.request.get('/api/admin/support/reports')).status()).toBe(403);
+    expect((await page.request.get(`/api/admin/support/reports/${report.id}`)).status()).toBe(403);
+    expect((await page.request.patch(`/api/admin/support/reports/${report.id}`, { data: { status: 'RESOLVED' } })).status()).toBe(403);
     // And an anonymous caller cannot file one.
     const anon = await browser.newContext();
     expect((await anon.request.post('/api/support/reports', { multipart: { type: 'BUG', description: 'x', contactAllowed: 'false' } })).status()).toBe(401);

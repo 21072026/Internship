@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { STATUS_NOTE_MAX } from '@/lib/supportReportIntegrationRule';
@@ -19,15 +18,10 @@ const patchSchema = z.object({
   note: z.string().trim().max(STATUS_NOTE_MAX).optional(),
 });
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return { session, orgId: await reportAdminOrg(session) };
-}
-
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
   const { id } = await params;
   return withTenantScope(admin.session, async () => {
     const report = await prisma.supportReport.findFirst({
@@ -43,8 +37,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.write', { request });
+  if ('error' in gate) return gate.error;
+  const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { id } = await params;
