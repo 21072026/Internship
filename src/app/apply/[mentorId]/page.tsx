@@ -45,7 +45,9 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
         body: JSON.stringify({ mentorId, ...form, skills }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      // A full programme reads as a capacity message in the applicant's own
+      // language (#1745) — never a plan, a price or the server's English text.
+      if (!res.ok) throw new Error(data.code === 'program_full' ? t.apply.programFull : data.code === 'mentor_full' || data.code === 'mentor_not_accepting' ? t.apply.fullTitle : data.error || 'Failed');
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');

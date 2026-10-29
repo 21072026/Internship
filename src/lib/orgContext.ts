@@ -27,9 +27,26 @@ import { prisma } from './prisma';
 import { isIsolationEnforced, resolveOrgId } from './orgScope';
 import { registerTenantAmbient } from './tenantAmbient';
 
+const ORG_STORE = Symbol.for('internship.orgContext.storage');
+const API_KEY_STORE = Symbol.for('internship.orgContext.apiKeyStorage');
+
 // The value carried per request: the tenant id to scope to (or null when the
 // request has no resolvable org — e.g. an unauthenticated/public route).
-const storage = new AsyncLocalStorage<{ orgId: string | null }>();
+//
+// ONE store per process, kept on `globalThis` (#1568). The middleware below is
+// installed once per process (its flag lives on `globalThis`) and reads the org
+// from the store of the module instance that installed it. When the bundler
+// evaluates this file more than once — Next compiles route entries separately
+// and dev reloads modules — a route bound its org in ITS instance's store while
+// the middleware read another, saw no org and scoped nothing: the leak matrix
+// caught `GET /api/interview-panels` returning every tenant's panels with the
+// flag on (`WHERE 1=1`). A shared store makes every instance bind and read the
+// same context, the way `src/lib/prisma.ts` shares its client.
+const globalForOrgContext = globalThis as unknown as {
+  [ORG_STORE]?: AsyncLocalStorage<{ orgId: string | null }>;
+  [API_KEY_STORE]?: AsyncLocalStorage<{ orgId: string | null }>;
+};
+const storage = (globalForOrgContext[ORG_STORE] ??= new AsyncLocalStorage<{ orgId: string | null }>());
 
 // The orgId bound to the current async context, or undefined when there is none.
 // `undefined` means "no context — do not scope"; an explicit `null` means
@@ -105,6 +122,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // INTERIM/FINAL due dates and reminders (#1891).
   'EvaluationDue',
   'Requisition',
+  'RequisitionFit',
   'InterviewRequest',
   // One person considered for one role (#1828). ApplicationEvent is reached only
   // through its application and is deliberately not listed (schema comment).
@@ -580,7 +598,7 @@ export function runWithOrg<T>(orgId: string | null, fn: () => T): T {
 // These three helpers make that absence loud. They are deliberately INDEPENDENT
 // of `MT_ENFORCE_ISOLATION`: the flag being off is precisely when a missing
 // tenant context is silent, so the guard must not be off with it.
-const apiKeyRequestStorage = new AsyncLocalStorage<{ orgId: string | null }>();
+const apiKeyRequestStorage = (globalForOrgContext[API_KEY_STORE] ??= new AsyncLocalStorage<{ orgId: string | null }>());
 
 // Mark the current async context as "serving an API-key-authenticated request,
 // org not yet resolved". `withApiKey()` (src/lib/apiKey.ts) enters this BEFORE
