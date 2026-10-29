@@ -35,9 +35,19 @@ a token). A failed row offers **Retry** (`POST …/deliveries/[id]/retry`,
 (`retryChatDelivery()`), rebuilds the card from the person's in-app
 notification of that event and **appends** a row — the failed one is never
 rewritten, a second retry of it is `409 already_retried`, and a retry whose
-source notification is gone is `409 source_gone` rather than a guess. Still to
-come: the OAuth install (#1935), identity linking (#1937) and the per-category
-channel matrix (#1707).
+source notification is gone is `409 source_gone` rather than a guess. **Identity
+linking** exists too (#1937, `src/lib/chat/identity.ts`): "Find people" on a
+workspace (`POST /api/admin/integrations/chat/[id]/propose`) reads the Slack
+directory (`users.list`, `users:read.email`) and **proposes** a link for each
+member whose address matches a **verified, active** account of the same org — an
+unmatched or unverified address creates nothing, and no member ever becomes a
+user. The person confirms (or rejects) on their account page ("Chat apps" card,
+`GET/POST/DELETE /api/integrations/chat/identity`, own identities only; an ADMIN
+may remove any link of their org). Only a confirmed identity is delivered to;
+disconnecting stops chat and leaves e-mail and the bell untouched. Teams has no
+directory proposal yet (it needs Microsoft Graph application permissions).
+Account erasure deletes the person's chat identities. Still to come: the
+per-category channel matrix (#1707) and the Teams uninstall activity.
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the

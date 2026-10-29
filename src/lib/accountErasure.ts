@@ -690,6 +690,10 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // delete cascades them; anonymise keeps the user row, so they went nowhere
     // until the housekeeping purge (#2098).
     prisma.signInDevice.deleteMany({ where: { userId } }),
+    // Who they are in a chat workspace (#1937): a chat member id and display
+    // name. A hard delete cascades them; anonymise keeps the user row, and a
+    // linked identity would keep delivering to a person who is gone.
+    prisma.chatIdentity.deleteMany({ where: { userId } }),
     // The remember-me rows carry the same two columns. They are revoked below
     // (outside this transaction, through the one revoker), not deleted: a
     // revoked row is what turns a replayed cookie into a refusal.
