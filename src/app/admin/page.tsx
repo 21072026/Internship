@@ -14,6 +14,9 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { clipSkillLabel } from '@/lib/skills';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { getPlan } from '@/lib/plans';
+import { FirstRunPanel } from '@/components/FirstRunPanel';
 
 // Bound to the caller's org (#2356): this is a server component, so its Prisma
 // reads do not pass through an API route's `withTenantScope` — without binding
@@ -27,7 +30,7 @@ import { clipSkillLabel } from '@/lib/skills';
 async function getStats(session: Session | null) {
   const tenant = await tenantWhere(session);
   return withTenantScope(session, async () => {
-  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount] =
+  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount, totalRelations] =
     await Promise.all([
       prisma.user.count({ where: withinTenant({ role: 'MENTEE' as const }, tenant) }),
       prisma.user.count({ where: withinTenant({ role: 'MENTOR' as const }, tenant) }),
@@ -68,6 +71,9 @@ async function getStats(session: Session | null) {
       prisma.mentorshipRelation.count({
         where: withinTenant({ status: 'ACTIVE' as const, stageDeadline: { lt: new Date() } }, tenant),
       }),
+      // Any relation, in any state (#1751): zero means a brand-new tenant,
+      // which gets the first-run panel instead of empty lists.
+      prisma.mentorshipRelation.count({ where: withinTenant({}, tenant) }),
     ]);
 
   const pipelineCounts = Object.fromEntries(
@@ -83,6 +89,7 @@ async function getStats(session: Session | null) {
     recentCandidates,
     pipelineCounts,
     overdueCount,
+    totalRelations,
   };
   });
 }
@@ -92,6 +99,13 @@ export default async function AdminDashboard() {
   const stats = await getStats(session);
   const { locale, t } = await getServerDictionary();
   const stages = await resolvePipelineStages(session?.user.orgId, locale);
+  // The first-run panel (#1751) is a mentoring product's guidance: a vertical
+  // without `mentorship` has no pairs to get to.
+  const firstRun = stats.totalRelations === 0 && (await shellCapabilities(session?.user.orgId)).includes('mentorship');
+  const orgPlan = firstRun && session?.user.orgId
+    ? (await prisma.organization.findUnique({ where: { id: session.user.orgId }, select: { plan: true } }))?.plan
+    : null;
+  const community = orgPlan === 'FREE' ? getPlan('community')?.limits ?? null : null;
 
   return (
     <div>
@@ -163,7 +177,11 @@ export default async function AdminDashboard() {
         </Link>
       </div>
 
-      {/* Pipeline distribution */}
+      {firstRun && <FirstRunPanel t={t.firstRun} community={community} />}
+
+      {/* Pipeline distribution, and the lists below: empty on a brand-new
+          tenant, where the first-run panel above stands in for them. */}
+      {!firstRun && (<>
       <Card className="mb-8">
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
@@ -299,6 +317,7 @@ export default async function AdminDashboard() {
           </div>
         </Card>
       </div>
+      </>)}
 
       {/* Quick Actions */}
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
