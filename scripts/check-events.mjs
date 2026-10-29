@@ -109,8 +109,14 @@ for (const file of files) {
     }
   }
 
-  const calls = [...source.matchAll(CALLS)];
-  const importAt = source.search(IMPORTS);
+  // Calls and imports are read from the code, not the comments: a file that
+  // only MENTIONS deliverToWebhook() (the /developers recipe, #1992) does not
+  // reach the dispatcher. Blanked to the same length, so line numbers hold.
+  const code = source.replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/g, (m, lead = '') =>
+    lead + m.slice(lead.length).replace(/[^\n]/g, ' ')
+  );
+  const calls = [...code.matchAll(CALLS)];
+  const importAt = code.search(IMPORTS);
   if (calls.length === 0 && importAt === -1) continue;
   seen.add(file);
   if (homes.has(file)) continue;

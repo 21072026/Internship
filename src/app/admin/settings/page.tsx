@@ -1010,7 +1010,7 @@ export default function AdminSettingsPage() {
       <Card>
         <CardHeader><CardTitle>{t.notificationTemplates.title}</CardTitle></CardHeader>
         <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{t.notificationTemplates.subtitle}</p>
-        <Link href="/admin/notification-templates" className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300" data-testid="settings-notification-templates-link">
+        <Link href="/admin/notification-templates" className="text-sm font-medium text-blue-700 hover:underline dark:!text-blue-300" data-testid="settings-notification-templates-link">
           {t.notificationTemplates.title} →
         </Link>
       </Card>
