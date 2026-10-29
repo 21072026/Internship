@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
@@ -20,11 +19,10 @@ import { requireCapability } from '@/lib/capabilityGate';
 // hired, conversion and time-to-hire alike — for any customer that renamed its
 // pipeline. For an org on the built-in catalogue the resolved sets are exactly
 // the two literals that were here, so those numbers are unchanged.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const callerOrgId = (session.user as { orgId?: string | null }).orgId ?? null;
   // Programme cohorts are the internship product (the /admin/cohorts link is
   // tagged `mentorship` in navLinks.ts); hiding the card is not access control,

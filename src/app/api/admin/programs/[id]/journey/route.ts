@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { journeyTemplate } from '@/lib/programJourneyRule';
 import { STEP_SELECT, journeyProgramFor, serializeStep, stepColumns, stepInputSchema } from '@/lib/programJourneyAdmin';
+import { requirePermission } from '@/lib/authz';
 
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
 // The journey builder's collection (#1853): the programme's steps, its pairs
 // for the preview picker, and the journey as a template a clone can copy.
@@ -24,8 +17,9 @@ async function requireAdmin() {
 const MAX_STEPS = 200;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('program.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const auth = await journeyProgramFor(session, (await params).id);
   if ('refusal' in auth) return auth.refusal;
   const { program } = auth;
@@ -49,8 +43,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const auth = await journeyProgramFor(session, (await params).id);
   if ('refusal' in auth) return auth.refusal;
   const { program } = auth;
@@ -76,8 +71,9 @@ const patchSchema = z.union([
 ]);
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const auth = await journeyProgramFor(session, (await params).id);
   if ('refusal' in auth) return auth.refusal;
   const { program } = auth;

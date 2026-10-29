@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin routes behind the permission layer — analytics & reporting (#1571, story #1565):** `/api/admin/analytics/**`, `insights`, `reports/[key]`, `weekly-reports` (+ `remind`), `relation-health`, `relation-integrity`, `health`, `operations`, `sla/**`, `stage-sla`, `hiring/queues`, `program-costs`, `2fa-coverage` and `activity` authorize through `requirePermission()` (`analytics.read` for reads; AI narrative/insight generation, stage-SLA and programme costs need `org.settings.write`; SLA acknowledge/snooze and weekly-report reminders `program.write`; outcomes `content.write`) instead of comparing the role to `'ADMIN'`. The private `adminSession()` helper of `program-costs` is gone. Behaviour-neutral for existing admins; a signed-in non-admin now gets 403 instead of 401. Also pins the two `offers` routes #3299 landed without a baseline entry, so `check:authz` is green on main again."
+}

@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
@@ -8,6 +6,7 @@ import { orgPlanHasFeature, planIncludingFeature } from '@/lib/orgPlans';
 import { BRAND_MARK_MAX_BYTES, classifyMarkUpload, removeBrandMark, storeBrandMark } from '@/lib/brandAssets';
 import { brandAssetPath } from '@/lib/brandRule';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { requirePermission } from '@/lib/authz';
 
 // /api/admin/organizations/[id]/brand-mark (#2922) — an organization's logo
 // mark, from which every app icon, launch image and the in-app mark are
@@ -51,9 +50,9 @@ function refused(reason: string, status = 400) {
 // POST (multipart, field `file`) — replace the organization's mark.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.branding.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await orgAdminRefusal(session, id, `POST ${ROUTE}`);
   if (refusal) return refusal;
   const limited = enforceRateLimit(request, 'brand-mark-upload', { limit: 10, windowMs: 10 * 60 * 1000, subject: session.user.id });
@@ -108,9 +107,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 // DELETE — remove the organization's mark; its icons fall back to the defaults.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.branding.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await orgAdminRefusal(session, id, `DELETE ${ROUTE}`);
   if (refusal) return refusal;
 

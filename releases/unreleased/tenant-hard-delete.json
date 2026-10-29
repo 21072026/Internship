@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Tenant hard delete, switched off by default (#1584, story #1580):** two-stage permanent deletion of an archived organization — `POST`/`DELETE /api/admin/organizations/[id]/deletion { confirmSlug }` (request / withdraw) and `DELETE /api/admin/organizations/[id] { confirmSlug, password }` (execute), super admin only (`platform.org.write`). Every door answers `403 hard_delete_disabled` unless the deployment sets `TENANT_HARD_DELETE_ENABLED=1` (nothing in the repo sets it). Execution needs the archive, `TENANT_HARD_DELETE_WAIT_HOURS` (default 72, floor 24) since the request, a full export taken after the request and the operator's own password; never the default org or the operator's own. New nullable `Organization.deletionRequestedAt`/`deletionRequestedById`; unarchiving withdraws a request. The deletion is planned from the schema (`src/lib/orgDeletionRule.ts`: orgId models + FK-reached children + `SOFT_LINKS` grants, optional links nulled except `orgId`, children-first topological order, unit-tested on the real schema) and run in one transaction (`src/lib/orgDeletionExec.ts`, e2e-run on a synthetic tenant); `org.deleted` is written beforehand to the operator's org. UI on the lifecycle card only when switched on (EN/TR/DE).",
+  "notes": {
+    "en": ["Operators can prepare the permanent deletion of an archived organization in two confirmed steps with a waiting period; the feature stays switched off until a deployment explicitly enables it."],
+    "tr": ["Operatörler, arşivlenmiş bir organizasyonun kalıcı silinmesini bekleme süreli iki onaylı adımda hazırlayabiliyor; özellik bir kurulum açıkça etkinleştirene kadar kapalı kalıyor."],
+    "de": ["Betreiber können die endgültige Löschung einer archivierten Organisation in zwei bestätigten Schritten mit Wartezeit vorbereiten; die Funktion bleibt ausgeschaltet, bis eine Installation sie ausdrücklich aktiviert."]
+  }
+}

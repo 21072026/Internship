@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { isLocale } from '@/i18n/config';
 import {
@@ -11,6 +9,7 @@ import {
   type NewsletterAudience,
 } from '@/lib/newsletter';
 import { renderNewsletterFor } from '@/lib/newsletterDispatch';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({
   content: z.record(z.string(), z.unknown()),
@@ -35,8 +34,9 @@ const schema = z.object({
  * languages, which does not belong in a query string.
  */
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 

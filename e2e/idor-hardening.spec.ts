@@ -66,7 +66,7 @@ test('source users are scoped to their own source; admin-only endpoints reject t
 
     // Admin-only endpoints are forbidden for a SOURCE user.
     expect((await page.request.get('/api/users')).status()).toBe(401);
-    expect((await page.request.post('/api/admin/source-users', { data: { sourceId: sourceB.id, email: 'z@z.com', fullName: 'Z' } })).status()).toBe(401);
+    expect((await page.request.post('/api/admin/source-users', { data: { sourceId: sourceB.id, email: 'z@z.com', fullName: 'Z' } })).status()).toBe(403);
   } finally {
     await prisma.user.updateMany({ where: { id: sourceUser.id }, data: { sourceId: null } });
     await cleanupByEmail(otherMentee.email);

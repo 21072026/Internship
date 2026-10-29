@@ -16,6 +16,7 @@ import { MailQueuePanel } from '@/components/admin/MailQueuePanel';
 import { EmailSuppressionPanel } from '@/components/admin/EmailSuppressionPanel';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
+import { OfferLetterTemplateEditor } from '@/components/OfferLetterTemplateEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 import { CrmBccCard } from '@/components/CrmBccCard';
@@ -1019,6 +1020,8 @@ export default function AdminSettingsPage() {
           `evaluations` capability, so its admins were offered criteria for
           "what a mentor scores a mentee on" in a product with neither. */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationFrameworkEditor />}
+      {/* Offer letters (#1857) exist only where offers do. */}
+      {verticalHasCapability(vertical, 'placements') && <OfferLetterTemplateEditor />}
       {/* When INTERIM/FINAL fall due, and their reminders (#1891). */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationScheduleEditor />}
       {/* The tenant starter pack (#2066): safe to apply again at any time. */}

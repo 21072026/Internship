@@ -85,7 +85,7 @@ test('admin queue: reply takes assignment and IN_PROGRESS, close notifies the re
     // The CLOSED filter shows it; a non-admin is rejected by the API.
     const filtered = await (await adminPage.request.get('/api/admin/support?status=CLOSED')).json();
     expect((filtered.tickets as { id: string }[]).some((tk) => tk.id === ticketId)).toBe(true);
-    expect((await userPage.request.get('/api/admin/support')).status()).toBe(401);
+    expect((await userPage.request.get('/api/admin/support')).status()).toBe(403);
   } finally {
     await userCtx.close();
     await adminCtx.close();

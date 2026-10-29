@@ -68,6 +68,8 @@ const DECISIONS = new Map([
   ['MentorApplication.referenceOutcome', ERASED],
   ['Offer.compensationNote', ERASED],
   ['Offer.declineNote', ERASED],
+  // The frozen offer letter names the person and states their pay (#1857).
+  ['Offer.letterSnapshot', ERASED],
   ['AiArtifact.content', ERASED],
   ['RequisitionFit.reason', ERASED],
   ['CompanyInterest.note', ERASED],
@@ -117,6 +119,11 @@ const DECISIONS = new Map([
   ['GoogleCalendarConnection.accessTokenEnc', ERASED],
   ['GoogleCalendarConnection.refreshTokenEnc', ERASED],
   ['GoogleCalendarConnection.lastError', ERASED],
+  // Its provider-neutral successor (#1989): disconnect() deletes both rows.
+  ['CalendarConnection.scope', ERASED],
+  ['CalendarConnection.accessTokenEnc', ERASED],
+  ['CalendarConnection.refreshTokenEnc', ERASED],
+  ['CalendarConnection.lastError', ERASED],
 
   // ── Reached another way ─────────────────────────────────────────────────────
   ['DocumentReview.note', 'cascades with its Document, which both erasure paths delete (Document.ownerId)'],
@@ -146,6 +153,7 @@ const DECISIONS = new Map([
   ['Organization.ssoClientSecretEnc', CONFIG],
   ['Organization.ssoDiscoveryUrl', CONFIG],
   ['NotificationTemplate.body', CONFIG],
+  ['OfferTemplate.bodyMarkdown', CONFIG],
   ['ContributorTerms.body', CONFIG],
   ['MentoringAgreement.body', CONFIG],
   ['Announcement.text', CONFIG],

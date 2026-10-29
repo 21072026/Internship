@@ -233,4 +233,24 @@ test.describe('notification router', () => {
       await prisma.notificationDelivery.deleteMany({ where: { userId: orphanId } });
     }
   });
+
+  test('a non-message event produces a push delivery record: no device is SKIPPED, a muted category is SKIPPED (#1715)', async () => {
+    const email = uniqueEmail('notify-push');
+    const user = await seedUser(email, PW, 'MENTEE', 'Notify Push');
+    try {
+      // offer_sent.new lists push; the person has no browser subscription and no app install.
+      const r = await notifyEvent(user.id, 'offer_sent.new', { position: 'Analyst' }, { channels: ['inApp', 'push'] });
+      expect(r).toMatchObject({ sent: 1, skipped: 1 });
+      const ledger = await ledgerFor(user.id);
+      expect(ledger.find((row) => row.channel === 'push')).toMatchObject({ status: 'SKIPPED', skipReason: 'no_device', eventKey: 'offer_sent.new' });
+
+      // The /account category switch silences push like the bell, with a recorded reason.
+      await prisma.notificationDelivery.deleteMany({ where: { userId: user.id } });
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { stageUpdates: false } } });
+      await notifyEvent(user.id, 'offer_sent.new', { position: 'Analyst' }, { channels: ['push'] });
+      expect((await ledgerFor(user.id)).find((row) => row.channel === 'push')).toMatchObject({ status: 'SKIPPED', skipReason: 'category_off' });
+    } finally {
+      await cleanup(email);
+    }
+  });
 });

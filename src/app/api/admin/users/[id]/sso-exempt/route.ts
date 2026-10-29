@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
@@ -9,6 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { countExemptAdmins } from '@/lib/ssoEnforcement';
+import { requirePermission } from '@/lib/authz';
 
 // POST — grant or revoke the break-glass exemption from enforced SSO (#1950).
 //
@@ -38,10 +37,9 @@ import { countExemptAdmins } from '@/lib/ssoEnforcement';
 const schema = z.object({ exempt: z.boolean() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (session.user.impersonatorId) {
     return NextResponse.json(
       { error: 'Cannot change an SSO exemption while impersonating' },

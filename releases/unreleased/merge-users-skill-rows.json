@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Account merge keeps canonical skills and levels (#1822 follow-up):** `mergeUsers` now moves the duplicate's `UserSkill` rows onto the primary inside the merge transaction (`moveUserSkills()` in `src/lib/skillLevels.ts`). A skill only the duplicate holds is re-pointed; one both hold is folded by `foldUserSkillRow()` — a mentor-confirmed level beats a self-rating, a rating beats none, and the duplicate's level history moves along — the same fold the curator's skill merge (`mergeSkill`) now shares. Previously the rows cascaded away with the duplicate and only the JSON survived until the next deploy's backfill."
+}

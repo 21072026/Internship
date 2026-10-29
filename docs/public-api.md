@@ -214,7 +214,23 @@ A full snapshot of one resource without walking the cursor:
 - Expired exports are deleted in the nightly 03:40 slot
   (`purgeExpiredExports`); they stop being served at `expiresAt`.
 
+## Sandbox key (#1992, `src/lib/api/sandboxKeyRule.ts`)
+
+`POST /api/developers/sandbox-key` (no session — the `/developers` button) mints a key **only on
+the public demo**: `DEMO_MODE=true` **and** a database whose name ends in `_demo` (the guard
+`prisma/reset-demo.mjs` uses). Everywhere else it answers 404, so it cannot mint against a real
+organisation even with the flag set by mistake. The key holds every `*:read` scope and nothing
+that writes (`interactions:read_notes` is not a `:read` scope), is bound to the deployment's
+default org (the synthetic seed), expires after 24 h and carries a daily allowance of 1000; minting
+is limited to 3 an hour per address and 200 live keys. The demo seed grants the default org
+`INTEGRATIONS_API` so those reads are not `feature_locked`.
+
 ## Deprecations
+
+The policy (6-month window, `Deprecation`/`Sunset` headers, what counts as breaking) is
+[`api-lifecycle.md`](api-lifecycle.md); the list below is `API_DEPRECATIONS` in
+`src/lib/api/v1Lifecycle.ts` — add a row there and here together. The public portal is
+`/developers` (#1992), rendered from this API's own OpenAPI document, never the admin one.
 
 | What | Since | Removed on |
 |---|---|---|

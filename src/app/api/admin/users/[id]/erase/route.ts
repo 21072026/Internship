@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { anonymizeUser, hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 
 const bodySchema = z.object({
   mode: z.enum(['anonymize', 'delete']),
@@ -26,10 +25,9 @@ const bodySchema = z.object({
 // POST — admin-initiated erasure of another user's account (EPIC: GDPR data
 // retention). Reachable from the candidate detail page and the admin user list.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.erase', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // An impersonation session carries the target user's role, so it cannot pass
   // the check above today — assert it anyway, so erasure can never be attributed
   // to an admin who was merely being impersonated.

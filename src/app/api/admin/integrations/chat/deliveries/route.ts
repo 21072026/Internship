@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { CHAT_LEDGER_MAX, listChatDeliveries } from '@/lib/chat/workspaces';
 
@@ -10,9 +9,9 @@ import { CHAT_LEDGER_MAX, listChatDeliveries } from '@/lib/chat/workspaces';
 // reason only — never the card body, never a token. ADMIN only, on the route;
 // a workspace of another org is 404.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 403 });
   const sp = new URL(request.url).searchParams;
