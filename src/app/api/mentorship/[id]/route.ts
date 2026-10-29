@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -56,6 +57,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
     return await withTenantScope(session, async () => {
       // Scoped to the caller's tenant by hand (#2613, the #2542 pattern): with
@@ -114,7 +118,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const isAuthorized =
-        session.user.role === 'ADMIN' ||
+        isAdmin ||
         relation.mentorId === session.user.id ||
         relation.menteeId === session.user.id;
 
@@ -140,7 +144,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // the chip shows the days but never a breach — the same people the admin
       // aging report keeps out of its overdue list. Only the boolean ships, and
       // only to the roles that can already list the pool (GET /api/re-engagement).
-      const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+      const seesPool = isAdmin || session.user.role === 'MENTOR';
 
       // The mentoring agreement (#1792), for the two detail screens without a
       // second request. Informational only: nothing on either screen is
@@ -179,6 +183,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
 
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findFirst({
@@ -190,7 +197,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const isAuthorized =
-        session.user.role === 'ADMIN' || relation.mentorId === session.user.id;
+        isAdmin || relation.mentorId === session.user.id;
 
       if (!isAuthorized) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -222,7 +229,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       // control). Echoing the current value stays a no-op for anyone.
       const kindChanging = kind !== undefined && kind !== relation.kind;
       if (kindChanging) {
-        if (session.user.role !== 'ADMIN') {
+        if (!isAdmin) {
           return NextResponse.json({ error: 'Only an admin can change the relation kind', code: 'kind_admin_only' }, { status: 403 });
         }
         if (!isRelationKind(kind)) {
@@ -256,7 +263,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         (target) => rest[target] !== undefined && rest[target] !== relation[target]
       );
       if (retargeted.length > 0) {
-        if (session.user.role !== 'ADMIN') {
+        if (!isAdmin) {
           return NextResponse.json(TARGET_ADMIN_ONLY[retargeted[0]], { status: 403 });
         }
         const refused = await refuseForeignTargets(

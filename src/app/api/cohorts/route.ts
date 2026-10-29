@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
@@ -10,9 +9,10 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 
 // GET — all cohorts with intern counts + per-stage distribution (admin).
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('program.read', { request: request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Programme cohorts are the internship product (`/admin/cohorts` is tagged
   // `mentorship` in navLinks.ts); a hidden link is not a gate, this is.
@@ -47,8 +47,9 @@ const schema = z.object({ name: z.string().min(1).max(120), term: z.string().max
 
 // POST — create a cohort (admin).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('program.write', { request: request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const gated = await requireCapability(resolveOrgId(session), 'mentorship');
   if (gated) return gated;
   return await withTenantScope(session, async () => {
