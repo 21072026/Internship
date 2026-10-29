@@ -1,5 +1,8 @@
 # Disaster recovery — restoring the database
 
+> Data loss is one incident class. Severity, on-call, customer communication and the
+> postmortem are in [`docs/incident-response.md`](incident-response.md) (#1605).
+
 > Status: **runbook + automation**. The backup half is automated
 > (`infra/backup-db.sh`, wired into every prod/preview deploy plus a daily cron
 > — see [`infra/README.md`](../infra/README.md#5-database-backups--the-destructive-schema-gate)).

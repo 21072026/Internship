@@ -118,10 +118,19 @@ jobs:
           # their URLs from this secret (see the header).
           MARKETING_PROBE_URLS: ${{ secrets.MARKETING_PROBE_URLS }}
           CONTENT_PROBE: .content-probe/scripts/marketing-content-probe.mjs
+          # Readiness (#1603): production's `/api/health?db=1` with the token,
+          # asserting the BODY says `db: "ok"` — a process that answers 200
+          # while its database is gone is down for every user. Needs the
+          # HEALTH_TOKEN secret (the same value the server has); without it the
+          # check is skipped with a notice, because the anonymous answer
+          # carries no `db` field to assert on.
+          HEALTH_TOKEN: ${{ secrets.HEALTH_TOKEN }}
+          READINESS_URL: https://interncrm.com/api/health?db=1
         run: |
           set -uo pipefail
           MARKETING_PROBE_URLS="${MARKETING_PROBE_URLS:-}"
           MARKETING_ON=1
+          [ -n "${HEALTH_TOKEN:-}" ] || echo "::notice title=Readiness not checked::The HEALTH_TOKEN secret is not set, so production's database was not checked — only that the process answers."
           if [ -z "${MARKETING_PROBE_URLS//[[:space:]]/}" ]; then
             MARKETING_ON=0
             echo "::notice title=Marketing hosts not probed::The MARKETING_PROBE_URLS secret is not set, so this run checked neither the reachability nor the content of the marketing hosts."
@@ -142,6 +151,11 @@ jobs:
 
           probe_all() {
             local failed="" n=0 origin
+            if [ -n "${HEALTH_TOKEN:-}" ]; then
+              db="$(curl -sS --max-time 20 -H "X-Health-Token: $HEALTH_TOKEN" "$READINESS_URL" 2>/dev/null | jq -r '.db // "missing"' 2>/dev/null)" || true
+              [ -n "$db" ] || db=unreachable
+              if [ "$db" != "ok" ]; then failed="${failed}production database (readiness) -> ${db}"$'\n'; fi
+            fi
             for url in $TARGETS; do
               # `|| echo 000` here would APPEND to curl's own output: curl exits
               # non-zero on a connection failure but has already printed `000`,
@@ -260,6 +274,8 @@ jobs:
             # Whether an open outage names a marketing host: a run that did not
             # probe the marketing hosts cannot say that one is back.
             if [ "${pair%%:*}" = reach_issue ] && [ -n "$NUM" ]; then
+              gh issue view "$NUM" --repo "$GITHUB_REPOSITORY" --json createdAt,labels,comments \
+                --jq '"reach_created=\(.createdAt)", "reach_acked=\([.labels[].name] | index("acknowledged") != null)", "reach_escalated=\([.comments[].body] | any(test("<!-- uptime-escalation -->")))"' >> "$GITHUB_OUTPUT"
               NAMES_MKT="$(gh issue view "$NUM" --repo "$GITHUB_REPOSITORY" --json body \
                              --jq '.body | test("marketing host #")')"
               echo "reach_issue_marketing=${NAMES_MKT}" >> "$GITHUB_OUTPUT"
@@ -317,6 +333,40 @@ jobs:
             "🔴 Site erişilemiyor" "$REACH_DETAIL"
           transition content "$CONTENT" "$CONTENT_ISSUE" "$CONTENT_ALERT_LABEL" \
             "🔴 Marketing host yanlış ürünü gösteriyor" "$CONTENT_DETAIL"
+
+      # ── escalation (#1603/#1605) ────────────────────────────────────────
+      # An alert nobody has to acknowledge is a notification, not a page. The
+      # open `uptime-alert` issue is acknowledged by adding the `acknowledged`
+      # label (docs/incident-response.md § On-call). Still down, open for
+      # ESCALATE_AFTER_MIN and nobody has acknowledged it → ONE comment that
+      # @-mentions the escalation contact (repository variable
+      # UPTIME_ESCALATE_TO, GitHub logins separated by spaces), which GitHub
+      # delivers as a mobile/e-mail notification — a channel that does not
+      # depend on the monitored host or on SMTP from this runner. Unset → no
+      # escalation; the issue itself remains the alert.
+      - name: Escalate an unacknowledged outage
+        if: steps.probe.outputs.reach == 'down' && steps.state.outputs.reach_issue != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ steps.state.outputs.reach_issue }}
+          CREATED: ${{ steps.state.outputs.reach_created }}
+          ACKED: ${{ steps.state.outputs.reach_acked }}
+          ESCALATED: ${{ steps.state.outputs.reach_escalated }}
+          ESCALATE_TO: ${{ vars.UPTIME_ESCALATE_TO }}
+          ESCALATE_AFTER_MIN: '30'
+        run: |
+          set -euo pipefail
+          [ "$ACKED" != true ] || { echo "acknowledged — no escalation"; exit 0; }
+          [ "$ESCALATED" != true ] || { echo "already escalated"; exit 0; }
+          if [ -z "${ESCALATE_TO// /}" ]; then
+            echo "::notice title=No escalation contact::Repository variable UPTIME_ESCALATE_TO is not set; the outage issue #$ISSUE stays the only alert."
+            exit 0
+          fi
+          age=$(( ( $(date -u +%s) - $(date -u -d "$CREATED" +%s) ) / 60 ))
+          [ "$age" -ge "$ESCALATE_AFTER_MIN" ] || { echo "open ${age} min — below ${ESCALATE_AFTER_MIN}"; exit 0; }
+          mentions="$(for l in $ESCALATE_TO; do printf '@%s ' "${l#@}"; done)"
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$(printf '<!-- uptime-escalation -->\n%s— still down after %s minutes and not acknowledged. Add the `acknowledged` label when you are on it; the process is docs/incident-response.md.\n' "$mentions" "$age")"
 
       # Mail only on transitions. Checkout + npm ci cost ~40s, which is why
       # they are here and not at the top: the overwhelmingly common case is a
