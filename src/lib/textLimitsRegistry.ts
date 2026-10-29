@@ -311,6 +311,12 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     ssoSpKey: SERVER_SET,
     ssoSpCert: SERVER_SET,
     ssoCertificate: { exempt: '@db.Text, capped at 20000 by the route' },
+    // OpenID Connect (#1926): the route's caps equal the VarChar columns; the
+    // secret is sealed by the server before it is stored, never typed into the column.
+    ssoClientId: { exempt: 'VarChar(255), capped at 255 by the route (#1926)' },
+    ssoScopes: { exempt: 'VarChar(255), capped at 255 by the route (#1926)' },
+    ssoDiscoveryUrl: { exempt: '@db.Text, capped at 2000 by the route (#1926)' },
+    ssoClientSecretEnc: SERVER_SET,
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },
     billingCountry: ENUMERATED,
