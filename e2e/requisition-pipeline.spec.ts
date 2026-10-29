@@ -232,6 +232,20 @@ test('a company shortlist creates the application, an approved interview moves i
   const afterPass = await prisma.application.findUniqueOrThrow({ where: key });
   expect(afterPass).toMatchObject({ stage: 'REJECTED', status: 'REJECTED', dispositionCode: 'OTHER', dispositionNote: 'went with another candidate' });
   expect(afterPass.decidedAt).not.toBeNull();
+
+  // The bus (#1998): one interest change per real status change (the repeat
+  // shortlist raised nothing), and the request's ask and decision — no notes.
+  const interestEvents = await prisma.domainEvent.findMany({
+    where: { name: 'company_interest.changed', payload: { path: '$.requisitionId', equals: reqA3.id } },
+    orderBy: { createdAt: 'asc' },
+  });
+  expect(interestEvents.map((e) => [(e.payload as { from: string | null }).from, (e.payload as { to: string }).to])).toEqual([
+    [null, 'SHORTLISTED'],
+    ['SHORTLISTED', 'PASS'],
+  ]);
+  expect(JSON.stringify(interestEvents.map((e) => e.payload))).not.toContain('went with another candidate');
+  expect(await prisma.domainEvent.count({ where: { name: 'interview_request.created', subjectId: request.id } })).toBe(1);
+  expect(await prisma.domainEvent.count({ where: { name: 'interview_request.approved', subjectId: request.id } })).toBe(1);
 });
 
 test('rediscovery: past applicants surface by disposition code, scoped to the company', async () => {

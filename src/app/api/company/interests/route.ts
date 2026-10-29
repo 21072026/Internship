@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { resolveOrgId } from '@/lib/orgScope';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { notify, notifyIfAllowed } from '@/lib/notify';
@@ -123,6 +124,12 @@ export async function POST(request: Request) {
     PASS: 'company_interest.passed',
   };
   if (statusChanged) {
+    // The note stays off the bus (#1998): the company's own words.
+    await emit(
+      'company_interest.changed',
+      { interestId: interest.id, companyId, menteeId, requisitionId: requisitionId ?? null, from: existing?.status ?? null, to: status },
+      { orgId, actor: { id: session.user.id, type: 'user' } },
+    );
     const mentee = relation.mentee.fullName;
     await notify(
       relation.mentorId,
