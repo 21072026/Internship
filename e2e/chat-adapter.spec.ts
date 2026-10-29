@@ -34,6 +34,9 @@ function recordingClient(posts: Post[], failWith?: string): ChatPlatformClient {
     async revoke() {
       return { revoked: true };
     },
+    async listMembers() {
+      return [];
+    },
   };
 }
 

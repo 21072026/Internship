@@ -79,6 +79,16 @@ test('lifecycle moves are authorized and validated by the server', { tag: '@smok
     expect(row.pausedAt).toBeNull();
 
     // An ended pairing cannot be paused, and a mentor cannot reopen it.
+    // The bus (#1998): exactly the two committed moves, the end's code and
+    // never its note; the refused calls raised nothing.
+    const raised = await prisma.domainEvent.findMany({
+      where: { name: 'mentorship.lifecycle_changed', subjectId: seeded.relationId },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(raised.map((e) => e.payload)).toEqual([
+      { relationId: seeded.relationId, from: 'ACTIVE', to: 'PAUSED', reasonCode: null },
+      { relationId: seeded.relationId, from: 'PAUSED', to: 'ENDED_EARLY', reasonCode: 'mentor_unavailable' },
+    ]);
     const illegal = await mentor.post(url, { data: { to: 'PAUSED' } });
     expect(illegal.status()).toBe(409);
     expect(await illegal.json()).toMatchObject({ code: 'illegal_transition', from: 'ENDED_EARLY', to: 'PAUSED' });

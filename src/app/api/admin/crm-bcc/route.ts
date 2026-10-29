@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -23,16 +22,18 @@ const postSchema = z.object({ action: z.enum(['rotate', 'enable', 'disable', 'de
 
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const gate = await requirePermission('mail.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     return withTenantScope(session, async () => NextResponse.json(await crmBccState(await settingsOrgOf(session))));
   });
 }
 
 export async function POST(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const gate = await requirePermission('mail.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const parsed = postSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'invalid' }, { status: 400 });
 

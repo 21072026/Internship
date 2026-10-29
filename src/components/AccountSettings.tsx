@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
+import { ChatConnectionsCard } from '@/components/ChatConnectionsCard';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, defaultAccentFor, isAccentColor, resolveAccent } from '@/lib/accent';
@@ -1610,6 +1611,8 @@ export function AccountSettings() {
       </Card>
 
       <ConsentSettings />
+
+      <ChatConnectionsCard />
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.dataSection}</CardTitle></CardHeader>

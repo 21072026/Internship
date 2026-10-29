@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { locales } from '@/i18n/config';
 import { normalizeMachineList } from '@/lib/machineTranslation';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -12,6 +10,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { requirePermission } from '@/lib/authz';
 
 // The shared goal-template pool (#51 follow-up).
 //
@@ -40,11 +39,6 @@ const createSchema = z.object({ translations: translationsSchema, machineTransla
 const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema, machineTranslated: machineSchema });
 const deleteSchema = z.object({ id: z.string().min(1) });
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
 function serialize(t: { id: string; title: string; translations: unknown; machineTranslated?: unknown; useCount: number }) {
   const translations = readTranslations(t.translations);
@@ -52,9 +46,10 @@ function serialize(t: { id: string; title: string; translations: unknown; machin
 }
 
 // GET — the shared pool, most-used first.
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
@@ -71,8 +66,9 @@ export async function GET() {
 
 // POST — add a shared template. At least one language must be filled in.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
@@ -121,8 +117,9 @@ export async function POST(request: Request) {
 
 // PATCH — rewrite a shared template in any/all languages.
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
@@ -164,8 +161,9 @@ export async function PATCH(request: Request) {
 // offering this", not "take it back from everyone who has it" — those to-dos stay
 // exactly as they are, and keep following any future rewording.
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');

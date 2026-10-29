@@ -83,6 +83,9 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['api/interview-requests/[id]', 'interview_request.approved', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2' }],
   ['api/interview-requests/[id]', 'interview_request.declined', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', reasonCode: 'not_ready' }],
   ['api/company/interests', 'company_interest.changed', { interestId: 'i1', companyId: 'c1', menteeId: 'u2', requisitionId: null, from: null, to: 'INTERESTED' }],
+  ['api/mentorship/[id]/lifecycle', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'PAUSED', reasonCode: null }],
+  ['lifecycleEvents (transfer)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_REASSIGNED', reasonCode: 'mentor_unavailable' }],
+  ['lifecycleEvents (win-back)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_CHURNED', reasonCode: null }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

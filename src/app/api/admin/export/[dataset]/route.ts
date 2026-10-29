@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
@@ -19,6 +17,7 @@ import { tenantWhere } from '@/lib/tenantFilter';
 import { loadSurveyOverview } from '@/lib/surveyOverview';
 import { defaultOutcomePeriod, loadOutcomeReport } from '@/lib/outcomesData';
 import { loadProgramScorecard } from '@/lib/programScorecardData';
+import { requirePermission } from '@/lib/authz';
 
 // GET /api/admin/export/[dataset] — the ONE door every admin export goes
 // through (#1740), gated by the org's REPORT_EXPORT entitlement (its plan or a
@@ -58,8 +57,9 @@ async function internal(handler: (req: Request) => Promise<Response>, request: R
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ dataset: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('audit.export', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { dataset } = await params;
   if (!(DATASETS as readonly string[]).includes(dataset)) return NextResponse.json({ error: 'Unknown dataset' }, { status: 404 });
   if (!(await entitled(await settingsOrgOf(session), 'REPORT_EXPORT'))) {
