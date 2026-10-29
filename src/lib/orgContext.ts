@@ -81,6 +81,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'User',
   // IdP role mapping rules (#1940) — one tenant's SSO config, never another's.
   'SsoClaimMapping',
+  // An SSO request in flight (#1929): sessionless writers (login route,
+  // callback) pass their own orgId.
+  'SsoAuthRequest',
   'Source',
   'Company',
   'Project',

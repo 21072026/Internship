@@ -8,6 +8,7 @@ import { runEmailHealthCheck } from '@/services/emailService';
 import { expireDrafts } from '@/lib/outboundDrafts';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
+import { purgeExpiredSsoAuthRequests } from '@/lib/ssoOidc';
 import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { purgeExpiredIdempotencyKeys } from '@/lib/api/v1Write';
 import { purgeExpiredExports } from '@/lib/api/v1Exports';
@@ -26,6 +27,8 @@ export function registerHousekeepingJobs(): void {
       trustedDevices: devices.devices,
       refreshGrants: devices.grants,
       loginLinks: await purgeExpiredLoginLinks(),
+      // OIDC requests in flight (#1929): 10-minute rows, spent or not.
+      ssoAuthRequests: await purgeExpiredSsoAuthRequests(),
       signInDevices: await purgeStaleSignInDevices(),
       idempotencyKeys: await purgeExpiredIdempotencyKeys(),
       // The /api/v1 exports (#3002) past their expiry: refused from that

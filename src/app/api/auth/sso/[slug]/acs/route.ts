@@ -1,60 +1,15 @@
-import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
 import { samlForOrg, mapSamlProfile } from '@/lib/ssoSaml';
-import { provisionSsoUser } from '@/lib/ssoProvisioning';
-import { extractClaims, mappableRolesFor, resolveRole, type SsoClaims } from '@/lib/ssoRoleMapping';
-import { verticalCapabilities } from '@/lib/verticals';
-import { worldOfOrg } from '@/lib/userWorld';
-import { originForWorld, worldForHostHeader } from '@/lib/hostWorld';
-import { servedOrigin } from '@/lib/servedHosts';
-import { verifiedTenantHosts } from '@/lib/hostOrg';
-
-const base = () => (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
-
-// Where the browser goes after the IdP posted here. The IdP always posts to the
-// ACS URL it has registered (NEXTAUTH_URL's host), but the SESSION has to be
-// minted on the host of the product the organization lives in (#2590): the
-// `sso` provider refuses an account whose world is not the host's, and it
-// burns the single-use grant BEFORE refusing — so handing a marketing
-// organization's grant to the internship host would waste it and sign nobody
-// in. An internship organization keeps `base()` exactly as before; only a
-// marketing organization is sent to the marketing host.
-//
-// Within that world, the host the sign-in STARTED on wins (#2494): the login
-// route puts that origin into RelayState, so a sign-in begun on another host
-// of the same product finishes there. RelayState is unsigned and chosen by
-// whoever makes the browser POST here, so it is honoured only through
-// servedOrigin() (a bare origin of a host this deployment serves, exact match —
-// no open redirect) AND only when that host belongs to the organization's own
-// world; anything else falls back to the world's origin as before. With no
-// organization at all (an unknown slug) there is only a refusal to show and no
-// grant to strand, so any served origin will do.
-// The host a RelayState names, for the verified-domain lookup only — the value
-// itself is still judged by servedOrigin().
-function relayHost(relayState: string | null): string | null {
-  try {
-    return relayState ? new URL(relayState).hostname : null;
-  } catch {
-    return null;
-  }
-}
-
-async function landingOrigin(orgId: string | null | undefined, relayState: string | null): Promise<string> {
-  const world = await worldOfOrg(orgId);
-  const started = servedOrigin(relayState, await verifiedTenantHosts(relayHost(relayState)));
-  if (started && (!orgId || worldForHostHeader(new URL(started).host) === world)) return started;
-  if (world === 'MARKETING') return originForWorld('MARKETING');
-  return base();
-}
-const fail = (reason: string, origin: string = base()) =>
-  NextResponse.redirect(`${origin}/auth/signin?error=${reason}`, 303);
+import { extractClaims, type SsoClaims } from '@/lib/ssoRoleMapping';
+import { completeSsoSignIn, landingOrigin, ssoFail as fail } from '@/lib/ssoCompletion';
 
 // POST /api/auth/sso/[slug]/acs — the Assertion Consumer Service. The IdP posts
 // the signed SAML response here (via the browser). We verify the signature
-// against the tenant's stored certificate, JIT-provision the user, then hand off
-// to the `sso` NextAuth provider via a single-use grant to issue the session.
+// against the tenant's stored certificate, then hand the verified identity to
+// completeSsoSignIn() (src/lib/ssoCompletion.ts) — JIT provisioning and the
+// single-use grant the `sso` NextAuth provider consumes, shared with OIDC.
+// Where the browser lands (the RelayState rules) is landingOrigin() there.
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   // The form is read first so that the refusals below can honour RelayState too.
@@ -71,7 +26,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const org = await prisma.organization.findUnique({ where: { slug } });
-  if (!org || !isSsoActive(org)) return fail('sso_unavailable', await landingOrigin(org?.id, RelayState));
+  // An OIDC tenant has no ACS: a SAML response posted here for it is refused
+  // like an inactive tenant's.
+  if (!org || !isSsoActive(org) || org.ssoProvider !== 'saml') return fail('sso_unavailable', await landingOrigin(org?.id, RelayState));
   const origin = await landingOrigin(org.id, RelayState);
   if (!SAMLResponse) return fail('sso_failed', origin);
 
@@ -91,26 +48,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return fail('sso_failed', origin);
   }
 
-  try {
-    // The tenant's IdP role mapping (#1940). Explicitly this org's rows — the
-    // ACS is sessionless, so no tenant scope is bound to do it for us. No
-    // match is null, and provisioning falls back to MENTEE. Only the roles the
-    // org's vertical has (#2839): a row holding one it lacks grants nothing.
-    const mappings = await prisma.ssoClaimMapping.findMany({
-      where: { orgId: org.id },
-      select: { claim: true, matchValue: true, role: true, priority: true },
-    });
-    const role = resolveRole(mappings, claims, mappableRolesFor(verticalCapabilities(org.vertical)));
-    const { user } = await provisionSsoUser({ orgId: org.id, email, fullName, role, syncRole: org.ssoSyncRole });
-    // Mint a short-lived single-use grant the `sso` provider will consume.
-    const token = crypto.randomBytes(32).toString('hex');
-    await prisma.ssoLoginGrant.create({
-      data: { token, userId: user.id, expiresAt: new Date(Date.now() + 2 * 60 * 1000) },
-    });
-    return NextResponse.redirect(`${origin}/auth/sso/complete?token=${token}`, 303);
-  } catch (e) {
-    // e.g. the email already belongs to a different tenant.
-    console.error('SSO provisioning failed:', e);
-    return fail('sso_conflict', origin);
-  }
+  return (await completeSsoSignIn(org, { email, fullName, claims }, origin)).response;
 }
