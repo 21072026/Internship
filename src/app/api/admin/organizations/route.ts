@@ -16,6 +16,7 @@ import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive, OIDC_CLIENT_SECRET_PURPOSE } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl, sloUrl } from '@/lib/ssoSaml';
+import { oidcCallbackUrl } from '@/lib/ssoOidc';
 import { certificateInfo } from '@/lib/ssoMetadata';
 import { certificateStatus } from '@/lib/ssoCertificateRule';
 import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
@@ -167,6 +168,8 @@ export async function GET() {
           ssoDiscoveryUrl: o.ssoDiscoveryUrl,
           ssoScopes: o.ssoScopes,
           ssoClientSecretSet: !!o.ssoClientSecretEnc,
+          // What an OIDC customer registers at their IdP (#1929).
+          oidcRedirectUri: oidcCallbackUrl(o.slug),
           // The stored certificate's expiry, for the card's badge (#1933) —
           // dates and a status only, never the certificate body.
           certificate: ssoCertificateSummary(o.ssoCertificate, now),

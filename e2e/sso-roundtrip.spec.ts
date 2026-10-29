@@ -3,7 +3,8 @@ import crypto from 'crypto';
 import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { gotoSettled, MARKETING_HOST } from './helpers/auth';
 import { E2E_IDP_MOCK_PORT } from '../playwright.config';
-import { SSO_IMPLEMENTED_PROVIDERS, SSO_OIDC_UNSUPPORTED, validateSsoConfig } from '../src/lib/sso';
+import { OIDC_CLIENT_SECRET_PURPOSE } from '../src/lib/sso';
+import { seal } from '../src/lib/secretBox';
 
 /**
  * Enterprise SSO, end to end against a stub IdP (#1936).
@@ -98,9 +99,18 @@ async function seedSsoOrg(
       ...(opts.vertical ? { vertical: opts.vertical } : {}),
       ssoProvider: provider,
       ssoIssuer: provider === 'saml' ? idp.samlIssuer : idp.oidcIssuer,
-      ssoEntryPoint: query.toString() ? `${base}?${query}` : base,
+      ssoEntryPoint: provider === 'saml' ? (query.toString() ? `${base}?${query}` : base) : null,
       ssoCertificate:
         opts.certificate === undefined ? (provider === 'saml' ? idp.samlCertificate : null) : opts.certificate,
+      // OIDC (#1929): the stub's discovery document carries the identity and
+      // the defect (mode) into its authorization endpoint.
+      ...(provider === 'oidc'
+        ? {
+            ssoClientId: 'e2e-oidc-client',
+            ssoClientSecretEnc: seal('e2e-oidc-client-secret', OIDC_CLIENT_SECRET_PURPOSE),
+            ssoDiscoveryUrl: query.toString() ? `${idp.oidcDiscoveryUrl}?${query}` : idp.oidcDiscoveryUrl,
+          }
+        : {}),
     },
   });
   return { org, slug };
@@ -415,39 +425,9 @@ test('SAML: concurrent redemptions of one grant mint exactly one session (#2548)
 
 // --- OIDC -------------------------------------------------------------------
 
-const OIDC_IMPLEMENTED = SSO_IMPLEMENTED_PROVIDERS.includes('oidc');
-
-test('OIDC: a tenant configured for OIDC is inert and falls back to password login', async ({ request }) => {
-  // Shipped behaviour today (#1537): OIDC is refused at the write boundary, and
-  // a row written before that shipped must not produce a broken redirect.
-  test.skip(OIDC_IMPLEMENTED, 'OIDC has shipped — this test describes the pre-#1929 behaviour');
-
-  expect(
-    validateSsoConfig({
-      ssoEnabled: true,
-      ssoProvider: 'oidc',
-      ssoIssuer: idp.oidcIssuer,
-      ssoEntryPoint: 'https://idp.example.com/authorize',
-      ssoCertificate: null,
-    })
-  ).toBe(SSO_OIDC_UNSUPPORTED);
-
-  const { org, slug } = await seedSsoOrg('sso-oidc-inert', { provider: 'oidc', certificate: null });
-  try {
-    const res = await request.get(`/api/auth/sso/${slug}/login`, { maxRedirects: 0 });
-    expect(res.status()).toBeGreaterThanOrEqual(300);
-    expect(res.status()).toBeLessThan(400);
-    expect(res.headers()['location']).toContain('error=sso_unavailable');
-  } finally {
-    await dropSsoOrg(org.id, []);
-  }
-});
-
 test('OIDC: the stub IdP serves discovery, JWKS, a code and a verifiable ID token', async ({ request }) => {
-  // The app cannot complete an OIDC login yet (#1929), so this exercises the
-  // harness rather than the product. It is not busywork: it keeps the OIDC half
-  // of the stub from rotting between now and the day #1929 lands, and it pins
-  // down what "wrong aud" / "wrong nonce" will mean when the app checks them.
+  // The harness itself, independent of the app: it pins down what "wrong aud"
+  // / "wrong nonce" mean for the negative cases below.
   const discovery = await (await request.get(idp.oidcDiscoveryUrl)).json();
   expect(discovery.issuer).toBe(idp.oidcIssuer);
   expect(discovery.id_token_signing_alg_values_supported).toContain('RS256');
@@ -509,32 +489,97 @@ test('OIDC: the stub IdP serves discovery, JWKS, a code and a verifiable ID toke
   expect((await replay.json()).error).toBe('invalid_grant');
 });
 
-test('OIDC: the round trip signs a user into the right tenant', async ({ page }) => {
-  test.skip(
-    !OIDC_IMPLEMENTED,
-    'OIDC login is not implemented yet (#1929). The stub already serves discovery, JWKS, ' +
-      'authorize and token, so this un-skips itself the moment "oidc" joins ' +
-      'SSO_IMPLEMENTED_PROVIDERS — and the wrong-aud / wrong-nonce / expired / wrong-key ' +
-      'variants of e2e/support/idp-mock.mjs are waiting for their negative cases.'
-  );
-
-  const { org, slug } = await seedSsoOrg('sso-oidc-rt', { provider: 'oidc', certificate: null });
+test('OIDC: the round trip signs a user into the right tenant', { tag: '@smoke' }, async ({ page }) => {
+  const email = uniqueEmail('sso-oidc-rt').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-oidc-rt', { provider: 'oidc', email, name: 'Oidc Roundtrip' });
   try {
+    // login route → stub authorize (code + state) → our callback → PKCE code
+    // exchange → ID token verified against the stub's JWKS → grant → session.
     await page.goto('/auth/sso');
     await page.getByTestId('sso-slug-input').fill(slug);
     await page.getByTestId('sso-continue').click();
+    await expect
+      .poll(() => sessionEmail(page.request), { timeout: 30_000, message: 'the OIDC round trip should end in a session' })
+      .toBe(email);
 
-    // Deliberately protocol-agnostic about the identity: the app decides how it
-    // builds the authorization URL, so the stub may not receive the `email`
-    // query the entry point carries and will fall back to its default subject.
-    await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).not.toBeNull();
-    const email = (await sessionEmail(page.request))!;
-    // The address is the stub IdP's default subject, so it is NOT unique to this
-    // run — and since #2590 the same address may sit in several organizations.
-    // Ask for the account IN the tenant that ran the round trip.
-    const user = await prisma.user.findFirst({ where: { email, orgId: org.id }, select: { id: true } });
-    expect(user, 'the round trip should have signed the asserted identity into this tenant').not.toBeNull();
+    const user = await prisma.user.findFirst({ where: { email, orgId: org.id } });
+    expect(user, 'the ID token should have JIT-provisioned a user in this tenant').toBeTruthy();
+    expect(user!.role).toBe('MENTEE');
+    expect(user!.fullName).toBe('Oidc Roundtrip');
+    // The request row was spent, the grant consumed.
+    const rows = await prisma.ssoAuthRequest.findMany({ where: { orgId: org.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].usedAt).not.toBeNull();
+    expect((await prisma.ssoLoginGrant.findMany({ where: { userId: user!.id } })).every((g) => g.used)).toBe(true);
   } finally {
-    await dropSsoOrg(org.id, []);
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+for (const mode of ['wrong-aud', 'wrong-nonce', 'expired', 'wrong-key'] as const) {
+  test(`OIDC: an ID token with ${mode} is refused — error page, no session, no account`, { tag: '@smoke' }, async ({ page }) => {
+    const email = uniqueEmail(`sso-oidc-${mode}`).toLowerCase();
+    const { org, slug } = await seedSsoOrg(`sso-oidc-${mode}`, { provider: 'oidc', mode, email });
+    try {
+      await page.goto('/auth/sso');
+      await page.getByTestId('sso-slug-input').fill(slug);
+      await page.getByTestId('sso-continue').click();
+      await page.waitForURL(/\/auth\/signin\?error=sso_failed/, { timeout: 30_000 });
+      expect(await sessionEmail(page.request)).toBeNull();
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+    } finally {
+      await dropSsoOrg(org.id, [email]);
+    }
+  });
+}
+
+/** Drive login → stub authorize by hand and return our callback URL. */
+async function oidcCallbackUrl(request: APIRequestContext, slug: string): Promise<string> {
+  const login = await request.get(`/api/auth/sso/${slug}/login`, { maxRedirects: 0 });
+  expect(login.status()).toBeGreaterThanOrEqual(300);
+  const authorize = await request.get(login.headers()['location'], { maxRedirects: 0 });
+  expect(authorize.status()).toBe(302);
+  return authorize.headers()['location'];
+}
+
+test('OIDC: a state is single use — the replayed callback is refused', { tag: '@smoke' }, async ({ request }) => {
+  const email = uniqueEmail('sso-oidc-replay').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-oidc-replay', { provider: 'oidc', email });
+  try {
+    const callback = await oidcCallbackUrl(request, slug);
+    const first = await request.get(callback, { maxRedirects: 0 });
+    expect(first.headers()['location']).toContain('/auth/sso/complete?token=');
+    const replay = await request.get(callback, { maxRedirects: 0 });
+    expect(replay.headers()['location']).toContain('error=sso_failed');
+  } finally {
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+test('OIDC: a callback carried to a browser that did not start the login is refused (login CSRF)', { tag: '@smoke' }, async ({ request, playwright, baseURL }) => {
+  const email = uniqueEmail('sso-oidc-csrf').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-oidc-csrf', { provider: 'oidc', email });
+  const victim = await playwright.request.newContext({ baseURL });
+  try {
+    const callback = await oidcCallbackUrl(request, slug);
+    const res = await victim.get(callback, { maxRedirects: 0 });
+    expect(res.headers()['location']).toContain('error=sso_failed');
+    expect(await prisma.user.count({ where: { email } })).toBe(0);
+  } finally {
+    await victim.dispose();
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+test('OIDC: an expired request row is refused', async ({ request }) => {
+  const email = uniqueEmail('sso-oidc-expired').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-oidc-expiredreq', { provider: 'oidc', email });
+  try {
+    const callback = await oidcCallbackUrl(request, slug);
+    await prisma.ssoAuthRequest.updateMany({ where: { orgId: org.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    const res = await request.get(callback, { maxRedirects: 0 });
+    expect(res.headers()['location']).toContain('error=sso_failed');
+  } finally {
+    await dropSsoOrg(org.id, [email]);
   }
 });
