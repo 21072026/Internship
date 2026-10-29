@@ -116,20 +116,6 @@ test('skills-gap: every non-admin role is refused by the route', async ({ playwr
   }
 });
 
-test('skills-gap: without ADVANCED_ANALYTICS the report is locked', async ({ playwright, baseURL }) => {
-  await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', false);
-  const admin = await playwright.request.newContext({ baseURL });
-  try {
-    expect((await signInViaApi(admin, emails.admin, PW)).ok).toBe(true);
-    const res = await admin.get('/api/admin/analytics/skills-gap');
-    expect(res.status()).toBe(403);
-    expect(await res.json()).toMatchObject({ code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' });
-  } finally {
-    await admin.dispose();
-    await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
-  }
-});
-
 test('skills-gap: the analytics card names the gap and the export carries every row', async ({ page }) => {
   await signInAndSettle(page, emails.admin, PW, '/admin');
   await gotoSettled(page, '/admin/analytics');
@@ -145,4 +131,18 @@ test('skills-gap: the analytics card names the gap and the export carries every 
   expect(sheets).toHaveLength(1);
   const names = sheets[0].rows.map((r: (string | number)[]) => r[0]).sort();
   expect(names).toEqual(['Excel', 'Kubernetes', 'React']);
+});
+
+test('skills-gap: without ADVANCED_ANALYTICS the report is locked', async ({ playwright, baseURL }) => {
+  await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', false);
+  const admin = await playwright.request.newContext({ baseURL });
+  try {
+    expect((await signInViaApi(admin, emails.admin, PW)).ok).toBe(true);
+    const res = await admin.get('/api/admin/analytics/skills-gap');
+    expect(res.status()).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' });
+  } finally {
+    await admin.dispose();
+    await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
+  }
 });
