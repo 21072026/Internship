@@ -45,7 +45,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing, Puzzle,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -107,6 +107,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'activityReport', category: 'insights', icon: Activity, color: 'green', capability: 'mentorship', title: C.activityReport.t, desc: C.activityReport.d },
     { key: 'menteeInsights', category: 'insights', icon: Eye, color: 'teal', capability: 'mentorship', title: C.menteeInsights.t, desc: C.menteeInsights.d },
     { key: 'menteeOwnProject', category: 'collaboration', icon: FolderKanban, color: 'purple', capability: 'projects', title: C.menteeOwnProject.t, desc: C.menteeOwnProject.d },
+    { key: 'skillsGap', category: 'insights', icon: Puzzle, color: 'sky', capability: 'mentorship', title: C.skillsGap.t, desc: C.skillsGap.d },
     { key: 'talentPool', category: 'companies', icon: Search, color: 'purple', capability: 'placements', title: C.talentPool.t, desc: C.talentPool.d },
     { key: 'aiPackage', category: 'insights', icon: Bot, color: 'indigo', capability: 'mentorship', title: C.aiPackage.t, desc: C.aiPackage.d },
     { key: 'security', category: 'trust', icon: KeyRound, color: 'amber', title: C.security.t, desc: C.security.d },
@@ -218,5 +219,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     // Stage automation (#1703/#1704): every vertical has a pipeline; MARKETING overlays the mentor wording.
     { key: 'stageAutomation', category: 'tracking', icon: Repeat2, color: 'indigo', title: C.stageAutomation.t, desc: C.stageAutomation.d },
     { key: 'terminology', category: 'platform', icon: Palette, color: 'violet', capability: 'mentorship', title: C.terminology.t, desc: C.terminology.d },
+    { key: 'notificationTemplates', category: 'platform', icon: MailCheck, color: 'blue', title: C.notificationTemplates.t, desc: C.notificationTemplates.d },
   ];
 }

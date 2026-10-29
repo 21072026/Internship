@@ -63,6 +63,25 @@ in Admin → Organizations:
 - **Client ID**
 - **Client secret**
 
+### Where the config lives (#1926)
+
+`Organization.ssoClientId`, `ssoDiscoveryUrl`, `ssoScopes` (null = `openid
+email profile`) and `ssoClientSecretEnc` — the secret **sealed** with
+`secretBox` (purpose `sso-oidc-client-secret`, `OIDC_CLIENT_SECRET_PURPOSE`).
+It is write-only: `PATCH /api/admin/organizations` takes `ssoClientSecret`,
+seals it before the write, and every read answers `ssoClientSecretSet: boolean`
+instead (`ORG_CREDENTIAL_FIELDS` strips the column from any row a route echoes;
+the audit diff records a fingerprint only). Like the SAML issuer and
+certificate, the client, the secret and the discovery URL are the IdP trust
+anchor: only a super admin may write them (#1575). `ssoJwksCache` /
+`ssoJwksFetchedAt` hold the IdP's public keys between logins and are cleared
+when the discovery URL changes.
+
+An OIDC config is **complete** with issuer + client ID + client secret +
+discovery URL (`isSsoConfigComplete`, `src/lib/sso.ts`); the discovery URL must
+be https. A half-filled one cannot be switched on, and the refusal names what is
+missing.
+
 ### Microsoft Entra ID
 
 1. **Entra admin centre → App registrations → New registration.** Name it

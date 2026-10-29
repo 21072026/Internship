@@ -87,6 +87,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Cohort',
   'MentorshipRelation',
   'MentorApplication',
+  // Mentor Offers (#1809); created with the mentor's orgId, the sweep passes none.
+  'MentorOffer',
   'DocumentRequirement',
   // A document's review chain (#1859); the sweep and the token route bind no context and pass orgId.
   'DocumentReview',
@@ -342,6 +344,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // request, where no context is bound and the sweep therefore still sees every
   // tenant's due offers — which is what a platform-wide sweep must do.
   'Offer',
+  // The org's offer letter template per locale (#1857). REQUIRED orgId; the
+  // one writer (PUT /api/admin/offer-templates) passes the session's org.
+  'OfferTemplate',
   // A live registration link with a role attached (#1272). Its consumption
   // paths are unauthenticated and bind NO org on purpose: /api/register and
   // /api/invite/opened look a row up BY TOKEN, which is the only thing the

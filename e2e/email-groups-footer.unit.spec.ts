@@ -464,7 +464,14 @@ test.describe('the taxonomy covers what the app actually sends', () => {
           owner: owner?.name ?? null,
           ownerAt: owner?.at ?? -1,
           category:
-            literal.match(/\bcategory:\s*'([a-z0-9-]+)'/)?.[1] ?? resolveCategoryConst(src, categoryExpr),
+            literal.match(/\bcategory:\s*'([a-z0-9-]+)'/)?.[1] ??
+            resolveCategoryConst(src, categoryExpr) ??
+            // The event mail (#1719, src/lib/notifications/emailJob.ts) takes its
+            // category per e-mail group from EVENT_MAIL_CATEGORY — a table the
+            // notification-templates-editor unit spec holds against the taxonomy
+            // entry by entry. Judged here by its strictest member, a
+            // non-essential category, so the site must identify its recipient.
+            (/\bcategory:\s*EVENT_MAIL_CATEGORY\[/.test(literal) ? 'nudge' : null),
           categoryExpr,
           // Shorthand (`userId,`) as well as `userId: x` — the senders forward it
           // by shorthand and the call sites spell it out.
