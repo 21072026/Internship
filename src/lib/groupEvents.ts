@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { notifyIfAllowed } from '@/lib/notify';
 import { formatInTimeZone } from '@/lib/timezone';
 import { intlLocaleFor } from '@/lib/interviewRequests';
+import { sendGroupEventEmail } from '@/services/emailService';
 import {
   audienceIncludesRole,
   capacityRefusal,
@@ -282,19 +283,43 @@ export function eventLinkFor(role: string, eventId: string): string {
 
 type EventNotice = 'event.promoted' | 'event.cancelled' | 'event.published' | 'event.updated';
 
-/** In-app, on each recipient's clock and in their language. Never throws. */
+/**
+ * In-app, on each recipient's clock and in their language — plus, for a
+ * promotion and a call-off, a mail through sendEmail() (the two notices a
+ * person must not miss: a seat they now hold, a session that is not
+ * happening). The bell and the mail have independent switches. Never throws.
+ */
 export async function noticeEvent(eventId: string, userIds: string[], kind: EventNotice) {
   if (userIds.length === 0) return;
   try {
-    const event = await prisma.programEvent.findUnique({ where: { id: eventId }, select: { title: true, startsAt: true } });
+    const event = await prisma.programEvent.findUnique({ where: { id: eventId }, select: { title: true, startsAt: true, orgId: true } });
     if (!event) return;
     const people = await prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, role: true, timezone: true, preferredLanguage: true },
+      select: { id: true, role: true, email: true, fullName: true, timezone: true, preferredLanguage: true, orgId: true },
     });
+    const mailKind = kind === 'event.promoted' ? 'promoted' : kind === 'event.cancelled' ? 'cancelled' : null;
     for (const p of people) {
       const when = formatInTimeZone(event.startsAt, p.timezone, undefined, intlLocaleFor(p.preferredLanguage));
-      await notifyIfAllowed(p.id, 'meetingReminders', kind, { title: event.title, when }, eventLinkFor(p.role, eventId));
+      const link = eventLinkFor(p.role, eventId);
+      await notifyIfAllowed(p.id, 'meetingReminders', kind, { title: event.title, when }, link);
+      if (!mailKind) continue;
+      try {
+        await sendGroupEventEmail({
+          to: p.email,
+          fullName: p.fullName,
+          kind: mailKind,
+          title: event.title,
+          startsAt: event.startsAt,
+          timeZone: p.timezone,
+          path: link,
+          userId: p.id,
+          locale: p.preferredLanguage,
+          orgId: p.orgId ?? event.orgId,
+        });
+      } catch (e) {
+        logger.error('Group event mail failed', { eventId, kind, error: String(e) });
+      }
     }
   } catch (e) {
     logger.error('Group event notice failed', { eventId, kind, error: String(e) });
