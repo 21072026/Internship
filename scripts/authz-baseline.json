@@ -5,56 +5,26 @@
     "allowed: a site that branches on the caller role for DATA SHAPE, not access — { count, reason }."
   ],
   "allowed": {
-    "src/app/api/weekly-reports/[id]/route.ts": {
+    "src/app/api/agendas/personalize/route.ts": {
       "count": 1,
-      "reason": "PATCH refuses the ADMIN role a write (admins only read weekly reports): it narrows access, never widens it."
+      "reason": "`audience: 'operator'` marks an admin outside the pair as operator AI use — a billing class (#1738), not an access decision; asking can() here would let a narrowed admin tier be billed as the pair"
     },
     "src/app/api/company/outreach/route.ts": {
       "count": 1,
       "reason": "GET only picks which approval queue a decider sees (mentor/admin PENDING, mentee APPROVED); the rows any caller can reach come from outreachActorWhere(), not from this branch"
+    },
+    "src/app/api/invite/route.ts": {
+      "count": 1,
+      "reason": "`role` here is the INVITED role from the request body: an ADMIN invitation takes an admin seat (#1752 quota) — data, not the caller's authority"
+    },
+    "src/app/api/register/route.ts": {
+      "count": 1,
+      "reason": "`role` here is the role the invitation grants: accepting an ADMIN invitation takes an admin seat (#1752 quota); register has no caller session to authorize"
+    },
+    "src/app/api/weekly-reports/[id]/route.ts": {
+      "count": 1,
+      "reason": "PATCH refuses the ADMIN role a write (admins only read weekly reports): it narrows access, never widens it."
     }
   },
-  "pending": {
-    "src/app/api/account/route.ts": 1,
-    "src/app/api/agendas/personalize/route.ts": 1,
-    "src/app/api/ai/artifacts/[id]/route.ts": 1,
-    "src/app/api/ai/bulk-draft/route.ts": 2,
-    "src/app/api/availability/route.ts": 4,
-    "src/app/api/avatar/[userId]/route.ts": 1,
-    "src/app/api/avatar/route.ts": 1,
-    "src/app/api/board/wip-limits/route.ts": 1,
-    "src/app/api/calendar-events/route.ts": 5,
-    "src/app/api/contributor-terms/keys/route.ts": 1,
-    "src/app/api/contributor-terms/route.ts": 1,
-    "src/app/api/cron/route.ts": 1,
-    "src/app/api/dev/db-tally/route.ts": 1,
-    "src/app/api/document-reviews/route.ts": 1,
-    "src/app/api/documents/[id]/route.ts": 1,
-    "src/app/api/documents/route.ts": 1,
-    "src/app/api/evaluations/[id]/route.ts": 2,
-    "src/app/api/evaluations/route.ts": 3,
-    "src/app/api/events/route.ts": 1,
-    "src/app/api/health/route.ts": 1,
-    "src/app/api/invite/[id]/route.ts": 1,
-    "src/app/api/invite/route.ts": 4,
-    "src/app/api/meeting-requests/[id]/route.ts": 1,
-    "src/app/api/meeting-series/route.ts": 4,
-    "src/app/api/meetings/[id]/route.ts": 1,
-    "src/app/api/meetings/route.ts": 5,
-    "src/app/api/messages/[id]/route.ts": 1,
-    "src/app/api/org/billing/route.ts": 1,
-    "src/app/api/org/plan-change/route.ts": 1,
-    "src/app/api/org/usage/route.ts": 1,
-    "src/app/api/questions/[id]/route.ts": 1,
-    "src/app/api/search/route.ts": 2,
-    "src/app/api/support/attachments/[id]/route.ts": 1,
-    "src/app/api/tags/[id]/merge/route.ts": 1,
-    "src/app/api/tags/[id]/route.ts": 2,
-    "src/app/api/tags/assign/route.ts": 1,
-    "src/app/api/tags/route.ts": 2,
-    "src/app/api/users/[id]/activity/route.ts": 1,
-    "src/app/api/users/[id]/resend-verification/route.ts": 1,
-    "src/app/api/users/[id]/route.ts": 2,
-    "src/app/api/users/route.ts": 1
-  }
+  "pending": {}
 }

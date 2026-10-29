@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -35,9 +34,9 @@ export async function POST(request: Request) {
 }
 
 async function handlePost(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   const limited = enforceRateLimit(request, 'ai:bulk_draft', { ...AI_RATE_LIMITS.bulk_draft, subject: session.user.id });
   if (limited) return limited;
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -54,7 +53,7 @@ async function handlePost(request: Request) {
       scope: 'bulk_draft',
       // A mentor drafting to their own mentees is the free core; an ADMIN's
       // bulk draft is an admin tool and needs the AI pack (#1738).
-      ...(session.user.role === 'ADMIN' ? { audience: 'operator' as const } : {}),
+      ...(admin ? { audience: 'operator' as const } : {}),
       userId: session.user.id,
       call: () => aiDraftBulk({ purpose: parsed.data.purpose, locale: parsed.data.locale, authorName: me?.fullName ?? '', recipientCount: parsed.data.recipientCount }),
     });

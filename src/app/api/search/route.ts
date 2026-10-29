@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -9,10 +8,9 @@ import type { Prisma } from '@prisma/client';
 // GET ?q= — global search over users (by name/email) and companies (by name).
 // Admins search everyone; mentors search their own mentees.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   return await withTenantScope(session, async () => {
     const q = (new URL(request.url).searchParams.get('q') || '').trim();
     if (q.length < 2) return NextResponse.json({ users: [], companies: [] });
@@ -46,7 +44,7 @@ export async function GET(request: Request) {
         take: 8,
         orderBy: { fullName: 'asc' },
       }),
-      session.user.role === 'ADMIN'
+      admin
         ? prisma.company.findMany({ where: withinTenant({ name: { contains: q } }, tenant), select: { id: true, name: true }, take: 5 })
         : Promise.resolve([]),
     ]);

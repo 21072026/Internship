@@ -164,8 +164,9 @@ export async function DELETE(request: Request) {
     // And "another admin" means one OF THIS ORG (#2542): another tenant's admin
     // cannot administer this one, so counting them let the only admin of an
     // org delete themselves and leave that org with none. NULL-org admins are
-    // the default org's (orgWhere).
-    if (session.user.role === 'ADMIN') {
+    // the default org's (orgWhere). Whether this account IS an admin is a fact
+    // about the row being deleted, read from it — not an authorization (#1571).
+    if (me.role === 'ADMIN') {
       const admins = await prisma.user.count({
         where: { AND: [{ role: 'ADMIN', NOT: { email: me.email } }, await orgWhere(me.orgId ?? (await defaultOrgId()))] },
       });
