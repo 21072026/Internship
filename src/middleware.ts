@@ -325,9 +325,12 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
 export const config = {
   matcher: [
     '/api/:path*',
-    // Page requests, for the remembered-device resume above. Everything with a
-    // dot in it (/sw.js, /favicon.ico, /manifest.webmanifest) is a file, and
-    // /_next, /api and /auth are handled elsewhere or must never be redirected.
-    '/((?!api/|_next/|auth/|.*\\.).*)',
+    // Page requests: the remembered-device resume above and the report-only
+    // CSP nonce (#1552). Everything with a dot in it (/sw.js, /favicon.ico,
+    // /manifest.webmanifest) is a file, and /_next and /api are handled
+    // elsewhere. /auth/* pages ARE matched since #1552 — the sign-in pages need
+    // their nonce like any other — and stay safe from redirects because
+    // wantsResume() returns false for them and no language rule covers them.
+    '/((?!api/|_next/|.*\\.).*)',
   ],
 };
