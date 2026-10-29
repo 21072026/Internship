@@ -60,3 +60,15 @@ The panel on `/admin/mentors` posts a CSV: `email` plus any of `mentorCapacity`,
   `not_a_mentor`, `duplicate_row`, `no_values`, `below_weekly`) or `ERROR` (each bad column named).
   An unknown column refuses the whole file.
 - ADMIN only, checked in the handler; `mentorship` capability; never plan-gated.
+
+## The screening gate before an account (#1807)
+
+Between a mentor application and an account sits an optional, admin-only screening record:
+a checklist (`referencesChecked`, `identityVerified`, `expertiseVerified`, `interviewDone`,
+`backgroundOk`, each stamped with who/when by the server), the interview (date + notes) and one
+reference (name, contact, outcome). The org setting `mentorScreeningRequired` names the items
+that must be done before approval; `PATCH /api/mentor-applications/[id]` (`approve`) answers
+`409 screening_incomplete` with `missing` otherwise. Empty (the default) = approval as before.
+The rule is `src/lib/mentorScreeningRule.ts`. The applicant receives none of it — only the
+existing under-review and decision mails — and the notes and reference are erased with the
+application.

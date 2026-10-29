@@ -12,10 +12,12 @@ import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
 import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
+import { MentorScreeningPanel, type ScreeningFields } from '@/components/admin/MentorScreeningPanel';
+import type { ScreeningItem } from '@/lib/mentorScreeningRule';
 
 type Status = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
 
-interface ApplicationDetail {
+interface ApplicationDetail extends ScreeningFields {
   id: string;
   fullName: string;
   email: string;
@@ -62,12 +64,14 @@ export default function MentorApplicationDetailPage() {
   const [note, setNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [rejectReasonText, setRejectReasonText] = useState('');
+  const [screeningRequired, setScreeningRequired] = useState<ScreeningItem[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/mentor-applications/${id}`);
     if (res.ok) {
       const d = await res.json();
       setApp(d.application ?? null);
+      setScreeningRequired(d.screeningRequired ?? []);
       // The note has its own column: reading it back out of `rejectReason`
       // was the other half of the bug that overwrote the reason (#1806).
       setNote(d.application?.adminNote ?? '');
@@ -92,6 +96,8 @@ export default function MentorApplicationDetailPage() {
       if (!res.ok) {
         if (d.code === 'already_decided') toast(a.alreadyDecided, 'error');
         else if (d.code === 'role_conflict') toast(a.roleConflict, 'error');
+        else if (d.code === 'screening_incomplete')
+          toast(a.screening.incomplete.replace('{items}', (d.missing as ScreeningItem[]).map((i) => a.screening.items[i]).join(', ')), 'error');
         else toast(d.error || a.actionError, 'error');
         await load();
         return;
@@ -271,6 +277,8 @@ export default function MentorApplicationDetailPage() {
               </div>
             </div>
           </Card>
+
+          <MentorScreeningPanel applicationId={app.id} initial={app} required={screeningRequired} />
 
           <Card>
             <CardHeader>

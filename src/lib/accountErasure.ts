@@ -224,6 +224,12 @@ async function mentorApplicationOps(userId: string): Promise<Prisma.PrismaPromis
         motivation: null,
         rejectReason: null,
         adminNote: null,
+        // The screening record (#1807): the interview notes are about the
+        // applicant, the reference is a third party's contact — both go.
+        interviewNotes: null,
+        referenceName: null,
+        referenceContact: null,
+        referenceOutcome: null,
       },
     }),
   ];
