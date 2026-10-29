@@ -363,6 +363,8 @@ _in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 # demo set's free-text skills must be mapped here too, or a topic env's skill
 # search finds only the free-text half. Idempotent.
 _in_image "$IMAGE" node prisma/backfill-skill-taxonomy.mjs --apply || true
+# …and the legacy self-assessments onto those rows (#1822), insert-only.
+_in_image "$IMAGE" node prisma/backfill-skill-levels.mjs --apply || true
 
 # Point the demo MARKETING org at THIS topic's marketing host so the landing
 # demo form opens and e-mail links stay on the topic env, not production
