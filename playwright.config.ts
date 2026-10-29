@@ -175,8 +175,20 @@ process.env.MARKETING_HOSTS = E2E_MARKETING_HOST;
 // (scripts/test/customer-mail-lock.test.mjs); no deployment sets this.
 process.env.MARKETING_CUSTOMER_MAIL_ENABLED = '1';
 
+// ── Quarantine (#1610) ──────────────────────────────────────────────────────
+// A test tagged `@quarantine` is known-flaky and on a deadline: it carries an
+// issue link and an expiry date (`npm run check:quarantine` fails without them
+// or once the date has passed). Every GATING run leaves it out — here, once, so
+// no workflow can forget a flag — and the scheduled full suite runs the
+// quarantined set again in a separate, non-gating step with
+// `E2E_QUARANTINE=only`, so it still runs and still reports. A CLI
+// `--grep-invert` replaces this default, which is fine: nothing in CI passes one.
+const quarantineOnly = process.env.E2E_QUARANTINE === 'only';
+const QUARANTINE = /@quarantine/;
+
 export default defineConfig({
   testDir: './e2e',
+  ...(quarantineOnly ? { grep: QUARANTINE } : { grepInvert: QUARANTINE }),
   timeout: 60_000,
   expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,

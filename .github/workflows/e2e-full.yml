@@ -215,6 +215,29 @@ jobs:
           # detects the gap via E2E_EXPECTED_REPORTS instead.
           if-no-files-found: warn
 
+      # Quarantined tests (#1610): playwright.config.ts leaves every `@quarantine`
+      # test out of the gating run above, so a known flake cannot turn the suite
+      # red — but it must still RUN and REPORT, or a quarantine is a silent skip.
+      # This step runs only those, never fails the job, and its JSON feeds the
+      # reliability history in the report job. With nothing quarantined it finds
+      # no tests and exits before booting a server.
+      - name: Quarantined tests, non-gating (shard ${{ matrix.shard }}/4)
+        if: always()
+        continue-on-error: true
+        env:
+          E2E_QUARANTINE: only
+          PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-quarantine-shard-${{ matrix.shard }}.json
+        run: npx playwright test --shard=${{ matrix.shard }}/4 --pass-with-no-tests --reporter=list,json
+
+      - name: Upload quarantine JSON result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-quarantine-shard-${{ matrix.shard }}
+          path: e2e-quarantine-shard-${{ matrix.shard }}.json
+          retention-days: 7
+          if-no-files-found: ignore
+
   # The `isolation` Playwright project (#1566), which no other gate runs.
   #
   # It cannot join the sharded job above: it needs its own Next server, booted
@@ -326,10 +349,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [gate, e2e-full, isolation]
     if: always() && needs.gate.outputs.run == 'true'
-    # issues: write is for the SMTP-free trail below (#2322); nothing else here
-    # writes to the repository.
+    # issues: write is for the SMTP-free trail below (#2322). contents: write is
+    # for ONE thing: appending this run to the `test-history` branch (#1610) —
+    # a data-only branch no workflow builds or deploys.
     permissions:
-      contents: read
+      contents: write
       actions: read
       issues: write
     steps:
@@ -380,6 +404,48 @@ jobs:
             appendFileSync(process.env.GITHUB_OUTPUT, `list<<FAILING_EOF\n${list}\nFAILING_EOF\n`);
           '
 
+      - name: Download quarantine JSON results
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: e2e-quarantine-shard-*
+          path: e2e-quarantine-reports
+          merge-multiple: true
+
+      # Per-test reliability across runs (#1610). Playwright retries once, so a
+      # test that passes on the retry is green and invisible; and the shard
+      # reports expire after 7 days, so "is this spec getting worse?" had no
+      # answer. Each run appends one line to history.jsonl on the data-only
+      # `test-history` branch (a branch, because artifacts and the cache both
+      # expire), and the least reliable tests over the last 40 runs go into
+      # the job summary, the ci-alert issue and the e-mail. Best effort: a lost
+      # push (two runs racing) costs one run's record, never the job.
+      - name: Reliability history and report
+        id: reliability
+        continue-on-error: true
+        run: |
+          set -e
+          if git fetch --depth=1 origin test-history 2>/dev/null; then
+            git worktree add ../history FETCH_HEAD
+            git -C ../history checkout -B test-history
+          else
+            git worktree add --detach ../history
+            git -C ../history checkout --orphan test-history
+            git -C ../history rm -rq --cached . || true
+            find ../history -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          fi
+          node scripts/e2e-reliability.mjs record --reports e2e-json-reports --quarantine e2e-quarantine-reports \
+            --history ../history/history.jsonl --run "$GITHUB_RUN_ID" --sha "$GITHUB_SHA"
+          node scripts/e2e-reliability.mjs report --history ../history/history.jsonl --runs 40 --top 10 > reliability.md
+          cat reliability.md >> "$GITHUB_STEP_SUMMARY"
+          { echo 'table<<RELIABILITY_EOF'; cat reliability.md; echo 'RELIABILITY_EOF'; } >> "$GITHUB_OUTPUT"
+          cd ../history
+          git add history.jsonl
+          if git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -qm "e2e history: run $GITHUB_RUN_ID ($GITHUB_SHA)"; then
+            git push origin HEAD:test-history
+          fi
+
       # The trail that reaches a person even when the e-mail below cannot
       # leave the runner (ETIMEDOUT on CONN, #2322): one `ci-alert` issue,
       # opened or refreshed while red, closed by the next green run. It runs
@@ -396,6 +462,8 @@ jobs:
             Commit `${{ github.sha }}`. Shards: **${{ needs.e2e-full.result }}**, tenant isolation: **${{ needs.isolation.result }}**.
             ${{ steps.failing.outputs.list }}
             Errors and traces are in the run's `playwright-report-*` artifacts.
+
+            ${{ steps.reliability.outputs.table }}
         run: node scripts/ci-alert-issue.mjs ${{ (needs.e2e-full.result == 'success' && needs.isolation.result == 'success') && 'green' || 'red' }}
 
       - name: Send summary email
@@ -415,6 +483,8 @@ jobs:
           # 4 shards + the isolation job, each writing one JSON report.
           E2E_EXPECTED_REPORTS: '5'
           E2E_REPORT_MODE: ${{ vars.E2E_REPORT_MODE || 'failures' }}
+          # The least reliable tests over the last 40 runs (#1610), when the step above wrote it.
+          E2E_RELIABILITY_FILE: reliability.md
           E2E_RUN_CONTEXT: 'e2e-full · ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
         run: |
           # Install from the lockfile so nodemailer matches the version the app
