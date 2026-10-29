@@ -116,7 +116,8 @@ test('connect → callback → uninstall: admin-only, state-bound, sealed, audit
     const anon = await playwright.request.newContext({ baseURL });
     ctxs.push(anon);
     const evt = JSON.stringify({ type: 'event_callback', team_id: team, event: { type: 'app_uninstalled' } });
-    expect((await anon.post('/api/integrations/chat/slack/uninstall', { data: evt, headers: { 'content-type': 'application/json' } })).status()).toBe(401);
+    // The first request compiles the route under `next dev`: give it room.
+    expect((await anon.post('/api/integrations/chat/slack/uninstall', { data: evt, headers: { 'content-type': 'application/json' }, timeout: 60_000 })).status()).toBe(401);
     expect((await anon.post('/api/integrations/chat/slack/uninstall', { data: evt, headers: signed(evt, Math.floor(Date.now() / 1000) - 600) })).status()).toBe(401);
     expect((await prisma.chatWorkspace.findUniqueOrThrow({ where: { id: ws.id } })).enabled).toBe(true);
     const challenge = JSON.stringify({ type: 'url_verification', challenge: `c-${stamp}` });

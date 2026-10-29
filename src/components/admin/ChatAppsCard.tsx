@@ -32,7 +32,7 @@ function DeliveryLedger({ workspaceId }: { workspaceId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/admin/integrations/chat/deliveries?workspaceId=${encodeURIComponent(workspaceId)}&limit=50`);
+    const res = await fetch(`/api/admin/integrations/chat/deliveries?workspaceId=${encodeURIComponent(workspaceId)}&limit=50`, { cache: 'no-store' });
     setItems(res.ok ? ((await res.json()).items as ChatDeliveryView[]) : []);
   }, [workspaceId]);
   useEffect(() => {
@@ -114,7 +114,7 @@ export function ChatAppsCard() {
   }, [banners]);
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/admin/integrations/chat/status');
+    const res = await fetch('/api/admin/integrations/chat/status', { cache: 'no-store' });
     if (!res.ok) {
       setError(c.loadError);
       return;
