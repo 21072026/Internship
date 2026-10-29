@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mentor application screening (#1807):** additive nullable columns on `MentorApplication` — `screeningChecklist` (Json, `{ item: { done, by, at } }` over `SCREENING_ITEMS`), `interviewAt`, `interviewNotes`, `referenceName`, `referenceContact`, `referenceOutcome`, `screenedById`. `PATCH /api/mentor-applications/[id]/screening` records it (ADMIN only, each tick server-stamped with who/when, `logActivity` names the item never the text). The org setting `mentorScreeningRequired` (edited via `/api/mentor-applications/screening-policy`) lists items that must be done before approval; the approve handler re-reads the checklist inside its transaction and answers `409 screening_incomplete` with `missing`. Empty policy (default) = approval unchanged. The rule is pure in `src/lib/mentorScreeningRule.ts`. Queue rows show screening progress and \"ready to decide\". Interview notes and reference details are erased with the application (`accountErasure`, `sanitize-db`). Nothing reaches the applicant.",
+  "notes": {
+    "en": ["Admins can record a screening for each mentor application — references, interview, checklist — and require chosen checks before approval."],
+    "tr": ["Yöneticiler artık her mentor başvurusu için ön eleme kaydı tutabilir — referans, görüşme, kontrol listesi — ve onaydan önce seçtikleri kontrolleri zorunlu kılabilir."],
+    "de": ["Admins können zu jeder Mentoren-Bewerbung eine Prüfung festhalten – Referenzen, Gespräch, Checkliste – und ausgewählte Prüfpunkte vor der Freigabe verlangen."]
+  }
+}

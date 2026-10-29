@@ -157,6 +157,13 @@ export interface RoiInput {
    * nobody paid for is a choice, not a fact.
    */
   mentorHours?: number;
+  /**
+   * Staff time the programme saves, priced and added to the VALUE side (#1755,
+   * the public calculator's "coordinator hours"). Omitted by the internal
+   * report, which has no measurement of saved time and does not invent one —
+   * so its figures and steps are exactly what they were before this field.
+   */
+  timeSaved?: { hours: number; hourValueMinor: number };
   window?: RoiWindow;
 }
 
@@ -170,6 +177,7 @@ export type RoiStepKey =
   | 'recordedValue'
   | 'assumedValue'
   | 'realisedValue'
+  | 'timeSavedValue'
   | 'successFee'
   | 'costPerPlacement'
   | 'net'
@@ -213,6 +221,8 @@ export interface RoiFigures {
 
   recordedValueMinor: number;
   assumedValueMinor: number;
+  /** Priced saved staff time (`timeSaved`), 0 when none was given. */
+  timeSavedValueMinor: number;
   realisedValueMinor: number;
 
   /**
@@ -293,6 +303,14 @@ export function computeRoi(input: RoiInput): RoiResult {
     return { ok: false, error: 'invalid_amount', field: 'assumptions.vacancyMonthsAvoidedPerPlacement' };
   }
 
+  if (input.timeSaved) {
+    const { hours, hourValueMinor } = input.timeSaved;
+    if (typeof hours !== 'number' || !Number.isFinite(hours) || hours < 0) {
+      return { ok: false, error: 'invalid_amount', field: 'timeSaved.hours' };
+    }
+    if (!isMoney(hourValueMinor) || hourValueMinor < 0) return { ok: false, error: 'invalid_amount', field: 'timeSaved.hourValueMinor' };
+  }
+
   const mentorHours = input.mentorHours ?? 0;
   if (typeof mentorHours !== 'number' || !Number.isFinite(mentorHours) || mentorHours < 0) {
     return { ok: false, error: 'invalid_amount', field: 'mentorHours' };
@@ -362,7 +380,8 @@ export function computeRoi(input: RoiInput): RoiResult {
   }
   const assumedPlacements = placementCount - valuedPlacements;
   const assumedValueMinor = assumedPlacements * assumedPerPlacementMinor;
-  const realisedValueMinor = recordedValueMinor + assumedValueMinor;
+  const timeSavedValueMinor = input.timeSaved ? roundMinor(input.timeSaved.hours * input.timeSaved.hourValueMinor) : 0;
+  const realisedValueMinor = recordedValueMinor + assumedValueMinor + timeSavedValueMinor;
 
   // 5. The two divisions, each rounded exactly once.
   const costPerPlacementMinor = placementCount === 0 ? null : roundMinor(totalCostMinor / placementCount);
@@ -405,9 +424,21 @@ export function computeRoi(input: RoiInput): RoiResult {
       valueMinor: assumedValueMinor,
       count: assumedPlacements,
     },
+    ...(input.timeSaved
+      ? [
+          {
+            key: 'timeSavedValue' as const,
+            expression: `${input.timeSaved.hours} h x ${input.timeSaved.hourValueMinor} = ${timeSavedValueMinor}`,
+            valueMinor: timeSavedValueMinor,
+            count: input.timeSaved.hours,
+          },
+        ]
+      : []),
     {
       key: 'realisedValue',
-      expression: `${recordedValueMinor} + ${assumedValueMinor} = ${realisedValueMinor}`,
+      expression: input.timeSaved
+        ? `${recordedValueMinor} + ${assumedValueMinor} + ${timeSavedValueMinor} = ${realisedValueMinor}`
+        : `${recordedValueMinor} + ${assumedValueMinor} = ${realisedValueMinor}`,
       valueMinor: realisedValueMinor,
     },
     {
@@ -450,12 +481,103 @@ export function computeRoi(input: RoiInput): RoiResult {
     assumedPlacements,
     recordedValueMinor,
     assumedValueMinor,
+    timeSavedValueMinor,
     realisedValueMinor,
     successFeeMinor,
     costPerPlacementMinor,
     netMinor,
     roiPercent,
     steps,
+  };
+}
+
+// ── The prospect's side: the public calculator (#1755) ───────────────────────
+//
+// /roi-calculator does NOT have a model of its own. It turns what a visitor
+// types into a `RoiInput` here and computes through `computeRoi()` above, so it
+// can never print a different number from /admin/analytics/roi for the same
+// inputs. Mapping, stated once:
+//   cost       = the published annual price of the plan that fits (one line,
+//                category PLATFORM — the caller reads it from src/lib/plans.ts);
+//   placements = floor(interns x (target% - current%) / 100) hires, none with a
+//                recorded value, so each is valued from the assumptions — with
+//                the visitor's own cost per hire as the recruiter fee avoided;
+//   timeSaved  = coordinator hours per week x working weeks, at their hourly cost.
+// Floor, not round: a calculator that rounds a fraction of a hire UP is
+// claiming a hire nobody made.
+//
+// A field the visitor left empty is MISSING, never a default: we have no
+// evidence for anybody's hours, hourly cost or conversion rates, so those
+// start empty and the result names what is missing instead of guessing.
+
+/** Two working weeks short of 48: 52 weeks less ~30 days of leave and public holidays (DE/TR). */
+export const PROSPECT_WORKING_WEEKS_DEFAULT = 46;
+
+export interface ProspectInput {
+  internsPerYear: number | null;
+  coordinatorHoursPerWeek: number | null;
+  coordinatorHourCostMinor: number | null;
+  /** The visitor's own cost per hire today; null → DEFAULT_ASSUMPTIONS' recruiter fee. */
+  costPerHireMinor: number | null;
+  currentConversionPct: number | null;
+  targetConversionPct: number | null;
+  workingWeeksPerYear: number | null;
+  unfilledRoleCostPerMonthMinor: number | null;
+  vacancyMonthsAvoided: number | null;
+  /** The published annual price of the fitting plan, in EUR minor units. */
+  annualPlanCostMinor: number;
+}
+
+export type ProspectMissing = 'internsPerYear' | 'conversion' | 'coordinatorTime';
+
+export interface ProspectRoi {
+  input: RoiInput;
+  hires: number;
+  hoursPerYear: number;
+  /** Parts of the value side left out because a field is empty. */
+  missing: ProspectMissing[];
+}
+
+const present = (v: number | null): v is number => typeof v === 'number' && Number.isFinite(v);
+
+export function prospectRoiInput(p: ProspectInput): ProspectRoi {
+  const missing: ProspectMissing[] = [];
+  const interns = present(p.internsPerYear) && p.internsPerYear > 0 ? Math.floor(p.internsPerYear) : 0;
+  if (!present(p.internsPerYear)) missing.push('internsPerYear');
+
+  let hires = 0;
+  if (present(p.currentConversionPct) && present(p.targetConversionPct)) {
+    const delta = Math.max(0, Math.min(100, p.targetConversionPct) - Math.max(0, p.currentConversionPct));
+    hires = Math.floor((interns * delta) / 100);
+  } else {
+    missing.push('conversion');
+  }
+
+  let hoursPerYear = 0;
+  let timeSaved: RoiInput['timeSaved'];
+  if (present(p.coordinatorHoursPerWeek) && present(p.coordinatorHourCostMinor)) {
+    const weeks = present(p.workingWeeksPerYear) ? p.workingWeeksPerYear : PROSPECT_WORKING_WEEKS_DEFAULT;
+    hoursPerYear = Math.max(0, p.coordinatorHoursPerWeek) * Math.max(0, weeks);
+    timeSaved = { hours: hoursPerYear, hourValueMinor: Math.max(0, Math.round(p.coordinatorHourCostMinor)) };
+  } else {
+    missing.push('coordinatorTime');
+  }
+
+  const assumptions: Partial<RoiAssumptions> = { currency: 'EUR' };
+  if (present(p.costPerHireMinor)) assumptions.recruiterFeeAvoidedPerPlacementMinor = Math.max(0, Math.round(p.costPerHireMinor));
+  if (present(p.unfilledRoleCostPerMonthMinor)) assumptions.unfilledRoleCostPerMonthMinor = Math.max(0, Math.round(p.unfilledRoleCostPerMonthMinor));
+  if (present(p.vacancyMonthsAvoided)) assumptions.vacancyMonthsAvoidedPerPlacement = Math.max(0, p.vacancyMonthsAvoided);
+
+  return {
+    input: {
+      costs: [{ category: 'PLATFORM', amountMinor: Math.max(0, Math.round(p.annualPlanCostMinor)), currency: 'EUR' }],
+      placements: Array.from({ length: hires }, () => ({ relationKind: 'PLACEMENT' as const, valueMinor: null })),
+      assumptions,
+      ...(timeSaved ? { timeSaved } : {}),
+    },
+    hires,
+    hoursPerYear,
+    missing,
   };
 }
 

@@ -1126,7 +1126,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
           title={enterToSend ? t.messages.enterToSendOnHint : t.messages.enterToSendOffHint}
           className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 shrink-0"
         >
-          <span className={`relative inline-block h-4 w-7 shrink-0 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300'}`}>
+          <span className={`relative inline-block h-4 w-7 shrink-0 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
             <span className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enterToSend ? 'translate-x-3' : 'translate-x-0'}`} />
           </span>
           {t.messages.enterToSend}

@@ -81,6 +81,7 @@ export const BACKFILLS = [
   },
   // CompanyNeed → Requisition (#1385). Never actually ran before #1540: the
   // script was not in the image.
+  // Since #1875 this also re-points a converted twin instead of duplicating it.
   { id: '0012-requisitions', script: 'scripts/backfill-requisitions.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // One Application per CompanyInterest that names a requisition (#1828).
   // Only ever adds rows. Same image gap as the line above.

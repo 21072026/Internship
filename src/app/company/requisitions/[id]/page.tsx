@@ -39,6 +39,9 @@ type Card = {
   mentee: { id: string; fullName: string; city: string | null };
   matchedSkills: string[];
   answered: number;
+  // Why this applicant fits (#2042): a sentence, never a score. AI = written
+  // on request with the AI pack; RULE = the deterministic one, always there.
+  fitReason?: { text: string; source: 'AI' | 'RULE' };
 };
 type Column = { items: Card[]; page: number; hasMore: boolean };
 type Requisition = { id: string; title: string; status: string; openings: number; filled: number };
@@ -82,6 +85,7 @@ export default function CompanyRequisitionBoardPage() {
   const [bulkStage, setBulkStage] = useState('');
   const [bulkReason, setBulkReason] = useState('');
   const [notice, setNotice] = useState('');
+  const [writingReasons, setWritingReasons] = useState(false);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [drawerFor, setDrawerFor] = useState<Card | null>(null);
@@ -114,6 +118,20 @@ export default function CompanyRequisitionBoardPage() {
     const page: Column | undefined = body.columns?.[stage];
     if (!page) return;
     setColumns((prev) => ({ ...prev, [stage]: { items: [...(prev[stage]?.items ?? []), ...page.items], page: page.page, hasMore: page.hasMore } }));
+  };
+
+  // The AI sentences for the top applicants (#2042). The order and the
+  // rule-based sentences never depend on this call; it only replaces wording.
+  const writeReasons = async () => {
+    setError(''); setNotice(''); setWritingReasons(true);
+    try {
+      const res = await fetch(`/api/company/requisitions/${id}/fit-reasons`, { method: 'POST' });
+      const body = res.ok ? await res.json() : null;
+      if (!body || body.ai !== 'ok') setNotice(body?.ai === 'not_entitled' ? text.fit.locked : text.fit.unavailable);
+      else await load();
+    } finally {
+      setWritingReasons(false);
+    }
   };
 
   const move = async (card: Card, toStage: string, dispositionCode?: string) => {
@@ -196,6 +214,12 @@ export default function CompanyRequisitionBoardPage() {
         </div>
       </header>
 
+      <div className="mb-3 flex flex-wrap items-center gap-3" data-testid="board-fit">
+        <Button size="sm" variant="outline" loading={writingReasons} onClick={() => void writeReasons()} data-testid="board-fit-write">
+          {writingReasons ? text.fit.writing : text.fit.write}
+        </Button>
+        <p className="text-xs text-gray-600 dark:text-gray-400">{text.fit.disclosure}</p>
+      </div>
       {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
       {notice && <p className="mb-3 text-sm text-green-700 dark:text-green-400" role="status" data-testid="board-notice">{notice}</p>}
 
@@ -338,6 +362,12 @@ function ApplicantCard({ card, selected, onToggle, onOpen, onMove, request, onRe
           : card.matchedSkills.map((skill) => <Badge key={skill} variant="success">{skill}</Badge>)}
       </div>
       {card.answered > 0 && <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{text.answered.replace('{count}', String(card.answered))}</p>}
+      {card.fitReason && (
+        <p className="mt-1 text-xs text-gray-700 dark:text-gray-300" data-testid={`fit-reason-${card.id}`} data-source={card.fitReason.source}>
+          {card.fitReason.source === 'AI' && <span className="mr-1 font-medium text-purple-700 dark:text-purple-300">{text.fit.aiMarker}</span>}
+          {card.fitReason.text}
+        </p>
+      )}
 
       {request && (
         <div className="mt-2 space-y-1 text-sm">

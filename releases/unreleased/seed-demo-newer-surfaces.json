@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Demo seed covers the newer surfaces (#2061):** `npm run seed:demo` now also fills group sessions (a past briefing with attendance, a full office hour with a waitlist, an open session), two stage automation rules with a run log, two nudge rules with send history, three closed months of billing usage rollups and hiring applications (the demo shortlist through the CompanyInterest → Application bridge plus two self-applications), and — on the MARKETING demo tenant only — the affiliate programme (plan, two partners, payments, commissions in every status and one payout). Every automation and nudge rule is seeded disabled, so seeding never sends mail. `scripts/demo-fidelity.json` pins all of it, and the four #1419 entries that were seeded but unenforced (`WeeklyReport`, `MentorQuestion`, `DocumentRequirement`, `Document`) now have their floor raised to what the seed produces. New module: `prisma/seed-demo-features.mjs`."
+}

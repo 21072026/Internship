@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { cleanupByEmail, cleanupCustomPipelineOrg, prisma, seedCustomPipelineOrg, seedUser, uniqueEmail } from './helpers/db';
 import { gotoSettled, signInAsFreshUser, signInViaApi } from './helpers/auth';
+import { emailDictionary } from '../src/i18n/emailDictionary';
 
 // Per-tenant terminology (#1629): an org's stored nouns reach the UI it
 // renders, a programme's value overrides the org's, a malformed document is
@@ -21,6 +22,8 @@ test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({ playwright }, info) => {
   seeded = await seedCustomPipelineOrg('terminology', PW);
+  // Custom terminology is a paid-plan setting (#1631); the FREE refusal has its own test.
+  await prisma.organization.update({ where: { id: seeded.org.id }, data: { plan: 'PRO' } });
   await seedUser(otherAdminEmail, PW, 'ADMIN', 'Terminology Other Admin');
   cohortId = (await prisma.cohort.create({ data: { orgId: seeded.org.id, name: 'Terminology cohort' } })).id;
   const defaultOrg = (await prisma.user.findFirst({ where: { email: otherAdminEmail }, select: { orgId: true } }))?.orgId ?? null;
@@ -35,6 +38,7 @@ test.afterAll(async () => {
   await Promise.all([admin, otherAdmin].map((c) => c?.dispose()));
   if (seeded) {
     await prisma.setting.deleteMany({ where: { orgId: seeded.org.id } });
+    await prisma.notification.deleteMany({ where: { user: { email: { in: seeded.emails } } } });
     await prisma.cohort.deleteMany({ where: { id: { in: [cohortId, otherCohortId].filter(Boolean) } } });
     await cleanupCustomPipelineOrg(seeded.org.id, seeded.emails);
   }
@@ -68,6 +72,46 @@ test('a programme value overrides the org, and another tenant sees neither', asy
   expect((await (await otherAdmin.get('/api/admin/terminology')).json()).terminology).toEqual({});
 });
 
+test('resetting a programme lets the org value flow down again', async () => {
+  const res = await admin.put('/api/admin/terminology', { data: { terminology: {}, programId: cohortId } });
+  expect(res.status()).toBe(200);
+  expect(await res.json()).toEqual({ terminology: { en: { mentor: COACH } }, inherited: true });
+  const got = await (await admin.get(`/api/admin/terminology?programId=${cohortId}`)).json();
+  expect(got.inherited).toBe(true);
+  expect(got.terminology).toEqual({ en: { mentor: COACH } });
+});
+
+test('a FREE org is refused by the route, but may always go back to the defaults', async () => {
+  await prisma.organization.update({ where: { id: seeded.org.id }, data: { plan: 'FREE' } });
+  try {
+    const refused = await admin.put('/api/admin/terminology', { data: { terminology: { en: { mentee: GUIDE } } } });
+    expect(refused.status()).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'plan_required', plan: 'FREE' });
+    // Nothing was written: the org value is unchanged.
+    expect((await (await admin.get('/api/admin/terminology')).json()).terminology).toEqual({ en: { mentor: COACH } });
+    // Clearing is never refused.
+    expect((await admin.put('/api/admin/terminology', { data: { terminology: {}, programId: cohortId } })).status()).toBe(200);
+  } finally {
+    await prisma.organization.update({ where: { id: seeded.org.id }, data: { plan: 'PRO' } });
+  }
+});
+
+test('the renamed noun reaches the recipient: notification and mail dictionary', async ({ page, context }) => {
+  const adminRow = await prisma.user.findFirstOrThrow({ where: { email: seeded.adminEmail }, select: { id: true } });
+  await prisma.notification.create({
+    data: { userId: adminRow.id, type: 'mentorship_request.rematchGeneric', params: {} },
+  });
+  await context.addCookies([{ name: 'locale', value: 'en', url: test.info().project.use.baseURL! }]);
+  await signInAsFreshUser(page, seeded.adminEmail, PW, '/admin');
+  await gotoSettled(page, '/notifications');
+  await expect(page.getByText('asked to be matched with a different coach').first()).toBeVisible();
+
+  // The mail side reads the same layer for the recipient's org (#1631).
+  const mail = await emailDictionary('en', seeded.org.id);
+  expect(mail.nav.mentors).toBe('Coaches');
+  expect((await emailDictionary('en', null)).nav.mentors).toBe('Mentors');
+});
+
 test('the settings card saves a row, refuses a half-filled one, and resets', async ({ page, context }) => {
   await context.addCookies([{ name: 'locale', value: 'en', url: test.info().project.use.baseURL! }]);
   await signInAsFreshUser(page, seeded.adminEmail, PW, '/admin');
@@ -84,11 +128,21 @@ test('the settings card saves a row, refuses a half-filled one, and resets', asy
   for (const [form, value] of Object.entries({ many: 'students', oneCap: 'Student', manyCap: 'Students' })) {
     await card.getByTestId(`terminology-en-mentee-${form}`).fill(value);
   }
+  // The preview applies the draft before anything is saved.
+  await expect(card.getByTestId('terminology-preview')).toHaveText(
+    'Each coach meets their students every week; the cohort follows one programme, and every mentorship starts with a goal.',
+  );
   await card.getByTestId('terminology-save').click();
   await expect(card.getByTestId('terminology-message')).toHaveText('Saved.');
   expect((await (await admin.get('/api/admin/terminology')).json()).terminology).toEqual({
     en: { mentor: COACH, mentee: { one: 'student', many: 'students', oneCap: 'Student', manyCap: 'Students' } },
   });
+
+  // A programme without its own row shows the org's words and says so.
+  await card.getByTestId('terminology-scope').selectOption(cohortId);
+  await expect(card.getByTestId('terminology-inherited')).toBeVisible();
+  await expect(card.getByTestId('terminology-en-mentee-many')).toHaveValue('students');
+  await card.getByTestId('terminology-scope').selectOption('');
 
   await card.getByTestId('terminology-reset').click();
   await expect(card.getByTestId('terminology-message')).toHaveText('Saved.');

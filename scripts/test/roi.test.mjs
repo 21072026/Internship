@@ -11,7 +11,7 @@
 // wrong figure. These assertions are what stands in for that.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRoi, roundMinor, DEFAULT_ASSUMPTIONS, formatMinor } from '../../src/lib/roi.ts';
+import { computeRoi, roundMinor, DEFAULT_ASSUMPTIONS, formatMinor, prospectRoiInput, PROSPECT_WORKING_WEEKS_DEFAULT } from '../../src/lib/roi.ts';
 
 const ok = (result) => {
   assert.equal(result.ok, true, `expected figures, got ${JSON.stringify(result)}`);
@@ -297,4 +297,76 @@ test('formatMinor asks the currency how many decimals it has', () => {
   assert.match(formatMinor(150_000, 'EUR', 'en-US'), /1,500\.00/);
   assert.match(formatMinor(1_500, 'JPY', 'en-US'), /1,500/);
   assert.doesNotMatch(formatMinor(1_500, 'JPY', 'en-US'), /15\.00/);
+});
+
+// ── The public calculator's mapping (#1755) ─────────────────────────────────
+// prospectRoiInput() is an adapter onto computeRoi(), not a second model: these
+// pin the mapping and that the figures come from the one computation.
+
+const prospect = (over = {}) => ({
+  internsPerYear: null,
+  coordinatorHoursPerWeek: null,
+  coordinatorHourCostMinor: null,
+  costPerHireMinor: null,
+  currentConversionPct: null,
+  targetConversionPct: null,
+  workingWeeksPerYear: null,
+  unfilledRoleCostPerMonthMinor: null,
+  vacancyMonthsAvoided: null,
+  annualPlanCostMinor: 0,
+  ...over,
+});
+
+test('prospect: empty inputs give zero, and name what is missing', () => {
+  const p = prospectRoiInput(prospect());
+  assert.deepEqual(p.missing, ['internsPerYear', 'conversion', 'coordinatorTime']);
+  const r = ok(computeRoi(p.input));
+  assert.equal(r.realisedValueMinor, 0);
+  assert.equal(r.totalCostMinor, 0);
+  assert.equal(r.netMinor, 0);
+  assert.equal(r.roiPercent, null);
+  // Without saved time, the internal report's steps are unchanged.
+  assert.equal(step(r, 'timeSavedValue'), undefined);
+});
+
+test('prospect: a known scenario gives a known result', () => {
+  const p = prospectRoiInput(
+    prospect({
+      internsPerYear: 50,
+      currentConversionPct: 10,
+      targetConversionPct: 20,
+      coordinatorHoursPerWeek: 5,
+      coordinatorHourCostMinor: 4_000,
+      annualPlanCostMinor: 178_800,
+    }),
+  );
+  assert.deepEqual(p.missing, []);
+  assert.equal(p.hires, 5);
+  assert.equal(p.hoursPerYear, 5 * PROSPECT_WORKING_WEEKS_DEFAULT);
+  const r = ok(computeRoi(p.input));
+  // 5 hires x (9,000 fee + 2 x 4,500 vacancy) = 90,000 EUR.
+  assert.equal(r.assumedValueMinor, 5 * (DEFAULT_ASSUMPTIONS.recruiterFeeAvoidedPerPlacementMinor + 2 * DEFAULT_ASSUMPTIONS.unfilledRoleCostPerMonthMinor));
+  assert.equal(r.timeSavedValueMinor, 230 * 4_000);
+  assert.equal(r.totalCostMinor, 178_800);
+  assert.equal(r.netMinor, 9_000_000 + 920_000 - 178_800);
+  assert.equal(r.roiPercent, 5448);
+  assert.equal(step(r, 'timeSavedValue').valueMinor, 920_000);
+  assert.match(step(r, 'realisedValue').expression, /9000000 \+ 920000 = 9920000$/);
+});
+
+test('prospect: fractions of a hire round down, and a lower target never costs hires or money', () => {
+  assert.equal(prospectRoiInput(prospect({ internsPerYear: 7, currentConversionPct: 10, targetConversionPct: 25 })).hires, 1);
+  const worse = prospectRoiInput(prospect({ internsPerYear: 50, currentConversionPct: 40, targetConversionPct: 20 }));
+  assert.equal(worse.hires, 0);
+  const r = ok(computeRoi(worse.input));
+  assert.equal(r.assumedValueMinor, 0);
+  // Negative typed numbers are clamped, so no output is a negative cost.
+  const neg = ok(computeRoi(prospectRoiInput(prospect({ internsPerYear: 10, coordinatorHoursPerWeek: -3, coordinatorHourCostMinor: -100, annualPlanCostMinor: -5 })).input));
+  assert.ok(neg.totalCostMinor >= 0);
+  assert.ok(neg.timeSavedValueMinor >= 0);
+});
+
+test('prospect: the visitor\'s cost per hire replaces the recruiter-fee assumption', () => {
+  const p = prospectRoiInput(prospect({ internsPerYear: 10, currentConversionPct: 0, targetConversionPct: 10, costPerHireMinor: 100_000, vacancyMonthsAvoided: 0 }));
+  assert.equal(ok(computeRoi(p.input)).assumedValueMinor, 100_000);
 });
