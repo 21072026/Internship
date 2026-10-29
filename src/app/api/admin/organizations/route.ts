@@ -35,6 +35,8 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { isAccentColor } from '@/lib/accent';
 import { BRAND_ACCENT, normalizeHex, paletteIsReadable, parsePalette } from '@/lib/brandRule';
 import { invalidateBrandCache } from '@/lib/hostBrand';
+import { hardDeleteConfig } from '@/lib/orgDeletion';
+import { eligibleAt } from '@/lib/orgDeletionRule';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -118,6 +120,7 @@ export async function GET() {
   const exemptAdmins = new Map(exemptAdminRows.map((r) => [r.orgId, r._count._all]));
   const sweepable = new Map(sweepableRows.map((r) => [r.orgId, r._count._all]));
   const now = new Date();
+  const hardDelete = hardDeleteConfig();
 
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
@@ -127,6 +130,9 @@ export async function GET() {
     verticals: world ? VERTICAL_KEYS.filter((k) => orgInWorld(k, world)) : VERTICAL_KEYS,
     // The world this super admin manages (null for a tenant admin).
     world,
+    // Whether this deployment allows permanent deletion at all (#1584) — off
+    // unless TENANT_HARD_DELETE_ENABLED. Only the operator's screen reads it.
+    hardDelete: superAdmin ? hardDelete : { enabled: false, waitHours: hardDelete.waitHours },
     // Lets the admin screen hide what this account cannot use. Presentation
     // only — the checks above and below are the actual control.
     superAdmin,
@@ -188,6 +194,9 @@ export async function GET() {
         createdAt: o.createdAt,
         // Tenant lifecycle (#1582): set = closed (no sign-in, no mail, data kept).
         archivedAt: o.archivedAt,
+        // Hard delete stage 1 (#1584) and when stage 2 opens.
+        deletionRequestedAt: o.deletionRequestedAt,
+        deletionEligibleAt: superAdmin ? eligibleAt(o, hardDelete.waitHours) : null,
         counts: {
           users: o._count.users,
           sources: o._count.sources,

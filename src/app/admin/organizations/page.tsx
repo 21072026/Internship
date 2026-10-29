@@ -57,6 +57,8 @@ interface Organization {
   };
   createdAt: string;
   archivedAt: string | null;
+  deletionRequestedAt: string | null;
+  deletionEligibleAt: string | null;
   counts: {
     users: number;
     sources: number;
@@ -324,6 +326,8 @@ export default function AdminOrganizationsPage() {
   // Whether this admin may manage every tenant (#1535). Presentation only — the
   // API refuses a cross-tenant write regardless of what is rendered here.
   const [superAdmin, setSuperAdmin] = useState(false);
+  // Permanent deletion (#1584): off unless the deployment switches it on.
+  const [hardDelete, setHardDelete] = useState<{ enabled: boolean; waitHours: number }>({ enabled: false, waitHours: 72 });
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   // Required (per-world super admins): the server offers only the verticals of
@@ -347,6 +351,7 @@ export default function AdminOrganizationsPage() {
       setVerticals(offered);
       setVertical((v) => (v && offered.includes(v) ? v : offered[0] ?? ''));
       setSuperAdmin(!!data.superAdmin);
+      if (data.hardDelete) setHardDelete(data.hardDelete);
     }
     setLoading(false);
   }, []);
@@ -961,9 +966,13 @@ export default function AdminOrganizationsPage() {
 
       {orgs.length > 0 && (
         <OrgLifecycleCard
-          orgs={orgs.map((o) => ({ id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt }))}
+          orgs={orgs.map((o) => ({
+            id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt,
+            deletionRequestedAt: o.deletionRequestedAt, deletionEligibleAt: o.deletionEligibleAt,
+          }))}
           onChanged={load}
           superAdmin={superAdmin}
+          hardDelete={hardDelete}
         />
       )}
 
