@@ -204,7 +204,9 @@ function channelAllowed(
   // twin. See MANDATORY EVENTS at the top of the file.
   if (isEssentialGroup(def.emailGroup)) return channel === 'email' && !user.email ? 'no_address' : null;
 
-  if (channel === 'inApp' || channel === 'chat') {
+  // Push (#1715) answers to the same category switch as the bell: one
+  // /account toggle silences an event on every channel but e-mail's own group.
+  if (channel === 'inApp' || channel === 'chat' || channel === 'push') {
     return notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)
       ? null
       : 'category_off';

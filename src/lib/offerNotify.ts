@@ -5,6 +5,7 @@
 import { prisma } from '@/lib/prisma';
 import { raiseOfferEvent } from '@/lib/offerEvents';
 import { notify } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendOfferSentEmail, sendOfferDecisionEmail } from '@/services/emailService';
 
@@ -37,7 +38,9 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
   });
   if (!offer) return;
   const mentee = offer.relation.mentee;
-  await notify(mentee.id, 'offer_sent.new', { position: offer.position }, '/portal');
+  // In-app + push through the router (#1715): an offer is the moment the
+  // programme exists for, so it may buzz a closed app. The mail stays below.
+  await notifyEvent(mentee, 'offer_sent.new', { position: offer.position }, { channels: ['inApp', 'push'] });
   // 'offer' is pipeline_updates. The `emailAllowed(mentee, 'mentorship')`
   // conjunct that used to stand here reads a key mapping to
   // mentorship_lifecycle, so it dropped offer letters that both preference
