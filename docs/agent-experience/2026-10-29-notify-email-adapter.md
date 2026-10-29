@@ -1,14 +1,10 @@
-## 2026-10-29 — notification router: adapters + a real e-mail channel (#1711)
+## 2026-10-29 — notification router: channel adapters (#1711, slice 1)
 
-- **A queue job name nobody registered is silently a black hole.** `notification.email` rows
-  had been written since #1710 with no handler; the worker never claims an unregistered name
-  and nothing alerts. When you finally register one, rows from the gap wake up — give the
-  handler a staleness cut-off (here: older than a day → SKIPPED `stale`).
-- **`sendEmail()` reads lane, transport and outbound hold from the CATEGORY, not the `group`
-  argument.** A generic category would put every routed mail in one lane. One `notify-<group>`
-  category per e-mail group keeps each mail on its group's lane; the outbound-approval unit test
-  then forces an explicit `OUTBOUND_CATEGORIES` entry for each, and the exempt list is pinned to
-  the account_security group's own categories.
+- **Fetch main right before you build on a "stub" a ticket names.** The router's e-mail
+  consumer I had written landed on main from a sibling session (#1719, `emailJob.ts`) while this
+  branch was open; the merge showed it as duplicate identifiers in `src/jobs/index.ts` and
+  `src/lib/jobs/types.ts`. Take main's files (`git checkout origin/main -- …`) and keep only the
+  part nobody else did — here the adapter port, the registry and the ledger module.
 - **Code a spec imports must not reach `enqueue()`'s lazy store import** — the Playwright
   process cannot resolve `@/` inside a dynamic import. Pass `store: prismaQueueStore()` from a
   static import in server modules a spec may load directly.

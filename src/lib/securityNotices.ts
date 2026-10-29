@@ -13,8 +13,8 @@
  * line cannot drift between nine routes.
  *
  * TWO CHANNELS, ONE CALL. The in-app row goes through notifyEvent() with the
- * channel pinned to `inApp`. The router's e-mail channel (#1711) renders one
- * template line per event; a notice's mail needs the device, the time in the
+ * channel pinned to `inApp`. The router's e-mail channel (#1719) renders the
+ * event's template; a notice's mail needs the device, the time in the
  * reader's zone and the "not you?" block, so it is still sent inline here.
  *
  * WHAT A NOTICE NEVER CARRIES: a token, a hash, a password, a recovery code,

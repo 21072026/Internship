@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { notifyEvent } from '@/lib/notifications/router';
-import { runNotificationEmail } from '@/lib/notifications/adapters/email';
 
 /**
  * The notification router, end to end against a real database (#1710).
@@ -100,9 +99,6 @@ test.describe('notification router', () => {
       expect(jobs).toHaveLength(1);
       expect(jobs[0].payload).toMatchObject({ eventKey: 'deadline.stagePassed', locale: 'en' });
       expect(jobs[0].idempotencyKey?.startsWith('notify:')).toBe(true);
-      // #1711: the job names the ledger row it settles.
-      const emailRow = await prisma.notificationDelivery.findFirst({ where: { userId: user.id, channel: 'email' }, select: { id: true } });
-      expect((jobs[0].payload as { deliveryId?: string }).deliveryId).toBe(emailRow?.id);
 
       const ledger = await ledgerFor(user.id);
       expect(ledger).toHaveLength(2);
@@ -235,30 +231,6 @@ test.describe('notification router', () => {
       });
     } finally {
       await prisma.notificationDelivery.deleteMany({ where: { userId: orphanId } });
-    }
-  });
-
-  test('the e-mail job settles its ledger row: a stale job and a vanished recipient are SKIPPED, never sent (#1711)', async () => {
-    const email = uniqueEmail('notify-email-job');
-    const user = await seedUser(email, PW, 'MENTOR', 'Notify Email Job');
-    try {
-      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' }, { channels: ['email'] });
-      const [job] = await mailJobsFor(user.id);
-      const payload = job.payload as Parameters<typeof runNotificationEmail>[0];
-
-      // Enqueued two days ago (a row from before the channel had a worker): dropped.
-      const stale = await runNotificationEmail(payload, { createdAt: new Date(Date.now() - 2 * 86_400_000), attempt: 1, maxAttempts: 3 });
-      expect(stale).toBe('stale');
-      expect(await prisma.notificationDelivery.findUnique({ where: { id: payload.deliveryId! }, select: { status: true, skipReason: true } }))
-        .toEqual({ status: 'SKIPPED', skipReason: 'stale' });
-
-      // A recipient deactivated before the job ran: nobody is mailed.
-      await prisma.user.update({ where: { id: user.id }, data: { isActive: false } });
-      expect(await runNotificationEmail(payload, { createdAt: new Date(), attempt: 1, maxAttempts: 3 })).toBe('no_user');
-      expect((await prisma.notificationDelivery.findUnique({ where: { id: payload.deliveryId! }, select: { skipReason: true } }))?.skipReason).toBe('no_user');
-      expect(await prisma.emailLog.count({ where: { to: email } })).toBe(0);
-    } finally {
-      await cleanup(email);
     }
   });
 });

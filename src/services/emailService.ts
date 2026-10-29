@@ -3699,55 +3699,6 @@ export async function sendRoleChangeEmail({
 // this only renders. Category `sso-certificate`, in the essential
 // account_security group: a lapsed certificate locks the whole tenant out of
 // single sign-on, so no preference may mute the two warnings.
-// One notification-router mail (#1711, src/lib/notifications/adapters/email.ts).
-// The subject and body come from the event's resolved template (an org's own,
-// sanitised, or the dictionary line — src/lib/notifications/templates.ts); the
-// link is the router's RELATIVE deep link, made absolute here for the
-// RECIPIENT's own product (appUrlForRecipient, #2590). The category is the
-// group's `notify-<group>` (notifyEmailCategory), so the opt-out, the lane and
-// the outbound hold are exactly the group's.
-export async function sendNotificationEmail({
-  to,
-  userId,
-  orgId,
-  locale,
-  subject,
-  html,
-  link,
-  category,
-}: {
-  to: string;
-  userId: string;
-  orgId: string | null;
-  locale: string;
-  subject: string;
-  html: string;
-  link: string;
-  category: string;
-}): Promise<SendEmailResult> {
-  const brand = await emailBrand(orgId);
-  const base = await appUrlForRecipient(orgId, userId);
-  const loc = resolveLocale(locale);
-  const M = (await emailDictionary(loc, orgId)).notificationEmail;
-  const href = link.startsWith('/') ? `${base}${link}` : base;
-  return sendEmail({
-    to,
-    userId,
-    ...(orgId ? { orgId } : {}),
-    category,
-    locale: loc,
-    fromName: brand.name,
-    subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(subject))}
-        ${html}
-        ${ctaBlock(brand, href, esc(M.cta))}
-      </div>
-    `,
-  });
-}
-
 // One admin-authored nudge (#1684, src/lib/nudges/evaluate.ts). The subject and
 // body are the rule's own text in the reader's language (already chosen and
 // `{name}`-filled by the evaluator); here they are only escaped — nothing in

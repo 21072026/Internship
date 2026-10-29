@@ -22,13 +22,7 @@ export type SkipReason =
   // confirmed identity any more, or their workspace's admin disabled it.
   | 'chat_apps_off'
   | 'no_identity'
-  | 'workspace_disabled'
-  // The e-mail adapter's (#1711): the mail gate in sendEmail() refused it
-  // (an opt-out read at send time, a suppressed address), the person was gone
-  // by the time the job ran, or the queued job outlived its usefulness.
-  | 'mail_skipped'
-  | 'no_user'
-  | 'stale';
+  | 'workspace_disabled';
 
 /** One claimed delivery, everything a channel needs to perform it. */
 export interface ChannelDelivery {
