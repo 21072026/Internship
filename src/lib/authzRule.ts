@@ -37,6 +37,10 @@ export const PERMISSIONS = [
   'org.branding.write',
   'org.invite',
   'org.integrations.write',
+  // The tenant's own offboarding export (#1584): every row of the org, no
+  // credentials. ORG_ADMIN only — it is a write-tier power although it writes
+  // nothing, because it hands out the whole tenant at once.
+  'org.export',
   // People.
   'user.read',
   'user.write',
