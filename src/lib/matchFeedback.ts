@@ -45,6 +45,16 @@ export function isMatchFeedbackOutcome(value: string): value is MatchFeedbackOut
 //              then load, capacity and the AI re-rank as in v1.
 export const MATCH_RULESET_VERSION = 'rules-v2';
 
+/**
+ * rules-v3 (#1787): the score is `scoreMatch()` with the org's rule set (#1781)
+ * — the `skills` dimension on canonical ids with adjacency, as v2 — so the
+ * recorded tag names WHICH rule set and version ranked the list:
+ * `rules-v3:<ruleSetId|default>@<version>`. Fits the VarChar(64) column.
+ */
+export function matchRuleSetTag(ruleSet: { id: string | null; version: number }): string {
+  return `rules-v3:${ruleSet.id ?? 'default'}@${ruleSet.version}`.slice(0, 64);
+}
+
 // Free-text note cap. Long enough for a sentence of context, short enough that
 // the column stays a note rather than a second CRM.
 export const MATCH_REASON_NOTE_MAX = 300;

@@ -13,6 +13,8 @@ import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { MATCH_DISMISS_REASONS, type MatchDismissReason } from '@/lib/matchFeedback';
+import { MatchScoreBreakdown } from '@/components/matching/MatchScoreBreakdown';
+import type { MatchScore } from '@/lib/matching/types';
 
 interface MentorOption {
   id: string;
@@ -31,6 +33,8 @@ interface Suggestion {
   sharedSkills: string[];
   /** Neighbours that stood in for a mentee skill (#1821). */
   adjacentSkills?: { skill: string; via: string; weight: number }[];
+  /** The engine's score and the per-rule rows behind it (#1787). */
+  match?: MatchScore;
   reason: string | null;
 }
 
@@ -261,22 +265,21 @@ export function AssignMentorInline({
       </div>
       {suggestion && (
         <div className="mt-1.5 flex items-start gap-1.5" data-testid="mentor-suggestion">
-          <p className="text-xs text-gray-600 dark:text-gray-300 flex-1 min-w-0">
-            <span className="font-medium">{a.suggested}: {suggestion.fullName}</span>
-            {suggestion.reason
-              ? ` — ${suggestion.reason}`
-              : (() => {
-                  // Exact skills first, then the related ones, each saying which
-                  // of the mentee's skills it stands in for (#1821).
-                  const related = (suggestion.adjacentSkills ?? []).map((r) =>
-                    a.relatedSkill.replace('{skill}', r.skill).replace('{via}', r.via),
-                  );
-                  const all = [...suggestion.sharedSkills, ...related];
-                  return all.length > 0 ? ` — ${a.sharedSkills}: ${all.join(', ')}` : '';
-                })()}
-            {aiUsed && suggestion.reason && <AiBadge className="ml-1.5" />}
-            {!aiUsed && !locked && <span className="text-gray-400"> ({a.ruleBased})</span>}
-          </p>
+          <div className="text-xs text-gray-600 dark:text-gray-300 flex-1 min-w-0">
+            <p className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="font-medium">{a.suggested}: {suggestion.fullName}</span>
+              {/* The score never travels without its explanation (#1787): the
+                  same component the request queue and the matching screen use. */}
+              {suggestion.match && <MatchScoreBreakdown {...suggestion.match} compact />}
+              {!aiUsed && !locked && <span className="text-gray-400">({a.ruleBased})</span>}
+            </p>
+            {suggestion.reason && (
+              <p className="mt-0.5">
+                {suggestion.reason}
+                {aiUsed && <AiBadge className="ml-1.5" />}
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setDismissing((v) => !v)}

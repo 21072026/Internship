@@ -7456,6 +7456,10 @@ const en = {
     unassigned: 'Unassigned',
   },
   mentorshipRequests: {
+    suggest: 'Suggest',
+    useSuggestion: 'Use',
+    suggestNone: 'No mentor fits the current rules.',
+    suggestBlocked: '{n} mentor(s) ruled out by a hard rule.',
     title: 'Request a mentor',
     hint: 'Tell us briefly what you are looking for — an admin will review your request and match you with a mentor.',
     messagePlaceholder: 'Optional message: your goals, interests, availability…',
@@ -17869,6 +17873,10 @@ const tr: Dict = {
     unassigned: 'Atanmamış',
   },
   mentorshipRequests: {
+    suggest: 'Öner',
+    useSuggestion: 'Seç',
+    suggestNone: 'Mevcut kurallara uyan mentor yok.',
+    suggestBlocked: '{n} mentor kesin bir kural yüzünden elendi.',
     title: 'Mentör talep et',
     hint: 'Ne aradığını kısaca anlat — bir admin talebini inceleyip seni bir mentörle eşleştirecek.',
     messagePlaceholder: 'İsteğe bağlı mesaj: hedeflerin, ilgi alanların, uygunluğun…',
@@ -28235,6 +28243,10 @@ const de: Dict = {
     unassigned: 'Nicht zugewiesen',
   },
   mentorshipRequests: {
+    suggest: 'Vorschlagen',
+    useSuggestion: 'Übernehmen',
+    suggestNone: 'Keine Mentor:in passt zu den aktuellen Regeln.',
+    suggestBlocked: '{n} Mentor:innen durch eine harte Regel ausgeschlossen.',
     title: 'Mentor anfragen',
     hint: 'Beschreibe kurz, was du suchst — ein Admin prüft deine Anfrage und ordnet dir einen Mentor zu.',
     messagePlaceholder: 'Optionale Nachricht: deine Ziele, Interessen, Verfügbarkeit…',
