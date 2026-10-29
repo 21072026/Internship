@@ -133,7 +133,7 @@ test('renaming onto an existing name is refused, and a non-admin cannot manage t
     // submit button Playwright is about to click.
     await signInAsFreshUser(page, menteeEmail, PASSWORD, '/portal');
     const forbidden = await page.request.patch(`/api/tags/${one.id}`, { data: { name: `Hijacked ${stamp}` } });
-    expect(forbidden.status()).toBe(401);
+    expect(forbidden.status()).toBe(403);
     await page.goto('/admin/tags');
     await expect(page).not.toHaveURL(/\/admin\/tags/);
   } finally {
