@@ -237,8 +237,14 @@ model Organization {
   // sign-in on any door, no mail to its people, gone from operational lists,
   // every row kept. Cleared = live again. Written only by
   // src/lib/orgLifecycle.ts (super admin). Nullable — additive (#2298).
-  archivedAt   DateTime?
-  archivedById String?
+  archivedAt            DateTime?
+  archivedById          String?
+  // Hard delete, stage 1 (#1584): when — and by whom — permanent deletion was
+  // requested. Execution waits TENANT_HARD_DELETE_WAIT_HOURS after this, needs
+  // the deployment switch TENANT_HARD_DELETE_ENABLED (off by default) and is
+  // cleared by unarchiving. Rule: src/lib/orgDeletionRule.ts. Nullable — additive.
+  deletionRequestedAt   DateTime?
+  deletionRequestedById String?
 
   users                   User[]
   sources                 Source[]

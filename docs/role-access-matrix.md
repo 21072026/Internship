@@ -360,6 +360,7 @@ Kurallar:
 | `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
 | `GET /api/requisitions/[id]/matches` (`/admin/requisitions/[id]`, #1401) | `user.read` | ✅ kendi org'unun talebi; yalnız rızalı aday havuzu (`CONSENTING_POOL_WHERE`) | ✅ aynı | **403** (`unscoped_subject` — talebe göre kapsam henüz verilmiyor, fail-closed) | **403** | 401 |
 | `GET /api/admin/organizations/[id]/export` (#1584, `docs/tenant-lifecycle.md`) | `org.export` (veya dünyanın süper admini: `platform.org.read`) | ✅ yalnız kendi org'u; başka org **403** | **403** | **403** | **403** | 401 |
+| `POST`/`DELETE …/[id]/deletion`, `DELETE /api/admin/organizations/[id]` (#1584, **`TENANT_HARD_DELETE_ENABLED` olmadan hep 403**) | `platform.org.write` | **403** (kendi org'u dahil) | **403** | **403** | **403** | 401 |
 | `POST /api/admin/organizations/[id]/rename`, `POST`/`DELETE …/archive` (#1582) | `platform.org.write` | **403** (kendi org'u dahil) | **403** | **403** | **403** | 401 |
 | `POST /api/requisitions/[id]/shortlist` (#1401) | `company.write` | ✅ kendi org'u; rızasız aday **409 `no_consent`**, kapalı talep 409 | **403** | **403** | **403** (COMPANY kendi kısa listesini `/api/company/interests` ile yazar) | 401 |
 
