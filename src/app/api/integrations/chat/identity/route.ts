@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { IdentityError, confirmIdentity, myChatIdentities, revokeIdentity } from '@/lib/chat/identity';
+import { actorFromSession, can } from '@/lib/authz';
 
 // The person's own chat links (#1937): GET lists them, POST confirms one,
 // DELETE removes one. Any signed-in role — a link is about the person, not a
@@ -52,7 +53,11 @@ export async function DELETE(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = await body(request);
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-  const adminOrgId = session.user.role === 'ADMIN' ? resolveOrgId(session) : null;
+  // An admin may revoke another member's link inside its own org; anyone else
+  // only their own. Asked through the permission layer (#1571), so an OBSERVER
+  // — role ADMIN, reads only — is not handed the admin branch.
+  const actor = await actorFromSession(session);
+  const adminOrgId = actor && (await can(actor, 'org.integrations.write', undefined, session)) ? resolveOrgId(session) : null;
   try {
     await revokeIdentity({ userId: session.user.id, adminOrgId }, parsed.data.identityId);
   } catch (e) {

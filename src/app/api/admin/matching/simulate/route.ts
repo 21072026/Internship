@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -9,6 +7,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { matchRuleSetDraftSchema } from '@/lib/matching/ruleSetSchema';
 import { loadMentees, loadMentorPool } from '@/lib/matching/pool';
 import { simulateRuleSet } from '@/lib/matching/simulate';
+import { requirePermission } from '@/lib/authz';
 
 // POST — dry-run a rule set (#1783). Takes the DRAFT body (no save needed)
 // and one mentee, a cohort, or the unmatched mentees, and answers who could
@@ -31,9 +30,9 @@ const schema = z
   });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await requireCapability(session.user.orgId, 'mentorship');
   if (refusal) return refusal;
 
