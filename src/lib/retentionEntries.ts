@@ -1054,6 +1054,25 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     run: pruneRosterRowResults,
   },
   {
+    key: 'chatDelivery',
+    // No setting: part of the chat apps' design (#1958, docs/chat-apps.md).
+    defaultDays: 90,
+    reason:
+      'One row per chat delivery attempt — an event key, a DM id and a status, never the card body — kept to answer "I never got the message" and to show a failing workspace. Ninety days matches the e-mail delivery log, the other "did it go out?" ledger; a row whose workspace was uninstalled keeps only that metadata until then.',
+    run: async (ctx) => {
+      const { processed, capped } = await pruneInBatches({
+        batchSize: ctx.batchSize,
+        budget: ctx.budget,
+        selectIds: async (take) =>
+          (
+            await prisma.chatDelivery.findMany({ where: { createdAt: { lt: ctx.cutoff } }, orderBy: { createdAt: 'asc' }, select: { id: true }, take })
+          ).map((r) => r.id),
+        handleBatch: async (ids) => (await prisma.chatDelivery.deleteMany({ where: { id: { in: ids } } })).count,
+      });
+      return { deleted: processed, capped };
+    },
+  },
+  {
     key: 'auditLog',
     // Resolved from the GLOBAL settings row, like activityLog: the sweep has no
     // org bound and takes every tenant's rows in one pass.
