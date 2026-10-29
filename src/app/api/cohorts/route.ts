@@ -8,6 +8,8 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 
 // GET — all cohorts with intern counts + per-stage distribution (admin).
 export async function GET() {
@@ -58,6 +60,10 @@ export async function POST(request: Request) {
   // a NULL row is the DEFAULT org's — so a cohort created by any other tenant
   // used to land in the internship org's list.
   const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+  // The plan's programme band (#1752): refuses the next cohort, never an
+  // existing one. Fails open for the default org.
+  const programs = await enforceQuota(orgId, 'PROGRAMS');
+  if (!programs.allowed) return NextResponse.json(quotaError(programs), { status: 403 });
   // Trim so a whitespace-only term is stored as null (shows as "—") rather than
   // a blank string. Term is free-text (e.g. "Fall 2026"), so no format check.
   const cohort = await prisma.cohort.create({ data: { orgId, name: parsed.data.name.trim(), term: parsed.data.term?.trim() || null } });

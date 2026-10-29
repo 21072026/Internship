@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
@@ -150,6 +152,7 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
   const [locale, setLocale] = useState<Locale>(uiLocale);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [result, setResult] = useState<{ registerUrl: string; emailSent: boolean; email: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   // Decided after mount: `navigator` does not exist during the server render,
@@ -170,6 +173,10 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
         body: JSON.stringify({ email: email.trim(), label: label.trim() || null, locale }),
       });
       const data = await res.json().catch(() => ({}));
+      // The target org's admin-seat quota (#1752).
+      const wall = res.ok ? null : parseGateBody(data);
+      setGate(wall);
+      if (wall) return;
       if (!res.ok) {
         setError(
           data.code === 'email_taken_in_world'
@@ -251,6 +258,7 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
             </select>
           </div>
           {error && <p className="text-sm text-red-600" data-testid="invite-admin-error">{error}</p>}
+          {gate && <UpgradePrompt gate={gate} viewer="admin" />}
           <Button type="submit" loading={busy} data-testid="invite-admin-submit" className="w-full sm:w-auto">
             {t.organizations.inviteSubmit}
           </Button>
