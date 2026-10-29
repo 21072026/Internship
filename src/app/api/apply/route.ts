@@ -10,6 +10,7 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit } from '@/lib/planGate';
+import { notifyAdminsHeldByPlan } from '@/lib/planGateNotify';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { selfSelectedCount } from '@/lib/selfMatchSeats';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
   // this response body.
   const gate = await checkActiveRelationLimit(mentor.orgId);
   if (!gate.allowed) {
-    await notifyAdminsOfHeldApplication(mentor.orgId, gate.limit);
+    await notifyAdminsHeldByPlan(mentor.orgId, 'plan_limit.application_held', gate.limit);
     return NextResponse.json(
       { error: 'This programme is not taking new applications right now', code: 'program_full' },
       { status: 409 },
@@ -221,17 +222,4 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true });
-}
-
-// The org's active admins hear why an application was held — at most once a
-// day each, so a busy application link does not flood the bell.
-async function notifyAdminsOfHeldApplication(orgId: string | null, limit: number | null): Promise<void> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  for (const adminId of await tenantAdminIds(orgId)) {
-    const recent = await prisma.notification.findFirst({
-      where: { userId: adminId, type: 'plan_limit.application_held', createdAt: { gte: since } },
-      select: { id: true },
-    });
-    if (!recent) await notify(adminId, 'plan_limit.application_held', { limit: String(limit ?? '') }, '/admin/billing');
-  }
 }

@@ -4280,6 +4280,7 @@ const en = {
       'mentor_application.new': '{name} applied to become a mentor.',
       'mentor_application.approved': 'Your mentor application was approved — welcome aboard!',
       'plan_change.requested': '{org} asked to move to the {plan} plan.',
+      'plan_limit.project_held': 'A participant could not create a project: your plan\'s limit of {limit} projects is reached. Existing projects are unaffected — see Billing to upgrade.',
       'plan_limit.application_held': 'A new application could not be accepted: your plan\'s limit of {limit} active pairs is reached. Existing pairs are unaffected — see Billing to upgrade.',
       'plan_change.applied': 'Your organisation is now on the {plan} plan.',
       'plan_change.rejected': 'Your request to move to the {plan} plan was declined. See the note under Billing.',
@@ -4688,6 +4689,7 @@ const en = {
     reminderHint: 'You both get a reminder the day before and an hour before — in the app, and by email unless meeting emails are switched off.',
   },
   projects: {
+    capacityReached: 'No new projects can be created right now. Your existing projects are unaffected — please try again later.',
     planLimitReached:
       'Plan limit reached: {usage}/{limit} projects on the {plan} plan. Existing projects are unaffected — upgrade, or archive one, to add another.',
     title: 'Projects',
@@ -14295,6 +14297,7 @@ const tr: Dict = {
       'mentor_application.new': '{name} mentor olmak için başvurdu.',
       'mentor_application.approved': 'Mentorluk başvurun onaylandı — aramıza hoş geldin!',
       'plan_change.requested': '{org}, {plan} planına geçmek istiyor.',
+      'plan_limit.project_held': 'Bir katılımcı proje oluşturamadı: paketinizin {limit} proje sınırı doldu. Mevcut projeler etkilenmez — yükseltmek için Faturalandırma\'ya bakın.',
       'plan_limit.application_held': 'Yeni bir başvuru alınamadı: paketinizin {limit} aktif eşleşme sınırı doldu. Mevcut eşleşmeler etkilenmez — yükseltmek için Faturalandırma\'ya bakın.',
       'plan_change.applied': 'Organizasyonunuz artık {plan} planında.',
       'plan_change.rejected': '{plan} planına geçiş talebiniz reddedildi. Notu Faturalandırma altında görebilirsiniz.',
@@ -14684,6 +14687,7 @@ const tr: Dict = {
     reminderHint: 'İkiniz de bir gün ve bir saat önce hatırlatma alırsınız — uygulamada ve toplantı e-postaları kapalı değilse e-postayla.',
   },
   projects: {
+    capacityReached: 'Şu anda yeni proje oluşturulamıyor. Mevcut projeleriniz etkilenmez — lütfen daha sonra tekrar deneyin.',
     planLimitReached:
       '{plan} planında proje sınırına ulaşıldı: {usage}/{limit}. Mevcut projeler etkilenmez — yenisini eklemek için planı yükseltin ya da birini arşivleyin.',
     title: 'Projeler',
@@ -24206,6 +24210,7 @@ const de: Dict = {
       'mentor_application.new': '{name} hat sich als Mentor beworben.',
       'mentor_application.approved': 'Deine Mentor-Bewerbung wurde angenommen — willkommen an Bord!',
       'plan_change.requested': '{org} möchte in den Plan {plan} wechseln.',
+      'plan_limit.project_held': 'Eine teilnehmende Person konnte kein Projekt anlegen: Das Limit Ihres Plans von {limit} Projekten ist erreicht. Bestehende Projekte sind nicht betroffen — Upgrade unter Abrechnung.',
       'plan_limit.application_held': 'Eine neue Bewerbung konnte nicht angenommen werden: Das Limit Ihres Plans von {limit} aktiven Paaren ist erreicht. Bestehende Paare sind nicht betroffen — Upgrade unter Abrechnung.',
       'plan_change.applied': 'Ihre Organisation ist jetzt im Plan {plan}.',
       'plan_change.rejected': 'Ihre Anfrage für den Plan {plan} wurde abgelehnt. Die Notiz finden Sie unter Abrechnung.',
@@ -24595,6 +24600,7 @@ const de: Dict = {
     reminderHint: 'Sie beide erhalten am Vortag und eine Stunde vorher eine Erinnerung — in der App und per E-Mail, sofern Termin-E-Mails nicht abgeschaltet sind.',
   },
   projects: {
+    capacityReached: 'Derzeit können keine neuen Projekte angelegt werden. Ihre bestehenden Projekte sind nicht betroffen — bitte versuchen Sie es später erneut.',
     planLimitReached:
       'Plan-Limit erreicht: {usage}/{limit} Projekte im {plan}-Tarif. Bestehende Projekte bleiben unberührt — für ein weiteres den Tarif erhöhen oder eines archivieren.',
     title: 'Projekte',
