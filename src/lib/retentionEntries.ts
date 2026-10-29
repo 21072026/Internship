@@ -295,6 +295,33 @@ export async function pruneDomainEvents(
 }
 
 /**
+ * Settled stage-automation runs (#1703) older than the window, oldest first.
+ * Every tenant's rows in one pass by `createdAt` alone, like the event record
+ * the runs point at. A run still PENDING (a delayed step, at most 30 days out)
+ * or RUNNING is never touched, whatever its age: its actions have not happened.
+ */
+export const AUTOMATION_RUN_RETENTION_DAYS = 90;
+
+async function pruneAutomationRuns(ctx: RetentionContext): Promise<RetentionOutcome> {
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.automationRun.findMany({
+          where: { createdAt: { lt: ctx.cutoff }, status: { notIn: ['PENDING', 'RUNNING'] } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.automationRun.deleteMany({ where: { id: { in: ids }, status: { notIn: ['PENDING', 'RUNNING'] } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
+/**
  * Settled mail-queue rows (#2944). A queued mail carries no address in the
  * clear and its sealed envelope is cleared the moment it settles, but the row
  * still holds the recipient's hash and the category, and the queue is the
@@ -999,6 +1026,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'An event row is a fact that something happened plus the ids it happened to — and the oldest public payloads (application.created) carry a name and an address. Its readers look back days, not years: a webhook receiver asks for a replay within a week or two (#1695), an automation run reads the event that triggered it (#1703). Ninety days covers a full quarter of "what fired, and why?" and matches the e-mail delivery log, the other "did it go out?" ledger. The durable history of a record is the record itself and its ActivityLog/AuditLog trail, not this table.',
     run: async (ctx) => pruneDomainEvents(ctx.cutoff, { batchSize: ctx.batchSize, budget: ctx.budget }),
+  },
+  {
+    key: 'automationRun',
+    // No setting: the window follows the DomainEvent record a run points at
+    // (docs/automation-rules.md), not an operator knob.
+    defaultDays: AUTOMATION_RUN_RETENTION_DAYS,
+    reason:
+      'A run row answers "what did this rule do, and did it fail?" for the admin\u2019s run log; it holds ids, stage keys and action codes, never a name or an address. Ninety days matches the domain-event record it points at, so a run never outlives the event that caused it. Runs still waiting for their delay or in flight are never pruned.',
+    run: pruneAutomationRuns,
   },
   {
     key: 'mailOutbox',
