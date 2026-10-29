@@ -273,6 +273,8 @@
     "src/app/api/mentor/meeting-feedback/route.ts": 2,
     "src/app/api/mentor/mentees/[id]/route.ts": 2,
     "src/app/api/mentor/mentees/route.ts": 1,
+    "src/app/api/mentor/offers/[id]/route.ts": 1,
+    "src/app/api/mentor/offers/route.ts": 1,
     "src/app/api/mentors/route.ts": 1,
     "src/app/api/mentorship/[id]/ai-draft/route.ts": 2,
     "src/app/api/mentorship/[id]/cadence/route.ts": 1,
