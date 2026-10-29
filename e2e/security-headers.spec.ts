@@ -97,14 +97,26 @@ test('the report endpoint takes both report shapes and refuses garbage', async (
 
 test("a real browser's violation report reaches the endpoint and is accepted", async ({ page }) => {
   await page.goto('/features');
-  const report = page.waitForResponse((r) => r.url().endsWith('/api/csp-report') && r.request().method() === 'POST');
-  // An inline script with no nonce: the strict policy would block it, the
+  const report = page.waitForRequest((r) => r.url().endsWith('/api/csp-report') && r.method() === 'POST');
+  // An inline event handler: the strict policy would block it (script-src-attr;
+  // 'strict-dynamic' trusts inserted <script>s, never handler attributes), the
   // enforced one still runs it — so the page is unharmed and a report goes out.
-  await page.evaluate(() => {
-    const s = document.createElement('script');
-    s.textContent = 'window.__cspProbe = 1;';
-    document.body.appendChild(s);
-  });
-  expect((await report).status()).toBe(204);
+  // The report is sent by the browser itself, through the cross-site write gate.
+  const violation = await page.evaluate(
+    () =>
+      new Promise<{ directive: string; disposition: string } | null>((resolve) => {
+        document.addEventListener('securitypolicyviolation', (e) =>
+          resolve({ directive: e.effectiveDirective, disposition: e.disposition }),
+        );
+        const b = document.createElement('button');
+        b.setAttribute('onclick', 'window.__cspProbe = 1');
+        document.body.appendChild(b);
+        b.click();
+        setTimeout(() => resolve(null), 5000);
+      }),
+  );
+  expect(violation).toEqual({ directive: 'script-src-attr', disposition: 'report' });
   expect(await page.evaluate(() => (window as unknown as { __cspProbe?: number }).__cspProbe)).toBe(1);
+  const res = await (await report).response();
+  expect(res?.status()).toBe(204);
 });
