@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Offer lifecycle on the event bus (#1998, 5/n):** `offer.accepted`, `offer.declined` and `requisition.filled` (registered since #1854) are now raised, and three new public events complete the lifecycle: `offer.sent`, `offer.withdrawn`, `offer.expired`. Both writers go through `raiseOfferEvent()` (`src/lib/offerEvents.ts`): the actions of `PATCH /api/offers/[id]` and the expiry sweep (`expireOffers()`, raised as `system`). Payloads are `{ offerId, applicationId, requisitionId }` — never the position, compensation or decline reason. `requisition.filled` fires once, from the acceptance that took the last seat.",
+  "notes": {
+    "en": ["Webhooks now follow every offer: sent, withdrawn, accepted, declined or expired — and when an accepted offer fills a requisition."],
+    "tr": ["Webhook'lar artık her teklifi izliyor: gönderildi, geri çekildi, kabul edildi, reddedildi veya süresi doldu — ve kabul edilen bir teklif bir iş talebini doldurduğunda."],
+    "de": ["Webhooks begleiten jetzt jedes Angebot: gesendet, zurückgezogen, angenommen, abgelehnt oder abgelaufen — und wenn ein angenommenes Angebot eine Stelle besetzt."]
+  }
+}
