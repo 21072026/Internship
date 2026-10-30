@@ -9,7 +9,7 @@
  */
 
 import { z } from 'zod';
-import { MATCH_DIMENSIONS } from './types';
+import { MATCH_DIMENSIONS, SOFT_ONLY_DIMENSIONS } from './types';
 
 export const MATCH_RULE_LIMIT = 20;
 
@@ -28,12 +28,18 @@ const configSchema = z
   })
   .strict();
 
-export const matchRuleSchema = z.object({
-  dimension: z.enum(MATCH_DIMENSIONS),
-  kind: z.enum(['WEIGHTED', 'HARD_REQUIRE', 'HARD_EXCLUDE']),
-  weight: z.number().int().min(0).max(100),
-  config: configSchema.default({}),
-});
+export const matchRuleSchema = z
+  .object({
+    dimension: z.enum(MATCH_DIMENSIONS),
+    kind: z.enum(['WEIGHTED', 'HARD_REQUIRE', 'HARD_EXCLUDE']),
+    weight: z.number().int().min(0).max(100),
+    config: configSchema.default({}),
+  })
+  // A soft-only dimension (#2038) can add to a score, never block a pair.
+  .refine((r) => r.kind === 'WEIGHTED' || !SOFT_ONLY_DIMENSIONS.includes(r.dimension), {
+    message: 'This rule can only be weighted',
+    path: ['kind'],
+  });
 
 export const matchRuleSetDraftSchema = z.object({
   name: z.string().trim().min(1).max(191),

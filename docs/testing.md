@@ -209,7 +209,27 @@ const { diffRoster } = await import('../../src/lib/rosterIngest.ts');
 The imports have to be **dynamic** and come after `register()`: a static import is hoisted
 above it and would resolve before the hook is installed.
 
-Anything that needs a rendered page, a session cookie or a Prisma query stays in `e2e/`
+### A module that queries Prisma (#1598)
+
+`src/lib/prisma.ts` reuses `globalThis.prisma` when one is already there, so a test can seat
+the in-memory client from `scripts/test/fake-prisma.mjs` **before** its first dynamic import
+and every `prisma.<model>.<op>()` in the module graph is routed to it. No database and no
+engine, and no per-module mocking either: each call is recorded in `calls`, answered by
+`handlers['model.op']` when the test set one, and otherwise by a neutral default (an empty
+list, `null`, `0`, `{ count: 0 }`). `$use` is recorded too, so a Prisma middleware can be
+called directly. `dormant-first-contact`, `plan-gate`, `entitlements` and `org-context` are
+the worked examples.
+
+```js
+const db = installFakePrisma();
+const { foo } = await import('../../src/lib/foo.ts');
+db.handlers['message.findMany'] = () => [{ relationId: 'r', createdAt: new Date() }];
+```
+
+What it cannot prove is the SQL: a `where` the database would reject passes here. Assert the
+shape of the arguments the module sends (`db.calls`), and leave query correctness to `e2e/`.
+
+Anything that needs a rendered page, a session cookie or a real query stays in `e2e/`
 under Playwright. The one awkward case is the `e2e/*.unit.spec.ts` files (about 70 at
 the time of writing — count them, don't trust this sentence): they are pure, but they were
 written against Playwright's resolver for the `@/` alias, so they run in the browser suite
@@ -953,9 +973,12 @@ net for everything else.
 
 **Determinism is built in, not hoped for:** a fixed 1280×800 viewport and a viewport-sized capture
 (a full-page height follows the data), animations/transitions/caret off, its own organisation with
-fixed display names, and masks over `<time>`, the account menu (it prints the e-mail), avatars and
-the notification badge. A screen that diffs on unchanged code needs another mask, never a looser
-threshold.
+fixed display names, and masks over `<time>`, the account menu (it prints the e-mail), avatars,
+the nav's count badges (they count rows other specs create in the shared shard DB) and the
+per-account referral code. A screen that diffs on unchanged code needs another mask, never a looser
+threshold — and a mask is removed again once its cause is gone (the first-run checklist was masked
+until #3393 scoped its counts to the org). A small diff can hide under `maxDiffPixelRatio`: look at
+the PNGs, not only at the green compare.
 
 **Baselines come only from the CI image.** Font rasterisation differs between a laptop and the
 GitHub runner, so a PNG made locally fails in CI on every run. To create or update them:

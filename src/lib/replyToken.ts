@@ -25,16 +25,32 @@ export { inboundEmailDomain };
 //
 // `~` separates the two ids: it is valid in an email local part (RFC 5322 atext)
 // and cannot occur inside a cuid or a uuid.
+//
+// A CONVERSATION target (#1713) — a project group chat, or a direct chat with
+// no mentorship behind it — is `c=<conversationId>~<recipientUserId>`. `=` has
+// the same two properties as `~` (atext; never inside a cuid/uuid), so no
+// relation token can be read as a conversation one or vice versa. A
+// conversation token always names its recipient. It names, it does not grant:
+// the inbound path re-checks the sender's right to post with
+// `canPostToConversation()` at write time.
 const SEP = '~';
+const CONVERSATION_PREFIX = 'c=';
 
 function sign(payload: string): string {
   return createHmac('sha256', requireServerSecret()).update(payload).digest('hex').slice(0, 32);
 }
 
-export type ReplyTokenPayload = { relationId: string; recipientUserId: string | null };
+export type ReplyTokenPayload =
+  | { kind: 'relation'; relationId: string; recipientUserId: string | null }
+  | { kind: 'conversation'; conversationId: string; recipientUserId: string };
 
 export function makeReplyToken(relationId: string, recipientUserId?: string): string {
   const payload = recipientUserId ? `${relationId}${SEP}${recipientUserId}` : relationId;
+  return `${payload}.${sign(payload)}`;
+}
+
+export function makeConversationReplyToken(conversationId: string, recipientUserId: string): string {
+  const payload = `${CONVERSATION_PREFIX}${conversationId}${SEP}${recipientUserId}`;
   return `${payload}.${sign(payload)}`;
 }
 
@@ -51,13 +67,21 @@ export function verifyReplyToken(token: string): ReplyTokenPayload | null {
     return null;
   }
 
+  if (payload.startsWith(CONVERSATION_PREFIX)) {
+    const rest = payload.slice(CONVERSATION_PREFIX.length);
+    const sep = rest.indexOf(SEP);
+    const conversationId = sep < 0 ? '' : rest.slice(0, sep);
+    const recipientUserId = sep < 0 ? '' : rest.slice(sep + 1);
+    if (!conversationId || !recipientUserId) return null;
+    return { kind: 'conversation', conversationId, recipientUserId };
+  }
   const sep = payload.indexOf(SEP);
-  if (sep < 0) return { relationId: payload, recipientUserId: null };
+  if (sep < 0) return { kind: 'relation', relationId: payload, recipientUserId: null };
   const relationId = payload.slice(0, sep);
   const recipientUserId = payload.slice(sep + 1);
   // A signed payload can't normally be malformed, but never hand back a blank id.
   if (!relationId || !recipientUserId) return null;
-  return { relationId, recipientUserId };
+  return { kind: 'relation', relationId, recipientUserId };
 }
 
 // Build the Reply-To for a notification about `relationId` being sent to
@@ -69,6 +93,13 @@ export function replyAddress(relationId: string, recipientUserId?: string): stri
   const domain = inboundEmailDomain();
   if (!domain) return undefined;
   return `reply+${makeReplyToken(relationId, recipientUserId)}@${domain}`;
+}
+
+// The Reply-To for a conversation thread with no mentorship behind it (#1713).
+export function conversationReplyAddress(conversationId: string, recipientUserId: string): string | undefined {
+  const domain = inboundEmailDomain();
+  if (!domain) return undefined;
+  return `reply+${makeConversationReplyToken(conversationId, recipientUserId)}@${domain}`;
 }
 
 // Extract the reply token from a recipient address like

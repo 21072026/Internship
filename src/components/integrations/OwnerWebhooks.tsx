@@ -6,12 +6,14 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useT } from '@/i18n/client';
+import type { Dictionary } from '@/i18n/dictionaries';
 
-// A COMPANY owner's own webhooks (#2006). The event list offered is exactly the
-// one the route answers with (`eventTypes`, COMPANY_WEBHOOK_EVENTS), so the
-// form cannot ask for an event the route would refuse; which events actually
-// reach the hook is decided again at delivery (src/lib/companyWebhookScope.ts).
+// A non-admin owner's own webhooks (#2006) — a COMPANY's or a SOURCE's, at
+// `endpoint`. The event list offered is exactly the one the route answers with
+// (`eventTypes`: COMPANY_WEBHOOK_EVENTS or SOURCE_WEBHOOK_EVENTS), so the form
+// cannot ask for an event the route would refuse; which events actually reach
+// the hook is decided again at delivery (companyWebhookScope.ts /
+// sourceWebhookScope.ts).
 
 interface HookRow {
   id: string;
@@ -20,8 +22,7 @@ interface HookRow {
   disabledAt: string | null;
 }
 
-export function CompanyWebhooks({ onLocked }: { onLocked: () => void }) {
-  const c = useT().companyIntegrations;
+export function OwnerWebhooks({ endpoint, labels: c, onLocked }: { endpoint: string; labels: Dictionary['companyIntegrations']; onLocked: () => void }) {
   const [hooks, setHooks] = useState<HookRow[] | null>(null);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [url, setUrl] = useState('');
@@ -31,12 +32,12 @@ export function CompanyWebhooks({ onLocked }: { onLocked: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/company/integrations/webhooks');
+    const res = await fetch(endpoint);
     if (!res.ok) return;
     const body = await res.json();
     setHooks(body.webhooks);
     setEventTypes(body.eventTypes);
-  }, []);
+  }, [endpoint]);
 
   useEffect(() => {
     void load();
@@ -47,7 +48,7 @@ export function CompanyWebhooks({ onLocked }: { onLocked: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/company/integrations/webhooks', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim(), events: picked }),
@@ -67,7 +68,7 @@ export function CompanyWebhooks({ onLocked }: { onLocked: () => void }) {
 
   async function remove(id: string) {
     if (!window.confirm(c.hookDeleteConfirm)) return;
-    const res = await fetch(`/api/company/integrations/webhooks?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!res.ok) return setError(c.error);
     await load();
   }

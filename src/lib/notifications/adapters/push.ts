@@ -8,12 +8,15 @@
 // the event's dictionary template in the RECIPIENT's locale, so the two never
 // say different things. The URL is the router's relative deep link, which opens
 // the recipient's own product on the host they subscribed from (webPush.ts).
-// One-shot events do not collapse: each gets its own tray entry.
+// A `thread` event collapses per thread (`tag: thread:<link>`), so a burst of
+// messages replaces itself in the tray; one-shot events do not collapse. The
+// body is the caller's `preview` (a message's text, 140 chars), else empty.
 //
 // No device anywhere is a SKIPPED `no_device` row, not a silent no-op — the
 // ledger shows who could not be reached by push and why.
 import { getDictionary } from '@/i18n/dictionaries';
 import { renderNotification } from '@/lib/notificationText';
+import { pushPreview } from '@/lib/supportPushRule';
 import { sendPushToUser } from '@/lib/webPush';
 import type { ChannelAdapter } from './types';
 
@@ -23,7 +26,12 @@ export const pushAdapter: ChannelAdapter = {
   deliver: async (d) => {
     try {
       const title = renderNotification({ type: d.def.key, params: d.params }, getDictionary(d.locale), d.locale);
-      const reached = await sendPushToUser(d.userId, d.def.category, { title, body: '', url: d.link });
+      const reached = await sendPushToUser(d.userId, d.def.category, {
+        title,
+        body: pushPreview(d.preview),
+        url: d.link,
+        ...(d.def.link === 'thread' ? { tag: `thread:${d.link}` } : {}),
+      });
       return reached > 0 ? { status: 'SENT' } : { status: 'SKIPPED', reason: 'no_device' };
     } catch (e) {
       return { status: 'FAILED', error: String(e) };

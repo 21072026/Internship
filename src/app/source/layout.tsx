@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, KeyRound } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -53,6 +53,13 @@ async function SourceLayout({ children }: { children: React.ReactNode }) {
             >
               <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
               {t.nav.dashboard}
+            </Link>
+            <Link
+              href="/source/integrations"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+            >
+              <KeyRound className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+              {t.sourceIntegrations.navLink}
             </Link>
             <InstallAppButton />
           </nav>
