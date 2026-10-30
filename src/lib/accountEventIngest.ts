@@ -387,7 +387,11 @@ async function apply(ctx: Ctx): Promise<Applied> {
     // the feed yet (an older stage set), and the event waits for it.
     if (!stages.some((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)) return missingStage(TRIAL_ACTIVE_STAGE_KEY);
     const created = await createAccount(ctx, stages);
-    if (created.outcome !== 'exists') return created;
+    if (created.outcome !== 'exists') {
+      // A brand-new account is the sign-up a referral link leads to: link it too.
+      if (created.outcome === 'applied') await attributeToAffiliate(ctx);
+      return created;
+    }
     companyId = created.companyId;
   }
   await fillGaps(ctx, companyId);
