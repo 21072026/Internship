@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Form builder (#1802):** `/admin/forms` lists every admin-defined form by surface and audience with its live/draft/archived versions, and creates one; `/admin/forms/[id]` is the builder — reorder, add a field of any `FORM_FIELD_TYPES` type, EN/TR/DE labels and help text side by side, options for choice types, `required`, and `matchable` (disabled with its reason for free text; the API refuses it too). A field whose key or label reads like a protected characteristic shows a warning that never blocks (`proxyWarnings`). The live preview renders through `FormFieldInput` (`src/components/forms/FormFieldInput.tsx`, the component the real forms will use, #1803) and validates with the shared `validateResponse()`, in a chosen language. The screen lists untranslated fields and holds the publish button (`missingLocales`, the same rule the server refuses `missing_locales` on); publishing confirms with the diff against the live version (`diffFields`) and states that answers already given are kept. Admin nav link (`mentorship` capability), mobile menu icon, EN/TR/DE builder chrome (`formsAdmin`, `LEAK_EXEMPT` with its reason). e2e `form-builder.spec.ts`.",
+  "notes": {
+    "en": ["Admins can now write their own registration, onboarding and profile questions in English, Turkish and German, preview them exactly as participants will see them, and publish new versions without losing earlier answers."],
+    "tr": ["Yöneticiler artık kayıt, başlangıç ve profil sorularını İngilizce, Türkçe ve Almanca olarak kendileri yazabiliyor, katılımcıların göreceği şekliyle önizleyebiliyor ve önceki cevapları kaybetmeden yeni sürümler yayınlayabiliyor."],
+    "de": ["Admins können jetzt eigene Fragen für Registrierung, Onboarding und Profil auf Englisch, Türkisch und Deutsch schreiben, sie genau so in der Vorschau sehen wie die Teilnehmenden und neue Versionen veröffentlichen, ohne frühere Antworten zu verlieren."]
+  }
+}
