@@ -4,6 +4,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { KudosPanel } from '@/components/KudosPanel';
 import { AgendaPanel } from '@/components/AgendaPanel';
 import { SessionNotePanel } from '@/components/SessionNotePanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
@@ -34,7 +35,7 @@ export default async function PortalGoalsPage() {
     // ACTIVE, else the latest COMPLETED one shown read-only (#1408).
     prisma.mentorshipRelation.findMany({
       where: menteeRelationWhere(session.user.id),
-      select: { id: true, status: true, startDate: true, completedAt: true },
+      select: { id: true, status: true, startDate: true, completedAt: true, mentor: { select: { id: true, fullName: true } } },
     }),
   ]);
   const { relation, isArchived } = pickMenteeRelation(relations);
@@ -69,6 +70,9 @@ export default async function PortalGoalsPage() {
               actions that need a live mentorship are closed above and below. */}
           <EvaluationPanel relationId={relation.id} audience="MENTOR" />
           <WeeklyReportsPanel relationId={relation.id} mode="mentee" readOnly={isArchived} />
+          {/* A thank-you to the mentor (#1868) — still open on an archive: the
+              end of a mentorship is exactly when one is written. */}
+          <KudosPanel relationId={relation.id} recipient={relation.mentor} />
         </div>
       ) : (
         <Card>

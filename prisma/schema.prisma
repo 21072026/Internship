@@ -1049,6 +1049,8 @@ model User {
   assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
   supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
+  kudosSent                         Kudo[]                         @relation("KudoSender")
+  kudosReceived                     Kudo[]                         @relation("KudoRecipient")
   sessionNotes                      SessionNote[]                  @relation("SessionNoteAuthor")
   sessionNoteRevisions              SessionNoteRevision[]          @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
@@ -4502,6 +4504,7 @@ model MentorshipRelation {
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
   relationNotes         RelationNote[]
+  kudos                 Kudo[]
   offers                Offer[]
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
@@ -4832,6 +4835,32 @@ model RelationNote {
   author   User               @relation("RelationNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([relationId])
+}
+
+// A written, attributed thank-you inside a pairing (#1868). Deliberately NOT
+// gamification: no points, score, level, streak or badge column, ever — the
+// product's do-not-build list. Never anonymous (senderId is required) and never
+// public: it is read by the pair and the programme's admins only. Like
+// SessionNote it has no `orgId` — a child of MentorshipRelation, which is in
+// TENANT_MODELS, reached only through a scoped parent. Who may send to whom is
+// src/lib/kudosRule.ts.
+model Kudo {
+  id          String   @id @default(cuid())
+  relationId  String
+  senderId    String
+  recipientId String
+  reason      String   @db.Text
+  // A preset the sender started from (KUDO_PRESETS); the text is in `reason`.
+  presetKey   String?  @db.VarChar(40)
+  createdAt   DateTime @default(now())
+
+  relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  sender    User               @relation("KudoSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User               @relation("KudoRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+  @@index([recipientId])
+  @@index([senderId])
 }
 
 // The pair's SHARED minutes (#1847): one record of what was said and agreed,

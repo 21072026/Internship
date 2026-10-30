@@ -156,6 +156,14 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     demoUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
     boardUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
   },
+  Kudo: {
+    id: ID,
+    relationId: ID,
+    senderId: ID,
+    recipientId: ID,
+    reason: { limit: 'kudoReason', files: ['src/app/api/kudos/route.ts', 'src/components/KudosPanel.tsx'] },
+    presetKey: ENUMERATED,
+  },
   Goal: {
     id: ID,
     relationId: ID,
