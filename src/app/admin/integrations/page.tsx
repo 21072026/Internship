@@ -593,6 +593,7 @@ function EventPicker({ eventTypes, selected, onToggle }: { eventTypes: string[];
     meetings: t.integrations.familyMeetings,
     interviews: t.integrations.familyInterviews,
     hiring: t.integrations.familyHiring,
+    people: t.integrations.familyPeople,
     other: t.integrations.familyOther,
   };
   return (
