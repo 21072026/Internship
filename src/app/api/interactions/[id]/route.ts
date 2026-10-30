@@ -5,18 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { actorFromSession, can, type Permission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
-import { z } from 'zod';
-import { TEXT_LIMITS } from '@/lib/textLimits';
-import { INTERACTION_TYPES } from '@/lib/interactionTypes';
+import { updateInteractionSchema } from '@/lib/interactionSchema';
 
-const updateInteractionSchema = z.object({
-  date: z.string().optional(),
-  notes: z.string().min(1).max(TEXT_LIMITS.interactionNotes).optional(),
-  // Same five types the create route accepts — this list used to stop at
-  // Email, so a Call or WhatsApp log could be created but never edited by the
-  // PUT handler below (#1354).
-  type: z.enum(INTERACTION_TYPES).optional(),
-});
 
 /** Does the caller act as an admin here? The permission rule answers, not the role string (#1571). */
 async function actsAsAdmin(session: Session, perm: Permission): Promise<boolean> {
@@ -115,11 +105,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
+    // The same fields the create route takes (src/lib/interactionSchema.ts,
+    // #1356), so a Call keeps its type and a subject can be corrected. An
+    // emptied subject is stored as NULL, as the create path stores a missing one.
+    const { date, subject, ...rest } = parsed.data;
     const updated = await prisma.interactionLog.update({
       where: { id },
       data: {
-        ...parsed.data,
-        date: parsed.data.date ? new Date(parsed.data.date) : undefined,
+        ...rest,
+        ...(date !== undefined ? { date: new Date(date) } : {}),
+        ...(subject !== undefined ? { subject: subject?.trim() ? subject.trim() : null } : {}),
       },
     });
 
