@@ -72,7 +72,11 @@
   },
   "src/app/api/company-inquiry/route.ts": {
     "methods": ["POST"],
-    "why": "The public /for-companies enquiry form. Companies have no self-service sign-up (a COMPANY user is only born from an InvitationToken), so this form is the only bridge. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+    "why": "The public /for-companies enquiry form — the conversational way in beside the employer self-signup (#1865). A COMPANY user is only born from an InvitationToken. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+  },
+  "src/app/api/public/signup/company/route.ts": {
+    "methods": ["POST"],
+    "why": "Employer self-signup (#1865, docs/company-verification.md). Creates a PENDING company — invisible to every candidate until verified — and an invitation mailed to the work address, never returned. Per-IP rate limit, honeypot, minimum fill time, free-mail domains refused, and the same 202 for a taken address so nothing can be probed."
   },
   "src/app/api/contact-permission/confirm/route.ts": {
     "methods": ["POST"],
