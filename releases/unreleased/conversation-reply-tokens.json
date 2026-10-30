@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Reply by e-mail in project group chats (#1713):** a new conversation-scoped reply token `c=<conversationId>~<recipientUserId>` (`makeConversationReplyToken` / `conversationReplyAddress` in `src/lib/replyToken.ts`; `=` is RFC 5322 atext and never inside a cuid, so it cannot collide with a relation token). Message mail from a thread with no mentorship behind it — a project group chat or a project DM — now carries a working `Reply-To`. `routeInboundEmail()` branches on the token kind: the conversation branch attributes the sender from the conversation's own participants (`From`, else the token's recipient while still a participant, logged), re-checks the right to post with `canPostToConversation()` at write time (a member removed from the project gets 403), keeps the Message-ID idempotency and the EN/TR/DE quote stripping, and notifies the other room members as the in-app composer does. Old bare and `relationId~userId` tokens verify unchanged. Tests: `e2e/inbound-email.spec.ts` (group case), `e2e/reply-token.unit.spec.ts`.",
+  "notes": {
+    "en": ["You can now answer a project group-chat message straight from your e-mail — the reply appears in the group conversation."],
+    "tr": ["Proje grup sohbeti mesajlarını artık doğrudan e-postanızdan yanıtlayabilirsiniz — yanıt grup sohbetinde görünür."],
+    "de": ["Nachrichten aus einem Projekt-Gruppenchat lassen sich jetzt direkt per E-Mail beantworten – die Antwort erscheint im Gruppenchat."]
+  }
+}
