@@ -12,3 +12,6 @@
   pass the Prisma singleton cast to it.
 - **A long dev-server run gets flaky late** (ECONNRESET, slow pages ~40 tests in). A spec that
   fails differently each run there is the server, not the change — check what it asserts first.
+- **A leftover `next start` silently wins the port.** `npx next dev` then dies with EADDRINUSE in its
+  log while Playwright happily reuses the OLD server — the run tests a build without your change.
+  Check the dev log's first lines (or stop every Next process) before each run.
