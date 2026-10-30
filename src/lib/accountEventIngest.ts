@@ -108,6 +108,11 @@ import {
   type EventPlan,
   type IngestIntent,
 } from '@/lib/accountEventRule';
+import {
+  customerRefFor,
+  planAffiliateAttribution,
+  referralCodeKey,
+} from '@/lib/affiliateAttributionRule';
 import type { AccountEvent } from '@/lib/accountEventSchema';
 
 /** A `processing` claim older than this belongs to a run that died. */
@@ -347,6 +352,7 @@ async function apply(ctx: Ctx): Promise<Applied> {
       const known = await findAccounts(ctx);
       if (known.length === 1) {
         await fillLeadSource(ctx, known[0].id);
+        await attributeToAffiliate(ctx);
         await recordPlan(ctx, known[0].id);
       }
     }
@@ -371,6 +377,7 @@ async function apply(ctx: Ctx): Promise<Applied> {
     if (!companyId) return { outcome: 'unknown_account' };
     const result = await moveAccount(ctx, companyId, intent, stages);
     await fillLeadSource(ctx, companyId);
+    await attributeToAffiliate(ctx);
     await recordPlan(ctx, companyId);
     return result;
   }
@@ -380,12 +387,17 @@ async function apply(ctx: Ctx): Promise<Applied> {
     // the feed yet (an older stage set), and the event waits for it.
     if (!stages.some((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)) return missingStage(TRIAL_ACTIVE_STAGE_KEY);
     const created = await createAccount(ctx, stages);
-    if (created.outcome !== 'exists') return created;
+    if (created.outcome !== 'exists') {
+      // A brand-new account is the sign-up a referral link leads to: link it too.
+      if (created.outcome === 'applied') await attributeToAffiliate(ctx);
+      return created;
+    }
     companyId = created.companyId;
   }
   await fillGaps(ctx, companyId);
   const result = await moveAccount(ctx, companyId, intent, stages);
   await fillLeadSource(ctx, companyId);
+  await attributeToAffiliate(ctx);
   await recordPlan(ctx, companyId);
   return result;
 }
@@ -532,6 +544,69 @@ async function fillLeadSource(ctx: Ctx, companyId: string): Promise<void> {
     data: { sourceId: row.id },
   });
   if (filled.count > 0) tally(ctx, 'source_filled');
+}
+
+/**
+ * Affiliate attribution (#3354): an event whose `referral_code` names an ACTIVE
+ * partner of THIS org links the account's customer row to that partner, so the
+ * partner's customer list shows it and a later payment finds it without an admin
+ * picking a partner. The decision is the pure `planAffiliateAttribution`
+ * (first link wins; suspended/terminated partners never link); this half reads
+ * the partner and the existing row and writes. Every read and write passes
+ * `orgId` explicitly (the ingest is sessionless) and goes through `ctx.db`, so a
+ * dry run's rollback takes the link with it. `createMany({ skipDuplicates })`
+ * is an INSERT IGNORE: a concurrent twin of the same event cannot make the
+ * unique key throw inside a transaction, and the loser simply links nothing.
+ */
+async function attributeToAffiliate(ctx: Ctx): Promise<void> {
+  const { db, event, orgId } = ctx;
+  const code = referralCodeKey(event.referral_code);
+  const externalRef = customerRefFor(event.external_id);
+  if (!code || !externalRef) return;
+  const partner = await db.affiliatePartner.findFirst({
+    where: { orgId, code },
+    select: { id: true, status: true, noticeEffectiveAt: true },
+  });
+  const existing = await db.affiliateCustomer.findFirst({
+    where: { orgId, externalRef },
+    select: { partnerId: true },
+  });
+  const plan = planAffiliateAttribution({ referralCode: code, externalId: event.external_id, partner, existing, eventAt: ctx.at ?? ctx.now });
+  if (plan.kind === 'kept_first') {
+    await keptFirstNote(ctx, externalRef, plan.keptPartnerId, plan.offeredPartnerId);
+    return;
+  }
+  if (plan.kind !== 'link') return;
+  const created = await db.affiliateCustomer.createMany({
+    data: [{ orgId, partnerId: plan.partnerId, externalRef: plan.externalRef, ...(ctx.at ? { createdAt: ctx.at } : {}) }],
+    skipDuplicates: true,
+  });
+  if (created.count === 0) {
+    // Lost a race to a concurrent event: if it linked ANOTHER partner, the
+    // documented first-link-wins line is still owed.
+    const winner = await db.affiliateCustomer.findFirst({ where: { orgId, externalRef: plan.externalRef }, select: { partnerId: true } });
+    if (winner && winner.partnerId !== plan.partnerId) {
+      await keptFirstNote(ctx, plan.externalRef, winner.partnerId, plan.partnerId);
+    }
+    return;
+  }
+  await note(ctx, {
+    action: 'integration.affiliate_linked',
+    orgId,
+    targetType: 'AffiliatePartner',
+    targetId: plan.partnerId,
+    detail: `${ctx.source.slug}: ${event.event_type}: customer ${plan.externalRef} linked to partner ${plan.partnerId}`,
+  });
+}
+
+async function keptFirstNote(ctx: Ctx, externalRef: string, keptPartnerId: string, offeredPartnerId: string): Promise<void> {
+  await note(ctx, {
+    action: 'integration.affiliate_kept_first',
+    orgId: ctx.orgId,
+    targetType: 'AffiliateCustomer',
+    targetId: externalRef,
+    detail: `${ctx.source.slug}: ${ctx.event.event_type}: the customer stays with partner ${keptPartnerId}; the code named partner ${offeredPartnerId} (first link wins)`,
+  });
 }
 
 /** Did this record ever sign? It is at DEAL_WON, or its history shows the move. */

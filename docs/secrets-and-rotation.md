@@ -50,6 +50,7 @@ Blast radius is "what an attacker can do with this value alone".
 |---|---|---|
 | `DATABASE_URL` | the MySQL credentials | read/write every tenant's data — only from a host that can reach the DB port (it is bound to the box, not public) |
 | `RATE_LIMIT_REDIS_URL` | the shared limiter store (unset at one replica) | reset or poison rate-limit counters; the limiter fails open, so no lock-out |
+| `REALTIME_REDIS_URL` | the cross-replica realtime channel (#1698; unset at one replica, may be the same Redis) | publish fake "something changed" signals, which make clients refetch through their authorized endpoints — no content is readable from it |
 
 ### 2.3 Mail
 
@@ -133,6 +134,7 @@ These are **not secrets**. They are listed so nobody has to wonder.
   `FEEDBACK_REPLAY_ENABLED`, `FEEDBACK_REPLAY_SECONDS`, `SUPPORT_REPORT_NOTIFY`,
   `JAAS_MONTHLY_ACTIVE_LIMIT`, `MT_ENFORCE_ISOLATION`, `SELF_SERVE_SIGNUP`, `DEMO_MODE`, `TRUSTED_PROXY_COUNT`,
   `REPLICA_ID`, `APP_TIMEZONE`, `LOG_LEVEL`, `ERROR_TRACKING_ENVIRONMENT`, `NEXT_PUBLIC_ERROR_TRACKING`, `NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE`, `DB_SLOW_QUERY_MS`, `DB_QUERY_WARN_CEILING`,
+  `REALTIME_CHANNEL`,
   `STATUS_SLA_TARGET`, `TENANT_HARD_DELETE_ENABLED` and `TENANT_HARD_DELETE_WAIT_HOURS` (irreversible
   tenant deletion — off unless set, [`tenant-lifecycle.md`](tenant-lifecycle.md)),
   `KLAVIYO_REVISION`, `KLAVIYO_EVENT_METRICS`, `KLAVIYO_CONVERSION_METRIC`.
@@ -211,6 +213,7 @@ nothing more.
 |---|---|---|
 | `DATABASE_URL` | `ALTER USER … IDENTIFIED BY …` in MySQL; update **both** containers' env files if they share the user | `/api/health` 200 |
 | `RATE_LIMIT_REDIS_URL` | the Redis `requirepass` / ACL | `GET /api/health?limits=1` not degraded |
+| `REALTIME_REDIS_URL` | the Redis `requirepass` / ACL (move together with the line above when they share a Redis) | the log shows no `realtime broker unavailable` after the restart |
 | `SMTP_PASS`, `SMTP_BULK_PASS` | the mail provider's panel. Also update the GitHub `SMTP_*` secrets if they are the same account | send a password-reset mail to yourself |
 | `INBOUND_IMAP_PASS` | the mailbox provider | the IMAP poll log shows a successful login |
 | `INBOUND_SECRET`, `EMAIL_WEBHOOK_SECRET`, `JAAS_WEBHOOK_SECRET` | random value; set the **same** one in the provider's webhook config in the same minute (deliveries in between get 401 and are retried by the provider) | the provider's delivery log shows 2xx |

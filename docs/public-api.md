@@ -166,7 +166,35 @@ key carries `ApiKey.companyId` and three rules hold for it:
   `apikey.revoked` at `warning`, like the admin path.
 
 Today's company-scoped routes: `/requisitions`, `/offers`, `/interview-requests`
-(list and item) and `/me`. SOURCE owners are a later slice of #2006.
+(list and item) and `/me`.
+
+### Source-owned keys (`src/lib/sourceApiKeyRule.ts`)
+
+A SOURCE owner (a referring institution) gets the same surface with the same
+three rules, over the candidates it referred:
+`POST/GET/DELETE /api/source/integrations/api-keys` and the `/source/integrations`
+page (the shared `OwnerApiKeys` screen). The key carries `ApiKey.sourceId`; the
+ceiling is `SOURCE_KEY_SCOPE_CEILING` (`candidates:read`); a route opts in with
+`{ sourceScoped: true }` and filters with `sourceOnly(key)` (`User.sourceId`);
+anything else answers `403 source_key_not_allowed`. Which source is the caller's
+is `ownSource()` (`src/lib/sourceIntegrations.ts`, through `sourceIdForUser`), and a
+SOURCE account without one gets `403 source_not_assigned`. Source-scoped routes:
+`GET /candidates` (list and item) and `/me`.
+
+### Source-owned webhooks (`src/lib/sourceWebhookRule.ts`, `sourceWebhookScope.ts`)
+
+`POST/GET/DELETE /api/source/integrations/webhooks` registers a hook with
+`Webhook.sourceId` (`source: 'source'`, at most 10 per source) — the company
+hook's twin. Its events must be in `SOURCE_WEBHOOK_EVENTS`, the events whose
+subject is one candidate: `user.created` (a MENTEE account) and the mentorship
+events (`mentorship.created`, `pipeline.stage_change`, `mentorship.lifecycle_changed`,
+`mentorship.transferred`, `mentorship.ending_soon`, `mentorship.extended`). Hiring
+records stay the company's. At delivery `sourceReceiverCheck(event)` resolves the
+candidate (the account, or the relation's mentee) in the event's org and delivers
+only when its `sourceId` is the hook's; anything unresolvable is not delivered.
+Fan-out and `replayRecentEvents()` apply both owner checks through one
+`ownerReceiverCheck()` in `src/lib/webhookDelivery.ts`. The `/source/integrations`
+page uses the shared `OwnerWebhooks` screen.
 
 ### Company-owned webhooks (`src/lib/companyWebhookRule.ts`, `companyWebhookScope.ts`)
 
