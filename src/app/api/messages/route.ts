@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
-import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
+import { getThreadIfAllowed, otherParticipant, threadRecipients } from '@/lib/messaging';
 import {
   getConversationIfAllowed,
   otherConversationParticipants,
@@ -367,7 +367,7 @@ async function handlePost(request: Request) {
     // thread, or every other participant of a conversation. An admin posting
     // into someone else's thread isn't a recipient of their own message.
     const recipients = (
-      rel ? [otherParticipant(rel, session.user.id)] : await otherConversationParticipants(conversation!, session.user.id)
+      rel ? await threadRecipients(rel, session.user.id) : await otherConversationParticipants(conversation!, session.user.id)
     ).filter((id) => id && id !== session.user.id);
     // Always the thread the recipient will actually read it in.
     const threadConversationId = relConversationId ?? conversation?.id ?? null;

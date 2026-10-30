@@ -115,6 +115,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },
   { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements' },
+  // The placement ledger (#1765): one row per hire, its attribution and invoice state.
+  { href: '/admin/placements', icon: Receipt, key: 'placements', capability: 'placements' },
   { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements' },
   { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' , capability: 'placements' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },

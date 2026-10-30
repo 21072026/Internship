@@ -147,6 +147,13 @@ model Organization {
   brandAccent            String?
   brandPalette           String?   @db.Text
   brandMarkVersion       String?
+  // The tenant's welcome page (#1664): what `/` shows on the org's own,
+  // VERIFIED host (src/lib/hostOrg.ts) instead of our marketing landing, when
+  // a title is set. Stored text, rendered as plain text with paragraph breaks
+  // — never HTML (src/lib/tenantWelcomeRule.ts). Nullable, so `db push` is
+  // additive (#2298).
+  welcomeTitle           String?   @db.VarChar(120)
+  welcomeBody            String?   @db.Text
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
@@ -187,6 +194,10 @@ model Organization {
   // ProgramEligibilityRule admits). Gates admission to the organisation: SSO
   // JIT, the public apply form, a direct assignment.
   eligibilityMode        String    @default("OPEN") @db.VarChar(8)
+  // Impersonation policy (#1586, src/lib/impersonationPolicyRule.ts): full
+  // (default — nothing changes on upgrade) | read_only | off. Judged on the
+  // TARGET user's org when an admin starts "log in as".
+  impersonationPolicy    String    @default("full") @db.VarChar(16)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
@@ -1011,6 +1022,7 @@ model User {
   // separate contract PR retires it; this is the joinable twin.
   skillRows                         UserSkill[]
   profileDigest                     ProfileDigest?
+  relationSeats                     RelationParticipant[]
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -1050,6 +1062,8 @@ model User {
   assignedSupportTickets            SupportTicket[]                @relation("SupportAssignee")
   supportMessages                   SupportMessage[]               @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                 @relation("RelationNoteAuthor")
+  kudosSent                         Kudo[]                         @relation("KudoSender")
+  kudosReceived                     Kudo[]                         @relation("KudoRecipient")
   sessionNotes                      SessionNote[]                  @relation("SessionNoteAuthor")
   sessionNoteRevisions              SessionNoteRevision[]          @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
@@ -1109,6 +1123,7 @@ model User {
   placements                        Placement[]                    @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
+  userIdentities                    UserIdentity[]
   adminScopeGrants                  AdminScopeGrant[]
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]              @relation("PracticeSessions")
@@ -4483,6 +4498,14 @@ model MentorshipRelation {
   // manager made". Shown to both sides on the archived record. Prose about the
   // pairing: scrubbed on the mentee's erasure (accountErasure.ts).
   closurePlan                String?          @db.Text
+  // What SHAPE the relation is (#1804): ONE_TO_ONE | GROUP | PEER | REVERSE |
+  // FLASH. Not the same question as `kind` above, which says WHY it exists
+  // (placement or coaching) — keep both, never merge them. Free String with
+  // the whitelist in src/lib/relationShapes.ts, for the reason pipelineStatus
+  // is one. For ONE_TO_ONE the `mentorId`/`menteeId` scalars ARE the pair; for
+  // any other shape they are the primary pair (the facilitating mentor and the
+  // first mentee) and `participants` holds everyone, them included.
+  relationType               String           @default("ONE_TO_ONE") @db.VarChar(16)
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -4508,6 +4531,7 @@ model MentorshipRelation {
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
   relationNotes         RelationNote[]
+  kudos                 Kudo[]
   offers                Offer[]
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
@@ -4516,6 +4540,8 @@ model MentorshipRelation {
   // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
   // here; see model RelationValue for why.
   value                 RelationValue?
+  // Everyone in it (#1804) — additive to the scalar pair, never instead of it.
+  participants          RelationParticipant[]
   rematchRequests       MentorshipRequest[]            @relation("RematchRequests")
   previousRelation      MentorshipRelation?            @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
@@ -4543,6 +4569,7 @@ model MentorshipRelation {
   @@index([nextActionAt])
   // The /api/v1 keyset (#1990).
   @@index([orgId, updatedAt, id])
+  @@index([relationType])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -4838,6 +4865,32 @@ model RelationNote {
   author   User               @relation("RelationNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([relationId])
+}
+
+// A written, attributed thank-you inside a pairing (#1868). Deliberately NOT
+// gamification: no points, score, level, streak or badge column, ever — the
+// product's do-not-build list. Never anonymous (senderId is required) and never
+// public: it is read by the pair and the programme's admins only. Like
+// SessionNote it has no `orgId` — a child of MentorshipRelation, which is in
+// TENANT_MODELS, reached only through a scoped parent. Who may send to whom is
+// src/lib/kudosRule.ts.
+model Kudo {
+  id          String   @id @default(cuid())
+  relationId  String
+  senderId    String
+  recipientId String
+  reason      String   @db.Text
+  // A preset the sender started from (KUDO_PRESETS); the text is in `reason`.
+  presetKey   String?  @db.VarChar(40)
+  createdAt   DateTime @default(now())
+
+  relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  sender    User               @relation("KudoSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User               @relation("KudoRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+  @@index([recipientId])
+  @@index([senderId])
 }
 
 // The pair's SHARED minutes (#1847): one record of what was said and agreed,
@@ -5722,6 +5775,9 @@ model ImpersonationGrant {
   targetId  String // who to become (the target on START, the admin on STOP)
   kind      String // START | STOP
   used      Boolean  @default(false)
+  // A START under the target org's `read_only` policy (#1586): the session it
+  // mints carries `impersonationReadOnly`, and middleware refuses its writes.
+  readOnly  Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
 }
@@ -5777,11 +5833,15 @@ model SsoAuthRequest {
   id           String       @id @default(cuid())
   orgId        String
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  kind         String       @default("oidc") @db.VarChar(10)
+  // oidc | saml | social:<provider> (#1962)
+  kind         String       @default("oidc") @db.VarChar(20)
   state        String       @unique @db.VarChar(191)
   nonce        String?      @db.VarChar(191)
   codeVerifier String?      @db.VarChar(191)
   returnOrigin String?      @db.VarChar(255)
+  // Social sign-in "connect" (#1962): the signed-in account that asked to link
+  // this provider. Set only by the login route from the session, never a body.
+  linkUserId   String?      @db.VarChar(191)
   createdAt    DateTime     @default(now())
   expiresAt    DateTime
   usedAt       DateTime?
@@ -5810,6 +5870,25 @@ model SsoLoginGrant {
 // User-keyed, not tenant-keyed, like SsoLoginGrant and PasswordResetToken: the
 // row is a credential for ONE account, and that account's row already carries
 // the tenant. An orgId here would be a second copy of the same fact.
+/// A social sign-in identity (#1962, docs/social-sign-in.md): "this Google /
+/// Microsoft / LinkedIn subject is this account". Linked on the provider's
+/// SUBJECT, never the address — an address changes at the provider, a subject
+/// does not. The address is kept for the account screen only. User-keyed like
+/// LoginLinkToken; the user's own org is the scope, so no orgId.
+model UserIdentity {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String   @db.VarChar(20)
+  subject    String   @db.VarChar(191)
+  email      String?  @db.VarChar(191)
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@unique([provider, subject])
+  @@index([userId])
+}
+
 model LoginLinkToken {
   id        String    @id @default(cuid())
   tokenHash String    @unique
@@ -7357,6 +7436,36 @@ model ProfileDigest {
   @@index([orgId])
 }
 
+/// One person's seat in a relation (#1804). A child of MentorshipRelation —
+/// no orgId of its own and no TENANT_MODELS entry, like the relation's other
+/// children: it is reached through its relation. A seat is never deleted when
+/// someone leaves: `leftAt` is stamped and the row stays as the record.
+/// The backfill (prisma/backfill-relation-participants.mjs) and the shared
+/// create path write the scalar pair's two seats (isPrimaryPair); a GROUP adds
+/// more.
+/// Readers go through src/lib/relationParticipants.ts.
+model RelationParticipant {
+  id            String    @id @default(cuid())
+  relationId    String
+  userId        String
+  /// MENTOR | MENTEE | FACILITATOR (src/lib/relationShapes.ts).
+  role          String    @db.VarChar(16)
+  /// This seat mirrors the relation's scalar pair (`mentorId`/`menteeId`). It
+  /// grants NOTHING: for the pair the scalars stay the truth, so a mentor
+  /// corrected in place (#2289) can never keep access through a stale row.
+  /// Only seats beyond the pair (isPrimaryPair = false) grant membership.
+  isPrimaryPair Boolean   @default(false)
+  joinedAt      DateTime  @default(now())
+  leftAt        DateTime?
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, userId])
+  @@index([relationId])
+  @@index([userId])
+}
+
 /// Where a pairing was decided (#1789). The human step, named.
 enum MatchDecisionSource {
   ADMIN_DIRECT
@@ -7665,10 +7774,9 @@ model ProgramCost {
 
 // The value side: one placement, and what it was worth.
 //
-// SCOPE NOTE (#1892 / #1765). #1765 owns this record — the stamping from
-// src/lib/stageChange.ts, the reversal rule, the invoice states and the
-// /admin/placements ledger are all its work and are deliberately NOT here.
-// This PR creates the table early because the ROI model has nowhere to attach
+// SCOPE NOTE (#1892 / #1765). #1892 created the table with the value columns;
+// #1765 added the ledger half below (stamp, reversal, invoice states — see
+// docs/placements.md). #1892 created it early because the ROI model has nowhere to attach
 // value otherwise, and #1892 says so explicitly: add the value fields in the PR
 // that creates `Placement`, do not stand up a parallel model. #1765 extends
 // these columns (attribution, feeModel, invoiceState, invoiceRef, reversedAt,
@@ -7723,12 +7831,45 @@ model Placement {
 
   note String? @db.Text
 
+  // ── The ledger half (#1765, docs/placements.md) ──────────────────────────
+  // Stamped by the `placement` subscriber of `pipeline.stage_change`
+  // (src/lib/placementLedger.ts); the rule is pure in src/lib/placementRule.ts.
+  // Every column below is additive and nullable or constant-defaulted, so the
+  // rows #1892 and the demo seeder already wrote stay valid under `db push`.
+
+  // Plain ids, not FKs, for the same reason as `offerId`: the accounting record
+  // outlives an edited requisition, a removed mentor or a retired source.
+  requisitionId    String?
+  creditedMentorId String?
+  sourceId         String?
+
+  // THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED — the relation's
+  // `employmentAttribution` when the hire was stamped (NULL there reads as
+  // THROUGH_US, src/lib/placementKind.ts). NULL here = a row from before #1765.
+  attribution String? @db.VarChar(24)
+
+  // SUBSCRIPTION | SUCCESS_FEE | NONE. NULL = nobody decided yet. A placement
+  // that is not ours (SELF_FOUND / ALREADY_EMPLOYED) is stamped NONE.
+  feeModel String? @db.VarChar(16)
+
+  // NOT_INVOICEABLE | INVOICEABLE | INVOICED | WAIVED. Moved only through
+  // `canChangeInvoiceState()`; INVOICED and WAIVED are an ORG_ADMIN's audited act.
+  invoiceState String    @default("NOT_INVOICEABLE") @db.VarChar(16)
+  invoiceRef   String?   @db.VarChar(64)
+  invoicedAt   DateTime?
+
+  // Set when the relation left the hire stage again. A placement is an
+  // accounting record and is never deleted for that; a return to the hire
+  // stage clears it.
+  reversedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([orgId, placedAt])
   @@index([companyId])
   @@index([menteeId])
+  @@index([orgId, invoiceState])
 }
 
 // ── Commercial spine (#1731, epic #1727) ─────────────────────────────────────

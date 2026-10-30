@@ -48,7 +48,7 @@
  * Emptied (free text written by or about a person):
  *   Message.body, MessageAttachment (rows), SafeguardingFlag (rows),
  *   SupportMessage.body,
- *   SupportAttachment (rows), SupportTicket.subject, RelationNote.body,
+ *   SupportAttachment (rows), SupportTicket.subject, RelationNote.body, Kudo.reason,
  *   PersonalNote.body, Evaluation.comment + publicExcerpt, InteractionLog.notes
  *   + subject, MentorQuestion.question/answer, MeetingRequest.topic,
  *   WeeklyReport.summary/blockers/mentorComment, Goal.description,
@@ -239,6 +239,7 @@ async function run() {
     ['supportMessage', () => prisma.supportMessage.updateMany({ data: { body: PLACEHOLDER } })],
     ['supportTicket', () => prisma.supportTicket.updateMany({ data: { subject: PLACEHOLDER } })],
     ['relationNote', () => prisma.relationNote.updateMany({ data: { body: PLACEHOLDER } })],
+    ['kudo', () => prisma.kudo.updateMany({ data: { reason: PLACEHOLDER } })],
     ['personalNote', () => prisma.personalNote.updateMany({ data: { body: PLACEHOLDER } })],
     ['evaluation', () => prisma.evaluation.updateMany({ data: { comment: null, publicExcerpt: null } })],
     ['interactionLog', () => prisma.interactionLog.updateMany({ data: { notes: PLACEHOLDER, subject: null } })],
