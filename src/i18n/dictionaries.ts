@@ -451,6 +451,8 @@ const en = {
   // explainable and contestable.
   // /admin/matching — rule-set editor and dry-run simulation (#1783).
   adminMatching: {
+    customField: 'Question',
+    tolerance: 'Tolerance',
     title: 'Matching rules',
     intro: 'Decide what makes a good mentor match and which rules are non-negotiable. Try a draft on real mentees before you save it — a simulation never assigns anybody.',
     builtIn: 'No rule set is the default: suggestions use the built-in rules (shared skills, mentor capacity).',
@@ -6056,6 +6058,24 @@ const en = {
       round_not_in_review: 'Move the round to review before publishing.',
       round_conflict: 'The round changed meanwhile. Reload and try again.',
       round_too_large: 'Too many people for one pass (at most {maxMentees} mentees and {maxMentors} mentors).',
+    },
+  },
+  profileDigest: {
+    title: 'How matching reads your profile',
+    intro: 'A short summary and a few themes made by AI from your own bio, interests, target position, skills and the goals you wrote. Matching compares themes — nothing else from this summary is used, and it is only made if you allowed AI to process your profile text.',
+    themes: 'Themes',
+    updated: 'Made {when}',
+    none: 'No summary yet. Matching works without one — it uses your skills and the other profile details.',
+    generate: 'Make my summary',
+    regenerate: 'Make it again',
+    results: {
+      updated: 'Your summary was made again from your current profile.',
+      unchanged: 'Your profile has not changed, so the summary stays as it is.',
+      removed: 'Your profile has no text to summarise, so the old summary was removed.',
+      empty: 'Add a bio, interests, a target position or a goal first — there is nothing to summarise yet.',
+      consent_required: 'Allow AI processing of your profile text in your privacy settings first.',
+      quota_exceeded: 'Your programme has used this month’s AI budget. Try again later.',
+      unavailable: 'Not available right now. Your current summary is unchanged.',
     },
   },
   matchDecision: {
@@ -11755,6 +11775,8 @@ const tr: Dict = {
   // işe alım sonucunu etkileyen bir sıralamayı açıklanabilir ve itiraz
   // edilebilir kılan cümle odur.
   adminMatching: {
+    customField: 'Soru',
+    tolerance: 'Tolerans',
     title: 'Eşleştirme kuralları',
     intro: 'İyi bir mentör eşleşmesini neyin belirlediğine ve hangi kuralların pazarlıksız olduğuna karar ver. Bir taslağı kaydetmeden önce gerçek mentee\'ler üzerinde dene — simülasyon kimseyi atamaz.',
     builtIn: 'Varsayılan kural seti yok: öneriler yerleşik kuralları kullanıyor (ortak beceriler, mentör kapasitesi).',
@@ -17221,6 +17243,24 @@ const tr: Dict = {
       round_not_in_review: 'Yayınlamadan önce turu incelemeye alın.',
       round_conflict: 'Tur bu arada değişti. Sayfayı yenileyip tekrar deneyin.',
       round_too_large: 'Tek geçiş için çok fazla kişi var (en fazla {maxMentees} mentee ve {maxMentors} mentor).',
+    },
+  },
+  profileDigest: {
+    title: 'Eşleştirme profilini nasıl okuyor',
+    intro: 'Kendi yazdığın tanıtım, ilgi alanları, hedef pozisyon, beceriler ve hedeflerinden yapay zekâyla çıkarılan kısa bir özet ve birkaç tema. Eşleştirme yalnızca temaları karşılaştırır; özet yalnızca profil metninin yapay zekâyla işlenmesine izin verdiysen oluşturulur.',
+    themes: 'Temalar',
+    updated: '{when} oluşturuldu',
+    none: 'Henüz özet yok. Eşleştirme özet olmadan da çalışır; becerilerini ve diğer profil bilgilerini kullanır.',
+    generate: 'Özetimi oluştur',
+    regenerate: 'Yeniden oluştur',
+    results: {
+      updated: 'Özetin güncel profilinden yeniden oluşturuldu.',
+      unchanged: 'Profilin değişmedi, özet olduğu gibi kalıyor.',
+      removed: 'Profilinde özetlenecek metin yok, eski özet kaldırıldı.',
+      empty: 'Önce bir tanıtım, ilgi alanı, hedef pozisyon ya da hedef ekle; henüz özetlenecek bir şey yok.',
+      consent_required: 'Önce gizlilik ayarlarından profil metninin yapay zekâyla işlenmesine izin ver.',
+      quota_exceeded: 'Programın bu ayın yapay zekâ bütçesini kullandı. Daha sonra tekrar dene.',
+      unavailable: 'Şu an kullanılamıyor. Mevcut özetin değişmedi.',
     },
   },
   matchDecision: {
@@ -22831,6 +22871,8 @@ const de: Dict = {
   // verpflichtend: Er hält ein Ranking, das eine Einstellungsentscheidung
   // beeinflusst, erklärbar und anfechtbar.
   adminMatching: {
+    customField: 'Frage',
+    tolerance: 'Toleranz',
     title: 'Matching-Regeln',
     intro: 'Lege fest, was ein gutes Mentor-Matching ausmacht und welche Regeln nicht verhandelbar sind. Teste einen Entwurf an echten Mentees, bevor du ihn speicherst — eine Simulation ordnet niemanden zu.',
     builtIn: 'Kein Regelset ist Standard: Vorschläge nutzen die eingebauten Regeln (gemeinsame Skills, Mentor-Kapazität).',
@@ -28299,6 +28341,24 @@ const de: Dict = {
       round_not_in_review: 'Die Runde vor dem Veröffentlichen zur Prüfung geben.',
       round_conflict: 'Die Runde hat sich inzwischen geändert. Neu laden und erneut versuchen.',
       round_too_large: 'Zu viele Personen für einen Durchgang (höchstens {maxMentees} Mentees und {maxMentors} Mentoren).',
+    },
+  },
+  profileDigest: {
+    title: 'Wie das Matching dein Profil liest',
+    intro: 'Eine kurze Zusammenfassung und einige Themen, von KI aus deiner eigenen Vorstellung, deinen Interessen, der Zielposition, deinen Fähigkeiten und deinen Zielen erstellt. Das Matching vergleicht nur die Themen; erstellt wird sie nur, wenn du der KI-Verarbeitung deines Profiltexts zugestimmt hast.',
+    themes: 'Themen',
+    updated: 'Erstellt {when}',
+    none: 'Noch keine Zusammenfassung. Das Matching funktioniert auch ohne — es nutzt deine Fähigkeiten und die übrigen Profilangaben.',
+    generate: 'Zusammenfassung erstellen',
+    regenerate: 'Neu erstellen',
+    results: {
+      updated: 'Deine Zusammenfassung wurde aus deinem aktuellen Profil neu erstellt.',
+      unchanged: 'Dein Profil hat sich nicht geändert, die Zusammenfassung bleibt, wie sie ist.',
+      removed: 'Dein Profil enthält keinen Text zum Zusammenfassen, die alte Zusammenfassung wurde entfernt.',
+      empty: 'Füge zuerst eine Vorstellung, Interessen, eine Zielposition oder ein Ziel hinzu — es gibt noch nichts zusammenzufassen.',
+      consent_required: 'Erlaube zuerst in deinen Datenschutzeinstellungen die KI-Verarbeitung deines Profiltexts.',
+      quota_exceeded: 'Dein Programm hat das KI-Budget dieses Monats aufgebraucht. Versuche es später erneut.',
+      unavailable: 'Gerade nicht verfügbar. Deine aktuelle Zusammenfassung bleibt unverändert.',
     },
   },
   matchDecision: {
