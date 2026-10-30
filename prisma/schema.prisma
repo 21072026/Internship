@@ -4367,6 +4367,19 @@ model MentorshipRelation {
   // because re-pointing `relationId` would re-attribute the outgoing mentor's
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId         String?
+  // What the pair agreed to (#1784, story #1782). `expectedEndDate` is when
+  // the pairing is MEANT to finish; `completedAt` is when it actually ended —
+  // deliberately two columns. Not `stageDeadline` either: that is the pipeline
+  // STAGE clock, rewritten on every stage move. The agreed meeting rhythm is
+  // the existing `expectedMeetingIntervalWeeks` (#2014) — one cadence column,
+  // not a second one in days. Rules: src/lib/relationSchedule.ts.
+  expectedEndDate            DateTime?
+  // How many times the end date was moved by the explicit extend action
+  // (#1786) — an edit of `expectedEndDate` never counts as an extension.
+  durationExtendedCount      Int              @default(0)
+  // The ending-soon nudge's idempotency stamp (#1786), in the shape of
+  // `deadlineReminderSentAt`: one nudge per end date; extending clears it.
+  endingSoonNotifiedAt       DateTime?
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
