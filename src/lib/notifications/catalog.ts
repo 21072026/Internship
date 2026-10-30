@@ -74,9 +74,11 @@ export interface NotificationLinkIds {
   relationId: string;
   menteeId: string;
   projectId: string;
+  /** A `thread` link to a conversation (`/messages/c/<id>`) rather than a relation's thread. */
+  conversationId: string;
 }
 
-export const LINK_ID_KEYS = ['relationId', 'menteeId', 'projectId'] as const;
+export const LINK_ID_KEYS = ['relationId', 'menteeId', 'projectId', 'conversationId'] as const;
 
 export interface NotificationEventDef {
   /** Matches a key of `notifications.events` in src/i18n/dictionaries.ts. */
@@ -113,9 +115,10 @@ export interface NotificationEventDef {
 // announcements' bulk copy and every `batched` event (the deadline and SLA
 // reminders among them) — volume a digest may roll up, read when the reader
 // chooses; scripts/test/notification-catalog.test.mjs pins that no event
-// in a digest, report or newsletter group lists `push`. New-message push stays
-// in src/lib/messagePush.ts (per-thread collapsing) until messages move behind
-// the router (#1711).
+// in a digest, report or newsletter group lists `push`. New messages push too
+// (#1464, the channel people expect to interrupt them): their sends pin
+// `channels: ['push']` from the message routes and pass the preview; a `thread`
+// event collapses per thread in the tray (adapters/push.ts).
 
 // ── The catalogue ────────────────────────────────────────────────────────────
 // One entry per `notifications.events` key. Both directions are asserted by
@@ -190,10 +193,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'guestRsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['guest', 'title'] },
 
   // Conversations: everything one human typed at another.
-  { key: 'message.new', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: ['from'] },
-  { key: 'message.newGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
+  { key: 'message.new', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'thread', params: ['from'] },
+  { key: 'message.newGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'thread', params: [] },
   // Already delivered by mail by definition — an e-mail about an e-mail is noise.
-  { key: 'message.newByEmail', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp'], delivery: 'immediate', link: 'thread', params: [] },
+  { key: 'message.newByEmail', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'push'], delivery: 'immediate', link: 'thread', params: [] },
   { key: 'question.asked', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: ['from'] },
   { key: 'question.askedGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
   { key: 'question.answered', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
