@@ -80,6 +80,8 @@ test.describe('meeting feedback', () => {
   });
 
   test('the sweep asks each mentee once; a second sweep and the guest are never asked', async ({ page }) => {
+    // The mail waits for the job worker's tick (#1711), up to a minute on a busy queue.
+    test.slow();
     await signInAndSettle(page, admin, PW, '/admin');
     await page.request.get('/api/cron?job=meeting-logs');
     const asked = await prisma.meeting.findMany({ where: { id: { in: meetingIds } }, select: { id: true, feedbackAskedAt: true } });
@@ -91,7 +93,7 @@ test.describe('meeting feedback', () => {
     const mails = () => prisma.emailLog.count({ where: { to: { in: mentees }, category: 'meeting-feedback' } });
     // The ask now leaves through the router's e-mail job (#1711), which the
     // worker drains every few seconds — so it is polled, not read at once.
-    await expect.poll(mails, { timeout: 30_000 }).toBe(4);
+    await expect.poll(mails, { timeout: 60_000 }).toBe(4);
     const first = await mails();
     await page.request.get('/api/cron?job=meeting-logs');
     await page.waitForTimeout(3_000);

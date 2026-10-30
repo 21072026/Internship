@@ -264,7 +264,7 @@ test('the INTERNSHIP control: with auto-send on, the outcome mail is attempted a
     // SKIPPED ("SMTP not configured") — the attempt is the point, not delivery.
     // It leaves through the router's e-mail job (#1711), so it is polled.
     await expect
-      .poll(async () => prisma.emailLog.count({ where: { to: seeded.menteeEmail, category: 'outcome' } }), { timeout: 30_000 })
+      .poll(async () => prisma.emailLog.count({ where: { to: seeded.menteeEmail, category: 'outcome' } }), { timeout: 60_000 })
       .toBe(1);
     expect(await prisma.interactionLog.count({ where: { relationId: seeded.relation.id, type: 'Email' } })).toBe(1);
   } finally {
