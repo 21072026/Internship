@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Partner portal shows a commission's kind and plan version** (#3348). `/affiliate/commissions` gets a \"Type\" column (first-payment band / percent / from the previous system) with the plan version next to it (`v1`; none for an imported row, whose plan version is 0). `partnerCommissions()` now returns `planVersion`. Read-only, same partner scope as before.",
+  "notes": {
+    "en": ["In your partner account, each commission now shows its type and the plan version it was calculated under, so you can check why it has that amount."],
+    "tr": ["Partner hesabında her komisyon artık türünü ve hesaplandığı plan sürümünü gösteriyor; tutarın neden o olduğunu kendin kontrol edebilirsin."],
+    "de": ["In Ihrem Partnerkonto zeigt jede Provision jetzt ihre Art und die Planversion, nach der sie berechnet wurde – so können Sie die Höhe selbst nachvollziehen."]
+  }
+}

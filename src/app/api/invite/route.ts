@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
 import { enforceQuota } from '@/lib/quota';
-import { quotaError } from '@/lib/quotaRule';
+import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
@@ -216,7 +216,7 @@ export async function POST(request: Request) {
       // The admin-seat quota (#1752). ADMIN only, on purpose: inviting a MENTOR
       // or a MENTEE is the free core and is never checked or counted — do not
       // widen this condition. An open ADMIN invitation holds a seat.
-      if (role === 'ADMIN') {
+      if (takesAdminSeat(role)) {
         const seats = await enforceQuota(resolveOrgId(session), 'ADMIN_SEATS', { pendingAdminInvites: true });
         if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
       }
