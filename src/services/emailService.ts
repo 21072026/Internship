@@ -43,6 +43,8 @@ import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 // imports nothing of ours, so this stays a leaf dependency and cannot cycle.
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
+import { programGrantsFor } from '@/lib/authzScope';
+import { programRelationWhere } from '@/lib/programScopeRule';
 import { orgWhere } from '@/lib/tenantFilter';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
@@ -6081,6 +6083,10 @@ export async function sendDailyActivityDigests() {
         skipped++;
         continue;
       }
+      // A PROGRAM_ADMIN's table holds its own programmes' mentees only (#1577).
+      const grants = await programGrantsFor({ id: a.id, role: 'ADMIN', orgId });
+      const items = grants ? await getSystemMenteeActivity(since, orgFilter, programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput) : adminItems;
+      if (items.length === 0) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
       // Their own organisation's to-dos, by the same org rule as the table.
@@ -6098,7 +6104,7 @@ export async function sendDailyActivityDigests() {
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
             ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
             <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(adminItems, aLocale, A)}
+            ${activityDigestTable(items, aLocale, A)}
             ${overdue}
             <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           </div>`,

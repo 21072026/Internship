@@ -4,6 +4,7 @@ import { logActivity } from '@/lib/activity';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { adminTierFor, type AdminTier, type ScopeGrant } from '@/lib/authzRule';
+import { grantRelationTerms } from '@/lib/programScopeRule';
 
 /**
  * Fail-closed data scoping (#814 / #831 / #849).
@@ -92,14 +93,12 @@ function adminTier(u: ScopeUser): AdminTier | null {
   return adminTierFor('ADMIN', u.adminLevel ?? null);
 }
 
-function grantRelationTerms(u: ScopeUser): Prisma.MentorshipRelationWhereInput[] {
-  return (u.grants ?? [])
-    .filter((g) => g.orgId === u.orgId && (g.cohortId || g.companyId))
-    .map((g) => ({ ...(g.cohortId ? { cohortId: g.cohortId } : {}), ...(g.companyId ? { companyId: g.companyId } : {}) }));
+function ownGrants(u: ScopeUser) {
+  return (u.grants ?? []).filter((g) => g.orgId === u.orgId);
 }
 
 function programRelationScope(u: ScopeUser): Prisma.MentorshipRelationWhereInput {
-  const terms = grantRelationTerms(u);
+  const terms = grantRelationTerms(ownGrants(u));
   return terms.length ? { OR: terms } : { id: NO_MATCH };
 }
 
@@ -198,7 +197,7 @@ const BUILDERS: {
       const tier = adminTier(u);
       if (tier === 'PROGRAM_ADMIN') {
         const terms: Prisma.CompanyWhereInput[] = [];
-        for (const g of (u.grants ?? []).filter((x) => x.orgId === u.orgId)) {
+        for (const g of ownGrants(u)) {
           if (g.companyId) terms.push({ id: g.companyId });
           else if (g.cohortId) terms.push({ mentorships: { some: { cohortId: g.cohortId } } });
         }
@@ -219,6 +218,25 @@ const BUILDERS: {
     COMPANY: async (u) => ({ id: u.companyId ?? NO_MATCH }),
   },
 };
+
+/**
+ * A server-rendered admin page's program scope (#1577): the live grants of a
+ * PROGRAM_ADMIN (the caller narrows with src/lib/programScopeRule.ts), or null
+ * for everyone the page already reads the whole tenant for. Read LIVE, like
+ * `scopeForRole` — the session's tier is presentation only. An ADMIN row that
+ * is gone, no longer an ADMIN or carries an unknown tier gets an empty list:
+ * reach nothing.
+ */
+export async function programGrantsFor(user: { id: string; role: string; orgId?: string | null }): Promise<ScopeGrant[] | null> {
+  if (user.role !== 'ADMIN') return null;
+  const orgId = user.orgId || (await defaultOrgId());
+  const row = await prisma.user.findUnique({ where: { id: user.id }, select: { role: true, adminLevel: true } });
+  if (row?.role !== 'ADMIN') return [];
+  const tier = adminTierFor('ADMIN', row.adminLevel);
+  if (tier === null) return []; // an unknown tier value reaches nothing
+  if (tier !== 'PROGRAM_ADMIN') return null;
+  return prisma.adminScopeGrant.findMany({ where: { userId: user.id, orgId }, select: { orgId: true, cohortId: true, companyId: true } });
+}
 
 /**
  * The `where` fragment this user may read for `resource`, or `null` when the

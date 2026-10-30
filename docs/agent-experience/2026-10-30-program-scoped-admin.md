@@ -13,3 +13,10 @@
   after-state with the same rule.
 - **`npm run build` OOMs at the default heap here.** Run it with
   `NODE_OPTIONS=--max-old-space-size=8192`.
+- **Read the tier table before opening a route to a tier.** Bulk edit asks `user.write`, which
+  PROGRAM_ADMIN does not hold; a grant check there would be dead code. The one rule
+  (`TIER_PERMISSIONS`) decides *whether*, the grants only decide *where*.
+- **Server components and cron mails are the forgotten readers.** `grep -rl "@/lib/prisma"
+  src/app/admin` found the dashboard and the re-engagement page; following
+  `getSystemMenteeActivity` found the daily digest mail. Fan-outs to "every active ADMIN" are
+  a whole class of their own (#3485).
