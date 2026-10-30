@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * /trust (#2027) — the public trust centre.
@@ -51,6 +53,24 @@ test('links the supply-chain evidence (#2059)', async ({ page }) => {
   await expect(docs.locator('a[href="/sbom.cdx.json"]')).toHaveCount(1);
   await expect(docs.locator('a[href$="/docs/trust/vulnerability-management.md"]')).toHaveCount(1);
   await expect(docs.locator('a[href$="/docs/legal/third-party-licenses.md"]')).toHaveCount(1);
+});
+
+test('links the data-processing pack, and every link names a file in this repository (#2029)', async ({ page }) => {
+  await page.goto('/trust');
+
+  // A DPO or a works council gets the agreement, the transfer annex, the
+  // Art. 30 record, the DPIA and the lifecycle commitment without asking.
+  const legal = page.getByTestId('trust-legal-docs');
+  await expect(legal).toBeVisible();
+  const hrefs = await legal.locator('a').evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href));
+  expect(hrefs).toHaveLength(5);
+  // The links point at main on GitHub, so "resolves" means: the path after
+  // /blob/main/ exists in the tree this page was built from.
+  for (const href of hrefs) {
+    const path = href.split('/blob/main/')[1];
+    expect(path, href).toBeTruthy();
+    expect(existsSync(join(process.cwd(), path)), path).toBe(true);
+  }
 });
 
 test('publishes the subprocessor register as a table', async ({ page }) => {
