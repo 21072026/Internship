@@ -999,6 +999,7 @@ model User {
   // separate contract PR retires it; this is the joinable twin.
   skillRows                         UserSkill[]
   profileDigest                     ProfileDigest?
+  relationSeats                     RelationParticipant[]
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -4465,6 +4466,14 @@ model MentorshipRelation {
   // manager made". Shown to both sides on the archived record. Prose about the
   // pairing: scrubbed on the mentee's erasure (accountErasure.ts).
   closurePlan                String?          @db.Text
+  // What SHAPE the relation is (#1804): ONE_TO_ONE | GROUP | PEER | REVERSE |
+  // FLASH. Not the same question as `kind` above, which says WHY it exists
+  // (placement or coaching) — keep both, never merge them. Free String with
+  // the whitelist in src/lib/relationShapes.ts, for the reason pipelineStatus
+  // is one. For ONE_TO_ONE the `mentorId`/`menteeId` scalars ARE the pair; for
+  // any other shape they are the primary pair (the facilitating mentor and the
+  // first mentee) and `participants` holds everyone, them included.
+  relationType               String           @default("ONE_TO_ONE") @db.VarChar(16)
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -4498,6 +4507,8 @@ model MentorshipRelation {
   // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
   // here; see model RelationValue for why.
   value                 RelationValue?
+  // Everyone in it (#1804) — additive to the scalar pair, never instead of it.
+  participants          RelationParticipant[]
   rematchRequests       MentorshipRequest[]            @relation("RematchRequests")
   previousRelation      MentorshipRelation?            @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
@@ -4525,6 +4536,7 @@ model MentorshipRelation {
   @@index([nextActionAt])
   // The /api/v1 keyset (#1990).
   @@index([orgId, updatedAt, id])
+  @@index([relationType])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -7337,6 +7349,36 @@ model ProfileDigest {
   user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
+}
+
+/// One person's seat in a relation (#1804). A child of MentorshipRelation —
+/// no orgId of its own and no TENANT_MODELS entry, like the relation's other
+/// children: it is reached through its relation. A seat is never deleted when
+/// someone leaves: `leftAt` is stamped and the row stays as the record.
+/// The backfill (prisma/backfill-relation-participants.mjs) and the shared
+/// create path write the scalar pair's two seats (isPrimaryPair); a GROUP adds
+/// more.
+/// Readers go through src/lib/relationParticipants.ts.
+model RelationParticipant {
+  id            String    @id @default(cuid())
+  relationId    String
+  userId        String
+  /// MENTOR | MENTEE | FACILITATOR (src/lib/relationShapes.ts).
+  role          String    @db.VarChar(16)
+  /// This seat mirrors the relation's scalar pair (`mentorId`/`menteeId`). It
+  /// grants NOTHING: for the pair the scalars stay the truth, so a mentor
+  /// corrected in place (#2289) can never keep access through a stale row.
+  /// Only seats beyond the pair (isPrimaryPair = false) grant membership.
+  isPrimaryPair Boolean   @default(false)
+  joinedAt      DateTime  @default(now())
+  leftAt        DateTime?
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, userId])
+  @@index([relationId])
+  @@index([userId])
 }
 
 /// Where a pairing was decided (#1789). The human step, named.
