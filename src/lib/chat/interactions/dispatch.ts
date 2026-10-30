@@ -5,6 +5,7 @@ import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import type { InteractionEnvelope } from './envelope';
+import type { CardButton } from '@/lib/chat/card';
 import type { ChatPlatform } from '@prisma/client';
 
 // The ONE dispatcher behind the chat interaction endpoint (#1948). The route
@@ -44,6 +45,10 @@ export interface ChatActionContext {
 
 export interface ChatReply {
   text: string;
+  /** Follow-up buttons (#1951), posting back here as `actionId` + `value`. */
+  buttons?: CardButton[];
+  /** Slack: replace the card that was clicked (a decided request loses its buttons). */
+  replaceOriginal?: boolean;
 }
 
 export type ChatActionHandler = (ctx: ChatActionContext) => Promise<ChatReply>;

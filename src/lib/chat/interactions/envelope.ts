@@ -84,8 +84,12 @@ export function parseTeamsInteraction(activity: unknown): InteractionEnvelope | 
   const externalUserId = id(a.from?.aadObjectId);
   const actionId = str(a.value?.action?.verb);
   if (!teamId || !externalUserId || !actionId || !ACTION_ID.test(actionId)) return null;
-  const v = value(a.value?.action?.data);
-  if (a.value?.action?.data !== undefined && v === null) return null;
+  // Our own Adaptive Card buttons send `data: { value }` (src/lib/chat/card.ts);
+  // that string is the value, exactly like a Slack button's.
+  const data = a.value?.action?.data as { value?: unknown } | undefined;
+  const raw = data && typeof data === 'object' && typeof data.value === 'string' ? data.value : data;
+  const v = value(raw);
+  if (raw !== undefined && v === null) return null;
   return { teamId, externalUserId, actionId, value: v, responseUrl: null, activityId: id(a.id) };
 }
 

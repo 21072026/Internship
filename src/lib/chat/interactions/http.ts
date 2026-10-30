@@ -5,6 +5,7 @@ import { rateLimit } from '@/lib/rateLimit';
 import { verifySlackSignature } from '@/lib/chat/slackSignature';
 import { verifyBotFrameworkRequest } from '@/lib/chat/botFrameworkAuth';
 import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
+import { slackBlocks, teamsAdaptiveCard } from '@/lib/chat/card';
 import { dispatchInteraction, parseSlackInteraction, parseTeamsInteraction, isSlackResponseUrl, type ChatReply } from './index';
 
 // The HTTP half of the chat interaction endpoint (#1948). Both platforms, in
@@ -58,7 +59,15 @@ async function postSlackReply(responseUrl: string | null, reply: ChatReply): Pro
     const res = await fetch(responseUrl as string, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ response_type: 'ephemeral', replace_original: false, text: reply.text }),
+      body: JSON.stringify({
+        response_type: 'ephemeral',
+        // A decision answered on the card itself replaces it, so its buttons
+        // cannot be pressed a second time (#1951); everything else is a new
+        // ephemeral line under it.
+        replace_original: reply.replaceOriginal === true,
+        text: reply.text,
+        ...(reply.buttons?.length ? { blocks: slackBlocks(reply.text, null, reply.buttons) } : {}),
+      }),
       signal: AbortSignal.timeout(5_000),
       redirect: 'error',
     });
@@ -105,7 +114,11 @@ export async function teamsVerifiedInteraction(activity: unknown): Promise<NextR
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } });
   }
   const outcome = await dispatchInteraction('TEAMS', env);
-  // The Universal Action invoke response: a message shown to the clicker.
+  // The Universal Action invoke response: a card when the answer offers
+  // buttons (#1951), else a message shown to the clicker.
+  if (outcome.reply.buttons?.length) {
+    return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.card.adaptive', value: teamsAdaptiveCard(outcome.reply.text, null, outcome.reply.buttons) });
+  }
   return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.activity.message', value: outcome.reply.text });
 }
 

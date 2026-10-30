@@ -77,6 +77,19 @@ is the e2e sink's switch and is never set on a deployment); Teams is answered
 in the invoke response. The rate limit and the replay memory use
 `src/lib/rateLimit.ts` — per process unless `RATE_LIMIT_REDIS_URL` is set.
 
+**Booking from chat** (#1951) is the first flow on it. A mentee's "my next
+meetings" reply carries a **Book** button; `meeting.book` answers with the next
+three times that work for both (`suggestedTimesFor()` — the app's own
+suggested-times answer, on the clicker's clock); `meeting.book.pick` opens a
+**MeetingRequest** through `createMeetingRequest()`; the mentor's chat card for
+that request carries **Accept/Decline**, which call `decideMeetingRequest()`.
+Those three services ARE the bodies of `GET /api/meetings/suggested-times`,
+`POST /api/meeting-requests` and `PATCH /api/meeting-requests/[id]`, moved
+out so the routes and the chat handlers share one write path each; a handler
+builds a Session-shaped view of the person the dispatcher verified (never a
+sign-in) and calls them as that person. Chat adds **no new right** (decided on
+#1951): a mentee requests, the mentor confirms — a pick never writes a Meeting.
+
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
 store-submission burden and the commercial decision are the parts that get lost
