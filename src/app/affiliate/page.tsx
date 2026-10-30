@@ -2,11 +2,12 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { getServerDictionary } from '@/i18n/server';
 import { CONTRACT_PATH, requirePortalPartner } from '@/lib/affiliatePortal';
-import { partnerSummary } from '@/lib/affiliatePartnerView';
+import { partnerPlanTerms, partnerSummary } from '@/lib/affiliatePartnerView';
 import { AFFILIATE_CURRENCIES } from '@/lib/affiliateProgramSettings';
 import { formatMinorAmount } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { formatDate } from '@/lib/relativeTime';
+import { CommissionTerms } from './CommissionTerms';
 import { CopyLink } from './CopyLink';
 
 // The partner portal's home (docs/affiliate-module.md, #3117): the referral link,
@@ -25,7 +26,7 @@ export default async function AffiliateHomePage() {
     );
   }
 
-  const summary = await partnerSummary(portal.partner);
+  const [summary, plan] = await Promise.all([partnerSummary(portal.partner), partnerPlanTerms(portal.partner)]);
   const money = (minor: number) => formatMinorAmount(minor, AFFILIATE_CURRENCIES[0], locale);
   const tiles: [string, string, string][] = [
     ['customers', L.customersCount, String(summary.customers)],
@@ -72,6 +73,8 @@ export default async function AffiliateHomePage() {
           ))}
         </div>
       </section>
+
+      <CommissionTerms terms={plan.terms} planVersion={plan.planVersion} effectiveAt={plan.effectiveAt} locale={locale} L={L} />
 
       {portal.contract.currentVersion > 0 && (
         <Link href={CONTRACT_PATH} className="text-sm font-medium text-blue-600 hover:underline">

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**SSO directory sync (#1943):** every SSO sign-in (SAML and OIDC, through `completeSsoSignIn()`) refreshes the profile from the IdP's claims. New `SsoAttributeMapping` (claim → allowlisted target: `fullName`, `department`, `targetPosition`, `city`, `country`, `timezone`, `phone`, `photo`, `attr:<OrgAttribute.key>`; tenant model), `Organization.ssoAuthoritative`, `User.ssoLastSyncedAt` / `ssoSyncError` / `ssoPhotoUrlHash` (all additive). Overwrites go through `planFieldUpdates()` (fill gaps unless authoritative). The photo is fetched through the SSRF guard (5 s, 2 MB, image signature) or decoded from inline base64, stored as `AvatarFile` bytes after the response, never hotlinked; no sync problem fails a sign-in. API `/api/admin/organizations/[id]/sso-attribute-mappings`, card on `/admin/organizations`, `sso.profile_synced` audit line with field names only. Rule in `src/lib/ssoDirectorySyncRule.ts` (`scripts/test/sso-directory-sync.test.mjs`), e2e `e2e/sso-directory-sync.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Single sign-on now keeps profiles up to date: department, title, location, your own attributes and the profile photo are refreshed from your identity provider at every sign-in."],
+    "tr": ["Tek oturum açma artık profilleri güncel tutuyor: departman, unvan, konum, size özel alanlar ve profil fotoğrafı her girişte kimlik sağlayıcınızdan yenileniyor."],
+    "de": ["Single Sign-on hält Profile jetzt aktuell: Abteilung, Position, Standort, Ihre eigenen Attribute und das Profilfoto werden bei jeder Anmeldung aus Ihrem Identitätsanbieter aktualisiert."]
+  }
+}

@@ -49,7 +49,7 @@ export interface AnnouncementMailInput {
   text: string;
   translations: Record<string, string> | Prisma.JsonValue;
   link?: string | null;
-  image?: { data: Buffer; contentType: string } | null;
+  image?: { data: Buffer; contentType: string; altText?: string | null } | null;
 }
 
 export interface AnnouncementMailResult {
@@ -74,7 +74,10 @@ export async function mailAnnouncement(input: AnnouncementMailInput): Promise<An
   // The image is attached inline (cid:) rather than linked: /api/announcements/
   // <id>/image requires a session, so an <img src="https://…"> would render as
   // a broken image in every mail client.
-  const imageHtml = image ? `<p><img src="cid:${ANNOUNCEMENT_IMAGE_CID}" alt="" style="max-width:100%;height:auto"></p>` : '';
+  // alt is the author's description (#3388), or empty for a decorative image.
+  const imageHtml = image
+    ? `<p><img src="cid:${ANNOUNCEMENT_IMAGE_CID}" alt="${escapeHtml(image.altText ?? '').replace(/"/g, '&quot;')}" style="max-width:100%;height:auto"></p>`
+    : '';
   const attachments = image
     ? [{ filename: announcementEmailImageFilename(image.contentType), content: image.data, contentType: image.contentType, cid: ANNOUNCEMENT_IMAGE_CID }]
     : undefined;

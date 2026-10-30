@@ -46,6 +46,8 @@ interface AnnouncementRecord {
   machineTranslated?: Locale[];
   link: string | null;
   imageUrl: string | null;
+  /** The author's description of the image (#3388); null = decorative. */
+  imageAlt?: string | null;
   sentByName: string | null;
   recipientCount: number;
   emailedCount: number;
@@ -88,6 +90,8 @@ export default function AdminAnnouncementsPage() {
   const [editTab, setEditTab] = useState<Locale>(locale);
   const [editLink, setEditLink] = useState('');
   const [editDropImage, setEditDropImage] = useState(false);
+  const [imageAlt, setImageAlt] = useState('');
+  const [editImageAlt, setEditImageAlt] = useState('');
   const [rowBusy, setRowBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // The month's broadcast band (#1754). Shown next to the "also send by email"
@@ -116,6 +120,7 @@ export default function AdminAnnouncementsPage() {
 
   const clearImage = () => {
     setImage(null);
+    setImageAlt('');
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -178,7 +183,10 @@ export default function AdminAnnouncementsPage() {
       if (Object.keys(audience).length > 0) body.append('audience', JSON.stringify(audience));
       // datetime-local is the admin's own wall clock; toISOString() carries it as an instant.
       if (scheduleAt) body.append('scheduledAt', new Date(scheduleAt).toISOString());
-      if (image) body.append('image', image.file);
+      if (image) {
+        body.append('image', image.file);
+        body.append('imageAlt', imageAlt);
+      }
 
       const res = await fetch('/api/admin/announcements', { method: 'POST', body });
       const data = await res.json();
@@ -231,6 +239,7 @@ export default function AdminAnnouncementsPage() {
     setEditTab(filledLocales(existing)[0] ?? locale);
     setEditLink(a.link ?? '');
     setEditDropImage(false);
+    setEditImageAlt(a.imageAlt ?? '');
   };
 
   const cancelEdit = () => {
@@ -251,6 +260,8 @@ export default function AdminAnnouncementsPage() {
           machineTranslated: editMachine,
           ...(editLink ? { link: editLink } : {}),
           ...(editDropImage ? { imageAction: 'remove' } : {}),
+          // Only an image that stays gets a description (#3388).
+          ...(!editDropImage && history.find((h) => h.id === editId)?.imageUrl ? { imageAlt: editImageAlt } : {}),
         }),
       });
       const data = await res.json();
@@ -397,7 +408,7 @@ export default function AdminAnnouncementsPage() {
                     data-testid="announcement-image-preview"
                     className="h-24 w-24 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
                   />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs text-gray-500 truncate">{image.file.name}</p>
                     <div className="flex gap-2 mt-1.5">
                       <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
@@ -408,6 +419,18 @@ export default function AdminAnnouncementsPage() {
                         {t.announcements.imageRemove}
                       </Button>
                     </div>
+                    <label className="mt-2 block text-xs text-gray-600 dark:text-gray-300">
+                      {t.imageViewer.altLabel}
+                      <input
+                        type="text"
+                        value={imageAlt}
+                        maxLength={TEXT_LIMITS.imageAltText}
+                        onChange={(e) => setImageAlt(e.target.value)}
+                        data-testid="announcement-image-alt"
+                        className="mt-0.5 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                      />
+                      <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{t.imageViewer.altHint}</span>
+                    </label>
                   </div>
                 </div>
               ) : (
@@ -500,6 +523,20 @@ export default function AdminAnnouncementsPage() {
                           {t.announcements.removeImage}
                         </label>
                       )}
+                      {a.imageUrl && !editDropImage && (
+                        <label className="mt-2 block text-xs text-gray-600 dark:text-gray-300">
+                          {t.imageViewer.altLabel}
+                          <input
+                            type="text"
+                            value={editImageAlt}
+                            maxLength={TEXT_LIMITS.imageAltText}
+                            onChange={(e) => setEditImageAlt(e.target.value)}
+                            data-testid="announcement-edit-image-alt"
+                            className="mt-0.5 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                          />
+                          <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{t.imageViewer.altHint}</span>
+                        </label>
+                      )}
                       {/* An edit corrects the record; it does not send again.
                           Saying so here stops "fix a typo" from feeling like it
                           will ping everyone a second time. */}
@@ -519,17 +556,16 @@ export default function AdminAnnouncementsPage() {
                   {editId !== a.id && a.imageUrl && (
                     <button
                       type="button"
-                      onClick={() => lightbox.open([{ src: a.imageUrl! }])}
-                      aria-label={t.imageViewer.viewImage}
+                      onClick={() => lightbox.open([{ src: a.imageUrl!, alt: a.imageAlt ?? undefined }])}
+                      aria-label={a.imageAlt ? t.imageViewer.view.replace('{name}', a.imageAlt) : t.imageViewer.viewImage}
                       className="mt-2 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={a.imageUrl}
-                        // Decorative here: the announcement text right above it is
-                        // the content. A label like "Image (optional)" would just be
-                        // noise for a screen reader.
-                        alt=""
+                        // The author's description (#3388); without one the image is
+                        // decorative — the announcement text above is the content.
+                        alt={a.imageAlt ?? ''}
                         className="max-h-40 rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
                       />
                     </button>

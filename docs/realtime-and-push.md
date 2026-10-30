@@ -259,8 +259,12 @@ worker'ları **blokluyor** (`playwright.config.ts`), bu yüzden `serviceWorkers:
 
 ## Yük testi notu
 
-`GET /api/realtime/stream` k6 senaryosuna **alınmadı**: `k6/` kuralları
-kimlik doğrulamalı uçları yasaklıyor (bkz. CLAUDE.md ve `docs/testing.md`) ve bu
-uç oturum olmadan hemen 401 döner — ölçülecek bir şey kalmaz. Bağlantı başına
+`GET /api/realtime/stream` gece çalışan anonim k6 senaryosunda yok (oturumsuz 401
+döner), ama #1612'den beri **yalnız demo ortamına** karşı çalışan `k6/sse-load.js`
+onu ölçüyor: N eşzamanlı akış, kurulum süresi (TTFB), `ready` oranı ve sunucu
+heartbeat sapması. Bunun için uç iki küçük şey kabul ediyor: `?maxSeconds=`
+(5 sn…30 dk arası kısıtlı, akışı yalnızca kısaltabilir — tarayıcı göndermez) ve
+heartbeat yorumunda sunucu saati (`: ping <epoch ms>`; EventSource yorumları yok
+sayar). Ayrıntı: `docs/testing.md` § The demo-only scenarios. Bağlantı başına
 maliyet, heartbeat'te iki indeksli `COUNT` ile sınırlı ve kullanıcı başına
 bağlantı sayısı `MAX_CONNECTIONS_PER_USER` ile kapalı.

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { relationScheduleFields } from '@/lib/relationSchedule';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { decideMentorshipRequest } from '@/lib/mentorshipDecision';
@@ -43,6 +44,8 @@ export async function GET(request: Request) {
 const decideSchema = z.object({
   requestId: z.string().min(1),
   action: z.enum(['accept', 'reject']),
+  // The agreed duration and rhythm (#1784), all optional.
+  ...relationScheduleFields,
 });
 
 // PUT — accept (relation with ME) or reject. No mentorId parameter exists on
@@ -62,6 +65,11 @@ export async function PUT(request: Request) {
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
       restrictToPreferredMentorId: session.user.id,
+      schedule: {
+        expectedEndDate: parsed.data.expectedEndDate,
+        durationMonths: parsed.data.durationMonths,
+        expectedMeetingIntervalWeeks: parsed.data.expectedMeetingIntervalWeeks,
+      },
       request,
     });
     return NextResponse.json(result.body, { status: result.status });

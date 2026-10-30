@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { relationScheduleFields } from '@/lib/relationSchedule';
 import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
 import { getLocale } from '@/i18n/server';
 import { prisma } from '@/lib/prisma';
@@ -122,6 +123,8 @@ const decideSchema = z.object({
   decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
   // Required for 'cancel' (#1775) — checked in decideMentorshipRequest.
   reason: z.string().max(500).optional(),
+  // The agreed duration and rhythm (#1784), all optional.
+  ...relationScheduleFields,
 });
 
 // PUT — decide a request. Approving requires a mentorId and creates the
@@ -138,7 +141,7 @@ export async function PUT(request: Request) {
   return await withTenantScope(session, async () => {
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const { requestId, action, mentorId, suggestionBatchId, decisionNote, reason } = parsed.data;
+  const { requestId, action, mentorId, suggestionBatchId, decisionNote, reason, expectedEndDate, durationMonths, expectedMeetingIntervalWeeks } = parsed.data;
 
   // The request and the chosen mentor must both be in the caller's tenant; a
   // foreign id reads as not found, never as "exists" (#2542).
@@ -164,6 +167,7 @@ export async function PUT(request: Request) {
     mentorId,
     suggestionBatchId,
     decisionNote,
+    schedule: { expectedEndDate, durationMonths, expectedMeetingIntervalWeeks },
     locale: await getLocale(),
     reason,
     actorId: session.user.id,

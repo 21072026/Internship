@@ -33,6 +33,7 @@ import { inTransaction, type Db } from './dbHandle';
 import { randomUUID } from 'node:crypto';
 import { runWithOrg } from './orgContext';
 import { acquireLease, releaseLease, replicaId } from './jobs/lease';
+import { createUser } from '@/lib/userCreate';
 // The store is passed in, not left to `lease.ts`'s lazy `import('./leaseStore')`:
 // the Playwright spec runner transforms static imports only, so under it that
 // dynamic import fails, the lease reads as held, and the run is refused (#3145).
@@ -416,7 +417,7 @@ async function placeOnFunnel(
     // is set, so this branch is not reached). The merchant's real mailbox,
     // which could collide with an account in either world, is never used as a
     // login address here.
-    const created = await tx.user.create({
+    const created = await createUser(tx, {
       data: {
         orgId: context.orgId,
         email: funnel.leadEmail,
@@ -434,7 +435,7 @@ async function placeOnFunnel(
         ...datedAt('createdAt', context.now),
       },
       select: { id: true },
-    });
+    }, { source: 'marketing_import' });
     leadId = created.id;
   } else {
     if (funnel.leadChanged.length > 0) {

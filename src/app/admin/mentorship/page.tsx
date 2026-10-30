@@ -24,6 +24,7 @@ import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { CADENCE_PRESETS_WEEKS, DURATION_PRESETS_MONTHS, cadenceLabel, monthsLabel } from '@/lib/relationSchedule';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
@@ -95,7 +96,7 @@ export default function MentorshipPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const assignDialogRef = useModalFocus<HTMLDivElement>(showForm, () => setShowForm(false));
-  const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '' });
+  const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '', durationMonths: '', cadenceWeeks: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
@@ -226,6 +227,9 @@ export default function MentorshipPage() {
           mentorId: formData.mentorId,
           menteeId: formData.menteeId,
           companyId: formData.companyId || undefined,
+          // The agreed duration and rhythm (#1784); left out → the org's defaults.
+          ...(formData.durationMonths ? { durationMonths: Number(formData.durationMonths) } : {}),
+          ...(formData.cadenceWeeks ? { expectedMeetingIntervalWeeks: Number(formData.cadenceWeeks) } : {}),
         }),
       });
       if (!res.ok) {
@@ -250,7 +254,7 @@ export default function MentorshipPage() {
       }
       await fetchRelations();
       setShowForm(false);
-      setFormData({ mentorId: '', menteeId: '', companyId: '' });
+      setFormData({ mentorId: '', menteeId: '', companyId: '', durationMonths: '', cadenceWeeks: '' });
     } catch {
       setFormError(t.mentorships.assignFailed);
     } finally {
@@ -524,6 +528,28 @@ export default function MentorshipPage() {
                 value={formData.companyId}
                 onChange={(e) => setFormData((p) => ({ ...p, companyId: e.target.value }))}
               />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Select
+                  label={t.relationSchedule.duration}
+                  options={[
+                    { value: '', label: t.relationSchedule.useDefault },
+                    ...DURATION_PRESETS_MONTHS.map((n) => ({ value: String(n), label: monthsLabel(t.relationSchedule, n) })),
+                  ]}
+                  value={formData.durationMonths}
+                  onChange={(e) => setFormData((p) => ({ ...p, durationMonths: e.target.value }))}
+                  data-testid="assign-duration"
+                />
+                <Select
+                  label={t.relationSchedule.cadence}
+                  options={[
+                    { value: '', label: t.relationSchedule.useDefault },
+                    ...CADENCE_PRESETS_WEEKS.map((n) => ({ value: String(n), label: cadenceLabel(t.relationSchedule, n) })),
+                  ]}
+                  value={formData.cadenceWeeks}
+                  onChange={(e) => setFormData((p) => ({ ...p, cadenceWeeks: e.target.value }))}
+                  data-testid="assign-cadence"
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
