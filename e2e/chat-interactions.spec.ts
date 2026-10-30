@@ -171,7 +171,11 @@ test('chat interactions: signature, replay window, and the person re-derived fro
       expect(res.status()).toBe(200);
       const json = await res.json();
       expect(json.statusCode).toBe(200);
-      expect(json.value).toContain(title);
+      // A mentee with an active pair also gets a Book button (#1951), so the
+      // answer is an Adaptive Card: the text is its first block.
+      expect(json.type).toBe('application/vnd.microsoft.card.adaptive');
+      expect(json.value.body[0].text).toContain(title);
+      expect(json.value.actions).toEqual([expect.objectContaining({ type: 'Action.Execute', verb: 'meeting.book', data: { value: relation.id } })]);
     }
     const teamsForged = await (await postTeams('interactions', invoke(`aad-forged-${stamp}`), `Bearer ${await sign(claims)}`)).json();
     expect(teamsForged.value).toContain('/account');
