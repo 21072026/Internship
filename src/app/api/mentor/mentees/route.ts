@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
       let mentee;
       try {
         mentee = await prisma.$transaction(async (tx) => {
-          const created = await tx.user.create({
+          const created = await createUser(tx, {
             data: {
               email: finalEmail,
               password: NO_LOGIN_PASSWORD,
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
               referredById,
               sourceId,
             },
-          });
+          }, { source: 'mentor', actorId: session.user.id });
           const active = await findActiveMentorship(tx, created.id);
           if (active) throw new AlreadyMentoredError(created.id, active.id);
           await tx.mentorshipRelation.create({
