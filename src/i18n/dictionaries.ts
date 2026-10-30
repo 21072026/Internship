@@ -3581,6 +3581,8 @@ const en = {
     ssoTenantEnforced: 'Your organisation signs in with single sign-on. The password form below is only for administrators with an exemption.',
     ssoTenantOr: 'or',
     socialContinue: 'Continue with {provider}',
+    socialConsentTitle: 'One step before your account is created',
+    socialConsentExpired: 'This sign-up has expired. Please start again.',
     socialErrors: {
       failed: 'Signing in with that account did not work. Please try again.',
       unverified_email: 'That account\'s email address is not verified with the provider, so it cannot be linked. Sign in with your password, then connect it from your account settings.',
@@ -15096,6 +15098,8 @@ const tr: Dict = {
     ssoTenantEnforced: 'Kurumunuz tek oturum açma ile giriş yapıyor. Aşağıdaki parola formu yalnızca muafiyeti olan yöneticiler içindir.',
     ssoTenantOr: 'veya',
     socialContinue: '{provider} ile devam et',
+    socialConsentTitle: 'Hesabın oluşturulmadan önce bir adım',
+    socialConsentExpired: 'Bu kayıt işleminin süresi doldu. Lütfen yeniden başla.',
     socialErrors: {
       failed: 'Bu hesapla giriş yapılamadı. Lütfen tekrar deneyin.',
       unverified_email: 'Bu hesabın e-posta adresi sağlayıcıda doğrulanmamış, bu yüzden bağlanamıyor. Parolanla giriş yap, sonra hesap ayarlarından bağla.',
@@ -26464,6 +26468,8 @@ const de: Dict = {
     ssoTenantEnforced: 'Ihre Organisation meldet sich per Single Sign-on an. Das Passwortformular unten ist nur für Administrator*innen mit einer Ausnahme.',
     ssoTenantOr: 'oder',
     socialContinue: 'Weiter mit {provider}',
+    socialConsentTitle: 'Noch ein Schritt, bevor dein Konto erstellt wird',
+    socialConsentExpired: 'Diese Registrierung ist abgelaufen. Bitte beginne erneut.',
     socialErrors: {
       failed: 'Die Anmeldung mit diesem Konto hat nicht funktioniert. Bitte versuche es erneut.',
       unverified_email: 'Die E-Mail-Adresse dieses Kontos ist beim Anbieter nicht bestätigt und kann daher nicht verknüpft werden. Melde dich mit deinem Passwort an und verbinde es dann in deinen Kontoeinstellungen.',

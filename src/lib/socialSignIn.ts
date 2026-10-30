@@ -22,6 +22,7 @@
 // Server-only.
 
 import { prisma } from '@/lib/prisma';
+import { open, seal } from '@/lib/secretBox';
 import { logActivity } from '@/lib/activity';
 import { createUser } from '@/lib/userCreate';
 import { defaultOrgId } from '@/lib/defaultOrg';
@@ -90,6 +91,7 @@ export type SocialOutcome =
   | { kind: 'sign_in'; userId: string }
   | { kind: 'linked'; userId: string }
   | { kind: 'pending' }
+  | { kind: 'needs_consent' }
   | { kind: 'refuse'; reason: 'unverified_email' | 'identity_taken' | 'no_email' | 'sso_required' | 'unavailable' };
 
 const userSelect = { id: true, orgId: true, ssoExempt: true, isActive: true } as const;
@@ -145,35 +147,84 @@ export async function resolveSocialSignIn(
       else await prisma.userIdentity.update({ where: { provider_subject: { provider, subject: identity.subject } }, data: { lastUsedAt: new Date() } });
       return { kind: 'sign_in', userId: user.id };
     }
-    case 'create': {
+    case 'create':
+      // A NEW account needs the same privacy / terms consent the register
+      // form asks for (GDPR Art. 7): nothing is created here. The callback
+      // parks the verified identity in a sealed, browser-bound ticket and the
+      // consent page creates the account once the person agrees
+      // (createSocialAccount). Linking to an existing account needs no new
+      // consent — that person gave it when the account was made.
       if (await isOrgEnforcingSso(orgId)) return { kind: 'refuse', reason: 'sso_required' };
-      // Asked again right before the write: the database only catches a
-      // duplicate inside one org (docs/worlds.md rule 1).
-      if (await emailTakenInWorld(identity.email!, 'INTERNSHIP')) return { kind: 'refuse', reason: 'unavailable' };
-      const user = await createUser(
-        prisma,
-        {
-          data: {
-            email: identity.email!,
-            // No password door: the account is reached through its identities
-            // (and can set a password through "forgot password" later).
-            password: '!social-no-login',
-            fullName: identity.name?.slice(0, 191) || identity.email!,
-            role: 'MENTEE',
-            orgId,
-            emailVerified: true, // the provider asserted it — only verified addresses get here
-            isActive: !decision.pending,
-            pendingApproval: decision.pending,
-            skills: [],
-          },
-          select: { id: true },
-        },
-        { source: 'social' },
-      );
-      await link(provider, identity, user.id, 'new account');
-      return decision.pending ? { kind: 'pending' } : { kind: 'sign_in', userId: user.id };
-    }
+      return { kind: 'needs_consent' };
   }
+}
+
+// ── The consent step (#1962) ────────────────────────────────────────────────
+
+/** The sealed ticket's cookie: browser-bound, httpOnly, scoped to the social routes. */
+export const SOCIAL_CONSENT_COOKIE = 'social_consent';
+const CONSENT_PURPOSE = 'social-consent-ticket';
+export const SOCIAL_CONSENT_TTL_MS = 10 * 60 * 1000;
+
+interface ConsentTicket { provider: SocialProvider; subject: string; email: string; name: string | null; exp: number }
+
+/** Seal the verified identity for the consent page. Encrypted and authenticated (secretBox); no address in the clear. */
+export function sealConsentTicket(provider: SocialProvider, identity: SocialIdentityClaims): string {
+  const t: ConsentTicket = { provider, subject: identity.subject, email: identity.email!, name: identity.name, exp: Date.now() + SOCIAL_CONSENT_TTL_MS };
+  return seal(JSON.stringify(t), CONSENT_PURPOSE);
+}
+
+export function openConsentTicket(raw: string | null | undefined): ConsentTicket | null {
+  if (!raw) return null;
+  const opened = open(raw, CONSENT_PURPOSE);
+  if (!opened) return null;
+  try {
+    const t = JSON.parse(opened) as ConsentTicket;
+    if (typeof t.exp !== 'number' || t.exp < Date.now() || !t.subject || !t.email) return null;
+    return t;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Create the account the consent page agreed to. Every fact is asked AGAIN —
+ * the ticket only carries a verified identity, never a decision: the subject
+ * must still be unlinked and the address still free in this world (which is
+ * also what makes the ticket single-use), and enforced SSO still refuses.
+ */
+export async function createSocialAccount(ticket: ConsentTicket, privacyVersion: string): Promise<SocialOutcome> {
+  const orgId = await defaultOrgId();
+  if (await isOrgEnforcingSso(orgId)) return { kind: 'refuse', reason: 'sso_required' };
+  const taken = await prisma.userIdentity.findUnique({ where: { provider_subject: { provider: ticket.provider, subject: ticket.subject } }, select: { id: true } });
+  if (taken || (await emailTakenInWorld(ticket.email, 'INTERNSHIP'))) return { kind: 'refuse', reason: 'unavailable' };
+  const pending = String(await resolveSetting('selfRegistration', { orgId })) === 'manual';
+  const now = new Date();
+  const user = await createUser(
+    prisma,
+    {
+      data: {
+        email: ticket.email,
+        // No password door: the account is reached through its identities
+        // (and can set a password through "forgot password" later).
+        password: '!social-no-login',
+        fullName: ticket.name?.slice(0, 191) || ticket.email,
+        role: 'MENTEE',
+        orgId,
+        emailVerified: true, // the provider asserted it — only verified addresses get here
+        isActive: !pending,
+        pendingApproval: pending,
+        consentAt: now,
+        skills: [],
+      },
+      select: { id: true },
+    },
+    { source: 'social' },
+  );
+  // The same auditable record the register form writes (GDPR Art. 7).
+  await prisma.userConsent.create({ data: { userId: user.id, type: 'PRIVACY_POLICY', version: privacyVersion, grantedAt: now } });
+  await link(ticket.provider, { subject: ticket.subject, email: ticket.email, emailVerified: true, name: ticket.name }, user.id, 'new account');
+  return pending ? { kind: 'pending' } : { kind: 'sign_in', userId: user.id };
 }
 
 /** An account's password is usable when it is a bcrypt hash (the sentinels start with "!"). */
