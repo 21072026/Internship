@@ -114,7 +114,7 @@ export default function AnalyticsReportPage() {
     setLoading(true);
     Promise.all([
       fetch('/api/admin/analytics').then((r) => (r.ok ? r.json() : null)),
-      fetch('/api/admin/analytics/cohorts').then(async (r) => (r.ok ? (await r.json()).cohorts : null)),
+      fetch('/api/admin/analytics/programs').then(async (r) => (r.ok ? (await r.json()).programs : null)),
       fetch('/api/admin/analytics/sources').then(async (r) => (r.ok ? (await r.json()).sources : null)),
       // Trial → paid (#2556): null for a tenant with no trial stage.
       fetch('/api/admin/analytics/funnel').then(async (r) => (r.ok ? (await r.json()).trialConversion ?? null : null)),
