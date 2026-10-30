@@ -8,7 +8,12 @@ import { formatDate } from '@/lib/relativeTime';
 // A pair's meeting rhythm (#2014): the promised interval, when they last met,
 // and whether that is inside it — on the relation record, for the mentor and
 // an admin, who are also the two who can set the promise. Counted, never
-// predicted (src/lib/meetingCadence.ts).
+// predicted (src/lib/meetingCadence.ts). Below it, the agreed end date (#1784).
+
+interface Schedule {
+  expectedEndDate: string | null;
+  durationExtendedCount: number;
+}
 
 interface Cadence {
   expectedIntervalWeeks: number | null;
@@ -24,11 +29,17 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
   const c = t.relationCadence;
   const locale = useLocale();
   const [data, setData] = useState<Cadence | null>(null);
+  const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const s = t.relationSchedule;
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/mentorship/${relationId}/cadence`).catch(() => null);
-    if (res?.ok) setData((await res.json()).cadence);
+    if (res?.ok) {
+      const body = await res.json();
+      setData(body.cadence);
+      setSchedule(body.schedule ?? null);
+    }
   }, [relationId]);
 
   useEffect(() => {
@@ -37,16 +48,17 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
 
   if (!data) return null;
 
-  const setInterval = async (value: string) => {
+  const save = async (patch: Record<string, unknown>) => {
     setSaving(true);
     await fetch(`/api/mentorship/${relationId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expectedMeetingIntervalWeeks: value ? Number(value) : null }),
+      body: JSON.stringify(patch),
     }).catch(() => null);
     setSaving(false);
     await load();
   };
+  const setInterval = (value: string) => save({ expectedMeetingIntervalWeeks: value ? Number(value) : null });
 
   const status =
     data.onCadence === null
@@ -83,6 +95,31 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
       <p className="mt-1 text-sm text-gray-500" data-testid="relation-cadence-last">
         {data.lastMetAt ? c.lastMet.replace('{date}', formatDate(data.lastMetAt, locale)).replace('{n}', String(data.daysSinceLastMet ?? 0)) : c.noMeetingYet}
       </p>
+      {schedule && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-300">
+          <span data-testid="relation-end-date">
+            {schedule.expectedEndDate ? s.endsOn.replace('{date}', formatDate(schedule.expectedEndDate, locale, { timeZone: 'UTC' })) : s.noEndDate}
+          </span>
+          {schedule.durationExtendedCount > 0 && (
+            <span className="text-xs text-gray-500">{s.extendedTimes.replace('{n}', String(schedule.durationExtendedCount))}</span>
+          )}
+          <label className="ml-auto flex items-center gap-2">
+            {s.endDate}
+            <input
+              type="date"
+              defaultValue={schedule.expectedEndDate ?? ''}
+              key={schedule.expectedEndDate ?? 'none'}
+              disabled={saving}
+              onBlur={(e) => {
+                const value = e.target.value;
+                if (value !== (schedule.expectedEndDate ?? '')) save({ expectedEndDate: value || null });
+              }}
+              data-testid="relation-end-date-input"
+              className="min-h-[36px] rounded-lg border border-gray-300 px-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }

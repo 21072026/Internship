@@ -3,6 +3,8 @@ import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { slugify } from '@/lib/transliterate';
@@ -39,6 +41,8 @@ const schema = z.object({
   sourceId: z.string().optional().nullable(),
   // Set on resubmit after the duplicate warning (#841): "yes, create anyway".
   confirmDuplicate: z.boolean().optional(),
+  // The agreed duration and rhythm (#1784), all optional.
+  ...relationScheduleFields,
 });
 
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
@@ -139,6 +143,12 @@ export async function POST(request: Request) {
       // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
       // the create (#2551); for every other start stage this is `{}`, no query.
       const trialWindow = await stageTrialWindow({ orgId, toStage: pipelineStatus, enteredAt: new Date() });
+      // The agreed duration and rhythm (#1784): the mentor's choice, else the org's defaults.
+      const schedule = scheduleCreateData(
+        { expectedEndDate: parsed.data.expectedEndDate, durationMonths: parsed.data.durationMonths, expectedMeetingIntervalWeeks: parsed.data.expectedMeetingIntervalWeeks },
+        new Date(),
+        await relationScheduleDefaults(orgId),
+      );
 
       // Account + mentorship in ONE transaction: a failure between the two used
       // to leave a mentee account with no relation, invisible to the mentor who
@@ -177,6 +187,7 @@ export async function POST(request: Request) {
               orgId,
               pipelineStatus,
               ...trialWindow,
+              ...schedule,
               // A mentor's own mentee is a placement relation from day one (#1503).
               funnelEnteredAt: new Date(),
             },
