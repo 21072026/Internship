@@ -2,8 +2,14 @@
   "bump": "minor",
   "changelog": "**Cohort matching pass (#1794, story #1791):** `POST /api/admin/match-rounds/[id]/run` scores every waiting mentee of the tenant (active MENTEEs without an ACTIVE relation, optionally narrowed by `menteeIds`) against every mentor in the pool with the ONE engine (`scoreMatch()`, the org's rule set, each mentee's skill graph — the same score a suggestion list shows) and writes exactly one `MatchProposal` per mentee in one transaction. Assignment is pure in `src/lib/matching/assign.ts`: not-accepting mentors excluded before scoring, a global greedy walk by score with the deterministic tie-break `(score, mentorId, menteeId)`, headroom `mentorCapacity − active` reserved per proposal inside the pass, default minimum score 1. Unplaced mentees get a reason (`no_eligible_mentor` naming the blocking rule, `all_at_capacity`, `below_threshold`, `no_mentors_in_scope`); every proposal carries the next 3 alternatives with score, breakdown and headroom left. The pass is a plain async function over injected loaders (`cohortPass.ts`, one query per side whatever the intake size, unit-tested) with caps of 500 mentees × 1000 mentors (413 before scoring); stats (proposed, unmatched by reason, mentors used / at capacity, duration) are stamped on the round with its rule-set id and version. Only a DRAFT round runs (409 otherwise); a re-run replaces the proposals. Creates no relation.",
   "notes": {
-    "en": "Admins can run a matching round over everyone waiting for a mentor in one go: one proposal per person, mentor capacity respected within the round, and a reason for everyone who could not be placed.",
-    "tr": "Yöneticiler mentor bekleyen herkes için tek seferde bir eşleştirme turu çalıştırabilir: kişi başına bir öneri, tur içinde mentor kapasitesine uyulur ve yerleştirilemeyen herkes için bir gerekçe gösterilir.",
-    "de": "Admins können eine Matching-Runde für alle, die auf einen Mentor warten, in einem Durchgang ausführen: ein Vorschlag pro Person, die Mentorenkapazität wird innerhalb der Runde eingehalten, und für alle, die nicht vermittelt werden konnten, wird ein Grund angegeben."
+    "en": [
+      "Admins can run a matching round over everyone waiting for a mentor in one go: one proposal per person, mentor capacity respected within the round, and a reason for everyone who could not be placed."
+    ],
+    "tr": [
+      "Yöneticiler mentor bekleyen herkes için tek seferde bir eşleştirme turu çalıştırabilir: kişi başına bir öneri, tur içinde mentor kapasitesine uyulur ve yerleştirilemeyen herkes için bir gerekçe gösterilir."
+    ],
+    "de": [
+      "Admins können eine Matching-Runde für alle, die auf einen Mentor warten, in einem Durchgang ausführen: ein Vorschlag pro Person, die Mentorenkapazität wird innerhalb der Runde eingehalten, und für alle, die nicht vermittelt werden konnten, wird ein Grund angegeben."
+    ]
   }
 }
