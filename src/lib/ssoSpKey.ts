@@ -77,3 +77,13 @@ export async function ensureSpSigningKey(org: {
   if (!privateKeyPem || !current?.ssoSpCert) throw new Error('SSO SP signing key unavailable');
   return { privateKeyPem, certificatePem: current.ssoSpCert };
 }
+
+/**
+ * The org's SP private key IF one exists — never creates one (#1955). The ACS
+ * decrypts an encrypted assertion with it: a key the IdP encrypted for must
+ * already be published, so there is nothing to mint at that point. A key that
+ * cannot be opened answers null; ensureSpSigningKey() is where it is replaced.
+ */
+export function existingSpPrivateKey(org: { ssoSpKey: string | null }): string | null {
+  return org.ssoSpKey ? open(org.ssoSpKey, PURPOSE) : null;
+}

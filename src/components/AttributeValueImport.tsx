@@ -81,7 +81,7 @@ export function AttributeValueImport({ onApplied }: { onApplied: () => void }) {
           type="file"
           accept=".csv,text/csv,text/plain"
           onChange={(e) => pickFile(e.target.files?.[0])}
-          className="block text-sm text-gray-700 dark:text-gray-200"
+          className="block w-full max-w-full text-sm text-gray-700 dark:text-gray-200"
           aria-label={L.file}
           data-testid="attribute-import-file"
         />

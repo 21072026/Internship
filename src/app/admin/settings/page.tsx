@@ -46,6 +46,10 @@ export default function AdminSettingsPage() {
   const t = useT();
   const locale = useLocale();
   const [reminderDays, setReminderDays] = useState('14');
+  // Meeting reminder lead times in minutes (#1636); '' = the built-in defaults.
+  const [meetingLeads, setMeetingLeads] = useState('');
+  const [defaultDuration, setDefaultDuration] = useState('');
+  const [defaultCadence, setDefaultCadence] = useState('');
   const [retentionMonths, setRetentionMonths] = useState('12');
   // Notification history window (#1646) — a different thing from the one
   // above, which is about candidate records; the two hints say which is which.
@@ -270,6 +274,9 @@ export default function AdminSettingsPage() {
     setSources(body?.sources ?? {});
     setLoadedRaw(settings);
     setReminderDays(settings.reminderDays ?? '14');
+    setMeetingLeads(settings.meetingReminderLeadsMinutes ?? '');
+    setDefaultDuration(settings.relationDefaultDurationMonths ?? '');
+    setDefaultCadence(settings.relationDefaultCadenceWeeks ?? '');
     setRetentionMonths(settings.retentionMonths ?? '12');
     setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
     setSupportEmail(settings.supportEmail ?? '');
@@ -390,7 +397,7 @@ export default function AdminSettingsPage() {
     const approvalChanged = hasTrialStage && outboundApproval !== loadedOutboundApproval;
     setSavingSettings(true);
     try {
-      const payload: Record<string, string> = { reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates.trim(), notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
+      const payload: Record<string, string> = { reminderDays, meetingReminderLeadsMinutes: meetingLeads, relationDefaultDurationMonths: defaultDuration.trim(), relationDefaultCadenceWeeks: defaultCadence.trim(), retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates.trim(), notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
       const changed = Object.fromEntries(Object.entries(payload).filter(([k, v]) => v !== loadedRaw[k]));
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -464,6 +471,14 @@ export default function AdminSettingsPage() {
             <div>
               <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
               <SettingProvenance settingKey="reminderDays" source={sources.reminderDays} onReverted={load} />
+              <Input label={t.settings.meetingReminderLeads} value={meetingLeads} placeholder="1440, 60" onChange={(e) => setMeetingLeads(e.target.value)} hint={t.settings.meetingReminderLeadsHint} data-testid="meeting-reminder-leads" />
+              <SettingProvenance settingKey="meetingReminderLeadsMinutes" source={sources.meetingReminderLeadsMinutes} onReverted={load} />
+            </div>
+            <div>
+              <Input label={t.relationSchedule.settingsDuration} type="number" min={1} max={36} value={defaultDuration} onChange={(e) => setDefaultDuration(e.target.value)} hint={t.relationSchedule.settingsHint} data-testid="relation-default-duration" />
+              <SettingProvenance settingKey="relationDefaultDurationMonths" source={sources.relationDefaultDurationMonths} onReverted={load} />
+              <Input label={t.relationSchedule.settingsCadence} type="number" min={1} max={52} value={defaultCadence} onChange={(e) => setDefaultCadence(e.target.value)} data-testid="relation-default-cadence" />
+              <SettingProvenance settingKey="relationDefaultCadenceWeeks" source={sources.relationDefaultCadenceWeeks} onReverted={load} />
             </div>
             <div>
               <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />

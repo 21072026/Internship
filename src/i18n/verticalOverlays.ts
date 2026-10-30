@@ -59,6 +59,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Customer journeys' },
       // #1745: the plan-wall prompt, in sales words (the active-pair cap is
       // the internship meter; a MARKETING org sees it only if its plan has one).
       upgrade: {
@@ -194,6 +196,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.newGeneric': 'A new contact request was received.',
           'mentorship_request.approved': 'Your contact request was approved — say hi to your contact person!',
           'mentorship_request.rejected': 'Your contact request was reviewed but could not be approved right now.',
+          'mentorship_request.nudge': '{from}’s contact request has been waiting a week for an answer — it expires in 7 days.',
+          'mentorship_request.expired': 'Your contact request expired after 14 days without an answer. You can send a new one now.',
+          'mentorship_request.cancelled': 'Your contact request was withdrawn: {reason} You can send a new one.',
           'mentorship_request.rematch': '{from} asked for a different contact person.',
           'mentorship_request.rematchGeneric': 'A lead asked for a different contact person.',
           'mentorship_request.rematchApproved': 'You have a new contact person — your previous one no longer looks after you.',
@@ -1214,6 +1219,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Müşteri yolculukları' },
       upgrade: {
         limitBody: '{plan} paketinde {limit} aktif kayıttan {usage} tanesini kullanıyorsunuz.',
         reassurance: 'Mevcut lead ve hesaplar etkilenmez — yalnızca yeni bir aktif kayıt eklemek bekletilir.',
@@ -1337,6 +1344,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.newGeneric': 'Yeni bir iletişim talebi alındı.',
           'mentorship_request.approved': 'İletişim talebin onaylandı — muhatabına merhaba de!',
           'mentorship_request.rejected': 'İletişim talebin incelendi ancak şu an onaylanamadı.',
+          'mentorship_request.nudge': '{from} adlı kişinin iletişim talebi bir haftadır yanıt bekliyor — 7 gün içinde süresi dolacak.',
+          'mentorship_request.expired': 'İletişim talebin 14 gün yanıtsız kaldığı için kapandı. Şimdi yeni bir talep gönderebilirsin.',
+          'mentorship_request.cancelled': 'İletişim talebin geri çekildi: {reason} Yeni bir talep gönderebilirsin.',
           'mentorship_request.rematch': '{from} farklı bir muhatap talep etti.',
           'mentorship_request.rematchGeneric': 'Bir müşteri adayı farklı bir muhatap talep etti.',
           'mentorship_request.rematchApproved': 'Yeni bir muhatabın var — önceki muhatabın artık seninle ilgilenmiyor.',
@@ -2226,6 +2236,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Kundenreisen' },
       upgrade: {
         limitBody: 'Sie nutzen {usage} von {limit} aktiven Datensätzen im Plan {plan}.',
         reassurance: 'Bestehende Leads und Konten sind nicht betroffen — nur ein neuer aktiver Datensatz wird angehalten.',
@@ -2348,6 +2360,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.newGeneric': 'Eine neue Kontaktanfrage ist eingegangen.',
           'mentorship_request.approved': 'Deine Kontaktanfrage wurde genehmigt — sag deiner Ansprechperson Hallo!',
           'mentorship_request.rejected': 'Deine Kontaktanfrage wurde geprüft, konnte aber derzeit nicht genehmigt werden.',
+          'mentorship_request.nudge': 'Die Kontaktanfrage von {from} wartet seit einer Woche auf eine Antwort — sie läuft in 7 Tagen ab.',
+          'mentorship_request.expired': 'Deine Kontaktanfrage ist nach 14 Tagen ohne Antwort abgelaufen. Du kannst jetzt eine neue senden.',
+          'mentorship_request.cancelled': 'Deine Kontaktanfrage wurde zurückgezogen: {reason} Du kannst eine neue senden.',
           'mentorship_request.rematch': '{from} hat um eine andere Ansprechperson gebeten.',
           'mentorship_request.rematchGeneric': 'Ein Lead hat um eine andere Ansprechperson gebeten.',
           'mentorship_request.rematchApproved': 'Du hast eine neue Ansprechperson — deine bisherige betreut dich nicht mehr.',

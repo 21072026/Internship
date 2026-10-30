@@ -28,10 +28,15 @@ const personSelect = {
   managerId: true,
 } as const;
 
+/** Who is in the mentor pool — one definition, shared by the loader and the cohort pass's cap check. */
+export function mentorPoolWhere(tenant: TenantWhere) {
+  return withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant);
+}
+
 /** Every active mentor (and admin who mentors) of the tenant, with their load. */
 export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]> {
   const rows = await prisma.user.findMany({
-    where: withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant),
+    where: mentorPoolWhere(tenant),
     select: {
       ...personSelect,
       mentorCapacity: true,

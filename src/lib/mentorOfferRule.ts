@@ -10,11 +10,14 @@
 // outreach from our sending domain.
 
 import type { MentorAvailabilityStatus } from './mentorAvailability';
+import { REQUEST_TTL_DAYS } from './requestExpiryRule';
 
 export const OFFER_LIMITS = {
   maxPending: 3,
   maxPerWeek: 5,
-  ttlDays: 14,
+  // The same clock as a mentorship request (#1775): an ask, either way round,
+  // waits 14 days for an answer.
+  ttlDays: REQUEST_TTL_DAYS,
   /** The one reminder goes out once an offer has this many days or fewer left. */
   reminderDaysBefore: 3,
   messageMax: 1000,

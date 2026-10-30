@@ -52,7 +52,9 @@ export async function POST(request: Request) {
     create: { userId: targetUserId, contentType: file.type, size: file.size, data },
     update: { contentType: file.type, size: file.size, data },
   });
-  await prisma.user.update({ where: { id: targetUserId }, data: { avatarUrl: `/api/avatar/${targetUserId}` } });
+  // An upload is the user's own photo: clearing the hash tells the SSO
+  // directory sync (#1943) not to replace it unless the IdP is authoritative.
+  await prisma.user.update({ where: { id: targetUserId }, data: { avatarUrl: `/api/avatar/${targetUserId}`, ssoPhotoUrlHash: null } });
 
   return NextResponse.json({ ok: true, avatarUrl: `/api/avatar/${targetUserId}` });
   });

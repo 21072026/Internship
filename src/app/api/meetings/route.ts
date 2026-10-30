@@ -18,6 +18,7 @@ import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
+import { reminderLeadField } from '@/lib/meetingReminderLeadField';
 import { bookWithoutConflict, conflictBody, recordForcedBooking } from '@/lib/busyWindows';
 import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
 import type { PolicyViolation } from '@/lib/bookingPolicyRule';
@@ -36,6 +37,9 @@ const schema = z.object({
   // How long it runs (#1984). Omitted → the one default, stored as null so the
   // row keeps following the default if it ever changes.
   durationMinutes: durationMinutesField,
+  // Reminder lead (#1636): null = the programme default, 0 = no reminder,
+  // N = one reminder N minutes ahead (src/lib/meetingReminderLeads.ts).
+  reminderLeadMinutes: reminderLeadField,
   // Outsiders with no account here (#1446). Each gets its own RSVP token and
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
@@ -227,6 +231,7 @@ export async function POST(request: Request) {
         title,
         scheduledAt: when,
         durationMinutes: durationMinutes ?? null,
+        reminderLeadMinutes: parsed.data.reminderLeadMinutes ?? null,
         timeZone: organizerZone,
         meetLink: link,
         rsvpToken,

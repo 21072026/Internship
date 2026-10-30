@@ -770,7 +770,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   failed-login bucket would lock the runner's IP out), never an endpoint that mails, calls
   an AI provider or increments a counter, and **never a rate-limited route** (all VUs share
   the runner's single IP, so `/api/public/stats` at 60/10min and `/api/v1/*` at 120/min are
-  excluded — a 429 in a report means the mix drifted, not that the app is sick). Keep the
+  excluded — a 429 in a report means the mix drifted, not that the app is sick). The ONE
+  exception is the demo-only pair `k6/authenticated-load.js` / `k6/sse-load.js` (#1612): they
+  sign in and write, and `k6/lib/demoTarget.js` makes `setup()` refuse every host but the demo —
+  any new authenticated scenario imports that guard. Keep the
   files **`.js`**: a `.ts` under `k6/` is pulled into `npx tsc --noEmit` and fails on the
   missing `k6/*` module types — deliberately left un-excluded in `tsconfig.json` so the rule
   enforces itself. The `.js` files themselves are linted and typechecked by **nothing**

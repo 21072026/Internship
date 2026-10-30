@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Meeting reminder lead times per programme and per meeting (#1636):** new setting `meetingReminderLeadsMinutes` (programme → org → global, e.g. `1440,60`; empty = the old defaults: 60 minutes for a meeting, 1440 + 60 for a series) and `Meeting.reminderLeadMinutes` (0 = none). One pure rule in `src/lib/meetingReminderLeads.ts` (`dueLead()` reproduces the old `leadFor()` exactly for the defaults). One-off reminders claim each lead in `Meeting.remindedLeads` with a guarded update; `MeetingSeriesReminder` gains a nullable `leadMinutes` beside the now-nullable `lead` enum (dual-written, both unique keys kept) instead of an in-place re-type. Setting on `/admin/settings`, a Reminder select on the meeting form, `reminderLeadMinutes` on `POST/PATCH /api/meetings`. `docs/meeting-reminder-leads.md`.",
+  "notes": {
+    "en": ["Choose when meeting reminders go out — for example a day and an hour before — for the whole programme, or per meeting, including no reminder at all."],
+    "tr": ["Toplantı hatırlatmalarının ne zaman gideceğini seçin — örneğin bir gün ve bir saat önce — tüm program için ya da toplantı bazında; hiç hatırlatma olmaması da dahil."],
+    "de": ["Legt fest, wann Besprechungserinnerungen verschickt werden – etwa einen Tag und eine Stunde vorher –, für das ganze Programm oder pro Besprechung, auch ganz ohne Erinnerung."]
+  }
+}

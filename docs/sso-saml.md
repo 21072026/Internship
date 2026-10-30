@@ -39,6 +39,59 @@ Enterprise SSO card on `/admin/organizations`; API:
 `{ syncRole }`, DELETE `?mappingId=`), writable by the org's own ADMIN or a
 super admin of its world.
 
+## Directory sync (#1943)
+
+On **every** SSO sign-in — SAML and OIDC alike, through the one
+`completeSsoSignIn()` path — the IdP's claims refresh the person's profile, so
+a department change in the directory reaches the app at the next login instead
+of never. A tenant maps a claim name to a target once (Enterprise SSO card on
+`/admin/organizations`, API `/api/admin/organizations/[id]/sso-attribute-mappings`:
+GET, POST `{ claim, target }`, PATCH `{ authoritative }`, DELETE `?mappingId=`;
+same writers as the role mapping). The rule is
+`src/lib/ssoDirectorySyncRule.ts` (pure, `scripts/test/sso-directory-sync.test.mjs`),
+the writer `src/lib/ssoDirectorySync.ts`.
+
+**Directory-owned fields** — the only targets a mapping may name:
+
+| Target | Column | Notes |
+|---|---|---|
+| `fullName` | `User.fullName` | |
+| `department` | `User.department` | |
+| `targetPosition` | `User.targetPosition` | the job title |
+| `city`, `country`, `phone` | same | |
+| `timezone` | `User.timezone` | must be an IANA zone, else rejected |
+| `attr:<key>` | `UserAttributeValue` | one of the org's own attributes (#1920), normalised by its type |
+| `photo` | `AvatarFile` | a URL or inline base64 (AD `thumbnailPhoto`) |
+
+Never `email`, `role`, `orgId` or any flag: who a person is and what they may
+do is provisioning's and the role mapping's (#1940), refused at the write
+boundary (`invalid_target`).
+
+**What may be overwritten** is `planFieldUpdates()` (`src/lib/externalSyncPolicy.ts`),
+the policy the roster feed shares: by default the IdP only **fills empty
+fields** — a city the person corrected in the app stays. With
+`Organization.ssoAuthoritative` on, the IdP is the record of truth and wins a
+disagreement. A claim the IdP did not send is no opinion; nothing is ever
+blanked, and deleting a mapping leaves the values already written.
+
+**The photo** is stored as bytes like an uploaded avatar and served from
+`/api/avatar/[userId]` — never hotlinked. A URL is fetched through the SSRF
+guard on every redirect hop (`src/lib/ssoFetch.ts`), with a 5 s timeout and
+the 2 MB avatar cap; the bytes must carry a PNG/JPEG/GIF/WebP signature. It
+runs **after** the response (`after()`), so a slow photo host never delays a
+sign-in. A photo the person uploaded themselves is kept unless the IdP is
+authoritative (an upload clears `User.ssoPhotoUrlHash`); a photo they removed
+is not put back until the IdP's photo changes.
+
+**Nothing here fails a sign-in.** A value that does not fit is dropped and
+recorded by target name; a photo refusal is a code. Both land in
+`User.ssoSyncError` (`rejected:timezone`, `photo_blocked`, `photo_failed`,
+`photo_too_large`, `photo_not_image`) with `User.ssoLastSyncedAt`; the admin
+card shows the last sync and the accounts with a problem. The activity line
+`sso.profile_synced` lists field **names** only, never a value.
+
+SCIM push provisioning is a separate story; this is the pull-on-login half.
+
 ## Who may set the identity provider (#1575)
 
 The **issuer, entry point and certificate** (and the provider) are the IdP trust
@@ -106,9 +159,32 @@ The SP-initiated SAML flow is implemented with `@node-saml/node-saml`
    grant via the `sso` NextAuth Credentials provider (mirrors the impersonation
    grant flow) to issue the session. No password, no IdP secret in our env.
 
-`validateInResponseTo` is `never` (stateless SP, no shared request cache; also
-allows IdP-initiated). The assertion signature + audience/recipient/expiry are
-the security anchors.
+The assertion signature + audience/recipient/expiry are the security anchors;
+since #1955 three hardening options sit on top of them — see
+[§ Protocol hardening](#protocol-hardening-1955).
+
+## Protocol hardening (#1955)
+
+The three questions a mature identity team asks, and what ships:
+
+| Option | Default | What it does | What it breaks if switched on too early |
+|--------|---------|--------------|------------------------------------------|
+| **Signed AuthnRequests** — `Organization.ssoSignRequests` | off | The login route signs the HTTP-Redirect AuthnRequest (`SigAlg` rsa-sha256) with the tenant's SP key (`ssoSpKey`, sealed; generated server-side, never uploaded). The SP metadata then says `AuthnRequestsSigned="true"`. | **Every sign-in of the tenant**, if the IdP has not imported our metadata (our certificate) yet — the toggle in the admin card says so. Import first, then switch on. |
+| **Encrypted assertions** | always available | When the SP key exists, the ACS passes it as `decryptionPvk`: an IdP configured to encrypt assertions to our `use="encryption"` certificate (published in the metadata next to `use="signing"`) just works. The decrypted assertion must still be signed. | Nothing — receive-side only. |
+| **InResponseTo correlation** | `ifPresent` | The login route stores the AuthnRequest ID in `SsoAuthRequest` (`kind = 'saml'`, the request store #1929 introduced). A response that names a request must name a live, unused one of ours — spent with one conditional `updateMany`, so a replayed response is refused (`src/lib/ssoSamlRequestStore.ts`). | `ssoRequireInResponseTo` (opt-in) switches to `always`: **IdP-initiated sign-in stops working**, because an unsolicited response names no request. |
+
+**IdP key rotation.** `ssoCertificate` may hold **several PEM blocks**, and every
+one is trusted (`idpCertificates()`, `src/lib/ssoCertificates.ts`). The
+procedure: when the IdP announces its next signing certificate, paste it
+**after** the current one and save — both are trusted; once the IdP has
+switched, remove the old one. Each block is validated on save (parseable, not
+expired), and the refusal names which one fails. The expiry badge and the
+expiry-warning mail read the **first** block, so keep the one expiring soonest
+first.
+
+`wantAssertionsSigned` stays `true` and audience / recipient / expiry checks
+stay on whatever is switched on. "Test connection" builds an unsigned,
+uncorrelated request, as before (it signs nobody in).
 
 The tenant's stored `ssoIssuer` is **not** passed to node-saml as `idpIssuer`,
 so the assertion's `<Issuer>` string is not compared against it. What binds an
@@ -258,29 +334,17 @@ so only a super admin of the org's world sets it — #1575).
   stub IdP, including the unsigned, wrongly signed and foreign-subject refusals
   and a remembered device that must not sign back in.
 
-## OIDC — refused at the write boundary (#1537)
+## OIDC — a second protocol, the same session path (#1929)
 
-`'oidc'` stays in the `SsoProvider` type: it is a real roadmap item (Wave 4) and
-the column already stores it. What it is *not* is implemented — the login route
-(`/api/auth/sso/[slug]/login`) unconditionally builds a SAML `AuthnRequest`. So
-saving a tenant as OIDC used to return a green "saved" and then lock every user
-of that tenant out behind a broken redirect.
-
-Two gates close that, both in `src/lib/sso.ts` so every write path inherits them:
-
-- `validateSsoConfig()` returns *"OIDC single sign-on is not supported yet — use
-  SAML"* (HTTP 400 from `PATCH /api/admin/organizations`) for any config naming
-  `oidc`, whether or not `ssoEnabled` is being flipped.
-- `isSsoActive()` additionally requires an *implemented* provider
-  (`SSO_IMPLEMENTED_PROVIDERS`), so a row written before this shipped is inert:
-  that tenant falls through to password login (`?error=sso_unavailable`) rather
-  than a dead-end redirect.
-
-Implementing OIDC means adding it to `SSO_IMPLEMENTED_PROVIDERS`, branching the
-login/ACS routes on the provider, and re-enabling the option in the admin card.
-That is #1929; the customer-facing setup it will need is already written up in
-[`docs/sso-oidc.md`](sso-oidc.md), and the e2e stub IdP below already serves the
-OIDC endpoints.
+Until #1929 `'oidc'` was refused at the write boundary (#1537): the login route
+always built a SAML `AuthnRequest`, so a tenant saved as OIDC was locked out.
+It is now in `SSO_IMPLEMENTED_PROVIDERS`; the login route branches on
+`ssoProvider`, the ACS refuses a non-SAML tenant, and an OIDC sign-in ends in
+`GET /api/auth/sso/<slug>/callback`. Both protocols hand their verified
+identity to `completeSsoSignIn()` (`src/lib/ssoCompletion.ts`) — one role
+mapping, one `provisionSsoUser()`, one single-use `SsoLoginGrant`. Single Logout
+stays SAML-only (`spInitiatedSloApplies` checks the provider). The whole OIDC
+contract is [`docs/sso-oidc.md`](sso-oidc.md).
 
 ## Enforced SSO — closing every other door (#1950)
 

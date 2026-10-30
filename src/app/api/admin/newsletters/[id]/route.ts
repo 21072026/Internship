@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { imageAltField } from '@/lib/announcementImage';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -38,6 +40,8 @@ const patchSchema = z.object({
   // 'schedule' arms it, 'draft' disarms it, 'cancel' pulls it for good.
   action: z.enum(['schedule', 'draft', 'cancel']).optional(),
   removeImage: z.boolean().optional(),
+  // The hero image's description (#3388). Absent = unchanged; '' = decorative.
+  imageAlt: z.string().max(TEXT_LIMITS.imageAltText).optional(),
 });
 
 // GET — the issue plus its delivery record. This is the "who was it sent to"
@@ -58,7 +62,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       id: true, templateKey: true, audience: true, status: true, subject: true, content: true,
       scheduledAt: true, sentAt: true, createdById: true, recipientCount: true, sentCount: true,
       failedCount: true, skippedCount: true, createdAt: true,
-      image: { select: { id: true } },
+      image: { select: { id: true, altText: true } },
     },
   });
   if (!issue) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -82,6 +86,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       languages: writtenNewsletterLocales(variants),
       createdBySystem: issue.createdById === 'system',
       imageUrl: image ? newsletterImageUrl(issue.id) : null,
+      imageAlt: image?.altText ?? null,
     },
     sends,
     sendsTruncated: issue.recipientCount > sends.length,
@@ -157,6 +162,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     } else {
       throw e;
     }
+  }
+
+  // updateMany, not a nested update: there may be no image, which is fine.
+  if (parsed.data.imageAlt !== undefined && !parsed.data.removeImage) {
+    await prisma.newsletterImage.updateMany({ where: { newsletterId: id }, data: { altText: imageAltField(parsed.data.imageAlt) } });
   }
 
   await logActivity({

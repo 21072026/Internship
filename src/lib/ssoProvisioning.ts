@@ -19,6 +19,7 @@ import { prisma } from './prisma';
 import { findUsersInWorld, worldOfOrg } from './userWorld';
 import { logActivity } from './activity';
 import type { SsoRole } from './ssoRoleMapping';
+import { createUser } from '@/lib/userCreate';
 
 // Roles an IdP attribute mapping may grant — the type and the rule that picks
 // one live in src/lib/ssoRoleMapping.ts (#1940). Defaults to the
@@ -87,7 +88,7 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
     return { user, created: false };
   }
 
-  const user = await prisma.user.create({
+  const user = await createUser(prisma, {
     data: {
       email,
       // SSO users authenticate via the IdP — no local password login.
@@ -99,7 +100,7 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
       skills: [],
     },
     select,
-  });
+  }, { source: 'sso' });
   return { user, created: true };
 }
 

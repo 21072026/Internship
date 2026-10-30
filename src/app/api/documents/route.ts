@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { canAccessUserDocs, DOCUMENT_TYPES, ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { logActivity } from '@/lib/activity';
@@ -178,6 +179,12 @@ export async function POST(request: Request) {
     select: META_SELECT,
   });
   await logActivity({ action: 'document.upload', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'document', targetId: doc.id });
+  // Ids, type and version only (#1998) — never the title, the file name or the bytes.
+  await emit(
+    'document.uploaded',
+    { documentId: doc.id, ownerId: ownerId ?? null, type: String(type), requirementId: requirementId ?? null, version: (prior?.version ?? 0) + 1, generated: false },
+    { actor: { id: session.user.id, type: 'user' } },
+  );
   return NextResponse.json({ document: doc }, { status: 201 });
   });
 }

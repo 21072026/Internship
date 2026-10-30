@@ -42,6 +42,10 @@
     "methods": ["POST"],
     "why": "SAML Assertion Consumer Service: the IdP posts a signed assertion through the browser and the signature, checked against the tenant's stored certificate, is the credential. Pre-auth by definition — this is where the session is issued."
   },
+  "src/app/api/auth/sso/[slug]/callback/route.ts": {
+    "methods": ["GET"],
+    "why": "The OIDC redirect URI (#1929): the IdP sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the IdP's JWKS."
+  },
   "src/app/api/auth/sso/[slug]/login/route.ts": {
     "methods": ["GET"],
     "why": "SP-initiated SSO: resolves the tenant and redirects to the IdP. Pre-auth by definition, and it falls back to the password page when SSO is not active so a wrong slug never dead-ends."

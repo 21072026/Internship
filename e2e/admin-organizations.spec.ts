@@ -138,25 +138,42 @@ test('admin creates an organization and it appears in the list', async ({ page }
     });
     expect(badUrl.status()).toBe(400);
 
-    // OIDC (#1537): the login route always builds a SAML request, so a saved
-    // OIDC config would lock the tenant out. Refused at the write boundary —
-    // both on its own and as part of an otherwise-complete, enabling payload.
-    for (const data of [
-      { id: org!.id, ssoProvider: 'oidc' },
-      {
+    // OIDC (#1929 replaced #1537's refusal): a half-filled OIDC config cannot
+    // be switched on, and the refusal names what is missing…
+    const halfOidc = await page.request.patch('/api/admin/organizations', {
+      data: {
         id: org!.id,
         ssoEnabled: true,
         ssoProvider: 'oidc',
-        ssoIssuer: 'https://idp.test/metadata',
-        ssoEntryPoint: 'https://idp.test/authorize',
+        ssoIssuer: 'https://login.idp.test',
+        ssoClientId: 'admin-orgs-client',
+        ssoDiscoveryUrl: 'https://login.idp.test/.well-known/openid-configuration',
       },
-    ]) {
-      const res = await page.request.patch('/api/admin/organizations', { data });
-      expect(res.status()).toBe(400);
-      expect((await res.json()).error).toMatch(/OIDC single sign-on is not supported yet/i);
-    }
-    // …and nothing was persisted: the provider is still unset.
+    });
+    expect(halfOidc.status()).toBe(400);
+    expect((await halfOidc.json()).error).toMatch(/missing: client secret/);
     expect((await prisma.organization.findUnique({ where: { id: org!.id } }))?.ssoProvider).toBeNull();
+    // …and a complete one is saved and reported active.
+    const fullOidc = await page.request.patch('/api/admin/organizations', {
+      data: {
+        id: org!.id,
+        ssoEnabled: true,
+        ssoProvider: 'oidc',
+        ssoIssuer: 'https://login.idp.test',
+        ssoClientId: 'admin-orgs-client',
+        ssoClientSecret: 'admin-orgs-secret',
+        ssoDiscoveryUrl: 'https://login.idp.test/.well-known/openid-configuration',
+      },
+    });
+    expect(fullOidc.ok()).toBeTruthy();
+    const oidcRow = ((await (await page.request.get('/api/admin/organizations')).json()).organizations as { id: string; sso: { active: boolean; ssoClientSecretSet: boolean } }[])
+      .find((o) => o.id === org!.id)!;
+    expect(oidcRow.sso.active).toBe(true);
+    expect(oidcRow.sso.ssoClientSecretSet).toBe(true);
+    // Back to a clean slate for the SAML half of this test.
+    expect((await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, ssoEnabled: false, ssoProvider: '', ssoIssuer: '', ssoClientId: '', ssoClientSecret: '', ssoDiscoveryUrl: '' },
+    })).ok()).toBeTruthy();
 
     // A complete SAML config enables and reports active.
     const goodSso = await page.request.patch('/api/admin/organizations', {
