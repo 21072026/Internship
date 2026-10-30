@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "Admin-defined questions now appear on the profile (#1803): `GET /api/forms/active`, `GET|PUT /api/forms/responses` (answers written only by their owner, validated with the shared `validateResponse()`), and the `DynamicFields` renderer mounted in `ProfileForm`.",
+  "notes": {
+    "en": [
+      "Questions your programme adds now appear on your profile — answer them in your language and edit them any time."
+    ],
+    "tr": [
+      "Programınızın eklediği sorular artık profilinizde — kendi dilinizde cevaplayın, istediğiniz zaman düzenleyin."
+    ],
+    "de": [
+      "Fragen, die Ihr Programm hinzufügt, erscheinen jetzt in Ihrem Profil – beantworten Sie sie in Ihrer Sprache und ändern Sie sie jederzeit."
+    ]
+  }
+}

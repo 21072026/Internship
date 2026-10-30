@@ -16,6 +16,7 @@ import { isValidTimeZone, offsetAt } from '@/lib/timezone';
 import { MATCH_DIMENSIONS, type MatchDimension } from './types';
 import { asStringList, lowercaseOnly, normalizeTerm, termMap, tokens } from './normalize';
 import { skillOverlap, type SkillEdgeRow } from '@/lib/skillTaxonomyRule';
+import { semanticAffinity } from './semantic';
 
 /** What every person on either side of a match may carry. All optional. */
 export interface MatchPerson {
@@ -37,6 +38,12 @@ export interface MatchPerson {
    * instead of the free-text one.
    */
   skillIds?: readonly string[];
+  /**
+   * The person's cached profile themes (`ProfileDigest.themes`, #2038), read
+   * by the `semanticAffinity` dimension. Absent = no digest yet: the rule is
+   * not applicable and adds the same 0 to everybody.
+   */
+  themes?: readonly string[];
 }
 
 export interface MatchMentee extends MatchPerson {
@@ -181,6 +188,19 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
     const ratio = cap == null ? 1 : cap <= 0 ? 0 : clamp01((cap - mentor.activeMenteeCount) / cap);
     const detail = [cap == null ? `${mentor.activeMenteeCount} active` : `${mentor.activeMenteeCount}/${cap}`];
     return { matched: availability.status === 'available', ratio, detail: availability.status === 'available' ? detail : [...detail, availability.status] };
+  },
+
+  // Soft only (#2038): the cached themes of both profiles, compared without a
+  // provider call (src/lib/matching/semantic.ts). The detail names what they
+  // share, and what met halfway ("platform engineering ≈ platform team").
+  semanticAffinity: (mentee, mentor) => {
+    if (!mentee.themes?.length || !mentor.themes?.length) return notApplicable('no profile digest');
+    const a = semanticAffinity(mentee.themes, mentor.themes);
+    return {
+      matched: a.score > 0,
+      ratio: a.score,
+      detail: [...a.sharedThemes, ...a.relatedThemes.map((r) => `${r.theme} ≈ ${r.via}`)],
+    };
   },
 
   // Meant as HARD_EXCLUDE: matched means "one manages the other".

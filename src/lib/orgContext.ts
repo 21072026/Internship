@@ -82,6 +82,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // IdP role mapping rules (#1940) — one tenant's SSO config, never another's.
   'SsoClaimMapping',
   'SsoAttributeMapping',
+  'ProgramEligibilityRule',
   // An SSO request in flight (#1929): sessionless writers (login route,
   // callback) pass their own orgId.
   'SsoAuthRequest',
@@ -181,6 +182,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Bulk matching rounds and their proposals (#1793) — both scoped on their own.
   'MatchRound',
   'MatchProposal',
+  // A person's cached profile themes for the semantic match rule (#2038).
+  'ProfileDigest',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
   // readers — /api/health's counters and the daily dead-letter alert — run

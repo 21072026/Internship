@@ -15,8 +15,8 @@ import { submitSignInForm, gotoSettled } from './helpers/auth';
 //   · its own organisation and accounts with FIXED display names, so no other
 //     spec's rows and no unique-email suffix reach the pixels;
 //   · everything that is time or identity masked: <time> elements, the account
-//     menu (it prints the e-mail), avatars, the nav's count badges and the
-//     first-run checklist (both count rows other specs create).
+//     menu (it prints the e-mail), avatars, the nav's count badges (they count
+//     rows other specs create) and the per-account referral code.
 //
 // BASELINES COME ONLY FROM THE CI IMAGE. Font rasterisation differs between a
 // laptop and the GitHub runner, so a locally generated PNG would fail in CI on
@@ -69,11 +69,14 @@ async function snap(page: Page, path: string, name: string, theme: string) {
       page.locator('time'),
       page.getByTestId('account-menu-button'),
       page.locator('[data-testid*="avatar"], img[alt=""]'),
-      // Counts the full suite's other specs move in the shared shard database:
-      // the nav's attention badges and the first-run checklist.
+      // Counts the full suite's other specs move in the shared shard database
+      // (the nav's attention badges). The first-run checklist is NOT masked:
+      // since #3393 it counts this org's rows only, which this spec owns.
       page.locator([
         'notifications-unread-badge', 'messages-unread-badge', 'mentor-applications-badge',
-        'admin-hiring-badge', 'admin-offers-badge', 'outbox-badge', 'onboarding-checklist',
+        'admin-hiring-badge', 'admin-offers-badge', 'outbox-badge',
+        // The referral code is minted per account, so a fresh run is a fresh code.
+        'referral-url',
       ].map((id) => `[data-testid="${id}"]`).join(', ')),
     ],
   });
