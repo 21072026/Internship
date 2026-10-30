@@ -37,6 +37,8 @@ const SELECTS = {
     // secret: the admin directory offers "reset two-factor" only to the rows
     // where there is something to reset, so support does not press it blind.
     twoFactorEnabled: true,
+    // On the bench (#1778): the directory badges it and offers "return".
+    participantState: true,
   },
   // Admin mentor pickers (#942): a name plus what's needed to derive
   // availability. `activeMenteeCount` and `availability` are computed below,
@@ -155,6 +157,11 @@ export async function GET(request: Request) {
       if (role) filters.role = role;
       if (status === 'active') filters.isActive = true;
       if (status === 'archived') filters.isActive = false;
+      // The bench (#1778) — active accounts parked for this term.
+      if (status === 'benched') {
+        filters.isActive = true;
+        filters.participantState = 'BENCHED';
+      }
       if (search) {
         filters.OR = [{ fullName: { contains: search } }, { email: { contains: search } }];
       }

@@ -9,6 +9,7 @@ import { applyScanCap, matchesTextFilters, pageSlice, toStringArray } from '@/li
 import { skillTermWhere } from '@/lib/skillFilter';
 import type { Prisma } from '@prisma/client';
 import { requireCapability } from '@/lib/capabilityGate';
+import { notBenched } from '@/lib/participantState';
 
 // Upper bound on the rows the in-memory filter branch is allowed to scan
 // (#1820). The skill filter is SQL now (`skillTermWhere`, over the taxonomy
@@ -61,6 +62,8 @@ export async function GET(request: Request) {
     const where: Prisma.UserWhereInput = {
       role: 'MENTOR',
       isActive: true,
+      // A benched mentor (#1778) is not offered to a mentee choosing one.
+      ...notBenched(),
       publicProfile: true,
       orgId: resolveOrgId(session),
       consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },

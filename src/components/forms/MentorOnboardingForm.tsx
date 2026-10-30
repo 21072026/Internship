@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkillsField } from '@/components/ui/SkillsField';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 import { useT } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -48,6 +49,7 @@ export function MentorOnboardingForm() {
   ];
   const days = t.availability.days as string[];
   const router = useRouter();
+  const customFields = useDynamicFields('ONBOARDING');
   const [currentStep, setCurrentStep] = useState(0);
   const [allData, setAllData] = useState<Partial<Step1Data & Step2Data & Step3Data>>({});
   const [error, setError] = useState('');
@@ -104,6 +106,8 @@ export function MentorOnboardingForm() {
   });
 
   const handleStep3 = step3Form.handleSubmit((data) => {
+    // The org's onboarding questions (#1803) sit on this step and are checked here.
+    if (!customFields.validate()) return;
     setAllData((prev) => ({ ...prev, ...data }));
     setCurrentStep(3);
   });
@@ -126,6 +130,7 @@ export function MentorOnboardingForm() {
       const body = await res.json();
       throw new Error(body.error || 'Failed to save profile');
     }
+    if (await customFields.save()) throw new Error(t.dynamicFields.saveFailed);
   };
 
   const addSlot = async (e: React.FormEvent) => {
@@ -288,6 +293,7 @@ export function MentorOnboardingForm() {
             {...step3Form.register('mentorCapacity')}
             error={step3Form.formState.errors.mentorCapacity?.message}
           />
+          <DynamicFields state={customFields} />
           <div className="flex gap-3">
             <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" size="lg">
               {t.onboarding.back}

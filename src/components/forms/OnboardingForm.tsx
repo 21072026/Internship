@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 import { SkillsField } from '@/components/ui/SkillsField';
 import { useT } from '@/i18n/client';
 
@@ -40,6 +41,7 @@ export function OnboardingForm() {
   const t = useT();
   const steps = [t.onboarding.personalInfo, t.onboarding.education, t.onboarding.skillsCv];
   const router = useRouter();
+  const customFields = useDynamicFields('ONBOARDING');
   const [currentStep, setCurrentStep] = useState(0);
   const [allData, setAllData] = useState<Partial<Step1Data & Step2Data & Step3Data>>({});
   const [error, setError] = useState('');
@@ -113,6 +115,8 @@ export function OnboardingForm() {
       return;
     }
     setSkillsError('');
+    // The org's onboarding questions (#1803): checked before anything is saved.
+    if (!customFields.validate()) return;
     setLoading(true);
     setError('');
 
@@ -129,6 +133,7 @@ export function OnboardingForm() {
         const body = await res.json();
         throw new Error(body.error || 'Failed to save profile');
       }
+      if (await customFields.save()) throw new Error(t.dynamicFields.saveFailed);
 
       router.push('/portal');
     } catch (err) {
@@ -273,6 +278,7 @@ export function OnboardingForm() {
             {...step3Form.register('cvUrl')}
             error={step3Form.formState.errors.cvUrl?.message}
           />
+          <DynamicFields state={customFields} />
           {userId && (
             <div className="border-t border-gray-100 pt-4">
               <CvManager targetUserId={userId} initialCvUrl={initialCv} />

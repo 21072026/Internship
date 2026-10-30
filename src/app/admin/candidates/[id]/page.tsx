@@ -18,6 +18,7 @@ import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { FormAnswersPanel } from '@/components/forms/FormAnswersPanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingSchedulerPanel } from '@/components/MeetingSchedulerPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
@@ -640,6 +641,8 @@ export default function AdminMenteeDetailPage() {
         {/* The hiring side (#1398): companies, roles, applications and interview
             requests — independent of a relation, so a candidate without one shows it too. */}
         <CandidateHiringPanel candidateId={id} />
+        {/* Answers to the org's own questions (#1803); nothing when none is asked. */}
+        <FormAnswersPanel userId={id} />
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
