@@ -22,6 +22,11 @@ import {
 // resurrect a category somebody switched off (the same rule applyUnsubscribe.ts
 // keeps for the e-mail groups).
 
+/** Categories with at least one non-essential event — the only ones push can be added to. */
+function routedCategories(): Set<string> {
+  return new Set(NOTIFICATION_EVENTS.filter((e) => !isEssentialGroup(e.emailGroup)).map((e) => e.category));
+}
+
 /** Which matrix channels any non-essential event of the category uses by default. */
 function categoryDefaults(): Record<NotificationCategory, Record<MatrixChannel, boolean>> {
   const out = Object.fromEntries(
@@ -41,6 +46,7 @@ function prefsObject(value: unknown): Record<string, unknown> {
 function view(prefs: unknown, timezone: string | null) {
   const map = readChannelMap(prefs, NOTIFICATION_CATEGORIES);
   const defaults = categoryDefaults();
+  const routed = routedCategories();
   return {
     categories: NOTIFICATION_CATEGORIES.map((id) => ({
       id,
@@ -49,7 +55,7 @@ function view(prefs: unknown, timezone: string | null) {
         default: defaults[id][ch],
         // null = follows the default; e-mail can be taken away, never added.
         value: map[id]?.[ch] ?? null,
-        settable: ch === 'push' || defaults[id][ch],
+        settable: defaults[id][ch] || (ch === 'push' && routed.has(id)),
       })),
     })),
     quietHours: readQuietHours(prefs),
@@ -104,12 +110,16 @@ export async function PUT(request: Request) {
   }
   const body = parsed.data;
   const defaults = categoryDefaults();
+  const routed = routedCategories();
   if (body.channels) {
     for (const [cat, row] of Object.entries(body.channels)) {
       // E-mail is only ever taken away: a category that mails nobody by design
       // cannot be switched on here (resolveChannels would ignore it anyway).
       if (row.email === true && !defaults[cat as NotificationCategory].email) {
         return NextResponse.json({ error: 'This category sends no e-mail', code: 'channel_not_settable' }, { status: 400 });
+      }
+      if (row.push === true && !routed.has(cat)) {
+        return NextResponse.json({ error: 'This category raises no notifications here', code: 'channel_not_settable' }, { status: 400 });
       }
       if (row.inApp === true && !defaults[cat as NotificationCategory].inApp) {
         return NextResponse.json({ error: 'This category has no in-app notice', code: 'channel_not_settable' }, { status: 400 });
