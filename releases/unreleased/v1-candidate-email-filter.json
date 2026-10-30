@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**`GET /api/v1/candidates?email=` (#2004):** an exact, case-insensitive e-mail lookup on the candidate list — the \"do we already have this person?\" step a connector (the Zapier app's `find_candidate` search) runs before it creates. The address is matched, never returned; the lookup stays inside the key's organisation (and its source, for a source key). Documented in the OpenAPI document; pinned in `e2e/api-v1-read-breadth.spec.ts`."
+}

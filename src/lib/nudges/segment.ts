@@ -20,6 +20,7 @@
 import type { Prisma } from '@prisma/client';
 import { daysInStage, DAY_MS } from '@/lib/stageClock';
 import { segmentRoles, type Segment, type SegmentCondition } from './rule';
+import { notBenched } from '@/lib/participantState';
 
 const RELATION_FIELDS = new Set<SegmentCondition['field']>(['stage', 'daysInStage', 'daysSinceLastInteraction', 'cohort']);
 
@@ -73,6 +74,8 @@ export function segmentUserWhere(segment: Segment, orgId: string, now: Date, res
   return {
     orgId,
     isActive: true,
+    // Nobody on the bench is nudged (#1778).
+    ...notBenched(),
     ...(restrictTo ? { id: { in: [...restrictTo] } } : {}),
     OR: segmentRoles(segment).map((r) => roleWhere(r, segment, orgId, now)),
   };

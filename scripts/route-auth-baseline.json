@@ -18,6 +18,10 @@
     "methods": ["GET", "POST"],
     "why": "The public 'apply to this mentor' link (#1188). The applicant has no account — creating one is what POST does — so the mentor id in the URL is the whole address. GET only says whether the link is open and who the mentor is; POST is rate-limited to 15/10min."
   },
+  "src/app/api/forms/public/route.ts": {
+    "methods": ["GET"],
+    "why": "The questions an org added to its PUBLIC application forms (#1803) — the per-mentor apply link and the become-a-mentor form — read by a visitor who has no account yet. The org comes from the link (the mentor's org, or the default org), the same address the public POSTs already use. It returns only the question definitions every visitor of that page is shown: never an answer, never the matchable flag, nothing per caller."
+  },
   "src/app/api/auth/forgot/route.ts": {
     "methods": ["POST"],
     "why": "Password reset request: whoever needs it cannot sign in by definition. Answers the same 200 for every address so it cannot enumerate accounts, and is rate-limited to 5/15min."
@@ -70,6 +74,7 @@
     "methods": ["GET"],
     "why": "Personal ICS subscription feed (#915). Calendar apps cannot sign in; the per-user token from /api/account/ics-feed is the credential and is rotatable there. Deliberately PII-minimal — a title and a time per event, no join links, no participant names."
   },
+  "src/app/api/partner/apply/route.ts": { "methods": ["POST"], "why": "public partner application form (#3361): sessionless by design, the org comes from the host mapping, per-IP rate limit + honeypot + per-address cap; creates no account" },
   "src/app/api/company-inquiry/route.ts": {
     "methods": ["POST"],
     "why": "The public /for-companies enquiry form. Companies have no self-service sign-up (a COMPANY user is only born from an InvitationToken), so this form is the only bridge. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."

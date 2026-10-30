@@ -25,12 +25,17 @@ const configSchema = z
     honourPreference: z.boolean().optional(),
     // capacityHeadroom: a self-select round — honour each mentor's selfMatchLimit (#1808).
     selfSelect: z.boolean().optional(),
+    // customField:<key> on a NUMBER/SCALE answer: the widest gap that still matches (#1803).
+    tolerance: z.number().min(0).max(1000).optional(),
   })
   .strict();
 
 export const matchRuleSchema = z
   .object({
-    dimension: z.enum(MATCH_DIMENSIONS),
+    // A built-in, or an admin-defined question (`customField:<fieldKey>`, #1803).
+    // The shape is checked here; that the field exists and is matchable in the
+    // caller's org is checked at the save route (unmatchableCustomFields()).
+    dimension: z.union([z.enum(MATCH_DIMENSIONS), z.string().regex(/^customField:[a-z][a-z0-9_]{0,79}$/) as z.ZodType<`customField:${string}`>]),
     kind: z.enum(['WEIGHTED', 'HARD_REQUIRE', 'HARD_EXCLUDE']),
     weight: z.number().int().min(0).max(100),
     config: configSchema.default({}),

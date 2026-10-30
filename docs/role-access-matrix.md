@@ -430,6 +430,45 @@ Sırayla, ilk eşleşen kazanır:
 - Her ret, rota adıyla bir `authz.capability_denied` (warning) `ActivityLog`
   satırı yazar; cevap `403 { code: 'permission_denied', permission }`.
 
+### Assigning tiers and scopes (#1579)
+
+The screen is the **Admin tiers** panel on `/admin/users`. Its API is
+`/api/admin/roles`: `GET`; `PATCH { userId, tier }`; `POST { userId, cohortId? | companyId? }`; and
+`DELETE ?grantId=`. All of them ask `requirePermission('admin.grant')`. That
+permission is in `ORG_ADMIN`'s set only, so the one permission rule decides who
+may assign, and there is no second authorization path.
+
+The change guards are pure, in `src/lib/adminTierRule.ts`, and are applied by the one writer, `src/lib/adminTiers.ts`:
+
+| Guard | Answer |
+|---|---|
+| An actor changes their own tier, up or down | `400 self_change` |
+| A tier above the actor's own, or a target above it | `400 above_own` / `target_above_own`. Unreachable while only ORG_ADMIN holds `admin.grant`, but kept as the rule for any later narrower tier. |
+| The org's last **active** ORG_ADMIN would be demoted, deactivated or would delete their account | `409 last_org_admin` (tier change, deactivation) / `400` (self-deletion) |
+| A scope grant on a tier other than PROGRAM_ADMIN, an empty grant, or another org's cohort/company | `400 not_program_admin` / `empty_grant`, `404 outside_org` |
+
+There is no SUPER_ADMIN tier. The platform operator is the per-world
+`isSuperAdmin` flag, set only by `prisma/set-super-admin.mjs` (#2647), so the
+"last super admin" of the issue is the org's last active ORG_ADMIN here.
+
+**A tier change signs the person out.** The tier rides in the JWT, so the
+change stamps `sessionsValidFrom` **and** calls `revokeAllTrustedDevices()`.
+Grants are different: `requirePermission()` reads them live, so a grant
+change applies on the next request without a sign-out.
+
+Every change writes an `AuditLog` row (`ADMIN_LEVEL_CHANGE`,
+`ADMIN_SCOPE_GRANT`, `ADMIN_SCOPE_REVOKE`, carrying `orgId`) and a warning
+activity line. A tier change also sends the target an in-app notice,
+`admin_tier.changed`, in the essential `account_security` group.
+
+Grants on a tier that no longer reads them (after a PROGRAM_ADMIN is
+promoted or demoted) are kept, not deleted. The rule ignores them, and they
+apply again if the tier returns.
+
+`AdminNav` hides the few links whose page needs a write a tier lacks (the
+`permission` tag in `src/lib/navLinks.ts`: automations and nudges). This is
+**cosmetic**: the page's API answers 403, and that is the control.
+
 ## Süper-admin yalnız uçlar / Super-admin-only endpoints
 
 `role === 'ADMIN'` bir **tenant** admin'idir; kiracıların kendisini yönetmek

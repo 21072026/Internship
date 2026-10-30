@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Programme filter on the analytics screens (#1652):** optional `?program=<id>|unassigned` on `/api/admin/analytics`, `/funnel` and `/aging` narrows every relation-based number (funnel, KPI cards, trend, mentor workload, interactions and relation meetings) to one programme — free on every plan. The id is checked against the caller's tenant before anything is computed (`src/lib/programFilter.ts`; another org's id is a 404), and `all` adds nothing to any `where`, so the unfiltered screen is unchanged. `/admin/analytics` gets a selector (`data-testid=\"analytics-program-filter\"`) kept in the URL. The premium comparison moves to `/api/admin/analytics/programs` with an explicit `unassigned` row so the programmes add up to the tenant total; `/api/admin/analytics/cohorts` stays as a one-release alias. Pinned by `scripts/test/program-filter.test.mjs` and `e2e/program-analytics-filter.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Analytics can now be filtered by programme — pick one in the new Programme selector and the funnel, KPI cards and trends show only that programme. The choice stays in the link, so a filtered view can be shared."],
+    "tr": ["Analitik artık programa göre süzülebiliyor — yeni Program seçicisinden birini seçince huni, KPI kartları ve eğilimler yalnızca o programı gösteriyor. Seçim bağlantıda kalıyor, süzülmüş görünüm paylaşılabiliyor."],
+    "de": ["Analysen lassen sich jetzt nach Programm filtern – im neuen Programm-Auswahlfeld eines wählen, und Trichter, KPI-Karten und Trends zeigen nur dieses Programm. Die Auswahl steht im Link, gefilterte Ansichten lassen sich teilen."]
+  }
+}

@@ -20,6 +20,7 @@ import type { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { raiseRequisitionStatus } from '@/lib/requisitionEvents';
 import { createUser } from '@/lib/userCreate';
 import { defaultPipelineStages } from '@/lib/pipeline';
 import { verticalHasCapability } from '@/lib/verticals';
@@ -61,7 +62,8 @@ export async function createSampleProgram(tx: Tx, orgId: string, now = new Date(
   created++;
   // A requisition is a `placements` module row: only a vertical that has it gets one.
   if (verticalHasCapability(org.vertical, 'placements')) {
-    await tx.requisition.create({ data: { orgId, companyId: company.id, title: 'Junior developer (sample)', status: 'OPEN', openings: 2, sampleData: true } });
+    const requisition = await tx.requisition.create({ data: { orgId, companyId: company.id, title: 'Junior developer (sample)', status: 'OPEN', openings: 2, sampleData: true }, select: { id: true } });
+    await raiseRequisitionStatus(tx, { requisitionId: requisition.id, orgId, from: null, to: 'OPEN' });
     created++;
   }
 

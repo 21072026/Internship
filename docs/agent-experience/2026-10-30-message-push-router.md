@@ -11,3 +11,8 @@
 - **Adding `push` to `defaultChannels` also changes the /account matrix**:
   the grid reads defaults from the catalogue, so a channel that already fired
   but was not declared showed as "off" there.
+- **A pure module that signs (replyToken) needs `NEXTAUTH_SECRET` even in a
+  `*.unit.spec.ts`** — `requireServerSecret()` refuses to run without it. Set a
+  fixed value in the spec's `beforeAll`; never add a default to the signer.
+- **RFC 5322 atext is the constraint for anything inside a reply address**:
+  `:` (which the #1713 issue text suggested) is not atext; `=` and `~` are.

@@ -168,7 +168,12 @@ export const NOTIFICATION_EVENTS = [
   { key: 'event.promoted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'event.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'event.updated', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
+  // Meeting invite, reminder, move and call-off reach chat too (#1942): the
+  // card carries the join link as a button and a move/cancel REWRITES the
+  // earlier card (ChatCard.supersede). The mail for all of them is sent inline
+  // by its own sender, so `email` is deliberately not a default channel here —
+  // the router would otherwise send a second, generic mail.
+  { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
   { key: 'meeting_reminder.seriesSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_reminder.seriesTomorrow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_request.new', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
@@ -177,13 +182,13 @@ export const NOTIFICATION_EVENTS = [
   { key: 'meeting_request.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['topic'] },
   { key: 'meeting.started', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['organizer', 'title'] },
   { key: 'meeting.startedGeneric', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'meeting.scheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'meeting.scheduledNoTime', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'meeting.scheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'meeting.scheduledNoTime', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   // A meeting that moved or was called off (#1982) — the mail is sent inline by
   // src/lib/meetingChangeNotices.ts, so the router is asked for in-app only.
-  { key: 'meeting.rescheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'from', 'to'] },
-  { key: 'meeting.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'meeting.cancelledReason', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when', 'reason'] },
+  { key: 'meeting.rescheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'from', 'to'] },
+  { key: 'meeting.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'meeting.cancelledReason', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when', 'reason'] },
   // An RSVP is the organizer's own bookkeeping: in-app only, no mail per answer.
   { key: 'rsvp.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'rsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
@@ -297,6 +302,7 @@ export const NOTIFICATION_EVENTS = [
   // The confirmed interview time, on the recipient's own clock (#1844); the cancellation of it.
   { key: 'interview_request.scheduled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'affiliate_application.new', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   // Plan-change requests (#1743): to the operators of the org's world, and the
@@ -443,6 +449,17 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // An admin tier change (#1579) signs the person out everywhere; this tells
+  // them why when they are back. No params: the new tier is on their screen.
+  { key: 'admin_tier.changed', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Account mails (#3399): invitation, password reset and e-mail verification.
+  // They are NEVER published through notifyEvent() — each has its own sender in
+  // emailService.ts, because the mail carries a one-time token. They are here
+  // so the template editor can change their wording; the token link itself is
+  // drawn by renderNotificationEmail() and is not a merge tag.
+  { key: 'account.invitation', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['role'] },
+  { key: 'account.passwordReset', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'account.verification', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 ] as const satisfies readonly NotificationEventDef[];
 
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number]['key'];

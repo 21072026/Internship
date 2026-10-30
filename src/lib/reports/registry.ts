@@ -165,7 +165,8 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
     const { tenant } = await scopeOf(ctx);
     const groups = await prisma.placement.groupBy({
       by: ['companyId'],
-      where: withinTenant(ctx.person ? { mentee: { is: ctx.person } } : {}, tenant),
+      // A reversed placement (#1765) is a hire that was undone.
+      where: withinTenant({ reversedAt: null, ...(ctx.person ? { mentee: { is: ctx.person } } : {}) }, tenant),
       _count: { _all: true, valueMinor: true },
     });
     const ids = groups.map((g) => g.companyId).filter((id): id is string => !!id);

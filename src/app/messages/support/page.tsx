@@ -74,7 +74,11 @@ export default function SupportChatPage() {
         body: (() => {
           const form = new FormData();
           form.append('body', text);
-          attachments.forEach(({ file }) => form.append('files', file));
+          // One altText per file, same order — the route pairs them (#3407).
+          attachments.forEach(({ file, alt }) => {
+            form.append('files', file);
+            form.append('altText', alt ?? '');
+          });
           return form;
         })(),
       });
@@ -155,6 +159,7 @@ export default function SupportChatPage() {
         <PendingAttachmentList
           attachments={attachments}
           removeLabel={s.removeAttachment}
+          onAltChange={(index, alt) => setAttachments((current) => current.map((a, i) => (i === index ? { ...a, alt } : a)))}
           onRemove={(index) => setAttachments((current) => {
             const next = [...current];
             const [removed] = next.splice(index, 1);

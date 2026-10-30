@@ -410,7 +410,10 @@ export async function GET(request: Request) {
             'Requires a key holding the `candidates:read` scope. Returns only the candidates of the organisation the key belongs to, one page at a time. The `candidates` key repeats `data` for clients written before the v1 envelope; it is deprecated and will be removed on ' +
             CANDIDATES_ALIAS_SUNSET + '.',
           security: [{ apiKey: ['candidates:read'] }],
-          parameters: listParameters,
+          parameters: [
+            ...listParameters,
+            eqFilter('email', 'Exact e-mail address (case-insensitive): finds the candidate with that address, if any. The address is matched, never returned.'),
+          ],
           responses: {
             '200': {
               description: 'One page of candidates, scoped to the key’s organisation',

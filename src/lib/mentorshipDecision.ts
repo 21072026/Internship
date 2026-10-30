@@ -22,6 +22,7 @@ import { ENDED_REMATCHED, effectiveLifecycleState } from '@/lib/relationLifecycl
 import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { recordMatchDecision } from '@/lib/matching/decision';
 import { scheduleCreateData, type RelationScheduleInput } from '@/lib/relationSchedule';
+import { isBenched, MENTOR_BENCHED_ERROR } from '@/lib/participantState';
 import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
@@ -162,6 +163,7 @@ export async function decideMentorshipRequest(opts: {
         notificationPrefs: true,
         mentorCapacity: true,
         acceptingMentees: true,
+        participantState: true,
       },
     });
     if (!mentor || !mentor.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
@@ -169,6 +171,9 @@ export async function decideMentorshipRequest(opts: {
       // rendered as the generic error line (#2283 follow-up).
       return { status: 400, body: { error: 'Invalid mentor', code: 'invalid_mentor' } };
     }
+    // A benched mentor (#1778) is not assignable — through the admin queue or
+    // their own accept alike. Refused here, not hidden in a picker.
+    if (isBenched(mentor)) return { status: 409, body: { ...MENTOR_BENCHED_ERROR } };
     // The pairing a re-match replaces, but only while it is still live: if it
     // ended some other way in the meantime this is an ordinary approval and
     // there is nothing left to close.
