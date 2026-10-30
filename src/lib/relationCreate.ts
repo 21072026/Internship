@@ -29,6 +29,7 @@ import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/ema
 import { findActiveMentorship, AlreadyMentoredError } from '@/lib/activeMentorship';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { recordMatchDecision, type MatchDecisionInput } from '@/lib/matching/decision';
+import { writePairSeats } from '@/lib/relationParticipants';
 
 export const NEW_RELATION_INCLUDE = {
   mentor: { select: { id: true, fullName: true, email: true } },
@@ -44,7 +45,10 @@ export async function createGuardedRelation(
 ) {
   const active = await findActiveMentorship(tx, data.menteeId);
   if (active) throw new AlreadyMentoredError(data.menteeId, active.id);
-  return tx.mentorshipRelation.create({ data, include: NEW_RELATION_INCLUDE });
+  const relation = await tx.mentorshipRelation.create({ data, include: NEW_RELATION_INCLUDE });
+  // The pair's mirror seats (#1804), in the same transaction.
+  await writePairSeats(tx, relation);
+  return relation;
 }
 
 type Person = Pick<User, 'id' | 'fullName' | 'email' | 'orgId'> & Parameters<typeof emailAllowed>[0] & Parameters<typeof emailGroupAllowedForCategory>[0];
@@ -57,14 +61,22 @@ export interface AnnounceInput {
   actor: { id: string; orgId: string | null };
   /** The decision record's own fields; the pair, org and decider come from above. */
   decision: Omit<MatchDecisionInput, 'orgId' | 'relationId' | 'menteeId' | 'mentorId' | 'decidedById'>;
+  /**
+   * A mentee seated in an existing GROUP (#1804) rather than a new relation:
+   * no second `mentorship.created` event for a relation that already exists —
+   * the decision record, the notices and the mails are the same.
+   */
+  seat?: boolean;
 }
 
-export async function announceNewRelation({ relation, mentor, mentee, companyId, actor, decision }: AnnounceInput): Promise<void> {
-  await emit(
-    'mentorship.created',
-    { relationId: relation.id, mentorId: mentor.id, menteeId: mentee.id, companyId },
-    { orgId: actor.orgId, actor: { id: actor.id, type: 'user' } },
-  );
+export async function announceNewRelation({ relation, mentor, mentee, companyId, actor, decision, seat = false }: AnnounceInput): Promise<void> {
+  if (!seat) {
+    await emit(
+      'mentorship.created',
+      { relationId: relation.id, mentorId: mentor.id, menteeId: mentee.id, companyId },
+      { orgId: actor.orgId, actor: { id: actor.id, type: 'user' } },
+    );
+  }
 
   // The per-pairing audit record (#1789). Never throws.
   await recordMatchDecision({

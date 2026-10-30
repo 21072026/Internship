@@ -13,6 +13,10 @@
       "count": 1,
       "reason": "Template preview sent to the admin themselves under the `test` category — a rendering check, not a notification."
     },
+    "src/lib/affiliateApplicationMail.ts": {
+      "count": 1,
+      "reason": "Acknowledgement to a public partner applicant (#3361) — an AffiliateApplication with no User row, so there is no person, preference or catalogue event for notifyEvent() to address."
+    },
     "src/lib/jobs/dlqAlert.ts": {
       "count": 1,
       "reason": "Operator alert to ALERT_EMAIL_TO — an address from the server env, not a person with a User row, preferences or a catalogue event."

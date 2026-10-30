@@ -9,6 +9,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { worldOfOrg } from '@/lib/userWorld';
 import { requirePermission } from '@/lib/authz';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { effectivePolicy } from '@/lib/impersonationPolicyRule';
 
 const schema = z.object({ targetUserId: z.string().min(1), reason: z.string().max(300).optional() });
 
@@ -63,8 +65,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Cannot impersonate an admin account' }, { status: 400 });
   }
 
+  // The TARGET's organization decides (#1586) — its works council or data
+  // protection officer set the policy for its people, not the admin's org.
+  // `off` mints nothing and tells the target nothing: no access happened.
+  const targetOrg = await prisma.organization.findUnique({
+    where: { id: target.orgId ?? (await defaultOrgId()) },
+    select: { impersonationPolicy: true },
+  });
+  const policy = effectivePolicy(targetOrg?.impersonationPolicy);
+  if (policy === 'off') {
+    return NextResponse.json(
+      { error: 'This organization does not allow signing in as its users', code: 'impersonation_off' },
+      { status: 403 }
+    );
+  }
+
   const reason = parsed.data.reason?.trim() || null;
-  const grant = await createImpersonationGrant(session.user.id, target.id, 'START');
+  const grant = await createImpersonationGrant(session.user.id, target.id, 'START', { readOnly: policy === 'read_only' });
   await prisma.auditLog.create({
     // The reason goes on the audit row too, not only on the ActivityLog entry
     // below: the account holder's own access history (#1587) is built from
@@ -89,6 +106,6 @@ export async function POST(request: Request) {
     reason ? { reason } : {},
   );
 
-  return NextResponse.json({ grant });
+  return NextResponse.json({ grant, readOnly: policy === 'read_only' });
   });
 }
