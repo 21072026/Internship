@@ -104,6 +104,29 @@ test('the mentor page and the portal panel render', async ({ page }) => {
   expect(res.status()).toBe(200);
 });
 
+test('a mentee whose only request has run out (#1775) can be offered again', async () => {
+  const id = quotaIds[3];
+  await prisma.mentorOffer.deleteMany({ where: { mentorId, menteeId: id } });
+  const stale = await prisma.mentorshipRequest.create({
+    data: { menteeId: id, createdAt: new Date(Date.now() - 20 * 86400000), expiresAt: new Date(Date.now() - 6 * 86400000) },
+  });
+  const live = await prisma.mentorshipRequest.create({ data: { menteeId: id, expiresAt: new Date(Date.now() + 86400000) } });
+  try {
+    // A live request still blocks…
+    await prisma.mentorOffer.updateMany({ where: { mentorId, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
+    await prisma.mentorOffer.updateMany({ where: { mentorId }, data: { createdAt: new Date(Date.now() - 8 * 86400000) } });
+    const blocked = await mentor.post('/api/mentor/offers', { data: { menteeId: id } });
+    expect((await blocked.json()).code).toBe('mentee_request_pending');
+    // …a PENDING one past its expiry does not, before any sweep has run.
+    await prisma.mentorshipRequest.delete({ where: { id: live.id } });
+    const listed = await (await mentor.get('/api/mentor/offers')).json();
+    expect(listed.offerable.map((m: { id: string }) => m.id)).toContain(id);
+    expect((await mentor.post('/api/mentor/offers', { data: { menteeId: id } })).status()).toBe(201);
+  } finally {
+    await prisma.mentorshipRequest.deleteMany({ where: { id: { in: [stale.id, live.id] } } });
+  }
+});
+
 test('a mentor who is not accepting cannot offer', async () => {
   await prisma.user.update({ where: { id: mentorId }, data: { acceptingMentees: false } });
   await prisma.mentorOffer.updateMany({ where: { mentorId, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });

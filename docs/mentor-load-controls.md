@@ -90,9 +90,13 @@ The supply side volunteering: a mentor with headroom offers to mentor an unmatch
   guard and both sides' notices are the shared ones. A refusal removes that request and reopens
   the offer. Declining asks for nothing; the mentor is told "declined".
 - **Mail:** at most two per offer — the offer and one reminder in its last 3 days
-  (`mentorOffers.sweep`, daily 09:10, the reminder claimed on `remindedAt: null`). Category
+  (the morning `requests.expirySweep`, 09:10, which expires mentorship requests (#1775) and offers in one job; the reminder is claimed on `remindedAt: null`). Category
   `mentor-offer` (mentorship_lifecycle group), after `emailAllowed` and
   `emailGroupAllowedForCategory`; never sent once the mentee switched the opt-in off.
-- Assumption: #1789's `MatchDecision` and #1775's request expiry are not on `main`; when they
-  land, the accept path writes a `MatchDecision` (`MENTEE_PREFERENCE`) and the sweep can move
-  next to the request expiry.
+- **One clock for both directions of an ask:** an offer waits `REQUEST_TTL_DAYS` (14) like a
+  mentorship request (#1775), and "the mentee has a request waiting" means #1775's
+  `livePendingRequestWhere()` — a PENDING request past its expiry no longer blocks an offer,
+  even before the sweep has marked it EXPIRED. The request an accepted offer creates carries
+  its `expiresAt` like every other create path.
+- Still open: #1789's `MatchDecision` is not on `main`; when it lands, the accept path writes one
+  (`MENTEE_PREFERENCE`).

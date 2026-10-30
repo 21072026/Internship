@@ -24,6 +24,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { decideMentorshipRequest, type DecisionResult } from '@/lib/mentorshipDecision';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { isExpired, offerExpiresAt, offerRefusal, reminderDue, weekAgo, type OfferRefusal } from '@/lib/mentorOfferRule';
+import { livePendingRequestWhere, requestExpiresAt } from '@/lib/requestExpiryRule';
 
 /** What a mentor may see about an offerable mentee — the profile, never contact details. */
 export const OFFERABLE_MENTEE_SELECT = {
@@ -40,15 +41,19 @@ export const OFFERABLE_MENTEE_SELECT = {
   targetPosition: true,
 } as const;
 
-/** Mentees a mentor may offer to: opted in, active, unmatched, no request waiting. */
-export function offerableMenteesWhere(tenant: TenantWhere) {
+/**
+ * Mentees a mentor may offer to: opted in, active, unmatched, no request
+ * waiting. "Waiting" is #1775's rule: a PENDING request past its expiry no
+ * longer blocks, even before the morning sweep has marked it EXPIRED.
+ */
+export function offerableMenteesWhere(tenant: TenantWhere, now: Date = new Date()) {
   return withinTenant(
     {
       role: 'MENTEE' as const,
       isActive: true,
       openToOffers: true,
       menteeRelations: { none: { status: 'ACTIVE' as const } },
-      mentorshipRequests: { none: { status: 'PENDING' as const } },
+      mentorshipRequests: { none: livePendingRequestWhere(now) },
     },
     tenant
   );
@@ -76,7 +81,7 @@ export async function createMentorOffer(opts: { session: Session; tenant: Tenant
   const [activeCount, menteeActive, menteePending, previous, pendingCount, sentLast7Days] = await Promise.all([
     prisma.mentorshipRelation.count({ where: { mentorId: mentor.id, status: 'ACTIVE' } }),
     prisma.mentorshipRelation.count({ where: { menteeId, status: 'ACTIVE' } }),
-    prisma.mentorshipRequest.count({ where: { menteeId, status: 'PENDING' } }),
+    prisma.mentorshipRequest.count({ where: { menteeId, ...livePendingRequestWhere(now) } }),
     prisma.mentorOffer.findFirst({ where: { mentorId: mentor.id, menteeId, status: { in: ['PENDING', 'DECLINED'] } }, select: { status: true } }),
     prisma.mentorOffer.count({ where: { mentorId: mentor.id, status: 'PENDING' } }),
     prisma.mentorOffer.count({ where: { mentorId: mentor.id, createdAt: { gte: weekAgo(now) } } }),
@@ -177,12 +182,12 @@ export async function answerMentorOffer(opts: { session: Session; offerId: strin
   const reopen = () => prisma.mentorOffer.updateMany({ where: { id: offerId, status: 'ACCEPTED' }, data: { status: 'PENDING', decidedAt: null } });
   // One pending request per mentee is the request flow's own rule; an offer
   // does not get to break it.
-  if (await prisma.mentorshipRequest.count({ where: { menteeId: session.user.id, status: 'PENDING' } })) {
+  if (await prisma.mentorshipRequest.count({ where: { menteeId: session.user.id, ...livePendingRequestWhere(now) } })) {
     await reopen();
     return { status: 409, body: { error: 'You already have a pending request', code: 'already_pending' } };
   }
   const req = await prisma.mentorshipRequest.create({
-    data: { menteeId: session.user.id, preferredMentorId: offer.mentorId },
+    data: { menteeId: session.user.id, preferredMentorId: offer.mentorId, expiresAt: requestExpiresAt(now) },
     select: { id: true },
   });
   const result = await decideMentorshipRequest({
