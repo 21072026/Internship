@@ -120,6 +120,8 @@ export interface NotifyOptions {
   dedupeKey?: string;
   /** Tenant to stamp when the recipient's own row carries none. */
   orgId?: string | null;
+  /** The push body — a new message's text, truncated by the push adapter (#1715). */
+  preview?: string | null;
 }
 
 export interface NotifyResult {
@@ -481,6 +483,8 @@ export async function notifyEvent<K extends NotificationEventKey>(
         // Quiet hours and org blackout days (#1714): an interrupting channel is
         // HELD to the next open instant, never dropped — a keyed deferred job,
         // the ledger row QUEUED meanwhile. The bell and essential events go now.
+        // A held push carries no `preview`: the job row would otherwise keep a
+        // message's text in the queue table, so it wakes with the title only.
         if (DEFERRABLE_CHANNELS.includes(channel) && !isEssentialGroup(def.emailGroup)) {
           const openAt = nextOpenInstant(new Date(), await calendarFor(user, orgId, blackoutOf));
           if (openAt) {
@@ -505,7 +509,7 @@ export async function notifyEvent<K extends NotificationEventKey>(
           continue;
         }
         const outcome = await adapter
-          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey })
+          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, preview: opts?.preview ?? null })
           .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
         const templateId = `notifications.events.${def.key}`;
         if (outcome.status === 'SENT') {
