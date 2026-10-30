@@ -17,6 +17,7 @@ import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPl
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { SsoAttributeMappings } from '@/components/admin/SsoAttributeMappings';
 import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
 import { OrgLifecycleCard } from '@/components/admin/OrgLifecycleCard';
@@ -1049,6 +1050,7 @@ export default function AdminOrganizationsPage() {
           {ssoMsg && <p className="text-sm text-gray-600 mt-2">{ssoMsg}</p>}
           {/* Keyed by org so switching the selector reloads its own mapping (#1940). */}
           {ssoOrgId && <SsoRoleMappings key={ssoOrgId} orgId={ssoOrgId} locked={ssoLocked} />}
+          {ssoOrgId && <SsoAttributeMappings key={`attr-${ssoOrgId}`} orgId={ssoOrgId} locked={ssoLocked} />}
         </Card>
       )}
 
