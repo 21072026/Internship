@@ -92,6 +92,33 @@ card shows the last sync and the accounts with a problem. The activity line
 
 SCIM push provisioning is a separate story; this is the pull-on-login half.
 
+## Per-tenant discovery (#1665)
+
+On a tenant's own **verified** host, nobody types an organisation code.
+`src/lib/ssoDiscovery.ts` resolves the host only through
+`resolveOrgFromHost()`, which accepts either a DNS-verified `publicHost` or
+`<slug>.<APP_ROOT_DOMAIN>`. On such a host:
+
+- `/auth/signin` leads with "Continue with <brand> SSO", a link to that
+  tenant's login route. Password sign-in stays below it.
+- With `ssoEnforced` (#1950), the page adds a notice that the form is only for
+  exempt administrators. The **control** is still the server's refusal in the
+  credentials provider; the notice only explains it.
+- `/auth/sso` redirects straight to the tenant's login route.
+
+On the default host, an unverified domain, or a tenant whose SSO is
+off, inactive or archived, nothing changes. The organisation-code form is
+still there, so there is no dead end.
+
+Discovery only decides which button is shown. The login route still checks
+`isSsoActive`, the plan and the archive itself.
+
+The SP identifiers (Entity ID, ACS URL) are deliberately **not** moved to the
+tenant's domain. SSO keeps its one registered endpoint, and the host the flow
+started on rides along in RelayState / the OIDC request row (§ One ACS,
+several hosts). An IdP registration made before discovery therefore keeps
+working.
+
 ## Who may set the identity provider (#1575)
 
 The **issuer, entry point and certificate** (and the provider) are the IdP trust
