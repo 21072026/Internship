@@ -44,6 +44,10 @@ const PUBLISHED = [
   'interview_request.approved',
   'interview_request.declined',
   'company_interest.changed',
+  'weekly_report.submitted',
+  'document.uploaded',
+  'goal.completed',
+  'meeting.attendance_recorded',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -83,6 +87,12 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['api/interview-requests/[id]', 'interview_request.approved', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2' }],
   ['api/interview-requests/[id]', 'interview_request.declined', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', reasonCode: 'not_ready' }],
   ['api/company/interests', 'company_interest.changed', { interestId: 'i1', companyId: 'c1', menteeId: 'u2', requisitionId: null, from: null, to: 'INTERESTED' }],
+  ['api/weekly-reports', 'weekly_report.submitted', { reportId: 'w1', relationId: 'r1', weekStart: at, resubmission: false }],
+  ['api/weekly-reports/[id]', 'weekly_report.submitted', { reportId: 'w1', relationId: 'r1', weekStart: at, resubmission: true }],
+  ['api/documents', 'document.uploaded', { documentId: 'd1', ownerId: 'u2', type: 'CV', requirementId: null, version: 1, generated: false }],
+  ['api/mentorship/[id]/certificate', 'document.uploaded', { documentId: 'd2', ownerId: 'u2', type: 'CERTIFICATE', requirementId: null, version: 2, generated: true }],
+  ['api/goals/[id]', 'goal.completed', { goalId: 'g1', relationId: 'r1' }],
+  ['meetingAttendance', 'meeting.attendance_recorded', { attendanceId: 'a1', meetingId: 'm1', seriesId: null, relationId: 'r1', userId: 'u2', state: 'NO_SHOW' }],
   ['api/mentorship/[id]/lifecycle', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'PAUSED', reasonCode: null }],
   ['lifecycleEvents (transfer)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_REASSIGNED', reasonCode: 'mentor_unavailable' }],
   ['lifecycleEvents (win-back)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_CHURNED', reasonCode: null }],
