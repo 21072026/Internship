@@ -11,6 +11,7 @@ import { enqueue } from '@/lib/jobs/queue';
 // Static, not enqueue()'s lazy default: a lazy import is not resolved through the
 // `@/` alias outside Next (the e2e process calling notifyEvent() directly).
 import { prismaQueueStore } from '@/lib/jobs/queueStore';
+import { sealEmail } from '@/lib/notifications/sealedEmail';
 import type { ChannelAdapter } from './types';
 
 export const emailAdapter: ChannelAdapter = {
@@ -31,6 +32,8 @@ export const emailAdapter: ChannelAdapter = {
           link: d.link,
           emailGroup: d.def.emailGroup,
           delivery: d.def.delivery,
+          // A mail the site already rendered (#1711) is sent as it is, sealed here.
+          ...(d.email ? { sealedEmail: sealEmail(d.email) } : {}),
         },
         { store: prismaQueueStore(), orgId: d.orgId, idempotencyKey: `notify:${d.dedupeKey}`, trigger: 'event' },
       );

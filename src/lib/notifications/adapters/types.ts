@@ -46,6 +46,25 @@ export interface ChannelDelivery {
    * stored on the bell row or in the ledger — only the push adapter reads it.
    */
   preview?: string | null;
+  /** A mail the call site already rendered (#1711) — see PrerenderedEmail. */
+  email?: PrerenderedEmail | null;
+}
+
+/**
+ * A mail the call site already built, handed to the router so the send gains the
+ * ledger row, the preference check, quiet hours and the channel matrix WITHOUT
+ * changing a byte of what the person receives (#1711, option 2a). The router
+ * decides whether it leaves; sendEmail() gets exactly these fields, as the site
+ * used to pass them. Sealed (secretBox) in the job payload, never stored clear.
+ */
+export interface PrerenderedEmail {
+  subject: string;
+  html: string;
+  /** The site's own sendEmail() category — it decides the lane and the footer group. */
+  category: string;
+  fromName?: string | null;
+  replyTo?: string;
+  locale?: string | null;
 }
 
 export type ChannelOutcome =

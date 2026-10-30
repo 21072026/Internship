@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { notifyEvent, runDeferredDelivery, type DeferredDelivery } from '@/lib/notifications/router';
+import { runNotificationEmail } from '@/lib/notifications/emailJob';
+import type { JobRecord } from '@/lib/jobs/queue';
 
 /**
  * The notification router, end to end against a real database (#1710).
@@ -327,6 +329,36 @@ test.describe('notification router', () => {
       });
     } finally {
       await prisma.notificationDelivery.deleteMany({ where: { userId: orphanId } });
+    }
+  });
+
+  test('a pre-rendered mail leaves byte-for-byte through the router, sealed in the queue, once (#1711)', async () => {
+    const email = uniqueEmail('notify-prerendered');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Prerendered');
+    try {
+      const subject = `Evaluation due: Aylin ${user.id}`;
+      const html = '<div><p>Exactly the site\'s own markup.</p></div>';
+      const r = await notifyEvent(user.id, 'evaluation.dueInterim', { menteeName: 'Aylin', relationId: 'rel-1' }, {
+        channels: ['email'],
+        dedupeKey: `prerendered-${user.id}`,
+        email: { subject, html, category: 'goals-evaluation', locale: 'en' },
+      });
+      expect(r).toMatchObject({ queued: 1 });
+      const [job] = (await mailJobsFor(user.id)) as unknown as (JobRecord & { payload: Record<string, unknown> })[];
+      // The queue row holds the mail sealed, never in the clear.
+      expect(typeof job.payload.sealedEmail).toBe('string');
+      expect(JSON.stringify(job.payload)).not.toContain(subject);
+      const full = (await prisma.job.findUniqueOrThrow({ where: { id: job.id } })) as unknown as JobRecord;
+      const payload = full.payload as Parameters<typeof runNotificationEmail>[0];
+      expect(await runNotificationEmail(payload, full)).toMatch(/^(sent|skipped_by_send)$/);
+      const log = await prisma.emailLog.findFirstOrThrow({ where: { to: email }, orderBy: { createdAt: 'desc' } });
+      // The site's own subject and category — not the catalogue template's.
+      expect(log).toMatchObject({ subject, category: 'goals-evaluation' });
+      expect(await runNotificationEmail(payload, full)).toBe('claimed_elsewhere');
+      expect(await prisma.emailLog.count({ where: { to: email } })).toBe(1);
+    } finally {
+      await prisma.emailLog.deleteMany({ where: { to: email } });
+      await cleanup(email);
     }
   });
 

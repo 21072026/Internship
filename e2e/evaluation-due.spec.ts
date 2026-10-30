@@ -93,7 +93,11 @@ test.describe('evaluation due dates', () => {
     // Only the mentor was reminded — in-app and by mail; no mentee, ever.
     expect(await prisma.notification.count({ where: { userId: mentorId, type: 'evaluation.dueInterim' } })).toBe(3);
     expect(await prisma.notification.count({ where: { userId: { in: menteeIds }, type: { startsWith: 'evaluation.due' } } })).toBe(0);
-    expect(await prisma.emailLog.count({ where: { to: mentor, category: 'goals-evaluation' } })).toBe(3);
+    // The mail goes through the router's e-mail job (#1711), which the worker
+    // drains every few seconds — so it is polled, not read at once.
+    await expect
+      .poll(async () => prisma.emailLog.count({ where: { to: mentor, category: 'goals-evaluation' } }), { timeout: 30_000 })
+      .toBe(3);
     expect(await prisma.emailLog.count({ where: { to: { in: mentees }, category: 'goals-evaluation' } })).toBe(0);
   });
 

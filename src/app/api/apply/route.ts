@@ -5,11 +5,10 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createUser } from '@/lib/userCreate';
 import { createPasswordResetToken } from '@/lib/passwordReset';
-import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
+import { sendPasswordResetEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit } from '@/lib/planGate';
 import { notifyAdminsHeldByPlan } from '@/lib/planGateNotify';
@@ -215,26 +214,21 @@ export async function POST(request: Request) {
   } catch (e) {
     console.error('Applicant set-password email failed:', e);
   }
-  // Notify the mentor — honoring their email opt-out (#668: this send used to
-  // ignore notificationPrefs entirely, so a mentor with email notifications off
-  // still received it).
-  if (emailAllowed(mentor, 'mentorship') && emailGroupAllowedForCategory(mentor, 'mentorship-request')) {
-    try {
-      await sendEmail({
-        to: mentor.email,
-        subject: `New application: ${fullName}`,
-        html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
-        category: 'mentorship-request',
-        // The MENTOR is the recipient. The applicant (`mentee`, created a few
-        // lines above) is the subject of the mail, and using their id here would
-        // both mint the wrong unsubscribe token and let a stranger's public
-        // application form switch off a mentor's mail.
-        userId: mentor.id,
-      });
-    } catch (e) {
-      console.error('Mentor notification email failed:', e);
-    }
-  }
+  // Notify the mentor by mail — through the router (#1711), which applies their
+  // e-mail opt-out (#668: this send used to ignore notificationPrefs entirely),
+  // the channel matrix and quiet hours, and records a ledger row. The MENTOR is
+  // the recipient: the applicant is the subject of the mail, and keying it to
+  // them would let a stranger's public form switch off a mentor's mail. The bell
+  // row is the notify() above, with its own /mentor/applications link.
+  await notifyEvent(mentor.id, 'application.received', { name: fullName }, {
+    channels: ['email'],
+    dedupeKey: `application-received:${mentee.id}:${mentor.id}`,
+    email: {
+      subject: `New application: ${fullName}`,
+      html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
+      category: 'mentorship-request',
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

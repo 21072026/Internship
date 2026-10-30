@@ -463,6 +463,9 @@ marketing names redirect there, and their apex now serves **mail only**.
   in `scripts/notify-baseline.json` (only shrinks, `-- --shrink`), and the ones that stay by
   decision (newsletter dispatch, security notices, operator alerts, admin test mails) sit in its
   `allowed` block with their reason.
+  A site moves behind the router **without changing its copy** by passing the mail it already
+  builds: `notifyEvent(…, { email: { subject, html, category } })` — sealed in the job payload
+  (`src/lib/notifications/sealedEmail.ts`), sent as-is by `emailJob.ts`; then `-- --shrink`.
 - **Channel matrix and quiet hours are router rules** ([`docs/notification-channels.md`](docs/notification-channels.md),
   #1714): `notificationPrefs.channels` (sparse per-category `inApp`/`email`/`push` overrides) and
   `notificationPrefs.quietHours` are read only through `src/lib/notificationChannelPrefs.ts` and
