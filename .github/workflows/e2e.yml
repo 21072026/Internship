@@ -178,8 +178,10 @@ jobs:
       - name: Build app
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
+        # 4 GiB stopped being enough on 2026-10-30 (both smoke shards OOM'd in
+        # `next build`); a hosted runner has 16 GiB, the browser runs later.
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Save Next.js build cache
         if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
@@ -317,7 +319,7 @@ jobs:
       - name: Build app
         run: npm run build
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
