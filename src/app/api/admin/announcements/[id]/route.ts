@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { imageAltField } from '@/lib/announcementImage';
 import { normalizeMachineList } from '@/lib/machineTranslation';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
@@ -46,6 +47,8 @@ const schema = z.object({
   // 'keep' (default) leaves the attached image alone, 'remove' detaches it; a
   // new file on the multipart path replaces it.
   imageAction: z.enum(['keep', 'remove']).optional(),
+  // The image's description (#3388). Absent = leave it alone; '' = decorative.
+  imageAlt: z.string().max(TEXT_LIMITS.imageAltText).optional(),
 });
 
 /** A multipart field carrying JSON; an unparseable one is dropped, not thrown. */
@@ -74,6 +77,7 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         ...(form.get('machineTranslated') ? { machineTranslated: safeJson(form.get('machineTranslated')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('imageAction') ? { imageAction: form.get('imageAction') } : {}),
+        ...(form.has('imageAlt') ? { imageAlt: String(form.get('imageAlt')) } : {}),
       },
       image: image instanceof File && image.size > 0 ? image : null,
     };
@@ -103,6 +107,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { link, imageAction } = parsed.data;
+    // undefined = leave the description alone; '' (trimmed) = decorative.
+    const imageAlt = parsed.data.imageAlt === undefined ? undefined : imageAltField(parsed.data.imageAlt);
     const translations = normalizeAnnouncementTranslations(parsed.data.translations);
     const text = canonicalAnnouncementText(translations, parsed.data.text);
     if (!text) {
@@ -131,8 +137,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               // violate AnnouncementImage's unique announcementId.
               image: {
                 upsert: {
-                  create: { contentType: image.type, size: image.size, data: imageData },
-                  update: { contentType: image.type, size: image.size, data: imageData },
+                  create: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt ?? null },
+                  update: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt ?? null },
                 },
               },
             }
@@ -165,9 +171,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       });
     }
 
+    // A new description for the image already attached (#3388). updateMany, not
+    // a nested update: there may be no image, and that is not an error here.
+    if (!imageData && imageAction !== 'remove' && imageAlt !== undefined) {
+      await prisma.announcementImage.updateMany({ where: { announcementId: id }, data: { altText: imageAlt } });
+    }
+
     const withImage = await prisma.announcement.findUnique({
       where: { id },
-      select: { image: { select: { id: true } } },
+      select: { image: { select: { id: true, altText: true } } },
     });
 
     await logActivity({
@@ -175,7 +187,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
     });
-    return NextResponse.json({ id, imageUrl: withImage?.image ? announcementImageUrl(id) : null });
+    return NextResponse.json({ id, imageUrl: withImage?.image ? announcementImageUrl(id) : null, imageAlt: withImage?.image?.altText ?? null });
   });
 }
 

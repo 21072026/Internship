@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Partner portal: payouts get their own name in Turkish** (#3350). \"Ödemeler\" meant both a customer's payments (admin) and the payouts to a partner (portal). The portal's payout menu entry, page title, empty state, detail title, back link and bank-details hint now say \"Hak ediş ödemeleri\". EN (Payouts / Payments) and DE (Auszahlungen / Zahlungen) already separated the two.",
+  "notes": {
+    "en": ["Turkish partner account: payouts made to you are now named \"Hak ediş ödemeleri\" and no longer share a name with customer payments."],
+    "tr": ["Partner hesabında sana yapılan ödemeler artık \"Hak ediş ödemeleri\" adıyla geçiyor; müşteri ödemeleriyle karışmıyor."],
+    "de": ["Türkisches Partnerkonto: Auszahlungen an Sie heißen jetzt \"Hak ediş ödemeleri\" und teilen sich keinen Namen mehr mit Kundenzahlungen."]
+  }
+}

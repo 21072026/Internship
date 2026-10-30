@@ -1,0 +1,152 @@
+# Authenticated, write and SSE load against the PUBLIC DEMO only (#1612).
+#
+# k6-load.yml stays anonymous-GET-only against production by hard rule. This is
+# the other half: k6/authenticated-load.js (sign-in, signed-in screens, message
+# and interaction writes) and k6/sse-load.js (N concurrent realtime streams,
+# setup time and heartbeat drift), both pointed at https://demo.interncrm.com —
+# its own database, published credentials (docs/DEMO.md). Both scripts refuse
+# any other host in setup(), so neither this file nor a dispatch input can aim
+# them elsewhere.
+#
+# WHY ITS OWN WORKFLOW (docs/testing.md § k6): k6-load.yml hardcodes one summary
+# filename in three places; a second `k6 run` there would overwrite it. Here each
+# scenario writes its own file (k6-auth-summary.json, k6-sse-summary.json) and
+# its own artifact, and the report job mails each one separately.
+#
+# WHEN: 01:20 UTC — clear of k6-load.yml (23:40) and 40 minutes before the
+# demo's 02:00 data reset (demo-reset.yml), which wipes the rows the write phase
+# adds. Like k6-load, a green run is silent; a red one opens/refreshes a
+# `ci-alert` issue and sends a best-effort Turkish breach mail.
+name: Demo k6 Load Test (authenticated + SSE)
+
+on:
+  workflow_dispatch:
+    inputs:
+      peak_vus:
+        description: 'Peak VUs of the read phase (default 10, max 30)'
+        required: false
+        type: string
+      sse_connections:
+        description: 'Concurrent SSE streams (default 24, max 72)'
+        required: false
+        type: string
+  schedule:
+    - cron: '20 1 * * *'
+
+concurrency:
+  group: k6-auth-load
+  cancel-in-progress: false
+
+env:
+  # Fixed on purpose — not an input, not a secret. The scripts refuse anything else anyway.
+  DEMO_URL: https://demo.interncrm.com
+
+jobs:
+  load:
+    name: k6 ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      # One at a time: the two scenarios would otherwise measure each other.
+      max-parallel: 1
+      matrix:
+        scenario: [auth, sse]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install k6
+        env:
+          K6_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/k6"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 --retry-delay 5 -o "$dir/k6.tgz" \
+            "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          tar -xzf "$dir/k6.tgz" --strip-components=1 -C "$dir"
+          "$dir/k6" version
+          echo "$dir" >> "$GITHUB_PATH"
+
+      - name: Run k6/authenticated-load.js
+        if: matrix.scenario == 'auth'
+        env:
+          BASE_URL: ${{ env.DEMO_URL }}
+          K6_PEAK_VUS: ${{ github.event.inputs.peak_vus || '10' }}
+          K6_SUMMARY_FILE: k6-auth-summary.json
+        run: k6 run --quiet k6/authenticated-load.js
+
+      - name: Run k6/sse-load.js
+        if: matrix.scenario == 'sse'
+        env:
+          BASE_URL: ${{ env.DEMO_URL }}
+          K6_SSE_CONNECTIONS: ${{ github.event.inputs.sse_connections || '24' }}
+          K6_SUMMARY_FILE: k6-sse-summary.json
+        run: k6 run --quiet k6/sse-load.js
+
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: k6-${{ matrix.scenario }}-summary
+          path: k6-${{ matrix.scenario }}-summary.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  report:
+    name: Breach report (red runs)
+    runs-on: ubuntu-latest
+    needs: [load]
+    if: ${{ !cancelled() }}
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Record the result as an issue (no SMTP)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: k6-auth-load
+          ALERT_TITLE: '🚨 k6-auth-load (demo) is red'
+          ALERT_SUMMARY: |
+            The authenticated / SSE k6 run against the demo ended **${{ needs.load.result }}**: a budget broke, setup() could not sign in (is the demo up and seeded?), or k6 never produced a summary.
+            Per-endpoint figures are in the run's `k6-auth-summary` and `k6-sse-summary` artifacts.
+        run: node scripts/ci-alert-issue.mjs ${{ needs.load.result == 'success' && 'green' || 'red' }}
+
+      - name: Download k6 summaries
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: k6-*-summary
+          path: k6-out
+          merge-multiple: true
+
+      - name: Send breach emails
+        # Best effort (#2322): SMTP from a hosted runner often times out; the
+        # ci-alert issue above is the alert of record.
+        timeout-minutes: 5
+        continue-on-error: true
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          K6_TARGET_URL: ${{ env.DEMO_URL }}
+          K6_REPORT_MODE: ${{ vars.K6_REPORT_MODE || 'failures' }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          rc=0
+          for s in auth sse; do
+            K6_SUMMARY_FILE="k6-out/k6-${s}-summary.json" \
+            K6_RUN_CONTEXT="k6-auth-load (${s}) · ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              node scripts/k6-report-email.mjs || rc=1
+          done
+          exit "$rc"
