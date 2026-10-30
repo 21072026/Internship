@@ -953,9 +953,12 @@ net for everything else.
 
 **Determinism is built in, not hoped for:** a fixed 1280×800 viewport and a viewport-sized capture
 (a full-page height follows the data), animations/transitions/caret off, its own organisation with
-fixed display names, and masks over `<time>`, the account menu (it prints the e-mail), avatars and
-the notification badge. A screen that diffs on unchanged code needs another mask, never a looser
-threshold.
+fixed display names, and masks over `<time>`, the account menu (it prints the e-mail), avatars,
+the nav's count badges (they count rows other specs create in the shared shard DB) and the
+per-account referral code. A screen that diffs on unchanged code needs another mask, never a looser
+threshold — and a mask is removed again once its cause is gone (the first-run checklist was masked
+until #3393 scoped its counts to the org). A small diff can hide under `maxDiffPixelRatio`: look at
+the PNGs, not only at the green compare.
 
 **Baselines come only from the CI image.** Font rasterisation differs between a laptop and the
 GitHub runner, so a PNG made locally fails in CI on every run. To create or update them:
