@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { SCOPE_ENTITLEMENT, apiKeyStatus, parseScopes, type ApiScope } from '@/lib/apiScopes';
 import { companyKeyAdmitted } from '@/lib/companyApiKeyRule';
+import { sourceKeyAdmitted } from '@/lib/sourceApiKeyRule';
 import { entitled } from '@/lib/entitlements';
 import { assertApiKeyRequestContext, runAsApiKeyRequest, runWithApiKeyOrg } from '@/lib/orgContext';
 import { clientIp, enforceRateLimit, rateLimitState } from '@/lib/rateLimit';
@@ -31,6 +32,8 @@ export interface ApiKeyIdentity {
   quotaLimit: number | null;
   /** Set on a COMPANY owner's self-served key (#2006); null = org-wide. */
   companyId: string | null;
+  /** Set on a SOURCE owner's self-served key (#2006); null = not a source key. */
+  sourceId: string | null;
 }
 
 // The identity a handler receives: authenticated, in scope, and bound to one
@@ -46,6 +49,15 @@ export interface ApiKeyContext extends ApiKeyIdentity {
  */
 export function companyOnly(key: { companyId: string | null }): { companyId?: string } {
   return key.companyId ? { companyId: key.companyId } : {};
+}
+
+/**
+ * The candidate filter a `sourceScoped` route ANDs into every read (#2006): a
+ * SOURCE owner's key sees the candidates its source referred, an org-wide key
+ * nothing narrower than before.
+ */
+export function sourceOnly(key: { sourceId: string | null }): { sourceId?: string } {
+  return key.sourceId ? { sourceId: key.sourceId } : {};
 }
 
 /** The `scope` of a route any live key may call — GET /api/v1/me only (#2002). */
@@ -78,7 +90,7 @@ export async function authenticateApiKey(request: Request): Promise<ApiKeyIdenti
   if (!m) return null;
   const key = await prisma.apiKey.findUnique({
     where: { hashedKey: hashApiKey(m[1].trim()) },
-    select: { id: true, orgId: true, companyId: true, scopes: true, expiresAt: true, revokedAt: true, lastUsedAt: true, quotaPeriod: true, quotaLimit: true },
+    select: { id: true, orgId: true, companyId: true, sourceId: true, scopes: true, expiresAt: true, revokedAt: true, lastUsedAt: true, quotaPeriod: true, quotaLimit: true },
   });
   if (!key) return null;
   // Revocation and expiry are one derived status (lib/apiScopes.ts) so the door
@@ -87,7 +99,7 @@ export async function authenticateApiKey(request: Request): Promise<ApiKeyIdenti
   if (!key.lastUsedAt || Date.now() - key.lastUsedAt.getTime() >= LAST_USED_RESOLUTION_MS) {
     await prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
   }
-  return { id: key.id, orgId: key.orgId, companyId: key.companyId, scopes: parseScopes(key.scopes), quotaPeriod: key.quotaPeriod, quotaLimit: key.quotaLimit };
+  return { id: key.id, orgId: key.orgId, companyId: key.companyId, sourceId: key.sourceId, scopes: parseScopes(key.scopes), quotaPeriod: key.quotaPeriod, quotaLimit: key.quotaLimit };
 }
 
 // 403, never a filtered 200: a key asking for something it was not granted is a
@@ -140,7 +152,9 @@ export async function withApiKey(
   // `companyScoped: true` (#2006): this handler narrows every read to
   // `key.companyId` when it is set, so a COMPANY owner's key may call it. A
   // route that does not say so refuses such a key — fail closed.
-  route: { companyScoped?: boolean } = {},
+  // `sourceScoped: true` is the same promise for `key.sourceId` (a SOURCE
+  // owner's key over the candidates it referred).
+  route: { companyScoped?: boolean; sourceScoped?: boolean } = {},
 ): Promise<NextResponse> {
   const limits: { minute?: LimitState; quota?: LimitState | null } = {};
   const response = await door(request, scope, handler, limits, route);
@@ -166,7 +180,7 @@ async function door(
   scope: ApiScope | typeof ANY_LIVE_KEY,
   handler: (key: ApiKeyContext) => Promise<NextResponse>,
   limits: { minute?: LimitState; quota?: LimitState | null },
-  route: { companyScoped?: boolean },
+  route: { companyScoped?: boolean; sourceScoped?: boolean },
 ): Promise<NextResponse> {
   const ip = clientIp(request);
   const presentsKey = /^Bearer\s+\S/i.test(request.headers.get('authorization') || '');
@@ -209,6 +223,10 @@ async function door(
     // A company-bound key only where the route filters by its company (#2006).
     if (!companyKeyAdmitted(key, route)) {
       return apiError(403, 'company_key_not_allowed', 'This API key is limited to its company’s hiring records');
+    }
+    // …and a source-bound key only where the route filters by its source.
+    if (!sourceKeyAdmitted(key, route)) {
+      return apiError(403, 'source_key_not_allowed', 'This API key is limited to the candidates its source referred');
     }
 
     const orgId = key.orgId;

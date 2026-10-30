@@ -10,7 +10,7 @@ missing iOS steps are listed at the end.
 
 ```mermaid
 flowchart LR
-  M[POST /api/messages] --> P[sendNewMessagePush]
+  M[POST /api/messages<br/>inbound e-mail] --> P[notifyEvent → push adapter]
   SU[POST /api/support<br/>POST /api/admin/support] --> SP[sendSupportPush]
   P --> S[sendPushToUser<br/>category check once]
   SP --> S
@@ -25,13 +25,19 @@ flowchart LR
   recipient's notification preferences once and sends the same `{ title, body, url, tag }`
   to browsers and to app installs. The two are independent: web push needs VAPID keys;
   native push needs nothing. A deployment without VAPID still reaches phones, so
-  `sendNewMessagePush` no longer returns early on `pushConfigured()`.
+  neither sender returns early on `pushConfigured()`.
 - **Never throws.** Like web push, every path is best-effort. A push service that is down
   cannot fail the message that triggered it.
-- **Which events push.** Only conversations, the channel people expect to interrupt
-  them. Every other event writes its bell row and stays quiet.
-  - Messages (`sendNewMessagePush`, `src/lib/messagePush.ts`): `message.new`,
-    `message.newGeneric` and `message.newByEmail`.
+- **Which events push.** Conversations, plus the catalogue events whose
+  `defaultChannels` list `push` (the per-event reasoning is in
+  `src/lib/notifications/catalog.ts`, #1715). Digests, reports and newsletter issues
+  never push.
+  - Messages (#1715): `message.new`, `message.newGeneric` and `message.newByEmail`
+    go through the router (`notifyEvent(..., { channels: ['push'], preview, dedupeKey:
+    'message:<id>' })`), so each push is a `NotificationDelivery` row: a muted category
+    or the channel matrix is a recorded `SKIPPED`, no device is `no_device`, quiet hours
+    hold it (title only — a held push keeps no message text in the queue). The push
+    adapter keeps the 140-char preview and collapses a `thread` event per thread.
   - The support line (#3154, rules in `src/lib/supportPushRule.ts`):
     - A user's support message (`support.new`, `support.newMessage` and their
       `…Generic` forms) goes to the active ADMINs of the requester's org, the same
