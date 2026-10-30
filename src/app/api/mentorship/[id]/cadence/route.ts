@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { relationCadence } from '@/lib/meetingCadence';
 import { loadPairMeetings } from '@/lib/meetingCadenceData';
+import { originalDurationMonths } from '@/lib/relationEnding';
 
 // One pair's meeting cadence (#2014): the promised interval, when they last
 // actually met, and whether that is inside it. The same deterministic rule as
@@ -24,7 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findFirst({
       where: withinTenant({ id }, await tenantWhere(session)),
-      select: { id: true, mentorId: true, expectedMeetingIntervalWeeks: true, expectedEndDate: true, durationExtendedCount: true },
+      select: { id: true, mentorId: true, expectedMeetingIntervalWeeks: true, expectedEndDate: true, durationExtendedCount: true, startDate: true },
     });
     if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!isAdmin && relation.mentorId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -36,6 +37,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       schedule: {
         expectedEndDate: relation.expectedEndDate?.toISOString().slice(0, 10) ?? null,
         durationExtendedCount: relation.durationExtendedCount,
+        // What the one-click extend adds (#1786): the original length.
+        extendMonths: relation.expectedEndDate ? originalDurationMonths(relation.startDate, relation.expectedEndDate) : null,
       },
     });
   });

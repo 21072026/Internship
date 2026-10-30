@@ -838,5 +838,43 @@
       "source"
     ],
     "additionalProperties": false
+  },
+  "mentorship.ending_soon@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "expectedEndDate": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "relationId",
+      "expectedEndDate"
+    ],
+    "additionalProperties": false
+  },
+  "mentorship.extended@1": {
+    "type": "object",
+    "properties": {
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "expectedEndDate": {
+        "type": "string"
+      },
+      "extendedCount": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "relationId",
+      "expectedEndDate",
+      "extendedCount"
+    ],
+    "additionalProperties": false
   }
 }
