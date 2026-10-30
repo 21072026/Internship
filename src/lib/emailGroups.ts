@@ -116,6 +116,8 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     categories: [
       'mentorship-request', 'mentorship-decision', 'mentor-assigned',
       'mentee-assigned', 'mentor-application', 'goals-evaluation', 'mentor-offer',
+      // The one ending-soon nudge per agreed end date (#1786).
+      'relation-ending',
     ],
     legacy: ['mentorship', 'goalsEvaluations'],
   },

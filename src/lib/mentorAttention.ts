@@ -13,8 +13,11 @@ import { isNextActionOverdue } from '@/lib/nextActionRule';
 import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 import { isCancellationPending } from '@/lib/contractEndRule';
 import { activeRelationWhere } from '@/lib/relationLifecycle';
+import { loadPairMeetings } from '@/lib/meetingCadenceData';
+import { relationCadence } from '@/lib/meetingCadence';
+import { cadenceStatus } from '@/lib/relationEnding';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending' | 'decision_window_closing' | 'free_quota_exceeded';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending' | 'decision_window_closing' | 'free_quota_exceeded' | 'behind_cadence';
 
 // The relationship-health flags this queue shows (#1898) — every one the
 // table raises except `stage_stalled`, which belongs to the admin monitor.
@@ -30,6 +33,8 @@ export interface AttentionItem {
   contractEndsAt?: Date | null;
   /** The day an expired trial's decision window closes (#2843). */
   decisionWindowEndsAt?: Date | null;
+  /** `behind_cadence` (#1786): the agreed interval and the days since the pair last met. */
+  cadence?: { intervalDays: number; daysSince: number } | null;
 }
 
 export interface AttentionQueue {
@@ -94,6 +99,7 @@ export async function getAttentionItems(
       trialEndsAt: true,
       trialStartedAt: true,
       contractEndsAt: true,
+      expectedMeetingIntervalWeeks: true,
       companyId: true,
       mentee: { select: { id: true, fullName: true } },
       questions: { where: { answer: null }, select: { id: true } },
@@ -132,6 +138,12 @@ export async function getAttentionItems(
   const usage = options.orgId && wantsUsage && relations.length > 0
     ? await usageSignalsFor(options.orgId, relations, new Date(now))
     : null;
+
+  // The agreed meeting rhythm (#1786): the meetings of the pairs that agreed
+  // one — read only for them, so a mentor whose pairs agreed none pays nothing.
+  const wantsCadence = !options.reasons || options.reasons.includes('behind_cadence');
+  const withRhythm = wantsCadence ? relations.filter((r) => r.expectedMeetingIntervalWeeks) : [];
+  const pairMeetings = withRhythm.length > 0 ? await loadPairMeetings(withRhythm.map((r) => r.id), new Date(now)) : [];
 
   // The decision window is per organization (#2927): read once per org, and
   // only for a record that has a trial end at all.
@@ -215,6 +227,17 @@ export async function getAttentionItems(
     const nowDate = new Date(now);
     const windowDays = r.trialEndsAt ? parseDecisionWindowDays(await decisionWindowRaw(r.orgId)) : DEFAULT_DECISION_WINDOW_DAYS;
     if (isDecisionWindowClosing(r, nowDate, windowDays)) reasons.push('decision_window_closing');
+    // Meeting less often than the pair agreed (#1786, src/lib/relationEnding.ts):
+    // derived, read-only, and silent for a pair that agreed no rhythm (`no_data`).
+    let cadence: AttentionItem['cadence'] = null;
+    if (wantsCadence && r.expectedMeetingIntervalWeeks) {
+      const met = relationCadence(r.expectedMeetingIntervalWeeks, pairMeetings.filter((m) => m.relationId === r.id), nowDate);
+      const reading = cadenceStatus(r, met.lastMetAt, nowDate);
+      if (reading.status === 'behind') {
+        reasons.push('behind_cadence');
+        cadence = { intervalDays: reading.intervalDays!, daysSince: reading.daysSince! };
+      }
+    }
     const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
     if (kept.length > 0) {
       items.push({
@@ -225,6 +248,7 @@ export async function getAttentionItems(
         daysSinceLastInteraction: daysSince,
         contractEndsAt: r.contractEndsAt,
         decisionWindowEndsAt: decisionWindowEndsAt(r.trialEndsAt, windowDays),
+        cadence,
       });
     }
   }
