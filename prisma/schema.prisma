@@ -147,6 +147,13 @@ model Organization {
   brandAccent            String?
   brandPalette           String?   @db.Text
   brandMarkVersion       String?
+  // The tenant's welcome page (#1664): what `/` shows on the org's own,
+  // VERIFIED host (src/lib/hostOrg.ts) instead of our marketing landing, when
+  // a title is set. Stored text, rendered as plain text with paragraph breaks
+  // — never HTML (src/lib/tenantWelcomeRule.ts). Nullable, so `db push` is
+  // additive (#2298).
+  welcomeTitle           String?   @db.VarChar(120)
+  welcomeBody            String?   @db.Text
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
