@@ -103,7 +103,8 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   // Surface a post-registration notice (pending approval / verify email).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pending')) setNotice(t.auth.pendingApproval);
+    // An SSO sign-in held by programme eligibility (#1945) lands here too.
+    if (params.get('pending') || params.get('error') === 'sso_pending_approval') setNotice(t.auth.pendingApproval);
     else if (params.get('verify')) setNotice(t.auth.verifyEmailSent);
     else if (params.get('registered')) setNotice(t.auth.registeredNotice);
   }, [t]);

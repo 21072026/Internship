@@ -10,6 +10,8 @@ import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { provisionSsoUser } from '@/lib/ssoProvisioning';
 import { syncSsoPhoto, syncSsoProfile } from '@/lib/ssoDirectorySync';
+import { isEligible } from '@/lib/eligibility';
+import { logActivity } from '@/lib/activity';
 import { mappableRolesFor, resolveRole, type SsoClaims } from '@/lib/ssoRoleMapping';
 import { verticalCapabilities } from '@/lib/verticals';
 import { worldOfOrg } from '@/lib/userWorld';
@@ -77,8 +79,14 @@ export async function completeSsoSignIn(
       select: { claim: true, matchValue: true, role: true, priority: true },
     });
     const role = resolveRole(mappings, identity.claims, mappableRolesFor(verticalCapabilities(org.vertical)));
-    const { user } = await provisionSsoUser({ orgId: org.id, email: identity.email, fullName: identity.fullName, role, syncRole: org.ssoSyncRole });
+    const { user, created } = await provisionSsoUser({ orgId: org.id, email: identity.email, fullName: identity.fullName, role, syncRole: org.ssoSyncRole });
     await refreshFromDirectory(user.id, org, identity.claims);
+    // Programme eligibility (#1945): judged AFTER the directory sync, on the
+    // profile the IdP just wrote. Never a failed login: an account nobody's
+    // rule admits waits in the admin's approval queue instead.
+    if (await heldForApproval(user, created, org.id)) {
+      return { response: ssoFail('sso_pending_approval', origin), userId: null };
+    }
     // A short-lived single-use grant the `sso` provider will consume.
     const token = crypto.randomBytes(32).toString('hex');
     await prisma.ssoLoginGrant.create({
@@ -106,4 +114,30 @@ async function refreshFromDirectory(userId: string, org: { id: string; ssoAuthor
   } catch (e) {
     console.error('SSO directory sync failed:', e);
   }
+}
+
+// A NEW participant (MENTEE) of an org in RULES mode whom no ALLOW rule admits
+// is provisioned inactive + pendingApproval — an exception is then one admin
+// click, not a mystery error. Only on creation: a returning user was admitted
+// once and is not deactivated by a later rule change on their next sign-in.
+// A user still waiting is answered the same way rather than with a grant the
+// `sso` provider would refuse as "deactivated".
+async function heldForApproval(user: { id: string; role: string }, created: boolean, orgId: string): Promise<boolean> {
+  if (!created) {
+    const row = await prisma.user.findUnique({ where: { id: user.id }, select: { isActive: true, pendingApproval: true } });
+    return !!row && !row.isActive && row.pendingApproval;
+  }
+  if (user.role !== 'MENTEE') return false;
+  const decision = await isEligible({ id: user.id, orgId });
+  if (decision.ok) return false;
+  await prisma.user.update({ where: { id: user.id }, data: { isActive: false, pendingApproval: true } });
+  await logActivity({
+    action: 'eligibility.denied',
+    level: 'warning',
+    actorId: null,
+    targetType: 'user',
+    targetId: user.id,
+    detail: `SSO JIT held for approval: ${decision.reason}${decision.ruleId ? ` (rule ${decision.ruleId})` : ''}`,
+  });
+  return true;
 }

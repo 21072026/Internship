@@ -41,6 +41,11 @@ export interface ChannelDelivery {
   /** Relative, inside the recipient's own product (#2590). */
   link: string;
   dedupeKey: string;
+  /**
+   * The push body (#1715): the message text a new-message push previews. Never
+   * stored on the bell row or in the ledger — only the push adapter reads it.
+   */
+  preview?: string | null;
 }
 
 export type ChannelOutcome =

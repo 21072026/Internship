@@ -19,7 +19,7 @@ import {
 } from '@/lib/conversations';
 import { markThreadRead } from '@/lib/threadRead';
 import { publishRealtime } from '@/lib/realtimeBus';
-import { sendNewMessagePush } from '@/lib/messagePush';
+import { notifyEvent } from '@/lib/notifications/router';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
@@ -399,14 +399,24 @@ async function handlePost(request: Request) {
     // recipient inside the loop would add that latency N times to a group
     // chat's POST. Still awaited before responding, so a slow push service
     // cannot log after the response is gone; never able to fail the send,
-    // because sendNewMessagePush swallows everything.
+    // because notifyEvent() never throws. Through the router (#1715): the push
+    // is a ledger row (a muted category or the matrix is a recorded SKIPPED,
+    // a phone-less recipient is `no_device`), keyed on the message id so a
+    // retried POST never buzzes twice.
     // Whoever muted this thread (#1609) is not interrupted by it at all: no
     // push, no e-mail mirror, no bell. The realtime publish above still went to
     // them — it only refreshes a tab that already has the thread open.
     const muted = await mutedParticipants(threadConversationId, recipients);
+    // The same thread link the bell row carries (`link` above), built by the router.
+    const threadIds = threadConversationId ? { conversationId: threadConversationId } : { relationId: rel!.id };
+    const pushOpts = { channels: ['push'] as const, preview: body, dedupeKey: `message:${message.id}` };
     const pushes = recipients
       .filter((recipient) => !muted.has(recipient))
-      .map((recipient) => sendNewMessagePush(recipient, { senderName, link, preview: body }));
+      .map((recipient) =>
+        senderName
+          ? notifyEvent(recipient, 'message.new', { from: senderName, ...threadIds }, pushOpts)
+          : notifyEvent(recipient, 'message.newGeneric', { ...threadIds }, pushOpts),
+      );
 
 
     for (const recipient of recipients) {

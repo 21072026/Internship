@@ -36,3 +36,17 @@ writer is `src/lib/forms/definitions.ts`.
 
 `GET|POST /api/admin/forms` · `GET|PUT|DELETE /api/admin/forms/[id]` (PUT answers 201 +
 `newVersion: true` when it created a version) · `POST /api/admin/forms/[id]/publish`.
+
+## Rendering and answering (#1803)
+
+`src/components/forms/DynamicFields.tsx` is the ONE renderer of a surface's questions inside a
+host form (`useDynamicFields(surface)` + `<DynamicFields state=…>`); it renders nothing when no
+form is published, so the host form is unchanged. Mounted today: `ProfileForm` (`PROFILE`).
+
+| Route | |
+|---|---|
+| `GET /api/forms/active?surface=` | The live version of each form of that surface whose audience covers the caller's role (MENTEE → MENTEE+BOTH, MENTOR → MENTOR+BOTH, any other role → none), in the caller's org. Questions only: no answers, no `matchable`. |
+| `GET /api/forms/responses?surface=` | The caller's OWN latest answers to those forms, keyed `formKey → fieldKey`. |
+| `PUT /api/forms/responses` | `{ definitionId, answers }`, `.strict()` — a body naming a `userId` is a 400; the person is always the session. A form the caller is not asked (another org's, a draft, another audience) is 404. Validated by `saveFormResponses()` with `validateResponse()`. A key sent empty (`null`, `''`, `[]`) clears that answer across every version of the form; a key left out is untouched. |
+
+Selection lives in `src/lib/forms/active.ts` (`activeForms`, `publicForm`, `ownAnswers`).

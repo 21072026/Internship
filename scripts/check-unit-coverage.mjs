@@ -237,6 +237,30 @@ const FLOORS = new Map([
       why: 'a Turkish page printed "8/25/2026" (#1422) and a meeting time without its zone is two appointments (#1030)',
     },
   ],
+  // The last four wave-0/1 modules (#1592), out of AWAITING_TESTS (#1598). All
+  // four reach Prisma; their suites seat the in-memory client from
+  // scripts/test/fake-prisma.mjs in `globalThis.prisma` before importing, so the
+  // rule runs for real with no database.
+  [
+    'src/lib/orgContext.ts',
+    {
+      floor: 95,
+      measured: 99.57,
+      why: 'with isolation on, every read/update/delete on a registered model is scoped and every create gets its orgId; an API-key request with no org bound cannot read a tenant model (#543/#1546)',
+    },
+  ],
+  [
+    'src/lib/entitlements.ts',
+    { floor: 95, measured: 100.0, why: 'no org is never entitled, a grant unlocks only until it expires, a legacy company row still counts (#1733)' },
+  ],
+  [
+    'src/lib/planGate.ts',
+    { floor: 95, measured: 100.0, why: 'the plan cap refuses the add that would pass it, a batch is judged whole, and a project refusal never reads as "too many mentees" (#1796/#2273)' },
+  ],
+  [
+    'src/lib/dormantFirstContact.ts',
+    { floor: 95, measured: 100.0, why: '"two mails, never a third": silence is counted from the first unanswered outreach, any sign of life clears the stamp and the counters (#1508/#1516)' },
+  ],
   [
     'src/lib/dateRange.ts',
     { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
@@ -442,9 +466,10 @@ const FLOORS = new Map([
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
 // The modules Waves 0-1 are about to rewrite (#1592) that still score 0% under
 // this runner. Six started here; `pipeline.ts` (#2264) and `relativeTime.ts`
-// (#1598, its suites moved off Playwright, which measures nothing) have left.
-// The four that remain all reach Prisma, so a suite for them is a
-// database-free rule extracted first, not a port.
+// (#1598, its suites moved off Playwright, which measures nothing) left first,
+// and the four that reach Prisma followed once scripts/test/fake-prisma.mjs let
+// their suites run without a database (#1598). The list is empty now; it stays
+// as the place a module waits when it must be tracked before it has a suite.
 //
 // They are listed here rather than given a floor of 0 because a floor of 0 can
 // never fail and would read, on the summary table, as coverage. An entry only
@@ -454,18 +479,13 @@ const FLOORS = new Map([
 // Exercised, not merely imported — see MIN_FLOOR below for why the difference
 // decides whether this check goes red. The size is pinned by EXPECTED_AWAITING
 // so the set cannot grow quietly.
-const AWAITING_TESTS = new Map([
-  ['src/lib/orgContext.ts', 'wave-0 rewrite (#1549); tenant registry + middleware'],
-  ['src/lib/entitlements.ts', 'wave-1 billing-subject collapse (#1592)'],
-  ['src/lib/planGate.ts', 'wave-1 billing-subject collapse (#1592)'],
-  ['src/lib/dormantFirstContact.ts', '"two mails, never a third" (docs/dormant-first-contacts.md)'],
-]);
+const AWAITING_TESTS = new Map([]);
 
 // How many entries AWAITING_TESTS is allowed to hold. Pinned as a literal for
 // the same reason check-tenant-models.mjs pins its pending set: a seventh
 // unfloored module cannot be waved through by appending a line, and the count
 // only moves in a diff a human approved.
-const EXPECTED_AWAITING = 4;
+const EXPECTED_AWAITING = 0;
 
 const TRACKED = [...FLOORS.keys(), ...AWAITING_TESTS.keys()];
 

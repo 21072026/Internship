@@ -4,7 +4,7 @@ import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { conversationForRelation, mutedParticipants } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
-import { sendNewMessagePush } from '@/lib/messagePush';
+import { notifyEvent } from '@/lib/notifications/router';
 import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
@@ -159,13 +159,18 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   // (#1426). Someone who switched Messages off has said they do not want the
   // bell for this conversation, whichever door the reply came through — and
   // that goes for the background push as well (#1464), which is why it sits
-  // inside the same gate. sendNewMessagePush re-checks the preference itself,
-  // so this is about not doing the work, not about correctness.
+  // inside the same gate. The router re-checks the preference itself (and
+  // records why it skipped), so this is about not doing the work.
   // A thread the recipient muted (#1609) interrupts them through no door.
   const muted = await mutedParticipants(conversation?.id, [recipientUser.id]);
   if (notificationCategoryAllowed(recipientUser, 'messages') && !muted.has(recipientUser.id)) {
     await notify(recipientUser.id, 'message.newByEmail', {}, link);
-    await sendNewMessagePush(recipientUser.id, { link, byEmail: true, preview: body });
+    await notifyEvent(
+      recipientUser.id,
+      'message.newByEmail',
+      conversation ? { conversationId: conversation.id } : { relationId },
+      { channels: ['push'], preview: body, dedupeKey: `message:${storedId}` },
+    );
   }
 
   return { ok: true, relationId, duplicate: false };

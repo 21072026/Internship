@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import type { MatchMentee, MatchMentor } from './dimensions';
 import { selfSelectedCounts } from '@/lib/selfMatchSeats';
+import { normalizeThemes } from './semantic';
 
 export type PoolMentor = MatchMentor & { fullName: string };
 export type PoolMentee = MatchMentee & { fullName: string };
@@ -26,7 +27,15 @@ const personSelect = {
   interests: true,
   targetPosition: true,
   managerId: true,
+  // The cached profile themes (#2038), in the same query — never one per person.
+  profileDigest: { select: { themes: true } },
 } as const;
+
+/** Swap the digest relation for the scorer's `themes` field. */
+function withThemes<T extends { profileDigest: { themes: unknown } | null }>(row: T): Omit<T, 'profileDigest'> & { themes: string[] } {
+  const { profileDigest, ...rest } = row;
+  return { ...rest, themes: normalizeThemes(profileDigest?.themes) };
+}
 
 /** Who is in the mentor pool — one definition, shared by the loader and the cohort pass's cap check. */
 export function mentorPoolWhere(tenant: TenantWhere) {
@@ -47,7 +56,7 @@ export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]>
   });
   // Seats only matter for a mentor who set a limit (#1808).
   const seats = await selfSelectedCounts(rows.filter((r) => r.selfMatchLimit != null).map((r) => r.id));
-  return rows.map(({ _count, ...m }) => ({ ...m, activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 }));
+  return rows.map(({ _count, ...m }) => ({ ...withThemes(m), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 }));
 }
 
 /**
@@ -61,7 +70,7 @@ export async function loadMentees(tenant: TenantWhere, ids: readonly string[]): 
     where: withinTenant({ id: { in: [...ids] }, role: 'MENTEE' as const }, tenant),
     select: { ...personSelect, menteeRelations: { select: { mentorId: true } } },
   });
-  return rows.map(({ menteeRelations, ...m }) => ({ ...m, pastMentorIds: menteeRelations.map((r) => r.mentorId) }));
+  return rows.map(({ menteeRelations, ...m }) => ({ ...withThemes(m), pastMentorIds: menteeRelations.map((r) => r.mentorId) }));
 }
 
 /**
@@ -92,7 +101,7 @@ export async function loadPairForScoring(
   const { _count, ...mo } = mentor;
   const seats = mo.selfMatchLimit != null ? await selfSelectedCounts([mo.id]) : new Map<string, number>();
   return {
-    mentee: { ...me, pastMentorIds: menteeRelations.map((r) => r.mentorId) },
-    mentor: { ...mo, activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 },
+    mentee: { ...withThemes(me), pastMentorIds: menteeRelations.map((r) => r.mentorId) },
+    mentor: { ...withThemes(mo), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 },
   };
 }

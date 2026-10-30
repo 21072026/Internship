@@ -55,6 +55,12 @@ test.describe('notificationLink', () => {
     expect(notificationLink('ADMIN', 'relation', { relationId: 'relation', menteeId: 'mentee' })).toBe('/admin/candidates/mentee');
   });
 
+  test('a thread link prefers the conversation over the relation (#1715)', () => {
+    expect(notificationLink('MENTEE', 'thread', { conversationId: 'conv_1', relationId: 'rel_1' })).toBe('/messages/c/conv_1');
+    expect(notificationLink('MENTOR', 'thread', { relationId: 'rel_1' })).toBe('/messages/rel_1');
+    expect(notificationLink('MENTEE', 'thread', { conversationId: '../admin' })).toBe('/portal');
+  });
+
   test('unknown runtime inputs fall back safely', () => {
     expect(notificationLink('UNKNOWN' as NotificationRole, 'dashboard', {})).toBe('/');
     expect(notificationLink('ADMIN', 'unknown' as LinkKind, {})).toBe('/admin');
