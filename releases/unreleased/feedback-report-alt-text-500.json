@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Fixed: sending an in-app bug report with a screenshot answered 500 since support attachments started carrying alt text (#3441); the report stores only the file's own fields.",
+  "notes": {
+    "en": "Sending a bug report with a screenshot works again.",
+    "tr": "Ekran görüntülü hata bildirimi göndermek yeniden çalışıyor.",
+    "de": "Fehlerberichte mit Screenshot lassen sich wieder senden."
+  }
+}
