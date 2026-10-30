@@ -13,6 +13,8 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MentorshipRequestQueue } from '@/components/admin/MentorshipRequestQueue';
+import { GroupRelationDialog } from '@/components/admin/GroupRelationDialog';
+import { RelationParticipantsPanel } from '@/components/admin/RelationParticipantsPanel';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -57,6 +59,8 @@ interface MentorshipRelation {
   // finished and a row that renders both as "Completed" is the falsehood these
   // workflows exist to remove.
   lifecycleState?: string | null;
+  // ONE_TO_ONE | GROUP | … (#1804); a GROUP shows its members below the card.
+  relationType?: string;
   // Why it ended (#1774): the badge's tooltip.
   endReasonCode?: string | null;
   mentor: { id: string; fullName: string; email: string };
@@ -426,6 +430,8 @@ export default function MentorshipPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentorships.title}</h1>
           <p className="text-gray-500 mt-1">{t.mentorships.subtitle}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <GroupRelationDialog mentors={mentors} mentees={mentees} onCreated={fetchRelations} />
         <Button
           onClick={() => {
             // A stale refusal from the last attempt must not greet the next one.
@@ -438,6 +444,7 @@ export default function MentorshipPage() {
           <Plus className="h-4 w-4" />
           {t.mentorships.assign}
         </Button>
+        </div>
       </div>
 
       {error && (
@@ -734,6 +741,9 @@ export default function MentorshipPage() {
                       <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
                     </span>
                     <StatusBadge status={rel.status} />
+                    {rel.relationType === 'GROUP' && (
+                      <Badge variant="info" data-testid={`relation-type-${rel.id}`}>{t.relationGroups.chip}</Badge>
+                    )}
                     <RelationHealthBadge health={health[rel.id]} testId={`relation-health-${rel.id}`} />
                     {/* A pairing the mentee left did not finish. Rendering both
                         as plain "Completed" is the record #1801/#2289 exist to
@@ -755,6 +765,13 @@ export default function MentorshipPage() {
                       </Badge>
                     )}
                   </div>
+                  {rel.relationType === 'GROUP' && (
+                    <RelationParticipantsPanel
+                      relationId={rel.id}
+                      active={rel.status === 'ACTIVE'}
+                      candidates={[...mentees, ...mentors.filter((m) => !mentees.some((x) => x.id === m.id))]}
+                    />
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end sm:shrink-0">
                   <Select
