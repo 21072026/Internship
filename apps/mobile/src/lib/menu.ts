@@ -19,6 +19,7 @@ const ICONS: Record<string, string> = {
   hiring: 'file-tray-full',
   requisitions: 'briefcase',
   offers: 'ribbon',
+  placements: 'receipt',
   interviewRequests: 'calendar',
   interviewPanels: 'clipboard',
   candidates: 'people',
