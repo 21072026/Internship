@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Matching round review board (#1796, closes story #1791's last task):** `/admin/matching/rounds` lists the tenant's rounds and opens a new one (optional programme the published pairs land in); `/admin/matching/rounds/[id]` is the board — run (and re-run) the pass, stats header, every proposal with the compact `MatchScoreBreakdown` and an expandable full view, state filters (draft / locked / discarded / published / unmatched), lock / unlock / discard / restore per row and for all visible rows, swap from the proposal's alternatives or a free mentor search (`data-testid=\"round-swap-search\"`; the score comes back from the server), move to review, and publish through a confirmation dialog that states how many mentorships it creates and that both sides are e-mailed. The unmatched panel groups people by reason with names, names the rule that ruled out the most pairs and the skills short of mentors with room. `GET /api/admin/match-rounds/[id]` now also returns the names of everyone the round mentions and the accepting mentor pool for the search. New `matchRounds` i18n namespace (EN/TR/DE; MARKETING-exempt, the pages are capability-gated); link from `/admin/matching`.",
+  "notes": {
+    "en": ["Matching rounds have a review board: see every proposed pair with its reasons, swap or lock pairs, find out why someone has no mentor, and publish the locked pairs in one confirmed step."],
+    "tr": ["Eşleştirme turlarının artık bir inceleme panosu var: önerilen her eşleşmeyi gerekçeleriyle görün, eşleşmeleri değiştirin veya kilitleyin, birinin neden mentoru olmadığını öğrenin ve kilitli eşleşmeleri tek onaylı adımda yayınlayın."],
+    "de": ["Matching-Runden haben jetzt ein Prüfboard: jedes vorgeschlagene Paar mit Begründung sehen, Paare tauschen oder sperren, herausfinden, warum jemand keinen Mentor hat, und die gesperrten Paare in einem bestätigten Schritt veröffentlichen."]
+  }
+}

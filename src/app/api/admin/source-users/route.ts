@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
@@ -43,10 +44,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
   }
 
-  const user = await prisma.user.create({
+  const user = await createUser(prisma, {
     // `orgId` by hand (#2542): see /api/admin/company-users.
     data: { email, fullName, role: 'SOURCE', sourceId, orgId, password: '!source-no-login', emailVerified: false, skills: [] },
-  });
+  }, { source: 'admin', actorId: session.user.id });
 
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');
   // #1720: a brand-new account has no language of its own — the creating admin's

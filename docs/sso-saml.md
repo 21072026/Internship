@@ -39,6 +39,59 @@ Enterprise SSO card on `/admin/organizations`; API:
 `{ syncRole }`, DELETE `?mappingId=`), writable by the org's own ADMIN or a
 super admin of its world.
 
+## Directory sync (#1943)
+
+On **every** SSO sign-in — SAML and OIDC alike, through the one
+`completeSsoSignIn()` path — the IdP's claims refresh the person's profile, so
+a department change in the directory reaches the app at the next login instead
+of never. A tenant maps a claim name to a target once (Enterprise SSO card on
+`/admin/organizations`, API `/api/admin/organizations/[id]/sso-attribute-mappings`:
+GET, POST `{ claim, target }`, PATCH `{ authoritative }`, DELETE `?mappingId=`;
+same writers as the role mapping). The rule is
+`src/lib/ssoDirectorySyncRule.ts` (pure, `scripts/test/sso-directory-sync.test.mjs`),
+the writer `src/lib/ssoDirectorySync.ts`.
+
+**Directory-owned fields** — the only targets a mapping may name:
+
+| Target | Column | Notes |
+|---|---|---|
+| `fullName` | `User.fullName` | |
+| `department` | `User.department` | |
+| `targetPosition` | `User.targetPosition` | the job title |
+| `city`, `country`, `phone` | same | |
+| `timezone` | `User.timezone` | must be an IANA zone, else rejected |
+| `attr:<key>` | `UserAttributeValue` | one of the org's own attributes (#1920), normalised by its type |
+| `photo` | `AvatarFile` | a URL or inline base64 (AD `thumbnailPhoto`) |
+
+Never `email`, `role`, `orgId` or any flag: who a person is and what they may
+do is provisioning's and the role mapping's (#1940), refused at the write
+boundary (`invalid_target`).
+
+**What may be overwritten** is `planFieldUpdates()` (`src/lib/externalSyncPolicy.ts`),
+the policy the roster feed shares: by default the IdP only **fills empty
+fields** — a city the person corrected in the app stays. With
+`Organization.ssoAuthoritative` on, the IdP is the record of truth and wins a
+disagreement. A claim the IdP did not send is no opinion; nothing is ever
+blanked, and deleting a mapping leaves the values already written.
+
+**The photo** is stored as bytes like an uploaded avatar and served from
+`/api/avatar/[userId]` — never hotlinked. A URL is fetched through the SSRF
+guard on every redirect hop (`src/lib/ssoFetch.ts`), with a 5 s timeout and
+the 2 MB avatar cap; the bytes must carry a PNG/JPEG/GIF/WebP signature. It
+runs **after** the response (`after()`), so a slow photo host never delays a
+sign-in. A photo the person uploaded themselves is kept unless the IdP is
+authoritative (an upload clears `User.ssoPhotoUrlHash`); a photo they removed
+is not put back until the IdP's photo changes.
+
+**Nothing here fails a sign-in.** A value that does not fit is dropped and
+recorded by target name; a photo refusal is a code. Both land in
+`User.ssoSyncError` (`rejected:timezone`, `photo_blocked`, `photo_failed`,
+`photo_too_large`, `photo_not_image`) with `User.ssoLastSyncedAt`; the admin
+card shows the last sync and the accounts with a problem. The activity line
+`sso.profile_synced` lists field **names** only, never a value.
+
+SCIM push provisioning is a separate story; this is the pull-on-login half.
+
 ## Who may set the identity provider (#1575)
 
 The **issuer, entry point and certificate** (and the provider) are the IdP trust

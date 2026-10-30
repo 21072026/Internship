@@ -25,6 +25,7 @@
 import bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { runImport, type ImportReport, type PlannedRow, type RowResult } from '@/lib/importPreview';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { resolvePipelineStages, startStageKey } from '@/lib/pipelineStages';
@@ -233,10 +234,10 @@ async function runLocked(input: MigrationInput, opts: MigrationOptions): Promise
             if (p.status === 'CREATE') {
               password ??= bcrypt.hash(randomBytes(18).toString('hex'), 10);
               const v = p.value;
-              const created = await prisma.user.create({
+              const created = await createUser(prisma, {
                 data: { email: v.email, fullName: v.fullName, role: v.role, phone: v.phone, university: v.university, department: v.department, password: await password, orgId },
                 select: { id: true },
-              });
+              }, { source: 'migration' });
               people.set(v.email, { id: created.id, role: v.role, sameOrg: true });
             } else if (p.status === 'UPDATE' && p.value.personId && p.value.fill) {
               await prisma.user.update({ where: { id: p.value.personId }, data: p.value.fill });

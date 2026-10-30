@@ -28,6 +28,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { runWithOrg } from '@/lib/orgContext';
 import { entitled } from '@/lib/entitlements';
 import { apiKeyStatus, parseScopes } from '@/lib/apiScopes';
@@ -162,7 +163,7 @@ export function candidateImportHooks(orgId: string, rows: unknown[], dryRun: boo
           out.push({ row: p.row, key: p.key, status: 'SKIP' as const, reason: 'duplicate_email', value: c });
           continue;
         }
-        const created = await prisma.user.create({
+        const created = await createUser(prisma, {
           data: {
             email: c.email,
             fullName: c.fullName,
@@ -176,7 +177,7 @@ export function candidateImportHooks(orgId: string, rows: unknown[], dryRun: boo
             orgId,
           },
           select: { id: true },
-        });
+        }, { source: 'api_import' });
         out.push({ row: p.row, key: p.key, status: 'CREATE' as const, targetId: created.id, value: c });
       }
       return out;
