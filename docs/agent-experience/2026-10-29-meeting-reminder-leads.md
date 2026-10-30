@@ -14,3 +14,11 @@
 - **A local DB e2e that drives the UI against `next dev` times out on cold compiles**;
   a production build (`npm run build`, then `npm run start`) is what CI runs and is the
   fair local comparison.
+- **Run every `check:*` of `ci.yml` before merging, not only the ones you think you
+  touched.** #1638 (#3334) merged a `prisma.setting.count()` in a route, which
+  `check:settings-accessor` forbids (`resolveSettings()` returns the `sources` per key —
+  use that to ask "is this layer overridden?"); this PR carries the fix. A one-liner
+  lists them: `grep -oE "npm run check:[a-z0-9:-]+" .github/workflows/ci.yml | sort -u`.
+- To tell "mine" from "already red on main", run the failing test files in a
+  `git worktree add <dir> origin/main` with `node_modules` symlinked in — seconds, no
+  reinstall. `check:demo-fidelity` needs `npm run seed:demo` against the local DB first.
