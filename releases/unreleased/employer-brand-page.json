@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Public employer page (#1867):** `/employers/[slug]` (new top-level dir with its `I18nScope`) and `GET /api/public/employers/[slug]` share one read, `loadPublicEmployer()` (`src/lib/employerPageStore.ts`): name, logo, `about`, industry, size, `websiteUrl` (https only, `rel=\"noopener nofollow\"`) and the OPEN roles with a free seat — never `contactEmail` or `address`. 404 unless `isPublicProfile` AND `VERIFIED` (`isPublicEmployer()`, pure, unit-tested). Additive `Company` columns `slug` (`@@unique([orgId, slug])` — per tenant, the host decides the tenant), `websiteUrl`, `about`, `isPublicProfile` (default false). The slug is assigned on first publish by `ensureEmployerSlug()` (Turkish-safe `kebabSlug()`, `-2`/`-3` on collision, guarded on `slug: null`) and never moves — no backfill. COMPANY users publish from `/company/profile` (`about`, `websiteUrl`, `isPublicProfile` join the self-editable fields); the job detail links the employer page. Own page metadata. `docs/employer-page.md`.",
+  "notes": {
+    "en": ["Verified employers can now publish a public employer page with their story, website and open roles — linked from each job posting."],
+    "tr": ["Doğrulanmış işverenler artık hikâyelerini, web sitelerini ve açık pozisyonlarını içeren herkese açık bir işveren sayfası yayımlayabiliyor — her iş ilanından bağlantı veriliyor."],
+    "de": ["Verifizierte Arbeitgeber können jetzt eine öffentliche Arbeitgeberseite mit ihrer Geschichte, Website und offenen Stellen veröffentlichen – verlinkt aus jeder Stellenanzeige."]
+  }
+}

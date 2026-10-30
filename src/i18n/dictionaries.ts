@@ -9292,6 +9292,16 @@ const en = {
     recordNotFound: 'The record was not found yet. DNS changes can take a while — try again later.',
     checkFailed: 'The check could not be completed.',
   },
+  employerPage: {
+    metaTitle: '{company} — employer profile',
+    metaDescription: 'Open roles and what it is like to work at {company}.',
+    about: 'About',
+    openRoles: 'Open roles',
+    noRoles: 'No open roles right now.',
+    website: 'Website',
+    size: '{size} employees',
+    starts: 'Starts {date}',
+  },
   companyProfile: {
     navLink: 'Company profile',
     title: 'Company profile',
@@ -9300,6 +9310,14 @@ const en = {
     save: 'Save',
     saved: 'Saved.',
     saveFailed: 'Could not save. Please check the fields.',
+    publicPage: {
+      title: 'Public employer page',
+      intro: 'Candidates can read about you on your own page, linked from every role you post. It is off until you switch it on, and only visible once your company is verified.',
+      websiteHint: 'https:// address of your website or careers page',
+      publish: 'Publish our employer page',
+      notVerified: 'Your page goes live as soon as your company is verified.',
+      view: 'View the public page',
+    },
     fields: {
       description: 'Description',
       logoUrl: 'Logo URL',
@@ -9307,6 +9325,8 @@ const en = {
       size: 'Company size',
       address: 'Address',
       contactEmail: 'Contact e-mail',
+      about: 'About us (shown on your public page)',
+      websiteUrl: 'Website',
     },
   },
   forCompanies: {
@@ -20416,6 +20436,16 @@ const tr: Dict = {
     recordNotFound: 'Kayıt henüz bulunamadı. DNS değişiklikleri biraz sürebilir — daha sonra tekrar deneyin.',
     checkFailed: 'Kontrol tamamlanamadı.',
   },
+  employerPage: {
+    metaTitle: '{company} — işveren profili',
+    metaDescription: '{company} şirketindeki açık pozisyonlar ve çalışma ortamı.',
+    about: 'Hakkında',
+    openRoles: 'Açık pozisyonlar',
+    noRoles: 'Şu anda açık pozisyon yok.',
+    website: 'Web sitesi',
+    size: '{size} çalışan',
+    starts: 'Başlangıç: {date}',
+  },
   companyProfile: {
     navLink: 'Şirket profili',
     title: 'Şirket profili',
@@ -20424,6 +20454,14 @@ const tr: Dict = {
     save: 'Kaydet',
     saved: 'Kaydedildi.',
     saveFailed: 'Kaydedilemedi. Lütfen alanları kontrol edin.',
+    publicPage: {
+      title: 'Herkese açık işveren sayfası',
+      intro: 'Adaylar, yayımladığınız her pozisyondan bağlantı verilen kendi sayfanızda sizi tanıyabilir. Siz açana kadar kapalıdır ve yalnızca şirketiniz doğrulandıktan sonra görünür.',
+      websiteHint: 'Web sitenizin veya kariyer sayfanızın https:// adresi',
+      publish: 'İşveren sayfamızı yayımla',
+      notVerified: 'Sayfanız, şirketiniz doğrulanır doğrulanmaz yayına girer.',
+      view: 'Herkese açık sayfayı görüntüle',
+    },
     fields: {
       description: 'Açıklama',
       logoUrl: 'Logo URL',
@@ -20431,6 +20469,8 @@ const tr: Dict = {
       size: 'Şirket büyüklüğü',
       address: 'Adres',
       contactEmail: 'İletişim e-postası',
+      about: 'Hakkımızda (herkese açık sayfanızda gösterilir)',
+      websiteUrl: 'Web sitesi',
     },
   },
   forCompanies: {
@@ -31513,6 +31553,16 @@ const de: Dict = {
     recordNotFound: 'Der Eintrag wurde noch nicht gefunden. DNS-Änderungen können etwas dauern – bitte später erneut versuchen.',
     checkFailed: 'Die Prüfung konnte nicht abgeschlossen werden.',
   },
+  employerPage: {
+    metaTitle: '{company} – Arbeitgeberprofil',
+    metaDescription: 'Offene Stellen und Arbeiten bei {company}.',
+    about: 'Über uns',
+    openRoles: 'Offene Stellen',
+    noRoles: 'Derzeit keine offenen Stellen.',
+    website: 'Website',
+    size: '{size} Beschäftigte',
+    starts: 'Beginn {date}',
+  },
   companyProfile: {
     navLink: 'Unternehmensprofil',
     title: 'Unternehmensprofil',
@@ -31521,6 +31571,14 @@ const de: Dict = {
     save: 'Speichern',
     saved: 'Gespeichert.',
     saveFailed: 'Speichern fehlgeschlagen. Bitte prüfen Sie die Felder.',
+    publicPage: {
+      title: 'Öffentliche Arbeitgeberseite',
+      intro: 'Kandidat:innen können sich auf Ihrer eigenen Seite über Sie informieren – verlinkt aus jeder ausgeschriebenen Stelle. Sie ist aus, bis Sie sie einschalten, und erst sichtbar, wenn Ihr Unternehmen verifiziert ist.',
+      websiteHint: 'https://-Adresse Ihrer Website oder Karriereseite',
+      publish: 'Unsere Arbeitgeberseite veröffentlichen',
+      notVerified: 'Ihre Seite geht online, sobald Ihr Unternehmen verifiziert ist.',
+      view: 'Öffentliche Seite ansehen',
+    },
     fields: {
       description: 'Beschreibung',
       logoUrl: 'Logo-URL',
@@ -31528,6 +31586,8 @@ const de: Dict = {
       size: 'Unternehmensgröße',
       address: 'Adresse',
       contactEmail: 'Kontakt-E-Mail',
+      about: 'Über uns (auf Ihrer öffentlichen Seite)',
+      websiteUrl: 'Website',
     },
   },
   forCompanies: {

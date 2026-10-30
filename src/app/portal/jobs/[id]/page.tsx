@@ -47,7 +47,16 @@ export default function PortalJobDetailPage() {
         <div className="mt-4 space-y-5">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{job.title}</h1>
-            <p className="mt-1 text-gray-700 dark:text-gray-300">{job.company.name}</p>
+            <p className="mt-1 text-gray-700 dark:text-gray-300">
+              {/* The employer page (#1867), when the company published one. */}
+              {job.company.isPublicProfile && job.company.slug ? (
+                <Link href={`/employers/${job.company.slug}`} className="text-blue-700 hover:underline dark:text-blue-300" data-testid="portal-job-employer-link">
+                  {job.company.name}
+                </Link>
+              ) : (
+                job.company.name
+              )}
+            </p>
             <p className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
               {job.city && <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" aria-hidden="true" />{job.city}</span>}
               {job.workMode && <span>{job.workMode}</span>}

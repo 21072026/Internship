@@ -2242,6 +2242,17 @@ model Company {
   signupDomain       String?       @db.VarChar(191)
   // Why an admin rejected or suspended the company; shown to the company.
   rejectionReason    String?       @db.Text
+  // The public employer page (#1867, docs/employer-page.md): /employers/<slug>
+  // on the tenant's own host. It exists only while `isPublicProfile` is true
+  // AND the company is VERIFIED — otherwise the URL is a 404, not an empty page.
+  // `slug` is assigned when the profile is first published (never backfilled:
+  // an unpublished company needs none), unique per TENANT, never globally — a
+  // global unique would let one tenant's employer block another's name.
+  slug               String?       @db.VarChar(80)
+  websiteUrl         String?       @db.VarChar(191)
+  // Candidate-facing copy, separate from the internal `description`.
+  about              String?       @db.Text
+  isPublicProfile    Boolean       @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -2283,6 +2294,8 @@ model Company {
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
+  // The employer page's address, per tenant (#1867).
+  @@unique([orgId, slug])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
   // `findMany({ where: { externalId } })`, and without this it would filter the

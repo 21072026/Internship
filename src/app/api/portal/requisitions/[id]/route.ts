@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   if (!orgId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return withTenantScope(session, async () => {
-    const job = await prisma.requisition.findFirst({ where: { AND: [{ id }, visibleJobsWhere(orgId)] }, select: { ...PORTAL_JOB_SELECT, company: { select: { id: true, name: true, logoUrl: true, description: true } } } });
+    const job = await prisma.requisition.findFirst({ where: { AND: [{ id }, visibleJobsWhere(orgId)] }, select: { ...PORTAL_JOB_SELECT, company: { select: { id: true, name: true, logoUrl: true, description: true, slug: true, isPublicProfile: true } } } });
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // The apply form (#1832): the role's screening questions, and whether this mentee already applied.
     const [extra, mine] = await Promise.all([

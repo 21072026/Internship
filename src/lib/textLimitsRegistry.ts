@@ -102,6 +102,11 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
       exempt:
         'written by the account-event writer only (#2846): the feed carries the plan as 1–40 characters of A–Z a–z 0–9 . _ - (src/lib/accountEventSchema.ts), the width of this column. No person and no form writes it.',
     },
+    // The public employer page (#1867).
+    // Written only by the company PUT (the admin form and the company's own profile page post to it).
+    about: { limit: 'companyAbout', files: ['src/app/api/companies/[id]/route.ts'] },
+    websiteUrl: { limit: 'companyWebsiteUrl', files: ['src/app/api/companies/[id]/route.ts'] },
+    slug: SERVER_SET,
     // Employer verification (#1865).
     verificationStatus: ENUMERATED,
     verifiedById: ID,

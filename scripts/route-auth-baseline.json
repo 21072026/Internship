@@ -74,6 +74,10 @@
     "methods": ["POST"],
     "why": "The public /for-companies enquiry form — the conversational way in beside the employer self-signup (#1865). A COMPANY user is only born from an InvitationToken. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
   },
+  "src/app/api/public/employers/[slug]/route.ts": {
+    "methods": ["GET"],
+    "why": "The public employer page's data (#1867, docs/employer-page.md). 404 unless the company opted in AND is verified; the tenant comes from the host; the select carries no contact e-mail or address. Rate-limited per IP."
+  },
   "src/app/api/public/signup/company/route.ts": {
     "methods": ["POST"],
     "why": "Employer self-signup (#1865, docs/company-verification.md). Creates a PENDING company — invisible to every candidate until verified — and an invitation mailed to the work address, never returned. Per-IP rate limit, honeypot, minimum fill time, free-mail domains refused, and the same 202 for a taken address so nothing can be probed."

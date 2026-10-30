@@ -179,6 +179,8 @@ const DECISIONS = new Map([
   ['ProgramCost.note', BUSINESS],
   // Why an admin rejected or suspended an employer account (#1865) — a decision about the company, not about a person.
   ['Company.rejectionReason', BUSINESS],
+  // The employer page's own public copy (#1867), written by the company about itself.
+  ['Company.about', BUSINESS],
   ['OrgEntitlement.note', BUSINESS],
   ['PlanChangeRequest.reason', BUSINESS],
   ['PlanChangeRequest.note', BUSINESS],

@@ -78,8 +78,15 @@ export function availableVerificationActions(status: string): VerificationAction
 
 // ── What a COMPANY user may change on its own company ───────────────────────
 
-/** Exactly these. Never quota, orgId, name, externalId or verificationStatus. */
-export const COMPANY_SELF_EDITABLE_FIELDS = ['description', 'logoUrl', 'industry', 'size', 'address', 'contactEmail'] as const;
+/**
+ * Exactly these. Never quota, orgId, name, slug, externalId or verificationStatus.
+ * The last three are the public employer page's (#1867): its copy, its website
+ * and the opt-in that publishes it.
+ */
+export const COMPANY_SELF_EDITABLE_FIELDS = [
+  'description', 'logoUrl', 'industry', 'size', 'address', 'contactEmail',
+  'about', 'websiteUrl', 'isPublicProfile',
+] as const;
 
 /** The keys of a COMPANY user's body that it may not write, sorted (empty = fine). */
 export function companySelfEditRefusedFields(body: unknown): string[] {

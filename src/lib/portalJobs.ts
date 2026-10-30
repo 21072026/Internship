@@ -22,7 +22,8 @@ export const PORTAL_JOB_SELECT = {
   requiredSkills: true,
   openings: true,
   filled: true,
-  company: { select: { id: true, name: true, logoUrl: true } },
+  // slug + isPublicProfile: the detail links the employer page when there is one (#1867).
+  company: { select: { id: true, name: true, logoUrl: true, slug: true, isPublicProfile: true } },
 } satisfies Prisma.RequisitionSelect;
 
 // …and its company is VERIFIED (#1865): a self-signed-up employer reaches no
