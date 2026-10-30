@@ -12,6 +12,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { findOrCreateSource } from '@/lib/leadSource';
 import { SOURCE_NAME_MAX } from '@/lib/leadSourceName';
 import { requirePermission } from '@/lib/authz';
+import { OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET — all sources with lead counts + conversion breakdown (admin).
 //
@@ -58,7 +59,8 @@ export async function GET(request: Request) {
       {
         ...attributedLeadWhere(),
         sourceId: { not: null },
-        menteeRelations: { some: { pipelineStatus: { in: outcome.finished } } },
+        // A placement that is ours (#1504): not a COACHING pair, not a self-found hire.
+        menteeRelations: { some: { pipelineStatus: { in: outcome.finished }, ...PLACEMENT_RELATION_WHERE, ...OUR_HIRE_WHERE } },
       },
       tenant,
     ),
