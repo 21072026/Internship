@@ -1,5 +1,6 @@
 import type { ChatMember, ChatPlatformClient } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
+import { slackBlocks } from '@/lib/chat/card';
 
 // Slack Web API, behind the ChatPlatformClient port. No URL here is ever built
 // from input — only from operator config — so there is nothing for an SSRF guard to do.
@@ -34,9 +35,13 @@ async function call(method: string, token: string, body: Record<string, unknown>
 }
 
 export const slackClient: ChatPlatformClient = {
-  async postMessage({ token, target, text }) {
-    const json = await call('chat.postMessage', token, { channel: target.id, text, unfurl_links: false, unfurl_media: false });
+  async postMessage({ token, target, text, action }) {
+    const json = await call('chat.postMessage', token, { channel: target.id, text, blocks: slackBlocks(text, action ?? null), unfurl_links: false, unfurl_media: false });
     return { externalMessageId: typeof json.ts === 'string' ? json.ts : null };
+  },
+  async updateMessage({ token, target, externalMessageId, text, action }) {
+    // `blocks` is always sent: an update without them would keep the old button.
+    await call('chat.update', token, { channel: target.id, ts: externalMessageId, text, blocks: slackBlocks(text, action ?? null) });
   },
   async openDm({ token, externalUserId }) {
     const json = await call('conversations.open', token, { users: externalUserId });

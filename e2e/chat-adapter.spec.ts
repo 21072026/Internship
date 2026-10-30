@@ -28,6 +28,7 @@ function recordingClient(posts: Post[], failWith?: string): ChatPlatformClient {
       posts.push({ token, target: target.id, text });
       return { externalMessageId: `ts-${posts.length}` };
     },
+    async updateMessage() {},
     async openDm({ externalUserId }) {
       return { id: `D-${externalUserId}` };
     },

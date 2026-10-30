@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Meeting events in chat (#1942):** the meeting invite, the 15-minute reminder, a reschedule and a cancellation now reach a person's verified Slack/Teams identity through the router's `chat` channel (catalog `defaultChannels`; e-mail stays inline). A card carries a \"Join the meeting\" button (Slack Block Kit `actions`, Teams hero-card `openUrl`, https-only via `safeAction`). New `NotifyOptions.chatCard` (`subjectKey`, `actionUrl`, `supersede`) rides the router, the quiet-hours deferral job and the adapter port; `ChatDelivery` gains `subjectKey` + `supersededAt` (additive). A move or cancel rewrites the person's live cards about the same meeting in place (`chat.update` / Bot Framework PUT) instead of posting a second one, marks them superseded and records one ledger row with the same `externalMessageId`; a cancelled card loses its button. `ChatPlatformClient.updateMessage()` added (stub + recording clients). The reminder's single-shot guard stays `reminderSentAt`, the router dedupes on `meeting-reminder:<id>:<user>:<slot>`. Pinned by `e2e/meeting-chat-cards.spec.ts` and `e2e/chat-card.unit.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Linked Slack or Teams? Meeting invites and reminders now arrive there with a Join button — and when a meeting moves or is cancelled, the earlier message updates itself instead of leaving a stale one behind."],
+    "tr": ["Slack ya da Teams bağladıysan toplantı davetleri ve hatırlatmaları artık oraya “Katıl” düğmesiyle geliyor — toplantı kayar ya da iptal edilirse eski mesaj kendini güncelliyor, geride bayat bir mesaj kalmıyor."],
+    "de": ["Slack oder Teams verknüpft? Meeting-Einladungen und Erinnerungen kommen jetzt dort mit einem Teilnehmen-Button an – und wird ein Meeting verschoben oder abgesagt, aktualisiert sich die frühere Nachricht selbst, statt veraltet stehen zu bleiben."]
+  }
+}

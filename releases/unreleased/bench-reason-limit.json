@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Bench reason cap (#1778 follow-up):** `TEXT_LIMITS.benchReason` lowered from 500 to 240 so the bench reason meets the single-line bar `e2e/text-limits-columns.unit.spec.ts` sets for every VARCHAR-backed reason (a 250-character paste is refused by the route, not by the database). The `User.benchedReason` column is unchanged."
+}

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Score breakdowns name a `customField:<key>` dimension by its question label (`GET /api/admin/matching/custom-fields`), and the rule editor flags and removes rules over a question that is no longer matchable instead of failing the save with a bare error (#1803 follow-ups).",
+  "notes": {
+    "en": ["Match explanations now show your own questions by name, and a rule whose question was switched off can be cleared in one click."],
+    "tr": ["Eşleşme açıklamaları artık kendi sorularınızı adıyla gösteriyor; sorusu kapatılan bir kural tek tıkla temizlenebiliyor."],
+    "de": ["Match-Erklärungen zeigen Ihre eigenen Fragen jetzt beim Namen, und eine Regel, deren Frage abgeschaltet wurde, lässt sich mit einem Klick entfernen."]
+  }
+}

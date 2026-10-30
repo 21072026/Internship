@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkillsField } from '@/components/ui/SkillsField';
 import { useT } from '@/i18n/client';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 
 export default function ApplyPage({ params }: { params: Promise<{ mentorId: string }> }) {
   const { mentorId } = use(params);
@@ -23,6 +24,8 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
   const [done, setDone] = useState(false);
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  // The org's own registration questions (#1803), from the mentor's link.
+  const customFields = useDynamicFields('REGISTRATION', { publicQuery: `for=apply&mentorId=${encodeURIComponent(mentorId)}` });
 
   useEffect(() => {
     fetch(`/api/apply?mentorId=${encodeURIComponent(mentorId)}`)
@@ -36,18 +39,19 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!customFields.validate()) return;
     setSending(true);
     setError('');
     try {
       const res = await fetch('/api/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mentorId, ...form, skills }),
+        body: JSON.stringify({ mentorId, ...form, skills, formAnswers: customFields.payload() }),
       });
       const data = await res.json();
       // A full programme reads as a capacity message in the applicant's own
       // language (#1745) — never a plan, a price or the server's English text.
-      if (!res.ok) throw new Error(data.code === 'program_full' ? t.apply.programFull : data.code === 'not_eligible' ? t.apply.notEligible : data.code === 'mentor_full' || data.code === 'mentor_not_accepting' ? t.apply.fullTitle : data.error || 'Failed');
+      if (!res.ok) throw new Error(data.code === 'program_full' ? t.apply.programFull : data.code === 'not_eligible' ? t.apply.notEligible : data.code === 'invalid_answers' ? t.dynamicFields.answersFailed : data.code === 'mentor_full' || data.code === 'mentor_not_accepting' ? t.apply.fullTitle : data.error || 'Failed');
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
@@ -104,6 +108,7 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
                   // Signed out: the mentor's link names whose vocabulary to offer.
                   suggestUrl={`/api/skills/suggest?mentorId=${encodeURIComponent(mentorId)}`}
                 />
+                <DynamicFields state={customFields} />
                 <Button type="submit" className="w-full" size="lg" loading={sending}>
                   {t.apply.submit}
                 </Button>

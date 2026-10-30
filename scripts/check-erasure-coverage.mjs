@@ -86,6 +86,7 @@ const DECISIONS = new Map([
   ['MentorQuestion.answer', ERASED],
   ['PersonalNote.body', ERASED],
   ['RelationNote.body', ERASED],
+  ['Kudo.reason', ERASED],
   ['SessionNote.body', ERASED],
   ['SessionNoteRevision.body', ERASED],
   ['Goal.description', ERASED],

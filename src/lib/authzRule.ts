@@ -51,6 +51,10 @@ export const PERMISSIONS = [
   'user.reset_password',
   'user.role_convert',
   'user.merge',
+  // Who holds which admin tier and which scope grants (#1579). Only ORG_ADMIN
+  // holds it (it is in no narrower tier), so nobody can mint a tier above
+  // their own; the remaining guards are src/lib/adminTierRule.ts.
+  'admin.grant',
   // Programmes and the pipeline.
   'program.read',
   'program.write',

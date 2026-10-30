@@ -16,6 +16,7 @@ import { getLastContacts } from '@/lib/lastContact';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { syncUserSkills } from '@/lib/skillsResolve';
 import { countExemptAdmins } from '@/lib/ssoEnforcement';
+import { isLastActiveOrgAdmin } from '@/lib/adminTiers';
 
 // Tenant (#2542): every lookup by id in this file is narrowed to the caller's
 // own tenant (`tenantWhere`, src/lib/tenantFilter.ts), so a record of another
@@ -185,6 +186,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // Guard against an admin locking themselves out.
         if (id === session.user.id && body.isActive === false) {
           return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
+        }
+        // The org keeps an active ORG_ADMIN (#1579, src/lib/adminTierRule.ts):
+        // the same guard a tier change and account deletion ask.
+        if (body.isActive === false) {
+          const row = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, adminLevel: true, orgId: true } });
+          if (row && (await isLastActiveOrgAdmin(row))) {
+            return NextResponse.json({ error: 'This is the last active org admin', code: 'last_org_admin' }, { status: 409 });
+          }
         }
         data.isActive = body.isActive;
         // An admin decision outranks the self-service door, so activating always

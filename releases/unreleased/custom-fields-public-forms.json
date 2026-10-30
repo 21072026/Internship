@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Admin-defined REGISTRATION questions on the public apply link and the become-a-mentor form (#1803): `GET /api/forms/public`, answers validated before any account exists (`invalid_answers`), written onto the account `/api/apply` creates, and staged on `MentorApplication.formAnswers` until approval or invitation registration carries them over.",
+  "notes": {
+    "en": ["Your programme's own questions now also appear on the public application forms, and the answers follow the applicant into their account."],
+    "tr": ["Programınızın kendi soruları artık herkese açık başvuru formlarında da çıkıyor; cevaplar başvuranla birlikte hesabına taşınıyor."],
+    "de": ["Die eigenen Fragen Ihres Programms erscheinen jetzt auch in den öffentlichen Bewerbungsformularen, und die Antworten gehen mit ins Konto der Bewerbenden über."]
+  }
+}

@@ -36,7 +36,8 @@ test('the query always filters on ACTIVE and the given mentee', async () => {
   await findActiveMentorship(db, 'mentee-1');
 
   assert.equal(db.calls.length, 1);
-  assert.deepEqual(db.calls[0].where, { menteeId: 'mentee-1', status: 'ACTIVE' });
+  // #1804: a mentee is mentored as the primary mentee OR from an open group seat.
+  assert.deepEqual(db.calls[0].where, { OR: [{ menteeId: 'mentee-1' }, { participants: { some: { userId: 'mentee-1', role: 'MENTEE', leftAt: null, isPrimaryPair: false } } }], status: 'ACTIVE' });
 });
 
 test('no exceptRelationId means no id filter at all', async () => {
@@ -51,7 +52,7 @@ test('exceptRelationId becomes id: { not }, for the reopen path', async () => {
   await findActiveMentorship(db, 'mentee-1', { exceptRelationId: 'rel-9' });
 
   assert.deepEqual(db.calls[0].where, {
-    menteeId: 'mentee-1',
+    OR: [{ menteeId: 'mentee-1' }, { participants: { some: { userId: 'mentee-1', role: 'MENTEE', leftAt: null, isPrimaryPair: false } } }],
     status: 'ACTIVE',
     id: { not: 'rel-9' },
   });

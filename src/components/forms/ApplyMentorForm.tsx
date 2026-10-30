@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { SkillsField } from '@/components/ui/SkillsField';
 import { useT, useLocale } from '@/i18n/client';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const applyMentorSchema = z.object({
@@ -42,6 +43,8 @@ export function ApplyMentorForm() {
   const [expertise, setExpertise] = useState<string[]>([]);
   const [expertiseError, setExpertiseError] = useState(false);
   const renderedAt = useRef(Date.now());
+  // The org's own registration questions for mentors (#1803); staged with the application.
+  const customFields = useDynamicFields('REGISTRATION', { publicQuery: 'for=mentor-application' });
 
   const {
     register,
@@ -55,6 +58,7 @@ export function ApplyMentorForm() {
       return;
     }
     setExpertiseError(false);
+    if (!customFields.validate()) return;
     setLoading(true);
     setError('');
 
@@ -74,6 +78,7 @@ export function ApplyMentorForm() {
           locale,
           website: data.website || undefined,
           renderedAt: renderedAt.current,
+          formAnswers: customFields.payload(),
         }),
       });
 
@@ -187,6 +192,7 @@ export function ApplyMentorForm() {
                 </span>
               </label>
               {errors.consent && <p className="text-xs text-red-600">{t.applyMentor.consentRequired}</p>}
+              <DynamicFields state={customFields} />
               <Button type="submit" className="w-full" size="lg" loading={loading}>
                 {t.applyMentor.submit}
               </Button>
