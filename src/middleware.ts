@@ -10,6 +10,7 @@ import { bodyLimitVerdict } from '@/lib/bodyLimitRule';
 import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, splitLocalePrefix } from '@/lib/localePath';
 import type { Locale } from '@/i18n/config';
 import { buildCsp } from '@/lib/cspPolicy.cjs';
+import { readOnlyImpersonationBlocks } from '@/lib/impersonationPolicyRule';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -272,6 +273,22 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
     const res = nextWithRequestId(req, requestId, page);
     clearRememberCookies(res);
     return res;
+  }
+
+  // Read-only impersonation (#1586): ONE central refusal for every write the
+  // impersonating session makes — the policy of the target's organization,
+  // fixed in the JWT when the session started. Before the general allowlist on
+  // purpose: a public form posted from someone else's session is still a write
+  // made as them. Only the ways out pass (impersonationPolicyRule.ts). The
+  // token is decoded for writes only; reads never pay for it.
+  if (WRITE_METHODS.has(req.method) && readOnlyImpersonationBlocks(req.method, pathname)) {
+    const imp = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (imp?.impersonatorId && imp.impersonationReadOnly === true) {
+      return NextResponse.json(
+        { error: 'This is a read-only session as another user — changes are not allowed.', code: 'impersonation_read_only' },
+        { status: 403, headers: { [REQUEST_ID_HEADER]: requestId } }
+      );
+    }
   }
 
   if (!WRITE_METHODS.has(req.method) || isAllowlisted(pathname)) {

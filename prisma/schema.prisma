@@ -187,6 +187,10 @@ model Organization {
   // ProgramEligibilityRule admits). Gates admission to the organisation: SSO
   // JIT, the public apply form, a direct assignment.
   eligibilityMode        String    @default("OPEN") @db.VarChar(8)
+  // Impersonation policy (#1586, src/lib/impersonationPolicyRule.ts): full
+  // (default — nothing changes on upgrade) | read_only | off. Judged on the
+  // TARGET user's org when an admin starts "log in as".
+  impersonationPolicy    String    @default("full") @db.VarChar(16)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
@@ -5717,6 +5721,9 @@ model ImpersonationGrant {
   targetId  String // who to become (the target on START, the admin on STOP)
   kind      String // START | STOP
   used      Boolean  @default(false)
+  // A START under the target org's `read_only` policy (#1586): the session it
+  // mints carries `impersonationReadOnly`, and middleware refuses its writes.
+  readOnly  Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
 }
