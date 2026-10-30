@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**The bench (#1778, story #1776):** new `User.participantState` (`ACTIVE` | `BENCHED`, free String + whitelist in `src/lib/participantState.ts`) with `benchedAt` / `benchedReason` / `benchedById`. A benched person still signs in — `isActive`, `sessionsValidFrom` and `consentAt` are never touched (`src/lib/bench.ts`, the one writer) — but is left out of the mentor pool, the cohort pass, the mentor directory and the attention list, refused server-side with `409 mentor_benched` by every assignment path (direct, request approval, the mentor's own accept, match-round publish, mentor offers, a mentor adding a mentee), and skipped by the nudge engine, the dormant check-in, the weekly-report reminder, the mentor digests and the ending-soon nudge. `/admin/users` gets an *On the bench* tab, per-row Bench/Return, a checkbox bulk action and **Re-invite the bench** (the existing re-engagement reminder, `checkReEngagementReminders({ userIds })`). APIs: `PATCH /api/admin/users/[id]/bench`, `POST /api/admin/users/bench` (ids or a cohort's mentees, ≤500), `POST /api/admin/users/bench/reinvite`. docs/bench.md.",
+  "notes": {
+    "en": ["Put people on the bench between intakes: they keep their account and can still sign in, but are not matched or reminded — and bring them back, or re-invite the whole bench, in one click."],
+    "tr": ["Dönemler arasında kişileri beklemeye alın: hesaplarını korurlar ve giriş yapabilirler, ama eşleştirilmez ve hatırlatma almazlar — tek tıkla geri alın ya da beklemedekilerin hepsini yeniden davet edin."],
+    "de": ["Personen zwischen zwei Durchgängen pausieren: Sie behalten ihr Konto und können sich weiter anmelden, werden aber weder zugeordnet noch erinnert — mit einem Klick zurückholen oder alle Pausierten erneut einladen."]
+  }
+}

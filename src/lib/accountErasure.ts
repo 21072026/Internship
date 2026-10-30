@@ -238,6 +238,8 @@ async function mentorApplicationOps(userId: string): Promise<Prisma.PrismaPromis
         referenceName: null,
         referenceContact: null,
         referenceOutcome: null,
+        // Answers to the org's own questions, staged until an account exists (#1803).
+        formAnswers: Prisma.DbNull,
       },
     }),
   ];
@@ -574,6 +576,8 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    // The pair's agreed next steps (#1795): prose about the pairing whose subject they are.
+    prisma.mentorshipRelation.updateMany({ where: { menteeId: userId }, data: { closurePlan: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
     // The fit sentence (#2042) is prose about the candidate; the score, the
     // breakdown and the rule-set version stay — they are the explainability record.
@@ -772,6 +776,8 @@ export async function anonymizeUser(userId: string): Promise<void> {
         // they said …"). The re-engagement promise is void once the account is
         // erased, so the note goes with it.
         reEngageNote: null,
+        // The admin's bench reason (#1778) is prose about them.
+        benchedReason: null,
         skills: [],
         skillLevels: {},
         publicProfile: false,

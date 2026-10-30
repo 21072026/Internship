@@ -48,6 +48,12 @@ export interface CampaignTarget {
   user: Person;
   relationId: string | null;
   periodKey: string;
+  /**
+   * The key this target was claimed under before its period became
+   * per-relation (#1795): a send under it counts as already sent, so the
+   * deploy that changed the key re-invites nobody.
+   */
+  legacyPeriodKey?: string;
 }
 
 type RelationWithPeople = Pick<MentorshipRelation, 'id'> & { mentor: Person; mentee: Person };
@@ -85,8 +91,8 @@ export async function dueCampaignTargets(now = new Date(), opts: { orgIds?: stri
     const since = new Date(Math.max(campaign.createdAt.getTime(), now.getTime() - LOOKBACK_DAYS * DAY));
     const scope = campaign.orgId ? await orgWhere(campaign.orgId) : {};
     const relSelect = { id: true, startDate: true, stageDeadline: true, mentor: { select: PERSON }, mentee: { select: PERSON } } as const;
-    const push = (r: RelationWithPeople, periodKey: string) => {
-      for (const user of peopleFor(audience, r)) targets.push({ campaign, user, relationId: r.id, periodKey });
+    const push = (r: RelationWithPeople, periodKey: string, legacyPeriodKey?: string) => {
+      for (const user of peopleFor(audience, r)) targets.push({ campaign, user, relationId: r.id, periodKey, legacyPeriodKey });
     };
 
     switch (campaign.trigger) {
@@ -134,7 +140,10 @@ export async function dueCampaignTargets(now = new Date(), opts: { orgIds?: stri
           where: { ...scope, status: 'COMPLETED', completedAt: { gte: new Date(since.getTime() - campaign.dayOffset * DAY), lte: new Date(now.getTime() - campaign.dayOffset * DAY) } },
           select: relSelect,
         });
-        for (const r of rels) push(r, `after:${campaign.dayOffset}`);
+        // One send per completion AND per person (#1795): a mentor who ends two
+        // pairings is asked about each, so the relation is part of the period
+        // (it was `after:<n>` alone, which let the second one collide).
+        for (const r of rels) push(r, `after:${campaign.dayOffset}:${r.id}`, `after:${campaign.dayOffset}`);
         break;
       }
       case 'RECURRING': {
@@ -185,6 +194,14 @@ export async function dispatchDueSurveyCampaigns(now = new Date(), opts: { orgId
       result.deferred++;
       continue;
     }
+    if (
+      target.legacyPeriodKey &&
+      (await prisma.surveyCampaignSend.count({
+        where: { campaignId: campaign.id, userId: user.id, relationId: target.relationId, periodKey: target.legacyPeriodKey },
+      }))
+    ) {
+      continue; // sent under the old key, before the period became per-relation
+    }
     // CLAIM before anything is minted or sent.
     let claim: { id: string };
     try {
@@ -196,7 +213,9 @@ export async function dispatchDueSurveyCampaigns(now = new Date(), opts: { orgId
       if ((error as { code?: string })?.code === 'P2002') continue; // already sent this period
       throw error;
     }
-    const round = periodKey.startsWith('pulse:') ? periodKey : '';
+    // A recurring pulse, and an end-of-pairing survey (one per pairing, #1795),
+    // are rounds of their own: one person may answer the same survey again.
+    const round = periodKey.startsWith('pulse:') || periodKey.startsWith('after:') ? periodKey : '';
     const invite = await createSurveyInvitation({ surveyId: campaign.surveyId, orgId: campaign.orgId, email: user.email, userId: user.id, locale: user.preferredLanguage, round, now });
     // Already invited to this survey round by another campaign: the claim
     // stands (so it is not retried), and nobody gets a second link.

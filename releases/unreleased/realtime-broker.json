@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Cross-replica realtime (#1698):** with `REALTIME_REDIS_URL` set, `publishRealtime()` still delivers locally first and also publishes the signal on a per-deployment Redis pub/sub channel (`src/lib/realtimeBroker.ts`, reusing the rate-limit store's dependency-free RESP), so SSE streams on another replica get it instantly; a replica ignores its own echo by origin. Only the signal crosses — type, ids, recipients — enforced on both ends by `src/lib/realtimeBrokerRule.ts`; never message content. Unset, behaviour is unchanged; a broker outage degrades to local delivery plus the heartbeat re-check, logged once, redialled with 1 s→60 s backoff. Proven over a real socket in `scripts/test/realtime-broker.test.mjs`."
+}
