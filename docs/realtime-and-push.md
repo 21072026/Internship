@@ -152,8 +152,10 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
   edilip `failureCount` ile sayılır, üst üste 5 hatadan sonra satır düşer.
 - `src/lib/messagePush.ts` — bildirim metnini **alıcının dilinde**, zilin
   kullandığı sözlük şablonundan üretir; böylece bildirim alanı ile uygulama içi
-  satır aynı şeyi söyler. Push gönderen yalnızca iki kanal var: mesajlar
-  (`sendNewMessagePush`) ve destek hattı (`sendSupportPush`, #3154: kullanıcının
+  satır aynı şeyi söyler. Mesaj push'u artık bildirim yönlendiricisinden geçer
+  (`notifyEvent(..., { channels: ['push'], preview })`, #1715 — defter satırı,
+  kanal matrisi ve sessiz saatler dahil; konu başına `tag` ile katlanır); kalan tek
+  doğrudan gönderici destek hattıdır (`sendSupportPush`, #3154: kullanıcının
   destek mesajı org'unun admin'lerine, admin yanıtı talep sahibine; kapatma push
   göndermez). Hangi destek olayının push gönderdiği `src/lib/supportPushRule.ts`'te;
   ayrıntı [`mobile-push.md`](mobile-push.md) § The shape.

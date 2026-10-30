@@ -25,6 +25,7 @@ import { SKILL_LIMITS, parseSkills } from '@/lib/skills';
 import { resolveSkill as resolveSeedSkill, skillLabel as seedSkillLabel } from '@/lib/skillVocabulary';
 import { FALLBACK_TIMEZONE, timeZoneOptions } from '@/lib/timezone';
 import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 import {
   profileCompleteness,
   profileFieldAnchor,
@@ -98,6 +99,8 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
     })),
   ];
   const toast = useToast();
+  // The org's own profile questions (#1803) — nothing renders when none is published.
+  const customFields = useDynamicFields('PROFILE');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -199,9 +202,12 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   }, [reset, role]);
 
   const onSubmit = handleSubmit(async (data) => {
-    setSaving(true);
     setError('');
     setSuccess(false);
+    // The custom questions are checked first, with the shared validator, so a
+    // missing required answer saves nothing rather than half the profile.
+    if (!customFields.validate()) return;
+    setSaving(true);
 
     try {
       const skillsArray = skills;
@@ -272,6 +278,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
       if (role === 'MENTEE' && saved?.user) {
         setSavedProfile(completenessSnapshot(saved.user));
       }
+      if (await customFields.save()) throw new Error(t.dynamicFields.saveFailed);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
       toast(t.profileForm.updated);
@@ -560,6 +567,8 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
               </div>
             </div>
           </div>
+
+          <DynamicFields state={customFields} />
 
           <div className="flex justify-end pt-2">
             <Button type="submit" loading={saving}>

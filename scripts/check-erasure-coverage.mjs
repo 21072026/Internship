@@ -74,6 +74,7 @@ const DECISIONS = new Map([
   ['Offer.letterSnapshot', ERASED],
   ['AiArtifact.content', ERASED],
   ['RequisitionFit.reason', ERASED],
+  ['ProfileDigest.digest', ERASED], // #2038 — a summary OF the person, deleted with them
   ['CompanyInterest.note', ERASED],
   ['CandidateOutreach.firstMessage', ERASED],
   ['ProjectJoinRequest.message', ERASED],

@@ -83,6 +83,7 @@ export const KEPT_FIELDS: Readonly<Record<string, string>> = Object.freeze({
   'AiUsage.inputTokens': 'a count of model tokens',
   'AiUsage.outputTokens': 'a count of model tokens',
   'AiArtifact.inputHash': 'cache key of a model input',
+  'ProfileDigest.sourceHash': 'digest of the profile text a theme summary was made from, so an unchanged profile is not re-summarised',
   'JaasMonthlyParticipant.participantHash': 'billing-meter digest',
   'ExternalProfileLink.emailHash': 'match key for an upstream record',
   'RosterFeed.credentialEnvVar': 'the NAME of an environment variable, never its value',
