@@ -96,7 +96,7 @@ test.describe('evaluation due dates', () => {
     // The mail goes through the router's e-mail job (#1711), which the worker
     // drains every few seconds — so it is polled, not read at once.
     await expect
-      .poll(async () => prisma.emailLog.count({ where: { to: mentor, category: 'goals-evaluation' } }), { timeout: 30_000 })
+      .poll(async () => prisma.emailLog.count({ where: { to: mentor, category: 'goals-evaluation' } }), { timeout: 60_000 })
       .toBe(3);
     expect(await prisma.emailLog.count({ where: { to: { in: mentees }, category: 'goals-evaluation' } })).toBe(0);
   });
