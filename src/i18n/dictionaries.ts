@@ -451,6 +451,8 @@ const en = {
   // explainable and contestable.
   // /admin/matching — rule-set editor and dry-run simulation (#1783).
   adminMatching: {
+    customField: 'Question',
+    tolerance: 'Tolerance',
     title: 'Matching rules',
     intro: 'Decide what makes a good mentor match and which rules are non-negotiable. Try a draft on real mentees before you save it — a simulation never assigns anybody.',
     builtIn: 'No rule set is the default: suggestions use the built-in rules (shared skills, mentor capacity).',
@@ -11755,6 +11757,8 @@ const tr: Dict = {
   // işe alım sonucunu etkileyen bir sıralamayı açıklanabilir ve itiraz
   // edilebilir kılan cümle odur.
   adminMatching: {
+    customField: 'Soru',
+    tolerance: 'Tolerans',
     title: 'Eşleştirme kuralları',
     intro: 'İyi bir mentör eşleşmesini neyin belirlediğine ve hangi kuralların pazarlıksız olduğuna karar ver. Bir taslağı kaydetmeden önce gerçek mentee\'ler üzerinde dene — simülasyon kimseyi atamaz.',
     builtIn: 'Varsayılan kural seti yok: öneriler yerleşik kuralları kullanıyor (ortak beceriler, mentör kapasitesi).',
@@ -22831,6 +22835,8 @@ const de: Dict = {
   // verpflichtend: Er hält ein Ranking, das eine Einstellungsentscheidung
   // beeinflusst, erklärbar und anfechtbar.
   adminMatching: {
+    customField: 'Frage',
+    tolerance: 'Toleranz',
     title: 'Matching-Regeln',
     intro: 'Lege fest, was ein gutes Mentor-Matching ausmacht und welche Regeln nicht verhandelbar sind. Teste einen Entwurf an echten Mentees, bevor du ihn speicherst — eine Simulation ordnet niemanden zu.',
     builtIn: 'Kein Regelset ist Standard: Vorschläge nutzen die eingebauten Regeln (gemeinsame Skills, Mentor-Kapazität).',
