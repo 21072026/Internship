@@ -1,4 +1,5 @@
 import { sweepMentorshipRequests } from '@/lib/requestExpiry';
+import { sweepEndingSoonRelations } from '@/lib/relationEndingSweep';
 import { NextResponse } from 'next/server';
 import {
   checkMentorInteractionReminders,
@@ -99,6 +100,10 @@ export async function GET(request: Request) {
     // nudge and the guarded expiry can be exercised and re-run safely.
     if (job === 'mentorship-requests') {
       return NextResponse.json({ message: 'Mentorship request sweep ran', requests: await sweepMentorshipRequests() });
+    }
+    // The ending-soon nudge (#1786): runnable on its own; a rerun nudges nobody twice.
+    if (job === 'relation-ending') {
+      return NextResponse.json({ message: 'Ending-soon sweep ran', ending: await sweepEndingSoonRelations() });
     }
     if (job === 'stage-deadlines') {
       return NextResponse.json({ message: 'Stage deadline reminders ran', deadlines: await checkStageDeadlineReminders() });
