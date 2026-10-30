@@ -257,6 +257,37 @@ within its own window. Colours and mark follow the host's brand.
 `src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
 pins it.
 
+### Partner links that land on this page (#3365)
+
+When `/partner` is the programme's referral address, links already in
+circulation (`…/partner?ref=<code>`) bring would-be **customers**, not would-be
+partners. The page then redirects to the landing's `productSignupUrl` with
+`ref=<code>` set — and nothing else from the request is carried (no open
+redirect: the target is the settings value). A value that is not a partner code
+(`REFERRAL_CODE_RE`, the same shape as `PARTNER_CODE_RE`, pinned by the unit
+test) or a programme without a sign-up page shows the page instead. Whether the
+code belongs to an active partner is deliberately not asked, so the redirect
+reveals nothing; the link itself is judged when the account event arrives
+(automatic attribution, #3354). Rule: `customerSignupRedirect()` in
+`src/lib/affiliateLandingRule.ts`.
+
+**Switching an existing programme to this page** (runbook):
+
+1. Fill in the page's content, including the sign-up page
+   (`/admin/affiliates/settings` → Public programme page), and open
+   `https://<marketing host>/partner?ref=<a real code>` once: it must land on the
+   sign-up page with the same code.
+2. Make sure every partner code here is exactly the `ref` value of the old links
+   (the migration, #3118, keeps codes verbatim; codes match case-insensitively).
+3. Set the referral address (same settings page) to
+   `https://<marketing host>/partner`. From now on the portal hands out links to
+   this page.
+4. Outside this repository: have the previous programme page redirect
+   (301, keeping the query string) to `https://<marketing host>/partner`, so links
+   already shared keep working.
+5. Afterwards, check that new accounts arrive with their `referral_code` and are
+   linked to the right partner (#3354).
+
 ## Partner applications
 
 The "become a partner" buttons of `/partner` open `/partner/apply` (#3361): a

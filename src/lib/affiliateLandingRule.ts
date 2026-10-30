@@ -351,3 +351,31 @@ export function commissionTableRows(plan: PublicPlanShape): CommissionTableRow[]
 export function maxOneOffCommission(plan: PublicPlanShape): number {
   return Math.max(plan.topCommissionMinor, ...plan.tiers.map((t) => t.commissionMinor));
 }
+
+/**
+ * A partner code as it may appear after `?ref=` — the same shape as
+ * PARTNER_CODE_RE in src/lib/affiliatePartners.ts (kept here because this file
+ * stays dependency-free; the unit test pins the two together).
+ */
+export const REFERRAL_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+
+/**
+ * Where a visitor who arrived through a partner's link (`/partner?ref=<code>`,
+ * #3365) is sent: the programme's customer sign-up page with the same code, and
+ * nothing else from the request. Null — show the page — when there is no
+ * sign-up page or the code is not a code. Whether the code belongs to an active
+ * partner is deliberately NOT asked here: the answer would tell a stranger which
+ * codes exist, and the link is judged where the account event arrives (#3354).
+ */
+export function customerSignupRedirect(signupUrl: string | null, ref: unknown): string | null {
+  if (!signupUrl || typeof ref !== 'string' || !REFERRAL_CODE_RE.test(ref)) return null;
+  let url: URL;
+  try {
+    url = new URL(signupUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:') return null;
+  url.searchParams.set('ref', ref);
+  return url.toString();
+}

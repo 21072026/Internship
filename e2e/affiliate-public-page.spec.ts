@@ -107,3 +107,16 @@ test('the marketing host shows the org’s copy, a table from its plan and every
 test('the internship host has no partner page', async ({ page }) => {
   expect((await page.goto('/partner'))?.status()).toBe(404);
 });
+
+test('a partner link sends the visitor to the sign-up page with the code only (#3365)', async ({ request }) => {
+  const get = (q: string) => request.get(`/partner${q}`, { headers: asHost(MARKETING_HOST), maxRedirects: 0 });
+  const res = await get('?ref=demo-1&next=https://evil.example');
+  expect(res.status()).toBeGreaterThanOrEqual(300);
+  expect(res.status()).toBeLessThan(400);
+  expect(res.headers()['location']).toBe('https://app.acme.example/register?ref=demo-1');
+  // Not a code: the page itself, never a redirect.
+  for (const q of ['?ref=https://evil.example', '?ref=', `?ref=${'x'.repeat(101)}`]) expect((await get(q)).status(), q).toBe(200);
+  // No sign-up page configured: the page itself.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: { ...LANDING, productSignupUrl: null } } });
+  expect((await get('?ref=demo-1')).status()).toBe(200);
+});
