@@ -8,6 +8,7 @@ import { Search } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { useT } from '@/i18n/client';
 import { ADMIN_NAV_LINKS, navAudienceAllows, visibleNavLinks } from '@/lib/navLinks';
+import { TIER_PERMISSIONS, type AdminTier } from '@/lib/authzRule';
 import type { VerticalCapability } from '@/lib/verticals';
 import { OutboxBadge, useOutboxPending } from '@/components/outbox/OutboxBadge';
 
@@ -18,21 +19,27 @@ export function AdminNav({
   capabilities,
   superAdmin = false,
   operator = false,
+  adminTier,
 }: {
   capabilities?: readonly VerticalCapability[];
   superAdmin?: boolean;
   operator?: boolean;
+  /** The admin's effective tier (#1579): hides the few links its tier cannot open. Cosmetic — the 403 is the control. */
+  adminTier?: AdminTier | null;
 }) {
   const t = useT();
   // The vertical's capability set, resolved by the layout (#2351). Undefined
   // means "not passed" — treated as the full product, so nothing is hidden by
   // capability. Super-admin-only links (#1575) need `superAdmin` either way.
   const LINKS = useMemo(
-    () =>
-      capabilities
-        ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities, { superAdmin, operator })
-        : ADMIN_NAV_LINKS.filter((l) => navAudienceAllows(l, { superAdmin, operator })),
-    [capabilities, superAdmin, operator],
+    () => {
+      // No tier at all (an ADMIN never lacks one) holds nothing.
+      const permissions = adminTier === undefined ? undefined : adminTier ? TIER_PERMISSIONS[adminTier] : new Set<never>();
+      return capabilities
+        ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities, { superAdmin, operator, permissions })
+        : ADMIN_NAV_LINKS.filter((l) => navAudienceAllows(l, { superAdmin, operator, permissions }));
+    },
+    [capabilities, superAdmin, operator, adminTier],
   );
   const pathname = usePathname();
   const [q, setQ] = useState('');
