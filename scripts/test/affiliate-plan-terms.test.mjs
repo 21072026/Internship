@@ -31,7 +31,7 @@ test('the bands, the amount above the last band and the percent phase are carrie
   assert.deepEqual(v.top, { aboveMinor: 3_000, commissionMinor: 1_100 });
   assert.deepEqual(v.percent, { bps: 850, startsAtCustomer: 7, boundaryCustomer: 'PERCENT', windowMonths: 12 });
   assert.equal(v.payoutDays, 30);
-  assert.equal(v.afterNotice, 'RUN_OUT');
+  assert.equal(v.afterNotice, 'RUN_OUT_WINDOW');
   assert.equal(v.currency, 'XTS');
 });
 
@@ -45,6 +45,20 @@ test('no percent phase without a rate or without a switch-over customer', () => 
   assert.equal(planTermsView({ ...PLAN, percentBps: 0, switchAtCustomer: null }).percent, null);
   assert.equal(planTermsView({ ...PLAN, switchAtCustomer: null }).percent, null);
   assert.equal(planTermsView({ ...PLAN, windowMonths: null }).percent.windowMonths, null);
+});
+
+test('the after-termination text follows the plan shape, as the engine behaves', () => {
+  // STOP_ALL: nothing accrues, whatever the rest says.
+  assert.equal(planTermsView({ ...PLAN, afterNotice: 'STOP_ALL' }).afterNotice, 'STOP_ALL');
+  assert.equal(planTermsView({ ...PLAN, afterNotice: 'STOP_ALL', percentBps: 0, switchAtCustomer: null }).afterNotice, 'STOP_ALL');
+  // RUN_OUT with a percent phase and a window: customers earn until their own window closes.
+  assert.equal(planTermsView(PLAN).afterNotice, 'RUN_OUT_WINDOW');
+  // RUN_OUT with a percent phase and no window: there is no window to close.
+  assert.equal(planTermsView({ ...PLAN, windowMonths: null }).afterNotice, 'RUN_OUT_OPEN');
+  // RUN_OUT without a percent phase (no rate, or no switch-over customer): nothing is left to earn.
+  assert.equal(planTermsView({ ...PLAN, percentBps: 0, switchAtCustomer: null }).afterNotice, 'RUN_OUT_NONE');
+  assert.equal(planTermsView({ ...PLAN, switchAtCustomer: null }).afterNotice, 'RUN_OUT_NONE');
+  assert.equal(planTermsView({ ...PLAN, switchAtCustomer: null, windowMonths: null }).afterNotice, 'RUN_OUT_NONE');
 });
 
 test('the view is a copy: changing it never changes the plan', () => {

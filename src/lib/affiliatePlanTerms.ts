@@ -7,7 +7,7 @@
 // only place a commission is computed). Amounts stay integer minor units; the page
 // formats them.
 
-import type { AfterNotice, BoundaryCustomer, CommissionPlan } from './affiliateCommissionRule';
+import type { BoundaryCustomer, CommissionPlan } from './affiliateCommissionRule';
 
 export interface PlanTermsView {
   currency: string;
@@ -27,8 +27,16 @@ export interface PlanTermsView {
     windowMonths: number | null;
   } | null;
   payoutDays: number;
-  afterNotice: AfterNotice;
+  /**
+   * What happens once a partnership's termination takes effect, by plan shape:
+   * STOP_ALL (nothing accrues), RUN_OUT_WINDOW (existing customers earn the percent
+   * until their own window closes), RUN_OUT_OPEN (the same, with no window) or
+   * RUN_OUT_NONE (run-out, but the plan has no percent phase, so nothing is left to earn).
+   */
+  afterNotice: AfterNoticeTerms;
 }
+
+export type AfterNoticeTerms = 'STOP_ALL' | 'RUN_OUT_WINDOW' | 'RUN_OUT_OPEN' | 'RUN_OUT_NONE';
 
 export function planTermsView(plan: CommissionPlan): PlanTermsView {
   const hasPercent = plan.percentBps > 0 && plan.switchAtCustomer !== null;
@@ -48,7 +56,14 @@ export function planTermsView(plan: CommissionPlan): PlanTermsView {
         }
       : null,
     payoutDays: plan.payoutDays,
-    afterNotice: plan.afterNotice,
+    afterNotice:
+      plan.afterNotice === 'STOP_ALL'
+        ? 'STOP_ALL'
+        : !hasPercent
+          ? 'RUN_OUT_NONE'
+          : plan.windowMonths === null
+            ? 'RUN_OUT_OPEN'
+            : 'RUN_OUT_WINDOW',
   };
 }
 

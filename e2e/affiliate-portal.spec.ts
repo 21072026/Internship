@@ -174,26 +174,25 @@ test('bank details are entered in the portal and shown masked', { tag: '@smoke' 
 });
 
 // #3349: the partner reads its own organisation's current plan — read-only, behind the contract gate.
-test('the portal home shows the commission terms of the partner’s own org, the new version after a change, and nothing before the contract is accepted', async ({ page }) => {
-  const plan = (topCommissionMinor: number, upToMinor: number, commissionMinor: number) => ({
-    currency: 'EUR',
-    tiers: [{ upToMinor, commissionMinor }],
-    topCommissionMinor,
-    percentBps: 850,
-    switchAtCustomer: 7,
-    boundaryCustomer: 'PERCENT',
-    windowMonths: 12,
-    payoutDays: 30,
-    afterNotice: 'RUN_OUT',
-  });
+const plan = (topCommissionMinor: number, upToMinor: number, commissionMinor: number) => ({
+  currency: 'EUR',
+  tiers: [{ upToMinor, commissionMinor }],
+  topCommissionMinor,
+  percentBps: 850,
+  switchAtCustomer: 7,
+  boundaryCustomer: 'PERCENT',
+  windowMonths: 12,
+  payoutDays: 30,
+  afterNotice: 'RUN_OUT',
+});
+
+test('the portal home shows the commission terms of the partner’s own org only, read-only', { tag: '@smoke' }, async ({ page }) => {
   // Another organisation with its own, different plan: it must never show here.
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const other = await prisma.organization.create({ data: { name: `Beta Sales ${stamp}`, slug: `aff-terms-${stamp}`, vertical: 'MARKETING' } });
   await prisma.affiliateProgramSettings.create({
     data: { orgId: other.id, plan: plan(6_300, 30_000, 5_500), planVersion: 4, planEffectiveAt: new Date('2026-05-05T00:00:00Z') },
   });
-  const lateEmail = uniqueEmail('aff-portal-late');
-  let lateUserId = '';
   try {
     await prisma.affiliateProgramSettings.update({
       where: { orgId },
@@ -211,6 +210,24 @@ test('the portal home shows the commission terms of the partner’s own org, the
     await expect(terms).not.toContainText(/63[.,]00|55[.,]00/);
     // Read-only: no form control inside the box.
     await expect(terms.locator('input, textarea, select, button')).toHaveCount(0);
+  } finally {
+    await prisma.affiliateProgramSettings.deleteMany({ where: { orgId: other.id } }).catch(() => {});
+    await prisma.organization.deleteMany({ where: { id: other.id } }).catch(() => {});
+    await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: Prisma.DbNull, planVersion: 0, planEffectiveAt: null } }).catch(() => {});
+  }
+});
+
+test('a plan change shows as the new version, and a partner who has not accepted the contract sees no terms', async ({ page }) => {
+  const lateEmail = uniqueEmail('aff-portal-late');
+  let lateUserId = '';
+  try {
+    await prisma.affiliateProgramSettings.update({
+      where: { orgId },
+      data: { plan: plan(9_100, 20_000, 4_700), planVersion: 2, planEffectiveAt: new Date('2026-03-01T00:00:00Z') },
+    });
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+    await signInAndSettle(page, mineEmail, PW, '/affiliate');
+    await expect(page.getByTestId('affiliate-terms-version')).toContainText('2');
 
     // A plan change shows as the new version.
     await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: plan(9_100, 20_000, 5_200), planVersion: 3, planEffectiveAt: new Date('2026-04-01T00:00:00Z') } });
@@ -229,8 +246,6 @@ test('the portal home shows the commission terms of the partner’s own org, the
   } finally {
     await prisma.affiliatePartner.deleteMany({ where: { orgId, userId: lateUserId || 'none' } }).catch(() => {});
     await cleanupByEmail(lateEmail);
-    await prisma.affiliateProgramSettings.deleteMany({ where: { orgId: other.id } }).catch(() => {});
-    await prisma.organization.deleteMany({ where: { id: other.id } }).catch(() => {});
     await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: Prisma.DbNull, planVersion: 0, planEffectiveAt: null } }).catch(() => {});
   }
 });
