@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Relationship lifecycle events on the bus (#1998, 8/n):** four new public catalogue events, each raised from every writer of its transition after the write: `weekly_report.submitted` (`{ reportId, relationId, weekStart, resubmission }` — the first hand-in and a resubmission after changes were requested), `document.uploaded` (`{ documentId, ownerId, type, requirementId, version, generated }` — uploads and generated certificates), `goal.completed` (`{ goalId, relationId }` on a genuine OPEN → DONE; a PRIVATE goal raises nothing) and `meeting.attendance_recorded` (`{ attendanceId, meetingId, seriesId, relationId, userId, state }`, one per person written, the derived LATE_CANCEL included). Never the report text, the mentor's comment, a file name, a goal title or an attendance note. `user.created` stays unraised: sixteen code paths create a user and none is shared yet.",
+  "notes": {
+    "en": ["Webhooks now fire when a weekly report is handed in, a document is added, a shared goal is completed and attendance is recorded."],
+    "tr": ["Webhook'lar artık haftalık rapor teslim edildiğinde, bir doküman eklendiğinde, paylaşılan bir hedef tamamlandığında ve katılım kaydedildiğinde tetikleniyor."],
+    "de": ["Webhooks werden jetzt ausgelöst, wenn ein Wochenbericht abgegeben, ein Dokument hinzugefügt, ein gemeinsames Ziel erreicht und die Anwesenheit erfasst wird."]
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Archive, Plus, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -154,9 +155,15 @@ export default function MatchingRulesPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{L.title}</h1>
-        <p className="text-gray-500 mt-1 max-w-3xl">{L.intro}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{L.title}</h1>
+          <p className="text-gray-500 mt-1 max-w-3xl">{L.intro}</p>
+        </div>
+        {/* The bulk rounds (#1796) are scored by these rules. */}
+        <Link href="/admin/matching/rounds" className="text-sm font-medium text-blue-700 hover:underline" data-testid="matching-rounds-link">
+          {t.matchRounds.roundsLink}
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">

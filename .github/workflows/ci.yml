@@ -336,6 +336,10 @@ jobs:
       # list, and `deliverToWebhook()` is scanned as the same door (#1697).
       - name: an event leaves through one door (#1697)
         run: npm run check:events
+      # A User row has one writer, createUser() (#1998): user.created then fires
+      # on every path that makes an account, never on some of them.
+      - name: an account is made through one writer (#1998)
+        run: npm run check:user-create
       # Nothing else in CI looks at k6/: `next lint` only visits src/, and
       # tsconfig's include lists only *.ts|tsx. Without this, a typo in a k6
       # script is first seen at 23:40 UTC when the nightly cron fires (#1449).

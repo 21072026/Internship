@@ -4,18 +4,14 @@ The OpenID Connect twin of [`docs/sso-saml.md`](sso-saml.md): what a customer's
 identity team registers, which claims we read, and what the automated tests do
 and do not prove.
 
-> **Status — read this before sending it to a customer.**
-> OIDC is **not a working sign-in path yet**. `validateSsoConfig()` refuses a
-> config naming `oidc` and `isSsoActive()` will not activate one, so a tenant
-> saved as OIDC falls back to password login rather than dead-ending
-> (`src/lib/sso.ts`, #1537). The login route, the callback and the ID-token
-> verification land in **#1929**; the config columns in #1926.
-> This document exists ahead of them so the customer-facing contract — redirect
-> URI, claims, scopes — is agreed once and the e2e harness already speaks it.
-> The **stub IdP** (`e2e/support/idp-mock.mjs`) serves discovery, JWKS,
-> authorize and token today, and `e2e/sso-roundtrip.spec.ts` carries the round
-> trip as a test that un-skips itself the moment `'oidc'` joins
-> `SSO_IMPLEMENTED_PROVIDERS`.
+> **Status.** OIDC is a working sign-in path since **#1929**: the login route
+> branches on `ssoProvider`, `GET /api/auth/sso/<slug>/callback` completes the
+> flow, and `e2e/sso-roundtrip.spec.ts` drives it end to end against the stub
+> IdP (`e2e/support/idp-mock.mjs`), including a refused ID token for each of
+> wrong audience, wrong nonce, expired and an untrusted signing key, a replayed
+> `state`, an expired request and a callback carried to another browser.
+> The code is `src/lib/ssoOidc.ts` (server) and `src/lib/ssoOidcClaims.ts`
+> (the pure claim mapping).
 
 ## The flow
 
@@ -40,6 +36,22 @@ Entra ID and Google Workspace document for a confidential web app:
 An ID token that fails any check lands the browser on
 `/auth/signin?error=sso_failed`. No session is issued and no user is
 provisioned.
+
+### What is checked, and where
+
+| Step | Rule |
+|------|------|
+| Request store | `SsoAuthRequest` — `state` (unique), `nonce`, PKCE `codeVerifier`, the origin the sign-in started on; 10-minute expiry, swept nightly (`auth.trustedDevicePurge`). The callback spends it with one conditional `updateMany` on `usedAt: null` **before** it trusts anything. |
+| Browser binding | The login route sets an `HttpOnly`, `SameSite=Lax` cookie `sso_oidc_state` (path `/api/auth/sso`). A login started on the callback's own host must come back with it (login CSRF). A login started on another served host cannot carry it and rests on the single-use `state`, exactly as SAML RelayState does. |
+| Outbound fetches | Discovery, JWKS and token go through `assertPublicHttpsUrl()`; redirects are refused, answers capped at 256 KB and 5 s. The discovery document's `issuer` must equal the configured issuer. `SSO_ALLOW_INSECURE_STUB=1` lets **only** http loopback past the guard — the e2e stub's switch, never set on a deployment. |
+| Token exchange | `client_secret_basic` unless discovery says the IdP does not take it, then `client_secret_post`; never both. The secret is opened from `secretBox` for this call only. |
+| ID token | `jose` `jwtVerify` against the cached JWKS: an allowlist of asymmetric algorithms (RS/PS/ES — never `none`, never HS*), `iss`, `aud` = our client ID, `exp`/`iat` with 5 s skew, `sub` present; then our `nonce`, and `azp` when `aud` is a list. An unknown `kid` refetches the JWKS once (IdP key rotation). |
+| Claims | `mapOidcClaims`: `email` required and refused when `email_verified` is false; name from `name`, else `given_name` + `family_name`. |
+| Session | `completeSsoSignIn()` (`src/lib/ssoCompletion.ts`) — the same role mapping, `provisionSsoUser()` and single-use `SsoLoginGrant` the SAML ACS uses. |
+
+Every refusal is an `sso.oidc_failed` warning in the activity log with its
+reason, and the browser lands on `/auth/signin?error=sso_failed` — never a 500.
+Single Logout is SAML-only; an OIDC tenant's sign-out ends our session only.
 
 ## What the customer registers
 

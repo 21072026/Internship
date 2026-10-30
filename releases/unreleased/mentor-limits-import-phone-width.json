@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Fixed: the CSV import panels on `/admin/mentors` (mentor limits) and the attribute import no longer push their card wider than a phone screen — the native file input now takes the card's width."
+}

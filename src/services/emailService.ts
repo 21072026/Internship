@@ -20,6 +20,19 @@ import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSu
 import { markReadUrl } from '@/lib/emailActionToken';
 import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
+import {
+  LEGACY_MEETING_LEADS,
+  LEGACY_SERIES_LEADS,
+  MAX_LEAD_MINUTES,
+  dueLead,
+  isDayAheadLead,
+  leadsFor,
+  legacyLeadEnum,
+  lookaheadMinutes,
+  parseLeadList,
+  readRemindedLeads,
+  writeRemindedLeads,
+} from '@/lib/meetingReminderLeads';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -5196,9 +5209,24 @@ export const MEETING_REMINDER_WINDOW_MINUTES = 60;
 // Marking first means a mid-send failure loses a reminder rather than
 // duplicating one — the far less annoying failure mode, and it keeps the in-app
 // notification and the email behind the same single marker.
+//
+// LEAD TIMES (#1636, src/lib/meetingReminderLeads.ts): a meeting may carry its
+// own lead (`reminderLeadMinutes`, 0 = none) and a programme may set a list
+// (`meetingReminderLeadsMinutes`); with neither, the one lead is the hour above
+// and everything below behaves exactly as it always did. Each lead is claimed
+// in `remindedLeads` by one guarded update; the smallest lead also stamps
+// `reminderSentAt`, so a meeting reminded before the deploy is not reminded
+// again.
 export async function sendMeetingReminders() {
+  return withSettingsCache(sendMeetingRemindersInner);
+}
+
+async function sendMeetingRemindersInner() {
   const now = new Date();
-  const horizon = new Date(now.getTime() + MEETING_REMINDER_WINDOW_MINUTES * 60 * 1000);
+  // The furthest any lead can reach; each meeting is then judged on its own leads.
+  const horizon = new Date(now.getTime() + lookaheadMinutes([MAX_LEAD_MINUTES]) * 60 * 1000);
+  const leadsSettingOf = (orgId: string | null, programId: string | null) =>
+    settingsOrgOfRow(orgId).then((org) => resolveSettingRaw('meetingReminderLeadsMinutes', { orgId: org, programId }));
   const participantSelect = {
     id: true,
     email: true,
@@ -5224,8 +5252,11 @@ export async function sendMeetingReminders() {
     // so they never match the scheduledAt window either.
     where: {
       scheduledAt: { gt: now, lte: horizon },
-      reminderSentAt: null,
       seriesId: null,
+      // A meeting that asked for no reminder is never loaded. Spelled with an
+      // explicit NULL branch: `NOT (col = 0)` is NULL — false — for a NULL row in
+      // SQL, so `NOT: { reminderLeadMinutes: 0 }` would drop every default meeting.
+      OR: [{ reminderLeadMinutes: null }, { reminderLeadMinutes: { gt: 0 } }],
       relationId: { not: null },
       // A cancelled meeting (#1980) is not reminded about. Moving one clears
       // `reminderSentAt`, so the new time gets its own reminder from here.
@@ -5263,10 +5294,26 @@ export async function sendMeetingReminders() {
   for (const m of meetings) {
     // Guaranteed by the query above; the guard is what tells TypeScript so.
     if (!m.relation) continue;
+    const leads = leadsFor({
+      override: m.reminderLeadMinutes,
+      configured: parseLeadList(await leadsSettingOf(m.relation.orgId, m.relation.cohortId)),
+      legacy: LEGACY_MEETING_LEADS,
+    });
+    if (leads.length === 0) continue;
+    const smallest = Math.min(...leads);
+    const sentLeads = readRemindedLeads(m.remindedLeads);
+    // A pre-#1636 claim covers the one lead that existed then.
+    if (m.reminderSentAt) sentLeads.add(smallest);
+    const minutesAway = (m.scheduledAt!.getTime() - now.getTime()) / 60000;
+    const lead = dueLead(minutesAway, leads, sentLeads);
+    if (lead === null) continue;
     // Claim it first — see the idempotency note above.
     const claim = await prisma.meeting.updateMany({
-      where: { id: m.id, reminderSentAt: null },
-      data: { reminderSentAt: new Date() },
+      where: { id: m.id, remindedLeads: m.remindedLeads, ...(lead === smallest ? { reminderSentAt: null } : {}) },
+      data: {
+        remindedLeads: writeRemindedLeads(new Set([...sentLeads, lead])),
+        ...(lead === smallest ? { reminderSentAt: new Date() } : {}),
+      },
     });
     if (claim.count === 0) continue;
     reminded++;
@@ -5315,7 +5362,7 @@ export async function sendMeetingReminders() {
           orgId: user.orgId,
           // On the queue (#2951): one reminder per participant per start time,
           // however often the tick runs, and none once the meeting has begun.
-          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt! }),
+          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt!, lead }),
           notAfter: m.scheduledAt!,
           locale: uLocale,
           subject: R.subject.replace('{title}', m.title),
@@ -5366,6 +5413,7 @@ export async function sendMeetingReminders() {
           // …and whose product this is: the organizer's world, as for the invite.
           orgId: m.relation.orgId ?? m.relation.mentor?.orgId ?? null,
           meetingId: m.id,
+          lead,
         });
         emailed++;
       } catch (e) {
@@ -5391,6 +5439,7 @@ async function sendMeetingGuestReminderEmail({
   locale,
   orgId,
   meetingId,
+  lead,
 }: {
   to: string;
   name?: string | null;
@@ -5405,6 +5454,8 @@ async function sendMeetingGuestReminderEmail({
   orgId?: string | null;
   /** The meeting, for the queued mail's natural key (#2951). */
   meetingId?: string;
+  /** The lead this reminder is for (#1636); part of its dedupe key. */
+  lead?: number;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
@@ -5421,7 +5472,7 @@ async function sendMeetingGuestReminderEmail({
     // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
     // On the queue (#2951): once per guest per start time, never after it.
-    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt }) } : {}),
+    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt, lead }) } : {}),
     notAfter: scheduledAt,
     locale: resolved,
     subject: R.subject.replace('{title}', title),
@@ -5462,14 +5513,17 @@ function upcomingSeriesOccurrences(series: SeriesRule, from: Date, withinMinutes
   return ruleOccurrences(series, from, horizon).filter((when) => when > from);
 }
 
-function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
-  if (minutesAway <= 60) return 'HOUR_BEFORE';
-  if (minutesAway >= 23 * 60) return 'DAY_BEFORE';
-  return null;
+// Which lead is due is src/lib/meetingReminderLeads.ts (#1636): with nothing
+// configured the leads are [1440, 60] and the windows are exactly the old
+// DAY_BEFORE (from 23h on) and HOUR_BEFORE (≤ 60 min).
+export async function sendProjectMeetingSeriesReminders() {
+  return withSettingsCache(sendProjectMeetingSeriesRemindersInner);
 }
 
-export async function sendProjectMeetingSeriesReminders() {
+async function sendProjectMeetingSeriesRemindersInner() {
   const now = new Date();
+  const leadsSettingOf = (orgId: string | null, programId: string | null) =>
+    settingsOrgOfRow(orgId).then((org) => resolveSettingRaw('meetingReminderLeadsMinutes', { orgId: org, programId }));
   const seriesList = await prisma.meetingSeries.findMany({
     // A project's recurring call, and a standing 1:1 on a live relation (#2013).
     where: {
@@ -5487,6 +5541,7 @@ export async function sendProjectMeetingSeriesReminders() {
       relation: {
         select: {
           orgId: true,
+          cohortId: true,
           mentorId: true,
           menteeId: true,
           mentor: { select: { fullName: true } },
@@ -5509,8 +5564,27 @@ export async function sendProjectMeetingSeriesReminders() {
     const oneToOne = !series.projectId ? series.relation : null;
     if (!series.projectId && !oneToOne) continue;
 
-    const occurrences = upcomingSeriesOccurrences(series, now, SERIES_LOOKAHEAD_MINUTES);
+    // The series' lead times (#1636): its programme's (a 1:1's cohort), else its org's.
+    const leads = leadsFor({
+      configured: parseLeadList(
+        await leadsSettingOf(series.project?.orgId ?? oneToOne?.orgId ?? null, oneToOne?.cohortId ?? null),
+      ),
+      legacy: LEGACY_SERIES_LEADS,
+    });
+    if (leads.length === 0) continue;
+    const occurrences = upcomingSeriesOccurrences(series, now, Math.max(SERIES_LOOKAHEAD_MINUTES, lookaheadMinutes(leads)));
     if (occurrences.length === 0) continue;
+    // What was already sent per occurrence — rows from before #1636 carry only the enum.
+    const sentRows = await prisma.meetingSeriesReminder.findMany({
+      where: { seriesId: series.id, occurrenceAt: { in: occurrences } },
+      select: { occurrenceAt: true, lead: true, leadMinutes: true },
+    });
+    const sentFor = (when: Date) =>
+      new Set(
+        sentRows
+          .filter((r) => r.occurrenceAt.getTime() === when.getTime())
+          .map((r) => r.leadMinutes ?? (r.lead === 'DAY_BEFORE' ? 1440 : 60)),
+      );
 
     // The whole team, not just the ProjectMember rows: a mentee attached to the
     // project the legacy way (MentorshipRelation.projectId) is expected at the
@@ -5543,12 +5617,16 @@ export async function sendProjectMeetingSeriesReminders() {
     await origins.prefetch(recipients.map((r) => r.orgId));
 
     for (const when of occurrences) {
-      const lead = leadFor((when.getTime() - now.getTime()) / 60000);
-      if (!lead) continue;
+      const lead = dueLead((when.getTime() - now.getTime()) / 60000, leads, sentFor(when));
+      if (lead === null) continue;
+      const soon = !isDayAheadLead(lead);
+      // The pre-#1636 key for 1440/60, so the queue dedupes across the deploy.
+      const leadKey = legacyLeadEnum(lead) ?? `L${lead}`;
 
-      // Claim first — see the idempotency note above.
+      // Claim first — see the idempotency note above. Both unique keys guard it:
+      // (…, leadMinutes) and, for 1440/60, the old (…, lead) a pre-deploy row holds.
       try {
-        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead } });
+        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead: legacyLeadEnum(lead), leadMinutes: lead } });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue;
         throw e;
@@ -5569,7 +5647,7 @@ export async function sendProjectMeetingSeriesReminders() {
         const whenLocal = formatInTimeZone(when, user.timezone, undefined, dateLocale(uLocale));
         await notify(
           user.id,
-          lead === 'HOUR_BEFORE' ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
+          soon ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
           { title: series.title, project: projectName, when: whenLocal },
           link
         );
@@ -5596,11 +5674,11 @@ export async function sendProjectMeetingSeriesReminders() {
             orgId: user.orgId,
             // On the queue (#2951): one per member per occurrence and lead
             // time, and none once the occurrence has started.
-            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead }),
+            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead: leadKey }),
             notAfter: when,
             locale: uLocale,
             subject:
-              lead === 'HOUR_BEFORE'
+              soon
                 ? S.subjectSoon.replace('{title}', series.title)
                 : S.subjectTomorrow.replace('{title}', series.title).replace('{project}', projectName),
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

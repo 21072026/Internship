@@ -39,14 +39,28 @@ export interface MatchDecisionInput {
   note?: string | null;
   /** Labels the frozen skill evidence; defaults to English. */
   locale?: string;
+  /**
+   * The score the decider actually saw, frozen elsewhere — a published round's
+   * proposal (#1796), scored by the cohort pass under the round's rule set.
+   * When given it is recorded as is, instead of re-scoring the pair now.
+   */
+  snapshot?: {
+    score: number | null;
+    breakdown: unknown;
+    blockedBy: unknown;
+    ruleSetId: string | null;
+    ruleSetVersion: number | null;
+  };
 }
 
 export async function recordMatchDecision(input: MatchDecisionInput): Promise<string | null> {
   try {
-    const pair = await loadPairForScoring(input.menteeId, input.mentorId);
-    const ruleSet = await resolveRuleSet(input.orgId);
-    let snapshot: ReturnType<typeof frozenScore> | null = null;
-    if (pair) {
+    const given = input.snapshot;
+    const pair = given ? null : await loadPairForScoring(input.menteeId, input.mentorId);
+    const live = given ? null : await resolveRuleSet(input.orgId);
+    const ruleSet = given ? { id: given.ruleSetId, version: given.ruleSetVersion } : { id: live!.id, version: live!.version };
+    let snapshot: { score: number | null; breakdown: unknown; blockedBy: unknown } | null = given ?? null;
+    if (pair && live) {
       const request = input.requestId
         ? await prisma.mentorshipRequest.findUnique({
             where: { id: input.requestId },
@@ -72,7 +86,7 @@ export async function recordMatchDecision(input: MatchDecisionInput): Promise<st
         preferredField: request?.preferredField ?? null,
         preferredLanguages: request?.preferredLanguages ?? [],
       };
-      snapshot = frozenScore(scoreSuggestionPair(mentee, mentor, ruleSet, { now: new Date(), ...(skillGraph ? { skillGraph } : {}) }));
+      snapshot = frozenScore(scoreSuggestionPair(mentee, mentor, live, { now: new Date(), ...(skillGraph ? { skillGraph } : {}) }));
     }
 
     const shown = input.suggestionBatchId

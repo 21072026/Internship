@@ -21,6 +21,8 @@ import { Prisma } from '@prisma/client';
 import { ENDED_REMATCHED, effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { recordMatchDecision } from '@/lib/matching/decision';
+import { scheduleCreateData, type RelationScheduleInput } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -43,7 +45,10 @@ export interface DecisionResult {
 
 export async function decideMentorshipRequest(opts: {
   requestId: string;
-  action: 'approve' | 'reject';
+  action: 'approve' | 'reject' | 'cancel';
+  // Cancel only (#1775): why the programme withdrew the request. Required, and
+  // shown to the mentee — it is the one thing they are owed.
+  reason?: string;
   // The mentor the approved relation is created with (approve only).
   mentorId?: string;
   actorId: string;
@@ -56,9 +61,11 @@ export async function decideMentorshipRequest(opts: {
   // their note. Both optional; the record is written either way.
   suggestionBatchId?: string;
   decisionNote?: string;
+  // What the pair agrees to (#1784); the org's defaults fill what is left out.
+  schedule?: RelationScheduleInput;
   locale?: string;
 }): Promise<DecisionResult> {
-  const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request } = opts;
+  const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request, reason } = opts;
 
   const req = await prisma.mentorshipRequest.findUnique({
     where: { id: requestId },
@@ -111,6 +118,33 @@ export async function decideMentorshipRequest(opts: {
   }
   if (req.status !== 'PENDING') {
     return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
+  }
+
+  if (action === 'cancel') {
+    // An administrator's act only: a mentor declines (reject), never cancels.
+    if (restrictToPreferredMentorId) return { status: 404, body: { error: 'Not found' } };
+    const why = (reason ?? '').trim();
+    if (!why) return { status: 400, body: { error: 'A reason is required to cancel', code: 'reason_required' } };
+    // Guarded on PENDING: the expiry sweep or another admin may have got there
+    // first; the loser changes nothing and says so.
+    const cancelled = await prisma.mentorshipRequest.updateMany({
+      where: { id: req.id, status: 'PENDING' },
+      data: { status: 'CANCELLED', cancelledById: actorId, cancelReason: why.slice(0, 500), decidedAt: new Date() },
+    });
+    if (cancelled.count !== 1) {
+      return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
+    }
+    await logActivity({
+      action: 'mentorship_request.cancelled',
+      actorId,
+      actorEmail: actorEmail ?? null,
+      targetType: 'mentorship_request',
+      targetId: req.id,
+      detail: req.replacesRelationId ? `cancelled · re-match · relation ${req.replacesRelationId}` : 'cancelled',
+      request,
+    });
+    await notify(req.menteeId, 'mentorship_request.cancelled', { reason: why.slice(0, 500) }, '/portal');
+    return { status: 200, body: { ok: true } };
   }
 
   if (action === 'approve') {
@@ -189,6 +223,9 @@ export async function decideMentorshipRequest(opts: {
     // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
     // the create (#2551); for every other start stage this is `{}`, no query.
     const trialWindow = await stageTrialWindow({ orgId: gate.orgId, toStage: pipelineStatus, enteredAt: new Date() });
+    // The agreed duration and rhythm (#1784), counted from today — the start
+    // the new relation gets by default.
+    const schedule = scheduleCreateData(opts.schedule ?? {}, new Date(), await relationScheduleDefaults(gate.orgId));
 
     // Interactive form (was an array `$transaction`) so the ACTIVE-mentor guard
     // sits INSIDE the transaction that writes (#419) — the pre-flight above ran
@@ -208,7 +245,7 @@ export async function decideMentorshipRequest(opts: {
           throw new AlreadyMentoredError(req.menteeId, active.id);
         }
         const created = await tx.mentorshipRelation.create({
-          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow },
+          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow, ...schedule },
         });
         // `status: 'PENDING'` in the where is the real serializer for THIS
         // request: the UPDATE takes the row lock MySQL grants anyway, so two

@@ -399,6 +399,13 @@ the check.
 
 - **Home:** the referral link, the customer count and the totals per commission
   status, and a notice while the partnership is suspended or ending.
+- **Commission terms (#3349):** a read-only box under the totals shows the
+  organisation's current plan — bands, the commission above the last band, the percent
+  phase, due days, the rule after a termination, the plan version and its effective
+  date — so a partner can check its own commissions. `partnerPlanTerms()` reads it
+  from the partner's own org (session, never the request); the reshaping is the pure
+  `src/lib/affiliatePlanTerms.ts`. The admin-only plan API is unchanged and a partner
+  still has no write path. The box says a change applies only to later payments.
 - **Referral link:** organisation data. `AffiliateProgramSettings.referralUrl`
   (admin settings, `PUT /api/admin/affiliate/settings/referral-url`, audited
   `affiliate.referral_url.update`) is an https base URL without credentials,

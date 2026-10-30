@@ -22,6 +22,9 @@ import {
   announcementImagePreview,
 } from '@/lib/announcementImage';
 import { locales, type Locale } from '@/i18n/config';
+import { AnnouncementAudiencePicker } from '@/components/admin/AnnouncementAudiencePicker';
+import type { Audience } from '@/lib/announcementAudience';
+import { formatDateTime } from '@/lib/relativeTime';
 import {
   BroadcastQuotaLine,
   useBroadcastQuota,
@@ -43,10 +46,18 @@ interface AnnouncementRecord {
   machineTranslated?: Locale[];
   link: string | null;
   imageUrl: string | null;
+  /** The author's description of the image (#3388); null = decorative. */
+  imageAlt?: string | null;
   sentByName: string | null;
   recipientCount: number;
   emailedCount: number;
   createdAt: string;
+  // Targeting, scheduling and read tracking (#1721).
+  audience: Audience | null;
+  status: 'SCHEDULED' | 'SENDING' | 'SENT' | 'CANCELED';
+  scheduledAt: string | null;
+  delivered: number;
+  read: number;
 }
 
 export default function AdminAnnouncementsPage() {
@@ -61,6 +72,9 @@ export default function AdminAnnouncementsPage() {
   const [tab, setTab] = useState<Locale>(locale);
   const [link, setLink] = useState('');
   const [email, setEmail] = useState(false);
+  // Who it is for and when (#1721): criteria, never a list of people.
+  const [audience, setAudience] = useState<Audience>({});
+  const [scheduleAt, setScheduleAt] = useState('');
   const [image, setImage] = useState<{ file: File; url: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -76,6 +90,8 @@ export default function AdminAnnouncementsPage() {
   const [editTab, setEditTab] = useState<Locale>(locale);
   const [editLink, setEditLink] = useState('');
   const [editDropImage, setEditDropImage] = useState(false);
+  const [imageAlt, setImageAlt] = useState('');
+  const [editImageAlt, setEditImageAlt] = useState('');
   const [rowBusy, setRowBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // The month's broadcast band (#1754). Shown next to the "also send by email"
@@ -104,6 +120,7 @@ export default function AdminAnnouncementsPage() {
 
   const clearImage = () => {
     setImage(null);
+    setImageAlt('');
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -163,7 +180,13 @@ export default function AdminAnnouncementsPage() {
       if (machine.length) body.append('machineTranslated', JSON.stringify(machine));
       if (link) body.append('link', link);
       body.append('email', String(email));
-      if (image) body.append('image', image.file);
+      if (Object.keys(audience).length > 0) body.append('audience', JSON.stringify(audience));
+      // datetime-local is the admin's own wall clock; toISOString() carries it as an instant.
+      if (scheduleAt) body.append('scheduledAt', new Date(scheduleAt).toISOString());
+      if (image) {
+        body.append('image', image.file);
+        body.append('imageAlt', imageAlt);
+      }
 
       const res = await fetch('/api/admin/announcements', { method: 'POST', body });
       const data = await res.json();
@@ -178,16 +201,29 @@ export default function AdminAnnouncementsPage() {
         }
         throw new Error(data.error ?? t.common.error);
       }
-      setBodies({}); setMachine([]); setLink(''); setEmail(false); clearImage();
-      // How many mails wait on the queue and roughly for how long (#2951).
-      const queuedLine = mailQueueNoticeText(data.mailQueue, t.mailQueue);
-      setResult([t.announcements.sent.replace('{n}', String(data.recipients)), queuedLine].filter(Boolean).join(' '));
+      setBodies({}); setMachine([]); setLink(''); setEmail(false); clearImage(); setAudience({}); setScheduleAt('');
+      if (data.scheduled) {
+        setResult(t.announcements.scheduledResult.replace('{when}', formatDateTime(data.scheduledAt, locale)));
+      } else {
+        // How many mails wait on the queue and roughly for how long (#2951).
+        const queuedLine = mailQueueNoticeText(data.mailQueue, t.mailQueue);
+        setResult([t.announcements.sent.replace('{n}', String(data.recipients)), queuedLine].filter(Boolean).join(' '));
+      }
       await Promise.all([fetchHistory(), refreshQuota()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     } finally {
       setSending(false);
     }
+  };
+
+  const cancelScheduled = async (id: string) => {
+    setError(null);
+    setResult(null);
+    const res = await fetch(`/api/admin/announcements/${id}/cancel`, { method: 'POST' });
+    if (res.ok) setResult(t.announcements.canceled);
+    else setError(t.common.error);
+    await fetchHistory();
   };
 
   const startEdit = (a: AnnouncementRecord) => {
@@ -203,6 +239,7 @@ export default function AdminAnnouncementsPage() {
     setEditTab(filledLocales(existing)[0] ?? locale);
     setEditLink(a.link ?? '');
     setEditDropImage(false);
+    setEditImageAlt(a.imageAlt ?? '');
   };
 
   const cancelEdit = () => {
@@ -223,6 +260,8 @@ export default function AdminAnnouncementsPage() {
           machineTranslated: editMachine,
           ...(editLink ? { link: editLink } : {}),
           ...(editDropImage ? { imageAction: 'remove' } : {}),
+          // Only an image that stays gets a description (#3388).
+          ...(!editDropImage && history.find((h) => h.id === editId)?.imageUrl ? { imageAlt: editImageAlt } : {}),
         }),
       });
       const data = await res.json();
@@ -369,7 +408,7 @@ export default function AdminAnnouncementsPage() {
                     data-testid="announcement-image-preview"
                     className="h-24 w-24 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
                   />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs text-gray-500 truncate">{image.file.name}</p>
                     <div className="flex gap-2 mt-1.5">
                       <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
@@ -380,6 +419,18 @@ export default function AdminAnnouncementsPage() {
                         {t.announcements.imageRemove}
                       </Button>
                     </div>
+                    <label className="mt-2 block text-xs text-gray-600 dark:text-gray-300">
+                      {t.imageViewer.altLabel}
+                      <input
+                        type="text"
+                        value={imageAlt}
+                        maxLength={TEXT_LIMITS.imageAltText}
+                        onChange={(e) => setImageAlt(e.target.value)}
+                        data-testid="announcement-image-alt"
+                        className="mt-0.5 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                      />
+                      <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{t.imageViewer.altHint}</span>
+                    </label>
                   </div>
                 </div>
               ) : (
@@ -393,6 +444,21 @@ export default function AdminAnnouncementsPage() {
                   </p>
                 </div>
               )}
+            </div>
+
+            <AnnouncementAudiencePicker value={audience} onChange={setAudience} />
+
+            <div>
+              <label htmlFor="announcement-schedule" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{t.announcements.schedule}</label>
+              <input
+                id="announcement-schedule"
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800"
+                data-testid="announcement-schedule"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.announcements.scheduleHint}</p>
             </div>
 
             <div className="space-y-1">
@@ -457,6 +523,20 @@ export default function AdminAnnouncementsPage() {
                           {t.announcements.removeImage}
                         </label>
                       )}
+                      {a.imageUrl && !editDropImage && (
+                        <label className="mt-2 block text-xs text-gray-600 dark:text-gray-300">
+                          {t.imageViewer.altLabel}
+                          <input
+                            type="text"
+                            value={editImageAlt}
+                            maxLength={TEXT_LIMITS.imageAltText}
+                            onChange={(e) => setEditImageAlt(e.target.value)}
+                            data-testid="announcement-edit-image-alt"
+                            className="mt-0.5 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                          />
+                          <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{t.imageViewer.altHint}</span>
+                        </label>
+                      )}
                       {/* An edit corrects the record; it does not send again.
                           Saying so here stops "fix a typo" from feeling like it
                           will ping everyone a second time. */}
@@ -476,17 +556,16 @@ export default function AdminAnnouncementsPage() {
                   {editId !== a.id && a.imageUrl && (
                     <button
                       type="button"
-                      onClick={() => lightbox.open([{ src: a.imageUrl! }])}
-                      aria-label={t.imageViewer.viewImage}
+                      onClick={() => lightbox.open([{ src: a.imageUrl!, alt: a.imageAlt ?? undefined }])}
+                      aria-label={a.imageAlt ? t.imageViewer.view.replace('{name}', a.imageAlt) : t.imageViewer.viewImage}
                       className="mt-2 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={a.imageUrl}
-                        // Decorative here: the announcement text right above it is
-                        // the content. A label like "Image (optional)" would just be
-                        // noise for a screen reader.
-                        alt=""
+                        // The author's description (#3388); without one the image is
+                        // decorative — the announcement text above is the content.
+                        alt={a.imageAlt ?? ''}
                         className="max-h-40 rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
                       />
                     </button>
@@ -497,10 +576,39 @@ export default function AdminAnnouncementsPage() {
                     </a>
                   )}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-xs text-gray-500">
-                    <RelativeTime date={a.createdAt} />
+                    {a.status === 'SCHEDULED' && a.scheduledAt ? (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-800" data-testid={`announcement-status-${a.id}`}>
+                        {t.announcements.statusScheduled.replace('{when}', formatDateTime(a.scheduledAt, locale))}
+                      </span>
+                    ) : a.status === 'CANCELED' ? (
+                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700" data-testid={`announcement-status-${a.id}`}>{t.announcements.statusCanceled}</span>
+                    ) : a.status === 'SENDING' ? (
+                      <span data-testid={`announcement-status-${a.id}`}>{t.announcements.statusSending}</span>
+                    ) : (
+                      <RelativeTime date={a.createdAt} />
+                    )}
+                    {a.audience && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">{t.announcements.audienceTargeted}</span>}
                     {a.sentByName && <span>{t.announcements.sentBy.replace('{name}', a.sentByName)}</span>}
-                    <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>
+                    {a.status === 'SENT' && <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>}
                     {a.emailedCount > 0 && <span>{t.announcements.emailedCount.replace('{n}', String(a.emailedCount))}</span>}
+                    {a.status === 'SENT' && a.delivered > 0 && (
+                      <span data-testid={`announcement-read-${a.id}`}>
+                        {t.announcements.readStats
+                          .replace('{r}', String(a.read))
+                          .replace('{d}', String(a.delivered))
+                          .replace('{p}', String(Math.round((a.read / a.delivered) * 100)))}
+                      </span>
+                    )}
+                    {a.status === 'SCHEDULED' && (
+                      <button
+                        type="button"
+                        data-testid={`announcement-cancel-${a.id}`}
+                        onClick={() => cancelScheduled(a.id)}
+                        className="rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                      >
+                        {t.announcements.cancelSchedule}
+                      </button>
+                    )}
                     {editId !== a.id && (
                       <span className="ml-auto flex items-center gap-1">
                         <button

@@ -105,6 +105,7 @@ const LEAK_WORDS: Record<string, RegExp> = {
 };
 
 const LEAK_EXEMPT: Record<string, string> = {
+  matchRounds: 'The bulk matching round board (#1796): its pages sit under /admin/matching, closed for an org without the `mentorship` capability by the segment layout (gatePage) and every round route by requireCapability, so MARKETING never renders a word of it.',
   matchDecision: 'The pairing audit record (#1789): its only reader, GET /api/admin/match-decisions, refuses an org without the `mentorship` capability (requireCapability), so MatchDecisionPanel draws nothing there; the note field sits on the internship assign/approve controls.',
   portal: 'The mentee portal shell: src/app/portal/layout.tsx redirects every org without the `mentorship` capability to /account.',
   portalInsights: 'Rendered only inside /portal (see `portal`).',
@@ -139,6 +140,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   participantJourney: 'Read only by JourneyView (#1855), mounted on /portal/journey (the portal layout sends an org without `mentorship` to /account) and /mentor/mentees/[id] (the mentor layout sends a MARKETING MENTOR to /sales); GET /api/journey refuses (requireCapability).',
   programJourney: '/admin/programs/[id]/journey (#1853) — its layout\'s gatePage closes it, and every /api/admin/programs/[id]/journey route refuses (requireCapability), for an org without `mentorship`.',
   agreementCard: 'Read only by AgreementCard and the /admin/mentorship agreement column (#1792), both rendered only from the `agreement` data GET /api/mentorship[/id] sends — and it sends it only for an org with the `mentorship` capability.',
+  formsAdmin: '/admin/forms (#1802) — gatePage closes it (its nav link carries `mentorship`) for an org without `mentorship`; the forms it edits are the internship registration/onboarding/profile questions.',
   agreementsAdmin: '/admin/agreements (#1790) — gatePage closes it (its nav link carries `mentorship`), and /api/admin/agreements refuses (requireCapability), for an org without `mentorship`.',
   cohorts: '/admin/cohorts — gatePage closes it, and /api/cohorts refuses (requireCapability), for an org without `mentorship`; /admin/candidates/[id] only reads `d.cohorts` from that API\'s JSON, never the namespace.',
   dormantCheckIn: 'Sent only by sendDormantCheckIns (src/services/emailService.ts), whose sweep skips every org without `mentorship` (dormantCheckInApplies, src/lib/salesSurface.ts, #2970) before anything is claimed — a MARKETING lead is never mailed.',

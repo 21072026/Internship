@@ -166,8 +166,24 @@ key carries `ApiKey.companyId` and three rules hold for it:
   `apikey.revoked` at `warning`, like the admin path.
 
 Today's company-scoped routes: `/requisitions`, `/offers`, `/interview-requests`
-(list and item) and `/me`. Self-served webhooks and SOURCE owners are later
-slices of #2006 — webhook delivery would first need to filter events by company.
+(list and item) and `/me`. SOURCE owners are a later slice of #2006.
+
+### Company-owned webhooks (`src/lib/companyWebhookRule.ts`, `companyWebhookScope.ts`)
+
+`POST/GET/DELETE /api/company/integrations/webhooks` registers a hook with
+`Webhook.companyId` (`source: 'company'`, at most 10 per company). Its events must
+be in `COMPANY_WEBHOOK_EVENTS` — the hiring events whose subject is one company's
+(applications, interview requests, panel outcomes, offers, a filled requisition,
+the company's own interest flags); anything else is `403 event_above_ceiling`.
+Same SSRF guard, plan gate, one-time secret and warning-level audit as the admin form.
+
+**The check is at delivery, not only at registration.** `fanOutWebhookEvent()`
+asks `companyReceiverCheck(event)` per company hook: the event must be in the list
+**and** its subject record (looked up by the payload's id, in the event's org) must
+belong to the hook's company. An event that cannot be resolved is not delivered.
+So an admin widening a company hook's event list later still sends it nothing of the
+programme's, and `replayRecentEvents()` applies the same filter. Org-wide hooks are
+untouched.
 
 ## Bulk candidate import (#3015, `src/lib/api/v1Imports.ts`)
 

@@ -17,6 +17,7 @@ import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPl
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { SsoAttributeMappings } from '@/components/admin/SsoAttributeMappings';
 import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
 import { OrgLifecycleCard } from '@/components/admin/OrgLifecycleCard';
@@ -47,6 +48,16 @@ interface Organization {
     ssoLogoutUrl: string | null;
     sloUrl: string;
     ssoCertificateSet: boolean;
+    // OpenID Connect (#1926/#1929). The secret is write-only: only whether one is stored.
+    ssoClientId: string | null;
+    ssoDiscoveryUrl: string | null;
+    ssoScopes: string | null;
+    ssoClientSecretSet: boolean;
+    oidcRedirectUri: string;
+    // SAML hardening (#1955).
+    ssoSignRequests: boolean;
+    ssoRequireInResponseTo: boolean;
+    spCertificateSet: boolean;
     certificate: CertificateSummary;
     active: boolean;
     spEntityId: string;
@@ -519,6 +530,12 @@ export default function AdminOrganizationsPage() {
   const [ssoEntryPoint, setSsoEntryPoint] = useState('');
   const [ssoLogoutUrl, setSsoLogoutUrl] = useState('');
   const [ssoCertificate, setSsoCertificate] = useState('');
+  const [ssoClientId, setSsoClientId] = useState('');
+  const [ssoClientSecret, setSsoClientSecret] = useState('');
+  const [ssoDiscoveryUrl, setSsoDiscoveryUrl] = useState('');
+  const [ssoScopes, setSsoScopes] = useState('');
+  const [ssoSignRequests, setSsoSignRequests] = useState(false);
+  const [ssoRequireInResponseTo, setSsoRequireInResponseTo] = useState(false);
   const [ssoMsg, setSsoMsg] = useState<string | null>(null);
 
   const selectSsoOrg = (id: string) => {
@@ -531,6 +548,12 @@ export default function AdminOrganizationsPage() {
     setSsoEntryPoint(o?.sso.ssoEntryPoint ?? '');
     setSsoLogoutUrl(o?.sso.ssoLogoutUrl ?? '');
     setSsoCertificate(''); // never prefilled; leave blank to keep the stored cert
+    setSsoClientId(o?.sso.ssoClientId ?? '');
+    setSsoClientSecret(''); // write-only, like the certificate
+    setSsoDiscoveryUrl(o?.sso.ssoDiscoveryUrl ?? '');
+    setSsoScopes(o?.sso.ssoScopes ?? '');
+    setSsoSignRequests(o?.sso.ssoSignRequests ?? false);
+    setSsoRequireInResponseTo(o?.sso.ssoRequireInResponseTo ?? false);
   };
 
   const saveSso = async (e: React.FormEvent) => {
@@ -543,6 +566,18 @@ export default function AdminOrganizationsPage() {
       };
       // Only send the cert when the admin actually typed one (blank = keep).
       if (ssoCertificate.trim()) body.ssoCertificate = ssoCertificate;
+      // OIDC (#1929): the client and discovery fields travel with the form;
+      // the secret, like the certificate, only when one was typed.
+      // SAML hardening (#1955): only for a SAML tenant, and only when changed.
+      if (ssoProvider === 'saml') {
+        const o = orgs.find((x) => x.id === ssoOrgId);
+        if (ssoSignRequests !== (o?.sso.ssoSignRequests ?? false)) body.ssoSignRequests = ssoSignRequests;
+        if (ssoRequireInResponseTo !== (o?.sso.ssoRequireInResponseTo ?? false)) body.ssoRequireInResponseTo = ssoRequireInResponseTo;
+      }
+      if (ssoProvider === 'oidc') {
+        Object.assign(body, { ssoClientId, ssoDiscoveryUrl, ssoScopes });
+        if (ssoClientSecret.trim()) body.ssoClientSecret = ssoClientSecret;
+      }
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -552,7 +587,7 @@ export default function AdminOrganizationsPage() {
         ? t.organizations.featureLocked
         : data.code === 'sso_super_admin_only' ? t.organizations.ssoTrustOperatorOnly : data.error || t.common.error;
       setSsoMsg(res.ok ? t.organizations.ssoSaved : failure);
-      if (res.ok) { setSsoCertificate(''); await load(); }
+      if (res.ok) { setSsoCertificate(''); setSsoClientSecret(''); await load(); }
     } finally {
       setSaving(false);
     }
@@ -880,11 +915,21 @@ export default function AdminOrganizationsPage() {
                   return (
                     <div data-testid="sp-details" className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
                       <p className="text-sm font-medium text-gray-700">{t.organizations.spDetails}</p>
-                      <p className="text-xs text-gray-500">{t.organizations.spDetailsHint}</p>
-                      <SpRow label={t.organizations.spEntityId} value={o.sso.spEntityId} testId="sp-entity-id" />
-                      <SpRow label={t.organizations.spAcsUrl} value={o.sso.acsUrl} testId="sp-acs-url" />
-                      <SpRow label={t.organizations.spMetadataUrl} value={o.sso.metadataUrl} testId="sp-metadata-url" link />
-                      <SpRow label={t.organizations.spSloUrl} value={o.sso.sloUrl} testId="sp-slo-url" />
+                      {ssoProvider === 'oidc' ? (
+                        <>
+                          {/* What an OIDC customer registers (#1929): one redirect URI. */}
+                          <p className="text-xs text-gray-500">{t.organizations.oidcDetailsHint}</p>
+                          <SpRow label={t.organizations.oidcRedirectUri} value={o.sso.oidcRedirectUri} testId="oidc-redirect-uri" />
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-gray-500">{t.organizations.spDetailsHint}</p>
+                          <SpRow label={t.organizations.spEntityId} value={o.sso.spEntityId} testId="sp-entity-id" />
+                          <SpRow label={t.organizations.spAcsUrl} value={o.sso.acsUrl} testId="sp-acs-url" />
+                          <SpRow label={t.organizations.spMetadataUrl} value={o.sso.metadataUrl} testId="sp-metadata-url" link />
+                          <SpRow label={t.organizations.spSloUrl} value={o.sso.sloUrl} testId="sp-slo-url" />
+                        </>
+                      )}
                     </div>
                   );
                 })()}
@@ -894,17 +939,37 @@ export default function AdminOrganizationsPage() {
                     <select value={ssoProvider} disabled={ssoTrustLocked} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
-                      {/* OIDC is a roadmap item: the login route always builds a
-                          SAML request, so saving it would lock the tenant out.
-                          Shown disabled rather than hidden — it is coming. */}
-                      <option value="oidc" disabled>{`OIDC — ${t.organizations.ssoOidcSoon}`}</option>
+                      <option value="oidc">{t.organizations.ssoProviderOidc}</option>
                     </select>
                   </div>
                   <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoTrustLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
-                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
-                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoLogoutUrl} value={ssoLogoutUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoLogoutUrl(e.target.value)} placeholder="https://idp.example.com/slo" data-testid="sso-logout-url" /></div>
+                  {ssoProvider !== 'oidc' && (
+                    <>
+                      <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
+                      <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoLogoutUrl} value={ssoLogoutUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoLogoutUrl(e.target.value)} placeholder="https://idp.example.com/slo" data-testid="sso-logout-url" /></div>
+                    </>
+                  )}
                 </div>
-                {!ssoTrustLocked && (
+                {ssoProvider === 'oidc' && (
+                  <div className="flex flex-wrap gap-3" data-testid="sso-oidc-fields">
+                    <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoDiscoveryUrl} value={ssoDiscoveryUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoDiscoveryUrl(e.target.value)} placeholder="https://login.example.com/.well-known/openid-configuration" data-testid="sso-discovery-url" /></div>
+                    <div className="flex-1 min-w-[180px]"><Input label={t.organizations.ssoClientId} value={ssoClientId} disabled={ssoTrustLocked} onChange={(e) => setSsoClientId(e.target.value)} data-testid="sso-client-id" /></div>
+                    <div className="flex-1 min-w-[180px]">
+                      <Input
+                        label={t.organizations.ssoClientSecret}
+                        type="password"
+                        autoComplete="off"
+                        value={ssoClientSecret}
+                        disabled={ssoTrustLocked}
+                        onChange={(e) => setSsoClientSecret(e.target.value)}
+                        placeholder={ssoOrg?.sso.ssoClientSecretSet ? t.organizations.ssoClientSecretKeep : ''}
+                        data-testid="sso-client-secret"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[180px]"><Input label={t.organizations.ssoScopes} value={ssoScopes} disabled={ssoTrustLocked} onChange={(e) => setSsoScopes(e.target.value)} placeholder={t.organizations.ssoScopesPlaceholder} /></div>
+                  </div>
+                )}
+                {!ssoTrustLocked && ssoProvider !== 'oidc' && (
                   <SsoMetadataImport
                     key={`import-${ssoOrgId}`}
                     orgId={ssoOrgId}
@@ -918,6 +983,7 @@ export default function AdminOrganizationsPage() {
                     }}
                   />
                 )}
+                {ssoProvider !== 'oidc' && (
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <label className="block text-sm font-medium text-gray-700">{t.organizations.ssoCertificate}</label>
@@ -933,6 +999,25 @@ export default function AdminOrganizationsPage() {
                   />
                   <p className="text-xs text-gray-400 mt-1">{t.organizations.ssoCertHint}</p>
                 </div>
+                )}
+                {ssoProvider === 'saml' && (
+                  <div className="space-y-2" data-testid="sso-saml-hardening">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" data-testid="sso-sign-requests" disabled={ssoLocked} checked={ssoSignRequests} onChange={(e) => setSsoSignRequests(e.target.checked)} />
+                      <span>
+                        {t.organizations.ssoSignRequests}
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">{t.organizations.ssoSignRequestsWarn}</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" data-testid="sso-require-in-response-to" disabled={ssoLocked} checked={ssoRequireInResponseTo} onChange={(e) => setSsoRequireInResponseTo(e.target.checked)} />
+                      <span>
+                        {t.organizations.ssoRequireInResponseTo}
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">{t.organizations.ssoRequireInResponseToWarn}</span>
+                      </span>
+                    </label>
+                  </div>
+                )}
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" data-testid="sso-enabled" disabled={ssoLocked} checked={ssoEnabled} onChange={(e) => setSsoEnabled(e.target.checked)} />
                   {t.organizations.ssoEnable}
@@ -965,6 +1050,7 @@ export default function AdminOrganizationsPage() {
           {ssoMsg && <p className="text-sm text-gray-600 mt-2">{ssoMsg}</p>}
           {/* Keyed by org so switching the selector reloads its own mapping (#1940). */}
           {ssoOrgId && <SsoRoleMappings key={ssoOrgId} orgId={ssoOrgId} locked={ssoLocked} />}
+          {ssoOrgId && <SsoAttributeMappings key={`attr-${ssoOrgId}`} orgId={ssoOrgId} locked={ssoLocked} />}
         </Card>
       )}
 

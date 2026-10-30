@@ -18,6 +18,8 @@ const PLATFORM: Record<string, JobName> = {
   'weekly-reports': 'reports.weeklyReportReminders',
   'email-health': 'email.healthCheck',
   'stage-deadlines': 'reminders.stageDeadline',
+  // One nudge on day 7, expiry on day 14 (#1775).
+  'mentorship-requests': 'requests.expirySweep',
   'meeting-logs': 'meetings.autoLog',
   retention: 'reminders.retentionReconsent',
   newsletters: 'newsletter.dispatch',

@@ -69,6 +69,7 @@ const ICONS: Record<string, string> = {
   cohorts: 'layers',
   contributorTerms: 'document-lock',
   documents: 'document',
+  forms: 'clipboard',
   email: 'mail',
   goalTemplates: 'list',
   integrations: 'git-network',

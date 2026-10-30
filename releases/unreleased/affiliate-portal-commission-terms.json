@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Partner portal: \"Your commission terms\" box** (#3349). The portal home shows the organisation's current commission plan read-only: one-off bands, the commission above the last band, the percent phase (rate, the paying customer it starts with, what that customer's own first payment earns, window in months), the due days, the rule after a termination, the plan version and its effective date, and the note that a change applies only to later payments. The plan is read through `partnerPlanTerms()` from the partner's own org (session, never the request) behind the existing contract gate; the reshaping is the pure, unit-tested `affiliatePlanTerms.ts`. No write path.",
+  "notes": {
+    "en": ["Your partner account now shows your commission terms: the bands, the percent phase, the due days and the plan version, so you can check your own commissions."],
+    "tr": ["Partner hesabında artık komisyon koşulların görünüyor: kademeler, yüzde aşaması, vade günü ve plan sürümü; komisyonlarını kendin doğrulayabilirsin."],
+    "de": ["Ihr Partnerkonto zeigt jetzt Ihre Provisionsbedingungen: Staffeln, Prozentphase, Fälligkeitstage und Planversion – so können Sie Ihre Provisionen selbst prüfen."]
+  }
+}

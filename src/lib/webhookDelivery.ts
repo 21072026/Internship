@@ -21,6 +21,7 @@ import { validateEventPayload } from '@/lib/events/catalog';
 import type { DeliveredEvent } from '@/lib/events/subscribers';
 import { SsrfBlockedError, SsrfUnresolvedError } from '@/lib/ssrfGuard';
 import { deliverToWebhook, liveSubscriptionsWhere, type WebhookEvent } from '@/lib/webhooks';
+import { companyReceiverCheck } from '@/lib/companyWebhookScope';
 import {
   runDeliveryAttempt,
   webhookJobKey,
@@ -58,11 +59,14 @@ async function enqueueDelivery(eventId: string, webhookId: string, orgId: string
 export async function fanOutWebhookEvent(event: DeliveredEvent): Promise<number> {
   const hooks = await prisma.webhook.findMany({
     where: liveSubscriptionsWhere(event.orgId),
-    select: { id: true, events: true },
+    select: { id: true, events: true, companyId: true },
   });
+  // A company's own hook only gets its own company's hiring events (#2006).
+  const mayReceive = companyReceiverCheck(event);
   let queued = 0;
   for (const h of hooks) {
     if (!subscribesTo(h.events, event.name)) continue;
+    if (!(await mayReceive(h))) continue;
     await enqueueDelivery(event.id, h.id, event.orgId);
     queued += 1;
   }
@@ -166,7 +170,7 @@ export function runWebhookDelivery(
 export type ReplayResult = { ok: true; queued: number } | { ok: false; reason: 'not_found' | 'disabled' | 'event_gone' };
 
 async function replayableHook(webhookId: string, orgId: string | null) {
-  const hook = await prisma.webhook.findFirst({ where: { id: webhookId, orgId }, select: { id: true, orgId: true, events: true } });
+  const hook = await prisma.webhook.findFirst({ where: { id: webhookId, orgId }, select: { id: true, orgId: true, events: true, companyId: true } });
   if (!hook) return null;
   return hook;
 }
@@ -194,12 +198,20 @@ export async function replayRecentEvents(webhookId: string, orgId: string | null
   if (!(await isLive(webhookId, orgId))) return { ok: false, reason: 'disabled' };
   const names = Array.isArray(hook.events) ? (hook.events as unknown[]).filter((e): e is string => typeof e === 'string') : [];
   if (names.length === 0) return { ok: true, queued: 0 };
-  const events = await prisma.domainEvent.findMany({
+  // A company hook replays only what fan-out would have sent it (#2006):
+  // filtered BEFORE the `count`, so "the last N" means its last N.
+  const candidates = await prisma.domainEvent.findMany({
     where: { orgId, name: { in: names } },
     orderBy: { createdAt: 'desc' },
-    take: count,
-    select: { id: true },
+    take: hook.companyId ? count * 10 : count,
+    select: { id: true, name: true, orgId: true, payload: true },
   });
+  const events: { id: string }[] = [];
+  for (const e of candidates) {
+    if (events.length >= count) break;
+    if (hook.companyId && !(await companyReceiverCheck({ ...e, payload: e.payload as Record<string, unknown> })(hook))) continue;
+    events.push(e);
+  }
   const stamp = Date.now();
   // Oldest first, so the receiver sees them in the order they happened.
   for (const e of events.reverse()) await enqueueDelivery(e.id, webhookId, orgId, `n:${stamp}`);

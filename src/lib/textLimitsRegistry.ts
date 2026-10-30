@@ -183,6 +183,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     reviewStatus: SERVER_SET,
   },
   User: {
+    // SSO directory sync (#1943): a short refusal code and a sha256 hex digest,
+    // both computed by src/lib/ssoDirectorySync.ts; the code is sliced to 191.
+    ssoSyncError: SERVER_SET,
+    ssoPhotoUrlHash: SERVER_SET,
     deactivatedBy: {
       exempt:
         'written by the server only (#1966): "roster:<feedId>" (a cuid) by the roster-feed deprovisioning, or the acting admin\'s user id by /api/users/[id]. No request body supplies the value.',

@@ -19,6 +19,7 @@ import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestI
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
+import { MeetingReminderSelect } from '@/components/meeting/MeetingReminderSelect';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, useConflictText, usePolicyText, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
@@ -73,6 +74,8 @@ export function MeetingsManager() {
   const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number>(DEFAULT_MEETING_MINUTES);
+  // null = the programme's reminder leads (#1636).
+  const [reminderLead, setReminderLead] = useState<number | null>(null);
   const [guests, setGuests] = useState<PendingGuest[]>([]);
   // Time is optional. With a date the meeting has a time (defaulting to
   // midnight if no clock time) and expects an RSVP; with no date it's a
@@ -211,6 +214,7 @@ export function MeetingsManager() {
           scheduledAt,
           meetLink,
           durationMinutes,
+          ...(reminderLead != null ? { reminderLeadMinutes: reminderLead } : {}),
           timeZone: browserTimeZone() ?? undefined,
           guests: guests.length > 0 ? guests : undefined,
           ...(force ? { force: true } : {}),
@@ -389,6 +393,7 @@ export function MeetingsManager() {
               </div>
             </div>
             <MeetingDurationSelect value={durationMinutes} onChange={setDurationMinutes} disabled={busy} />
+            <MeetingReminderSelect value={reminderLead} onChange={setReminderLead} disabled={busy} />
             {scheduledAt && chosen.length > 0 && <AttendeeTimes instantISO={scheduledAt} people={attendees} />}
             <Input
               label={t.meetings.meetLink}

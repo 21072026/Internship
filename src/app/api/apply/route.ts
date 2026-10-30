@@ -1,7 +1,9 @@
+import { requestExpiresAt } from '@/lib/requestExpiryRule';
 import { NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
@@ -131,7 +133,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const mentee = await prisma.user.create({
+  const mentee = await createUser(prisma, {
     data: {
       email,
       password: APPLY_NO_LOGIN_PASSWORD,
@@ -148,7 +150,7 @@ export async function POST(request: Request) {
       // rather than rejected.
       skills: capSkills(skills),
     },
-  });
+  }, { source: 'apply' });
   // Dual-write the canonical twin of the skill list (#1818).
   await syncUserSkills(mentee.id, mentee.orgId, Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []);
 
@@ -158,7 +160,7 @@ export async function POST(request: Request) {
   // goes through the shared decision service (notification + e-mail to the
   // applicant either way).
   await prisma.mentorshipRequest.create({
-    data: { menteeId: mentee.id, preferredMentorId: mentor.id },
+    data: { menteeId: mentee.id, preferredMentorId: mentor.id, expiresAt: requestExpiresAt(new Date()) },
   });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/applications');
   await emit('application.created', { mentorId: mentor.id, menteeName: fullName, email }, { orgId: mentor.orgId ?? null, actor: null });

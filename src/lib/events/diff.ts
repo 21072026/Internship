@@ -157,6 +157,9 @@ export const ORGANIZATION_DIFF_SPEC: DiffSpec = {
   // OIDC (#1926): the secret is a credential (fingerprint only); the JWKS
   // cache is the IdP's public keys refreshed by a login, not a config write.
   ssoClientId: 'record',
+  // SAML hardening (#1955): switches, recorded.
+  ssoSignRequests: 'record',
+  ssoRequireInResponseTo: 'record',
   ssoDiscoveryUrl: 'record',
   ssoScopes: 'record',
   ssoClientSecretEnc: 'redact',

@@ -50,6 +50,19 @@ const CLIENT_RETRY_MS = 10_000;
 // age means the reconnect happens at a moment we chose, with a fresh session
 // check, rather than as a surprise mid-conversation.
 const MAX_STREAM_MS = 30 * 60_000;
+// A client may ask for a SHORTER life with `?maxSeconds=` (#1612): the SSE load
+// test (k6/sse-load.js) cannot read a stream incrementally, so it holds one for a
+// bounded time and reads the whole body when we close it. Clamped to 5 s…the
+// normal cap, so it can only shorten a stream, never extend one; the browser
+// never sends it.
+const MIN_STREAM_MS = 5_000;
+
+/** The stream lifetime a request asked for, clamped into [MIN_STREAM_MS, MAX_STREAM_MS]. */
+function streamLifetimeMs(request: Request): number {
+  const raw = Number(new URL(request.url).searchParams.get('maxSeconds'));
+  if (!Number.isFinite(raw) || raw <= 0) return MAX_STREAM_MS;
+  return Math.min(MAX_STREAM_MS, Math.max(MIN_STREAM_MS, Math.round(raw * 1000)));
+}
 
 export async function GET(request: Request) {
   // The context is bound around the whole handler, so the stream's own async
@@ -71,6 +84,7 @@ async function handleGet(request: Request) {
     return new Response('Too many streams', { status: 503, headers: { 'Retry-After': '60' } });
   }
 
+  const lifetimeMs = streamLifetimeMs(request);
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -172,12 +186,14 @@ async function handleGet(request: Request) {
 
       heartbeat = setInterval(() => {
         // A comment line is a no-op for EventSource but real bytes on the wire,
-        // which is what keeps proxies and phone radios from dropping us.
-        write(`: ping\n\n`);
+        // which is what keeps proxies and phone radios from dropping us. The
+        // server clock rides along (#1612) so the load test can measure how far
+        // the beat drifts from HEARTBEAT_MS when the event loop is busy.
+        write(`: ping ${Date.now()}\n\n`);
         pushCounts('sync');
       }, HEARTBEAT_MS);
 
-      lifetime = setTimeout(cleanup, MAX_STREAM_MS);
+      lifetime = setTimeout(cleanup, lifetimeMs);
       request.signal.addEventListener('abort', cleanup);
     },
     cancel() {
