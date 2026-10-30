@@ -121,6 +121,10 @@ A record that has ended (lost, or closed) is never reopened, and a trial that ha
 
 Any event that carries `referral_code` or `acquisition_source` fills the lead's `Source` when the lead has none yet: an acquisition source the source system learnt after the account was created still counts. First touch, the import's own rule: a lead that already has a `Source` or a referring person keeps it, and the write is conditional on exactly that.
 
+### Affiliate attribution
+
+An event that carries `referral_code` also links the account's customer to the partner whose code it names (#3354), on any event type, after the account exists. Only an `ACTIVE` partner **of the key's organization** matches: another organization's code, an unknown code, a suspended or terminated partner link nothing, and the event is otherwise handled as usual. The customer reference is the event's `external_id`; **the first link wins**, so a later event naming another partner changes nothing and leaves an `integration.affiliate_kept_first` activity line. A repeated event writes no second row. A [dry run](#dry-run) links nobody. The partner then sees the customer in the portal, and a later manual payment entry finds it without choosing a partner. The rule is in [affiliate-module.md](../affiliate-module.md#automatic-attribution-3354).
+
 ## What an event does
 
 - **A new account** is created on the organization's default lead owner's funnel, straight into `TRIAL_ACTIVE`. Its name is the contact's company name, else the person's name, else a placeholder `"<source label> <external_id>"` that an operator renames. Its lead `Source` comes from `referral_code` (`affiliate:<code>`), else `acquisition_source` (`channel:<value>`). The event's trial dates replace the CRM's default window. Without a default lead owner the answer is `409 no_default_owner` and nothing is written, so the sender can simply retry once one is set.
