@@ -241,6 +241,27 @@ const en = {
     privacyNote: 'This page is only about you. Nothing here compares you to anyone else, and it is always free.',
     metrics: { goalsDone: 'Goals done', goalsOpen: 'Goals open', meetings: 'Meetings', interactions: 'Interactions', pipeline: 'Stage moves', messages: 'Msgs sent/recv', timeOnSite: 'Time on site', pages: 'Page views' },
   },
+  kudos: {
+    title: 'Thanks',
+    hint: 'A written thank-you, signed with your name. Only the two of you and the programme team can read it.',
+    presetsLabel: 'Start from',
+    presets: {
+      clearFeedback: 'Thank you for the clear feedback.',
+      wellPrepared: 'Thank you for coming so well prepared.',
+      unblockedMe: 'Thank you for getting me unstuck.',
+      extraMile: 'Thank you for going the extra mile.',
+      greatQuestions: 'Thank you for the great questions.',
+      steadyProgress: 'Thank you for the steady progress — it shows.',
+    },
+    placeholder: 'Write a thank-you to {name}…',
+    send: 'Send thanks',
+    sent: 'Thank-you sent',
+    failed: 'The thank-you could not be sent',
+    none: 'No thank-yous yet.',
+    fromTo: '{from} → {to}',
+    from: 'From {from}',
+    receivedTitle: 'Thank-yous you received',
+  },
   relationNotes: { title: 'Private notes', hint: 'Only you (and admins) can see these — never the mentee.', placeholder: 'Impressions, prep notes, things to remember…', add: 'Add note', none: 'No notes yet' },
   erasure: {
     title: 'Danger zone — GDPR erasure',
@@ -454,6 +475,10 @@ const en = {
   adminMatching: {
     customField: 'Question',
     tolerance: 'Tolerance',
+    orphanedRule: 'No longer matchable',
+    orphanedRules: '{n} rule(s) use a question that is no longer matchable. They score nothing, and the rule set cannot be saved until they are removed.',
+    removeOrphaned: 'Remove these rules',
+    orphanedSaveRefused: 'A rule uses a question that is no longer matchable — remove it, then save.',
     title: 'Matching rules',
     intro: 'Decide what makes a good mentor match and which rules are non-negotiable. Try a draft on real mentees before you save it — a simulation never assigns anybody.',
     builtIn: 'No rule set is the default: suggestions use the built-in rules (shared skills, mentor capacity).',
@@ -492,6 +517,7 @@ const en = {
     truncated: 'Only the first 200 mentees were simulated.',
   },
   matchScore: {
+    customField: 'Question',
     title: 'Match score',
     // The visible figure. Turkish writes the sign first (%78) and German puts a
     // space before it — hardcoding "{pct}%" in JSX left the one number a
@@ -1427,6 +1453,8 @@ const en = {
   // mentee's own first-person reasons live in `rematchRequest.reasons`, and the
   // two lists are not interchangeable even where the codes overlap.
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Ended (other)',
     actions: 'Pairing state',
     pause: 'Pause',
     resume: 'Resume',
@@ -3725,6 +3753,7 @@ const en = {
     reset2faFailed: 'Could not reset two-factor authentication for this user.',
   },
   impersonation: {
+    readOnly: 'Read-only',
     viewingAs: 'You are viewing the app as {name}.',
     return: 'Return to your account',
     stopFailed: 'Could not return to your account. Please try again.',
@@ -4530,6 +4559,7 @@ const en = {
       'event.cancelled': 'The group session "{title}" ({when}) was cancelled.',
       'event.updated': 'The group session "{title}" moved to {when}.',
       'meeting.noShow': 'We missed you at your last meeting. If something came up, you can find a new time here.',
+      'kudo.received': '{from} sent you a thank-you.',
       'goal.assigned': 'A new goal was added to your mentorship: "{title}".',
       'goal.completed': 'Goal marked as done: "{title}".',
       'evaluation.added': 'A new evaluation was added about your mentorship.',
@@ -6806,6 +6836,16 @@ const en = {
     ssoRoleNone: 'No mappings yet — every SSO user starts as MENTEE.',
     ssoRoleSync: 'Re-apply the mapping on every login',
     ssoRoleSyncHint: 'Off: an existing user keeps the role they have. On: their role follows the mapping at each sign-in (never for an ADMIN, and a login that matches nothing changes nothing).',
+    impersonationTitle: 'Sign in as a user',
+    impersonationHint: 'Whether this organisation\'s admins may open a user\'s account as that user — for support. The organisation of the person being viewed decides.',
+    impersonationFull: 'Allowed',
+    impersonationFullHint: 'An admin may sign in as a user and act as them. Every start and stop is audited and the user is told.',
+    impersonationReadOnly: 'Read-only',
+    impersonationReadOnlyHint: 'An admin may look at a user\'s account, but every change is refused by the server.',
+    impersonationOff: 'Off',
+    impersonationOffHint: 'Nobody may sign in as this organisation\'s users.',
+    impersonationSaved: 'Saved.',
+    impersonationSaveFailed: 'The policy could not be saved.',
     ssoSyncTitle: 'Directory sync',
     ssoSyncHint: 'Refresh profile fields from the IdP on every sign-in. Map a claim name (e.g. "department" or an attribute URI) to a field.',
     ssoSyncNone: 'No fields are synced from the IdP yet.',
@@ -11781,6 +11821,27 @@ const tr: Dict = {
     privacyNote: 'Bu sayfa yalnızca seninle ilgili. Burada seni başkalarıyla kıyaslayan hiçbir şey yok ve her zaman ücretsiz.',
     metrics: { goalsDone: 'Tamamlanan hedef', goalsOpen: 'Açık hedef', meetings: 'Toplantılar', interactions: 'Etkileşimler', pipeline: 'Aşama değişimi', messages: 'Mesaj gön/al', timeOnSite: 'Sitede süre', pages: 'Sayfa görüntüleme' },
   },
+  kudos: {
+    title: 'Teşekkürler',
+    hint: 'Adınla imzalanan, yazılı bir teşekkür. Yalnızca ikiniz ve program ekibi okuyabilir.',
+    presetsLabel: 'Hazır cümleyle başla',
+    presets: {
+      clearFeedback: 'Net geri bildirimin için teşekkürler.',
+      wellPrepared: 'Bu kadar hazırlıklı geldiğin için teşekkürler.',
+      unblockedMe: 'Takıldığım yerden çıkmama yardım ettiğin için teşekkürler.',
+      extraMile: 'Fazlasını yaptığın için teşekkürler.',
+      greatQuestions: 'Harika soruların için teşekkürler.',
+      steadyProgress: 'İstikrarlı ilerlemen için teşekkürler — belli oluyor.',
+    },
+    placeholder: '{name} için bir teşekkür yaz…',
+    send: 'Teşekkür gönder',
+    sent: 'Teşekkür gönderildi',
+    failed: 'Teşekkür gönderilemedi',
+    none: 'Henüz teşekkür yok.',
+    fromTo: '{from} → {to}',
+    from: 'Gönderen: {from}',
+    receivedTitle: 'Aldığın teşekkürler',
+  },
   relationNotes: { title: 'Özel notlar', hint: 'Bunları yalnızca sen (ve adminler) görebilir — mentee asla göremez.', placeholder: 'İzlenimler, hazırlık notları, hatırlanacaklar…', add: 'Not ekle', none: 'Henüz not yok' },
   erasure: {
     title: 'Tehlikeli bölge — GDPR silme',
@@ -11988,6 +12049,10 @@ const tr: Dict = {
   adminMatching: {
     customField: 'Soru',
     tolerance: 'Tolerans',
+    orphanedRule: 'Artık eşleştirmeye açık değil',
+    orphanedRules: '{n} kural artık eşleştirmeye açık olmayan bir soruyu kullanıyor. Puana katkıları yok ve bunlar kaldırılmadan kural seti kaydedilemez.',
+    removeOrphaned: 'Bu kuralları kaldır',
+    orphanedSaveRefused: 'Bir kural artık eşleştirmeye açık olmayan bir soruyu kullanıyor — kaldırıp yeniden kaydedin.',
     title: 'Eşleştirme kuralları',
     intro: 'İyi bir mentör eşleşmesini neyin belirlediğine ve hangi kuralların pazarlıksız olduğuna karar ver. Bir taslağı kaydetmeden önce gerçek mentee\'ler üzerinde dene — simülasyon kimseyi atamaz.',
     builtIn: 'Varsayılan kural seti yok: öneriler yerleşik kuralları kullanıyor (ortak beceriler, mentör kapasitesi).',
@@ -12026,6 +12091,7 @@ const tr: Dict = {
     truncated: 'Yalnızca ilk 200 mentee simüle edildi.',
   },
   matchScore: {
+    customField: 'Soru',
     title: 'Eşleşme skoru',
     percent: '%{n}',
     srScore: 'Kural karşılama: %{n}',
@@ -12938,6 +13004,8 @@ const tr: Dict = {
   // birinci tekil gerekçeleri `rematchRequest.reasons` içinde yaşar ve kodlar
   // örtüşse bile iki liste birbirinin yerine kullanılmaz.
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Diğer biçimde sona erdi',
     actions: 'Eşleşme durumu',
     pause: 'Duraklat',
     resume: 'Devam ettir',
@@ -15176,6 +15244,7 @@ const tr: Dict = {
     reset2faFailed: 'Bu kullanıcının iki adımlı doğrulaması sıfırlanamadı.',
   },
   impersonation: {
+    readOnly: 'Salt okunur',
     viewingAs: 'Uygulamayı {name} olarak görüntülüyorsun.',
     return: 'Kendi hesabına dön',
     stopFailed: 'Kendi hesabına dönülemedi. Lütfen tekrar deneyin.',
@@ -15960,6 +16029,7 @@ const tr: Dict = {
       'event.cancelled': '"{title}" grup oturumu ({when}) iptal edildi.',
       'event.updated': '"{title}" grup oturumu {when} tarihine taşındı.',
       'meeting.noShow': 'Son görüşmede seni göremedik. Bir şey çıktıysa buradan yeni bir zaman bulabilirsin.',
+      'kudo.received': '{from} sana bir teşekkür gönderdi.',
       'goal.assigned': 'Mentorluğuna yeni bir hedef eklendi: "{title}".',
       'goal.completed': 'Hedef tamamlandı olarak işaretlendi: "{title}".',
       'evaluation.added': 'Mentorluğun hakkında yeni bir değerlendirme eklendi.',
@@ -18193,6 +18263,16 @@ const tr: Dict = {
     ssoRoleNone: 'Henüz eşleme yok — her SSO kullanıcısı MENTEE olarak başlar.',
     ssoRoleSync: 'Eşlemeyi her girişte yeniden uygula',
     ssoRoleSyncHint: 'Kapalı: mevcut kullanıcı rolünü korur. Açık: rolü her girişte eşlemeyi izler (ADMIN için asla; hiçbir şeyle eşleşmeyen giriş bir şey değiştirmez).',
+    impersonationTitle: 'Kullanıcı olarak giriş',
+    impersonationHint: 'Bu kurumun yöneticilerinin destek için bir kullanıcının hesabını o kullanıcı olarak açıp açamayacağı. Karar, görüntülenen kişinin kurumuna aittir.',
+    impersonationFull: 'İzinli',
+    impersonationFullHint: 'Bir yönetici kullanıcı olarak giriş yapıp onun adına işlem yapabilir. Her başlatma ve bitiş denetlenir ve kullanıcıya bildirilir.',
+    impersonationReadOnly: 'Salt okunur',
+    impersonationReadOnlyHint: 'Bir yönetici kullanıcının hesabına bakabilir, ancak her değişiklik sunucu tarafından reddedilir.',
+    impersonationOff: 'Kapalı',
+    impersonationOffHint: 'Kimse bu kurumun kullanıcıları olarak giriş yapamaz.',
+    impersonationSaved: 'Kaydedildi.',
+    impersonationSaveFailed: 'Politika kaydedilemedi.',
     ssoSyncTitle: 'Dizin senkronu',
     ssoSyncHint: 'Profil alanlarını her girişte IdP\'den yenile. Bir claim adını (ör. "department" veya bir öznitelik URI\'si) bir alanla eşle.',
     ssoSyncNone: 'IdP\'den henüz hiçbir alan senkronlanmıyor.',
@@ -23084,6 +23164,27 @@ const de: Dict = {
     privacyNote: 'Diese Seite handelt nur von dir. Nichts hier vergleicht dich mit anderen, und sie ist immer kostenlos.',
     metrics: { goalsDone: 'Erledigte Ziele', goalsOpen: 'Offene Ziele', meetings: 'Meetings', interactions: 'Interaktionen', pipeline: 'Phasenwechsel', messages: 'Nachr. gesend/empf', timeOnSite: 'Zeit auf der Seite', pages: 'Seitenaufrufe' },
   },
+  kudos: {
+    title: 'Danke',
+    hint: 'Ein schriftlicher Dank, mit deinem Namen unterschrieben. Nur ihr beide und das Programmteam können ihn lesen.',
+    presetsLabel: 'Beginnen mit',
+    presets: {
+      clearFeedback: 'Danke für das klare Feedback.',
+      wellPrepared: 'Danke, dass du so gut vorbereitet warst.',
+      unblockedMe: 'Danke, dass du mir weitergeholfen hast.',
+      extraMile: 'Danke, dass du die Extrameile gegangen bist.',
+      greatQuestions: 'Danke für die großartigen Fragen.',
+      steadyProgress: 'Danke für den stetigen Fortschritt — man sieht ihn.',
+    },
+    placeholder: 'Schreib {name} ein Dankeschön…',
+    send: 'Danke senden',
+    sent: 'Dankeschön gesendet',
+    failed: 'Das Dankeschön konnte nicht gesendet werden',
+    none: 'Noch keine Dankeschöns.',
+    fromTo: '{from} → {to}',
+    from: 'Von {from}',
+    receivedTitle: 'Dankeschöns, die du bekommen hast',
+  },
   relationNotes: { title: 'Private Notizen', hint: 'Nur du (und Admins) siehst diese — nie der Mentee.', placeholder: 'Eindrücke, Vorbereitungsnotizen, Dinge zum Merken…', add: 'Notiz hinzufügen', none: 'Noch keine Notizen' },
   erasure: {
     title: 'Gefahrenzone — DSGVO-Löschung',
@@ -23291,6 +23392,10 @@ const de: Dict = {
   adminMatching: {
     customField: 'Frage',
     tolerance: 'Toleranz',
+    orphanedRule: 'Nicht mehr für das Matching freigegeben',
+    orphanedRules: '{n} Regel(n) verwenden eine Frage, die nicht mehr für das Matching freigegeben ist. Sie zählen nicht, und der Regelsatz kann erst nach dem Entfernen gespeichert werden.',
+    removeOrphaned: 'Diese Regeln entfernen',
+    orphanedSaveRefused: 'Eine Regel verwendet eine Frage, die nicht mehr für das Matching freigegeben ist – entfernen Sie sie und speichern Sie erneut.',
     title: 'Matching-Regeln',
     intro: 'Lege fest, was ein gutes Mentor-Matching ausmacht und welche Regeln nicht verhandelbar sind. Teste einen Entwurf an echten Mentees, bevor du ihn speicherst — eine Simulation ordnet niemanden zu.',
     builtIn: 'Kein Regelset ist Standard: Vorschläge nutzen die eingebauten Regeln (gemeinsame Skills, Mentor-Kapazität).',
@@ -23329,6 +23434,7 @@ const de: Dict = {
     truncated: 'Nur die ersten 200 Mentees wurden simuliert.',
   },
   matchScore: {
+    customField: 'Frage',
     title: 'Match-Score',
     percent: '{n} %',
     srScore: '{n} % Regelerfüllung',
@@ -24241,6 +24347,8 @@ const de: Dict = {
   // ADMINISTRATION — die Ich-Begründungen der Mentees stehen in
   // `rematchRequest.reasons`; die beiden Listen sind nicht austauschbar.
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Anders beendet',
     actions: 'Status der Zusammenarbeit',
     pause: 'Pausieren',
     resume: 'Fortsetzen',
@@ -26480,6 +26588,7 @@ const de: Dict = {
     reset2faFailed: 'Die Zwei-Faktor-Authentifizierung dieses Benutzers konnte nicht zurückgesetzt werden.',
   },
   impersonation: {
+    readOnly: 'Nur lesen',
     viewingAs: 'Du siehst die App als {name}.',
     return: 'Zu deinem Konto zurückkehren',
     stopFailed: 'Rückkehr zu deinem Konto fehlgeschlagen. Bitte versuche es erneut.',
@@ -27264,6 +27373,7 @@ const de: Dict = {
       'event.cancelled': 'Die Gruppensitzung „{title}“ ({when}) wurde abgesagt.',
       'event.updated': 'Die Gruppensitzung „{title}“ wurde auf {when} verschoben.',
       'meeting.noShow': 'Wir haben dich beim letzten Treffen vermisst. Falls etwas dazwischenkam, findest du hier einen neuen Termin.',
+      'kudo.received': '{from} hat dir ein Dankeschön geschickt.',
       'goal.assigned': 'Zu deinem Mentoring wurde ein neues Ziel hinzugefügt: "{title}".',
       'goal.completed': 'Ziel als erledigt markiert: "{title}".',
       'evaluation.added': 'Zu deinem Mentoring wurde eine neue Bewertung hinzugefügt.',
@@ -29498,6 +29608,16 @@ const de: Dict = {
     ssoRoleNone: 'Noch keine Zuordnung — jeder SSO-Nutzer startet als MENTEE.',
     ssoRoleSync: 'Zuordnung bei jeder Anmeldung neu anwenden',
     ssoRoleSyncHint: 'Aus: Bestehende Nutzer behalten ihre Rolle. An: Die Rolle folgt bei jeder Anmeldung der Zuordnung (nie für ADMIN; eine Anmeldung ohne Treffer ändert nichts).',
+    impersonationTitle: 'Als Nutzer*in anmelden',
+    impersonationHint: 'Ob die Admins dieser Organisation das Konto einer Person für den Support als diese Person öffnen dürfen. Es entscheidet die Organisation der angesehenen Person.',
+    impersonationFull: 'Erlaubt',
+    impersonationFullHint: 'Ein Admin darf sich als Nutzer*in anmelden und in deren Namen handeln. Jeder Beginn und jedes Ende wird protokolliert und die Person informiert.',
+    impersonationReadOnly: 'Nur lesen',
+    impersonationReadOnlyHint: 'Ein Admin darf das Konto ansehen, aber jede Änderung wird vom Server abgelehnt.',
+    impersonationOff: 'Aus',
+    impersonationOffHint: 'Niemand darf sich als Nutzer*in dieser Organisation anmelden.',
+    impersonationSaved: 'Gespeichert.',
+    impersonationSaveFailed: 'Die Richtlinie konnte nicht gespeichert werden.',
     ssoSyncTitle: 'Verzeichnisabgleich',
     ssoSyncHint: 'Profilfelder bei jeder Anmeldung aus dem IdP aktualisieren. Ordnen Sie einen Claim-Namen (z. B. „department“ oder eine Attribut-URI) einem Feld zu.',
     ssoSyncNone: 'Noch werden keine Felder aus dem IdP abgeglichen.',

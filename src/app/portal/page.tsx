@@ -34,6 +34,7 @@ import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
 import { AgreementCard } from '@/components/AgreementCard';
 import { agreementBlockFor } from '@/lib/mentoringAgreement';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -75,6 +76,9 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         expectedMeetingIntervalWeeks: true,
         // The pair's agreed next steps (#1795), on the archived record.
         closurePlan: true,
+        // Where it stands (#1774): paused, completed or ended — and why.
+        lifecycleState: true,
+        endReasonCode: true,
       },
     }),
     // Has the mentee ever decided on company visibility (#527)? A row means
@@ -240,6 +244,8 @@ export default async function PortalDashboard({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <StatusBadge status={relation.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={relation} hideLive />
               {/* "Completed" is the moment it ended, so it reads as a distance;
                   "Since" is the mentorship's start date and stays a date. */}
               <span className="text-xs text-gray-400">
