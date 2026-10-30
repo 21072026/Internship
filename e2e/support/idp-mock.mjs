@@ -461,9 +461,14 @@ const server = createServer(async (req, res) => {
 
   // --- OIDC ---------------------------------------------------------------
   if (url.pathname.endsWith('/.well-known/openid-configuration')) {
+    // The OIDC twin of the SAML entry point's query (mode/email/name): a tenant
+    // whose discovery URL carries them gets an authorization endpoint that does
+    // too, so a spec can pick the identity and the defect per tenant.
+    const authorize = new URL(`${OIDC_ISSUER}/authorize`);
+    for (const k of ['mode', 'email', 'name']) if (q.get(k)) authorize.searchParams.set(k, q.get(k));
     return json(res, 200, {
       issuer: OIDC_ISSUER,
-      authorization_endpoint: `${OIDC_ISSUER}/authorize`,
+      authorization_endpoint: authorize.toString(),
       token_endpoint: `${OIDC_ISSUER}/token`,
       jwks_uri: `${OIDC_ISSUER}/jwks.json`,
       userinfo_endpoint: `${OIDC_ISSUER}/userinfo`,

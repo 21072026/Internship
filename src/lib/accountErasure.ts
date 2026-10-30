@@ -512,7 +512,8 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.messageTemplate.deleteMany({ where: { ownerId: userId } }),
     // The mentee's own words in their self-serve mentorship request, and the
     // reason they gave when asking for a different mentor (#2098).
-    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null } }),
+    // `cancelReason` (#1775) is what an admin wrote ABOUT this person's request — scrubbed with the rest.
+    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null, cancelReason: null } }),
     // A mentor's own words in a Mentor Offer (#1809), written to a mentee: about
     // the mentee when the mentee is erased, the mentor's text when the mentor is.
     prisma.mentorOffer.updateMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] }, data: { message: null } }),
@@ -577,10 +578,6 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // The fit sentence (#2042) is prose about the candidate; the score, the
     // breakdown and the rule-set version stay — they are the explainability record.
     prisma.requisitionFit.updateMany({ where: { menteeId: userId }, data: { reason: null, reasonSource: null } }),
-    // A coordinator's matching note ("why this mentor") is prose about the pair;
-    // the proposal, the decision and their scores stay as the matching record.
-    prisma.matchProposal.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
-    prisma.matchDecision.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
     prisma.interviewRequest.updateMany({
       where: { menteeId: userId },
       data: { note: null, declineNote: null, cancelReason: null },
@@ -607,6 +604,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.candidateOutreach.updateMany({ where: { menteeId: userId }, data: { firstMessage: null } }),
     prisma.matchFeedback.updateMany({ where: { menteeId: userId }, data: { reasonNote: null } }),
     prisma.placement.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    //   - the matching round's proposal note and the recorded match decision's
+    //     "why this mentor" (#1793): prose about a pairing, so it goes when
+    //     either side of the pair is erased; the proposal and decision rows,
+    //     their state and scores stay.
+    prisma.matchProposal.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
+    prisma.matchDecision.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
     //   - the session agenda of their relation (required column → emptied).
     prisma.sessionAgendaItem.updateMany({ where: { agenda: asSubject }, data: { text: '' } }),
   ];
@@ -670,6 +673,7 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // support ticket failed with an opaque FK error.
   await prisma.supportTicket.updateMany({ where: { assignedAdminId: userId }, data: { assignedAdminId: null } });
   await prisma.mentorshipRequest.updateMany({ where: { decidedById: userId }, data: { decidedById: null } });
+  await prisma.mentorshipRequest.updateMany({ where: { cancelledById: userId }, data: { cancelledById: null } });
   await prisma.project.updateMany({ where: { ownerUserId: userId }, data: { ownerUserId: null } });
   // Revoked at Google first (#2098): the cascade would drop our copy of the
   // token but leave the grant live on the person's Google account.

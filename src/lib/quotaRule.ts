@@ -16,6 +16,14 @@ import type { PlanLimits } from './plans';
 export const QUOTA_METRICS = ['ADMIN_SEATS', 'COMPANIES', 'PROGRAMS'] as const;
 export type QuotaMetric = (typeof QUOTA_METRICS)[number];
 
+/**
+ * Does provisioning an account of this role take an admin seat? Only ADMIN —
+ * the free core in one place, so no route compares the role string itself.
+ */
+export function takesAdminSeat(role: string | null | undefined): boolean {
+  return role === 'ADMIN';
+}
+
 /** Which plan limit each quota reads. */
 export const QUOTA_LIMIT_KEY: Record<QuotaMetric, keyof PlanLimits> = {
   ADMIN_SEATS: 'adminSeats',

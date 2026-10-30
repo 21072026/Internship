@@ -52,3 +52,15 @@ test('a SAML tenant cannot be enabled half-configured, and a complete one can', 
   expect(validateSsoConfig({ ...saml, ssoEnabled: true, ssoCertificate: null })).toMatch(/missing: certificate/);
   expect(validateSsoConfig({ ...saml, ssoEnabled: true })).toBeNull();
 });
+
+import { mapOidcClaims } from '../src/lib/ssoOidcClaims';
+
+test('OIDC claims: email required and verified when the IdP says, name from name or given + family (#1929)', { tag: '@smoke' }, () => {
+  expect(mapOidcClaims({ email: ' A@Example.TEST ', name: 'Ada Lovelace', email_verified: true })).toEqual({ email: 'a@example.test', fullName: 'Ada Lovelace' });
+  expect(mapOidcClaims({ email: 'b@example.test', given_name: 'Grace', family_name: 'Hopper' })).toEqual({ email: 'b@example.test', fullName: 'Grace Hopper' });
+  expect(mapOidcClaims({ email: 'c@example.test' })).toEqual({ email: 'c@example.test', fullName: null });
+  expect(() => mapOidcClaims({ email: 'd@example.test', email_verified: false })).toThrow(/not verified/);
+  expect(() => mapOidcClaims({ email: 'd@example.test', email_verified: 'false' })).toThrow(/not verified/);
+  expect(() => mapOidcClaims({ name: 'No Mail' })).toThrow(/no email/);
+  expect(() => mapOidcClaims(null)).toThrow();
+});

@@ -258,29 +258,17 @@ so only a super admin of the org's world sets it — #1575).
   stub IdP, including the unsigned, wrongly signed and foreign-subject refusals
   and a remembered device that must not sign back in.
 
-## OIDC — refused at the write boundary (#1537)
+## OIDC — a second protocol, the same session path (#1929)
 
-`'oidc'` stays in the `SsoProvider` type: it is a real roadmap item (Wave 4) and
-the column already stores it. What it is *not* is implemented — the login route
-(`/api/auth/sso/[slug]/login`) unconditionally builds a SAML `AuthnRequest`. So
-saving a tenant as OIDC used to return a green "saved" and then lock every user
-of that tenant out behind a broken redirect.
-
-Two gates close that, both in `src/lib/sso.ts` so every write path inherits them:
-
-- `validateSsoConfig()` returns *"OIDC single sign-on is not supported yet — use
-  SAML"* (HTTP 400 from `PATCH /api/admin/organizations`) for any config naming
-  `oidc`, whether or not `ssoEnabled` is being flipped.
-- `isSsoActive()` additionally requires an *implemented* provider
-  (`SSO_IMPLEMENTED_PROVIDERS`), so a row written before this shipped is inert:
-  that tenant falls through to password login (`?error=sso_unavailable`) rather
-  than a dead-end redirect.
-
-Implementing OIDC means adding it to `SSO_IMPLEMENTED_PROVIDERS`, branching the
-login/ACS routes on the provider, and re-enabling the option in the admin card.
-That is #1929; the customer-facing setup it will need is already written up in
-[`docs/sso-oidc.md`](sso-oidc.md), and the e2e stub IdP below already serves the
-OIDC endpoints.
+Until #1929 `'oidc'` was refused at the write boundary (#1537): the login route
+always built a SAML `AuthnRequest`, so a tenant saved as OIDC was locked out.
+It is now in `SSO_IMPLEMENTED_PROVIDERS`; the login route branches on
+`ssoProvider`, the ACS refuses a non-SAML tenant, and an OIDC sign-in ends in
+`GET /api/auth/sso/<slug>/callback`. Both protocols hand their verified
+identity to `completeSsoSignIn()` (`src/lib/ssoCompletion.ts`) — one role
+mapping, one `provisionSsoUser()`, one single-use `SsoLoginGrant`. Single Logout
+stays SAML-only (`spInitiatedSloApplies` checks the provider). The whole OIDC
+contract is [`docs/sso-oidc.md`](sso-oidc.md).
 
 ## Enforced SSO — closing every other door (#1950)
 

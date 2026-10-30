@@ -5,7 +5,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
-import { resolveSetting, resolveSettings } from '@/lib/settingsResolver';
+import { resolveSettings } from '@/lib/settingsResolver';
 import { revertSetting, writeSetting } from '@/lib/settingsWrite';
 import { isValidTimeZone } from '@/lib/timezone';
 import { parseWorkingDays } from '@/lib/businessDays';
@@ -33,27 +33,26 @@ export async function GET(request: Request) {
     const scope = await programOf(orgId, requested);
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const at = { orgId, programId: scope.programId };
-    const [mode, workingDays, timeZone, calendarId, overridden, calendars, programs] = await Promise.all([
-      resolveSetting('slaDayMode', at),
-      resolveSetting('slaWorkingDays', at),
-      resolveSetting('slaTimeZone', at),
-      resolveSetting('slaHolidayCalendarId', at),
-      // Whether this programme overrides any of the four, read through the
-      // resolver's layer report (#1621), not the Setting table.
-      scope.programId
-        ? resolveSettings(at).then((r) => KEYS.filter((key) => r.sources[key] === 'program').length)
-        : Promise.resolve(0),
+    const [resolved, calendars, programs] = await Promise.all([
+      // Through the resolver (#1621): values and the layer each one came from.
+      resolveSettings(at),
       prisma.holidayCalendar.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
       prisma.cohort.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
     ]);
+    const { values, sources } = resolved;
+    const mode = values.slaDayMode;
+    const workingDays = values.slaWorkingDays;
+    const timeZone = values.slaTimeZone;
+    const calendarId = values.slaHolidayCalendarId;
+    // A programme row exists for at least one key: the scope does not just inherit.
+    const overridden = scope.programId ? KEYS.some((k) => sources[k] === 'program') : false;
     return NextResponse.json({
       programId: scope.programId,
       mode,
       workingDays: parseWorkingDays(workingDays),
       timeZone,
       calendarId,
-      // A programme row exists for at least one key: the scope does not just inherit.
-      overridden: overridden > 0,
+      overridden,
       calendars,
       programs,
     });

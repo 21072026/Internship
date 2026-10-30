@@ -12,7 +12,7 @@ import path from 'node:path';
 import { register } from 'node:module';
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { QUOTA_METRICS, QUOTA_LIMIT_KEY, quotaAllows, quotaError } = await import('../../src/lib/quotaRule.ts');
+const { QUOTA_METRICS, QUOTA_LIMIT_KEY, quotaAllows, quotaError, takesAdminSeat } = await import('../../src/lib/quotaRule.ts');
 const { PLANS } = await import('../../src/lib/plans.ts');
 
 test('one more may be provisioned while usage + adding stays within the limit; null is unlimited', () => {
@@ -31,6 +31,11 @@ test('the 403 is the shared plan_limit_reached shape, with the metric', () => {
   assert.equal(body.limit, 2);
   assert.equal(body.usage, 2);
   assert.equal(body.plan, 'community');
+});
+
+test('FREE CORE: only an ADMIN takes a seat', () => {
+  assert.equal(takesAdminSeat('ADMIN'), true);
+  for (const role of ['MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE', null, undefined]) assert.equal(takesAdminSeat(role), false);
 });
 
 test('FREE CORE: no quota metric counts a mentor or a mentee', () => {

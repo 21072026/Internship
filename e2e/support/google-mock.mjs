@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 const PORT = Number(process.env.GOOGLE_MOCK_PORT || 4599);
 
 // Recorded so a test can assert on what the app sent.
-const state = { events: new Map(), revoked: [], seq: 0, freeBusy: { busy: [], fail: false }, freeBusyCalls: 0 };
+const state = { events: new Map(), revoked: [], seq: 0, freeBusy: { busy: [], fail: false }, freeBusyCalls: 0, conference: { fail: false } };
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -70,9 +70,19 @@ const server = createServer(async (req, res) => {
   if (m) {
     const [, , eventId] = m;
     if (req.method === 'POST') {
+      const event = JSON.parse(body || '{}');
+      // A Meet room (#2009): only with conferenceDataVersion=1 and a createRequest,
+      // as Google does. /__conference switches it to failing.
+      const wantsRoom = url.searchParams.get('conferenceDataVersion') === '1' && event.conferenceData?.createRequest;
+      if (wantsRoom && state.conference.fail) return json(res, 503, { error: { message: 'backendError' } });
       const id = `evt-${++state.seq}`;
-      state.events.set(id, JSON.parse(body || '{}'));
-      return json(res, 200, { id, status: 'confirmed' });
+      if (wantsRoom) {
+        const uri = `https://meet.google.com/mock-${state.seq}`;
+        event.hangoutLink = uri;
+        event.conferenceData = { conferenceId: `mock-${state.seq}`, entryPoints: [{ entryPointType: 'video', uri }] };
+      }
+      state.events.set(id, event);
+      return json(res, 200, { id, status: 'confirmed', ...(wantsRoom ? { hangoutLink: event.hangoutLink, conferenceData: event.conferenceData } : {}) });
     }
     if (req.method === 'PATCH' && eventId) {
       if (!state.events.has(eventId)) return json(res, 404, { error: { message: 'Not Found' } });
@@ -96,6 +106,10 @@ const server = createServer(async (req, res) => {
     const id = q.items?.[0]?.id ?? 'primary';
     const busy = state.freeBusy.busy.filter((b) => b.start < q.timeMax && b.end > q.timeMin);
     return json(res, 200, { kind: 'calendar#freeBusy', calendars: { [id]: { busy: busy.map((b) => ({ ...b, summary: 'Dentist (private)' })) } } });
+  }
+  if (url.pathname === '/__conference' && req.method === 'POST') {
+    state.conference = { fail: false, ...JSON.parse(body || '{}') };
+    return json(res, 200, { ok: true });
   }
   if (url.pathname === '/__freebusy' && req.method === 'POST') {
     state.freeBusy = { busy: [], fail: false, ...JSON.parse(body || '{}') };

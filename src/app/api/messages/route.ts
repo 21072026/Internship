@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -37,7 +38,7 @@ import { withRequestScope } from '@/lib/requestContext';
 import { accountState, type AccountState } from '@/lib/accountState';
 import { decodePageCursor, olderThan, parsePageLimit, toPage } from '@/lib/messagePage';
 
-const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
+const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true, altText: true } as const;
 
 // GET ?relationId= — messages in a thread (participants/admin only).
 //
@@ -268,6 +269,9 @@ async function handlePost(request: Request) {
     let conversationId = '';
     let body: string;
     let files: File[] = [];
+    // One `altText` field per `file` field, in the same order (#2864); '' when
+    // the sender gave none or the file is not an image.
+    let altTexts: (string | null)[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData();
@@ -275,7 +279,17 @@ async function handlePost(request: Request) {
       conversationId = String(form.get('conversationId') || '');
       body = String(form.get('body') || '');
       // Accept multiple files (pasted images + picked files). Cap the count.
-      files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0).slice(0, 10);
+      const rawAlts = form.getAll('altText').map((v) => (typeof v === 'string' ? v : ''));
+      const paired = form
+        .getAll('file')
+        .map((f, i) => ({ f, alt: rawAlts[i] ?? '' }))
+        .filter((p): p is { f: File; alt: string } => p.f instanceof File && p.f.size > 0)
+        .slice(0, 10);
+      files = paired.map((p) => p.f);
+      altTexts = paired.map((p) => (p.f.type.startsWith('image/') && p.alt.trim() ? p.alt.trim() : null));
+      if (altTexts.some((a) => a !== null && a.length > TEXT_LIMITS.imageAltText)) {
+        return NextResponse.json({ error: 'Validation failed', code: 'too_long' }, { status: 400 });
+      }
       if ((!relationId && !conversationId) || (!body.trim() && files.length === 0) || body.length > 5000) {
         return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
       }
@@ -310,7 +324,7 @@ async function handlePost(request: Request) {
     // Read each file once into a Buffer, reused for both DB storage and the
     // recipient's email attachments.
     const fileBufs = await Promise.all(
-      files.map(async (f) => ({ filename: f.name, contentType: f.type, size: f.size, data: Buffer.from(await f.arrayBuffer()) })),
+      files.map(async (f, i) => ({ filename: f.name, contentType: f.type, size: f.size, data: Buffer.from(await f.arrayBuffer()), altText: altTexts[i] ?? null })),
     );
     // The MIME check above trusts a client-written header; now that the bytes
     // are in hand, check they agree (#888).
@@ -338,7 +352,7 @@ async function handlePost(request: Request) {
         body,
         channel: 'IN_APP',
         ...(fileBufs.length
-          ? { attachments: { create: fileBufs.map((fb) => ({ filename: fb.filename, contentType: fb.contentType, size: fb.size, data: fb.data })) } }
+          ? { attachments: { create: fileBufs.map((fb) => ({ filename: fb.filename, contentType: fb.contentType, size: fb.size, data: fb.data, altText: fb.altText })) } }
           : {}),
       },
       include: { attachments: { select: ATTACHMENT_SELECT } },

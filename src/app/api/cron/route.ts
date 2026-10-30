@@ -1,3 +1,4 @@
+import { sweepMentorshipRequests } from '@/lib/requestExpiry';
 import { NextResponse } from 'next/server';
 import {
   checkMentorInteractionReminders,
@@ -94,6 +95,11 @@ export async function GET(request: Request) {
     // Stage service levels (#817): runnable on its own so the idempotency of
     // the overdue reminder can be exercised — and so an admin can re-run just
     // this one after fixing an SMTP problem.
+    // Mentorship-request expiry (#1775): runnable on its own so the single
+    // nudge and the guarded expiry can be exercised and re-run safely.
+    if (job === 'mentorship-requests') {
+      return NextResponse.json({ message: 'Mentorship request sweep ran', requests: await sweepMentorshipRequests() });
+    }
     if (job === 'stage-deadlines') {
       return NextResponse.json({ message: 'Stage deadline reminders ran', deadlines: await checkStageDeadlineReminders() });
     }

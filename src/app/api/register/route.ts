@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enforceQuota } from '@/lib/quota';
-import { quotaError } from '@/lib/quotaRule';
+import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
     // the org is already at its plan's band. ADMIN only — a MENTOR or MENTEE
     // acceptance is the free core and is never checked or counted. The open
     // invitation itself is not counted here (it is the seat being taken).
-    if (role === 'ADMIN') {
+    if (takesAdminSeat(role)) {
       const seats = await enforceQuota(orgId, 'ADMIN_SEATS');
       if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
     }
