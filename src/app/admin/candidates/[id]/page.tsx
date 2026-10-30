@@ -47,6 +47,7 @@ import { RelationHealthBadge, useRelationHealth } from '@/components/HealthBadge
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
@@ -58,6 +59,7 @@ interface Relation {
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
+  endReasonCode?: string | null;
   stageDeadline?: string | null;
   // The owner's follow-up (#2563), independent of the stage deadline above.
   nextActionAt?: string | null;
@@ -462,6 +464,8 @@ export default function AdminMenteeDetailPage() {
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium" data-testid="mentorship-mentor"><PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" /></span></div>
                 {rel.company && <div><span className="text-gray-500">{t.candidateDetail.company}:</span> <span className="font-medium">{rel.company.name}</span></div>}
+                {/* Where the pairing stands (#1774), the end reason on hover. */}
+                <div><RelationLifecycleBadge relation={rel} /></div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">

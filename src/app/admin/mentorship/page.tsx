@@ -26,6 +26,10 @@ import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+
+const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ENDED'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 import { CADENCE_PRESETS_WEEKS, DURATION_PRESETS_MONTHS, cadenceLabel, monthsLabel } from '@/lib/relationSchedule';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
@@ -57,6 +61,8 @@ interface MentorshipRelation {
   lifecycleState?: string | null;
   // ONE_TO_ONE | GROUP | … (#1804); a GROUP shows its members below the card.
   relationType?: string;
+  // Why it ended (#1774): the badge's tooltip.
+  endReasonCode?: string | null;
   mentor: { id: string; fullName: string; email: string };
   mentee: { id: string; fullName: string; email: string };
   company: { id: string; name: string } | null;
@@ -107,7 +113,9 @@ export default function MentorshipPage() {
   // The plan's active-mentorship cap renders the upgrade prompt (#1745).
   const [formGate, setFormGate] = useState<GateInfo | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
+  // ACTIVE is the coarse live status (paused included); COMPLETED, PAUSED and
+  // ENDED are lifecycle states (#1774) — a completion is never an early end.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [agreementFilter, setAgreementFilter] = useState<AgreementStatus | ''>('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -139,7 +147,8 @@ export default function MentorshipPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (statusFilter === 'ACTIVE') params.set('status', 'ACTIVE');
+      else if (statusFilter !== 'ALL') params.set('lifecycle', statusFilter);
       if (search) params.set('search', search);
       if (agreementFilter) params.set('agreement', agreementFilter);
       params.set('page', String(page));
@@ -657,15 +666,24 @@ export default function MentorshipPage() {
 
       {/* Search + status filter */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {(['ALL', 'ACTIVE', 'COMPLETED'] as const).map((sf) => (
+        {STATUS_FILTERS.map((sf) => (
           <button
             key={sf}
+            data-testid={`mentorship-filter-${sf.toLowerCase()}`}
             onClick={() => setStatusFilter(sf)}
             className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === sf ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            {sf === 'ALL' ? t.usersAdmin.all : sf === 'ACTIVE' ? t.mentorships.active : t.mentorships.completed}
+            {sf === 'ALL'
+              ? t.usersAdmin.all
+              : sf === 'ACTIVE'
+                ? t.mentorships.active
+                : sf === 'COMPLETED'
+                  ? t.mentorships.completed
+                  : sf === 'PAUSED'
+                    ? t.relationLifecycle.states.PAUSED
+                    : t.relationLifecycle.endedFilter}
           </button>
         ))}
         {/* Filter by agreement status (#1792). A report, not a gate. */}
@@ -695,7 +713,7 @@ export default function MentorshipPage() {
           current={{ search, statusFilter }}
           onApply={(f) => {
             setSearch(f.search || '');
-            setStatusFilter((f.statusFilter as 'ALL' | 'ACTIVE' | 'COMPLETED') || 'ALL');
+            setStatusFilter(STATUS_FILTERS.find((sf) => sf === f.statusFilter) ?? 'ALL');
           }}
         />
       </div>
@@ -730,19 +748,10 @@ export default function MentorshipPage() {
                     {/* A pairing the mentee left did not finish. Rendering both
                         as plain "Completed" is the record #1801/#2289 exist to
                         stop being written. */}
-                    {(effectiveLifecycleState(rel) === 'PAUSED' || effectiveLifecycleState(rel) === 'ENDED_EARLY') && (
-                      <Badge variant="warning" data-testid="lifecycle-state-badge">
-                        {t.relationLifecycle.states[effectiveLifecycleState(rel)]}
-                      </Badge>
-                    )}
-                    {(rel.lifecycleState === 'ENDED_REASSIGNED' ||
-                      rel.lifecycleState === 'ENDED_REMATCHED') && (
-                      <Badge variant="warning" data-testid="lifecycle-badge">
-                        {rel.lifecycleState === 'ENDED_REASSIGNED'
-                          ? t.changeMentor.badgeReassigned
-                          : t.rematchRequest.badge}
-                      </Badge>
-                    )}
+                    {/* Where the pairing stands (#1774): paused, completed or
+                        ended early / re-matched / reassigned / won back — the
+                        end reason on hover. A live pair already says "Active". */}
+                    <RelationLifecycleBadge relation={rel} hideLive />
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                     {rel.company && (

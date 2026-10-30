@@ -1488,6 +1488,8 @@ const en = {
     },
   },
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Ended (other)',
     actions: 'Pairing state',
     pause: 'Pause',
     resume: 'Resume',
@@ -3308,6 +3310,13 @@ const en = {
     insightsT: 'See where deals get stuck',
     insightsD: 'Stage-to-stage conversion, time to won and monthly cohorts — computed from the pipeline, not typed into a spreadsheet.',
     insightsAlt: 'The analytics screen: totals for records, won rate and interactions, a stage-to-stage conversion chart that marks the biggest drop-off, time to won, and a cohort table by month.',
+  },
+  // The tenant welcome page at `/` on an organization's own domain (#1664).
+  // Only the chrome: the headline and body are the tenant's stored text.
+  tenantWelcome: {
+    signIn: 'Sign in',
+    apply: 'Apply',
+    poweredBy: 'Powered by {product}',
   },
   landing: {
     signIn: 'Sign In',
@@ -6750,6 +6759,9 @@ const en = {
     brandAccentBrand: 'Organization colour',
     brandPalette: 'Palette (ten hex colours, 50 → 900)',
     brandPaletteHint: 'Super admins only. The exact ramp behind “Organization colour”; white text on the 600 shade must reach 4.5:1. Leave empty to generate it from the brand color.',
+    welcomeTitle: 'Welcome page headline',
+    welcomeBody: 'Welcome page text',
+    welcomeHint: 'Shown at the root of your verified own domain instead of our landing page, with Sign in and Apply buttons. Plain text: a blank line starts a new paragraph. Leave the headline empty to turn the page off.',
     brandMark: 'Logo mark',
     brandMarkHint: 'One square mark on a transparent background — SVG, or PNG/WebP of at least 512 px, up to 2 MB. Every app icon, the iOS launch screens and the mark in the app are generated from it, on the tile color.',
     brandMarkNone: 'No mark yet — the product icons are used.',
@@ -8523,7 +8535,7 @@ const en = {
       groupSessions: { t: 'Group sessions and office hours', d: 'Publish a kickoff briefing, a mentor office hour or an employer info session to a programme or the whole organisation. People register for a place; past the cap they join a waitlist and move up automatically — and are told — when someone cancels. The host records who attended, and each participant sees their own record.' },
       offers: { t: 'Offer management', d: 'Create, preview and send a job offer from a candidate’s Mentorship card in three steps; the candidate accepts or declines (with a reason) from their portal, sees a persistent decision state, and overdue offers expire on their own — every step logged and notified. An admin offer index answers what is still outstanding, what expires this week and what was declined, and why. Every sent offer carries a branded offer letter from your own template, frozen when sent, with a recorded click-to-accept.' },
       multiTenancy: { t: 'Multi-tenant organisations', d: 'Keep each organisation’s data, plan and configuration separate in one CRM.' },
-      whiteLabel: { t: 'Per-tenant branding settings', d: 'Brand name, logo, colours and support contact are stored for each organisation, and tenant branding is applied across the product — the role layouts, every e-mail a member receives including the career newsletter, and generated certificates.' },
+      whiteLabel: { t: 'Per-tenant branding settings', d: 'Brand name, logo, colours and support contact are stored for each organisation, and tenant branding is applied across the product — the role layouts, every e-mail a member receives including the career newsletter, and generated certificates. A verified own domain can open on the tenant’s own welcome page instead of ours.' },
       brandIcons: { t: 'Your logo as the app icon', d: 'Upload one square logo mark and every app icon is generated from it — home-screen and maskable icons, favicon, shortcut icons and the iOS launch screens — together with your tile colour and, optionally, your own accent palette. A public address mapped to your organisation installs under your name and icons, and your members see your mark in the app, in e-mail and in push notifications.' },
       enterpriseSso: { t: 'Enterprise SSO configuration', d: 'Connect an enterprise directory over SAML or OpenID Connect. Sign-in via /auth/sso provisions people just in time, and SSO can be enforced so no password works for the organisation.' },
       integrations: { t: 'A documented API and signed webhooks', d: 'Your own systems can read candidates, relationships, interactions, meetings, companies and the hiring records, write candidates, stage moves and interactions back, and receive signed webhooks when something changes. Keys are scoped per resource and bound to your organisation, every list pages with a cursor, and the whole contract — with a written deprecation policy — is public on the developer page. Partner companies create their own time-limited keys for their own hiring records, without an admin.' },
@@ -13072,6 +13084,8 @@ const tr: Dict = {
     },
   },
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Diğer biçimde sona erdi',
     actions: 'Eşleşme durumu',
     pause: 'Duraklat',
     resume: 'Devam ettir',
@@ -14832,6 +14846,11 @@ const tr: Dict = {
     insightsT: 'Fırsatların nerede takıldığını görün',
     insightsD: 'Aşamadan aşamaya dönüşüm, kazanmaya kadar geçen süre ve aylık kohortlar — bir tabloya elle yazılmaz, pipeline’dan hesaplanır.',
     insightsAlt: 'Analiz ekranı: kayıt, kazanma oranı ve etkileşim toplamları, en büyük kaybı işaretleyen aşamadan aşamaya dönüşüm grafiği, kazanmaya kadar geçen süre ve aylık kohort tablosu.',
+  },
+  tenantWelcome: {
+    signIn: 'Giriş yap',
+    apply: 'Başvur',
+    poweredBy: '{product} altyapısıyla',
   },
   landing: {
     signIn: 'Giriş Yap',
@@ -18211,6 +18230,9 @@ const tr: Dict = {
     brandAccentBrand: 'Kurum rengi',
     brandPalette: 'Palet (on hex renk, 50 → 900)',
     brandPaletteHint: 'Yalnızca süper yöneticiler. “Kurum rengi”nin tam renk skalası; 600 tonu üzerindeki beyaz metin 4.5:1 kontrasta ulaşmalı. Boş bırakılırsa marka renginden üretilir.',
+    welcomeTitle: 'Karşılama sayfası başlığı',
+    welcomeBody: 'Karşılama sayfası metni',
+    welcomeHint: 'Doğrulanmış kendi alan adınızın ana sayfasında bizim tanıtım sayfamız yerine, Giriş yap ve Başvur düğmeleriyle gösterilir. Düz metin: boş bir satır yeni paragraf başlatır. Sayfayı kapatmak için başlığı boş bırakın.',
     brandMark: 'Logo işareti',
     brandMarkHint: 'Saydam zeminli, kare tek bir işaret — SVG ya da en az 512 px PNG/WebP, en fazla 2 MB. Bütün uygulama simgeleri, iOS açılış ekranları ve uygulamadaki işaret bundan, zemin renginin üzerinde üretilir.',
     brandMarkNone: 'Henüz işaret yok — ürün simgeleri kullanılıyor.',
@@ -19890,7 +19912,7 @@ const tr: Dict = {
       reportSegments: { t: 'Raporları kendi kırılımınızla görün', d: 'Kendi özniteliklerinizi tanımlayın — bölüm, seviye, konum, kıdem olarak okunan bir başlangıç tarihi — CSV ile içe aktarın ve pipeline, dönem, kaynak, iş yükü, yerleştirme ve haftalık rapor raporlarını bunlara göre yan yana ya da tek tek kırın. Beş kişiden küçük segmentler her zaman tek bir adlandırılmış satırda birleştirilir; kimse tek başına ayırt edilemez ve toplamlar tutar.' },
       programJourney: { t: 'Gün gün program akışı', d: 'Ne zaman ne olacağını kurgula: 3. günde bir hatırlatma, 7. günde ilk hedef, 6. hafta için okuma — eşleşmenin başlangıcından ya da bir aşamaya girildiği günden sayılır, üç dilde. Yayınlamadan önce herhangi bir ikilinin tarihlerini önizle; her adım ikiliye uygulama içinde bir kez ulaşır, zaten yapılmış olan atlanır.' },
       multiTenancy: { t: 'Çok kiracılı organizasyonlar', d: 'Her organizasyonun verilerini, planını ve ayarlarını aynı CRM içinde ayrı tutun.' },
-      whiteLabel: { t: 'Kurum bazlı marka ayarları', d: 'Her organizasyon için marka adı, logo, renkler ve destek iletişim bilgileri saklanır; kiracı markası ürün geneline uygulanır — rol yerleşimleri, üyeye giden her e-posta (kariyer bülteni dâhil) ve üretilen sertifikalar.' },
+      whiteLabel: { t: 'Kurum bazlı marka ayarları', d: 'Her organizasyon için marka adı, logo, renkler ve destek iletişim bilgileri saklanır; kiracı markası ürün geneline uygulanır — rol yerleşimleri, üyeye giden her e-posta (kariyer bülteni dâhil) ve üretilen sertifikalar. Doğrulanmış kendi alan adı, bizim sayfamız yerine kurumun kendi karşılama sayfasıyla açılabilir.' },
       brandIcons: { t: 'Logonuz uygulama simgesi olarak', d: 'Tek bir kare logo işareti yükleyin, bütün uygulama simgeleri ondan üretilsin — ana ekran ve maskelenebilir simgeler, favicon, kısayol simgeleri ve iOS açılış ekranları — zemin renginiz ve isterseniz kendi vurgu paletinizle birlikte. Kurumunuza eşlenmiş herkese açık bir adres sizin adınız ve simgelerinizle yüklenir; üyeleriniz işaretinizi uygulamada, e-postada ve anlık bildirimlerde görür.' },
       enterpriseSso: { t: 'Kurumsal SSO yapılandırması', d: 'Kurumsal dizini SAML veya OpenID Connect ile bağlayın. /auth/sso girişi kullanıcıları anında açar; SSO zorunlu kılınabilir, böylece kurum için hiçbir şifre çalışmaz.' },
       pricing: { t: 'İlan edilmiş fiyatlandırma', d: 'Fiyat listesi teklifte değil, sitede: paket bantları, yönetici koltukları, aşım ücreti ve tüm ek paketler. Tek ölçü birimi aktif eşleşmiş çift olduğu için mentor ve mentee yapısal olarak faturalanamaz; sayfa hiçbir pakette neyin ölçülmediğini de açıkça yazar.' },
@@ -24448,6 +24470,8 @@ const de: Dict = {
     },
   },
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Anders beendet',
     actions: 'Status der Zusammenarbeit',
     pause: 'Pausieren',
     resume: 'Fortsetzen',
@@ -26209,6 +26233,11 @@ const de: Dict = {
     insightsT: 'Sehen, wo Deals hängen bleiben',
     insightsD: 'Konversion von Phase zu Phase, Zeit bis zum Abschluss und monatliche Kohorten – aus der Pipeline berechnet, nicht in eine Tabelle getippt.',
     insightsAlt: 'Die Analyse-Ansicht: Summen für Datensätze, Gewinnquote und Interaktionen, ein Diagramm der Konversion von Phase zu Phase mit dem größten Abfall markiert, die Zeit bis zum Abschluss und eine Kohortentabelle nach Monat.',
+  },
+  tenantWelcome: {
+    signIn: 'Anmelden',
+    apply: 'Bewerben',
+    poweredBy: 'Bereitgestellt von {product}',
   },
   landing: {
     signIn: 'Anmelden',
@@ -29589,6 +29618,9 @@ const de: Dict = {
     brandAccentBrand: 'Organisationsfarbe',
     brandPalette: 'Palette (zehn Hex-Farben, 50 → 900)',
     brandPaletteHint: 'Nur für Super-Admins. Die genaue Farbskala hinter „Organisationsfarbe“; weißer Text auf der Stufe 600 muss 4,5:1 erreichen. Leer lassen, um sie aus der Markenfarbe zu erzeugen.',
+    welcomeTitle: 'Überschrift der Willkommensseite',
+    welcomeBody: 'Text der Willkommensseite',
+    welcomeHint: 'Wird auf der Startseite deiner verifizierten eigenen Domain statt unserer Landingpage gezeigt, mit den Buttons Anmelden und Bewerben. Reiner Text: Eine Leerzeile beginnt einen neuen Absatz. Lass die Überschrift leer, um die Seite abzuschalten.',
     brandMark: 'Logo-Zeichen',
     brandMarkHint: 'Ein quadratisches Zeichen auf transparentem Hintergrund — SVG oder PNG/WebP mit mindestens 512 px, höchstens 2 MB. Alle App-Icons, die iOS-Startbildschirme und das Zeichen in der App werden daraus erzeugt, auf der Kachelfarbe.',
     brandMarkNone: 'Noch kein Zeichen — die Produkt-Icons werden verwendet.',
@@ -31268,7 +31300,7 @@ const de: Dict = {
       reportSegments: { t: 'Berichte nach Ihren Kriterien', d: 'Legen Sie eigene Attribute an — Abteilung, Ebene, Standort, ein Eintrittsdatum als Betriebszugehörigkeit —, importieren Sie sie per CSV und schlüsseln Sie Pipeline-, Kohorten-, Quellen-, Auslastungs-, Vermittlungs- und Wochenberichte danach auf, nebeneinander oder einzeln. Segmente unter fünf Personen werden immer in einer benannten Zeile zusammengefasst — niemand wird erkennbar, und die Summen stimmen.' },
       programJourney: { t: 'Ein Programmablauf, Tag für Tag', d: 'Leg fest, was wann passiert: eine Erinnerung an Tag 3, ein erstes Ziel an Tag 7, Lesestoff für Woche 6 — gezählt ab dem Start des Paares oder ab dem Tag, an dem eine Phase erreicht ist, in drei Sprachen. Sieh dir vor dem Veröffentlichen die Termine jedes Paares an; jeder Schritt erreicht das Paar einmal in der App, und was schon erledigt ist, wird übersprungen.' },
       multiTenancy: { t: 'Mandantenfähige Organisationen', d: 'Daten, Tarif und Einstellungen jeder Organisation bleiben innerhalb eines CRM getrennt.' },
-      whiteLabel: { t: 'Mandantenbezogene Marken-Einstellungen', d: 'Markenname, Logo, Farben und Supportkontakt werden je Organisation gespeichert; das Mandanten-Branding wird produktweit angewendet — die Rollen-Layouts, jede E-Mail an ein Mitglied inklusive Karriere-Newsletter und erzeugte Zertifikate.' },
+      whiteLabel: { t: 'Mandantenbezogene Marken-Einstellungen', d: 'Markenname, Logo, Farben und Supportkontakt werden je Organisation gespeichert; das Mandanten-Branding wird produktweit angewendet — die Rollen-Layouts, jede E-Mail an ein Mitglied inklusive Karriere-Newsletter und erzeugte Zertifikate. Eine verifizierte eigene Domain kann mit der eigenen Willkommensseite des Mandanten statt mit unserer öffnen.' },
       brandIcons: { t: 'Ihr Logo als App-Icon', d: 'Ein quadratisches Logo-Zeichen hochladen, und alle App-Icons werden daraus erzeugt — Homescreen- und maskierbare Icons, Favicon, Shortcut-Icons und die iOS-Startbildschirme — zusammen mit Ihrer Kachelfarbe und auf Wunsch Ihrer eigenen Akzentpalette. Eine öffentliche Adresse, die Ihrer Organisation zugeordnet ist, installiert sich mit Ihrem Namen und Ihren Icons, und Ihre Mitglieder sehen Ihr Zeichen in der App, in E-Mails und in Push-Benachrichtigungen.' },
       enterpriseSso: { t: 'Enterprise-SSO-Konfiguration', d: 'Ein Unternehmensverzeichnis per SAML oder OpenID Connect anbinden. Die Anmeldung über /auth/sso legt Personen bei Bedarf an, und SSO lässt sich erzwingen, sodass für die Organisation kein Passwort mehr funktioniert.' },
       pricing: { t: 'Veröffentlichte Preise', d: 'Die Preisliste steht auf der Website und nicht in einem Angebot: Plan-Bänder, Admin-Plätze, die Überschreitungsgebühr und alle Zusatzpakete. Eine einzige Abrechnungseinheit — das aktive zusammengeführte Paar — macht Mentoren und Mentees strukturell nicht abrechenbar, und die Seite nennt auch, was in keinem Plan abgerechnet wird.' },
