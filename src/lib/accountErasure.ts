@@ -238,6 +238,8 @@ async function mentorApplicationOps(userId: string): Promise<Prisma.PrismaPromis
         referenceName: null,
         referenceContact: null,
         referenceOutcome: null,
+        // Answers to the org's own questions, staged until an account exists (#1803).
+        formAnswers: Prisma.DbNull,
       },
     }),
   ];

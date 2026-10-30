@@ -18,7 +18,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { notifyIfAllowed } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
+import { meetingChatCard } from '@/lib/meetingChatCard';
 import { formatInTimeZone } from '@/lib/timezone';
 import { intlLocaleFor } from '@/lib/interviewRequests';
 import {
@@ -57,6 +58,7 @@ async function loadRows(ids: string[]) {
       scheduledAt: true,
       previousScheduledAt: true,
       meetLink: true,
+      batchKey: true,
       timeZone: true,
       rsvpToken: true,
       createdById: true,
@@ -105,7 +107,6 @@ async function organizerOf(row: Row) {
   };
 }
 
-const linkFor = (p: Person) => (p.role === 'MENTEE' ? '/portal' : p.role === 'ADMIN' ? '/admin/calendar' : '/mentor/meetings');
 const readOn = (at: Date, p: Person) => formatInTimeZone(at, p.timezone, undefined, intlLocaleFor(p.preferredLanguage));
 
 /** Run one notice and log, never throw: a failed mail must not fail the change. */
@@ -126,13 +127,14 @@ export async function noticeMeetingsRescheduled(ids: string[], actorId: string) 
 
   for (const { person, row, invitee } of peopleOf(rows, actorId)) {
     const to = row.scheduledAt as Date;
+    // The bell, and chat for a person who linked it (#1942): the move rewrites
+    // their earlier invite/reminder card for this meeting, join button kept.
     await attempt('inApp', () =>
-      notifyIfAllowed(
+      notifyEvent(
         person.id,
-        'meetingReminders',
         'meeting.rescheduled',
         { title: row.title, from: row.previousScheduledAt ? readOn(row.previousScheduledAt, person) : '—', to: readOn(to, person) },
-        linkFor(person),
+        { dedupeKey: `meeting-moved:${row.id}:${to.toISOString()}`, chatCard: meetingChatCard(row, 'moved') },
       ),
     );
     await attempt('mail', () =>
@@ -182,14 +184,14 @@ export async function noticeMeetingsCancelled(ids: string[], actorId: string, re
 
   for (const { person, row } of peopleOf(rows, actorId)) {
     const when = row.scheduledAt ? readOn(row.scheduledAt, person) : '—';
+    // The bell, and chat (#1942): the cancel rewrites the earlier cards for
+    // this meeting WITHOUT the join button, so none still says "join".
+    const card = meetingChatCard(row, 'cancelled');
+    const dedupeKey = `meeting-cancelled:${row.id}`;
     await attempt('inApp', () =>
-      notifyIfAllowed(
-        person.id,
-        'meetingReminders',
-        why ? 'meeting.cancelledReason' : 'meeting.cancelled',
-        why ? { title: row.title, when, reason: why } : { title: row.title, when },
-        linkFor(person),
-      ),
+      why
+        ? notifyEvent(person.id, 'meeting.cancelledReason', { title: row.title, when, reason: why }, { dedupeKey, chatCard: card })
+        : notifyEvent(person.id, 'meeting.cancelled', { title: row.title, when }, { dedupeKey, chatCard: card }),
     );
     await attempt('mail', () =>
       sendMeetingCancelledEmail({

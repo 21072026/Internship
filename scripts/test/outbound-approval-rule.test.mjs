@@ -86,9 +86,11 @@ test('exempt even when on: the account_security group and the person\'s own ackn
   // The demo form's double opt-in confirmation is `consent`.
   assert.equal(outboundDecision({ ...on, category: 'consent', recipient: 'contact' }).hold, false);
   assert.equal(outboundDecision({ ...on, category: 'mentor-application-received', recipient: 'contact' }).hold, false);
+  // The acknowledgement of a public partner application (#3361): the person's own action.
+  assert.equal(outboundDecision({ ...on, category: 'affiliate-application-received', recipient: 'contact' }).hold, false);
   // And nothing outside those is exempt.
   const exempt = Object.entries(OUTBOUND_CATEGORIES).filter(([, e]) => e.exempt).map(([c]) => c).sort();
-  assert.deepEqual(exempt, [...exemptSecurity, 'mentor-application-received'].sort());
+  assert.deepEqual(exempt, [...exemptSecurity, 'mentor-application-received', 'affiliate-application-received'].sort());
 });
 
 test('an unknown or missing category is HELD (fail safe), and an org-less mail is never held', () => {
