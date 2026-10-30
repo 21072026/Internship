@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**A programme's own vocabulary on its pages (#3400):** the page dictionary now reads the terminology's programme layer for a signed-in mentee (their active mentorship's programme) or mentor (the programme all their active mentorships share), derived from the database in `requestProgramId()` (`src/i18n/server.ts`), never from request input. `/admin/programs/[id]/…` mounts `ProgramTerminologyScope` (`src/i18n/programScope.tsx`), which honours the route id only for a programme of the caller's org and applies the programme document over the overlaid base (`overlaidDictionary()`). With no programme row nothing changes.",
+  "notes": {
+    "en": ["A programme's own words now appear on its pages and for its mentors and mentees."],
+    "tr": ["Bir programın kendi kelimeleri artık o programın sayfalarında ve programdaki kişilerde görünür."],
+    "de": ["Die eigenen Begriffe eines Programms erscheinen jetzt auf seinen Seiten und bei seinen Teilnehmenden."]
+  }
+}
