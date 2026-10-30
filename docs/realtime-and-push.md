@@ -69,6 +69,39 @@ Akış **yalnızca id taşır**, mesaj gövdesi taşımaz. İstemci sinyali duyu
 yetkili uca gidip thread'i yeniden çeker — böylece bir mesajı okumanın tek bir
 kod yolu kalır ve bu uç ikinci, daha zayıf bir okuma kapısına dönüşemez.
 
+### Replikalar arası teslimat (#1698)
+
+`REALTIME_REDIS_URL` ayarlıysa bus, her yayını yerel dinleyicilere verdikten
+sonra aynı sinyali bir Redis pub/sub kanalına da yazar
+(`src/lib/realtimeBroker.ts`); öbür replikalar onu kendi dinleyicilerine
+dağıtır, yayıncı kendi yankısını `origin` ile tanıyıp atlar. Ayarlı değilse
+davranış birebir eskisi: süreç içi teslimat + heartbeat düzeltmesi.
+
+- **Kanaldan geçen yalnızca sinyal.** Olay tipi, en çok üç id ve alıcı
+  kullanıcı id'leri — `src/lib/realtimeBrokerRule.ts` bunu iki uçta da zorlar
+  (bilinmeyen anahtar atılır, bilinmeyen tip reddedilir, id'ler log-güvenli
+  alfabede, alıcı sayısı ≤ 500, yük ≤ 64 KB). Mesaj gövdesi broker'a hiç
+  konmaz: konsaydı broker, birinin mesajlarını okumanın ikinci ve daha zayıf
+  yolu olurdu.
+- **Kanal ortam başına:** `realtime:<REALTIME_CHANNEL>` ya da
+  `realtime:<NEXTAUTH_URL host'u>`. Prod ve preview aynı Redis'i paylaşsa bile
+  birbirinin sinyalini duymaz.
+- **Broker düşerse sessizlik yok:** yerel teslimat sürer, kesinti bir kez
+  `warning` olarak loglanır, bağlantı 1 sn'den 60 sn'ye katlanan aralıklarla
+  yeniden kurulur ve dönüş bir kez `info` olarak yazılır. Arada kaçan sinyali
+  heartbeat'teki veritabanı kontrolü düzeltir — bu yüzden o kontrol kalıyor.
+- **Bağımlılık yok:** rate-limit deposunun RESP kodlayıcı/ayrıştırıcısını
+  (`src/lib/rateLimitRedis.ts`) kullanır; iki soket (PUBLISH ve SUBSCRIBE), AUTH
+  ve SELECT. Aynı Redis'i `RATE_LIMIT_REDIS_URL` ile paylaşabilir — ayrı bir
+  servis gerekmez.
+
+Kanıt: `scripts/test/realtime-broker.test.mjs` gerçek soket üzerinde küçük bir
+RESP sunucusuyla (AUTH/SELECT/SUBSCRIBE/PUBLISH) iki broker arasında teslimatı,
+yanlış parolayı (log'a parola sızmadan), bağlantı kopup yeniden kurulmasını ve
+bus'ın bir eş replikanın yayınını yerel dinleyiciye verip kendi yankısını
+atladığını doğrular. Ölçülen bağlantı maliyeti ve heartbeat sapması için
+`k6/sse-load.js` (#1612).
+
 ### Doğrulama
 
 ```bash
@@ -119,8 +152,10 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
   edilip `failureCount` ile sayılır, üst üste 5 hatadan sonra satır düşer.
 - `src/lib/messagePush.ts` — bildirim metnini **alıcının dilinde**, zilin
   kullandığı sözlük şablonundan üretir; böylece bildirim alanı ile uygulama içi
-  satır aynı şeyi söyler. Push gönderen yalnızca iki kanal var: mesajlar
-  (`sendNewMessagePush`) ve destek hattı (`sendSupportPush`, #3154: kullanıcının
+  satır aynı şeyi söyler. Mesaj push'u artık bildirim yönlendiricisinden geçer
+  (`notifyEvent(..., { channels: ['push'], preview })`, #1715 — defter satırı,
+  kanal matrisi ve sessiz saatler dahil; konu başına `tag` ile katlanır); kalan tek
+  doğrudan gönderici destek hattıdır (`sendSupportPush`, #3154: kullanıcının
   destek mesajı org'unun admin'lerine, admin yanıtı talep sahibine; kapatma push
   göndermez). Hangi destek olayının push gönderdiği `src/lib/supportPushRule.ts`'te;
   ayrıntı [`mobile-push.md`](mobile-push.md) § The shape.

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Affiliate: automatic attribution from account events** (#3354). An account event whose `referral_code` matches an ACTIVE `AffiliatePartner.code` of the same org now creates the `AffiliateCustomer` row (`externalRef` = the event's `external_id`) inside the ingest, idempotently (`INSERT IGNORE` on `(orgId, externalRef)`); first link wins (an `integration.affiliate_kept_first` activity line instead of a re-point), suspended/terminated partners and other orgs' codes never link, a batch dry run writes nothing. The decision is the pure `planAffiliateAttribution()` (`src/lib/affiliateAttributionRule.ts`, unit-tested); the later manual payment entry finds the customer without a partner pick. Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Customers who sign up through a partner's referral link are now attached to that partner automatically, so their payments earn the partner a commission without any manual linking."],
+    "tr": ["Bir partnerin referans bağlantısıyla kayıt olan müşteriler artık otomatik olarak o partnere bağlanıyor; ödemelerinin komisyonu elle eşleştirme gerekmeden partnere yazılıyor."],
+    "de": ["Kunden, die sich über den Empfehlungslink eines Partners registrieren, werden jetzt automatisch diesem Partner zugeordnet – ihre Zahlungen lösen ohne manuelle Zuordnung eine Provision aus."]
+  }
+}

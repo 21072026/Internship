@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { createUser } from '@/lib/userCreate';
-import { withApiKey } from '@/lib/apiKey';
+import { sourceOnly, withApiKey } from '@/lib/apiKey';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { KEYSET_ORDER, apiError, apiOk, keysetWhere, paginate, parseListQuery } from '@/lib/api/v1';
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     if (query instanceof Response) return query;
 
     const mentees = await prisma.user.findMany({
-      where: { role: 'MENTEE', orgId: key.orgId, ...keysetWhere(query) },
+      where: { AND: [{ role: 'MENTEE', orgId: key.orgId }, sourceOnly(key), keysetWhere(query)] },
       orderBy: KEYSET_ORDER,
       take: query.limit + 1,
       select: candidateSelect,
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const { rows, page } = paginate(RESOURCE, mentees, query.limit);
     const data = rows.map(serializeCandidate);
     return apiOk(data, page, { candidates: data });
-  });
+  }, { sourceScoped: true });
 }
 
 // POST /api/v1/candidates (#1996) — create a mentee in the key's org.
