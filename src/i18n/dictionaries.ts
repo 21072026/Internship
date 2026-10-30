@@ -7005,6 +7005,8 @@ const en = {
     cancelEvent: 'Cancel session',
     cancelConfirm: 'Cancel this session? Everyone registered or waiting is told.',
   },
+  // The link button on a chat card (#1942).
+  chatCard: { join: 'Join the meeting' },
   calendar: {
     title: 'Calendar',
     subtitle: 'Your meetings and stage deadlines at a glance',
@@ -18343,6 +18345,7 @@ const tr: Dict = {
     cancelEvent: 'Oturumu iptal et',
     cancelConfirm: 'Bu oturum iptal edilsin mi? Kayıtlı ve bekleyen herkese haber verilir.',
   },
+  chatCard: { join: 'Toplantıya katıl' },
   calendar: {
     title: 'Takvim',
     subtitle: 'Toplantıların ve aşama son tarihlerin tek bakışta',
@@ -29600,6 +29603,7 @@ const de: Dict = {
     cancelEvent: 'Sitzung absagen',
     cancelConfirm: 'Diese Sitzung absagen? Alle Angemeldeten und Wartenden werden benachrichtigt.',
   },
+  chatCard: { join: 'Am Meeting teilnehmen' },
   calendar: {
     title: 'Kalender',
     subtitle: 'Deine Meetings und Phasenfristen auf einen Blick',

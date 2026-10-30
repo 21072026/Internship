@@ -3023,6 +3023,11 @@ model MentorApplication {
   referenceContact   String?   @db.VarChar(191)
   referenceOutcome   String?   @db.Text
   screenedById       String?
+  // Answers to the org's REGISTRATION questions for mentors (#1803), staged
+  // here because no account exists yet: [{ definitionId, answers }], each
+  // validated at submit with validateResponse(). Copied onto the account when
+  // it is created or promoted (carryMentorApplicationAnswers), then cleared.
+  formAnswers        Json?
 
   decidedBy  User? @relation("DecidedMentorApplications", fields: [decidedById], references: [id])
   screenedBy User? @relation("ScreenedMentorApplications", fields: [screenedById], references: [id])
@@ -9410,12 +9415,21 @@ model ChatDelivery {
   externalMessageId String?            @db.VarChar(128)
   status            ChatDeliveryStatus
   error             String?            @db.Text
+  /// What the card is about (#1942), e.g. `meeting:<batchKey|id>` — so a
+  /// reschedule or cancel card can rewrite the earlier cards instead of
+  /// posting one that contradicts them. Null for cards about nothing in
+  /// particular.
+  subjectKey        String?            @db.VarChar(64)
+  /// Set when a later card rewrote this one in place (chat.update / a Bot
+  /// Framework activity update); a superseded card is never rewritten again.
+  supersededAt      DateTime?
   createdAt         DateTime           @default(now())
 
   workspace ChatWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
   @@index([orgId])
+  @@index([identityId, subjectKey])
 }
 
 // A mentor volunteering to mentor an unmatched mentee (#1809, "Mentor Offers").

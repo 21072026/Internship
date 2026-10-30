@@ -31,9 +31,17 @@ export interface DynamicFieldsState {
   validate: () => boolean;
   /** Save every form's answers; null on success, else the API's code. */
   save: () => Promise<string | null>;
+  /** The answers as a public form posts them, inside its own request (`formAnswers`). */
+  payload: () => { definitionId: string; answers: Record<string, unknown> }[];
 }
 
-export function useDynamicFields(surface: FormSurface): DynamicFieldsState {
+/**
+ * `publicQuery` switches to a PUBLIC page (no account yet, #1803): the
+ * questions come from `/api/forms/public?<publicQuery>`, nothing is read back,
+ * and the host posts `payload()` with its own request instead of calling `save()`.
+ */
+export function useDynamicFields(surface: FormSurface, opts: { publicQuery?: string } = {}): DynamicFieldsState {
+  const { publicQuery } = opts;
   const [forms, setForms] = useState<ActiveForm[]>([]);
   const [answers, setAnswers] = useState<Record<string, Record<string, unknown>>>({});
   const [showErrors, setShowErrors] = useState(false);
@@ -41,8 +49,8 @@ export function useDynamicFields(surface: FormSurface): DynamicFieldsState {
   useEffect(() => {
     let live = true;
     Promise.all([
-      fetch(`/api/forms/active?surface=${surface}`).then((r) => (r.ok ? r.json() : { forms: [] })),
-      fetch(`/api/forms/responses?surface=${surface}`).then((r) => (r.ok ? r.json() : { answers: {} })),
+      fetch(publicQuery ? `/api/forms/public?${publicQuery}` : `/api/forms/active?surface=${surface}`).then((r) => (r.ok ? r.json() : { forms: [] })),
+      publicQuery ? Promise.resolve({ answers: {} }) : fetch(`/api/forms/responses?surface=${surface}`).then((r) => (r.ok ? r.json() : { answers: {} })),
     ])
       .then(([a, b]) => {
         if (!live) return;
@@ -53,7 +61,7 @@ export function useDynamicFields(surface: FormSurface): DynamicFieldsState {
     return () => {
       live = false;
     };
-  }, [surface]);
+  }, [surface, publicQuery]);
 
   const setAnswer = useCallback((formKey: string, fieldKey: string, value: unknown) => {
     setAnswers((prev) => ({ ...prev, [formKey]: { ...prev[formKey], [fieldKey]: value } }));
@@ -79,7 +87,12 @@ export function useDynamicFields(surface: FormSurface): DynamicFieldsState {
     return null;
   }, [forms, answers]);
 
-  return { forms, answers, setAnswer, showErrors, validate, save };
+  const payload = useCallback(
+    () => forms.map((form) => ({ definitionId: form.id, answers: Object.fromEntries(form.fields.map((f) => [f.key, answers[form.key]?.[f.key] ?? null])) })),
+    [forms, answers],
+  );
+
+  return { forms, answers, setAnswer, showErrors, validate, save, payload };
 }
 
 export function DynamicFields({ state, testIdPrefix = 'custom-field' }: { state: DynamicFieldsState; testIdPrefix?: string }) {
