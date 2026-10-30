@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate public programme page (#3360):** `/partner` on the marketing host, signed out — hero with three doors (apply, partner portal, the product's sign-up page), introduction, a commission table built from the org's plan on every render (`commissionTableRows()` / `maxOneOffCommission()` in `src/lib/affiliateLandingRule.ts`, unit-tested), the percent phase in one sentence, the steps, a call button (`tel:`), the closing call to action with an e-mail button (`mailto:`) and this host's imprint/privacy/terms in the footer. The org is the one an operator mapped the host to, through the public company-inquiry resolver (`resolvePublicInquiryTarget`, same trust note); the page exists only for a MARKETING org with the `affiliate` capability, a valid plan and some copy (#3359) — anything less is a 404. Colours and mark follow the host's brand; every organisation-specific word is data. Deliberately not in `PUBLIC_ROUTES` (it 404s where no programme is configured). Pinned by `e2e/affiliate-public-page.spec.ts`.",
+  "notes": {
+    "en": ["Partner programmes now have a public page on the marketing site: your texts, a commission table that always matches your plan, and buttons to apply, sign in, call or write to you."],
+    "tr": ["Partner programlarının artık marketing sitesinde herkese açık bir sayfası var: sizin metinleriniz, her zaman planınızla uyumlu bir komisyon tablosu ve başvuru, giriş, arama ve e-posta butonları."],
+    "de": ["Partnerprogramme haben jetzt eine öffentliche Seite auf der Marketing-Website: Ihre Texte, eine Provisionstabelle, die immer zu Ihrem Plan passt, und Schaltflächen zum Bewerben, Anmelden, Anrufen oder Schreiben."]
+  }
+}

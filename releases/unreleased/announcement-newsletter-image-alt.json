@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Alt text for announcement and newsletter images (EN 301 549 11.8.2 / Section 508 504.3, #3388):** `AnnouncementImage.altText` and `NewsletterImage.altText` (nullable `VarChar(500)`). Both admin composers show a \"Describe this image\" field when an image is attached (`imageAlt` multipart field; announcement and newsletter PATCH accept `imageAlt` to change it on an existing image, '' = decorative; over 500 → 400 `too_long`). The feed, the /announcements page, the admin history, the newsletter archive and both mails (announcement `cid:` image, newsletter hero) render it as `alt`, empty when none was given. Support-conversation images follow in #3407; VPAT 11.8.2, 504.2, 504.3 updated.",
+  "notes": {
+    "en": ["Images in announcements and newsletters can now be described, so screen-reader users hear what they show."],
+    "tr": ["Duyuru ve bültenlerdeki resimler artık tanımlanabiliyor; ekran okuyucu kullananlar resimde ne olduğunu duyuyor."],
+    "de": ["Bilder in Ankündigungen und Newslettern lassen sich jetzt beschreiben – Screenreader lesen vor, was sie zeigen."]
+  }
+}
