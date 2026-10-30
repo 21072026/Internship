@@ -151,6 +151,36 @@ test('the contract is published through the API', { tag: '@smoke' }, async ({ pl
   expect(s).toMatchObject({ contractVersion: 1, contract: { en: 'Synthetic terms', de: 'Synthetische Bedingungen' } });
 });
 
+test('the public page content is validated, stored and audited (#3359)', async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const put = (ctx: APIRequestContext, data: unknown) => ctx.put('/api/admin/affiliate/settings/landing', { headers: host, data });
+
+  expect((await put(observer, { landing: {} })).status()).toBe(403);
+  expect((await put(owner, {})).status()).toBe(400);
+  const bad = await put(owner, { landing: { copy: { fr: {} }, phone: 'call me', productSignupUrl: 'http://app.example/' } });
+  expect(bad.status()).toBe(400);
+  expect((await bad.json()).issues.map((i: { field: string }) => i.field).sort()).toEqual(['copy.fr', 'phone', 'productSignupUrl']);
+
+  const landing = {
+    copy: {
+      de: { heroTitle: 'Partner werden', steps: [{ title: 'Registrieren', text: 'In Sekunden.' }], bullets: ['Jederzeit kündbar'] },
+      en: { heroTitle: 'Become a partner' },
+    },
+    phone: '+49 30 1234567',
+    email: 'partners@acme.example',
+    productSignupUrl: 'https://app.acme.example/register',
+  };
+  const saved = await put(owner, { landing });
+  expect(saved.status()).toBe(200);
+  expect((await saved.json()).changed).toBe(true);
+  // The same content in another key order is not a change.
+  expect((await (await put(owner, { landing: { productSignupUrl: landing.productSignupUrl, email: landing.email, phone: landing.phone, copy: { en: landing.copy.en, de: landing.copy.de } } })).json()).changed).toBe(false);
+  const s = await (await observer.get('/api/admin/affiliate/settings', { headers: host })).json();
+  expect(s.landing).toMatchObject({ copy: { de: { heroTitle: 'Partner werden' } }, phone: '+49 30 1234567', email: 'partners@acme.example' });
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.landing.update' } })).toBe(1);
+});
+
 test('partners: create, codes unique, state changes under the lock, IBAN reveal audited', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
   const owner = await as(playwright, baseURL, emails[0]);
   const observer = await as(playwright, baseURL, emails[1]);

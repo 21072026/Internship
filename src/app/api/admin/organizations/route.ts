@@ -14,6 +14,7 @@ import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive, OIDC_CLIENT_SECRET_PURPOSE } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl, sloUrl } from '@/lib/ssoSaml';
+import { oidcCallbackUrl } from '@/lib/ssoOidc';
 import { certificateInfo } from '@/lib/ssoMetadata';
 import { certificateStatus } from '@/lib/ssoCertificateRule';
 import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
@@ -173,6 +174,12 @@ export async function GET(request: Request) {
           ssoDiscoveryUrl: o.ssoDiscoveryUrl,
           ssoScopes: o.ssoScopes,
           ssoClientSecretSet: !!o.ssoClientSecretEnc,
+          // SAML hardening (#1955): the tenant's own switches.
+          ssoSignRequests: o.ssoSignRequests,
+          ssoRequireInResponseTo: o.ssoRequireInResponseTo,
+          spCertificateSet: !!o.ssoSpCert,
+          // What an OIDC customer registers at their IdP (#1929).
+          oidcRedirectUri: oidcCallbackUrl(o.slug),
           // The stored certificate's expiry, for the card's badge (#1933) —
           // dates and a status only, never the certificate body.
           certificate: ssoCertificateSummary(o.ssoCertificate, now),
@@ -330,6 +337,12 @@ const patchSchema = z.object({
   ssoClientSecret: z.string().max(2000).optional(),
   ssoDiscoveryUrl: z.string().max(2000).optional(),
   ssoScopes: z.string().max(255).optional(),
+  // SAML hardening (#1955). The tenant's own policy, like enforcement: each
+  // only narrows what a sign-in may be (a signed request, a correlated
+  // response), so a tenant ADMIN may set them — the IdP trust stays the
+  // operator's.
+  ssoSignRequests: z.boolean().optional(),
+  ssoRequireInResponseTo: z.boolean().optional(),
   // Enforced SSO (#1950). Separate from ssoEnabled on purpose: "our IdP works"
   // and "nothing but our IdP may work" are different promises, and only the
   // second one ends live sessions.
@@ -394,6 +407,7 @@ export async function PATCH(request: Request) {
     brandTileColor, brandAccent, brandPalette,
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
     ssoClientId, ssoClientSecret, ssoDiscoveryUrl, ssoScopes,
+    ssoSignRequests, ssoRequireInResponseTo,
   } = parsed.data;
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
@@ -510,10 +524,12 @@ export async function PATCH(request: Request) {
   const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
     ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined ||
     ssoLogoutUrl !== undefined || ssoEnforced !== undefined ||
-    ssoClientId !== undefined || ssoClientSecret !== undefined || ssoDiscoveryUrl !== undefined || ssoScopes !== undefined;
+    ssoClientId !== undefined || ssoClientSecret !== undefined || ssoDiscoveryUrl !== undefined || ssoScopes !== undefined ||
+    ssoSignRequests !== undefined || ssoRequireInResponseTo !== undefined;
   const clearsSso = isPureClear([
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
     ssoClientId, ssoClientSecret, ssoDiscoveryUrl, ssoScopes,
+    ssoSignRequests, ssoRequireInResponseTo,
   ]);
   if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
@@ -628,6 +644,8 @@ export async function PATCH(request: Request) {
     const sep = orNull(ssoEntryPoint); if (sep !== undefined) data.ssoEntryPoint = sep;
     const sc = orNull(ssoCertificate); if (sc !== undefined) data.ssoCertificate = sc;
     const slo = orNull(ssoLogoutUrl); if (slo !== undefined) data.ssoLogoutUrl = slo;
+    if (ssoSignRequests !== undefined) data.ssoSignRequests = ssoSignRequests;
+    if (ssoRequireInResponseTo !== undefined) data.ssoRequireInResponseTo = ssoRequireInResponseTo;
     const cid = orNull(ssoClientId); if (cid !== undefined) data.ssoClientId = cid;
     const disc = orNull(ssoDiscoveryUrl); if (disc !== undefined) data.ssoDiscoveryUrl = disc;
     const scopes = orNull(ssoScopes); if (scopes !== undefined) data.ssoScopes = scopes;
@@ -747,7 +765,8 @@ export async function PATCH(request: Request) {
     action: 'org.updated',
     level:
       'ssoEnabled' in data || 'ssoIssuer' in data || 'ssoEntryPoint' in data || 'ssoEnforced' in data ||
-      'ssoClientId' in data || 'ssoClientSecretEnc' in data || 'ssoDiscoveryUrl' in data
+      'ssoClientId' in data || 'ssoClientSecretEnc' in data || 'ssoDiscoveryUrl' in data ||
+      'ssoSignRequests' in data || 'ssoRequireInResponseTo' in data
         ? 'warning'
         : 'info',
     actorId: session.user.id,

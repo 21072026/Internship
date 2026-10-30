@@ -67,8 +67,13 @@ const server = createServer(async (req, res) => {
     const [, eventId] = m;
     if (req.method === 'POST' && !eventId) {
       const id = `ms-evt-${++state.seq}`;
-      state.events.set(id, JSON.parse(body || '{}'));
-      return json(res, 201, { id });
+      const event = JSON.parse(body || '{}');
+      // A Teams meeting (#2009): Graph answers isOnlineMeeting with onlineMeeting.joinUrl.
+      if (event.isOnlineMeeting && event.onlineMeetingProvider === 'teamsForBusiness') {
+        event.onlineMeeting = { joinUrl: `https://teams.microsoft.com/l/meetup-join/mock-${state.seq}` };
+      }
+      state.events.set(id, event);
+      return json(res, 201, { id, ...(event.onlineMeeting ? { onlineMeeting: event.onlineMeeting } : {}) });
     }
     if (req.method === 'PATCH' && eventId) {
       if (!state.events.has(eventId)) return json(res, 404, { error: { code: 'ErrorItemNotFound' } });

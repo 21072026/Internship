@@ -319,6 +319,16 @@ export const SETTING_DEFAULTS = {
   // Meeting attendance (#2014): a cancellation this many hours or fewer before
   // the start is recorded as LATE_CANCEL for whoever cancelled.
   lateCancelHours: '24',
+  // Meeting reminder lead times in minutes (#1636), e.g. '1440,60'. '' = the
+  // built-in defaults (one hour before a meeting; a day and an hour before a
+  // series occurrence), i.e. exactly what every installation did before.
+  meetingReminderLeadsMinutes: '',
+  // What a new pairing agrees to when the person creating it chooses nothing
+  // (#1784): a duration in months and a meeting interval in weeks. '' = none,
+  // which is what every installation did before. Per programme, so a 3-month
+  // bootcamp and a 12-month programme of one tenant each carry their own.
+  relationDefaultDurationMonths: '',
+  relationDefaultCadenceWeeks: '',
   // Business-day stage SLAs (#1638, docs/business-day-slas.md). `calendar` is
   // what every installation did before, so nothing moves until an admin opts in.
   slaDayMode: 'calendar',
@@ -471,6 +481,9 @@ export const SETTING_SCHEMA = {
   salesLeaderboardForReps: { type: 'boolean', scopes: O },
   outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
   lateCancelHours: { type: 'number', scopes: P },
+  meetingReminderLeadsMinutes: { type: 'string', scopes: P },
+  relationDefaultDurationMonths: { type: 'number', nullable: true, scopes: P },
+  relationDefaultCadenceWeeks: { type: 'number', nullable: true, scopes: P },
   slaDayMode: { type: 'enum', values: ['calendar', 'business'], scopes: P },
   slaWorkingDays: { type: 'string', scopes: P },
   slaHolidayCalendarId: { type: 'string', scopes: P },

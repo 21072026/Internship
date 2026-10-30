@@ -77,16 +77,14 @@ test.describe('evaluation due dates', () => {
 
     // B's mentor writes the interim evaluation; A's MENTEE reviews the mentor —
     // only the first is the task the reminder is about.
-    await page.context().clearCookies();
-    await signInAndSettle(page, mentor, PW, '/mentor');
+    await signInAsFreshUser(page, mentor, PW, '/mentor');
     expect((await page.request.post('/api/evaluations', { data: { relationId: relationIds[1], type: 'INTERIM', scores: { technical: 4 } } })).status()).toBe(201);
     expect((await prisma.evaluationDue.findFirstOrThrow({ where: { relationId: relationIds[1] } })).completedAt).not.toBeNull();
     await signInAsFreshUser(page, mentees[0], PW, '/portal');
     expect((await page.request.post('/api/evaluations', { data: { relationId: relationIds[0], type: 'INTERIM', scores: { communication: 5 } } })).status()).toBe(201);
     expect((await prisma.evaluationDue.findFirstOrThrow({ where: { relationId: relationIds[0] } })).completedAt).toBeNull();
 
-    await page.context().clearCookies();
-    await signInAndSettle(page, admin, PW, '/admin');
+    await signInAsFreshUser(page, admin, PW, '/admin');
     expect(await sweep(27)).toMatchObject({ reminded: 0 }); // the second waits a week
     expect(await sweep(28)).toMatchObject({ reminded: 1 }); // A only — B was written
     expect(await sweep(60)).toMatchObject({ reminded: 0 }); // never a third

@@ -1,0 +1,131 @@
+name: Visual baselines (generate)
+
+# Generates the screenshot baselines of e2e/visual-regression.spec.ts (#1614)
+# on the SAME image the scheduled full suite compares them on, and pushes them to
+# a branch for a pull request. Baselines are never generated on a laptop: font
+# rasterisation differs, and a locally made PNG would fail on every CI run.
+#
+# Manual only. A baseline update is reviewed like code (docs/testing.md, "Visual
+# regression"): open the PR from the pushed branch, look at every changed PNG,
+# and merge only what the change under review was supposed to move.
+#
+# Every step that shapes the pixels mirrors e2e-full.yml (Node 22, `next build`,
+# `playwright install --with-deps chromium`, the seeded admin) — keep them in
+# step when that workflow changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or SHA to generate baselines for'
+        required: false
+        default: main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: visual-baselines
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Generate visual baselines
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
+      NODE_OPTIONS: --max-old-space-size=8192
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+      SEED_ADMIN_EMAIL: "admin@example.com"
+      SEED_ADMIN_PASSWORD: "ChangeMe123!"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "ChangeMe123!"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply DB schema
+        run: npx prisma db push
+
+      - name: Seed admin user
+        run: npx prisma db seed
+
+      - name: Build app
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate baselines
+        env:
+          VISUAL_BASELINE_UPDATE: '1'
+        run: npx playwright test e2e/visual-regression.spec.ts --update-snapshots --reporter=list
+
+      # Proof of determinism before anything is pushed: the same build compared
+      # against what it just wrote, twice. A diff here means a mask is missing,
+      # and the baselines are not pushed.
+      - name: Compare twice against the fresh baselines
+        run: |
+          npx playwright test e2e/visual-regression.spec.ts --reporter=list
+          npx playwright test e2e/visual-regression.spec.ts --reporter=list
+
+      - name: Upload baselines
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-baselines
+          path: e2e/visual-regression.spec.ts-snapshots/
+          if-no-files-found: ignore
+
+      - name: Push baselines to a branch
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          branch="bot/visual-baselines-${RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add e2e/visual-regression.spec.ts-snapshots
+          if git diff --cached --quiet; then
+            echo "Baselines unchanged — nothing to push." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "test(visual): regenerate screenshot baselines (#1614)"
+          git push origin "$branch"
+          {
+            echo "Baselines pushed to \`$branch\`."
+            echo ""
+            echo "Open a PR from it and review every changed PNG before merging (docs/testing.md, \"Visual regression\")."
+          } >> "$GITHUB_STEP_SUMMARY"

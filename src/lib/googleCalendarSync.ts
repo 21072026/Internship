@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { productNameForOrg } from '@/lib/orgBrand';
 import { anyCalendarSyncEnabled, enabledSyncProviders, type CalendarSyncProvider } from '@/lib/calendar/provider';
 import type { PushableMeeting } from '@/lib/calendar/pushable';
+import { CONFERENCE_NOTE_PREFIX } from '@/lib/calendar/conferenceNote';
 
 export { pushableSelect, type PushableMeeting } from '@/lib/calendar/pushable';
 
@@ -84,7 +85,14 @@ async function pushOne(
   }
   await prisma.calendarConnection.update({
     where: { id: auth.connectionId },
-    data: { lastSyncAt: new Date(), lastError: null },
+    data: { lastSyncAt: new Date() },
+  }).catch(() => {});
+  // A successful mirror clears a mirror error, never a conference-generation
+  // note (#2009): that one says why the meeting got another room, and the push
+  // that follows it in the same request would otherwise erase it at once.
+  await prisma.calendarConnection.updateMany({
+    where: { id: auth.connectionId, NOT: { lastError: { startsWith: CONFERENCE_NOTE_PREFIX } } },
+    data: { lastError: null },
   }).catch(() => {});
   return true;
 }

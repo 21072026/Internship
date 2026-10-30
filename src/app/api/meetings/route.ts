@@ -14,10 +14,12 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingContext';
 import { meetingLinkRefusal } from '@/lib/meetingRoom';
+import { adoptProviderEvent } from '@/lib/conferenceGeneration';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
+import { reminderLeadField } from '@/lib/meetingReminderLeadField';
 import { bookWithoutConflict, conflictBody, recordForcedBooking } from '@/lib/busyWindows';
 import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
 import type { PolicyViolation } from '@/lib/bookingPolicyRule';
@@ -36,6 +38,9 @@ const schema = z.object({
   // How long it runs (#1984). Omitted → the one default, stored as null so the
   // row keeps following the default if it ever changes.
   durationMinutes: durationMinutesField,
+  // Reminder lead (#1636): null = the programme default, 0 = no reminder,
+  // N = one reminder N minutes ahead (src/lib/meetingReminderLeads.ts).
+  reminderLeadMinutes: reminderLeadField,
   // Outsiders with no account here (#1446). Each gets its own RSVP token and
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
@@ -186,6 +191,8 @@ export async function POST(request: Request) {
       inviteeCount: relations.length,
       orgId: session.user.orgId,
       organizerId: session.user.id,
+      // A Meet room on the organiser's own calendar under GENERATE_PROVIDER (#2009).
+      conference: when ? { title, start: when, end: meetingEnd(when, { durationMinutes }), timeZone: organizerZone } : null,
     });
     if (!resolved.ok) return meetingLinkRefusal(resolved);
     const link = resolved.link;
@@ -225,6 +232,7 @@ export async function POST(request: Request) {
         title,
         scheduledAt: when,
         durationMinutes: durationMinutes ?? null,
+        reminderLeadMinutes: parsed.data.reminderLeadMinutes ?? null,
         timeZone: organizerZone,
         meetLink: link,
         rsvpToken,
@@ -264,6 +272,9 @@ export async function POST(request: Request) {
         meeting = await prisma.meeting.create({ data });
       }
       guestHostMeetingId ??= meeting.id;
+      // A generated Meet room already IS an event on the organiser's calendar:
+      // adopt it as this row's mirror before the push, or the push makes a second.
+      await adoptProviderEvent([meeting.id], resolved.conference);
       // Mirror into the calendars of whoever connected their own Google account
       // (#709). A no-op unless the operator enabled the integration and the
       // person opted in; unconnected users keep the e-mail + .ics path exactly

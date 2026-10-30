@@ -59,3 +59,20 @@ export const UNMATCHED_REASONS = ['no_eligible_mentor', 'all_at_capacity', 'belo
 export type UnmatchedReason = (typeof UNMATCHED_REASONS)[number];
 
 export const ROUND_NAME_MAX = 120;
+
+/**
+ * The board's per-row and bulk actions (#1796), each as the state it moves to
+ * and the states it moves from — every pair is an edge `canTransitionProposal`
+ * allows an admin. `lock` additionally needs a mentor on the row: an unmatched
+ * proposal has nothing to publish.
+ */
+export const PROPOSAL_ACTIONS = {
+  lock: { to: 'LOCKED', from: ['DRAFT'] },
+  unlock: { to: 'DRAFT', from: ['LOCKED'] },
+  discard: { to: 'DISCARDED', from: ['DRAFT', 'LOCKED'] },
+  restore: { to: 'DRAFT', from: ['DISCARDED'] },
+} as const satisfies Record<string, { to: ProposalState; from: readonly ProposalState[] }>;
+export type ProposalAction = keyof typeof PROPOSAL_ACTIONS;
+
+/** Proposals hold a mentor's seat while they can still be published. */
+export const SEAT_HOLDING_STATES = ['DRAFT', 'LOCKED'] as const satisfies readonly ProposalState[];

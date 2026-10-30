@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, type Session } from 'next-auth';
+import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -8,7 +8,7 @@ import { emit } from '@/lib/events/emit';
 import { redactedDiff, API_KEY_DIFF_SPEC } from '@/lib/events/diff';
 import { generateApiKey } from '@/lib/apiKey';
 import { resolveOrgId } from '@/lib/orgScope';
-import { logScopeDenial, scopeForRole } from '@/lib/authzScope';
+import { ownCompany } from '@/lib/companyIntegrations';
 import { apiKeyStatus, isApiScope, maxApiKeyExpiry, parseScopes, serializeScopes } from '@/lib/apiScopes';
 import { COMPANY_KEY_SCOPE_CEILING, checkCompanyScopeCeiling } from '@/lib/companyApiKeyRule';
 import { integrationsLocked } from '@/lib/integrationsGate';
@@ -21,25 +21,13 @@ import { integrationsLocked } from '@/lib/integrationsGate';
 // narrowed grant. The /api/v1 door then admits such a key only on routes that
 // filter by its company (src/lib/companyApiKeyRule.ts).
 //
-// Which company is the caller's is the fail-closed role scope
-// (`scopeForRole(…, 'company')`, src/lib/authzScope.ts), never a body field: a
-// COMPANY session without a company owns nothing and gets a 403. Another
-// company's key is invisible here — the list and the revoke both filter by the
+// Which company is the caller's: ownCompany() (src/lib/companyIntegrations.ts),
+// the fail-closed role scope, never a body field. Another company's key is
+// invisible here — the list and the revoke both filter by the
 // caller's company, so its id answers like one that does not exist.
 //
 // Same audit trail as the admin path: `apikey.created` / `apikey.revoked` at
 // warning level, and the same events. The raw key is shown exactly once.
-
-async function ownCompany(session: Session, action: string): Promise<{ id: string } | NextResponse> {
-  if (session.user.role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const scope = await scopeForRole(session.user, 'company');
-  const company = scope ? await prisma.company.findFirst({ where: scope, select: { id: true } }) : null;
-  if (!company) {
-    await logScopeDenial(session.user, action);
-    return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
-  }
-  return company;
-}
 
 export async function GET() {
   const session = await getServerSession(authOptions);

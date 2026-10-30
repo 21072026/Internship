@@ -1,14 +1,14 @@
-// Enterprise SSO configuration & gating (#545). The SAML round-trip IS live —
-// `src/lib/ssoSaml.ts` builds the AuthnRequest and verifies the posted
-// assertion; this module stores/validates a tenant's IdP config and exposes the
-// guard (`isSsoActive`) that the login/ACS routes check before redirecting.
-// OIDC is a roadmap item, not a shipped one: nothing builds an OIDC request, so
-// it is refused at the write boundary here. See docs/sso-saml.md.
+// Enterprise SSO configuration & gating (#545). Both protocols are live: SAML
+// (`src/lib/ssoSaml.ts`, docs/sso-saml.md) and, since #1929, OpenID Connect
+// (`src/lib/ssoOidc.ts`, docs/sso-oidc.md). This module stores/validates a
+// tenant's IdP config and exposes the guard (`isSsoActive`) the login, ACS and
+// callback routes check before doing anything.
 //
 // Safe to import from the server; no client-only concerns.
 
 import { orgPlanHasFeature, type OrgPlan } from '@/lib/orgPlans';
 import { certificateInfo } from '@/lib/ssoMetadata';
+import { idpCertificates } from '@/lib/ssoCertificates';
 
 export type SsoProvider = 'saml' | 'oidc';
 
@@ -34,13 +34,10 @@ export interface SsoConfig {
 // Every provider the config *vocabulary* knows about…
 export const SSO_PROVIDERS: SsoProvider[] = ['saml', 'oidc'];
 
-// …and the subset the auth path can actually complete a login with. 'oidc' stays
-// in the type/vocabulary (it is a real roadmap item), but a config naming it can
-// neither be saved (validateSsoConfig) nor go live (isSsoActive) — the login
-// route always builds a SAML request, so an OIDC tenant would be locked out.
-export const SSO_IMPLEMENTED_PROVIDERS: SsoProvider[] = ['saml'];
-
-export const SSO_OIDC_UNSUPPORTED = 'OIDC single sign-on is not supported yet — use SAML';
+// …and the subset the auth path can complete a login with. A provider is added
+// here only together with its login route branch; until #1929 'oidc' was refused
+// at the write boundary because the login route always built a SAML request.
+export const SSO_IMPLEMENTED_PROVIDERS: SsoProvider[] = ['saml', 'oidc'];
 
 export function isSsoProvider(v: unknown): v is SsoProvider {
   return v === 'saml' || v === 'oidc';
@@ -119,11 +116,20 @@ export function isSsoActive(c: SsoActivation | null | undefined): boolean {
 // A SAML signing certificate that does not parse, or has already expired, would
 // save cleanly and then fail at the first real assertion — in front of the
 // whole tenant (#1933). Refused at save time instead, naming the problem.
+//
+// Several PEM blocks are several trusted certificates (#1955, a key rotation:
+// the IdP's current and next one). Each is judged on its own, and the message
+// names which one fails — an expired one has to be removed, not kept "just in
+// case", because it would still be trusted.
 export function validateSsoCertificate(pem: string, now: Date = new Date()): string | null {
-  const info = certificateInfo(pem);
-  if (!info) return 'SSO certificate could not be parsed — paste the IdP\'s X.509 signing certificate (PEM)';
-  if (info.notAfter.getTime() <= now.getTime()) {
-    return `SSO certificate expired on ${info.notAfter.toISOString().slice(0, 10)} — ask the IdP for its current signing certificate`;
+  const certs = idpCertificates(pem);
+  for (const [i, cert] of certs.entries()) {
+    const which = certs.length > 1 ? ` #${i + 1}` : '';
+    const info = certificateInfo(cert);
+    if (!info) return `SSO certificate${which} could not be parsed — paste the IdP\'s X.509 signing certificate (PEM)`;
+    if (info.notAfter.getTime() <= now.getTime()) {
+      return `SSO certificate${which} expired on ${info.notAfter.toISOString().slice(0, 10)} — ask the IdP for its current signing certificate`;
+    }
   }
   return null;
 }
@@ -143,10 +149,10 @@ export function validateSsoConfig(
   if (c.ssoProvider != null && c.ssoProvider !== '' && !isSsoProvider(c.ssoProvider)) {
     return 'SSO provider must be "saml" or "oidc"';
   }
-  // Saving `oidc` used to return a green "saved" and lock every user of the
-  // tenant out: the login route always builds a SAML request.
+  // A provider in the vocabulary that no login route can complete would save
+  // green and lock every user of the tenant out.
   if (isSsoProvider(c.ssoProvider) && !isSsoProviderImplemented(c.ssoProvider)) {
-    return SSO_OIDC_UNSUPPORTED;
+    return `SSO provider "${c.ssoProvider}" is not supported`;
   }
   const url = (c.ssoEntryPoint ?? '').trim();
   if (url && !/^https:\/\//i.test(url)) {

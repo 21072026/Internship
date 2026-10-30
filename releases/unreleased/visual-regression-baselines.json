@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Visual regression (#1614, part 2):** `e2e/visual-regression.spec.ts` compares landing, `/auth/signin`, `/admin`, `/admin/board`, `/messages`, `/mentor` and `/portal` in EN/TR/DE × light/dark (42 PNGs) with `toHaveScreenshot()`, in the scheduled full suite only. Deterministic by construction: fixed viewport, viewport-sized capture, animations/transitions/caret off, its own organisation with fixed names, and masks over `<time>`, the account menu, avatars, the nav count badges and the first-run checklist. Baselines come only from the CI image: the new `visual-baselines.yml` (`workflow_dispatch`) builds exactly like `e2e-full.yml`, writes them, compares twice against what it wrote, and pushes them to `bot/visual-baselines-<run>` for a reviewed PR. Until baselines are committed the spec skips itself. Procedure in `docs/testing.md` § Visual regression."
+}

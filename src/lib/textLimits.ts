@@ -102,6 +102,8 @@ export const TEXT_LIMITS = {
   companyInterestNote: 1000,
   /** Message.body (conversation + support reply) — @db.Text */
   messageBody: 5000,
+  /** MessageAttachment.altText — VarChar(500): what an attached image shows (#2864). */
+  imageAltText: 500,
   /** SupportMessage.body — @db.Text */
   supportMessageBody: 5000,
   /** User.bio — @db.Text */

@@ -65,6 +65,9 @@ enum ConferencingPolicy {
   BUILTIN
   PREFER_PERSONAL
   REQUIRE_EXTERNAL
+  // A Google Meet room created on the organiser's own connected calendar
+  // (#2009, src/lib/conferenceGeneration.ts); PREFER_PERSONAL without one.
+  GENERATE_PROVIDER
 }
 
 enum InteractionType {
@@ -97,15 +100,15 @@ enum PipelineStatus {
 // enforces isolation yet, so behaviour is unchanged. Enforcement (query
 // filtering, per-org uniqueness) lands in a later, guarded slice.
 model Organization {
-  id                 String    @id @default(cuid())
-  name               String
-  slug               String    @unique
+  id                     String    @id @default(cuid())
+  name                   String
+  slug                   String    @unique
   // Per-tenant plan tier (#547). Limits per plan live in src/lib/orgPlans.ts
   // (client-safe catalogue), not the DB. New tenants start on FREE; the
   // backfilled legacy "default" org is grandfathered to ENTERPRISE (unlimited)
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
-  plan               OrgPlan   @default(FREE)
+  plan                   OrgPlan   @default(FREE)
   // Which PRODUCT this tenant is (#2350, epic #2348). coreCRM is one core with
   // several verticals: INTERNSHIP is the mentorship/placement product this repo
   // started as, MARKETING the second one. It is a property of the TENANT, not of
@@ -120,16 +123,16 @@ model Organization {
   //
   // Literal default, so `db push` fills existing rows itself (#2298 only bites
   // client-side defaults and required columns without one).
-  vertical           String    @default("INTERNSHIP")
+  vertical               String    @default("INTERNSHIP")
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,
   // the #543 enforcement slice); until then they are managed but not applied to
   // the live single-tenant UI.
-  brandName          String?
-  brandLogoUrl       String?   @db.Text
-  brandColor         String?
-  supportEmail       String?
+  brandName              String?
+  brandLogoUrl           String?   @db.Text
+  brandColor             String?
+  supportEmail           String?
   // Per-organization brand (#2922, docs/white-label.md). The rule is pure in
   // src/lib/brandRule.ts: a field left null falls back to the vertical's
   // default on its own, and a row with none of them set IS the default. All
@@ -140,25 +143,25 @@ model Organization {
   //                    (super admin only; generated from brandColor when unset)
   //   brandMarkVersion the current generated icon set (BrandAsset.version);
   //                    null = the vertical's static files under public/
-  brandTileColor     String?
-  brandAccent        String?
-  brandPalette       String?   @db.Text
-  brandMarkVersion   String?
+  brandTileColor         String?
+  brandAccent            String?
+  brandPalette           String?   @db.Text
+  brandMarkVersion       String?
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
   // library — see docs/sso-saml.md; this stores/validates the config and gates
   // the (documented, not-yet-wired) auth code path.
-  ssoEnabled         Boolean   @default(false)
-  ssoProvider        String? // 'saml' | 'oidc'
-  ssoIssuer          String? // IdP entity ID / issuer
-  ssoEntryPoint      String?   @db.Text // IdP SSO sign-in URL
-  ssoCertificate     String?   @db.Text // IdP x509 signing certificate (PEM)
+  ssoEnabled             Boolean   @default(false)
+  ssoProvider            String? // 'saml' | 'oidc'
+  ssoIssuer              String? // IdP entity ID / issuer
+  ssoEntryPoint          String?   @db.Text // IdP SSO sign-in URL
+  ssoCertificate         String?   @db.Text // IdP x509 signing certificate (PEM)
   // The certificate-expiry warning already mailed (#1933, src/lib/ssoCertificateRule.ts):
   // the SHA-256 fingerprint it was about and the mark (30 or 7 days). Keyed to the
   // fingerprint so a rotated certificate starts afresh and a redeploy never re-sends.
-  ssoCertWarnFp      String?   @db.VarChar(100)
-  ssoCertWarnStage   Int?
+  ssoCertWarnFp          String?   @db.VarChar(100)
+  ssoCertWarnStage       Int?
   // Enforced SSO (#1950): when true, NO password-derived path may mint a
   // session for this tenant's users — sign-in, remember-me silent re-auth,
   // password reset/SET_INITIAL, invitation registration and password change all
@@ -168,43 +171,57 @@ model Organization {
   // ADMIN (anti-lockout), and enforcement only *applies* while SSO is still
   // active — a plan downgrade or a broken config falls back to password login
   // rather than locking the tenant out of its own data. See docs/sso-saml.md.
-  ssoEnforced        Boolean   @default(false)
+  ssoEnforced            Boolean   @default(false)
   // IdP role mapping (#1940): when true, a RETURNING SSO user's role is
   // re-resolved from their claims on every login (logged at warning level,
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
-  ssoSyncRole        Boolean   @default(false)
+  ssoSyncRole            Boolean   @default(false)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
   // sealed with secretBox (purpose 'sso-sp-signing-key'), the self-signed
   // public certificate published in the SP metadata.
-  ssoLogoutUrl       String?   @db.Text
-  ssoSpKey           String?   @db.Text
-  ssoSpCert          String?   @db.Text
+  ssoLogoutUrl           String?   @db.Text
+  ssoSpKey               String?   @db.Text
+  ssoSpCert              String?   @db.Text
+  // SAML protocol hardening (#1955, docs/sso-saml.md § Hardening). Both off by
+  // default so no existing tenant changes until its IdP is ready:
+  //   ssoSignRequests        sign our AuthnRequest with the SP key above. The
+  //                          IdP must trust our certificate FIRST, or every
+  //                          sign-in of the tenant fails.
+  //   ssoRequireInResponseTo correlate every response with a request we sent
+  //                          (`always`). Off = `ifPresent`: a response that
+  //                          names a request must name a live one of ours, and
+  //                          IdP-initiated sign-in (no InResponseTo) still works.
+  // Encrypted assertions need no switch: whenever the SP key exists we can
+  // decrypt one. ssoCertificate may hold SEVERAL PEM blocks — every one is
+  // trusted, which is how an IdP signing-key rotation stays a non-event.
+  ssoSignRequests        Boolean   @default(false)
+  ssoRequireInResponseTo Boolean   @default(false)
   // OpenID Connect (#1926; the flow is #1929, docs/sso-oidc.md). Used only when
   // ssoProvider = 'oidc'; ssoIssuer is the OIDC `iss`. The client secret is
   // SEALED (secretBox purpose 'sso-oidc-client-secret') and is a credential:
   // ORG_CREDENTIAL_FIELDS keeps it out of every response. Scopes default to
   // `openid email profile` when null. The JWKS cache spares a login one
   // network hop; it is refreshed on a TTL and on an unknown `kid`.
-  ssoClientId        String?   @db.VarChar(255)
-  ssoClientSecretEnc String?   @db.Text
-  ssoDiscoveryUrl    String?   @db.Text
-  ssoScopes          String?   @db.VarChar(255)
-  ssoJwksCache       Json?
-  ssoJwksFetchedAt   DateTime?
+  ssoClientId            String?   @db.VarChar(255)
+  ssoClientSecretEnc     String?   @db.Text
+  ssoDiscoveryUrl        String?   @db.Text
+  ssoScopes              String?   @db.VarChar(255)
+  ssoJwksCache           Json?
+  ssoJwksFetchedAt       DateTime?
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
   // yet — `stripeCustomerId` is the column the later checkout task fills, kept
   // unique so one customer can never be attached to two tenants.
-  stripeCustomerId   String?   @unique
-  billingEmail       String?
-  vatId              String?
+  stripeCustomerId       String?   @unique
+  billingEmail           String?
+  vatId                  String?
   // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
   // never inferred from an IP or a locale.
-  billingCountry     String?
+  billingCountry         String?
   // The public hostname whose sessionless forms write into THIS tenant (#2569):
   // the marketing landing's demo form on one of the marketing hosts
   // (MARKETING_HOSTS) lands in the org whose `publicHost` is exactly that host
@@ -214,9 +231,9 @@ model Organization {
   // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
   // one host can never name two tenants. Resolution + trust reasoning:
   // src/lib/publicHostOrg.ts. Nullable, so `db push` is additive (#2298).
-  publicHost         String?   @unique
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  publicHost             String?   @unique
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   // Ownership of `publicHost` as a TENANT's own domain (#1661). The mapping
   // above is an operator's word; a domain a tenant brings itself is proven with
@@ -341,6 +358,7 @@ model Organization {
   chatWorkspaces          ChatWorkspace[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
+  ssoAuthRequests         SsoAuthRequest[]
   agendaTemplates         AgendaTemplate[]
   safeguardingFlags       SafeguardingFlag[]
   brandAssets             BrandAsset[]
@@ -1074,6 +1092,8 @@ model User {
 
   requisitionFits RequisitionFit[] @relation("RequisitionFitMentee")
 
+  cancelledMentorshipRequests MentorshipRequest[] @relation("CancelledMentorshipRequests")
+
   @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
@@ -1480,6 +1500,13 @@ model MessageAttachment {
   contentType String
   size        Int
   data        Bytes
+  // What an image shows, in the sender's words (WCAG 1.1.1 / EN 11.8.2, #2864):
+  // the composer asks for it under every attached image and the thread renders
+  // it as the image's alt text. Nullable — optional for the author, absent on
+  // every attachment sent before the prompt existed (the filename stands in).
+  // Erased with the row: the sweep deletes the attachments of the person's
+  // messages (accountErasure.ts).
+  altText     String?  @db.VarChar(500)
   createdAt   DateTime @default(now())
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -1701,8 +1728,37 @@ model Announcement {
   orgId String?
   org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  // Targeting and scheduling (#1721). All additive with defaults, so every row
+  // written before them reads as "everyone, already sent" with no backfill.
+  //
+  // `audience` holds CRITERIA, never a recipient list — roles, programmes,
+  // pipeline stages, companies, tags — parsed by src/lib/announcementAudience.ts
+  // and resolved against the tenant's people AT SEND TIME (someone who joins a
+  // programme between scheduling and sending is included). Null = everyone.
+  audience       Json?
+  // Mirrors `audience != null`, as a plain column the reader feed can filter on
+  // (a JSON-null predicate is not portable): a targeted announcement appears in
+  // the feed only of the people it was delivered to.
+  targeted       Boolean            @default(false)
+  // When a SCHEDULED announcement goes out; null for one sent on submit.
+  scheduledAt    DateTime?
+  status         AnnouncementStatus @default(SENT)
+  // A scheduled send remembers whether the admin also asked for e-mail.
+  emailRequested Boolean            @default(false)
+
   @@index([createdAt])
   @@index([orgId])
+}
+
+// An announcement's lifecycle (#1721). SENT is the default so every existing
+// row is a sent one. SCHEDULED → SENDING is the dispatch job's claim (one
+// guarded updateMany), SENDING → SENT when the fan-out settles. CANCELED is an
+// admin's cancel of a SCHEDULED one before its time — kept as a record.
+enum AnnouncementStatus {
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELED
 }
 
 // An image attached to a broadcast announcement, stored in the database (same
@@ -2169,10 +2225,12 @@ model Company {
   externalProfiles   ExternalProfileLink[]
   adminScopeGrants   AdminScopeGrant[]
 
-  // Org-scoped, not global — see the `vatId` comment above.
   // API keys a COMPANY owner minted for their own data (#2006).
-  apiKeys ApiKey[]
+  apiKeys  ApiKey[]
+  // Webhooks a COMPANY owner registered for their own hiring events (#2006).
+  webhooks Webhook[]
 
+  // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
@@ -2415,6 +2473,10 @@ enum MentorshipRequestStatus {
   PENDING
   APPROVED
   REJECTED
+  // #1775: an admin withdrew it with a reason (`cancelReason`), or nobody
+  // answered within 14 days (`expiresAt`). Both free the mentee to ask again.
+  CANCELLED
+  EXPIRED
 }
 
 model MentorshipRequest {
@@ -2440,10 +2502,21 @@ model MentorshipRequest {
   rematchNote        String?                 @db.Text
   decidedById        String?
   decidedAt          DateTime?
+  // Request expiry (#1775). The rule — 14 days to an answer, ONE nudge on day 7
+  // — is pure in src/lib/requestExpiryRule.ts; src/lib/requestExpiry.ts is the
+  // only writer of the sweep's state. NULL `expiresAt` (requests from before the
+  // column) reads as createdAt + 14 days.
+  expiresAt          DateTime?
+  nudgeSentAt        DateTime?
+  // Who withdrew a pending request and why (admin only, `action: 'cancel'`).
+  // The reason is shown to the mentee — it is the one thing they are owed.
+  cancelledById      String?
+  cancelReason       String?                 @db.Text
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
   mentee           User                @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  cancelledBy      User?               @relation("CancelledMentorshipRequests", fields: [cancelledById], references: [id], onDelete: SetNull)
   decidedBy        User?               @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
   // SetNull: a mentor leaving must not take pending requests with them — the
   // preference simply disappears while the request survives.
@@ -2456,6 +2529,7 @@ model MentorshipRequest {
   @@index([menteeId])
   @@index([preferredMentorId])
   @@index([replacesRelationId])
+  @@index([status, expiresAt])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
@@ -3213,6 +3287,11 @@ model Webhook {
   apiKeyId            String?
   apiKey              ApiKey?           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
   source              String?           @db.VarChar(20)
+  // Set when a COMPANY owner registered the hook for their own data (#2006):
+  // fan-out then delivers only the company-scoped events whose subject belongs
+  // to this company (src/lib/companyWebhookScope.ts). Null = an org-wide hook.
+  companyId           String?
+  company             Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
   // `consecutiveFailures` and `failingSince` describe the current failure
   // streak (reset by any 2xx); past 20 failures or 72h without a success the
@@ -3228,6 +3307,7 @@ model Webhook {
 
   @@index([orgId, active])
   @@index([apiKeyId])
+  @@index([companyId])
 }
 
 // One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
@@ -4287,6 +4367,19 @@ model MentorshipRelation {
   // because re-pointing `relationId` would re-attribute the outgoing mentor's
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId         String?
+  // What the pair agreed to (#1784, story #1782). `expectedEndDate` is when
+  // the pairing is MEANT to finish; `completedAt` is when it actually ended —
+  // deliberately two columns. Not `stageDeadline` either: that is the pipeline
+  // STAGE clock, rewritten on every stage move. The agreed meeting rhythm is
+  // the existing `expectedMeetingIntervalWeeks` (#2014) — one cadence column,
+  // not a second one in days. Rules: src/lib/relationSchedule.ts.
+  expectedEndDate            DateTime?
+  // How many times the end date was moved by the explicit extend action
+  // (#1786) — an edit of `expectedEndDate` never counts as an extension.
+  durationExtendedCount      Int              @default(0)
+  // The ending-soon nudge's idempotency stamp (#1786), in the shape of
+  // `deadlineReminderSentAt`: one nudge per end date; extending clears it.
+  endingSoonNotifiedAt       DateTime?
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -4964,6 +5057,14 @@ model Meeting {
   rsvpToken           String        @unique
   createdById         String
   reminderSentAt      DateTime?
+  // Reminder lead times (#1636, src/lib/meetingReminderLeads.ts). NULL = the
+  // programme's `meetingReminderLeadsMinutes` (or the one-hour default); 0 =
+  // no reminder for this meeting; N = one reminder N minutes ahead.
+  reminderLeadMinutes Int?
+  // The leads already sent for the current start time ("1440,60"), claimed by
+  // one guarded update before anything is sent; cleared with reminderSentAt
+  // when the meeting moves.
+  remindedLeads       String?       @db.VarChar(64)
   createdAt           DateTime      @default(now())
   // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
   updatedAt           DateTime      @default(now()) @updatedAt
@@ -5266,15 +5367,22 @@ enum MeetingReminderLead {
 }
 
 model MeetingSeriesReminder {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   seriesId     String
   occurrenceAt DateTime
-  lead         MeetingReminderLead
-  sentAt       DateTime            @default(now())
+  // The pre-#1636 enum, still written for the 1440/60 leads so a row written
+  // now collides with one written before the deploy (no double reminder across
+  // the transition); NULL for any other lead. Never re-typed in place: an
+  // enum → Int change under `db push --accept-data-loss` drops the column.
+  lead         MeetingReminderLead?
+  // The lead in minutes (#1636) — the real key from now on. NULL on old rows.
+  leadMinutes  Int?
+  sentAt       DateTime             @default(now())
 
   series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([seriesId, occurrenceAt, lead])
+  @@unique([seriesId, occurrenceAt, leadMinutes])
 }
 
 // "This occurrence is over" for a series occurrence that has no Meeting row —
@@ -5538,6 +5646,31 @@ model SsoClaimMapping {
 // assertion is verified, then consumed by the `sso` NextAuth provider to issue a
 // session (#545). Mirrors ImpersonationGrant: short-lived + single-use, so a
 // verified IdP login can't be replayed.
+// One SP-initiated SSO request in flight (#1929): the OIDC `state` (unique,
+// the lookup key) with its `nonce` and PKCE `codeVerifier`, and the origin the
+// sign-in started on (the OIDC twin of SAML RelayState, honoured on the way
+// back only through servedOrigin()). Single use: the callback spends it with a
+// conditional updateMany on `usedAt: null` before it trusts anything, so a
+// replayed or raced `state` finds nothing. 10-minute expiry; the nightly
+// housekeeping job deletes expired rows. `kind` lets the SAML request ID use
+// the same store for InResponseTo correlation (#1955) — one request store.
+model SsoAuthRequest {
+  id           String       @id @default(cuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  kind         String       @default("oidc") @db.VarChar(10)
+  state        String       @unique @db.VarChar(191)
+  nonce        String?      @db.VarChar(191)
+  codeVerifier String?      @db.VarChar(191)
+  returnOrigin String?      @db.VarChar(255)
+  createdAt    DateTime     @default(now())
+  expiresAt    DateTime
+  usedAt       DateTime?
+
+  @@index([orgId])
+  @@index([expiresAt])
+}
+
 model SsoLoginGrant {
   id        String   @id @default(cuid())
   token     String   @unique
