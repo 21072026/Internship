@@ -14,7 +14,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createPartnerLocked, lockOrganization, PARTNER_CODE_RE } from '@/lib/affiliatePartners';
 import { PartnerInviteError, invitePartner } from '@/lib/affiliateInvite';
-import { sendAffiliateApplicationRejectedEmail } from '@/services/emailService';
+import { sendAffiliateApplicationRejectedEmail } from '@/lib/affiliateApplicationMail';
 import { suggestPartnerCode, type ApplicationRejectionCode } from '@/lib/affiliateApplicationRule';
 
 export type ApplicationReviewErrorCode = 'not_found' | 'already_decided' | 'invalid_code' | 'code_taken' | 'email_is_partner';
