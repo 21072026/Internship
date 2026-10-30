@@ -60,3 +60,29 @@ test('14-day expiry and exactly one reminder in the last 3 days', () => {
   assert.equal(isExpired(offer, new Date('2026-10-15T00:00:00Z')), true);
   assert.equal(isExpired({ ...offer, status: 'ACCEPTED' }, new Date('2026-11-01T00:00:00Z')), false);
 });
+
+const { REQUEST_TTL_DAYS, livePendingRequestWhere, isLivePending } = await import('../../src/lib/requestExpiryRule.ts');
+
+test('an offer waits on the same clock as a mentorship request (#1775)', () => {
+  assert.equal(OFFER_LIMITS.ttlDays, REQUEST_TTL_DAYS);
+});
+
+test('livePendingRequestWhere is the SQL twin of isLivePending', () => {
+  const now = new Date('2026-10-30T12:00:00Z');
+  const where = livePendingRequestWhere(now);
+  // A tiny evaluator of exactly the shape the filter uses.
+  const matches = (r) =>
+    r.status === where.status &&
+    where.OR.some((c) =>
+      'createdAt' in c ? r.expiresAt === null && r.createdAt > c.createdAt.gt : r.expiresAt !== null && r.expiresAt > c.expiresAt.gt
+    );
+  const DAY = 86400000;
+  const rows = [
+    { status: 'PENDING', createdAt: new Date(now - 3 * DAY), expiresAt: new Date(now.getTime() + 11 * DAY) },
+    { status: 'PENDING', createdAt: new Date(now - 20 * DAY), expiresAt: new Date(now - 6 * DAY) },
+    { status: 'PENDING', createdAt: new Date(now - 3 * DAY), expiresAt: null },
+    { status: 'PENDING', createdAt: new Date(now - 15 * DAY), expiresAt: null },
+    { status: 'EXPIRED', createdAt: new Date(now - 3 * DAY), expiresAt: new Date(now.getTime() + 11 * DAY) },
+  ];
+  for (const r of rows) assert.equal(matches(r), isLivePending(r, now), JSON.stringify(r));
+});
