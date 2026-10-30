@@ -29,6 +29,19 @@ export interface CalendarWriteResult {
   eventId?: string;
 }
 
+/** The slot a conference room is generated for (#2009). */
+export interface ConferenceSlot {
+  title: string;
+  start: Date;
+  end: Date;
+  timeZone: string | null;
+}
+
+export interface ConferenceResult extends CalendarWriteResult {
+  /** The join URL the provider created (Meet `hangoutLink`, Teams `onlineMeeting.joinUrl`). */
+  joinUrl?: string;
+}
+
 export interface CalendarSyncProvider {
   kind: CalendarProviderKind;
   /** Configured AND switched on by the operator. */
@@ -41,6 +54,11 @@ export interface CalendarSyncProvider {
   writeEvent(auth: CalendarAuth, meeting: PushableMeeting, product: string, existingEventId: string | null): Promise<CalendarWriteResult>;
   /** Delete the event; best effort. */
   deleteEvent(auth: CalendarAuth, calendarId: string, eventId: string): Promise<void>;
+  /**
+   * Create the event WITH a conference room of the provider's own (#2009):
+   * Google Meet, Microsoft Teams. Never throws on HTTP errors.
+   */
+  createConference(auth: CalendarAuth, slot: ConferenceSlot): Promise<ConferenceResult>;
 }
 
 export const CALENDAR_SYNC_PROVIDERS: readonly CalendarSyncProvider[] = [googleSyncProvider, microsoftSyncProvider];
