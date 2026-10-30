@@ -58,6 +58,11 @@ export interface ChannelDelivery {
   dedupeKey: string;
   /** The chat card's subject, button and supersede intent (#1942). */
   card?: ChatCard | null;
+  /**
+   * The push body (#1715): the message text a new-message push previews. Never
+   * stored on the bell row or in the ledger — only the push adapter reads it.
+   */
+  preview?: string | null;
 }
 
 export type ChannelOutcome =

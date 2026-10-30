@@ -17,7 +17,8 @@ import { notify } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
-import { markReadUrl } from '@/lib/emailActionToken';
+import { extendRelationUrl, markReadUrl } from '@/lib/emailActionToken';
+import { intlLocaleFor } from '@/lib/interviewRequests';
 import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
 import {
@@ -3160,6 +3161,65 @@ export async function sendMentorOfferEmail({
         <p>${esc(fill(kind === 'new' ? M.newBody : M.reminderBody))}</p>
         ${kind === 'new' && message ? `<p><strong>${esc(M.messageLabel)}</strong><br>${esc(message).replace(/\n/g, '<br>')}</p>` : ''}
         ${ctaBlock(brand, `${base}/portal`, M.cta)}
+        <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+      </div>
+    `,
+  });
+}
+
+// The ONE ending-soon mail per agreed end date (#1786), to each participant of
+// a pairing — sent by src/lib/relationEndingSweep.ts after it claimed the
+// relation's stamp. The mentor's copy carries the signed one-click "extend by
+// the original length" link; the mentee cannot extend, so theirs does not.
+export async function sendRelationEndingEmail({
+  to,
+  userId,
+  orgId,
+  locale,
+  recipientName,
+  otherName,
+  relationId,
+  endDay,
+  bookPath,
+  extend,
+}: {
+  to: string;
+  userId: string;
+  orgId?: string | null;
+  locale?: string | null;
+  recipientName: string;
+  otherName: string;
+  relationId: string;
+  /** The agreed end, YYYY-MM-DD. */
+  endDay: string;
+  /** Where the recipient books the wrap-up meeting. */
+  bookPath: string;
+  /** Mentor only: the original length the link extends by. */
+  extend?: { months: number } | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const lang = await assignedEmailLocale(locale, userId);
+  const M = (await emailDictionary(lang, orgId)).notifications.relationEndingEmail;
+  const date = formatInTimeZone(new Date(`${endDay}T00:00:00Z`), 'UTC', { dateStyle: 'long' }, intlLocaleFor(lang));
+  const fill = (t: string) =>
+    t.replace('{name}', otherName).replace('{recipient}', recipientName).replace('{date}', date).replace('{months}', String(extend?.months ?? ''));
+  await sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'relation-ending',
+    // One per recipient per end date, even if the sweep is retried.
+    dedupeKey: dedupeKeyFor({ kind: 'relation-ending', relationId, userId, endDay }),
+    fromName: brand.name,
+    subject: fill(M.subject),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.heading)}
+        <p>${esc(fill(M.greeting))}</p>
+        <p>${esc(fill(M.body))}</p>
+        ${ctaBlock(brand, `${base}${bookPath}`, M.bookCta)}
+        ${extend ? `<p>${esc(fill(M.extendHint))}</p>${ctaBlock(brand, extendRelationUrl(relationId, userId, endDay, base), fill(M.extendCta))}` : ''}
         <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
       </div>
     `,

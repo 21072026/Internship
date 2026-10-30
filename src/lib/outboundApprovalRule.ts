@@ -182,6 +182,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'mentor-application': { exempt: false, trigger: 'pipeline', why: 'an application decision' },
   'mentor-offer': { exempt: false, trigger: 'pipeline', why: 'a mentor offering mentorship (#1809), sent only to an opted-in mentee' },
   'goals-evaluation': { exempt: false, trigger: 'pipeline', why: 'an automated evaluation notice' },
+  'relation-ending': { exempt: false, trigger: 'pipeline', why: 'the one ending-soon nudge per agreed end date (#1786)' },
   // Inbound requests are addressed to staff in practice (and staff is never
   // held); listed so a copy that does reach a lead waits like everything else.
   'public-contact': { exempt: false, trigger: 'request', why: 'a profile enquiry forwarded by mail' },

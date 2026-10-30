@@ -20,6 +20,8 @@ const PLATFORM: Record<string, JobName> = {
   'stage-deadlines': 'reminders.stageDeadline',
   // One nudge on day 7, expiry on day 14 (#1775).
   'mentorship-requests': 'requests.expirySweep',
+  // The one ending-soon nudge per agreed end date (#1786).
+  'relation-ending': 'reminders.relationEnding',
   'meeting-logs': 'meetings.autoLog',
   retention: 'reminders.retentionReconsent',
   newsletters: 'newsletter.dispatch',

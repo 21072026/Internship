@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Self-serve webhooks for SOURCE owners (#2006):** the company hook model applied to a referring source — `Webhook.sourceId` (relation `ownerSource`), `SOURCE_WEBHOOK_EVENTS` (`user.created` and the mentorship events; `src/lib/sourceWebhookRule.ts`, above it `403 event_above_ceiling`), and a delivery-time check `sourceReceiverCheck()` (`src/lib/sourceWebhookScope.ts`) that resolves the event's candidate and delivers only when that source referred it — fail closed. Fan-out and replay compose both owner checks in one `ownerReceiverCheck()`. `POST/GET/DELETE /api/source/integrations/webhooks` (SSRF guard, plan gate, 10 per source, warning-level audit, demo blocklist), the admin hook list shows the owning source, and the webhook form is now the shared `OwnerWebhooks` (company and source pages). Pinned by `e2e/source-webhooks.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Referring organisations can now register their own webhooks to hear when something happens to a candidate they referred."],
+    "tr": ["Yönlendiren kurumlar artık kendi webhook'larını kurup yönlendirdikleri bir adayla ilgili gelişmelerden anında haberdar olabiliyor."],
+    "de": ["Vermittelnde Organisationen können jetzt eigene Webhooks einrichten und erfahren sofort, wenn sich bei einer vermittelten Person etwas tut."]
+  }
+}

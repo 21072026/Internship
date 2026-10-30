@@ -7,7 +7,7 @@
 // covers falls into `other`, and the unit spec fails on that for every public
 // event — a new event has to be placed here.
 
-export const WEBHOOK_EVENT_FAMILIES = ['pipeline', 'mentorship', 'activity', 'meetings', 'interviews', 'hiring', 'people', 'other'] as const;
+export const WEBHOOK_EVENT_FAMILIES = ['pipeline', 'mentorship', 'activity', 'meetings', 'interviews', 'hiring', 'other'] as const;
 export type WebhookEventFamily = (typeof WEBHOOK_EVENT_FAMILIES)[number];
 
 const BY_NAME: Record<string, WebhookEventFamily> = {
@@ -16,6 +16,9 @@ const BY_NAME: Record<string, WebhookEventFamily> = {
   'application.stage_changed': 'hiring',
   'interaction.logged': 'activity',
   'evaluation.added': 'activity',
+  // A new account (#3405) — most often a candidate entering the funnel, so it
+  // sits with the pipeline's own arrival event.
+  'user.created': 'pipeline',
 };
 
 const BY_PREFIX: Record<string, WebhookEventFamily> = {
@@ -29,7 +32,6 @@ const BY_PREFIX: Record<string, WebhookEventFamily> = {
   weekly_report: 'activity',
   document: 'activity',
   goal: 'activity',
-  user: 'people',
 };
 
 export function webhookEventFamily(name: string): WebhookEventFamily {

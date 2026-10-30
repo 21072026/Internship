@@ -49,6 +49,8 @@ const PUBLISHED = [
   'goal.completed',
   'meeting.attendance_recorded',
   'user.created',
+  'mentorship.ending_soon',
+  'mentorship.extended',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -98,6 +100,8 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['api/mentorship/[id]/lifecycle', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'PAUSED', reasonCode: null }],
   ['lifecycleEvents (transfer)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_REASSIGNED', reasonCode: 'mentor_unavailable' }],
   ['lifecycleEvents (win-back)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_CHURNED', reasonCode: null }],
+  ['relationEndingSweep', 'mentorship.ending_soon', { relationId: 'r1', expectedEndDate: '2026-11-13' }],
+  ['relationExtend', 'mentorship.extended', { relationId: 'r1', expectedEndDate: '2027-05-13', extendedCount: 1 }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

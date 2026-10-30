@@ -37,7 +37,7 @@ const DRAFTERS = [
   'src/app/api/admin/ai/company-enrich/route.ts',
   'src/app/api/profile/enrich/route.ts',
 ];
-const SENDS = /\b(sendEmail|sendNewMessagePush|notifyIfAllowed|notify)\s*\(|\bmessage\.create\b|\binteractionLog\.create\b|\bpublishRealtime\b/;
+const SENDS = /\b(sendEmail|sendSupportPush|notifyEvent|notifyIfAllowed|notify)\s*\(|\bmessage\.create\b|\binteractionLog\.create\b|\bpublishRealtime\b/;
 
 test('every listed file exists (a rename must not silently empty the rule)', () => {
   for (const f of [...AUTO_SENDERS, ...DRAFTERS]) assert.ok(existsSync(new URL(`../../${f}`, import.meta.url)), f);

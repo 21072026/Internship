@@ -124,6 +124,7 @@ export interface JobPayloadMap {
   'matching.needMatchAlerts': Record<string, never>;
   'mentorOffers.sweep': Record<string, never>;
   'requests.expirySweep': Record<string, never>;
+  'reminders.relationEnding': Record<string, never>;
   'meetings.reminders': Record<string, never>;
   'meetings.seriesReminders': Record<string, never>;
   'meetings.autoLog': Record<string, never>;
@@ -230,6 +231,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'matching.needMatchAlerts',
   'mentorOffers.sweep',
   'requests.expirySweep',
+  'reminders.relationEnding',
   'meetings.reminders',
   'meetings.seriesReminders',
   'meetings.autoLog',

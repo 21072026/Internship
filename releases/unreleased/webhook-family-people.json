@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Webhook picker: `user.*` events get their own family (#1998 follow-up).** `user.created` (#3405) landed after the family table (#3395) and fell into `other`, which `e2e/webhook-event-families.unit.spec.ts` (@smoke) refuses — `main` was red on it. New `people` family (\"People & accounts\", EN/TR/DE) maps the `user` prefix."
-}
