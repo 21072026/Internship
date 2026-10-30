@@ -18,6 +18,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { User, Building2, ExternalLink, MessageCircle, FolderKanban, ArrowRight, Route } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
+import { cadenceLabel } from '@/lib/relationSchedule';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { missingRequirementsForUser } from '@/lib/documentRequirements';
@@ -69,6 +70,9 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         // restart the mentee's own "days in this stage".
         statusChanges: { where: REAL_STAGE_MOVE, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
         mentor: { select: { id: true, fullName: true, publicProfile: true } },
+        // What the pair agreed to (#1784), read-only for the mentee.
+        expectedEndDate: true,
+        expectedMeetingIntervalWeeks: true,
       },
     }),
     // Has the mentee ever decided on company visibility (#527)? A row means
@@ -246,6 +250,18 @@ export default async function PortalDashboard({
                 )}
               </span>
             </div>
+            {!isArchived && (relation.expectedEndDate || relation.expectedMeetingIntervalWeeks) && (
+              <p className="text-sm text-gray-600 dark:text-gray-300" data-testid="portal-relation-schedule">
+                {[
+                  relation.expectedEndDate
+                    ? t.relationSchedule.endsOn.replace('{date}', formatDate(relation.expectedEndDate, locale, { timeZone: 'UTC' }))
+                    : null,
+                  relation.expectedMeetingIntervalWeeks
+                    ? t.relationSchedule.meets.replace('{rhythm}', cadenceLabel(t.relationSchedule, relation.expectedMeetingIntervalWeeks).toLowerCase())
+                    : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
             {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">
