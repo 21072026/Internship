@@ -113,6 +113,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   mentorImpact: 'The private impact card on /mentor only (src/app/mentor/page.tsx) — the mentor layout sends a MARKETING MENTOR to /sales, and getMentorImpact() returns null without the `mentorship` capability.',
   offers: 'Offer management — `/api/offers` refuses an org without the `placements` capability (requireCapability).',
   offersAdmin: 'The admin offer screen over the same `placements`-gated API.',
+  placements: 'The placement ledger (#1765) — /admin/placements is closed by gatePage, and its API and the `placements` export dataset refuse (requireCapability), for an org without the `placements` capability.',
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   migration: '/admin/migrate (#2073) — gatePage closes it, and POST /api/admin/migrate refuses (requireCapability), for an org without the `mentorship` capability.',
