@@ -113,6 +113,8 @@ const DECISIONS = new Map([
   ['ApplicationEvent.note', ERASED],
   ['MatchFeedback.reasonNote', ERASED],
   ['Placement.note', ERASED],
+  ['MatchProposal.note', ERASED],
+  ['MatchDecision.note', ERASED],
   ['RosterRowResult.message', ERASED],
   ['SurveyAnswer.text', ERASED],
   ['MeetingFeedback.note', ERASED],

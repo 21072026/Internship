@@ -25,8 +25,15 @@ test('invitation lifecycle is stamped and shown in Recent Invitations', async ({
     // 2. Opening the register link stamps openedAt.
     const opened = await page.request.post('/api/invite/opened', { data: { token } });
     expect(opened.ok()).toBeTruthy();
+    // WCAG 3.3.7 (#2864): a live invitation hands its address back so the
+    // register form is pre-filled instead of asking for it again.
+    expect(await opened.json()).toEqual({ ok: true, email });
     inv = await prisma.invitationToken.findUnique({ where: { token } });
     expect(inv?.openedAt).not.toBeNull();
+
+    // The register page shows it in the email field, still editable.
+    await page.goto(`/auth/register?token=${token}`);
+    await expect(page.locator('input[type="email"]')).toHaveValue(email, { timeout: 15_000 });
 
     // 3. Registering stamps registeredAt and (invited → auto-verified) verifiedAt.
     const reg = await page.request.post('/api/register', {

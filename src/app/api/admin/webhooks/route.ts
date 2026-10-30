@@ -27,6 +27,8 @@ export async function GET(request: Request) {
       // Delivery health (#1695): the integrations page shows an auto-disabled
       // hook with its reason and a re-enable button.
       consecutiveFailures: true, lastSuccessAt: true, disabledAt: true, disabledReason: true,
+      // A company's self-served hook (#2006): the admin sees whose it is.
+      company: { select: { id: true, name: true } },
     },
   });
   return NextResponse.json({ webhooks, eventTypes: WEBHOOK_EVENTS });
