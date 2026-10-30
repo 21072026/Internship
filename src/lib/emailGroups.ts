@@ -204,7 +204,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'inbound_requests',
     essential: false,
     bulk: false,
-    categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received', 'support-report'],
+    categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received', 'affiliate-application-received', 'support-report'],
     // The two coarse keys these sites gated on: 'messages' for an enquiry
     // through a public profile, 'mentorship' for a project join request.
     legacy: ['messages', 'mentorship'],

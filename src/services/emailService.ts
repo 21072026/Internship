@@ -3373,6 +3373,43 @@ export async function sendMentorApplicationReceivedEmail({
   });
 }
 
+// --- Partner applications (#3361) --------------------------------------------
+// The acknowledgement of a public partner application. Like the mentor
+// application above, the applicant has no account yet, so the language is the
+// one the form was shown in, and the copy goes through emailDictionary() so the
+// org's product name reaches it.
+export async function sendAffiliateApplicationReceivedEmail({
+  to,
+  firstName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  firstName: string;
+  locale?: string | null;
+  orgId: string;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = (await emailDictionary(resolveLocale(locale), orgId)).affiliateApplicationEmail;
+  await sendEmail({
+    to,
+    orgId,
+    // no-user-row: the applicant is an AffiliateApplication and nothing else —
+    // no User row exists to hold a preference, so no footer is emitted.
+    category: 'affiliate-application-received',
+    locale,
+    fromName: brand.name,
+    subject: M.received.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.received.heading))}
+        <p>${esc(M.greeting.replace('{name}', firstName))}</p>
+        <p>${esc(M.received.body)}</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendMentorApplicationUnderReviewEmail({
   to,
   fullName,

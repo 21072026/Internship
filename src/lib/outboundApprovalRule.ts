@@ -127,6 +127,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'sso-certificate': { exempt: true, why: `${ESSENTIAL} — the IdP certificate-expiry warning, addressed to the org's admins and support address` },
   // ── triggered by the person themselves ────────────────────────────────────
   'mentor-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own application' },
+  'affiliate-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own partner application (#3361)' },
   // #3132: the answer to the person's own bug report, sent only when an admin
   // chooses to AND the person allowed contact. Held like `message` (a human's
   // words to a lead are still the product writing to a lead).
