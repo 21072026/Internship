@@ -4,6 +4,7 @@ import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
 import { headers } from 'next/headers';
 import { requestHostHeader } from '@/lib/publicHostOrg';
 import { discoverSsoForHost } from '@/lib/ssoDiscovery';
+import { socialButtonsForHeaders } from '@/lib/socialSignIn';
 import { SignInClient } from './SignInClient';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -19,10 +20,14 @@ export async function generateMetadata(): Promise<Metadata> {
 // leads with "Continue with <tenant> SSO". On the default host this is null and
 // nothing changes.
 export default async function SignInPage() {
-  const tenantSso = await discoverSsoForHost(requestHostHeader(await headers()));
+  const h = await headers();
+  const tenantSso = await discoverSsoForHost(requestHostHeader(h));
+  // Social sign-in (#1962): only the providers the operator configured.
+  const social = socialButtonsForHeaders((n) => h.get(n));
   return (
     <SignInClient
       tenantSso={tenantSso}
+      social={social}
       demo={
         IS_DEMO_MODE
           ? { accounts: DEMO_ACCOUNTS.map((a) => ({ ...a })), password: DEMO_PASSWORD }

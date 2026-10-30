@@ -465,6 +465,22 @@ export default defineConfig({
           // http on loopback: lets exactly 127.0.0.1/localhost past the SSRF
           // guard for discovery, JWKS and token. Test-only switch.
           SSO_ALLOW_INSECURE_STUB: '1',
+          // Social sign-in (#1962): all three providers point at the same stub
+          // IdP (its OIDC half), so the whole flow — provider redirect, code,
+          // verified ID token, linking — runs with no external network.
+          SOCIAL_SIGN_IN: '1',
+          SOCIAL_GOOGLE_CLIENT_ID: 'e2e-oidc-client',
+          SOCIAL_GOOGLE_CLIENT_SECRET: 'e2e-social-secret',
+          SOCIAL_GOOGLE_ISSUER: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/oidc`,
+          SOCIAL_GOOGLE_DISCOVERY_URL: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/oidc/.well-known/openid-configuration`,
+          SOCIAL_MICROSOFT_CLIENT_ID: 'e2e-oidc-client',
+          SOCIAL_MICROSOFT_CLIENT_SECRET: 'e2e-social-secret',
+          SOCIAL_MICROSOFT_ISSUER: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/oidc`,
+          SOCIAL_MICROSOFT_DISCOVERY_URL: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/oidc/.well-known/openid-configuration`,
+          SOCIAL_LINKEDIN_CLIENT_ID: 'e2e-oidc-client',
+          SOCIAL_LINKEDIN_CLIENT_SECRET: 'e2e-social-secret',
+          SOCIAL_LINKEDIN_ISSUER: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/oidc`,
+          SOCIAL_LINKEDIN_DISCOVERY_URL: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/oidc/.well-known/openid-configuration`,
           // The marketing hosts this server serves: the default list FIRST
           // (unchanged, so it stays the primary marketing host every link and
           // spec already uses) plus one host of the suite's own (#2922), which

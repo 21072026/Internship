@@ -50,6 +50,10 @@
     "methods": ["GET"],
     "why": "The OIDC redirect URI (#1929): the IdP sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the IdP's JWKS."
   },
+  "src/app/api/auth/social/[provider]/callback/route.ts": {
+    "methods": ["GET"],
+    "why": "The social sign-in redirect URI (#1962): the provider sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the provider's JWKS — and the session is still minted only by the `magic` provider (every account rule, 2FA included)."
+  },
   "src/app/api/auth/sso/[slug]/login/route.ts": {
     "methods": ["GET"],
     "why": "SP-initiated SSO: resolves the tenant and redirects to the IdP. Pre-auth by definition, and it falls back to the password page when SSO is not active so a wrong slug never dead-ends."

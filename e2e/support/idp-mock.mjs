@@ -331,18 +331,20 @@ function jwks() {
   };
 }
 
-export function buildIdToken({ audience, email, name, nonce, mode = 'ok' }) {
+export function buildIdToken({ audience, email, name, nonce, mode = 'ok', sub, emailVerified = true }) {
   const nowSec = Math.floor(Date.now() / 1000);
   const key = mode === 'wrong-key' ? rogue : signing;
   const header = { alg: 'RS256', typ: 'JWT', kid: OIDC_KID };
   const payload = {
     iss: OIDC_ISSUER,
-    sub: `stub|${email}`,
+    sub: sub || `stub|${email}`,
     aud: mode === 'wrong-aud' ? 'some-other-client-id' : audience,
     exp: mode === 'expired' ? nowSec - 300 : nowSec + 300,
     iat: nowSec - 5,
     email,
-    email_verified: true,
+    // Social sign-in (#1962) links on a VERIFIED email only; `null` drops the
+    // claim, which the app must read as unverified.
+    ...(emailVerified === null ? {} : { email_verified: emailVerified }),
     name: name || email,
     ...(nonce ? { nonce: mode === 'wrong-nonce' ? `${nonce}-tampered` : nonce } : {}),
   };
@@ -355,6 +357,11 @@ export function buildIdToken({ audience, email, name, nonce, mode = 'ok' }) {
 
 // Authorization codes issued by /oidc/authorize, consumed once by /oidc/token.
 const oidcCodes = new Map();
+// Social sign-in (#1962): the providers' discovery URL is fixed by the app's
+// env, so a spec cannot vary the identity per request through it. It POSTs
+// the NEXT identity to /oidc/next instead; the next /oidc/authorize uses (and
+// forgets) it. Specs run one worker, so there is no race.
+let nextIdentity = null;
 
 // --- HTTP -----------------------------------------------------------------
 
@@ -562,15 +569,34 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/oidc/jwks.json') return json(res, 200, jwks());
 
+  if (url.pathname === '/oidc/next' && req.method === 'POST') {
+    try {
+      const body = JSON.parse((await readBody(req)) || '{}');
+      nextIdentity = {
+        email: typeof body.email === 'string' ? body.email : 'stub.user@e2e.local',
+        name: typeof body.name === 'string' ? body.name : 'Stub User',
+        sub: typeof body.sub === 'string' ? body.sub : undefined,
+        emailVerified: body.emailVerified === undefined ? true : body.emailVerified,
+      };
+    } catch {
+      return json(res, 400, { error: 'body must be JSON' });
+    }
+    return json(res, 200, { ok: true });
+  }
+
   if (url.pathname === '/oidc/authorize') {
     const redirectUri = q.get('redirect_uri');
     if (!redirectUri) return json(res, 400, { error: 'redirect_uri is required' });
     const code = crypto.randomBytes(24).toString('hex');
+    const next = nextIdentity;
+    nextIdentity = null;
     oidcCodes.set(code, {
       audience: q.get('client_id') || 'e2e-oidc-client',
       nonce: q.get('nonce') || '',
-      email: q.get('email') || 'stub.user@e2e.local',
-      name: q.get('name') || 'Stub User',
+      email: next?.email ?? (q.get('email') || 'stub.user@e2e.local'),
+      name: next?.name ?? (q.get('name') || 'Stub User'),
+      sub: next?.sub,
+      emailVerified: next ? next.emailVerified : true,
       mode: q.get('mode') || 'ok',
     });
     const back = new URL(redirectUri);
@@ -600,6 +626,8 @@ const server = createServer(async (req, res) => {
         name: issued.name,
         nonce: issued.nonce,
         mode: issued.mode,
+        sub: issued.sub,
+        emailVerified: issued.emailVerified,
       }),
     });
   }
