@@ -320,6 +320,7 @@ model Organization {
   matchDecisions          MatchDecision[]
   matchRounds             MatchRound[]
   matchProposals          MatchProposal[]
+  profileDigests          ProfileDigest[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -978,6 +979,7 @@ model User {
   // Canonical skills (#1815). `skills` above stays the free-text JSON until a
   // separate contract PR retires it; this is the joinable twin.
   skillRows                         UserSkill[]
+  profileDigest                     ProfileDigest?
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -7212,6 +7214,30 @@ model MatchProposal {
 
   @@unique([roundId, menteeId])
   @@index([roundId, state])
+}
+
+/// A person's profile in themes (#2038): a short normalised paragraph and a
+/// bounded list of theme tokens, generated once by AI from the person's own
+/// free text and cached here, so the `semanticAffinity` match rule compares
+/// cached tokens and a matching query never calls a provider. `sourceHash`
+/// is the hash of the text it was made from — regenerated only when that
+/// text changes. Its subject can read it and ask for a regeneration.
+model ProfileDigest {
+  id         String   @id @default(cuid())
+  orgId      String?
+  userId     String   @unique
+  digest     String   @db.Text
+  /// A bounded list of normalised theme tokens (src/lib/matching/semantic.ts).
+  themes     Json     @default("[]")
+  sourceHash String   @db.VarChar(64)
+  model      String?  @db.VarChar(100)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org  Organization? @relation(fields: [orgId], references: [id])
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
 }
 
 /// Where a pairing was decided (#1789). The human step, named.
