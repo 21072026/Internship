@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Alt text for support-conversation images (EN 301 549 11.8.2, #3407):** `SupportAttachment.altText` (nullable `VarChar(500)`). Both support composers (`/messages/support`, `/admin/support`) show the shared \"Describe this image\" field (`PendingAttachmentList` `onAltChange`); `/api/support` (through `readSupportMessageRequest` + `buildSupportAttachments`) and `/api/admin/support` pair one `altText` per `files` entry (images only, trimmed, over 500 → 400); `SupportAttachmentList` renders it as `alt` and button name, the filename as fallback. VPAT 11.8.2 and 504.2 now read `Supports`; 504.3 stays Partially (no other author checking, #2864).",
+  "notes": {
+    "en": ["Images you send to support can now be described too, so screen-reader users know what they show."],
+    "tr": ["Destek ekibine gönderdiğiniz resimleri de artık tanımlayabilirsiniz; ekran okuyucu kullananlar resimde ne olduğunu öğrenir."],
+    "de": ["Auch Bilder, die Sie an den Support senden, lassen sich jetzt beschreiben – so wissen Screenreader-Nutzer, was sie zeigen."]
+  }
+}

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { TEXT_LIMITS } from '@/lib/textLimits';
+import { supportAltText } from '@/lib/supportMessageRequest';
 import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -12,7 +14,7 @@ import {
   validateSupportFile,
 } from '@/lib/supportAttachments';
 
-const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
+const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true, altText: true } as const;
 
 // Admin side of the support channel (#594): the queue at /admin/support.
 // Admins see every ticket OF THEIR OWN TENANT, reply into the thread, move
@@ -83,12 +85,15 @@ export async function POST(request: Request) {
 
   let payload: unknown;
   let files: File[] = [];
+  // One `altText` per `files` entry, same order (#3407).
+  let altTexts: string[] = [];
 
   if (request.headers.get('content-type')?.includes('multipart/form-data')) {
     const form = await request.formData().catch(() => null);
     if (!form) return NextResponse.json({ error: 'Invalid multipart request' }, { status: 400 });
     payload = { ticketId: form.get('ticketId'), body: form.get('body') ?? '' };
     files = form.getAll('files').filter((value): value is File => typeof value !== 'string');
+    altTexts = form.getAll('altText').map((value) => (typeof value === 'string' ? value : ''));
   } else {
     payload = await request.json().catch(() => null);
   }
@@ -124,12 +129,18 @@ export async function POST(request: Request) {
     }
   }
 
+  const alts = files.map((file, i) => supportAltText(file, altTexts[i]));
+  if (alts.some((a) => a !== null && a.length > TEXT_LIMITS.imageAltText)) {
+    return NextResponse.json({ error: 'Image description too long' }, { status: 400 });
+  }
+
   const attachments = await Promise.all(
-    files.map(async (file) => ({
+    files.map(async (file, i) => ({
       filename: file.name,
       contentType: file.type,
       size: file.size,
       data: Buffer.from(await file.arrayBuffer()),
+      altText: alts[i],
     })),
   );
 

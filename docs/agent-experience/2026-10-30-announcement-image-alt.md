@@ -8,3 +8,9 @@
   { announcementId } })` is a no-op instead.
 - **Cold `next dev` compiles still make first sign-ins time out locally** — run new specs with
   `--retries=2` and read which attempt failed and where before calling anything a regression.
+- **A 1×1 test PNG inside an `object-contain` frame is not "visible" to Playwright** — the `img`
+  exists with the right `alt` but has no height. Assert `toBeAttached()` on the `img` and
+  `toBeVisible()` on its button (`e2e/support-attachments.spec.ts`).
+- **After a container restart (`uptime` a few minutes) the `.next` dev cache is gone** and every
+  first navigation times out; run the spec once in the background with `--retries=3` to warm it
+  instead of reading three cold failures as a regression.
