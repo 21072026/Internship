@@ -45,11 +45,14 @@ test('kudos: mentor thanks mentee, mentee reads and thanks back; strangers refus
     await signInAndSettle(page, menteeEmail, 'MenteePass123', '/portal');
     await gotoSettled(page, '/portal/goals');
     const menteePanel = page.getByTestId('kudos-panel');
-    await expect(menteePanel.getByText('Thank you for the excellent demo prep.')).toBeVisible({ timeout: 30_000 });
+    await expect(menteePanel.getByTestId('kudos-list').getByText('Thank you for the excellent demo prep.')).toBeVisible({ timeout: 30_000 });
     await menteePanel.getByTestId('kudo-reason').fill('Thanks for the patience.');
     await menteePanel.getByTestId('kudo-send').click();
-    await expect(menteePanel.getByText('Thanks for the patience.')).toBeVisible({ timeout: 30_000 });
-    expect(await prisma.kudo.count({ where: { relationId: rel.id, senderId: mentee.id, recipientId: mentor.id } })).toBe(1);
+    // Scoped to the list: the textarea still holds the same words until the POST lands.
+    await expect(menteePanel.getByTestId('kudos-list').getByText('Thanks for the patience.')).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(() => prisma.kudo.count({ where: { relationId: rel.id, senderId: mentee.id, recipientId: mentor.id } }))
+      .toBe(1);
 
     // …and on their own account page, received only.
     await gotoSettled(page, '/account');
