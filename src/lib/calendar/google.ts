@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
 import { meetingEnd } from '@/lib/meetingDuration';
@@ -21,6 +22,14 @@ function eventBody(meeting: PushableMeeting, product: string) {
   };
 }
 
+/** The join URL Google returned: `hangoutLink`, else the video entry point. */
+export function meetJoinUrl(body: Record<string, unknown>): string | null {
+  if (typeof body.hangoutLink === 'string' && body.hangoutLink.startsWith('https://')) return body.hangoutLink;
+  const data = body.conferenceData as { entryPoints?: { entryPointType?: string; uri?: string }[] } | undefined;
+  const video = data?.entryPoints?.find((e) => e.entryPointType === 'video' && typeof e.uri === 'string' && e.uri.startsWith('https://'));
+  return video?.uri ?? null;
+}
+
 const eventPath = (calendarId: string, eventId?: string | null) =>
   `/calendars/${encodeURIComponent(calendarId)}/events${eventId ? `/${encodeURIComponent(eventId)}` : ''}`;
 
@@ -36,6 +45,27 @@ export const googleSyncProvider: CalendarSyncProvider = {
     }).catch(() => null);
     if (!res) return { ok: false, status: 0 };
     return { ok: res.ok, status: res.status, eventId: typeof res.body.id === 'string' ? res.body.id : undefined };
+  },
+  async createConference(auth, slot) {
+    // A Meet room comes with the event only on conferenceDataVersion=1 and a
+    // createRequest whose requestId is unique per attempt (#2009).
+    const body = {
+      summary: slot.title,
+      start: { dateTime: slot.start.toISOString(), ...(slot.timeZone ? { timeZone: slot.timeZone } : {}) },
+      end: { dateTime: slot.end.toISOString(), ...(slot.timeZone ? { timeZone: slot.timeZone } : {}) },
+      conferenceData: { createRequest: { requestId: randomBytes(12).toString('hex'), conferenceSolutionKey: { type: 'hangoutsMeet' } } },
+    };
+    const res = await calendarFetch(auth.token, `${eventPath(auth.calendarId)}?conferenceDataVersion=1`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    if (!res) return { ok: false, status: 0 };
+    return {
+      ok: res.ok,
+      status: res.status,
+      eventId: typeof res.body.id === 'string' ? res.body.id : undefined,
+      joinUrl: meetJoinUrl(res.body) ?? undefined,
+    };
   },
   async deleteEvent(auth, calendarId, eventId) {
     await calendarFetch(auth.token, eventPath(calendarId, eventId), { method: 'DELETE' }).catch(() => null);

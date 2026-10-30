@@ -33,3 +33,9 @@
   for the old exact name before changing a shared control's text.
 - **`account-menu`, `i18n` and `i18n-de` specs fail locally on main** (2026-10-29: two
   `button[aria-haspopup="menu"]`, and a seed-admin sign-in that never lands) — not a regression signal.
+- **After pulling main, `npx prisma db push` the local DB too, not just `prisma generate`.** A
+  column added on main (`Organization.archivedAt`, 2026-10-29) made every sign-in 500 locally,
+  which read as "flaky login" in a dozen unrelated specs until the server log showed the P2022.
+- **On 2026-10-30 `/admin/candidates/[id]`'s offer panel did not render locally on main itself**
+  (`offers.spec.ts` "admin creates and sends an offer via the wizard" red with `git stash`), so
+  the new wizard pre-fill test could not be run end to end here.

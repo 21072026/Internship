@@ -13,14 +13,6 @@
       "count": 1,
       "reason": "GET only picks which approval queue a decider sees (mentor/admin PENDING, mentee APPROVED); the rows any caller can reach come from outreachActorWhere(), not from this branch"
     },
-    "src/app/api/invite/route.ts": {
-      "count": 1,
-      "reason": "`role` here is the INVITED role from the request body: an ADMIN invitation takes an admin seat (#1752 quota) — data, not the caller's authority"
-    },
-    "src/app/api/register/route.ts": {
-      "count": 1,
-      "reason": "`role` here is the role the invitation grants: accepting an ADMIN invitation takes an admin seat (#1752 quota); register has no caller session to authorize"
-    },
     "src/app/api/weekly-reports/[id]/route.ts": {
       "count": 1,
       "reason": "PATCH refuses the ADMIN role a write (admins only read weekly reports): it narrows access, never widens it."

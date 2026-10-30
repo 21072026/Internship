@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Redundant entry (WCAG 3.3.7, #2864):** `POST /api/invite/opened` returns the invitation's address for a live invitation of this world, and the register form pre-fills it (still editable; a dead, unknown or other-world token answers `{ ok: true }` as before). The offer wizard carries a chosen requisition's title into an empty Position. VPAT 3.3.7 now reads `Supports` after an audit of registration, onboarding, the offer wizard and account settings.",
+  "notes": {
+    "en": ["Signing up from an invitation no longer asks for your email address again, and offers take the position from the chosen requisition."],
+    "tr": ["Davetle kayıt olurken e-posta adresiniz tekrar sorulmuyor; teklifler pozisyonu seçilen iş talebinden alıyor."],
+    "de": ["Bei der Registrierung über eine Einladung wird die E-Mail-Adresse nicht mehr erneut abgefragt, und Angebote übernehmen die Position aus der gewählten Stellenanforderung."]
+  }
+}
