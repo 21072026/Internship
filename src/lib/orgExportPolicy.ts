@@ -26,6 +26,7 @@ export const OMITTED_MODELS: Readonly<Record<string, string>> = Object.freeze({
   SessionRefreshGrant: 'single-use credential',
   ImpersonationGrant: 'single-use credential',
   SsoLoginGrant: 'single-use credential',
+  SsoAuthRequest: 'single-use credential: the OIDC state, nonce and PKCE verifier of a login in flight (#1929)',
   TwoFactorRecoveryCode: 'second-factor credential',
   PushSubscription: 'device push endpoint keys (a credential to that device)',
   NativePushToken: 'device push token (a credential to that device)',
