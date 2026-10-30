@@ -3,6 +3,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { parseRequired } from '@/lib/mentorScreeningRule';
 import { z } from 'zod';
+import { locales } from '@/i18n/config';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import { notify } from '@/lib/notify';
@@ -39,7 +40,7 @@ const applySchema = z.object({
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.number().int().min(1).optional(),
   linkedinUrl: z.string().url().max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
-  locale: z.enum(['en', 'tr', 'de']).optional(),
+  locale: z.enum(locales).optional(),
   // Anti-spam (mirrors the public-contact form, src/app/api/public-contact/[userId]/route.ts):
   // a hidden honeypot field bots fill in, and a client-stamped render time to
   // reject implausibly fast submits. Accept any value so a filled trap still

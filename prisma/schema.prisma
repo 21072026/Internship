@@ -7665,10 +7665,9 @@ model ProgramCost {
 
 // The value side: one placement, and what it was worth.
 //
-// SCOPE NOTE (#1892 / #1765). #1765 owns this record — the stamping from
-// src/lib/stageChange.ts, the reversal rule, the invoice states and the
-// /admin/placements ledger are all its work and are deliberately NOT here.
-// This PR creates the table early because the ROI model has nowhere to attach
+// SCOPE NOTE (#1892 / #1765). #1892 created the table with the value columns;
+// #1765 added the ledger half below (stamp, reversal, invoice states — see
+// docs/placements.md). #1892 created it early because the ROI model has nowhere to attach
 // value otherwise, and #1892 says so explicitly: add the value fields in the PR
 // that creates `Placement`, do not stand up a parallel model. #1765 extends
 // these columns (attribution, feeModel, invoiceState, invoiceRef, reversedAt,
@@ -7723,12 +7722,45 @@ model Placement {
 
   note String? @db.Text
 
+  // ── The ledger half (#1765, docs/placements.md) ──────────────────────────
+  // Stamped by the `placement` subscriber of `pipeline.stage_change`
+  // (src/lib/placementLedger.ts); the rule is pure in src/lib/placementRule.ts.
+  // Every column below is additive and nullable or constant-defaulted, so the
+  // rows #1892 and the demo seeder already wrote stay valid under `db push`.
+
+  // Plain ids, not FKs, for the same reason as `offerId`: the accounting record
+  // outlives an edited requisition, a removed mentor or a retired source.
+  requisitionId    String?
+  creditedMentorId String?
+  sourceId         String?
+
+  // THROUGH_US | SELF_FOUND | ALREADY_EMPLOYED — the relation's
+  // `employmentAttribution` when the hire was stamped (NULL there reads as
+  // THROUGH_US, src/lib/placementKind.ts). NULL here = a row from before #1765.
+  attribution String? @db.VarChar(24)
+
+  // SUBSCRIPTION | SUCCESS_FEE | NONE. NULL = nobody decided yet. A placement
+  // that is not ours (SELF_FOUND / ALREADY_EMPLOYED) is stamped NONE.
+  feeModel String? @db.VarChar(16)
+
+  // NOT_INVOICEABLE | INVOICEABLE | INVOICED | WAIVED. Moved only through
+  // `canChangeInvoiceState()`; INVOICED and WAIVED are an ORG_ADMIN's audited act.
+  invoiceState String    @default("NOT_INVOICEABLE") @db.VarChar(16)
+  invoiceRef   String?   @db.VarChar(64)
+  invoicedAt   DateTime?
+
+  // Set when the relation left the hire stage again. A placement is an
+  // accounting record and is never deleted for that; a return to the hire
+  // stage clears it.
+  reversedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([orgId, placedAt])
   @@index([companyId])
   @@index([menteeId])
+  @@index([orgId, invoiceState])
 }
 
 // ── Commercial spine (#1731, epic #1727) ─────────────────────────────────────

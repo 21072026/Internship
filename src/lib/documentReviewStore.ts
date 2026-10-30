@@ -13,7 +13,7 @@ import { notify } from '@/lib/notify';
 import { logger } from '@/lib/logger';
 import { requirementLabel } from '@/lib/documentRequirements';
 import { canDecideStep, nextStep, validityWindow, type ReviewDecision } from '@/lib/documentReview';
-import type { Locale } from '@/i18n/config';
+import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 export const reviewDocumentSelect = {
   id: true,
@@ -53,7 +53,8 @@ function ownerLink(role: string | undefined): string | undefined {
 }
 
 function labelFor(doc: ReviewDocument): string {
-  const locale = (['en', 'tr', 'de'].includes(doc.owner?.preferredLanguage ?? '') ? doc.owner!.preferredLanguage : 'en') as Locale;
+  const pref = doc.owner?.preferredLanguage ?? null;
+  const locale: Locale = isLocale(pref) ? pref : defaultLocale;
   return doc.requirement ? requirementLabel(doc.requirement.labels, locale, doc.requirement.key) : doc.title;
 }
 

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { locales } from '@/i18n/config';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -103,7 +104,7 @@ const updateProfileSchema = z.object({
       z.record(z.string(), z.boolean()),
     )
     .optional(),
-  preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
+  preferredLanguage: z.enum(locales).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
   density: z.enum(['comfortable', 'compact']).optional(),
