@@ -2172,10 +2172,12 @@ model Company {
   externalProfiles   ExternalProfileLink[]
   adminScopeGrants   AdminScopeGrant[]
 
-  // Org-scoped, not global — see the `vatId` comment above.
   // API keys a COMPANY owner minted for their own data (#2006).
-  apiKeys ApiKey[]
+  apiKeys  ApiKey[]
+  // Webhooks a COMPANY owner registered for their own hiring events (#2006).
+  webhooks Webhook[]
 
+  // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
@@ -3216,6 +3218,11 @@ model Webhook {
   apiKeyId            String?
   apiKey              ApiKey?           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
   source              String?           @db.VarChar(20)
+  // Set when a COMPANY owner registered the hook for their own data (#2006):
+  // fan-out then delivers only the company-scoped events whose subject belongs
+  // to this company (src/lib/companyWebhookScope.ts). Null = an org-wide hook.
+  companyId           String?
+  company             Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
   // `consecutiveFailures` and `failingSince` describe the current failure
   // streak (reset by any 2xx); past 20 failures or 72h without a success the
@@ -3231,6 +3238,7 @@ model Webhook {
 
   @@index([orgId, active])
   @@index([apiKeyId])
+  @@index([companyId])
 }
 
 // One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
