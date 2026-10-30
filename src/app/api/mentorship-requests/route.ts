@@ -1,3 +1,4 @@
+import { isLivePending, requestExpiresAt } from '@/lib/requestExpiryRule';
 import { NextResponse } from 'next/server';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { selfSelectedCount } from '@/lib/selfMatchSeats';
@@ -57,6 +58,10 @@ export async function GET() {
           rematchReason: true,
           createdAt: true,
           decidedAt: true,
+          // Expiry and cancellation (#1775): the countdown, and the reason an
+          // admin gave for withdrawing the request — owed to the mentee.
+          expiresAt: true,
+          cancelReason: true,
         },
       }),
       getMenteeRequestGate(session.user.id),
@@ -92,13 +97,18 @@ export async function POST(request: Request) {
 
     const [activeRelation, pending, latest] = await Promise.all([
       prisma.mentorshipRelation.findFirst({ where: { menteeId: session.user.id, status: 'ACTIVE' }, select: { id: true } }),
-      prisma.mentorshipRequest.findFirst({ where: { menteeId: session.user.id, status: 'PENDING' }, select: { id: true } }),
+      // A PENDING request past its expiry no longer blocks (#1775): the daily
+      // sweep marks it EXPIRED, but the mentee is not made to wait for 09:00.
+      prisma.mentorshipRequest.findFirst({
+        where: { menteeId: session.user.id, status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        select: { id: true, createdAt: true, expiresAt: true },
+      }),
       prisma.mentorshipRequest.findFirst({ where: { menteeId: session.user.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
     ]);
     if (activeRelation) {
       return NextResponse.json({ error: 'You already have an active mentorship', code: 'already_mentored' }, { status: 409 });
     }
-    if (pending) {
+    if (pending && isLivePending({ status: 'PENDING', ...pending }, new Date())) {
       return NextResponse.json({ error: 'You already have a pending request', code: 'already_pending' }, { status: 409 });
     }
     if (latest && Date.now() - latest.createdAt.getTime() < 60 * 60 * 1000) {
@@ -157,7 +167,7 @@ export async function POST(request: Request) {
     }
 
     const created = await prisma.mentorshipRequest.create({
-      data: { menteeId: session.user.id, message, targetPosition, preferredField, preferredLanguages, preferredMentorId },
+      data: { menteeId: session.user.id, message, targetPosition, preferredField, preferredLanguages, preferredMentorId, expiresAt: requestExpiresAt(new Date()) },
       select: { id: true, status: true, createdAt: true },
     });
 
