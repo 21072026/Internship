@@ -248,6 +248,14 @@ jobs:
       # which only shrinks; a new one fails here.
       - name: routes authorize through the permission layer (#1571)
         run: npm run check:authz
+      # A notification leaves through notifyEvent() and its channel adapters
+      # (src/lib/notifications/), where the preference check, the ledger row and
+      # quiet hours live once. A raw sendEmail()/sendPushToUser()/bell-row write
+      # elsewhere re-grows the per-site checks that drifted (#1711). The sites
+      # not moved yet are pinned in scripts/notify-baseline.json, which only
+      # shrinks; a new one fails here.
+      - name: notifications go through the router (#1711)
+        run: npm run check:notify
       # A vertical capability switches a MODULE off, and it only does so if the
       # gate is on every one of that module's write paths. Hiding the nav entry
       # (#2351) is not access control, and the leaked-writer class has now been

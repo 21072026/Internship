@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**`npm run check:notify` (#1711):** a CI guard that fails on a raw `sendEmail(` / `sendPushToUser(` / `prisma.notification.create` outside `src/lib/notifications/`. The 75 sites in 16 files not yet moved behind `notifyEvent()` are pinned in `scripts/notify-baseline.json`, which only shrinks (`-- --shrink`, same ratchet as `check:authz`); the sends that stay by decision — newsletter dispatch, the security notices' inline mail, operator alerts, admin test mails and the in-app transport itself — are in its `allowed` block with a reason. Unit-tested in `scripts/test/check-notify.test.mjs`."
+}

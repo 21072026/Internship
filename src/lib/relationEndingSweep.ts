@@ -27,6 +27,7 @@ import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { activeRelationWhere } from '@/lib/relationLifecycle';
 import { endingLeadDays, isEndingSoon, MAX_ENDING_LEAD_DAYS, originalDurationMonths } from '@/lib/relationEnding';
 import { sendRelationEndingEmail } from '@/services/emailService';
+import { isBenched } from '@/lib/participantState';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,6 +37,7 @@ const PERSON = {
   email: true,
   orgId: true,
   isActive: true,
+  participantState: true,
   preferredLanguage: true,
   emailNotifications: true,
   notificationPrefs: true,
@@ -92,7 +94,8 @@ export async function sweepEndingSoonRelations(now: Date = new Date()): Promise<
       { me: r.mentee, other: r.mentor, link: '/portal/calendar', extend: null },
     ];
     for (const side of sides) {
-      if (!side.me.isActive) continue;
+      // Inactive or benched (#1778): nobody on the bench is nudged.
+      if (!side.me.isActive || isBenched(side.me)) continue;
       await notifyIfAllowed(side.me.id, 'mentorship', 'mentorship.ending_soon', { name: side.other.fullName, date: endDay }, side.link);
       if (side.me.email && emailAllowed(side.me, 'mentorship') && emailGroupAllowedForCategory(side.me, 'relation-ending')) {
         await sendRelationEndingEmail({

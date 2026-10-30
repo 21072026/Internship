@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { END_REASON_CODES } from '@/lib/relationLifecycle';
 import { useT } from '@/i18n/client';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 
 interface Gate { profile: boolean; cv: boolean; complete: boolean; missing: ('profile' | 'cv')[] }
 
@@ -53,6 +54,9 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
   const q = t.mentorshipRequests;
   const rm = t.rematchRequest;
   const dir = t.mentorDirectory;
+  // The org's request questions (#1803). Answers are the person's own, saved
+  // before the request so the matcher reads them when it ranks this request.
+  const customFields = useDynamicFields('MENTORSHIP_REQUEST');
   const isRematch = !!rematchRelationId;
   const [rematchOpen, setRematchOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -195,6 +199,7 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
   };
 
   const submit = async () => {
+    if (!customFields.validate()) return;
     setBusy(true);
     setErr('');
     const languages = preferredLanguages
@@ -202,6 +207,10 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
       .map((l) => l.trim())
       .filter(Boolean);
     try {
+      if (await customFields.save()) {
+        setErr(t.dynamicFields.answersFailed);
+        return;
+      }
       const res = await fetch('/api/mentorship-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -420,6 +429,9 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
             />
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.preferencesHint}</p>
+          <div className="mb-3">
+            <DynamicFields state={customFields} />
+          </div>
           {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
           {gate && !gate.complete && (
             <div className="mb-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-3" data-testid="request-gate">

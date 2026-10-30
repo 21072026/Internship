@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
 import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
+import { isBenched, MENTOR_BENCHED_ERROR } from '@/lib/participantState';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -261,6 +262,8 @@ export async function POST(request: Request) {
     if (!mentor || !PARTICIPANT_ROLES.includes(mentor.role)) {
       return NextResponse.json({ error: 'Invalid mentor' }, { status: 400 });
     }
+    // A benched mentor (#1778) is not assignable: refused here, not hidden.
+    if (isBenched(mentor)) return NextResponse.json(MENTOR_BENCHED_ERROR, { status: 409 });
 
     if (!mentee || !PARTICIPANT_ROLES.includes(mentee.role)) {
       return NextResponse.json({ error: 'Invalid mentee' }, { status: 400 });

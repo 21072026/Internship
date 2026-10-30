@@ -876,5 +876,29 @@
       "extendedCount"
     ],
     "additionalProperties": false
+  },
+  "requisition.status_changed@1": {
+    "type": "object",
+    "properties": {
+      "requisitionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "from": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "to": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requisitionId",
+      "from",
+      "to"
+    ],
+    "additionalProperties": false
   }
 }

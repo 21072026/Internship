@@ -8,18 +8,9 @@ import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
-import { z } from 'zod';
 import { createInteraction } from '@/lib/interactionWrite';
-import { TEXT_LIMITS } from '@/lib/textLimits';
-import { INTERACTION_TYPES } from '@/lib/interactionTypes';
+import { createInteractionSchema } from '@/lib/interactionSchema';
 
-const createInteractionSchema = z.object({
-  relationId: z.string().min(1),
-  date: z.string().min(1),
-  subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
-  notes: z.string().min(1, 'Notes are required').max(TEXT_LIMITS.interactionNotes),
-  type: z.enum(INTERACTION_TYPES),
-});
 
 export async function GET(request: Request) {
   try {

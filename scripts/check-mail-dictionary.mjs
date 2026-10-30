@@ -23,7 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const PINNED = new Map([
-  ['src/services/emailService.ts', 25],
+  ['src/services/emailService.ts', 23],
   ['src/lib/announcementMail.ts', 1],
   ['src/lib/newsletterDispatch.ts', 1],
   ['src/lib/outcomeComms.server.ts', 1],
