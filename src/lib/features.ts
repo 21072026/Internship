@@ -132,6 +132,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'requisitionFit', category: 'companies', icon: Target, color: 'purple', capability: 'placements', title: C.requisitionFit.t, desc: C.requisitionFit.d },
     { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', capability: 'placements', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
+    // A Meet or Teams room generated on the organiser's own calendar (#2009). Zoom is deferred by
+    // decision — docs/conferencing.md — so the card says how Zoom works today.
+    { key: 'generatedMeetRooms', category: 'collaboration', icon: Video, color: 'blue', title: C.generatedMeetRooms.t, desc: C.generatedMeetRooms.d },
     { key: 'externalGuests', category: 'collaboration', icon: UserPlus, color: 'amber', title: C.externalGuests.t, desc: C.externalGuests.d },
     // The public demo is ONE instance and it runs the internship product —
     // shared mentor/mentee accounts, an internship pipeline, "create
