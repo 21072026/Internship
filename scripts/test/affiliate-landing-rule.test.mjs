@@ -16,6 +16,9 @@ import {
   parseEmail,
   EMPTY_LANDING,
   LANDING_LIMITS,
+  statCards,
+  needsLiveStats,
+  STAT_LIVE_MIN_PARTNERS,
 } from '../../src/lib/affiliateLandingRule.ts';
 
 const fields = (r) => (r.ok ? [] : r.issues.map((i) => `${i.field}:${i.code}`));
@@ -163,4 +166,76 @@ test('the public table follows the plan: sorted bands, then the open top band', 
   ]);
   assert.equal(maxOneOffCommission(plan), 1_500);
   assert.deepEqual(commissionTableRows({ ...plan, tiers: [] }), [{ overMinor: null, upToMinor: null, commissionMinor: 1_500 }]);
+});
+
+// ── The figure cards (#3364) ──────────────────────────────────────────────
+
+test('stat cards: live, manual and hidden parse; satisfaction cannot be live; a manual card needs a short figure', () => {
+  const ok = parseLanding({ stats: { activePartners: { mode: 'live' }, customers: { mode: 'hidden' }, satisfaction: { mode: 'manual', value: '  98 % ' } } });
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.landing.stats, {
+    activePartners: { mode: 'live', value: null },
+    customers: { mode: 'hidden', value: null },
+    satisfaction: { mode: 'manual', value: '98 %' },
+  });
+
+  const bad = parseLanding({
+    stats: {
+      satisfaction: { mode: 'live' },
+      activePartners: { mode: 'manual', value: '' },
+      customers: { mode: 'manual', value: 'x'.repeat(LANDING_LIMITS.statValue + 1) },
+      ranking: { mode: 'hidden' },
+    },
+  });
+  assert.deepEqual(fields(bad).sort(), ['stats.activePartners.value:invalid', 'stats.customers.value:too_long', 'stats.ranking:unknown', 'stats.satisfaction.mode:invalid'].sort());
+  assert.deepEqual(fields(parseLanding({ stats: { customers: { mode: 'sometimes' } } })), ['stats.customers.mode:invalid']);
+  assert.deepEqual(fields(parseLanding({ stats: 'live' })), ['stats:type']);
+});
+
+test('stat cards: what a visitor sees — fixed order, typed figures as typed, live counts only above the threshold', () => {
+  const landing = parseLanding({
+    stats: { satisfaction: { mode: 'manual', value: '98 %' }, customers: { mode: 'live' }, activePartners: { mode: 'live' } },
+  }).landing;
+  const big = { activePartners: STAT_LIVE_MIN_PARTNERS, customers: 1234 };
+  assert.deepEqual(statCards(landing, big, (n) => n.toLocaleString('de-DE')), [
+    { key: 'activePartners', value: String(STAT_LIVE_MIN_PARTNERS) },
+    { key: 'customers', value: '1.234' },
+    { key: 'satisfaction', value: '98 %' },
+  ]);
+  // Below the threshold — and when the counts could not be read — every live card is gone.
+  assert.deepEqual(statCards(landing, { activePartners: STAT_LIVE_MIN_PARTNERS - 1, customers: 5000 }), [{ key: 'satisfaction', value: '98 %' }]);
+  assert.deepEqual(statCards(landing, null), [{ key: 'satisfaction', value: '98 %' }]);
+  // Nothing configured shows nothing, and asks for no counts.
+  assert.deepEqual(statCards(EMPTY_LANDING, big), []);
+  assert.equal(needsLiveStats(EMPTY_LANDING), false);
+  assert.equal(needsLiveStats(landing), true);
+});
+
+test('stat cards take part in the change comparison; a hidden card equals an absent one', () => {
+  const a = parseLanding({ stats: { satisfaction: { mode: 'manual', value: '98 %' } } }).landing;
+  const b = parseLanding({ stats: { satisfaction: { mode: 'manual', value: '97 %' } } }).landing;
+  const hidden = parseLanding({ stats: { customers: { mode: 'hidden' } } }).landing;
+  assert.notEqual(canonicalLanding(a), canonicalLanding(b));
+  assert.equal(canonicalLanding(hidden), canonicalLanding(EMPTY_LANDING));
+  // A stored landing from before #3364 (no `stats`) still reads.
+  assert.deepEqual(readStoredLanding({ copy: { en: { heroTitle: 'Partners' } } }).stats, {});
+});
+
+test('the live figures are read once per organisation per window, refreshed after it, and a failed read shows nothing', async () => {
+  const { makeTtlCache } = await import('../../src/lib/affiliatePublicStatsCache.ts');
+  const cache = makeTtlCache(1000);
+  let reads = 0;
+  let partners = 12;
+  const load = async () => {
+    reads += 1;
+    return { activePartners: partners, customers: 3 };
+  };
+  assert.deepEqual(await cache.get('org-a', load, 0), { activePartners: 12, customers: 3 });
+  partners = 15;
+  assert.equal((await cache.get('org-a', load, 999)).activePartners, 12); // still inside the window
+  assert.equal(reads, 1);
+  assert.equal((await cache.get('org-a', load, 1000)).activePartners, 15); // the window passed
+  assert.equal(reads, 2);
+  assert.equal((await cache.get('org-b', load, 1000)).activePartners, 15); // per organisation
+  assert.equal(await cache.get('org-c', async () => { throw new Error('db down'); }, 0), null);
 });

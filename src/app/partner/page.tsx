@@ -8,7 +8,8 @@ import { brandAssetPath } from '@/lib/brandRule';
 import { formatMinorPrice } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { publicProgrammeForRequest } from '@/lib/affiliatePublicPage';
-import { commissionTableRows, landingCopyFor, maxOneOffCommission, telHref } from '@/lib/affiliateLandingRule';
+import { commissionTableRows, landingCopyFor, maxOneOffCommission, needsLiveStats, statCards, telHref } from '@/lib/affiliateLandingRule';
+import { liveStatCounts } from '@/lib/affiliatePublicStats';
 
 // The public partner-programme page (docs/affiliate-module.md, #3360): the first
 // page someone who wants to become a partner sees, on the marketing host,
@@ -43,6 +44,10 @@ export default async function PartnerProgrammePage() {
   const { phone, email, productSignupUrl } = programme.landing;
   const money = (minor: number) => formatMinorPrice(minor, plan.currency, locale);
   const rows = commissionTableRows(plan);
+  // The figure cards (#3364): live counts are read (hourly cached) only when a
+  // card asks for them; below the threshold the rule leaves the live ones out.
+  const live = needsLiveStats(programme.landing) ? await liveStatCounts(programme.orgId) : null;
+  const cards = statCards(programme.landing, live, (n) => n.toLocaleString(locale));
   const accent = brand.themeColor;
   // The gradient's second stop: the same colour at 80 % when it is a plain #rrggbb.
   const accentSoft = /^#[0-9a-f]{6}$/i.test(accent) ? `${accent}cc` : accent;
@@ -97,6 +102,19 @@ export default async function PartnerProgrammePage() {
 
       <main id="main-content" className="mx-auto max-w-5xl space-y-16 px-4 py-14">
         {copy.intro && <p className="mx-auto max-w-3xl whitespace-pre-line text-center text-lg text-gray-700 dark:text-gray-300">{copy.intro}</p>}
+
+        {cards.length > 0 && (
+          <section aria-label={L.stats.title} data-testid="partner-stats">
+            <dl className={`mx-auto grid max-w-3xl gap-4 ${cards.length === 1 ? 'sm:grid-cols-1' : cards.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+              {cards.map((card) => (
+                <div key={card.key} className="rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900" data-testid={`partner-stat-${card.key}`}>
+                  <dt className="text-sm text-gray-600 dark:text-gray-400">{L.stats[card.key]}</dt>
+                  <dd className="mt-1 text-3xl font-bold" style={{ color: accent }}>{card.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
 
         <section aria-labelledby="partner-table" className="space-y-6">
           <div className="text-center">

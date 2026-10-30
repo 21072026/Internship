@@ -5,12 +5,18 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
 import { interpolate } from '@/lib/notificationText';
 import {
   LANDING_LIMITS,
   LANDING_LOCALES,
+  LANDING_STAT_KEYS,
+  LIVE_STAT_KEYS,
+  STAT_MODES,
+  type LandingStat,
+  type LandingStatKey,
   type Landing,
   type LandingCopy,
   type LandingIssue,
@@ -51,6 +57,8 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
   const [phone, setPhone] = useState(initial.phone ?? '');
   const [email, setEmail] = useState(initial.email ?? '');
   const [signupUrl, setSignupUrl] = useState(initial.productSignupUrl ?? '');
+  // The figure cards (#3364): an absent key is shown as `hidden`.
+  const [stats, setStats] = useState<Partial<Record<LandingStatKey, LandingStat>>>(initial.stats ?? {});
   const [lang, setLang] = useState<LandingLocale>('de');
   const [issues, setIssues] = useState<Map<string, LandingIssueCode>>(new Map());
   const [busy, setBusy] = useState(false);
@@ -70,7 +78,7 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
       const res = await fetch('/api/admin/affiliate/settings/landing', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ landing: { copy, phone, email, productSignupUrl: signupUrl } }),
+        body: JSON.stringify({ landing: { copy, phone, email, productSignupUrl: signupUrl, stats } }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -80,6 +88,7 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
         setPhone(saved.phone ?? '');
         setEmail(saved.email ?? '');
         setSignupUrl(saved.productSignupUrl ?? '');
+        setStats(saved.stats ?? {});
       } else if (body.code === 'invalid_landing') {
         setIssues(new Map((body.issues as LandingIssue[]).map((i) => [i.field, i.code])));
         toast(t.affiliateSettings.errorInvalid, 'error');
@@ -223,6 +232,38 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
             onChange={(e) => setSignupUrl(e.target.value)}
             data-testid="affiliate-landing-signup-url"
           />
+        </div>
+
+        <div className="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800" data-testid="affiliate-landing-stats">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{L.stats.title}</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{L.stats.hint}</p>
+          {LANDING_STAT_KEYS.map((key) => {
+            const stat = stats[key] ?? { mode: 'hidden', value: null };
+            const modes = STAT_MODES.filter((m) => m !== 'live' || LIVE_STAT_KEYS.includes(key));
+            return (
+              <div key={key} className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2">
+                <Select
+                  label={`${L.stats.labels[key]} · ${L.stats.mode}`}
+                  value={stat.mode}
+                  error={err(`stats.${key}.mode`)}
+                  onChange={(e) => setStats({ ...stats, [key]: { mode: e.target.value as LandingStat['mode'], value: stat.value } })}
+                  options={modes.map((m) => ({ value: m, label: L.stats.modes[m] }))}
+                  data-testid={`affiliate-landing-stat-${key}-mode`}
+                />
+                {stat.mode === 'manual' && (
+                  <Input
+                    label={L.stats.value}
+                    hint={key === 'satisfaction' ? L.stats.satisfactionHint : undefined}
+                    value={stat.value ?? ''}
+                    maxLength={LANDING_LIMITS.statValue}
+                    error={err(`stats.${key}.value`)}
+                    onChange={(e) => setStats({ ...stats, [key]: { mode: 'manual', value: e.target.value } })}
+                    data-testid={`affiliate-landing-stat-${key}-value`}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {!readOnly && (

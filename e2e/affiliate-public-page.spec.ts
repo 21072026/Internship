@@ -110,6 +110,44 @@ test('the marketing host shows the org’s copy, a table from its plan and every
   for (const href of ['/imprint', '/privacy', '/terms']) await expect(page.locator(`footer a[href="${href}"]`)).toHaveCount(1);
 });
 
+test('the figure cards show live counts, a typed figure and nothing for a hidden card', async ({ page }) => {
+  // #3364. Ten active partners (the live threshold), one suspended, two linked
+  // customers — the live cards must count only the active partners. Seeded
+  // BEFORE the first read: the counts are cached for an hour per organisation.
+  const partners = await Promise.all(
+    Array.from({ length: 11 }, (_, i) =>
+      prisma.affiliatePartner.create({
+        data: { orgId, code: `olabel-${stamp}-${i}`, displayName: `Synthetic Partner ${i}`, ...(i === 10 ? { status: 'SUSPENDED' } : {}) },
+      }),
+    ),
+  );
+  await prisma.affiliateCustomer.createMany({
+    data: [0, 1].map((i) => ({ orgId, partnerId: partners[0].id, externalRef: `cust-${stamp}-${i}` })),
+  });
+  await prisma.affiliateProgramSettings.update({
+    where: { orgId },
+    data: { landing: { ...LANDING, stats: { activePartners: { mode: 'live' }, customers: { mode: 'live' }, satisfaction: { mode: 'manual', value: '96 %' } } } },
+  });
+  await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), 'accept-language': 'en' });
+  expect((await page.goto('/partner'))?.status()).toBe(200);
+  await expect(page.getByTestId('partner-stat-activePartners')).toContainText('10');
+  await expect(page.getByTestId('partner-stat-activePartners')).toContainText('Active partners');
+  await expect(page.getByTestId('partner-stat-customers')).toContainText('2');
+  await expect(page.getByTestId('partner-stat-satisfaction')).toContainText('96 %');
+
+  // A hidden card is not on the page at all.
+  await prisma.affiliateProgramSettings.update({
+    where: { orgId },
+    data: { landing: { ...LANDING, stats: { activePartners: { mode: 'live' }, customers: { mode: 'hidden' }, satisfaction: { mode: 'manual', value: '96 %' } } } },
+  });
+  await page.reload();
+  await expect(page.getByTestId('partner-stat-activePartners')).toBeVisible();
+  await expect(page.getByTestId('partner-stat-customers')).toHaveCount(0);
+
+  await prisma.affiliateCustomer.deleteMany({ where: { orgId } });
+  await prisma.affiliatePartner.deleteMany({ where: { orgId } });
+});
+
 test('the internship host has no partner page', async ({ page }) => {
   expect((await page.goto('/partner'))?.status()).toBe(404);
 });
