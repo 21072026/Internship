@@ -105,6 +105,7 @@ const LEAK_WORDS: Record<string, RegExp> = {
 };
 
 const LEAK_EXEMPT: Record<string, string> = {
+  matchRounds: 'The bulk matching round board (#1796): its pages sit under /admin/matching, closed for an org without the `mentorship` capability by the segment layout (gatePage) and every round route by requireCapability, so MARKETING never renders a word of it.',
   matchDecision: 'The pairing audit record (#1789): its only reader, GET /api/admin/match-decisions, refuses an org without the `mentorship` capability (requireCapability), so MatchDecisionPanel draws nothing there; the note field sits on the internship assign/approve controls.',
   portal: 'The mentee portal shell: src/app/portal/layout.tsx redirects every org without the `mentorship` capability to /account.',
   portalInsights: 'Rendered only inside /portal (see `portal`).',
