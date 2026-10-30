@@ -17,6 +17,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, validateDropoffReason, validateEmploymentAttribution } from '@/lib/stageChange';
+import { canTransition } from '@/lib/stageGate';
 import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
 
@@ -300,6 +301,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         });
         if (!attributionCheck.ok) {
           return NextResponse.json({ error: attributionCheck.error, code: 'invalid_attribution' }, { status: 400 });
+        }
+        // The stage's entry gate (#1589): who may move it there, and what must
+        // be true first. Open unless the tenant configured one; never gates a
+        // backwards or off-path move.
+        const gate = await canTransition({ actor, session }, relation, pipelineStatus!, await getLocale());
+        if (gate) {
+          return NextResponse.json({ error: 'stage_gate_blocked', gate }, { status: 409 });
         }
       }
 
