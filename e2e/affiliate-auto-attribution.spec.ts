@@ -80,7 +80,7 @@ function envelope(over: Record<string, unknown> = {}) {
     trial_started_at: new Date(Date.now() - DAY).toISOString(),
     trial_ends_at: new Date(Date.now() + 19 * DAY).toISOString(),
     referral_code: CODE,
-    contact: { first_name: 'Ada', last_name: 'Example', email: `ada-${crypto.randomBytes(3).toString('hex')}@shop.example`, company_name: `Shop ${STAMP}` },
+    contact: { first_name: 'Ada', last_name: 'Example', email: `ada-${crypto.randomBytes(3).toString('hex')}@shop.example`, company_name: `Shop ${STAMP} ${crypto.randomBytes(3).toString('hex')}` },
     ...over,
   };
 }
