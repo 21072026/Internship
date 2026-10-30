@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Lifecycle badge wherever a pairing is listed (#1774, story #1767):** new `RelationLifecycleBadge` (`src/components/ui/`) — live green, paused amber, completed blue, every other ending grey, the localized end reason as its tooltip — on `/admin/mentorship`, the admin dashboard, the candidate detail panel, the mentor's dashboard, mentee list and mentee page, and the mentee portal and journey; it replaces the two ad-hoc chips on `/admin/mentorship`. The `/admin/mentorship` filter gains PAUSED and ENDED next to ALL/ACTIVE/COMPLETED, through a new `lifecycle=` parameter on `GET /api/mentorship` (`status=` keeps its meaning for every other caller); COMPLETED now means a real completion. Saved views restore the new chips.",
+  "notes": {
+    "en": ["A paused or early-ended pairing now says so wherever pairings are listed — with the reason on hover — and the pairings list can be filtered to paused or ended ones."],
+    "tr": ["Duraklatılmış ya da erken biten bir eşleşme artık eşleşmelerin listelendiği her yerde bunu gösteriyor — gerekçesi fareyle üzerine gelince — ve eşleşme listesi duraklatılmış ya da sona ermiş olanlara göre süzülebiliyor."],
+    "de": ["Eine pausierte oder vorzeitig beendete Paarung zeigt das jetzt überall, wo Paarungen aufgelistet sind — mit dem Grund beim Darüberfahren —, und die Paarungsliste lässt sich nach pausierten oder beendeten filtern."]
+  }
+}

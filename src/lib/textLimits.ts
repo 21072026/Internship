@@ -197,6 +197,8 @@ export const TEXT_LIMITS = {
   agendaItemText: 2000,
   /** SessionNote.body — @db.Text (#1847); the pair's shared minutes */
   sessionNoteBody: 10000,
+  /** Kudo.reason — @db.Text (#1868); a written thank-you */
+  kudoReason: 1000,
   /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
   agendaSummary: 500,
   /** AgendaTemplateItem.guidance — @db.Text (#1843) */

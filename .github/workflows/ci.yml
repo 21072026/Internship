@@ -388,6 +388,11 @@ jobs:
       # getDictionary() calls in mailing files are a pinned ratchet.
       - name: mail copy follows the recipient's org (#1631)
         run: npm run check:mail-dictionary
+      # The locale list is written once, in src/i18n/config.ts (#2082): a
+      # hand-written ['en', 'tr', 'de'] silently leaves out the next language.
+      # Older copies are a pinned ratchet (scripts/locale-list-baseline.json).
+      - name: locale list written once (#2082)
+        run: npm run check:locale-list
       # Settings are read through ONE accessor, src/lib/settingsResolver.ts
       # (#1621): a direct prisma.setting read skips the org/programme chain
       # and reads the global row for every tenant. Legacy getSetting() readers

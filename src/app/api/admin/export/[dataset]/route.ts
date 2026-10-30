@@ -18,6 +18,9 @@ import { loadSurveyOverview } from '@/lib/surveyOverview';
 import { defaultOutcomePeriod, loadOutcomeReport } from '@/lib/outcomesData';
 import { loadProgramScorecard } from '@/lib/programScorecardData';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
+import { loadPlacements, placementFiltersFrom } from '@/lib/placementQuery';
+import { placementsSheet } from '@/lib/placementSheet';
 
 // GET /api/admin/export/[dataset] — the ONE door every admin export goes
 // through (#1740), gated by the org's REPORT_EXPORT entitlement (its plan or a
@@ -43,7 +46,7 @@ import { requirePermission } from '@/lib/authz';
 // paged candidate list, stay free to view. REPORT_EXPORT sells the file — the
 // whole filtered set in one workbook — not the right to read one's own data.
 
-const DATASETS = ['candidates', 'analytics', 'analytics-full', 'contributor-terms', 'skills-gap'] as const;
+const DATASETS = ['candidates', 'analytics', 'analytics-full', 'contributor-terms', 'skills-gap', 'placements'] as const;
 type Dataset = (typeof DATASETS)[number];
 
 /** Call another route handler in-process with the caller's query string. */
@@ -100,6 +103,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
         const res = await internal(skillsGapGET, request, '/api/admin/analytics/skills-gap', { all: '1' });
         if (!res.ok) return NextResponse.json({ error: 'Export failed' }, { status: res.status });
         return NextResponse.json({ sheets: [skillsGapSheet(res.body.rows ?? [], t.skillsGap)] });
+      }
+      case 'placements': {
+        // The ledger screen's own query and filters (#1765), so the file holds
+        // exactly the rows the screen lists.
+        const blocked = await requireCapability(orgId, 'placements');
+        if (blocked) return blocked;
+        const rows = await loadPlacements(orgId, placementFiltersFrom(new URL(request.url).searchParams));
+        return new NextResponse(toCsv(placementsSheet(rows, t.placements)), {
+          headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="placements-${new Date().toISOString().slice(0, 10)}.csv"`,
+          },
+        });
       }
       case 'contributor-terms': {
         const { rows } = await buildAcceptanceReport();
