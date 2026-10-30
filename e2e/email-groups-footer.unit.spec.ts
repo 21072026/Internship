@@ -511,8 +511,11 @@ test.describe('the taxonomy covers what the app actually sends', () => {
       const src = fs.readFileSync(file, 'utf8');
       // Only files that actually send mail. `category:` is also a cookie-consent
       // and a feature-catalogue field name, and those have nothing to do with
-      // this taxonomy.
-      if (!src.includes('sendEmail(') && !src.includes('emailService')) continue;
+      // this taxonomy. Judged on the code, not the comments: the notification
+      // catalogue (its own `category:` vocabulary) merely MENTIONS sendEmail()
+      // in a comment, and that alone pulled 115 foreign literals in.
+      const code = src.replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/g, '$1');
+      if (!code.includes('sendEmail(') && !code.includes('emailService')) continue;
       for (const m of src.matchAll(/\bcategory:\s*'([a-z0-9-]+)'/g)) {
         seen++;
         if (!groupForCategory(m[1])) offenders.push(`${path.relative(process.cwd(), file)}: ${m[1]}`);
