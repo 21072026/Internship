@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Profile digests for the semantic match rule (#2038, slice 2):** new AI task `profile_digest` (operator, `AI_CV_PARSING` consent of the person, `fast` tier) turns a person's OWN labelled text — bio, interests, target position, skills and the titles of goals they wrote, each field bounded, contact details masked — into a 2-3 sentence neutral summary and ≤ 12 English theme tokens on `ProfileDigest` (`src/lib/ai/profileDigest.ts`; rules pure in `src/lib/profileDigestRule.ts`; the one writer `refreshProfileDigest()` in `src/lib/profileDigest.ts`). The model is called only when the text's sha256 differs from the stored `sourceHash` or the person asks; skills alone make no digest, and a profile emptied of text removes it. A nightly queued job `profileDigest.refresh` (02:35 UTC) scans up to 500 consenting MENTORs/MENTEEs — no-digest-yet by most recent edit, existing ones by longest unchecked, marking checked rows — and makes at most 50 model calls; an org whose AI is off, unpaid or out of quota is skipped silently. `GET`/`POST /api/profile/digest` let a person read exactly what is stored about them and regenerate it (session user only, 3/hour, `mentorship` capability); the profile page shows it in a new card (`ProfileDigestCard`, EN/TR/DE). Without a digest the semantic rule stays not applicable and matching runs on the deterministic rules.",
+  "notes": {
+    "en": ["Your profile page now shows the short summary and themes matching uses to find you a fitting mentor or mentee — and you can have it made again."],
+    "tr": ["Profil sayfan artık eşleştirmenin sana uygun mentor ya da mentee bulmak için kullandığı kısa özeti ve temaları gösteriyor; istersen yeniden oluşturabilirsin."],
+    "de": ["Deine Profilseite zeigt jetzt die kurze Zusammenfassung und die Themen, mit denen das Matching passende Mentoren oder Mentees findet — und du kannst sie neu erstellen lassen."]
+  }
+}
