@@ -34,6 +34,7 @@ import { createServer } from 'node:http';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { SignedXml } from 'xml-crypto';
+import xmlenc from 'xml-encryption';
 import { derInt, selfSignedCertificate } from './x509.mjs';
 
 const PORT = Number(process.env.IDP_MOCK_PORT || 4600);
@@ -217,6 +218,52 @@ export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', 
   return Buffer.from(response, 'utf8').toString('base64');
 }
 
+
+// --- SAML protocol hardening (#1955) ---------------------------------------
+// The SP's certificate, read from the SP metadata the AuthnRequest's ACS URL
+// points at (…/acs → …/metadata), exactly as a real IdP that imported our
+// metadata would hold it.
+async function spCertificate(acsUrl, use) {
+  const res = await fetch(acsUrl.replace(/\/acs$/, '/metadata'));
+  const xml = await res.text();
+  const re = new RegExp(`<md:KeyDescriptor use="${use}">[\\s\\S]*?<ds:X509Certificate>([^<]+)</ds:X509Certificate>`);
+  const m = re.exec(xml);
+  if (!m) return null;
+  const body = m[1].replace(/\s+/g, '').match(/.{1,64}/g).join('\n');
+  return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`;
+}
+
+// HTTP-Redirect binding signature (SAML bindings § 3.4.4.1): the signed octets
+// are the RAW query parameters SAMLRequest, RelayState (if any) and SigAlg, in
+// that order, exactly as they arrived.
+function redirectSignedOctets(rawQuery) {
+  const pairs = new Map(rawQuery.split('&').map((p) => { const i = p.indexOf('='); return [p.slice(0, i), p.slice(i + 1)]; }));
+  const parts = ['SAMLRequest', 'RelayState', 'SigAlg'].filter((k) => pairs.has(k)).map((k) => `${k}=${pairs.get(k)}`);
+  return { octets: parts.join('&'), signature: pairs.get('Signature') ? decodeURIComponent(pairs.get('Signature')) : null };
+}
+
+// The last AuthnRequest the SSO endpoint saw: was it signed, and did that
+// signature verify against the SP certificate in the SP's metadata?
+let lastAuthn = null;
+
+function encryptAssertionIn(responseB64, certPem) {
+  const xml = Buffer.from(responseB64, 'base64').toString('utf8');
+  const m = /<saml:Assertion\b[\s\S]*<\/saml:Assertion>/.exec(xml);
+  const publicKey = crypto.createPublicKey(certPem).export({ type: 'spki', format: 'pem' });
+  return new Promise((resolve, reject) => {
+    xmlenc.encrypt(m[0], {
+      rsa_pub: publicKey,
+      pem: certPem,
+      encryptionAlgorithm: 'http://www.w3.org/2009/xmlenc11#aes256-gcm',
+      keyEncryptionAlgorithm: 'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p',
+    }, (err, encrypted) => {
+      if (err) return reject(err);
+      const out = xml.replace(m[0], `<saml:EncryptedAssertion>${encrypted}</saml:EncryptedAssertion>`);
+      resolve(Buffer.from(out, 'utf8').toString('base64'));
+    });
+  });
+}
+
 // --- SAML Single Logout (#1952) -------------------------------------------
 
 let lastSlo = null;
@@ -377,15 +424,36 @@ const server = createServer(async (req, res) => {
     if (!parsed.acsUrl || !parsed.spEntityId) {
       return json(res, 400, { error: 'AuthnRequest lacks an ACS URL or Issuer' });
     }
-    const samlResponse = buildSamlResponse({
+    // #1955: verify a signed AuthnRequest against the SP's published
+    // certificate, record what arrived, and refuse an unsigned one when the
+    // tenant's entry point asks for that (`mode=require-signed`).
+    const mode = q.get('mode') || 'ok';
+    const { octets, signature } = redirectSignedOctets(req.url.slice(req.url.indexOf('?') + 1));
+    let verified = null;
+    if (signature) {
+      const cert = await spCertificate(parsed.acsUrl, 'signing');
+      verified = !!cert && crypto.verify('sha256', Buffer.from(octets), cert, Buffer.from(signature, 'base64'));
+    }
+    lastAuthn = { requestId: parsed.requestId, signed: !!signature, verified, sigAlg: q.get('SigAlg') };
+    if (mode === 'require-signed' && verified !== true) {
+      return json(res, 400, { error: signature ? 'AuthnRequest signature does not verify' : 'AuthnRequest must be signed' });
+    }
+    let samlResponse = buildSamlResponse({
       acsUrl: parsed.acsUrl,
       audience: parsed.spEntityId,
       email: q.get('email') || 'stub.user@e2e.local',
       name: q.get('name') || 'Stub User',
-      mode: q.get('mode') || 'ok',
-      inResponseTo: parsed.requestId,
+      mode: mode === 'require-signed' || mode === 'encrypted' ? 'ok' : mode,
+      // `no-in-response-to` answers as if IdP-initiated; `foreign-in-response-to`
+      // names a request this SP never sent.
+      inResponseTo: mode === 'no-in-response-to' ? undefined : mode === 'foreign-in-response-to' ? '_not-a-request-of-ours' : parsed.requestId,
       groups: (q.get('groups') || '').split(',').map((g) => g.trim()).filter(Boolean),
     });
+    if (mode === 'encrypted') {
+      const cert = await spCertificate(parsed.acsUrl, 'encryption');
+      if (!cert) return json(res, 400, { error: 'the SP metadata publishes no encryption certificate' });
+      samlResponse = await encryptAssertionIn(samlResponse, cert);
+    }
     return html(res, 200, autoPostForm(parsed.acsUrl, samlResponse, q.get('RelayState') || ''));
   }
 
@@ -444,6 +512,7 @@ const server = createServer(async (req, res) => {
     return html(res, 200, '<!doctype html><title>Stub IdP</title><p data-testid="stub-idp-signed-out">Signed out at the stub IdP.</p>');
   }
   if (url.pathname === '/saml/slo/last') return json(res, 200, lastSlo);
+  if (url.pathname === '/saml/authn/last') return json(res, 200, lastAuthn);
 
   // Mint an IdP-initiated LogoutRequest for the spec to deliver to the app's
   // SLO endpoint. `mode`: ok (signed, Redirect binding), unsigned, wrong-key,

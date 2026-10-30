@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
-import { samlForOrg } from '@/lib/ssoSaml';
+import { samlLoginForOrg } from '@/lib/ssoSamlLogin';
 import { beginOidcLogin, OIDC_REQUEST_TTL_MS, OIDC_STATE_COOKIE } from '@/lib/ssoOidc';
 import { configuredOrigin, requestOrigin } from '@/lib/servedHosts';
 import { worldForHeaders } from '@/lib/hostWorld';
@@ -54,7 +54,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     }
   }
   try {
-    const saml = samlForOrg(slug, org);
+    const saml = await samlLoginForOrg(slug, org);
     // The ACS the IdP posts back to is REGISTERED there under NEXTAUTH_URL's
     // host, so the browser returns to that host whichever one it left from.
     // RelayState is SAML's own "where was I" slot (echoed verbatim by the IdP,
