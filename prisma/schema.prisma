@@ -1123,6 +1123,7 @@ model User {
   placements                        Placement[]                    @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
+  userIdentities                    UserIdentity[]
   adminScopeGrants                  AdminScopeGrant[]
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]              @relation("PracticeSessions")
@@ -5832,11 +5833,15 @@ model SsoAuthRequest {
   id           String       @id @default(cuid())
   orgId        String
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  kind         String       @default("oidc") @db.VarChar(10)
+  // oidc | saml | social:<provider> (#1962)
+  kind         String       @default("oidc") @db.VarChar(20)
   state        String       @unique @db.VarChar(191)
   nonce        String?      @db.VarChar(191)
   codeVerifier String?      @db.VarChar(191)
   returnOrigin String?      @db.VarChar(255)
+  // Social sign-in "connect" (#1962): the signed-in account that asked to link
+  // this provider. Set only by the login route from the session, never a body.
+  linkUserId   String?      @db.VarChar(191)
   createdAt    DateTime     @default(now())
   expiresAt    DateTime
   usedAt       DateTime?
@@ -5865,6 +5870,25 @@ model SsoLoginGrant {
 // User-keyed, not tenant-keyed, like SsoLoginGrant and PasswordResetToken: the
 // row is a credential for ONE account, and that account's row already carries
 // the tenant. An orgId here would be a second copy of the same fact.
+/// A social sign-in identity (#1962, docs/social-sign-in.md): "this Google /
+/// Microsoft / LinkedIn subject is this account". Linked on the provider's
+/// SUBJECT, never the address — an address changes at the provider, a subject
+/// does not. The address is kept for the account screen only. User-keyed like
+/// LoginLinkToken; the user's own org is the scope, so no orgId.
+model UserIdentity {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String   @db.VarChar(20)
+  subject    String   @db.VarChar(191)
+  email      String?  @db.VarChar(191)
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@unique([provider, subject])
+  @@index([userId])
+}
+
 model LoginLinkToken {
   id        String    @id @default(cuid())
   tokenHash String    @unique
