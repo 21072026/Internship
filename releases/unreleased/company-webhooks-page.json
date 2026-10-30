@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Company webhooks on `/company/integrations` (#2006, 4/n):** the company's API keys page gains a Webhooks section over `/api/company/integrations/webhooks` — a receiver URL, a checkbox per event the route offers (`COMPANY_WEBHOOK_EVENTS`, read from its answer, so the form never asks for one the route refuses), the signing secret shown once, a paused badge for a hook auto-disabled after failures, and delete. EN/TR/DE strings.",
+  "notes": {
+    "en": ["Companies can now add and remove their own webhooks on the API keys page."],
+    "tr": ["Şirketler artık kendi webhook'larını API anahtarları sayfasında ekleyip kaldırabiliyor."],
+    "de": ["Unternehmen können ihre eigenen Webhooks jetzt auf der Seite „API-Schlüssel“ hinzufügen und entfernen."]
+  }
+}
