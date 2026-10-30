@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate partner application (#3361):** `/partner/apply` on the marketing host — first/last name, e-mail, optional company and phone, \"how did you hear about us?\" (`AFFILIATE_HEARD_FROM`, `other` with text) and a required privacy consent; no password, no account. New tenant model `AffiliateApplication` (`PENDING`/`APPROVED`/`REJECTED`, consent time + privacy text version, decision fields for #3362) written only by `submitAffiliateApplication()` through the sessionless `POST /api/partner/apply`: org from the host's programme (`affiliateProgrammeForHost()`, 503 without one), 3/hour per IP, honeypot, minimum render time, one pending application and three rows per address and org per day, the same 200 for every accepted body. Admins get `affiliate_application.new` in the app; the applicant an acknowledgement (`affiliate-application-received`, `inbound_requests`, outbound-exempt). Rows are deleted after 180 days by the new `affiliateApplication` retention entry. Rule pure in `src/lib/affiliateApplicationRule.ts` (unit-tested); pinned by `e2e/affiliate-application.spec.ts` (tenant routing @smoke).",
+  "notes": {
+    "en": ["People who want to become partners can now apply through a form on your partner programme page; you are notified and they get a confirmation e-mail."],
+    "tr": ["Partner olmak isteyenler artık partner programı sayfanızdaki formla başvurabiliyor; size bildirim gelir, başvurana da onay e-postası gider."],
+    "de": ["Interessierte können sich jetzt über ein Formular auf Ihrer Partnerprogrammseite als Partner bewerben; Sie werden benachrichtigt, und die Bewerber erhalten eine Bestätigung per E-Mail."]
+  }
+}
