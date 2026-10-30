@@ -52,6 +52,6 @@
     "src/lib/outcomeComms.server.ts": 1,
     "src/lib/surveyCampaigns.ts": 1,
     "src/lib/surveyReminders.ts": 1,
-    "src/services/emailService.ts": 61
+    "src/services/emailService.ts": 60
   }
 }
