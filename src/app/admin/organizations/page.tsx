@@ -924,7 +924,7 @@ export default function AdminOrganizationsPage() {
                     <select value={ssoProvider} disabled={ssoTrustLocked} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
-                      <option value="oidc">OpenID Connect</option>
+                      <option value="oidc">{t.organizations.ssoProviderOidc}</option>
                     </select>
                   </div>
                   <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoTrustLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
@@ -951,7 +951,7 @@ export default function AdminOrganizationsPage() {
                         data-testid="sso-client-secret"
                       />
                     </div>
-                    <div className="flex-1 min-w-[180px]"><Input label={t.organizations.ssoScopes} value={ssoScopes} disabled={ssoTrustLocked} onChange={(e) => setSsoScopes(e.target.value)} placeholder="openid email profile" /></div>
+                    <div className="flex-1 min-w-[180px]"><Input label={t.organizations.ssoScopes} value={ssoScopes} disabled={ssoTrustLocked} onChange={(e) => setSsoScopes(e.target.value)} placeholder={t.organizations.ssoScopesPlaceholder} /></div>
                   </div>
                 )}
                 {!ssoTrustLocked && ssoProvider !== 'oidc' && (
