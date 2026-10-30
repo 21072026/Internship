@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**SAML protocol hardening (#1955):** signed AuthnRequests (per tenant, `Organization.ssoSignRequests`, default off — the SP metadata then says `AuthnRequestsSigned=\"true\"`), encrypted assertions (decrypted with the tenant's sealed SP key whenever it exists; the metadata now publishes the certificate for `use=\"encryption\"` as well as `use=\"signing\"`) and `InResponseTo` correlation — the AuthnRequest ID is stored in `SsoAuthRequest` (`kind = 'saml'`) and spent once by a conditional update (`SamlRequestStore`, node-saml's cache provider), `ifPresent` by default so IdP-initiated sign-in keeps working, `always` as the opt-in `ssoRequireInResponseTo`. `ssoCertificate` may hold several PEM blocks, all trusted, so an IdP key rotation is not an outage; each block is validated on save. Admin card toggles carry the breakage warnings; `docs/sso-saml.md` § Protocol hardening replaces the stateless-SP paragraph.",
+  "notes": {
+    "en": ["Enterprise SSO over SAML can now sign its sign-in requests, accept encrypted assertions and refuse responses it never asked for — and a certificate change at the identity provider no longer interrupts sign-in."],
+    "tr": ["SAML ile kurumsal SSO artık giriş isteklerini imzalayabiliyor, şifreli assertion kabul ediyor ve istemediği yanıtları reddediyor — kimlik sağlayıcıdaki sertifika değişimi de artık girişi kesmiyor."],
+    "de": ["Enterprise-SSO per SAML kann Anmeldeanfragen jetzt signieren, verschlüsselte Assertions annehmen und Antworten ablehnen, die es nie angefordert hat — und ein Zertifikatswechsel beim Identity Provider unterbricht die Anmeldung nicht mehr."]
+  }
+}

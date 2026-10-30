@@ -8,6 +8,7 @@
 
 import { orgPlanHasFeature, type OrgPlan } from '@/lib/orgPlans';
 import { certificateInfo } from '@/lib/ssoMetadata';
+import { idpCertificates } from '@/lib/ssoCertificates';
 
 export type SsoProvider = 'saml' | 'oidc';
 
@@ -115,11 +116,20 @@ export function isSsoActive(c: SsoActivation | null | undefined): boolean {
 // A SAML signing certificate that does not parse, or has already expired, would
 // save cleanly and then fail at the first real assertion — in front of the
 // whole tenant (#1933). Refused at save time instead, naming the problem.
+//
+// Several PEM blocks are several trusted certificates (#1955, a key rotation:
+// the IdP's current and next one). Each is judged on its own, and the message
+// names which one fails — an expired one has to be removed, not kept "just in
+// case", because it would still be trusted.
 export function validateSsoCertificate(pem: string, now: Date = new Date()): string | null {
-  const info = certificateInfo(pem);
-  if (!info) return 'SSO certificate could not be parsed — paste the IdP\'s X.509 signing certificate (PEM)';
-  if (info.notAfter.getTime() <= now.getTime()) {
-    return `SSO certificate expired on ${info.notAfter.toISOString().slice(0, 10)} — ask the IdP for its current signing certificate`;
+  const certs = idpCertificates(pem);
+  for (const [i, cert] of certs.entries()) {
+    const which = certs.length > 1 ? ` #${i + 1}` : '';
+    const info = certificateInfo(cert);
+    if (!info) return `SSO certificate${which} could not be parsed — paste the IdP\'s X.509 signing certificate (PEM)`;
+    if (info.notAfter.getTime() <= now.getTime()) {
+      return `SSO certificate${which} expired on ${info.notAfter.toISOString().slice(0, 10)} — ask the IdP for its current signing certificate`;
+    }
   }
   return null;
 }

@@ -106,9 +106,32 @@ The SP-initiated SAML flow is implemented with `@node-saml/node-saml`
    grant via the `sso` NextAuth Credentials provider (mirrors the impersonation
    grant flow) to issue the session. No password, no IdP secret in our env.
 
-`validateInResponseTo` is `never` (stateless SP, no shared request cache; also
-allows IdP-initiated). The assertion signature + audience/recipient/expiry are
-the security anchors.
+The assertion signature + audience/recipient/expiry are the security anchors;
+since #1955 three hardening options sit on top of them — see
+[§ Protocol hardening](#protocol-hardening-1955).
+
+## Protocol hardening (#1955)
+
+The three questions a mature identity team asks, and what ships:
+
+| Option | Default | What it does | What it breaks if switched on too early |
+|--------|---------|--------------|------------------------------------------|
+| **Signed AuthnRequests** — `Organization.ssoSignRequests` | off | The login route signs the HTTP-Redirect AuthnRequest (`SigAlg` rsa-sha256) with the tenant's SP key (`ssoSpKey`, sealed; generated server-side, never uploaded). The SP metadata then says `AuthnRequestsSigned="true"`. | **Every sign-in of the tenant**, if the IdP has not imported our metadata (our certificate) yet — the toggle in the admin card says so. Import first, then switch on. |
+| **Encrypted assertions** | always available | When the SP key exists, the ACS passes it as `decryptionPvk`: an IdP configured to encrypt assertions to our `use="encryption"` certificate (published in the metadata next to `use="signing"`) just works. The decrypted assertion must still be signed. | Nothing — receive-side only. |
+| **InResponseTo correlation** | `ifPresent` | The login route stores the AuthnRequest ID in `SsoAuthRequest` (`kind = 'saml'`, the request store #1929 introduced). A response that names a request must name a live, unused one of ours — spent with one conditional `updateMany`, so a replayed response is refused (`src/lib/ssoSamlRequestStore.ts`). | `ssoRequireInResponseTo` (opt-in) switches to `always`: **IdP-initiated sign-in stops working**, because an unsolicited response names no request. |
+
+**IdP key rotation.** `ssoCertificate` may hold **several PEM blocks**, and every
+one is trusted (`idpCertificates()`, `src/lib/ssoCertificates.ts`). The
+procedure: when the IdP announces its next signing certificate, paste it
+**after** the current one and save — both are trusted; once the IdP has
+switched, remove the old one. Each block is validated on save (parseable, not
+expired), and the refusal names which one fails. The expiry badge and the
+expiry-warning mail read the **first** block, so keep the one expiring soonest
+first.
+
+`wantAssertionsSigned` stays `true` and audience / recipient / expiry checks
+stay on whatever is switched on. "Test connection" builds an unsigned,
+uncorrelated request, as before (it signs nobody in).
 
 The tenant's stored `ssoIssuer` is **not** passed to node-saml as `idpIssuer`,
 so the assertion's `<Issuer>` string is not compared against it. What binds an

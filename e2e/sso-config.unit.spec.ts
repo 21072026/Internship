@@ -64,3 +64,27 @@ test('OIDC claims: email required and verified when the IdP says, name from name
   expect(() => mapOidcClaims({ name: 'No Mail' })).toThrow(/no email/);
   expect(() => mapOidcClaims(null)).toThrow();
 });
+
+import { idpCertificates } from '../src/lib/ssoCertificates';
+import { validateSsoCertificate } from '../src/lib/sso';
+import { testCertificate } from './support/x509.mjs';
+
+test('IdP certificates are a list: one PEM, several PEMs, or a bare body (#1955)', { tag: '@smoke' }, () => {
+  const a = testCertificate(365, 'idp-current');
+  const b = testCertificate(730, 'idp-next');
+  expect(idpCertificates(a)).toHaveLength(1);
+  expect(idpCertificates(`${a}\n${b}`)).toEqual([a.trim(), b.trim()]);
+  expect(idpCertificates('MIIBbare')).toEqual(['MIIBbare']);
+  expect(idpCertificates('  ')).toEqual([]);
+  expect(idpCertificates(null)).toEqual([]);
+});
+
+test('every certificate in the list is judged, and the refusal names which one (#1955)', { tag: '@smoke' }, () => {
+  const current = testCertificate(365, 'idp-current');
+  const next = testCertificate(730, 'idp-next');
+  const expired = testCertificate(-1, 'idp-old');
+  expect(validateSsoCertificate(`${current}\n${next}`)).toBeNull();
+  expect(validateSsoCertificate(`${current}\n${expired}`)).toMatch(/^SSO certificate #2 expired/);
+  expect(validateSsoCertificate(expired)).toMatch(/^SSO certificate expired/);
+  expect(validateSsoCertificate(`${current}\n-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----`)).toMatch(/^SSO certificate #2 could not be parsed/);
+});
