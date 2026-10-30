@@ -13,6 +13,7 @@ import { formatDate } from '@/lib/relativeTime';
 interface Schedule {
   expectedEndDate: string | null;
   durationExtendedCount: number;
+  extendMonths: number | null;
 }
 
 interface Cadence {
@@ -30,6 +31,7 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
   const locale = useLocale();
   const [data, setData] = useState<Cadence | null>(null);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [extendError, setExtendError] = useState('');
   const s = t.relationSchedule;
   const [saving, setSaving] = useState(false);
 
@@ -55,6 +57,19 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     }).catch(() => null);
+    setSaving(false);
+    await load();
+  };
+  // Extend by the original length (#1786) — the same writer as the mail link.
+  const extend = async () => {
+    setSaving(true);
+    setExtendError('');
+    const res = await fetch(`/api/mentorship/${relationId}/extend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }).catch(() => null);
+    if (!res?.ok) setExtendError(s.extendFailed);
     setSaving(false);
     await load();
   };
@@ -103,6 +118,17 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
           {schedule.durationExtendedCount > 0 && (
             <span className="text-xs text-gray-500">{s.extendedTimes.replace('{n}', String(schedule.durationExtendedCount))}</span>
           )}
+          {schedule.expectedEndDate && schedule.extendMonths && (
+            <button
+              type="button"
+              onClick={extend}
+              disabled={saving}
+              data-testid="relation-extend"
+              className="min-h-[36px] rounded-lg border border-gray-300 px-3 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+            >
+              {s.extendBy.replace('{n}', String(schedule.extendMonths))}
+            </button>
+          )}
           <label className="ml-auto flex items-center gap-2">
             {s.endDate}
             <input
@@ -118,6 +144,7 @@ export function RelationCadencePanel({ relationId }: { relationId: string }) {
               className="min-h-[36px] rounded-lg border border-gray-300 px-2 text-sm dark:border-gray-700 dark:bg-gray-800"
             />
           </label>
+          {extendError && <p role="alert" className="w-full text-sm text-red-600">{extendError}</p>}
         </div>
       )}
     </div>
