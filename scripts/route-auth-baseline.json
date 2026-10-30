@@ -106,6 +106,10 @@
     "methods": ["POST"],
     "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."
   },
+  "src/app/api/integrations/chat/[platform]/interactions/route.ts": {
+    "methods": ["POST"],
+    "why": "The one public entry point for Slack/Teams buttons (#1948). Platforms have no session; the caller is authenticated by Slack's HMAC over the raw body (SLACK_SIGNING_SECRET, 5-minute window, each signature accepted once) or the Bot Framework JWT (published keys, our TEAMS_APP_ID, serviceUrl-bound) before anything is parsed — every refusal is the same 401. The person is then re-derived from an enabled workspace and a person-confirmed ChatIdentity; an unlinked member gets a link-your-account reply and no action runs."
+  },
   "src/app/api/integrations/chat/[platform]/messages/route.ts": {
     "methods": ["POST"],
     "why": "The Teams bot's messaging endpoint (#3322). The Bot Framework has no session; every request carries its RS256 JWT, verified against the Bot Framework's published keys (issuer, our TEAMS_APP_ID as audience, expiry, and the activity's own serviceUrl) — anything else is 401 and changes nothing. The only effect is switching a tenant's Teams workspace off and clearing its tokens on installationUpdate/remove; Slack is 404 here."

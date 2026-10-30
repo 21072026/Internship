@@ -56,6 +56,27 @@ a `mail` are matched on that tenant-managed address (never the
 Account erasure deletes the person's chat identities. Still to come: the
 per-category channel matrix (#1707).
 
+**Interactions** exist too (#1948): every Slack/Teams button reaches ONE public
+route, `POST /api/integrations/chat/[platform]/interactions` (Teams Universal
+Actions may also arrive on the bot's `…/teams/messages` endpoint, which hands
+them to the same function). Order, strictly: raw body read once → platform
+signature (`verifySlackSignature` / `verifyBotFrameworkRequest`) → replay window
+(±5 min; a Slack signature is accepted once) → rate limit per (workspace,
+member) → parse → dispatch — every refusal before the parse is the same opaque
+401. The dispatcher (`src/lib/chat/interactions/dispatch.ts`) re-derives the
+person on every click: an **enabled** workspace for `(platform, teamId)`, a
+`ChatIdentity` the person **confirmed**, an **active** user of the workspace's
+org. A payload's member id is only that lookup key; an unlinked or unconfirmed
+member gets an ephemeral "link your account first" reply and no handler runs.
+A new action is a `registerChatAction('<id>', handler)` in
+`src/lib/chat/interactions/actions.ts` — the handler gets the resolved user,
+runs under `runWithOrg`, asks the same rule the app's route asks and must be
+rerun-safe. Slack is acknowledged at once and answered on its `response_url`
+(hooks.slack.com only, SSRF-checked; `CHAT_RESPONSE_URL_ALLOW_INSECURE_STUB=1`
+is the e2e sink's switch and is never set on a deployment); Teams is answered
+in the invoke response. The rate limit and the replay memory use
+`src/lib/rateLimit.ts` — per process unless `RATE_LIMIT_REDIS_URL` is set.
+
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
 store-submission burden and the commercial decision are the parts that get lost
