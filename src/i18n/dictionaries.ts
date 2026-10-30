@@ -10979,6 +10979,19 @@ const en = {
   },
   // Answering a survey from the mailed link, no login (#1881). The thank-you
   // reuses programSurvey.thankYou.
+  bench: {
+    view: 'On the bench',
+    badge: 'On the bench',
+    benchOne: 'Bench',
+    returnOne: 'Return to active',
+    benchSelected: 'Bench selected',
+    returnSelected: 'Return selected to active',
+    selected: '{n} selected',
+    select: 'Select {name}',
+    reinvite: 'Re-invite the bench',
+    reinvited: 'Re-invited {n} people whose date has come.',
+    failed: 'That did not work. Please try again.',
+  },
   closure: {
     link: 'How pairings ended',
     title: 'How pairings ended',
@@ -11061,6 +11074,8 @@ const en = {
   },
   dynamicFields: {
     heading: 'Additional questions',
+    answersFailed: 'Your answers could not be saved. Please check them and try again.',
+    noAnswers: 'No answers yet.',
     saveFailed: 'Your profile was saved, but your answers to the additional questions could not be saved. Please try again.',
   },
   surveyRespond: {
@@ -22126,6 +22141,19 @@ const tr: Dict = {
   },
   // E-postadaki bağlantıdan, giriş yapmadan anket cevaplama (#1881). Teşekkür
   // ekranı programSurvey.thankYou'yu kullanır.
+  bench: {
+    view: 'Beklemede',
+    badge: 'Beklemede',
+    benchOne: 'Beklemeye al',
+    returnOne: 'Aktife döndür',
+    benchSelected: 'Seçilenleri beklemeye al',
+    returnSelected: 'Seçilenleri aktife döndür',
+    selected: '{n} seçili',
+    select: '{name} kişisini seç',
+    reinvite: 'Beklemedekileri yeniden davet et',
+    reinvited: 'Tarihi gelen {n} kişi yeniden davet edildi.',
+    failed: 'Olmadı. Lütfen tekrar dene.',
+  },
   closure: {
     link: 'Eşleşmeler nasıl bitti',
     title: 'Eşleşmeler nasıl bitti',
@@ -22208,6 +22236,8 @@ const tr: Dict = {
   },
   dynamicFields: {
     heading: 'Ek sorular',
+    answersFailed: 'Cevaplarınız kaydedilemedi. Lütfen kontrol edip tekrar deneyin.',
+    noAnswers: 'Henüz cevap yok.',
     saveFailed: 'Profiliniz kaydedildi, ancak ek sorulara verdiğiniz cevaplar kaydedilemedi. Lütfen tekrar deneyin.',
   },
   surveyRespond: {
@@ -33265,6 +33295,19 @@ const de: Dict = {
   },
   // Eine Umfrage über den Link aus der E-Mail beantworten, ohne Anmeldung
   // (#1881). Der Dank nutzt programSurvey.thankYou.
+  bench: {
+    view: 'Pausiert',
+    badge: 'Pausiert',
+    benchOne: 'Pausieren',
+    returnOne: 'Wieder aktivieren',
+    benchSelected: 'Auswahl pausieren',
+    returnSelected: 'Auswahl wieder aktivieren',
+    selected: '{n} ausgewählt',
+    select: '{name} auswählen',
+    reinvite: 'Pausierte erneut einladen',
+    reinvited: '{n} Personen, deren Termin gekommen ist, wurden erneut eingeladen.',
+    failed: 'Das hat nicht geklappt. Bitte versuche es erneut.',
+  },
   closure: {
     link: 'Wie Paarungen endeten',
     title: 'Wie Paarungen endeten',
@@ -33347,6 +33390,8 @@ const de: Dict = {
   },
   dynamicFields: {
     heading: 'Zusätzliche Fragen',
+    answersFailed: 'Ihre Antworten konnten nicht gespeichert werden. Bitte prüfen Sie sie und versuchen Sie es erneut.',
+    noAnswers: 'Noch keine Antworten.',
     saveFailed: 'Ihr Profil wurde gespeichert, Ihre Antworten auf die zusätzlichen Fragen jedoch nicht. Bitte versuchen Sie es erneut.',
   },
   surveyRespond: {

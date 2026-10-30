@@ -119,9 +119,11 @@ export async function leavePool(userId: string, opts: { alsoRevokeConsent?: bool
 }
 
 /** Everyone whose "let's talk again" date has arrived and who has not been told. */
-export async function dueForReminder(now: Date = new Date()) {
+export async function dueForReminder(now: Date = new Date(), opts: { userIds?: readonly string[] } = {}) {
   return prisma.user.findMany({
     where: {
+      // "Re-invite the bench" (#1778) runs this same reminder for the bench only.
+      ...(opts.userIds ? { id: { in: [...opts.userIds] } } : {}),
       reEngageAt: { not: null, lte: now },
       reEngageNotifiedAt: null,
       // Consent can be revoked after the date was set; the cron must re-check
