@@ -18,6 +18,7 @@ import { notificationLink, type NotificationRole } from '@/lib/notificationLink'
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
 import { extendRelationUrl, markReadUrl } from '@/lib/emailActionToken';
+import { notBenched } from '@/lib/participantState';
 import { intlLocaleFor } from '@/lib/interviewRequests';
 import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
@@ -4856,7 +4857,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
     where: {
       ...(options.relationIds ? { id: { in: options.relationIds } } : {}),
       // Not a paused pair (#1772): reports are still accepted, just never chased during a pause.
-      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
+      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true, ...notBenched() },
       weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
     },
     select: {
@@ -4987,7 +4988,8 @@ export async function sendDormantCheckIns(now = new Date()) {
       ...activeRelationWhere(),
       dormantSince: { not: null },
       dormantNudgeCount: { lt: DORMANT_MAX_NUDGES },
-      mentee: { isActive: true },
+      // Not inactive, not on the bench (#1778): nobody on the bench is nudged.
+      mentee: { isActive: true, ...notBenched() },
     },
     select: {
       id: true,
@@ -5652,7 +5654,7 @@ export async function sendWeeklyMentorDigests() {
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    where: { role: 'MENTOR', isActive: true, ...notBenched() },
     select: {
       id: true,
       orgId: true,
@@ -5925,7 +5927,7 @@ export async function sendDailyActivityDigests() {
   let skipped = 0;
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    where: { role: 'MENTOR', isActive: true, ...notBenched() },
     // #1720: `preferredLanguage` was missing here too — every recipient of this
     // digest is a registered user, so their own preference is the whole answer.
     select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
@@ -6189,8 +6191,10 @@ export async function checkRetentionReminders() {
  * date that was set months ago: someone can withdraw in between, and the whole
  * promise of the one-click link is that withdrawing actually stops the mail.
  */
-export async function checkReEngagementReminders() {
-  const people = await dueForReminder();
+export async function checkReEngagementReminders(opts: { userIds?: readonly string[] } = {}) {
+  // `userIds`: "Re-invite the bench" (#1778) — the same message, the same
+  // consent check and the same stamp, for the given people only.
+  const people = await dueForReminder(new Date(), opts);
 
   // WORLDS (#2590): the one-click "leave the pool" link opens the product the
   // PERSON's account lives in. `dueForReminder()` selects no organization, so it

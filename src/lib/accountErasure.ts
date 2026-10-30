@@ -774,6 +774,8 @@ export async function anonymizeUser(userId: string): Promise<void> {
         // they said …"). The re-engagement promise is void once the account is
         // erased, so the note goes with it.
         reEngageNote: null,
+        // The admin's bench reason (#1778) is prose about them.
+        benchedReason: null,
         skills: [],
         skillLevels: {},
         publicProfile: false,
