@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate public page content (#3359):** `AffiliateProgramSettings.landing` (already in the schema, unused until now) is written by `saveLanding()` in `src/lib/affiliateProgramSettings.ts` through `PUT /api/admin/affiliate/settings/landing` (`affiliate.write`, MARKETING only) and edited in a new \"Public programme page\" card on `/admin/affiliates/settings`: copy per locale (EN/TR/DE; headline, buttons, intro, table heading, up to 6 steps, contact block, closing CTA with up to 6 points), contact phone and e-mail and the product's https sign-up URL. The rule is pure in `src/lib/affiliateLandingRule.ts` (plain text, length limits, field-by-field locale fallback, key-order-independent comparison; `scripts/test/affiliate-landing-rule.test.mjs`); an unchanged save writes nothing, a change is audited as `affiliate.landing.update` with the locales and which contact fields are set, never the texts. No organisation's wording lives in the code. The public page that reads it is #3360.",
+  "notes": {
+    "en": ["Affiliate settings have a new “Public programme page” section: write the page’s texts in English, Turkish and German and add the contact phone, e-mail and sign-up link."],
+    "tr": ["Affiliate ayarlarında yeni bir “Herkese açık program sayfası” bölümü var: sayfanın metinlerini İngilizce, Türkçe ve Almanca yazıp iletişim telefonunu, e-postasını ve kayıt linkini ekleyebilirsiniz."],
+    "de": ["Die Affiliate-Einstellungen haben einen neuen Bereich „Öffentliche Programmseite“: Texte auf Englisch, Türkisch und Deutsch pflegen und Telefon, E-Mail und Registrierungslink hinterlegen."]
+  }
+}

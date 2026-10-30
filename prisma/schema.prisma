@@ -65,6 +65,9 @@ enum ConferencingPolicy {
   BUILTIN
   PREFER_PERSONAL
   REQUIRE_EXTERNAL
+  // A Google Meet room created on the organiser's own connected calendar
+  // (#2009, src/lib/conferenceGeneration.ts); PREFER_PERSONAL without one.
+  GENERATE_PROVIDER
 }
 
 enum InteractionType {

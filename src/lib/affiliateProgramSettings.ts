@@ -1,6 +1,7 @@
 // The programme's settings: the commission plan (docs/affiliate-module.md, #3116)
-// and the referral base URL (#3117). The ONE writer of
-// AffiliateProgramSettings.plan / planVersion / planEffectiveAt / referralUrl.
+// the referral base URL (#3117) and the public programme page's content (#3359).
+// The ONE writer of AffiliateProgramSettings.plan / planVersion / planEffectiveAt /
+// referralUrl / landing.
 // The contract half has its own writer (src/lib/affiliateContract.ts).
 //
 // A plan change:
@@ -26,6 +27,7 @@ import { enqueue } from '@/lib/jobs/queue';
 import { PLAN_RESYNC_MAX_ATTEMPTS } from '@/lib/affiliatePlanResync';
 import { parseResyncState, queuedResync, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { parseReferralUrl, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
+import { canonicalLanding, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -172,11 +174,56 @@ export async function saveReferralUrl(
   }
 }
 
+/**
+ * Replaces the public programme page's content (src/lib/affiliateLandingRule.ts).
+ * An unchanged save writes nothing; a change is audited with the locales that
+ * carry copy and whether each contact field is set — not the texts themselves,
+ * which are the organisation's own marketing copy and live on the row.
+ */
+export async function saveLanding(
+  orgId: string,
+  raw: unknown,
+  actorId: string,
+): Promise<{ ok: true; landing: Landing; changed: boolean } | { ok: false; issues: LandingIssue[] }> {
+  const parsed = parseLanding(raw);
+  if (!parsed.ok) return parsed;
+  const landing = parsed.landing;
+  const value = landing as unknown as Prisma.InputJsonValue;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { landing: true } });
+      if (current && canonicalLanding(readStoredLanding(current.landing)) === canonicalLanding(landing)) {
+        return { ok: true as const, landing, changed: false };
+      }
+      if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: { landing: value } });
+      else await tx.affiliateProgramSettings.create({ data: { orgId, landing: value } });
+      await tx.auditLog.create({
+        data: {
+          orgId,
+          actorId,
+          action: 'affiliate.landing.update',
+          detail: JSON.stringify({
+            locales: Object.keys(landing.copy),
+            phone: landing.phone !== null,
+            email: landing.email !== null,
+            productSignupUrl: landing.productSignupUrl !== null,
+          }),
+        },
+      });
+      return { ok: true as const, landing, changed: true };
+    });
+  } catch (e) {
+    // Two first saves of one organisation: the loser hits the unique orgId.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
+    throw e;
+  }
+}
+
 export async function programSettings(orgId: string) {
   const [settings, payments] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({
       where: { orgId },
-      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, contract: true, contractVersion: true, updatedAt: true },
+      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, updatedAt: true },
     }),
     prisma.affiliatePayment.count({ where: { orgId } }),
   ]);
@@ -187,6 +234,7 @@ export async function programSettings(orgId: string) {
     planEffectiveAt: settings?.planEffectiveAt ?? null,
     planResync: parseResyncState(settings?.planResync),
     referralUrl: settings?.referralUrl ?? null,
+    landing: readStoredLanding(settings?.landing),
     contract: settings?.contract ?? null,
     contractVersion: settings?.contractVersion ?? 0,
     currencyLocked: payments > 0,
