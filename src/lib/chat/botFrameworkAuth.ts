@@ -20,13 +20,15 @@ import { createPublicKey, verify as verifySignature, type JsonWebKey } from 'nod
 // The metadata URL comes from env (TEAMS_OPENID_METADATA_URL) with the real
 // default, so the e2e can point it at a stub. Operator config, never input.
 
-export const BOT_FRAMEWORK_ISSUER = 'https://api.botframework.com';
+import { BOT_FRAMEWORK_ISSUER, BOT_FRAMEWORK_OPENID_METADATA_URL } from '@/lib/chat/client/botFrameworkEndpoints';
+
+export { BOT_FRAMEWORK_ISSUER };
 const CLOCK_SKEW_S = 5 * 60;
 const KEYS_TTL_MS = 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5_000;
 
 export function botFrameworkMetadataUrl(): string {
-  return process.env.TEAMS_OPENID_METADATA_URL || 'https://login.botframework.com/v1/.well-known/openidconfiguration';
+  return process.env.TEAMS_OPENID_METADATA_URL || BOT_FRAMEWORK_OPENID_METADATA_URL;
 }
 
 type Jwk = JsonWebKey & { kid?: string };
