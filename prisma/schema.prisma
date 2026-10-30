@@ -1348,8 +1348,9 @@ model Source {
   contactEmail String?
   createdAt    DateTime      @default(now())
 
-  users   User[]
-  apiKeys ApiKey[]
+  users    User[]
+  apiKeys  ApiKey[]
+  webhooks Webhook[]
 
   @@unique([orgId, name])
   @@index([name])
@@ -3324,6 +3325,11 @@ model Webhook {
   // to this company (src/lib/companyWebhookScope.ts). Null = an org-wide hook.
   companyId           String?
   company             Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Set when a SOURCE owner registered the hook for the candidates it referred
+  // (#2006): fan-out then delivers only the source-scoped events whose subject
+  // is one of this source's candidates (src/lib/sourceWebhookScope.ts).
+  sourceId            String?
+  ownerSource         Source?           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
   // `consecutiveFailures` and `failingSince` describe the current failure
   // streak (reset by any 2xx); past 20 failures or 72h without a success the
@@ -3340,6 +3346,7 @@ model Webhook {
   @@index([orgId, active])
   @@index([apiKeyId])
   @@index([companyId])
+  @@index([sourceId])
 }
 
 // One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
