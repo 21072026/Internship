@@ -1,4 +1,5 @@
 import { isValidLeadList } from '@/lib/meetingReminderLeads';
+import { MAX_CADENCE_WEEKS, MAX_DURATION_MONTHS } from '@/lib/relationSchedule';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isGlobalSettingKey, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
@@ -60,6 +61,9 @@ const schema = z.object({
   reminderDays: z.string().regex(/^\d{1,3}$/).optional(),
   // Meeting reminder lead times (#1636): '' = the built-in defaults.
   meetingReminderLeadsMinutes: z.string().max(40).refine(isValidLeadList, 'invalid lead list').optional(),
+  // A new pairing's default duration and meeting rhythm (#1784); '' = none.
+  relationDefaultDurationMonths: z.string().refine((v) => v === '' || (/^\d{1,2}$/.test(v) && +v >= 1 && +v <= MAX_DURATION_MONTHS), 'invalid duration').optional(),
+  relationDefaultCadenceWeeks: z.string().refine((v) => v === '' || (/^\d{1,2}$/.test(v) && +v >= 1 && +v <= MAX_CADENCE_WEEKS), 'invalid cadence').optional(),
   supportEmail: z.string().email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),

@@ -13,6 +13,8 @@ import { AlreadyMentoredError } from '@/lib/activeMentorship';
 import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate';
 import { canTransitionRound, type RoundStatus } from '@/lib/matching/round';
 import { getLocale } from '@/i18n/server';
+import { scheduleCreateData } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 
 // POST — publish a round (#1796): one relation per LOCKED proposal, nothing
 // for a DRAFT or DISCARDED one, all inside ONE transaction — a refusal
@@ -83,6 +85,9 @@ export async function POST(request: Request, { params }: Ctx) {
       const start = new Date();
       const pipelineStatus = await resolveStartStage(round.orgId);
       const trialWindow = await stageTrialWindow({ orgId: round.orgId, toStage: pipelineStatus, enteredAt: start });
+      // A round belongs to a programme: its pairings take the programme's
+      // agreed duration and rhythm (#1784), when it has defaults.
+      const schedule = scheduleCreateData({}, start, await relationScheduleDefaults(round.orgId, round.cohortId));
 
       let created: { proposal: (typeof locked)[number]; relation: { id: string; orgId: string | null } }[];
       try {
@@ -104,6 +109,7 @@ export async function POST(request: Request, { params }: Ctx) {
                 pipelineStatus,
                 ...trialWindow,
                 startDate: start,
+                ...schedule,
                 kind: DEFAULT_RELATION_KIND,
                 funnelEnteredAt: DEFAULT_RELATION_KIND === 'PLACEMENT' ? start : null,
               });
