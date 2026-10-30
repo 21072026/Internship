@@ -293,7 +293,10 @@ exactly as they are.
   `already_decided`. **Approve** takes a referral code (the form suggests one
   from the name, `suggestPartnerCode()`), creates the partner in the same
   transaction under the organisation lock `createPartner()` and the migration
-  share (a taken code is 409 `code_taken` and leaves the application pending),
+  share, through `createPartnerLocked()` — the same row and `affiliate.partner.create`
+  audit line as a partner added by hand (a taken code is 409 `code_taken`; an
+  address that is already a partner's contact is 409 `email_is_partner`, to be
+  declined as a duplicate; both leave the application pending),
   then calls the ordinary `invitePartner()` — there is no second way to an
   account. If the invitation cannot be sent the approval stands and the admin is
   told why. **Decline** takes a code from `APPLICATION_REJECTION_CODES`; only the

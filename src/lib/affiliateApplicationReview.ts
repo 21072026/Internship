@@ -6,17 +6,18 @@
 // updateMany on `status: 'PENDING'`, so two admins clicking at once decide it
 // once and the loser gets 409. An approval creates the partner in the SAME
 // transaction (under the organisation lock createPartner() and the migration
-// share), then hands it to the ordinary partner invitation (#3117) — there is
+// share, through createPartnerLocked() — the same row and audit line as a
+// partner added by hand), then hands it to the ordinary partner invitation (#3117) — there is
 // no second way to give a partner an account. Another org's id is 404.
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { lockOrganization, PARTNER_CODE_RE } from '@/lib/affiliatePartners';
+import { createPartnerLocked, lockOrganization, PARTNER_CODE_RE } from '@/lib/affiliatePartners';
 import { PartnerInviteError, invitePartner } from '@/lib/affiliateInvite';
 import { sendAffiliateApplicationRejectedEmail } from '@/services/emailService';
 import { suggestPartnerCode, type ApplicationRejectionCode } from '@/lib/affiliateApplicationRule';
 
-export type ApplicationReviewErrorCode = 'not_found' | 'already_decided' | 'invalid_code' | 'code_taken';
+export type ApplicationReviewErrorCode = 'not_found' | 'already_decided' | 'invalid_code' | 'code_taken' | 'email_is_partner';
 
 export class ApplicationReviewError extends Error {
   readonly code: ApplicationReviewErrorCode;
@@ -96,11 +97,13 @@ export async function approveApplication(input: {
       });
       if (!app) throw new ApplicationReviewError('not_found');
       if (app.status !== 'PENDING') throw new ApplicationReviewError('already_decided');
+      // An address that is already a partner's contact is a duplicate to decline,
+      // not a second partner to create under another code.
+      const existing = await tx.affiliatePartner.findFirst({ where: { orgId, contactEmail: app.email }, select: { id: true } });
+      if (existing) throw new ApplicationReviewError('email_is_partner');
       const name = `${app.firstName} ${app.lastName}`;
-      const partner = await tx.affiliatePartner.create({
-        data: { orgId, code, displayName: (app.company ? `${name} (${app.company})` : name).slice(0, 160), contactEmail: app.email },
-        select: { id: true },
-      });
+      const displayName = (app.company ? `${name} (${app.company})` : name).slice(0, 160);
+      const partner = await createPartnerLocked(tx, orgId, { code, displayName, contactEmail: app.email }, actor.id);
       const { count } = await tx.affiliateApplication.updateMany({
         where: { id: applicationId, orgId, status: 'PENDING' },
         data: { status: 'APPROVED', decidedAt: new Date(), decidedById: actor.id, partnerId: partner.id },

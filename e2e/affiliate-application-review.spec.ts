@@ -108,6 +108,14 @@ test('an approval creates the partner and its invitation; a bad code changes not
   expect(await prisma.invitationToken.count({ where: { orgId, email, role: 'AFFILIATE', partnerId: partner.id } })).toBe(1);
   expect(await prisma.affiliateApplication.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'APPROVED', partnerId: partner.id });
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.application.approve', targetId: id } })).toBe(1);
+  // The same trail as a partner added by hand.
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.partner.create', targetId: partner.id } })).toBe(1);
+
+  // A second application from an address that is now a partner's contact is refused, not turned into a second partner.
+  const again = await application('Bo', email);
+  const dup = await owner.post(`/api/admin/affiliate/applications/${again}/approve`, { headers: host, data: { code: 'bo-2' } });
+  expect([dup.status(), (await dup.json()).code]).toEqual([409, 'email_is_partner']);
+  expect(await prisma.affiliatePartner.count({ where: { orgId, contactEmail: email } })).toBe(1);
 });
 
 test('a rejection keeps the reason code; the note stays in the audit row', async ({ playwright, baseURL }) => {
@@ -135,5 +143,6 @@ test('the screen lists a pending application with its suggested code', async ({ 
   const list = page.getByTestId('affiliate-applications-list');
   await expect(list.getByText('Dee Example')).toBeVisible();
   await expect(list.getByTestId('affiliate-application-code').first()).toHaveValue('dee-example');
-  await expect(page.getByTestId('affiliate-applications-pending')).toHaveText('1');
+  const pending = await prisma.affiliateApplication.count({ where: { orgId, status: 'PENDING' } });
+  await expect(page.getByTestId('affiliate-applications-pending')).toHaveText(String(pending));
 });

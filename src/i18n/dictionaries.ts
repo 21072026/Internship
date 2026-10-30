@@ -902,6 +902,7 @@ const en = {
       code_taken: 'This referral code is already used by another partner.',
       already_decided: 'Someone has already decided on this application.',
       invalid_reason: 'Please choose a reason.',
+      email_is_partner: 'This address is already a partner’s contact. Decline the application as a duplicate.',
     },
   },
   affiliatePartners: {
@@ -11856,6 +11857,7 @@ const tr: Dict = {
       code_taken: 'Bu referans kodunu başka bir partner kullanıyor.',
       already_decided: 'Bu başvuru hakkında başka biri zaten karar verdi.',
       invalid_reason: 'Lütfen bir gerekçe seçin.',
+      email_is_partner: 'Bu adres zaten bir partnerin iletişim adresi. Başvuruyu mükerrer olarak reddedin.',
     },
   },
   affiliatePartners: {
@@ -22599,6 +22601,7 @@ const de: Dict = {
       code_taken: 'Dieser Empfehlungscode wird bereits von einem anderen Partner verwendet.',
       already_decided: 'Über diese Bewerbung wurde bereits entschieden.',
       invalid_reason: 'Bitte wählen Sie einen Grund.',
+      email_is_partner: 'Diese Adresse ist bereits Kontaktadresse eines Partners. Lehnen Sie die Bewerbung als Duplikat ab.',
     },
   },
   affiliatePartners: {
