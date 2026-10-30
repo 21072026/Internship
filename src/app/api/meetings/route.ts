@@ -13,6 +13,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingContext';
 import { meetingLinkRefusal } from '@/lib/meetingRoom';
+import { adoptProviderEvent } from '@/lib/conferenceGeneration';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
@@ -185,6 +186,8 @@ export async function POST(request: Request) {
       inviteeCount: relations.length,
       orgId: session.user.orgId,
       organizerId: session.user.id,
+      // A Meet room on the organiser's own calendar under GENERATE_PROVIDER (#2009).
+      conference: when ? { title, start: when, end: meetingEnd(when, { durationMinutes }), timeZone: organizerZone } : null,
     });
     if (!resolved.ok) return meetingLinkRefusal(resolved);
     const link = resolved.link;
@@ -263,6 +266,9 @@ export async function POST(request: Request) {
         meeting = await prisma.meeting.create({ data });
       }
       guestHostMeetingId ??= meeting.id;
+      // A generated Meet room already IS an event on the organiser's calendar:
+      // adopt it as this row's mirror before the push, or the push makes a second.
+      await adoptProviderEvent([meeting.id], resolved.conference);
       // Mirror into the calendars of whoever connected their own Google account
       // (#709). A no-op unless the operator enabled the integration and the
       // person opted in; unconnected users keep the e-mail + .ics path exactly
