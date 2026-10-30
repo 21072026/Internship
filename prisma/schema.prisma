@@ -344,6 +344,7 @@ model Organization {
   chatWorkspaces          ChatWorkspace[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
+  ssoAuthRequests         SsoAuthRequest[]
   agendaTemplates         AgendaTemplate[]
   safeguardingFlags       SafeguardingFlag[]
   brandAssets             BrandAsset[]
@@ -5589,6 +5590,31 @@ model SsoClaimMapping {
 // assertion is verified, then consumed by the `sso` NextAuth provider to issue a
 // session (#545). Mirrors ImpersonationGrant: short-lived + single-use, so a
 // verified IdP login can't be replayed.
+// One SP-initiated SSO request in flight (#1929): the OIDC `state` (unique,
+// the lookup key) with its `nonce` and PKCE `codeVerifier`, and the origin the
+// sign-in started on (the OIDC twin of SAML RelayState, honoured on the way
+// back only through servedOrigin()). Single use: the callback spends it with a
+// conditional updateMany on `usedAt: null` before it trusts anything, so a
+// replayed or raced `state` finds nothing. 10-minute expiry; the nightly
+// housekeeping job deletes expired rows. `kind` lets the SAML request ID use
+// the same store for InResponseTo correlation (#1955) — one request store.
+model SsoAuthRequest {
+  id           String       @id @default(cuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  kind         String       @default("oidc") @db.VarChar(10)
+  state        String       @unique @db.VarChar(191)
+  nonce        String?      @db.VarChar(191)
+  codeVerifier String?      @db.VarChar(191)
+  returnOrigin String?      @db.VarChar(255)
+  createdAt    DateTime     @default(now())
+  expiresAt    DateTime
+  usedAt       DateTime?
+
+  @@index([orgId])
+  @@index([expiresAt])
+}
+
 model SsoLoginGrant {
   id        String   @id @default(cuid())
   token     String   @unique
