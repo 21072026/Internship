@@ -49,7 +49,7 @@ import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { StageClockChip } from '@/components/StageClockChip';
-import { daysInStage } from '@/lib/stageClock';
+import { daysInStage, isStageOverdue } from '@/lib/stageClock';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
@@ -145,6 +145,7 @@ export default function MenteeDetailPage() {
   const [formError, setFormError] = useState('');
   const [savingStage, setSavingStage] = useState(false);
   const [stageError, setStageError] = useState('');
+  const [deadlineDraft, setDeadlineDraft] = useState<string | null>(null);
   // The log being edited (#1356), or null while the form adds a new one. One
   // form for both, so an edit offers exactly the fields a new log has.
   const [editing, setEditing] = useState<InteractionLog | null>(null);
@@ -318,26 +319,40 @@ export default function MenteeDetailPage() {
     else toast(failure, 'error');
   };
 
-  const handlePipelineChange = async (pipelineStatus: string) => {
+  // Stage and its deadline share one PUT (#1373): the deadline is what the
+  // attention queue's "overdue" reason reads (src/lib/mentorAttention.ts).
+  const saveStageFields = async (patch: { pipelineStatus?: string; stageDeadline?: string | null }, done: string) => {
     setSavingStage(true);
     setStageError('');
     try {
       const res = await fetch(`/api/mentorship/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pipelineStatus }),
+        body: JSON.stringify(patch),
       });
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error || 'Failed to update stage');
       }
       await fetchRelation();
-      toast(t.mentor.stageUpdated);
+      toast(done);
     } catch (err) {
       setStageError(err instanceof Error ? err.message : 'Failed to update stage');
     } finally {
       setSavingStage(false);
     }
+  };
+
+  const handlePipelineChange = (pipelineStatus: string) => saveStageFields({ pipelineStatus }, t.mentor.stageUpdated);
+  // Committed on blur, not per change: typing a year digit by digit in a date
+  // input yields a valid value ("0002-…") at every keystroke.
+  const commitDeadline = async () => {
+    if (deadlineDraft === null || !relation) return;
+    const current = relation.stageDeadline ? relation.stageDeadline.slice(0, 10) : '';
+    if (deadlineDraft !== current) {
+      await saveStageFields({ stageDeadline: deadlineDraft || null }, t.mentor.stageDeadlineUpdated);
+    }
+    setDeadlineDraft(null);
   };
 
   // The pair's health (#1904): the same score and reasons as the attention queue.
@@ -394,6 +409,20 @@ export default function MenteeDetailPage() {
                 disabled={savingStage}
                 onChange={(e) => handlePipelineChange(e.target.value)}
               />
+              <label htmlFor="stage-deadline" className="block text-sm font-medium text-gray-700 mt-2 mb-1.5">{t.candidateDetail.stageDeadline}</label>
+              <input
+                id="stage-deadline"
+                type="date"
+                data-testid="stage-deadline-input"
+                value={deadlineDraft ?? (relation.stageDeadline ? relation.stageDeadline.slice(0, 10) : '')}
+                disabled={savingStage}
+                onChange={(e) => setDeadlineDraft(e.target.value)}
+                onBlur={commitDeadline}
+                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
+              />
+              {isStageOverdue({ stageDeadline: relation.stageDeadline, pipelineStatus: relation.pipelineStatus }, stages) && (
+                <p className="text-xs text-red-600 mt-1" data-testid="stage-deadline-overdue">{t.candidateDetail.overdue}</p>
+              )}
               {stageError && <p className="text-xs text-red-600 mt-1">{stageError}</p>}
             </div>
           </div>
