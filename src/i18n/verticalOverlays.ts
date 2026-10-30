@@ -59,6 +59,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Customer journeys' },
       // #1745: the plan-wall prompt, in sales words (the active-pair cap is
       // the internship meter; a MARKETING org sees it only if its plan has one).
       upgrade: {
@@ -1217,6 +1219,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Müşteri yolculukları' },
       upgrade: {
         limitBody: '{plan} paketinde {limit} aktif kayıttan {usage} tanesini kullanıyorsunuz.',
         reassurance: 'Mevcut lead ve hesaplar etkilenmez — yalnızca yeni bir aktif kayıt eklemek bekletilir.',
@@ -2232,6 +2236,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Kundenreisen' },
       upgrade: {
         limitBody: 'Sie nutzen {usage} von {limit} aktiven Datensätzen im Plan {plan}.',
         reassurance: 'Bestehende Leads und Konten sind nicht betroffen — nur ein neuer aktiver Datensatz wird angehalten.',
