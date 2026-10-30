@@ -221,10 +221,13 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(result.results.map((r) => r.key).sort()).toEqual(
       [
         'activityLog',
+        'affiliatePayoutDetails',
         'auditLog',
+        'automationRun',
         'chatDelivery',
         'companyInquiry',
         'companyUsage',
+        'contactPermissionProof',
         'domainEvent',
         'emailDeliveryEvent',
         'emailLog',

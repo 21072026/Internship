@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { publicEventPayloads } from '@/lib/events/payloadSchema';
 import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
@@ -7,8 +8,8 @@ import { REQUISITION_STATUSES } from '@/lib/requisitions';
 import { IMPORT_ROW_CAP, MAX_OPEN_IMPORTS_PER_KEY } from '@/lib/api/v1Imports';
 import { EXPORT_RESOURCES, EXPORT_RESOURCE_NAMES, EXPORT_ROW_CAP, MAX_OPEN_EXPORTS_PER_KEY } from '@/lib/api/v1Exports';
 
-// The day the pre-#1988 `candidates` alias key is removed from GET /candidates.
-const CANDIDATES_ALIAS_SUNSET = '2027-01-31';
+import { CANDIDATES_ALIAS_SUNSET, DEPRECATION_HEADERS, DEPRECATION_WINDOW_MONTHS, API_DEPRECATIONS } from '@/lib/api/v1Lifecycle';
+import { APP_VERSION } from '@/lib/version';
 
 const problem = { 'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } } };
 const listParameters = [
@@ -132,7 +133,9 @@ export async function GET(request: Request) {
     openapi: '3.1.0',
     info: {
       title: `${brandProductName(brand)} Public API`,
-      version: '1.0.0',
+      // The deployment's version (#1992): an integrator can tell which build
+      // answered. The CONTRACT version is the path (`/api/v1`) — see x-lifecycle.
+      version: APP_VERSION,
       description:
         'Read access to candidates, relationships, interactions, meetings, companies and the hiring resources (Bearer API key) plus outgoing webhooks. No resource carries an e-mail address or phone number; an interaction’s note body needs its own scope. Every list answers `{ data, page: { nextCursor, hasMore } }` and takes `limit`, `cursor` and `updatedSince`; every failure is an RFC 9457 problem document with a stable `type`. Writes need a `<resource>:write` scope, have their own tighter limit of 30 a minute per key, accept an `Idempotency-Key` and answer an invalid body with 422 and per-field `errors`. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
     },
@@ -718,10 +721,24 @@ export async function GET(request: Request) {
         'Scopes an API key can hold, in the canonical `<resource>:<action>` shape. A key must hold at least one. Each operation names the scope it requires under `security`; a key presenting without it is refused with 403 rather than served a filtered result.',
       scopes: API_SCOPES,
     },
+    // The lifecycle policy (#1992, src/lib/api/v1Lifecycle.ts, docs/api-lifecycle.md).
+    'x-lifecycle': {
+      contractVersion: 'v1',
+      description: `Within v1 a change is additive only: new endpoints, new optional parameters, new fields in a response and new error types may appear at any time, so clients must ignore what they do not know. Removing or renaming a field, parameter or endpoint, changing a type, tightening validation or changing an error type is breaking: it is announced at least ${DEPRECATION_WINDOW_MONTHS} months ahead, listed under deprecations, and a deprecated operation answers with ${DEPRECATION_HEADERS.join(' and ')} headers. A change that cannot keep that promise ships as an opt-in parameter within v1 or as v2.`,
+      deprecationWindowMonths: DEPRECATION_WINDOW_MONTHS,
+      deprecationHeaders: DEPRECATION_HEADERS,
+      deprecations: API_DEPRECATIONS,
+    },
     'x-webhooks': {
-      description: 'Outgoing webhooks are POSTed with an X-Signature (HMAC-SHA256 of the body) and X-Event header.',
+      description:
+        'Outgoing webhooks are POSTed as `{ event, data, sentAt }` with an `X-Signature` header (hex HMAC-SHA256 of the exact request body under the hook secret), `X-Event` and `X-Delivery-Id`. `payloads` gives the schema of `data` for each event, keyed `name@version`; a published version never changes shape — a breaking change ships as a new version (#1611).',
       events: WEBHOOK_EVENTS,
-      payload: { type: 'object', properties: { event: { type: 'string' }, data: { type: 'object' }, sentAt: { type: 'string', format: 'date-time' } } },
+      payload: {
+        type: 'object',
+        required: ['event', 'data', 'sentAt'],
+        properties: { event: { type: 'string' }, data: { type: 'object' }, sentAt: { type: 'string', format: 'date-time' } },
+      },
+      payloads: publicEventPayloads(),
     },
   };
   return NextResponse.json(spec, { headers: { Vary: 'X-Forwarded-Host, Host' } });

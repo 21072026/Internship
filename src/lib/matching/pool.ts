@@ -28,10 +28,15 @@ const personSelect = {
   managerId: true,
 } as const;
 
+/** Who is in the mentor pool — one definition, shared by the loader and the cohort pass's cap check. */
+export function mentorPoolWhere(tenant: TenantWhere) {
+  return withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant);
+}
+
 /** Every active mentor (and admin who mentors) of the tenant, with their load. */
 export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]> {
   const rows = await prisma.user.findMany({
-    where: withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant),
+    where: mentorPoolWhere(tenant),
     select: {
       ...personSelect,
       mentorCapacity: true,
@@ -57,4 +62,37 @@ export async function loadMentees(tenant: TenantWhere, ids: readonly string[]): 
     select: { ...personSelect, menteeRelations: { select: { mentorId: true } } },
   });
   return rows.map(({ menteeRelations, ...m }) => ({ ...m, pastMentorIds: menteeRelations.map((r) => r.mentorId) }));
+}
+
+/**
+ * One pair in the scorer's shape, whatever their roles (#1789): a direct
+ * assignment may pair an ADMIN or even a MENTEE as the mentor (#1141), so the
+ * role filters of the two loaders above do not apply. The caller has already
+ * decided the pair is legitimate and in its tenant. Null when either is gone.
+ */
+export async function loadPairForScoring(
+  menteeId: string,
+  mentorId: string,
+): Promise<{ mentee: PoolMentee; mentor: PoolMentor } | null> {
+  const [mentee, mentor] = await Promise.all([
+    prisma.user.findUnique({ where: { id: menteeId }, select: { ...personSelect, menteeRelations: { select: { mentorId: true } } } }),
+    prisma.user.findUnique({
+      where: { id: mentorId },
+      select: {
+        ...personSelect,
+        mentorCapacity: true,
+        acceptingMentees: true,
+        selfMatchLimit: true,
+        _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
+      },
+    }),
+  ]);
+  if (!mentee || !mentor) return null;
+  const { menteeRelations, ...me } = mentee;
+  const { _count, ...mo } = mentor;
+  const seats = mo.selfMatchLimit != null ? await selfSelectedCounts([mo.id]) : new Map<string, number>();
+  return {
+    mentee: { ...me, pastMentorIds: menteeRelations.map((r) => r.mentorId) },
+    mentor: { ...mo, activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 },
+  };
 }

@@ -447,18 +447,19 @@ export function CompanyDetailView({
           <CardHeader>
             <CardTitle>{d.sections.needs}</CardTitle>
           </CardHeader>
-          {company.needs.length === 0 ? (
+          {/* Open positions are Requisitions only (#1875). */}
+          {company.requisitions.length === 0 ? (
             <p className="text-sm text-gray-500">{d.needsEmpty}</p>
           ) : (
             <ul className="space-y-1.5">
-              {company.needs.map((need) => (
+              {company.requisitions.map((req) => (
                 <li
-                  key={need.id}
+                  key={req.id}
                   className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-xs"
                 >
-                  <span className="font-medium text-gray-700">{need.position}</span>
+                  <span className="font-medium text-gray-700">{req.title}</span>
                   <span className="text-gray-500">
-                    {need.count} × {need.period}
+                    {req.filled}/{req.openings}
                   </span>
                 </li>
               ))}

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Pairing audit record (#1789):** new `MatchDecision` (tenant model, `orgId` + TENANT_MODELS) with `MatchDecisionSource` (`ADMIN_DIRECT | REQUEST_APPROVAL | MENTOR_ACCEPT | BULK_ROUND | MENTEE_PREFERENCE`). `recordMatchDecision()` (`src/lib/matching/decision.ts`) is the one writer, called after the commit from `POST /api/mentorship` and `decideMentorshipRequest()` (admin approval and the mentor's own accept); it never throws and logs `match_decision.write_failed`. It scores the pair with the live rule set through the same scorer and skill graph as the suggestion list (`scoreSuggestionPair`, `src/lib/matching/skillContext.ts`) and stores a frozen copy — editing or archiving the rule set never rewrites it. `overrodeSuggestion`/`suggestedRank` come from the MatchFeedback rows of the suggestion batch the client echoes (`rankingOutcome()` in `decisionRule.ts`), never from a client flag. The admin's note (assign + approve controls) is stored on the decision only. `GET /api/admin/match-decisions?relationId=|menteeId=` (`audit.read`, `mentorship` capability, tenant-scoped, paginated) feeds the new `MatchDecisionPanel` on the candidate detail view.",
+  "notes": {
+    "en": ["Every pairing now keeps an audit record: the score and rules at the moment of the decision, who decided, whether they deviated from the suggested ranking, and their note."],
+    "tr": ["Her eşleştirme artık bir denetim kaydı tutuyor: karar anındaki skor ve kurallar, kararı kimin verdiği, önerilen sıralamadan sapılıp sapılmadığı ve karar notu."],
+    "de": ["Jede Paarung hat jetzt einen Prüfdatensatz: Score und Regeln zum Zeitpunkt der Entscheidung, wer entschieden hat, ob vom vorgeschlagenen Ranking abgewichen wurde, und die Notiz dazu."]
+  }
+}

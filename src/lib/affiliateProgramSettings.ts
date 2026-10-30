@@ -1,6 +1,7 @@
 // The programme's settings: the commission plan (docs/affiliate-module.md, #3116)
-// and the referral base URL (#3117). The ONE writer of
-// AffiliateProgramSettings.plan / planVersion / planEffectiveAt / referralUrl.
+// the referral base URL (#3117) and the public programme page's content (#3359).
+// The ONE writer of AffiliateProgramSettings.plan / planVersion / planEffectiveAt /
+// referralUrl / landing.
 // The contract half has its own writer (src/lib/affiliateContract.ts).
 //
 // A plan change:
@@ -12,15 +13,21 @@
 //   - may not switch the currency once a payment exists: every past payment would
 //     turn into "not a payment" and every ordinal would be rebuilt;
 //   - bumps planVersion with a guarded update on the version it read, stamps
-//     planEffectiveAt, writes an AuditLog row in the same transaction,
-//   - and then re-evaluates every partner through the payment writer, which
-//     freezes what exists and never pays retroactively.
+//     planEffectiveAt, writes an AuditLog row and a QUEUED re-evaluation state
+//     in the same transaction,
+//   - and then enqueues `affiliate.planResync` (#3170): the job re-evaluates every
+//     partner through the payment writer, which freezes what exists and never pays
+//     retroactively. The request returns once the plan is saved, whatever the
+//     number of partners; the screen follows the job through `planResync`.
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { parseCommissionPlan, type CommissionPlan, type PlanIssue } from '@/lib/affiliateCommissionRule';
-import { resyncPartnerCommissions } from '@/lib/affiliatePaymentWriter';
+import { enqueue } from '@/lib/jobs/queue';
+import { PLAN_RESYNC_MAX_ATTEMPTS } from '@/lib/affiliatePlanResync';
+import { parseResyncState, queuedResync, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { parseReferralUrl, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
+import { canonicalLanding, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -59,10 +66,8 @@ export function canonicalPlan(plan: CommissionPlan): string {
 export interface PlanSaveResult {
   changed: boolean;
   planVersion: number;
-  partnersResynced: number;
-  /** Partners whose re-evaluation failed (lock busy); their next payment write re-evaluates them. */
-  resyncFailed: number;
-  drift: number;
+  /** The re-evaluation the change queued (null for an unchanged save). */
+  resync: PlanResyncState | null;
 }
 
 export async function savePlan(orgId: string, raw: unknown, actorId: string): Promise<PlanSaveResult> {
@@ -93,13 +98,15 @@ export async function savePlan(orgId: string, raw: unknown, actorId: string): Pr
       const now = new Date();
       let next: number;
       if (!current) {
-        await tx.affiliateProgramSettings.create({ data: { orgId, plan: value, planVersion: 1, planEffectiveAt: now } });
+        const planResync = queuedResync(1, now) as unknown as Prisma.InputJsonValue;
+        await tx.affiliateProgramSettings.create({ data: { orgId, plan: value, planVersion: 1, planEffectiveAt: now, planResync } });
         next = 1;
       } else {
         next = current.planVersion + 1;
+        const planResync = queuedResync(next, now) as unknown as Prisma.InputJsonValue;
         const { count } = await tx.affiliateProgramSettings.updateMany({
           where: { orgId, planVersion: current.planVersion },
-          data: { plan: value, planVersion: next, planEffectiveAt: now },
+          data: { plan: value, planVersion: next, planEffectiveAt: now, planResync },
         });
         if (count !== 1) throw new AffiliateSettingsError('conflict');
       }
@@ -108,31 +115,32 @@ export async function savePlan(orgId: string, raw: unknown, actorId: string): Pr
       });
       return { changed: true, version: next };
     });
-    if (!outcome.changed) return { changed: false, planVersion: outcome.version, partnersResynced: 0, resyncFailed: 0, drift: 0 };
+    if (!outcome.changed) return { changed: false, planVersion: outcome.version, resync: null };
     version = outcome.version;
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
     throw e;
   }
 
-  // Each partner in its own locked transaction (the writer's). Sequential on
-  // purpose: a programme has few partners, and one lock at a time keeps the
-  // database quiet for the payments being entered meanwhile.
-  const partners = await prisma.affiliatePartner.findMany({ where: { orgId }, select: { id: true } });
-  // The plan is already committed: a partner whose re-evaluation fails is counted
-  // and reported, never turned into an error for a save that did happen.
-  let drift = 0;
-  let resynced = 0;
-  let resyncFailed = 0;
-  for (const p of partners) {
-    try {
-      drift += (await resyncPartnerCommissions(orgId, p.id, actorId)).drift.length;
-      resynced += 1;
-    } catch {
-      resyncFailed += 1;
-    }
+  // The plan is committed; the re-evaluation runs on the queue, keyed on the org
+  // and the version, so a retried request enqueues it once. If the enqueue itself
+  // fails, the state says INCOMPLETE: each partner is then re-evaluated by its next
+  // payment write, as the writer always does — the save is not turned into an error.
+  try {
+    await enqueue('affiliate.planResync', { planVersion: version, actorId }, {
+      orgId,
+      idempotencyKey: `affiliate.planResync:${orgId}:${version}`,
+      maxAttempts: PLAN_RESYNC_MAX_ATTEMPTS,
+      trigger: 'manual',
+    });
+  } catch {
+    const now = new Date();
+    const failed: PlanResyncState = { ...queuedResync(version, now), status: 'INCOMPLETE', finishedAt: now.toISOString() };
+    await prisma.affiliateProgramSettings.updateMany({ where: { orgId, planVersion: version }, data: { planResync: failed as unknown as Prisma.InputJsonValue } });
+    return { changed: true, planVersion: version, resync: failed };
   }
-  return { changed: true, planVersion: version, partnersResynced: resynced, resyncFailed, drift };
+  const stored = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { planResync: true } });
+  return { changed: true, planVersion: version, resync: parseResyncState(stored?.planResync) };
 }
 
 /**
@@ -166,11 +174,56 @@ export async function saveReferralUrl(
   }
 }
 
+/**
+ * Replaces the public programme page's content (src/lib/affiliateLandingRule.ts).
+ * An unchanged save writes nothing; a change is audited with the locales that
+ * carry copy and whether each contact field is set — not the texts themselves,
+ * which are the organisation's own marketing copy and live on the row.
+ */
+export async function saveLanding(
+  orgId: string,
+  raw: unknown,
+  actorId: string,
+): Promise<{ ok: true; landing: Landing; changed: boolean } | { ok: false; issues: LandingIssue[] }> {
+  const parsed = parseLanding(raw);
+  if (!parsed.ok) return parsed;
+  const landing = parsed.landing;
+  const value = landing as unknown as Prisma.InputJsonValue;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { landing: true } });
+      if (current && canonicalLanding(readStoredLanding(current.landing)) === canonicalLanding(landing)) {
+        return { ok: true as const, landing, changed: false };
+      }
+      if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: { landing: value } });
+      else await tx.affiliateProgramSettings.create({ data: { orgId, landing: value } });
+      await tx.auditLog.create({
+        data: {
+          orgId,
+          actorId,
+          action: 'affiliate.landing.update',
+          detail: JSON.stringify({
+            locales: Object.keys(landing.copy),
+            phone: landing.phone !== null,
+            email: landing.email !== null,
+            productSignupUrl: landing.productSignupUrl !== null,
+          }),
+        },
+      });
+      return { ok: true as const, landing, changed: true };
+    });
+  } catch (e) {
+    // Two first saves of one organisation: the loser hits the unique orgId.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
+    throw e;
+  }
+}
+
 export async function programSettings(orgId: string) {
   const [settings, payments] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({
       where: { orgId },
-      select: { plan: true, planVersion: true, planEffectiveAt: true, referralUrl: true, contract: true, contractVersion: true, updatedAt: true },
+      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, updatedAt: true },
     }),
     prisma.affiliatePayment.count({ where: { orgId } }),
   ]);
@@ -179,7 +232,9 @@ export async function programSettings(orgId: string) {
     plan: parsed?.ok ? parsed.plan : null,
     planVersion: settings?.planVersion ?? 0,
     planEffectiveAt: settings?.planEffectiveAt ?? null,
+    planResync: parseResyncState(settings?.planResync),
     referralUrl: settings?.referralUrl ?? null,
+    landing: readStoredLanding(settings?.landing),
     contract: settings?.contract ?? null,
     contractVersion: settings?.contractVersion ?? 0,
     currencyLocked: payments > 0,

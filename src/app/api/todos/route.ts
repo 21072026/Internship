@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant, tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -198,7 +199,10 @@ export async function GET(request: Request) {
     // on the existing page rather than a second to-dos page. Nobody else has a
     // team — a mentee's "team" is their own list, which is what they already get.
     if (team) {
-      if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
+      // Admin reach from the permission rule, not the role string (#1571).
+      const actor = await actorFromSession(session);
+      const isAdmin = !!actor && (await can(actor, 'user.read', undefined, session));
+      if (!isAdmin && session.user.role !== 'MENTOR') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
       const ids = await teamMemberIds(session.user);

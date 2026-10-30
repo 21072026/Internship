@@ -145,6 +145,46 @@ key-owned subscription stops receiving the moment its key is revoked or expires.
 `/api/v1/hooks` is on the demo blocklist for the same reason as
 `/api/admin/webhooks`.
 
+## Company-owned keys (#2006, `src/lib/companyApiKeyRule.ts`)
+
+A COMPANY owner mints keys for their own data at
+`POST/GET/DELETE /api/company/integrations/api-keys` — no ADMIN involved. Such a
+key carries `ApiKey.companyId` and three rules hold for it:
+
+- **Ceiling.** Its scopes never exceed `COMPANY_KEY_SCOPE_CEILING` (`hiring:read`
+  today). A request above it is `403 scope_above_ceiling` naming the scopes, never
+  a narrowed grant. Self-served keys always expire (≤ 12 months).
+- **Fail-closed door.** `withApiKey(request, scope, handler, { companyScoped: true })`
+  is how a route says "I narrow every read to `key.companyId`" (via
+  `companyOnly(key)`). A company key on any other route — exports included, though
+  its scope would match — answers `403 company_key_not_allowed`. A new route is
+  therefore closed to company keys until it opts in **and** filters.
+- **Oversight.** The admin key list (`/api/admin/api-keys`) shows the company a
+  key belongs to and who issued it; the admin can revoke it like any other. The
+  company list and revoke only ever match the caller's own company (another
+  company's id is a 404). Mint and revoke write `apikey.created` /
+  `apikey.revoked` at `warning`, like the admin path.
+
+Today's company-scoped routes: `/requisitions`, `/offers`, `/interview-requests`
+(list and item) and `/me`. SOURCE owners are a later slice of #2006.
+
+### Company-owned webhooks (`src/lib/companyWebhookRule.ts`, `companyWebhookScope.ts`)
+
+`POST/GET/DELETE /api/company/integrations/webhooks` registers a hook with
+`Webhook.companyId` (`source: 'company'`, at most 10 per company). Its events must
+be in `COMPANY_WEBHOOK_EVENTS` — the hiring events whose subject is one company's
+(applications, interview requests, panel outcomes, offers, a filled requisition,
+the company's own interest flags); anything else is `403 event_above_ceiling`.
+Same SSRF guard, plan gate, one-time secret and warning-level audit as the admin form.
+
+**The check is at delivery, not only at registration.** `fanOutWebhookEvent()`
+asks `companyReceiverCheck(event)` per company hook: the event must be in the list
+**and** its subject record (looked up by the payload's id, in the event's org) must
+belong to the hook's company. An event that cannot be resolved is not delivered.
+So an admin widening a company hook's event list later still sends it nothing of the
+programme's, and `replayRecentEvents()` applies the same filter. Org-wide hooks are
+untouched.
+
 ## Bulk candidate import (#3015, `src/lib/api/v1Imports.ts`)
 
 - **`POST /imports/candidates`** `{ candidates: [...≤500], dryRun? }` →
@@ -214,11 +254,51 @@ A full snapshot of one resource without walking the cursor:
 - Expired exports are deleted in the nightly 03:40 slot
   (`purgeExpiredExports`); they stop being served at `expiresAt`.
 
+## Sandbox key (#1992, `src/lib/api/sandboxKeyRule.ts`)
+
+`POST /api/developers/sandbox-key` (no session — the `/developers` button) mints a key **only on
+the public demo**: `DEMO_MODE=true` **and** a database whose name ends in `_demo` (the guard
+`prisma/reset-demo.mjs` uses). Everywhere else it answers 404, so it cannot mint against a real
+organisation even with the flag set by mistake. The key holds every `*:read` scope and nothing
+that writes (`interactions:read_notes` is not a `:read` scope), is bound to the deployment's
+default org (the synthetic seed), expires after 24 h and carries a daily allowance of 1000; minting
+is limited to 3 an hour per address and 200 live keys. The demo seed grants the default org
+`INTEGRATIONS_API` so those reads are not `feature_locked`.
+
 ## Deprecations
+
+The policy (6-month window, `Deprecation`/`Sunset` headers, what counts as breaking) is
+[`api-lifecycle.md`](api-lifecycle.md); the list below is `API_DEPRECATIONS` in
+`src/lib/api/v1Lifecycle.ts` — add a row there and here together. The public portal is
+`/developers` (#1992), rendered from this API's own OpenAPI document, never the admin one.
 
 | What | Since | Removed on |
 |---|---|---|
 | `candidates` key on `GET /api/v1/candidates` (alias of `data`) | #1988 | 2027-01-31 |
+
+## Published contracts (#1611)
+
+Two tests stop a field rename from shipping green and silently breaking an integrator:
+
+- **Responses** — `e2e/api-v1-response-contract.spec.ts` (`@smoke`) fetches EVERY GET operation
+  in the served `/api/v1/openapi.json` with a key holding exactly the scopes those operations
+  declare, and validates each body against that operation's own 200 schema with a strict
+  validator (`e2e/helpers/strictSchema.ts`): every `required` key present and typed, and **no
+  key the schema does not list**. A new GET path fails it until a row is seeded for it.
+- **Webhooks** — each public event's payload is published under `x-webhooks.payloads`
+  (`name@version` → JSON Schema of `data`, from the catalogue's zod schema via
+  `src/lib/events/payloadSchema.ts`). `scripts/test/webhook-contract.test.mjs` compares them
+  with the committed `scripts/test/fixtures/webhook-payloads.json` and checks the delivery
+  itself: body `{ event, data, sentAt }`, `X-Signature` = hex HMAC-SHA256 of exactly that body
+  under the hook secret, `X-Event`, `X-Delivery-Id`.
+
+When one of them goes red, the fix is never to edit the test until it agrees with the code:
+
+- a **new** field in a response is documented in the schema in the same PR (additive);
+- a **renamed or removed** field, or any webhook payload change, is a breaking change: add a
+  new version (`version: 2` in `src/lib/events/catalog.ts`; a new field next to the old one with
+  an entry under § Deprecations), and record a new event version in the fixture with
+  `UPDATE_WEBHOOK_CONTRACT=1 npm run test:unit`.
 
 ## Adding an endpoint
 
@@ -228,5 +308,6 @@ A full snapshot of one resource without walking the cursor:
    error.
 3. The path in `src/app/api/v1/openapi.json/route.ts`, reusing the
    `Limit`/`Cursor`/`UpdatedSince` parameters and the shared error responses.
-4. An e2e spec; a security boundary (scope, tenant) is tagged `@smoke`.
+4. An e2e spec; a security boundary (scope, tenant) is tagged `@smoke`. A new GET is picked up
+   by the response-contract spec automatically. Seed it a row there (§ Published contracts).
 5. Never add `/api/v1/*` to a k6 scenario (rate-limited, one shared runner IP).

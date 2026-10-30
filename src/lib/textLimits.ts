@@ -116,6 +116,8 @@ export const TEXT_LIMITS = {
   mentorScreeningReference: 191,
   /** MentorApplication.referenceOutcome — @db.Text (#1807) */
   mentorScreeningReferenceOutcome: 2000,
+  /** MentorOffer.message — @db.Text (#1809) */
+  mentorOfferMessage: 1000,
   /** WeeklyReport.summary — @db.Text */
   weeklyReportSummary: 10000,
   /** WeeklyReport.blockers — @db.Text */

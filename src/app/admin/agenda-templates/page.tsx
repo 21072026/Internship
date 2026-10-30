@@ -161,6 +161,7 @@ export default function AdminAgendaTemplatesPage() {
         <Input
           key={l}
           label={label.replace('{lang}', l.toUpperCase())}
+          lang={l}
           value={value[l] ?? ''}
           maxLength={maxLength}
           onChange={(e) => onChange({ ...value, [l]: e.target.value })}

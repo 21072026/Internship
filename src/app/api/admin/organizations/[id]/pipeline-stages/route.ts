@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isHexColor } from '@/lib/branding';
 import { resolvePipelineStages, defaultPipelineStages, replaceStages, stageUsage } from '@/lib/pipelineStages';
@@ -10,6 +8,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { isPipelinePhase, removedStagesInUse } from '@/lib/pipeline';
+import { requirePermission, type Permission } from '@/lib/authz';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
 // stages require a paid plan). Phase A: label / order / color / on-path grouping
@@ -20,13 +19,14 @@ import { isPipelinePhase, removedStagesInUse } from '@/lib/pipeline';
 // write another tenant's stages: a super admin manages any org (#1535), and the
 // org is an explicit path parameter, not the caller's own. Binding the caller's
 // tenant here would narrow every query below to the super admin's own org and
-// break exactly that. The authorisation lives in requireAdminOrg() — a plain
+// break exactly that. The authorisation lives in orgSettingsGate() — a plain
 // ADMIN is refused unless `id` is their own org — and every query names
 // `orgId: id` itself, so nothing depends on the middleware either way.
 
-async function requireAdminOrg(id: string, route: string) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return { error: 'Unauthorized' as const, status: 401 };
+async function orgSettingsGate(id: string, route: string, permission: Permission, request: Request) {
+  const gate = await requirePermission(permission, { request });
+  if ('error' in gate) return gate;
+  const { session } = gate;
   // Same rule as the parent route (#1535): a super admin may manage any tenant
   // of its OWN WORLD (docs/worlds.md § Super admin), a plain ADMIN only their
   // own — and the refusal comes before the lookup, so it cannot confirm whether
@@ -35,19 +35,19 @@ async function requireAdminOrg(id: string, route: string) {
     const ownOrgId = resolveOrgId(session);
     if (!ownOrgId || ownOrgId !== id) {
       await logCrossTenantDenial(session, route, id);
-      return { error: 'Forbidden' as const, status: 403 };
+      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
   }
   const org = await prisma.organization.findUnique({ where: { id } });
-  if (!org) return { error: 'Organization not found' as const, status: 404 };
+  if (!org) return { error: NextResponse.json({ error: 'Organization not found' }, { status: 404 }) };
   return { org, session };
 }
 
 // GET — the org's resolved stages plus whether they are customized.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gate = await requireAdminOrg(id, 'GET /api/admin/organizations/[id]/pipeline-stages');
-  if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
+  const gate = await orgSettingsGate(id, 'GET /api/admin/organizations/[id]/pipeline-stages', 'org.settings.read', _req);
+  if ('error' in gate) return gate.error;
 
   const count = await prisma.pipelineStage.count({ where: { orgId: id } });
   // The editor prefills its inputs from this response, so it has to speak the
@@ -77,8 +77,8 @@ const putSchema = z.object({ stages: z.array(stageSchema).min(1).max(50) });
 // PUT — replace the org's stage set. Premium-gated (not FREE). Keys must be unique.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gate = await requireAdminOrg(id, 'PUT /api/admin/organizations/[id]/pipeline-stages');
-  if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
+  const gate = await orgSettingsGate(id, 'PUT /api/admin/organizations/[id]/pipeline-stages', 'org.settings.write', req);
+  if ('error' in gate) return gate.error;
   if (gate.org.plan === 'FREE') {
     return NextResponse.json({ error: 'Custom pipeline stages require a paid plan' }, { status: 403 });
   }
@@ -136,8 +136,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // DELETE — reset to the built-in canonical stages (drop all custom rows).
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gate = await requireAdminOrg(id, 'DELETE /api/admin/organizations/[id]/pipeline-stages');
-  if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
+  const gate = await orgSettingsGate(id, 'DELETE /api/admin/organizations/[id]/pipeline-stages', 'org.settings.write', req);
+  if ('error' in gate) return gate.error;
 
   const removed = await prisma.pipelineStage.deleteMany({ where: { orgId: id } });
   if (removed.count > 0) {

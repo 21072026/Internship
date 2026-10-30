@@ -16,10 +16,13 @@ import { MailQueuePanel } from '@/components/admin/MailQueuePanel';
 import { EmailSuppressionPanel } from '@/components/admin/EmailSuppressionPanel';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
+import { OfferLetterTemplateEditor } from '@/components/OfferLetterTemplateEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
+import { SlaDayModeCard } from '@/components/admin/SlaDayModeCard';
 import { CrmBccCard } from '@/components/CrmBccCard';
 import { TerminologyCard } from '@/components/admin/TerminologyCard';
+import Link from 'next/link';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
 import { useSession } from 'next-auth/react';
@@ -43,12 +46,17 @@ export default function AdminSettingsPage() {
   const t = useT();
   const locale = useLocale();
   const [reminderDays, setReminderDays] = useState('14');
+  // Meeting reminder lead times in minutes (#1636); '' = the built-in defaults.
+  const [meetingLeads, setMeetingLeads] = useState('');
   const [retentionMonths, setRetentionMonths] = useState('12');
   // Notification history window (#1646) — a different thing from the one
   // above, which is about candidate records; the two hints say which is which.
   const [notificationRetentionDays, setNotificationRetentionDays] = useState('180');
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
+  // Notification blackout days (#1714).
+  const [blackoutDates, setBlackoutDates] = useState('');
+  const [blackoutWeekends, setBlackoutWeekends] = useState(false);
   const [require2fa, setRequire2fa] = useState('off');
   // The policy as last loaded/saved, the coverage rows the card reported, and
   // whether a stricter switch is waiting for the admin's confirmation (#1644).
@@ -264,10 +272,13 @@ export default function AdminSettingsPage() {
     setSources(body?.sources ?? {});
     setLoadedRaw(settings);
     setReminderDays(settings.reminderDays ?? '14');
+    setMeetingLeads(settings.meetingReminderLeadsMinutes ?? '');
     setRetentionMonths(settings.retentionMonths ?? '12');
     setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
     setSupportEmail(settings.supportEmail ?? '');
     setWeeklyDigest(settings.weeklyDigest !== 'false');
+    setBlackoutDates(settings.notificationBlackoutDates ?? '');
+    setBlackoutWeekends(settings.notificationBlackoutWeekends === 'true');
     setRequire2fa(settings.require2fa ?? 'off');
     setLoadedRequire2fa(settings.require2fa ?? 'off');
     setSelfRegistration(settings.selfRegistration ?? 'auto');
@@ -382,7 +393,7 @@ export default function AdminSettingsPage() {
     const approvalChanged = hasTrialStage && outboundApproval !== loadedOutboundApproval;
     setSavingSettings(true);
     try {
-      const payload: Record<string, string> = { reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
+      const payload: Record<string, string> = { reminderDays, meetingReminderLeadsMinutes: meetingLeads, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates.trim(), notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
       const changed = Object.fromEntries(Object.entries(payload).filter(([k, v]) => v !== loadedRaw[k]));
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -456,6 +467,8 @@ export default function AdminSettingsPage() {
             <div>
               <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
               <SettingProvenance settingKey="reminderDays" source={sources.reminderDays} onReverted={load} />
+              <Input label={t.settings.meetingReminderLeads} value={meetingLeads} placeholder="1440, 60" onChange={(e) => setMeetingLeads(e.target.value)} hint={t.settings.meetingReminderLeadsHint} data-testid="meeting-reminder-leads" />
+              <SettingProvenance settingKey="meetingReminderLeadsMinutes" source={sources.meetingReminderLeadsMinutes} onReverted={load} />
             </div>
             <div>
               <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
@@ -477,6 +490,15 @@ export default function AdminSettingsPage() {
               {t.settings.weeklyDigest}
             </label>
             <SettingProvenance settingKey="weeklyDigest" source={sources.weeklyDigest} onReverted={load} />
+            <div>
+              <Input label={t.settings.notificationBlackoutDates} value={blackoutDates} onChange={(e) => setBlackoutDates(e.target.value)} hint={t.settings.notificationBlackoutDatesHint} placeholder="2026-12-24, 2026-12-31" data-testid="notification-blackout-dates" />
+              <SettingProvenance settingKey="notificationBlackoutDates" source={sources.notificationBlackoutDates} onReverted={load} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={blackoutWeekends} onChange={(e) => setBlackoutWeekends(e.target.checked)} data-testid="notification-blackout-weekends" />
+              {t.settings.notificationBlackoutWeekends}
+            </label>
+            <SettingProvenance settingKey="notificationBlackoutWeekends" source={sources.notificationBlackoutWeekends} onReverted={load} />
             <div>
               <label htmlFor="self-registration" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.selfRegistration}</label>
               <select
@@ -1004,11 +1026,22 @@ export default function AdminSettingsPage() {
           MARKETING tenant's words come from its vertical overlay. */}
       {verticalHasCapability(vertical, 'mentorship') && <TerminologyCard />}
 
+      {/* The words of the event e-mails (#1719) live on their own screen. */}
+      <Card>
+        <CardHeader><CardTitle>{t.notificationTemplates.title}</CardTitle></CardHeader>
+        <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{t.notificationTemplates.subtitle}</p>
+        <Link href="/admin/notification-templates" className="text-sm font-medium text-blue-700 hover:underline dark:!text-blue-300" data-testid="settings-notification-templates-link">
+          {t.notificationTemplates.title} →
+        </Link>
+      </Card>
+
       {/* The org's competency framework (#822) — criteria as data, not code.
           Only where the vertical scores anyone (#2558): MARKETING carries no
           `evaluations` capability, so its admins were offered criteria for
           "what a mentor scores a mentee on" in a product with neither. */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationFrameworkEditor />}
+      {/* Offer letters (#1857) exist only where offers do. */}
+      {verticalHasCapability(vertical, 'placements') && <OfferLetterTemplateEditor />}
       {/* When INTERIM/FINAL fall due, and their reminders (#1891). */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationScheduleEditor />}
       {/* The tenant starter pack (#2066): safe to apply again at any time. */}
@@ -1016,6 +1049,9 @@ export default function AdminSettingsPage() {
 
       {/* Per-stage service levels (#817) — how long anyone may wait. */}
       <StageSlaEditor />
+
+      {/* How those SLA days are counted: calendar or business days (#1638). */}
+      <SlaDayModeCard />
     </div>
   );
 }

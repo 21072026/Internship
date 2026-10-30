@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession, type Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can, type Permission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
@@ -17,10 +18,16 @@ const updateInteractionSchema = z.object({
   type: z.enum(INTERACTION_TYPES).optional(),
 });
 
+/** Does the caller act as an admin here? The permission rule answers, not the role string (#1571). */
+async function actsAsAdmin(session: Session, perm: Permission): Promise<boolean> {
+  const actor = await actorFromSession(session);
+  return !!actor && (await can(actor, perm, undefined, session));
+}
+
 async function getInteractionAndVerifyAccess(
   id: string,
   userId: string,
-  role: string,
+  isAdmin: boolean,
   callerOrgId: string | null
 ) {
   const interaction = await prisma.interactionLog.findUnique({
@@ -38,7 +45,7 @@ async function getInteractionAndVerifyAccess(
   }
 
   const authorized =
-    role === 'ADMIN' || interaction.relation.mentorId === userId;
+    isAdmin || interaction.relation.mentorId === userId;
 
   return { interaction, authorized };
 }
@@ -55,7 +62,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { interaction, authorized } = await getInteractionAndVerifyAccess(
       id,
       session.user.id,
-      session.user.role,
+      await actsAsAdmin(session, 'program.read'),
       resolveOrgId(session)
     );
 
@@ -86,7 +93,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const { interaction, authorized } = await getInteractionAndVerifyAccess(
       id,
       session.user.id,
-      session.user.role,
+      await actsAsAdmin(session, 'relation.write'),
       resolveOrgId(session)
     );
 
@@ -135,7 +142,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { interaction, authorized } = await getInteractionAndVerifyAccess(
       id,
       session.user.id,
-      session.user.role,
+      await actsAsAdmin(session, 'relation.write'),
       resolveOrgId(session)
     );
 

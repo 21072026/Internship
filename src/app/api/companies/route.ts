@@ -5,8 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { openPositionsInclude } from '@/lib/openPositions';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { marketingEmailPermissionFilter } from '@/lib/contactPermission';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
@@ -47,15 +51,9 @@ const companySchema = z.object({
   size: z.string().max(TEXT_LIMITS.companySize).optional(),
   address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),
-  needs: z
-    .array(
-      z.object({
-        position: z.string().min(1).max(TEXT_LIMITS.companyNeedPosition),
-        count: z.number().int().min(1),
-        period: z.string().min(1).max(TEXT_LIMITS.companyNeedPeriod),
-      })
-    )
-    .optional(),
+  // No `needs` any more (#1875): open positions are Requisitions, created on
+  // /admin/requisitions. A legacy client still sending the key has it stripped
+  // by zod rather than refused.
 });
 
 /** Same ceiling as `/api/candidates`, for the same reason: one page is a screen. */
@@ -167,7 +165,8 @@ export async function GET(request: Request) {
         sourceFilter,
       );
       const include = {
-        needs: true,
+        // Open positions come from Requisition only (#1875).
+        requisitions: openPositionsInclude,
         // The e-mail row only, for the list's permission badge (#2577).
         contactPermissions: {
           where: { channel: 'EMAIL' as const },
@@ -319,11 +318,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('company.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const body = await request.json();
@@ -336,7 +333,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const { needs, contactEmail, ...companyData } = parsed.data;
+    const { contactEmail, ...companyData } = parsed.data;
+
+    // The plan's company band (#1752): refuses the next company, never touches
+    // an existing one. Fails open for the default org and for MARKETING.
+    const companies = await enforceQuota(resolveOrgId(session), 'COMPANIES');
+    if (!companies.allowed) return NextResponse.json(quotaError(companies), { status: 403 });
 
     const company = await prisma.company.create({
       data: {
@@ -346,13 +348,8 @@ export async function POST(request: Request) {
         // admin who just created it now that the list is org-scoped.
         orgId: resolveOrgId(session),
         contactEmail: contactEmail || null,
-        needs: needs
-          ? {
-              create: needs,
-            }
-          : undefined,
       },
-      include: { needs: true },
+      include: { requisitions: openPositionsInclude },
     });
 
     return NextResponse.json({ company }, { status: 201 });

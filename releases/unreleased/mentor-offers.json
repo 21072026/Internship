@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mentor Offers (#1809):** a mentor with headroom can offer to mentor an unmatched mentee who opted in (`User.openToOffers`, default off — not opted in = not listed, not offerable, never mailed). New `MentorOffer` tenant model (`PENDING|ACCEPTED|DECLINED|EXPIRED|WITHDRAWN`, 14-day `expiresAt`, one `remindedAt`). The rule is pure in `src/lib/mentorOfferRule.ts` (availability via `getMentorAvailability`, no re-offer while pending or after a decline, quota 3 pending / 5 per rolling 7 days, not configurable); `src/lib/mentorOffers.ts` is the one writer. Accepting claims the offer and approves a request naming the mentor through `decideMentorshipRequest()` — same plan gate, one-active-mentor guard and notices as any pairing; on refusal the request is removed and the offer reopened. Daily `mentorOffers.sweep` (09:10) expires offers and sends the one reminder (claimed on `remindedAt: null`). Mail goes through `sendEmail()` under the new `mentor-offer` category (mentorship_lifecycle group) after `emailAllowed` + `emailGroupAllowedForCategory`. Routes: `/api/mentor/offers` (GET/POST), `/api/mentor/offers/[id]` (DELETE = withdraw), `/api/mentee/offers` (GET), `/api/mentee/offers/[id]` (POST accept/decline). UI: `/mentor/offers` (new nav entry) and the opt-in + offers panel on `/portal`. The offer message is erased with either party.",
+  "notes": {
+    "en": ["Mentors with free capacity can now offer to mentor someone — but only mentees who switched on “mentors may offer to mentor me” can receive an offer."],
+    "tr": ["Boş kapasitesi olan mentorlar artık birine mentorluk teklif edebilir — ama yalnızca “mentorlar bana mentorluk teklif edebilir” seçeneğini açan mentee'ler teklif alabilir."],
+    "de": ["Mentorinnen und Mentoren mit freier Kapazität können jetzt jemandem ein Mentoring anbieten – aber nur Mentees, die „Mentoren dürfen mir ein Mentoring anbieten“ eingeschaltet haben."]
+  }
+}

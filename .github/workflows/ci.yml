@@ -240,6 +240,14 @@ jobs:
       # scripts/route-auth-baseline.json; a new one that is not fails here.
       - name: every API handler asks who is calling (#2444)
         run: npm run check:route-auth
+      # "May this person do this?" has ONE answer: requirePermission() / can()
+      # in src/lib/authz.ts (docs/role-access-matrix.md § Admin tiers). A route
+      # that compares session.user.role to 'ADMIN' instead hands an OBSERVER or
+      # a PROGRAM_ADMIN the whole tenant, because both have role ADMIN. The
+      # sites not moved yet are pinned per file in scripts/authz-baseline.json,
+      # which only shrinks; a new one fails here.
+      - name: routes authorize through the permission layer (#1571)
+        run: npm run check:authz
       # A vertical capability switches a MODULE off, and it only does so if the
       # gate is on every one of that module's write paths. Hiding the nav entry
       # (#2351) is not access control, and the leaked-writer class has now been
@@ -363,6 +371,11 @@ jobs:
       # sendMail() anywhere else compiles and delivers while skipping all four.
       - name: mail leaves through one door (#2944)
         run: npm run check:direct-sendmail
+      # Mail copy carries the recipient org's vertical and terminology only when
+      # read through emailDictionary(locale, orgId) (#1631); bare
+      # getDictionary() calls in mailing files are a pinned ratchet.
+      - name: mail copy follows the recipient's org (#1631)
+        run: npm run check:mail-dictionary
       # Settings are read through ONE accessor, src/lib/settingsResolver.ts
       # (#1621): a direct prisma.setting read skips the org/programme chain
       # and reads the global row for every tenant. Legacy getSetting() readers

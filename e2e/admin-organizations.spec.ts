@@ -198,7 +198,7 @@ test('non-admin cannot list or create organizations', async ({ page }) => {
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
     const list = await page.request.get('/api/admin/organizations');
-    expect(list.status()).toBe(401);
+    expect(list.status()).toBe(403);
 
     // Signed in, not an administrator: 403 (#2065), and the provisioning
     // fields the wizard posts change nothing about that.
@@ -417,6 +417,54 @@ test('no organization response carries a credential column', { tag: '@smoke' }, 
     const created = await page.request.post('/api/admin/organizations', { data: { name: `Cred New ${tag}`, slug: createdSlug, vertical: 'INTERNSHIP' } });
     expect(created.status()).toBe(201);
     expect((await created.json()).organization).not.toHaveProperty('ssoSpKey');
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('an OIDC client secret is sealed at rest and never returned (#1926)', { tag: '@smoke' }, async ({ page }) => {
+  const tag = Date.now();
+  const slug = `e2e-oidc-secret-${tag}`;
+  createdSlugs.push(slug);
+  const org = await prisma.organization.create({ data: { slug, name: `OIDC Secret ${tag}`, plan: 'ENTERPRISE' } });
+  const adminEmail = uniqueEmail('oidc-secret-admin');
+  const admin = await seedUser(adminEmail, 'OidcPass123', 'ADMIN', 'OIDC Secret Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
+  const SECRET = `e2e-client-secret-${tag}`;
+
+  try {
+    await signInAndSettle(page, adminEmail, 'OidcPass123', '/admin');
+    // A tenant ADMIN may not set the IdP trust: a client secret is part of it.
+    const refused = await page.request.patch('/api/admin/organizations', { data: { id: org.id, ssoClientSecret: SECRET } });
+    expect(refused.status()).toBe(403);
+    expect((await refused.json()).code).toBe('sso_super_admin_only');
+
+    await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
+    await signInAsFreshUser(page, adminEmail, 'OidcPass123', '/admin');
+    const patched = await page.request.patch('/api/admin/organizations', {
+      data: { id: org.id, ssoClientId: 'client-e2e', ssoClientSecret: SECRET, ssoDiscoveryUrl: 'https://login.example.test/.well-known/openid-configuration' },
+    });
+    expect(patched.ok()).toBeTruthy();
+    expect(JSON.stringify(await patched.json())).not.toContain(SECRET);
+
+    const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.id }, select: { ssoClientSecretEnc: true, ssoClientId: true } });
+    expect(stored.ssoClientId).toBe('client-e2e');
+    expect(stored.ssoClientSecretEnc).toBeTruthy();
+    expect(stored.ssoClientSecretEnc).not.toContain(SECRET);
+
+    const list = await page.request.get('/api/admin/organizations');
+    const text = await list.text();
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain(stored.ssoClientSecretEnc!);
+    const row = (JSON.parse(text).organizations as { id: string; sso: Record<string, unknown> }[]).find((o) => o.id === org.id)!;
+    expect(row.sso.ssoClientSecretSet).toBe(true);
+    expect(row.sso.ssoClientId).toBe('client-e2e');
+
+    // Neither the activity line nor the audit diff carries it.
+    const logs = await prisma.activityLog.findMany({ where: { createdAt: { gte: new Date(tag - 1000) } }, select: { detail: true } });
+    for (const l of logs) expect(l.detail ?? '').not.toContain(SECRET);
+    const audit = await prisma.auditLog.findMany({ where: { orgId: org.id }, select: { detail: true } });
+    for (const a of audit) expect(JSON.stringify(a.detail ?? '')).not.toContain(SECRET);
   } finally {
     await cleanupByEmail(adminEmail);
   }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -30,10 +29,9 @@ const schema = z.object({ email: z.string().email() });
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-    if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'user.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
 
     // The endpoint sends mail to an address chosen by the caller, so it is
     // bounded even though the caller is authenticated.
@@ -66,7 +64,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
 
       // A mentor may only touch their own mentee; an admin any mentee in scope.
-      if (session.user.role !== 'ADMIN') {
+      if (!admin) {
         const relation = await prisma.mentorshipRelation.findFirst({
           where: { mentorId: session.user.id, menteeId: mentee.id },
           select: { id: true },

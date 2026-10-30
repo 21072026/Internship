@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { CohortComparison } from '@/components/admin/CohortComparison';
+import { SkillsGapPanel } from '@/components/admin/SkillsGapPanel';
 import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
@@ -861,6 +862,9 @@ export default function AdminAnalyticsPage() {
       {/* Programme cohorts are the internship product; the route refuses a
           vertical without `mentorship` as well (leak audit WP3). */}
       {premium === true && showMentorship && <CohortComparison />}
+      {/* Skills gap (#1823): pool supply vs hiring demand, same premium tier
+          and the same `mentorship` capability as the cohort card. */}
+      {premium === true && showMentorship && <SkillsGapPanel canExport={canExport} />}
 
       {/* Match quality (#2040): how often the mentor suggestion is taken, and
           at which rank position. Not premium-gated — it is the answer to the

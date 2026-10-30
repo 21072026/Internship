@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 import {
   ORPHAN_ANONYMIZE_PER_RUN,
   ORPHAN_APPLICANT_GRACE_DAYS,
@@ -31,11 +30,10 @@ import {
 // to scroll, and `total` reports the real size either way.
 const MAX_ROWS = 200;
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     // Read from the GLOBAL layer explicitly (`orgId: null`), because that is

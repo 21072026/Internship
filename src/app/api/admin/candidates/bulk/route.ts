@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { nextOnPathStage, type ResolvedStage } from '@/lib/pipeline';
@@ -15,6 +13,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { notify } from '@/lib/notify';
+import { requirePermission } from '@/lib/authz';
 
 const bodySchema = z.object({
   candidateIds: z.array(z.string().min(1)).min(1).max(200),
@@ -44,10 +43,9 @@ const BULK_OWNER_REASON = 'mentor_unavailable' as const;
 // defense in depth — this endpoint can never touch an admin/mentor account
 // even if the caller somehow sent the wrong IDs.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // One try/catch around the whole handler, the same shape as GET /api/candidates
   // and POST /api/mentorship/[id]/transfer. It matters most for assignOwner,

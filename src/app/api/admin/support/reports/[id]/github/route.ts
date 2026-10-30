@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { withTenantScope } from '@/lib/orgContext';
@@ -14,6 +13,7 @@ import {
   githubConfig,
   isIssueUrlOf,
 } from '@/lib/supportReportIntegrationRule';
+import { withRequestScope } from '@/lib/requestContext';
 
 // "Create GitHub issue" for one bug report (#3132).
 //   GET  — the default draft (public-safe by construction, see
@@ -36,12 +36,6 @@ const postSchema = z.object({
   title: z.string().trim().min(1).max(ISSUE_TITLE_MAX),
   body: z.string().max(ISSUE_BODY_MAX),
 });
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return { session, orgId: await reportAdminOrg(session) };
-}
 
 function gh(token: string, path: string, init?: RequestInit) {
   return fetch(`${API}${path}`, {
@@ -69,69 +63,75 @@ async function loadReport(id: string, orgId: string) {
   });
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id } = await params;
-  return withTenantScope(admin.session, async () => {
-    const report = await loadReport(id, admin.orgId);
-    if (!report) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const config = githubConfig(process.env);
-    if (!config) return NextResponse.json({ configured: false, issueUrl: report.githubIssueUrl });
-    const ctx = sanitizeFeedbackContext(report.context);
-    const draft = buildIssueDraft({
-      ...report,
-      hasScreenshot: report.files.some((f) => f.kind === 'SCREENSHOT'),
-      hasReplay: report.files.some((f) => f.kind === 'REPLAY'),
-      consoleCount: ctx.consoleErrors.length,
-      failedRequests: ctx.failedRequests,
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, async () => {
+    const gate = await requirePermission('support.read', { request });
+    if ('error' in gate) return gate.error;
+    const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
+    const { id } = await params;
+    return withTenantScope(admin.session, async () => {
+      const report = await loadReport(id, admin.orgId);
+      if (!report) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const config = githubConfig(process.env);
+      if (!config) return NextResponse.json({ configured: false, issueUrl: report.githubIssueUrl });
+      const ctx = sanitizeFeedbackContext(report.context);
+      const draft = buildIssueDraft({
+        ...report,
+        hasScreenshot: report.files.some((f) => f.kind === 'SCREENSHOT'),
+        hasReplay: report.files.some((f) => f.kind === 'REPLAY'),
+        consoleCount: ctx.consoleErrors.length,
+        failedRequests: ctx.failedRequests,
+      });
+      // Unknown visibility reads as public: the warning is the safe default.
+      let isPrivate = false;
+      try {
+        const res = await gh(config.token, `/repos/${config.repo}`);
+        if (res.ok) isPrivate = (await res.json()).private === true;
+      } catch {
+        // keep the warning
+      }
+      return NextResponse.json({ configured: true, repo: config.repo, isPrivate, issueUrl: report.githubIssueUrl, draft });
     });
-    // Unknown visibility reads as public: the warning is the safe default.
-    let isPrivate = false;
-    try {
-      const res = await gh(config.token, `/repos/${config.repo}`);
-      if (res.ok) isPrivate = (await res.json()).private === true;
-    } catch {
-      // keep the warning
-    }
-    return NextResponse.json({ configured: true, repo: config.repo, isPrivate, issueUrl: report.githubIssueUrl, draft });
   });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const parsed = postSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const config = githubConfig(process.env);
-  if (!config) return NextResponse.json({ error: 'GitHub is not configured', code: 'not_configured' }, { status: 409 });
-  const { id } = await params;
+  return withRequestScope(request, async () => {
+    const gate = await requirePermission('support.write', { request });
+    if ('error' in gate) return gate.error;
+    const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
+    const parsed = postSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    const config = githubConfig(process.env);
+    if (!config) return NextResponse.json({ error: 'GitHub is not configured', code: 'not_configured' }, { status: 409 });
+    const { id } = await params;
 
-  return withTenantScope(admin.session, async () => {
-    const claim = await prisma.supportReport.updateMany({
-      where: { id, orgId: admin.orgId, githubIssueUrl: null },
-      data: { githubIssueUrl: `${PENDING}${Date.now()}` },
-    });
-    if (claim.count === 0) {
-      const exists = await prisma.supportReport.count({ where: { id, orgId: admin.orgId } });
-      return exists
-        ? NextResponse.json({ error: 'An issue already exists for this report', code: 'already_linked' }, { status: 409 })
-        : NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    try {
-      const res = await gh(config.token, `/repos/${config.repo}/issues`, {
-        method: 'POST',
-        body: JSON.stringify({ title: parsed.data.title, body: parsed.data.body }),
+    return withTenantScope(admin.session, async () => {
+      const claim = await prisma.supportReport.updateMany({
+        where: { id, orgId: admin.orgId, githubIssueUrl: null },
+        data: { githubIssueUrl: `${PENDING}${Date.now()}` },
       });
-      const issueUrl = res.ok ? String((await res.json()).html_url ?? '') : '';
-      if (!isIssueUrlOf(config.repo, issueUrl)) throw new Error(`github ${res.status}`);
-      await prisma.supportReport.update({ where: { id }, data: { githubIssueUrl: issueUrl } });
-      return NextResponse.json({ issueUrl }, { status: 201 });
-    } catch (e) {
-      // Release the claim so the admin can try again.
-      await prisma.supportReport.updateMany({ where: { id, githubIssueUrl: { startsWith: PENDING } }, data: { githubIssueUrl: null } });
-      logger.warning('support_report.github_failed', { reportId: id, error: e instanceof Error ? e.message : String(e) });
-      return NextResponse.json({ error: 'The issue could not be created', code: 'github_failed' }, { status: 502 });
-    }
+      if (claim.count === 0) {
+        const exists = await prisma.supportReport.count({ where: { id, orgId: admin.orgId } });
+        return exists
+          ? NextResponse.json({ error: 'An issue already exists for this report', code: 'already_linked' }, { status: 409 })
+          : NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+      try {
+        const res = await gh(config.token, `/repos/${config.repo}/issues`, {
+          method: 'POST',
+          body: JSON.stringify({ title: parsed.data.title, body: parsed.data.body }),
+        });
+        const issueUrl = res.ok ? String((await res.json()).html_url ?? '') : '';
+        if (!isIssueUrlOf(config.repo, issueUrl)) throw new Error(`github ${res.status}`);
+        await prisma.supportReport.update({ where: { id }, data: { githubIssueUrl: issueUrl } });
+        return NextResponse.json({ issueUrl }, { status: 201 });
+      } catch (e) {
+        // Release the claim so the admin can try again.
+        await prisma.supportReport.updateMany({ where: { id, githubIssueUrl: { startsWith: PENDING } }, data: { githubIssueUrl: null } });
+        logger.warning('support_report.github_failed', { reportId: id, error: e instanceof Error ? e.message : String(e) });
+        return NextResponse.json({ error: 'The issue could not be created', code: 'github_failed' }, { status: 502 });
+      }
+    });
   });
 }

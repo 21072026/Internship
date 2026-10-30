@@ -2,11 +2,13 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { disconnect as disconnectGoogleCalendar } from '@/lib/googleCalendarClient';
+import { disconnectMicrosoft as disconnectMicrosoftCalendar } from '@/lib/microsoftCalendarClient';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
 import { forgetQueuedMail } from '@/lib/mailOutbox';
 import { forgetOutboundDrafts } from '@/lib/outboundDrafts';
+import { stampContactProofsErased } from '@/lib/contactPermission';
 import {
   accountlessTombstoneId,
   companyContactErasureData,
@@ -125,6 +127,12 @@ async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<u
     ...realAddresses.flatMap((address) => contactScrubOps(address, user.orgId, userId, fallbackOrgId)),
     ...(nameOnlyCompanyIds.length
       ? [
+          // Same clock as in contactScrubOps(), before the name goes: a
+          // company matched by name has no stored address, so its address-less
+          // (phone/post) proofs are this person's.
+          stampContactProofsErased(
+            erasureScoped({ companyId: { in: nameOnlyCompanyIds }, address: null }, user.orgId, fallbackOrgId),
+          ),
           prisma.company.updateMany({
             where: erasureScoped({ id: { in: nameOnlyCompanyIds } }, user.orgId, fallbackOrgId),
             data: companyContactErasureData(),
@@ -293,8 +301,22 @@ function contactScrubOps(
   Prisma.PrismaPromise<Prisma.BatchPayload>,
   Prisma.PrismaPromise<Prisma.BatchPayload>,
   Prisma.PrismaPromise<Prisma.BatchPayload>,
+  Prisma.PrismaPromise<Prisma.BatchPayload>,
 ] {
   return [
+    // FIRST, while `Company.contactEmail` still names the person: their UWG § 7
+    // proof is kept as evidence (#2098), and this stamp starts its clock — the
+    // `contactPermissionProof` retention entry deletes it three years after the
+    // end of this year. A row is theirs when it was established for their
+    // address, or carries no address (phone/post) on the company they are the
+    // contact of. The first erasure's date wins; a re-run does not restart it.
+    stampContactProofsErased(
+      erasureScoped(
+        { OR: [{ address: email }, { address: null, company: { contactEmail: email } }] },
+        subjectOrgId,
+        fallbackOrgId,
+      ),
+    ),
     prisma.companyInquiry.updateMany({
       where: erasureScoped({ email }, subjectOrgId, fallbackOrgId),
       data: inquiryErasureData(tombstoneId),
@@ -332,7 +354,7 @@ export async function forgetCompanyContact(
   const fallbackOrgId = await defaultOrgId();
   const address = normalizeContactEmail(email);
   const profileData = await externalProfileDataErasureOps({ orgId: erasureOrgId(orgId, fallbackOrgId), emails: [address] });
-  const [inquiries, companies, contacts] = await prisma.$transaction([
+  const [, inquiries, companies, contacts] = await prisma.$transaction([
     ...contactScrubOps(address, orgId, accountlessTombstoneId(randomId), fallbackOrgId),
     // The pull connector's profile of this address: a tombstone, so the next
     // sync does not write the contact straight back onto the account.
@@ -400,8 +422,8 @@ export async function forgetCompanyContact(
 //     them in a free-standing note (#2098). Reachable only by full-text search,
 //     and a search is not a key: it finds namesakes and misses a paraphrase,
 //     and running one across private notes would itself read text nobody
-//     asked the author to share. Not reached, by decision — the privacy notice
-//     must say so (the wording is the rights holder's, not code's).
+//     asked the author to share. Not reached, by decision — and the privacy
+//     notice says so (`privacy.erasureScope`, the rights holder's wording).
 //   - `Meeting.meetLink`: a room URL, not personal data; sanitize-db drops it
 //     only so a preview link cannot open a live room.
 //   - `MenteeOnboarding.steps` and `Announcement`: checklist state and org-wide
@@ -426,9 +448,16 @@ export async function forgetCompanyContact(
 //   - the roster-feed run log (`RosterRowResult.key/message`, `RosterRun.absentKeys`)
 //     is not free text but names the person by key: forgotten by `rosterLogOps()`
 //     on both paths, and bounded by the `rosterRowResult` retention entry (90 days).
-//   - company-side proof and bookkeeping: `ContactPermission.reason` (the
-//     UWG § 7 basis on the company record) and an affiliate partner's payout
-//     details. How long a proof outlives the person is the rights holder's call.
+//   - company-side proof and bookkeeping, KEPT for a fixed period and then
+//     removed by the retention sweep (the rights holder's decision, #2098; the
+//     rule and its legal anchors in src/lib/erasureRetentionRule.ts):
+//       · `ContactPermission` (`reason` and the rest of the UWG § 7 proof) —
+//         stamped `subjectErasedAt` here, the row deleted three years after the
+//         end of the erasure's calendar year (`contactPermissionProof`);
+//       · `AffiliatePartner.payoutDetailsCipher` (IBAN, account holder) —
+//         stamped `accountErasedAt` here, cleared ten years after the end of
+//         the year the relationship ended: the latest of the erasure, the
+//         termination and the last payout (`affiliatePayoutDetails`).
 //   - the suppression list (`EmailSuppression`, `EmailDeliveryEvent.detail`):
 //     erasing it would mail a bounced/complaining address again.
 // A new `@db.Text` column about a person belongs in BOTH lists — here and in
@@ -483,7 +512,11 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.messageTemplate.deleteMany({ where: { ownerId: userId } }),
     // The mentee's own words in their self-serve mentorship request, and the
     // reason they gave when asking for a different mentor (#2098).
-    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null } }),
+    // `cancelReason` (#1775) is what an admin wrote ABOUT this person's request — scrubbed with the rest.
+    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null, cancelReason: null } }),
+    // A mentor's own words in a Mentor Offer (#1809), written to a mentee: about
+    // the mentee when the mentee is erased, the mentor's text when the mentor is.
+    prisma.mentorOffer.updateMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] }, data: { message: null } }),
     // Their own bell. A hard delete cascades it; anonymise used to keep every
     // rendered sentence ("Ayşe sent you a message", with the link) under a row
     // that claimed to be anonymous. Theirs alone, so deleted (#2106).
@@ -533,7 +566,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
       data: { title: '', cancelReason: null },
     }),
     prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
-    prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
+    // The frozen letter names them and states their pay; the click-to-accept
+    // record is their IP and browser (#1857).
+    prisma.offer.updateMany({
+      where: asSubject,
+      data: { compensationNote: null, declineNote: null, letterSnapshot: null, acceptedIp: null, acceptedUserAgent: null },
+    }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
@@ -566,6 +604,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.candidateOutreach.updateMany({ where: { menteeId: userId }, data: { firstMessage: null } }),
     prisma.matchFeedback.updateMany({ where: { menteeId: userId }, data: { reasonNote: null } }),
     prisma.placement.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    //   - the matching round's proposal note and the recorded match decision's
+    //     "why this mentor" (#1793): prose about a pairing, so it goes when
+    //     either side of the pair is erased; the proposal and decision rows,
+    //     their state and scores stay.
+    prisma.matchProposal.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
+    prisma.matchDecision.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
     //   - the session agenda of their relation (required column → emptied).
     prisma.sessionAgendaItem.updateMany({ where: { agenda: asSubject }, data: { text: '' } }),
   ];
@@ -580,6 +624,20 @@ async function openTextArtifactOps(userId: string) {
   if (!user) return [];
   const orgId = user.orgId ?? (await defaultOrgId());
   return [prisma.aiArtifact.deleteMany({ where: { orgId, subjectUserId: null, taskId: { in: [...OPEN_TEXT_TASKS] } } })];
+}
+
+/**
+ * An affiliate partner's payout details (IBAN, account holder) are KEPT by an
+ * erasure, for the bookkeeping duty (#2098). This stamp is when the account
+ * went; the `affiliatePayoutDetails` retention entry clears the details ten
+ * years after the end of the year of the last of this, the termination and
+ * the last payout (src/lib/erasureRetentionRule.ts). The first erasure wins.
+ */
+function affiliatePayoutStampOp(userId: string) {
+  return prisma.affiliatePartner.updateMany({
+    where: { userId, accountErasedAt: null },
+    data: { accountErasedAt: new Date() },
+  });
 }
 
 export async function hardDeleteUser(userId: string): Promise<void> {
@@ -597,6 +655,9 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // mode (an FK that neither cascades nor is detached).
   await prisma.$transaction([
     ...scrubFreeTextOps(userId, new Date()),
+    // Before the delete SetNulls `AffiliatePartner.userId` and the row stops
+    // pointing at anyone (#2098) — see affiliatePayoutStampOp().
+    affiliatePayoutStampOp(userId),
     ...companyContact,
     ...openText,
     ...rosterLog,
@@ -612,10 +673,13 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // support ticket failed with an opaque FK error.
   await prisma.supportTicket.updateMany({ where: { assignedAdminId: userId }, data: { assignedAdminId: null } });
   await prisma.mentorshipRequest.updateMany({ where: { decidedById: userId }, data: { decidedById: null } });
+  await prisma.mentorshipRequest.updateMany({ where: { cancelledById: userId }, data: { cancelledById: null } });
   await prisma.project.updateMany({ where: { ownerUserId: userId }, data: { ownerUserId: null } });
   // Revoked at Google first (#2098): the cascade would drop our copy of the
   // token but leave the grant live on the person's Google account.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
   await prisma.user.delete({ where: { id: userId } });
 }
 
@@ -637,6 +701,10 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // delete cascades them; anonymise keeps the user row, so they went nowhere
     // until the housekeeping purge (#2098).
     prisma.signInDevice.deleteMany({ where: { userId } }),
+    // Who they are in a chat workspace (#1937): a chat member id and display
+    // name. A hard delete cascades them; anonymise keeps the user row, and a
+    // linked identity would keep delivering to a person who is gone.
+    prisma.chatIdentity.deleteMany({ where: { userId } }),
     // The remember-me rows carry the same two columns. They are revoked below
     // (outside this transaction, through the one revoker), not deleted: a
     // revoked row is what turns a replayed cookie into a refusal.
@@ -646,6 +714,10 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // What an AI wrote about the person (#2044): the row stays, the person's
     // data does not. A hard delete takes these with the cascade.
     prisma.aiArtifact.deleteMany({ where: { subjectUserId: userId } }),
+    // Their fit scores against requisitions (#2042): a breakdown of them and a
+    // written sentence about them. A hard delete cascades these; the record of
+    // a ranking about a person who is gone explains nothing to anyone.
+    prisma.requisitionFit.deleteMany({ where: { menteeId: userId } }),
     prisma.avatarFile.deleteMany({ where: { userId } }),
     prisma.document.deleteMany({ where: { ownerId: userId } }),
     // The canonical twin of `skills`/`skillLevels` below (#1818/#1822): the
@@ -659,6 +731,7 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // The enquiry they sent and the company they are the contact of: the
     // person goes, the company and its history stay.
     ...companyContact,
+    affiliatePayoutStampOp(userId),
     // Revoke consents — nothing left to process on their behalf.
     prisma.userConsent.updateMany({ where: { userId }, data: { revokedAt: new Date() } }),
     // And any outstanding password link. A hard delete takes these through the
@@ -717,4 +790,6 @@ export async function anonymizeUser(userId: string): Promise<void> {
   // cascaded it — an erased account kept OAuth tokens to the person's own
   // Google calendar. Revoked at Google, then forgotten here.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
 }

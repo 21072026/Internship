@@ -114,8 +114,8 @@ export async function providerBusy(userIds: string[], from: Date, to: Date): Pro
   if (!isGoogleCalendarEnabled() || userIds.length === 0 || to <= from) return out;
   const qFrom = new Date(Math.floor(from.getTime() / QUANTUM_MS) * QUANTUM_MS);
   const qTo = new Date(Math.ceil(to.getTime() / QUANTUM_MS) * QUANTUM_MS);
-  const connections = await prisma.googleCalendarConnection.findMany({
-    where: { userId: { in: [...new Set(userIds)] } },
+  const connections = await prisma.calendarConnection.findMany({
+    where: { provider: 'GOOGLE', userId: { in: [...new Set(userIds)] } },
     select: { userId: true, scope: true },
   });
   const eligible = connections.filter((c) => scopeAllowsFreeBusy(c.scope)).map((c) => c.userId);

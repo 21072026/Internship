@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**The data-processing pack (#2029).** `docs/legal/dpa-template.md` (Art. 28 template; Annex II → security overview, Annex III → the subprocessor register, never duplicated), `docs/legal/dpa-annex-sccs.md` (transfer basis per non-EEA subprocessor), `docs/legal/ropa.md` (Art. 30 record; every retention figure cites its constant or retention key), `docs/legal/dpia-starter.md` (AI CV reading and the requisition fit ranking flagged as high-risk, #2016) and `docs/trust/data-lifecycle.md` (retention, personal export, account erasure, org export/archive/hard delete). `/trust` gains a \"Data processing documents\" section (EN/TR/DE headings); `e2e/trust-page.spec.ts` checks every link names a file in the tree. `docs/legal/README.md`: a new subprocessor or processing purpose updates the register and the ROPA in the same PR.",
+  "notes": {
+    "en": ["The trust page now offers a data processing agreement template, the record of processing activities, a DPIA starter and a plain description of how long data is kept and how it is exported and deleted."],
+    "tr": ["Güven sayfası artık bir veri işleme sözleşmesi şablonu, işleme faaliyetleri kaydı, bir etki değerlendirmesi başlangıcı ve verinin ne kadar saklandığını, nasıl dışa aktarılıp silindiğini anlatan bir açıklama sunuyor."],
+    "de": ["Die Trust-Seite bietet jetzt eine Vorlage für den Auftragsverarbeitungsvertrag, das Verzeichnis von Verarbeitungstätigkeiten, eine Ausgangsbasis für die Datenschutz-Folgenabschätzung und eine klare Beschreibung, wie lange Daten aufbewahrt und wie sie exportiert und gelöscht werden."]
+  }
+}

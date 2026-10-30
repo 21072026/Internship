@@ -36,11 +36,18 @@ import type { Locale } from '@/i18n/config';
  */
 export function PublicHeader({
   showRegister = true,
+  showSignup = false,
   dashboardHref,
   hideInternshipLinks = false,
   urlLocale = null,
 }: {
   showRegister?: boolean;
+  /**
+   * Self-serve tenant signup is on (#1751, SELF_SERVE_SIGNUP read by
+   * PublicShell on the server): adds the "Start free" link to /signup. Cosmetic
+   * — the endpoint is the control.
+   */
+  showSignup?: boolean;
   /** Set when the visitor is signed in — the route to their own dashboard. */
   dashboardHref?: string;
   /**
@@ -189,6 +196,15 @@ export function PublicHeader({
                 >
                   {n.signIn}
                 </Link>
+                {showSignup && (
+                  <Link
+                    href="/signup"
+                    data-testid="public-nav-start-free"
+                    className="hidden lg:inline text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 whitespace-nowrap transition-colors"
+                  >
+                    {n.startFree}
+                  </Link>
+                )}
                 {showRegister && (
                   <Link
                     href="/auth/register"
@@ -259,6 +275,11 @@ export function PublicHeader({
                   >
                     {n.signIn}
                   </Link>
+                  {showSignup && (
+                    <Link href="/signup" className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                      {n.startFree}
+                    </Link>
+                  )}
                   {showRegister && (
                     <Link
                       href="/auth/register"

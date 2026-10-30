@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { createImpersonationGrant } from '@/lib/impersonation';
@@ -10,6 +8,7 @@ import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { worldOfOrg } from '@/lib/userWorld';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({ targetUserId: z.string().min(1), reason: z.string().max(300).optional() });
 
@@ -17,10 +16,9 @@ const schema = z.object({ targetUserId: z.string().min(1), reason: z.string().ma
 // (non-impersonating) admin, audits it, and returns a single-use grant the
 // client hands to signIn('impersonate').
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN' || session.user.impersonatorId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.impersonate', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
+import { requirePermission } from '@/lib/authz';
 import type { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
-import { getServerSession } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
@@ -13,14 +12,10 @@ import { WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
 import { integrationsLocked } from '@/lib/integrationsGate';
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const webhooks = await prisma.webhook.findMany({
     // Scoped to the acting tenant (#2357): the middleware is advisory until
     // MT_ENFORCE_ISOLATION, so a tenant admin must not list another tenant's
@@ -32,6 +27,8 @@ export async function GET() {
       // Delivery health (#1695): the integrations page shows an auto-disabled
       // hook with its reason and a re-enable button.
       consecutiveFailures: true, lastSuccessAt: true, disabledAt: true, disabledReason: true,
+      // A company's self-served hook (#2006): the admin sees whose it is.
+      company: { select: { id: true, name: true } },
     },
   });
   return NextResponse.json({ webhooks, eventTypes: WEBHOOK_EVENTS });
@@ -43,8 +40,9 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // A new subscription is the paid feature (#1744).
   const locked = await integrationsLocked(session);
   if (locked) return locked;
@@ -96,8 +94,9 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const parsed = patchSchema.safeParse(await request.json());
   // Every field is optional, so an empty body parses — reject it rather than
@@ -164,8 +163,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const before = await prisma.webhook.findFirst({
     where: { id, orgId: resolveOrgId(session) },

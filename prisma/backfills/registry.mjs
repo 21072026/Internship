@@ -81,6 +81,7 @@ export const BACKFILLS = [
   },
   // CompanyNeed → Requisition (#1385). Never actually ran before #1540: the
   // script was not in the image.
+  // Since #1875 this also re-points a converted twin instead of duplicating it.
   { id: '0012-requisitions', script: 'scripts/backfill-requisitions.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
   // One Application per CompanyInterest that names a requisition (#1828).
   // Only ever adds rows. Same image gap as the line above.
@@ -149,5 +150,16 @@ export const BACKFILLS = [
     once: true,
     optional: true,
     why: 'A derived convenience column: a failed fill leaves relations exactly as before #1640, so it must not block a deploy.',
+  },
+  // Google calendar connections and event links into the provider-neutral
+  // tables (#1989, expand). ONCE: after the switch a disconnect deletes only the
+  // new row, so re-copying the old one every deploy would reconnect the person.
+  // Insert-only and never touches the old tables, which stay as the rollback.
+  {
+    id: '0035-calendar-connections',
+    script: 'prisma/backfill-calendar-connections.mjs',
+    once: true,
+    optional: true,
+    why: 'Copies into new tables only; a failure leaves the old Google tables intact and is visible in the ledger, and the code reads the new tables, so a failed copy shows as "not connected" (reconnect repairs it) rather than a broken deploy.',
   },
 ];

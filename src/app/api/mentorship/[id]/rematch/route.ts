@@ -1,3 +1,4 @@
+import { requestExpiresAt } from '@/lib/requestExpiryRule';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
@@ -96,7 +97,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const [openRematch, latest] = await Promise.all([
       prisma.mentorshipRequest.findFirst({
-        where: { replacesRelationId: relation.id, status: 'PENDING' },
+        // One past its expiry no longer blocks a new one (#1775).
+        where: { replacesRelationId: relation.id, status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
         select: { id: true },
       }),
       prisma.mentorshipRequest.findFirst({
@@ -162,6 +164,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         rematchReason: parsed.data.reason,
         rematchNote: note,
         preferredMentorId,
+        expiresAt: requestExpiresAt(new Date()),
       },
       select: { id: true, status: true, createdAt: true },
     });

@@ -18,7 +18,9 @@ import {
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
 import { Prisma } from '@prisma/client';
-import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
+import { ENDED_REMATCHED, effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
+import { recordMatchDecision } from '@/lib/matching/decision';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -41,7 +43,10 @@ export interface DecisionResult {
 
 export async function decideMentorshipRequest(opts: {
   requestId: string;
-  action: 'approve' | 'reject';
+  action: 'approve' | 'reject' | 'cancel';
+  // Cancel only (#1775): why the programme withdrew the request. Required, and
+  // shown to the mentee — it is the one thing they are owed.
+  reason?: string;
   // The mentor the approved relation is created with (approve only).
   mentorId?: string;
   actorId: string;
@@ -50,8 +55,13 @@ export async function decideMentorshipRequest(opts: {
   // caller may not touch it (server-side authorization, not a UI filter).
   restrictToPreferredMentorId?: string;
   request?: Request;
+  // The audit record (#1789): the suggestion batch the decider was shown and
+  // their note. Both optional; the record is written either way.
+  suggestionBatchId?: string;
+  decisionNote?: string;
+  locale?: string;
 }): Promise<DecisionResult> {
-  const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request } = opts;
+  const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request, reason } = opts;
 
   const req = await prisma.mentorshipRequest.findUnique({
     where: { id: requestId },
@@ -69,6 +79,8 @@ export async function decideMentorshipRequest(opts: {
         select: {
           id: true,
           status: true,
+          lifecycleState: true,
+          orgId: true,
           mentor: {
             select: {
               id: true,
@@ -102,6 +114,33 @@ export async function decideMentorshipRequest(opts: {
   }
   if (req.status !== 'PENDING') {
     return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
+  }
+
+  if (action === 'cancel') {
+    // An administrator's act only: a mentor declines (reject), never cancels.
+    if (restrictToPreferredMentorId) return { status: 404, body: { error: 'Not found' } };
+    const why = (reason ?? '').trim();
+    if (!why) return { status: 400, body: { error: 'A reason is required to cancel', code: 'reason_required' } };
+    // Guarded on PENDING: the expiry sweep or another admin may have got there
+    // first; the loser changes nothing and says so.
+    const cancelled = await prisma.mentorshipRequest.updateMany({
+      where: { id: req.id, status: 'PENDING' },
+      data: { status: 'CANCELLED', cancelledById: actorId, cancelReason: why.slice(0, 500), decidedAt: new Date() },
+    });
+    if (cancelled.count !== 1) {
+      return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
+    }
+    await logActivity({
+      action: 'mentorship_request.cancelled',
+      actorId,
+      actorEmail: actorEmail ?? null,
+      targetType: 'mentorship_request',
+      targetId: req.id,
+      detail: req.replacesRelationId ? `cancelled · re-match · relation ${req.replacesRelationId}` : 'cancelled',
+      request,
+    });
+    await notify(req.menteeId, 'mentorship_request.cancelled', { reason: why.slice(0, 500) }, '/portal');
+    return { status: 200, body: { ok: true } };
   }
 
   if (action === 'approve') {
@@ -225,6 +264,30 @@ export async function decideMentorshipRequest(opts: {
         return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
       }
       throw e;
+    }
+    // The per-pairing audit record (#1789), after the commit — it never throws.
+    // The mentor's own accept is MENTOR_ACCEPT; an admin approving the mentor
+    // the mentee asked for is MENTEE_PREFERENCE; any other approval is
+    // REQUEST_APPROVAL.
+    await recordMatchDecision({
+      orgId: relation.orgId,
+      relationId: relation.id,
+      menteeId: req.menteeId,
+      mentorId,
+      requestId: req.id,
+      source: restrictToPreferredMentorId
+        ? 'MENTOR_ACCEPT'
+        : req.preferredMentorId === mentorId
+          ? 'MENTEE_PREFERENCE'
+          : 'REQUEST_APPROVAL',
+      decidedById: actorId,
+      suggestionBatchId: opts.suggestionBatchId ?? null,
+      note: opts.decisionNote ?? null,
+      locale: opts.locale,
+    });
+    // The replaced pairing ended as a re-match (#1998), after the commit.
+    if (replaced) {
+      await raiseLifecycleChanged({ relationId: replaced.id, orgId: replaced.orgId, from: effectiveLifecycleState(replaced), to: ENDED_REMATCHED, reasonCode: null, actorId });
     }
     await notify(
       req.menteeId,

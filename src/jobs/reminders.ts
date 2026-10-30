@@ -16,13 +16,16 @@
 //   reminders.stageDeadline      — `deadlineReminderSentAt` + mail dedupeKey.
 //   reminders.retentionReconsent — `retentionReminderSentAt`.
 //   matching.needMatchAlerts     — createMany(skipDuplicates) on the alert rows.
+//   requests.expirySweep         — guarded updateMany on PENDING / nudgeSentAt null (#1775).
 import { registerJob } from '@/lib/jobs/registry';
 import { dormancySweepHandler } from './dormancyChain';
 import { counters, SWEEP_OPTS } from './summary';
 import { enqueue } from '@/lib/jobs/queue';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { sweepMentorOffers } from '@/lib/mentorOffers';
+import { sweepMentorshipRequests } from '@/lib/requestExpiry';
 import {
-  checkCompanyNeedMatches,
+  checkRequisitionMatches,
   checkMentorInteractionReminders,
   checkRetentionReminders,
   checkStageDeadlineReminders,
@@ -42,5 +45,9 @@ export function registerReminderJobs(): void {
   registerJob('reminders.mentorInteraction', async () => counters(await checkMentorInteractionReminders()), SWEEP_OPTS);
   registerJob('reminders.stageDeadline', async () => counters(await checkStageDeadlineReminders()), SWEEP_OPTS);
   registerJob('reminders.retentionReconsent', async () => counters(await checkRetentionReminders()), SWEEP_OPTS);
-  registerJob('matching.needMatchAlerts', async () => counters(await checkCompanyNeedMatches()), SWEEP_OPTS);
+  registerJob('requests.expirySweep', async () => counters(await sweepMentorshipRequests()), SWEEP_OPTS);
+  registerJob('matching.needMatchAlerts', async () => counters(await checkRequisitionMatches()), SWEEP_OPTS);
+  // A rerun expires nothing new and reminds nobody twice: the reminder is claimed
+  // by a conditional update on `remindedAt: null` (src/lib/mentorOffers.ts).
+  registerJob('mentorOffers.sweep', async () => counters(await sweepMentorOffers()), SWEEP_OPTS);
 }

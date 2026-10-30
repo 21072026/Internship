@@ -160,6 +160,32 @@ test('offer create and draft edit validate requisitions and allow an optional cl
   }
 });
 
+// WCAG 3.3.7 Redundant Entry (#2864): picking a requisition first carries its
+// title into the empty Position field, and never overwrites one already typed.
+test('the offer wizard takes the position from the chosen requisition', async ({ page }) => {
+  const s = await seedScenario('reqprefill');
+  try {
+    const req = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Prefill Backend Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
+    await page.goto(`/admin/candidates/${s.mentee.id}`);
+    await page.getByTestId('offer-create-button').click();
+    const modal = page.getByTestId('offer-wizard-modal');
+    const position = modal.getByLabel('Position');
+    await expect(position).toHaveValue('');
+    const select = modal.getByTestId('offer-requisition-select');
+    await expect(select.locator('option')).toHaveText(['No requisition', req.title]);
+    await select.selectOption(req.id);
+    await expect(position).toHaveValue(req.title);
+
+    await position.fill('Typed by hand');
+    await select.selectOption('');
+    await select.selectOption(req.id);
+    await expect(position).toHaveValue('Typed by hand');
+  } finally {
+    await s.cleanup();
+  }
+});
+
 test('mentee declines an offer with a reason and sees a persistent declined state', async ({ page }) => {
   const s = await seedScenario('decl');
   try {
@@ -401,6 +427,12 @@ test('the expiry cron transitions a due offer exactly once across two runs', asy
 
     const notifications = await prisma.notification.findMany({ where: { userId: s.admin.id, type: 'offer_expired.admin' } });
     expect(notifications).toHaveLength(1);
+
+    // The cron is a writer too (#1998): one `offer.expired`, raised by the system.
+    const raised = await prisma.domainEvent.findMany({ where: { name: 'offer.expired', subjectId: offer.id } });
+    expect(raised).toHaveLength(1);
+    expect(raised[0]).toMatchObject({ actorType: 'system', actorId: null });
+    expect(raised[0].payload).toEqual({ offerId: offer.id, applicationId: null, requisitionId: null });
   } finally {
     await s.cleanup();
   }
@@ -455,6 +487,11 @@ test('accepted offers fill a requisition: once each, never past openings, and a 
     const decided = await prisma.offer.findMany({ where: { id: { in: racers.map((o) => o.id) } } });
     expect(decided.every((o) => o.status === 'ACCEPTED')).toBe(true);
     expect(decided.filter((o) => o.requisitionCountedAt !== null)).toHaveLength(2);
+    // The bus (#1998): every acceptance is announced, the requisition fills once.
+    expect(await prisma.domainEvent.count({ where: { name: 'offer.accepted', subjectId: { in: racers.map((o) => o.id) } } })).toBe(3);
+    const filledEvents = await prisma.domainEvent.findMany({ where: { name: 'requisition.filled', subjectId: req.id } });
+    expect(filledEvents).toHaveLength(1);
+    expect(racers.map((o) => o.id)).toContain((filledEvents[0].payload as { offerId: string }).offerId);
 
     // The refused count is on the record, where the admin reads the offer's history.
     const refused = decided.find((o) => o.requisitionCountedAt === null)!;

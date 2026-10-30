@@ -8,6 +8,7 @@ import { requirePortalPartner } from '@/lib/affiliatePortal';
 import { partnerCommissions } from '@/lib/affiliatePartnerView';
 import { COMMISSION_STATUSES, type CommissionStatus } from '@/lib/affiliateCommissions';
 import { formatMinorAmount } from '@/lib/money';
+import { interpolate } from '@/lib/notificationText';
 import { formatDate } from '@/lib/relativeTime';
 import { PortalPager } from '../PortalPager';
 
@@ -59,6 +60,7 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                 <tr>
                   <th className="px-4 py-2">{L.colPaymentDate}</th>
                   <th className="px-4 py-2">{L.colCustomer}</th>
+                  <th className="px-4 py-2">{L.colKind}</th>
                   <th className="px-4 py-2 text-right">{L.colPayment}</th>
                   <th className="px-4 py-2 text-right">{L.colCommission}</th>
                   <th className="px-4 py-2">{L.colDue}</th>
@@ -70,6 +72,12 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                   <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
                     <td className="px-4 py-2 whitespace-nowrap">{date(r.accruedAt)}</td>
                     <td className="px-4 py-2 font-mono">{r.customerRef}</td>
+                    <td className="px-4 py-2 whitespace-nowrap" data-testid="affiliate-commission-kind">
+                      {L[`kind${r.kind}`]}
+                      {r.planVersion > 0 && (
+                        <span className="ml-1 text-gray-500">({interpolate(L.planVersionShort, { n: String(r.planVersion) })})</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{formatMinorAmount(r.paymentAmountMinor, r.currency, locale)}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap font-medium">{formatMinorAmount(r.amountMinor, r.currency, locale)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{date(r.dueAt)}</td>

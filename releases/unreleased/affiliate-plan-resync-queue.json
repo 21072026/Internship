@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate plan save no longer waits for every partner (#3170):** `savePlan()` commits the plan with a QUEUED `AffiliateProgramSettings.planResync` state (new nullable JSON column) and enqueues `affiliate.planResync` (keyed `<org>:<version>`, 5 attempts). The handler (`src/lib/affiliatePlanResync.ts`, rules pure in `affiliatePlanResyncRule.ts`, unit-tested) re-evaluates partners in id-ordered batches of 100 through the one writer, checkpoints a cursor after each batch, retries busy partners on the next attempt (backoff), ends INCOMPLETE on the last, and stops when a newer plan version took over (every state write is guarded on `planVersion`). The PUT now answers `{ changed, planVersion, resync }` instead of `partnersResynced`/`resyncFailed`/`drift`; the settings screen polls the state and shows progress and the outcome. `e2e/affiliate-plan-resync.spec.ts` covers the 60-partner request path, the resume, the retry and the supersede.",
+  "notes": {
+    "en": ["Affiliate programme: saving the commission plan is instant even for large programmes — partners are re-evaluated in the background, and the settings show the progress."],
+    "tr": ["Affiliate programı: komisyon planını kaydetmek büyük programlarda da anında biter — partnerler arka planda yeniden değerlendiriliyor, ilerleme ayarlarda görünüyor."],
+    "de": ["Partnerprogramm: Das Speichern des Provisionsplans ist auch bei großen Programmen sofort erledigt – die Partner werden im Hintergrund neu bewertet, der Fortschritt steht in den Einstellungen."]
+  }
+}

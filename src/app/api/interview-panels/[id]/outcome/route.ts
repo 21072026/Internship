@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -75,7 +76,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const role = session.user.role;
-    if (role !== 'ADMIN' && role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
+    if ('error' in gate) return gate.error;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));

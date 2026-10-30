@@ -105,6 +105,7 @@ const LEAK_WORDS: Record<string, RegExp> = {
 };
 
 const LEAK_EXEMPT: Record<string, string> = {
+  matchDecision: 'The pairing audit record (#1789): its only reader, GET /api/admin/match-decisions, refuses an org without the `mentorship` capability (requireCapability), so MatchDecisionPanel draws nothing there; the note field sits on the internship assign/approve controls.',
   portal: 'The mentee portal shell: src/app/portal/layout.tsx redirects every org without the `mentorship` capability to /account.',
   portalInsights: 'Rendered only inside /portal (see `portal`).',
   mentorAnalytics: 'Read only by the mentor shell (src/app/mentor), whose layout sends a MARKETING MENTOR to /sales.',
@@ -114,8 +115,10 @@ const LEAK_EXEMPT: Record<string, string> = {
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   migration: '/admin/migrate (#2073) — gatePage closes it, and POST /api/admin/migrate refuses (requireCapability), for an org without the `mentorship` capability.',
+  nudges: '/admin/nudges (#1686) — gatePage closes it, and every /api/admin/nudges route refuses (requireCapability), for an org without the `mentorship` capability; a nudge\'s audience is mentors and mentees by definition.',
   adminInsights: '/admin/insights (#2046) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   adminAvailability: '/admin/availability (#2005) — gatePage closes it for an org without the `mentorship` capability, and the editor reads these keys only when an admin has picked a mentor there.',
+  mentorOffers: 'Mentor Offers (#1809): read only on /mentor/offers (the mentor shell sends a MARKETING MENTOR to /sales) and in the /portal panel (the portal layout sends an org without `mentorship` to /account); every /api/mentor/offers and /api/mentee/offers route refuses such an org (requireCapability).',
   mentorLimitsImport: 'Read only by MentorLimitsImport on /admin/mentors (#1808) — gatePage closes that page, and POST /api/admin/mentors/limits/import refuses (requireCapability), for an org without the `mentorship` capability. Its column names are the CSV contract and cannot be overlaid.',
   groupEvents: '/admin|/mentor|/portal/events (#1856) — gatePage closes the three pages, and every /api/events route refuses (requireCapability), for an org without the `mentorship` capability.',
   adminMatching: '/admin/matching (#1783) — gatePage closes it, and every /api/admin/matching route refuses (requireCapability), for an org without the `mentorship` capability.',
@@ -123,6 +126,8 @@ const LEAK_EXEMPT: Record<string, string> = {
   adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   forecastCapacity: 'The capacity half of the forecast panel (#1897) — /api/admin/analytics/forecast returns `capacity: null` for an org without the `mentorship` capability, and the executive page renders these strings only when it is present.',
   evaluationDue: 'Sent only by src/lib/evaluationDue.ts, whose sweep skips every org without the `evaluations` capability — a MARKETING tenant is never reminded of an evaluation (#1891).',
+  signup: '/signup (#1751) — requireVerticalCapability(\'mentorship\') answers 404 on a vertical without the module, and POST /api/public/signup/org refuses a MARKETING host (invitation-only, #2501).',
+  firstRun: 'The /admin first-run panel (#1751) — FirstRunPanel renders only when the org has the `mentorship` capability (shellCapabilities); a MARKETING admin never sees it.',
   productTour: 'The internship landing\'s product tour (#1399): ProductTour reads it only for an INTERNSHIP host, and its screenshots show the internship product. The MARKETING tour reads `productTourMarketing`, which is deliberately not exempt.',
   // Internship-only surfaces a MARKETING org cannot reach (the bulk overlay pass).
   activityReport: '/admin/mentee-activity — gatePage closes it for an org without the `mentorship` capability; the only other reader, /mentor/mentee-activity (ActivityReportView\'s second mount), is in the mentor shell, whose layout sends a MARKETING MENTOR to /sales.',

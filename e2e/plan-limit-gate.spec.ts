@@ -80,6 +80,8 @@ test('FREE tenant is gated on new projects; existing projects are unaffected', a
   const cap = planLimits('FREE').maxProjects!;
   const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Project Cap Mentee');
   await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id } });
+  const adminEmail = uniqueEmail('projcap-admin');
+  const admin = await seedUser(adminEmail, pw, 'ADMIN', 'Project Cap Admin', org.id);
 
   try {
     // Fill the org exactly to the cap, directly — the gate is about what the
@@ -97,15 +99,18 @@ test('FREE tenant is gated on new projects; existing projects are unaffected', a
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
     const res = await page.request.post('/api/projects', { data: { name: `Cap Overflow ${stamp}` } });
-    expect(res.status()).toBe(403);
-    const body = await res.json();
-    // Its OWN code, not the relation gate's: a client that maps
-    // 'plan_limit_reached' renders a sentence about active mentorships, which
-    // would be confidently wrong here.
-    expect(body.code).toBe('project_limit_reached');
-    expect(body.limit).toBe(cap);
-    expect(body.usage).toBe(cap);
-    expect(body.plan).toBe('FREE');
+    // FREE CORE (#3270): a mentee is told only that there is no room — no plan
+    // name, no quota, no upgrade. (Staff still get `project_limit_reached`.)
+    expect(res.status()).toBe(409);
+    const text = await res.text();
+    expect(JSON.parse(text).code).toBe('project_capacity');
+    for (const forbidden of [/\bFREE\b/, /Community/, /\bplan\b/i, /upgrade/i, /€|EUR/, /"limit"|"usage"/]) {
+      expect(text, String(forbidden)).not.toMatch(forbidden);
+    }
+    // The commercial half went to the org's admin instead.
+    await expect
+      .poll(() => prisma.notification.count({ where: { userId: admin.id, type: 'plan_limit.project_held' } }))
+      .toBe(1);
 
     // Nothing was created, and nothing existing was touched.
     expect(await prisma.project.count({ where: { orgId: org.id } })).toBe(cap);
@@ -113,7 +118,9 @@ test('FREE tenant is gated on new projects; existing projects are unaffected', a
   } finally {
     await prisma.projectMember.deleteMany({ where: { project: { orgId: org.id } } });
     await prisma.project.deleteMany({ where: { orgId: org.id } });
+    await prisma.notification.deleteMany({ where: { userId: admin.id } }).catch(() => {});
     await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(adminEmail);
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });

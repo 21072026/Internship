@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can, requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -13,6 +14,8 @@ import { locales } from '@/i18n/config';
 import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
@@ -61,9 +64,13 @@ const ALLOWED_ROLES: Record<string, ReadonlyArray<'MENTOR' | 'MENTEE' | 'ADMIN'>
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const allowed = session ? ALLOWED_ROLES[session.user.role] : undefined;
-    if (!session || !allowed) {
+    // MENTOR and MENTEE invite on their role; an admin on the permission
+    // layer's `org.invite` (#1571). Anyone else was never admitted.
+    const gate = await requireRoleOrPermission(['MENTOR', 'MENTEE'], 'org.invite', { request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
+    const allowed = admin ? ALLOWED_ROLES.ADMIN : ALLOWED_ROLES[session.user.role];
+    if (!allowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // A MENTOR or MENTEE invitation is the mentorship module's self-serve path
@@ -71,7 +78,7 @@ export async function POST(request: Request) {
     // `mentorship` — a MARKETING sales rep is a MENTOR (#2580) — invites nobody:
     // bringing people into the tenant stays an ADMIN act there. INTERNSHIP
     // carries the module, so this is a no-op for it.
-    if (session.user.role !== 'ADMIN') {
+    if (!admin) {
       const denied = await requireCapability(session.user.orgId, 'mentorship');
       if (denied) return denied;
     }
@@ -101,7 +108,7 @@ export async function POST(request: Request) {
       let menteeId: string | null = null;
       if (session.user.role === 'MENTOR' && role === 'MENTEE') {
         mentorId = session.user.id;
-      } else if (session.user.role === 'ADMIN') {
+      } else if (admin) {
         mentorId = parsed.data.mentorId || null;
         menteeId = parsed.data.menteeId || null;
       }
@@ -143,7 +150,7 @@ export async function POST(request: Request) {
       // A mentee invite may name a mentor; a mentor invite may name a mentee.
       if (role === 'MENTEE') menteeId = null;
       if (role === 'MENTOR') mentorId = null;
-      if (role === 'ADMIN') { mentorId = null; menteeId = null; }
+      if (parsed.data.role === 'ADMIN') { mentorId = null; menteeId = null; }
 
       // Back door (#419): pre-linking a mentee is what creates the relation at
       // registration (register/route.ts), so the 409 POST /api/mentorship gives
@@ -206,6 +213,14 @@ export async function POST(request: Request) {
         }
       }
 
+      // The admin-seat quota (#1752). ADMIN only, on purpose: inviting a MENTOR
+      // or a MENTEE is the free core and is never checked or counted — do not
+      // widen this condition. An open ADMIN invitation holds a seat.
+      if (takesAdminSeat(role)) {
+        const seats = await enforceQuota(resolveOrgId(session), 'ADMIN_SEATS', { pendingAdminInvites: true });
+        if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
+      }
+
       // Shared with the bulk endpoint (#2070) so the token, the tenant, the
       // auto-pairing pointers and the mail template have exactly one
       // implementation. A failed send is reported, never fatal: the token is
@@ -261,6 +276,9 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // "Admin" is the permission layer's answer (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'user.read', undefined, session));
 
     return await withTenantScope(session, async () => {
       // Admins audit every invitation OF THEIR ORG; everyone else sees the ones
@@ -269,7 +287,7 @@ export async function GET() {
       // every tenant's invitations — addresses and inviters included.
       const tenant = await tenantWhere(session);
       const invitations = await prisma.invitationToken.findMany({
-        where: withinTenant(session.user.role === 'ADMIN' ? {} : { invitedById: session.user.id }, tenant),
+        where: withinTenant(isAdmin ? {} : { invitedById: session.user.id }, tenant),
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,

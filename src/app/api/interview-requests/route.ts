@@ -4,14 +4,16 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { createInterviewRequestSchema, interviewActiveKey } from '@/lib/interviewRequests';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'COMPANY', 'MENTOR'].includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['COMPANY', 'MENTOR'], 'company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (session.user.role === 'COMPANY' && !session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
@@ -95,6 +97,11 @@ export async function POST(request: Request) {
       const created = await prisma.interviewRequest.create({
         data: { requisitionId, menteeId, companyId: session.user.companyId!, orgId, note: note || null, proposedSlots: proposedSlots ?? undefined, activeKey: interviewActiveKey(requisitionId, menteeId) },
       });
+      await emit(
+        'interview_request.created',
+        { requestId: created.id, requisitionId, menteeId, companyId: created.companyId },
+        { orgId, actor: { id: session.user.id, type: 'user' } },
+      );
       return NextResponse.json({ request: created }, { status: 201 });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return NextResponse.json({ error: 'A pending request already exists', code: 'already_pending' }, { status: 409 });

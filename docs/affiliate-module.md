@@ -37,7 +37,7 @@ whole organisation. The screens tell such an admin so instead of failing. **The 
 decision for the first release; the engine is currency-agnostic and widening is
 the one list `AFFILIATE_CURRENCIES`. A real plan change bumps `planVersion`, stamps
 `planEffectiveAt`, is audited (`affiliate.plan.update`) and re-evaluates every
-partner; an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
+partner on the queue (see "Re-evaluation after a plan change"); an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
 (same rule as `Offer` / `ProgramCost`). Shape:
 
 | Field | Meaning |
@@ -110,6 +110,34 @@ reconciliation.
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
 
+### Re-evaluation after a plan change (#3170)
+
+A plan save returns as soon as the plan is committed, whatever the number of
+partners. In the same transaction it writes `AffiliateProgramSettings.planResync`
+(QUEUED, for the new version), and after the commit it enqueues the job
+`affiliate.planResync` (keyed on the organisation and the version, 5 attempts).
+The job (`src/lib/affiliatePlanResync.ts`; the state rules are pure in
+`affiliatePlanResyncRule.ts`) walks the partners in id order, 100 at a time, each
+through `resyncPartnerCommissions()`. The writer is still the only code that
+touches a commission.
+
+- **Checkpoint.** After every batch the state stores the last partner done
+  (`cursor`), the counts (`total`, `done`, `failed`, `drift`), and the partners whose
+  lock was busy (`retry`, at most 500; past that, `overflow` makes the next attempt
+  walk everyone again). A rerun after a crash, a timeout or a redeploy resumes after
+  the cursor.
+- **Retries.** Partners still outstanding at the end of a pass mean the attempt
+  throws, and the worker backs off. The next attempt judges exactly the retry list.
+  On the last attempt the state ends INCOMPLETE: those partners are re-evaluated by
+  their next payment write, as the writer always does.
+- **Newer plan wins.** Every state write is guarded on the plan version. A job for an
+  older version stops at its first write after a newer plan is saved.
+- **At-least-once.** A second run over a partner changes nothing and reports the
+  same drift.
+- **Visible to the admin.** The settings API returns `planResync`, and the plan card
+  follows it every 3 s while it is QUEUED, RUNNING or RETRYING. It shows the
+  progress, then the result: re-evaluated, still failing, and the drift.
+
 ## Data model
 
 All models carry `orgId` and are registered in `TENANT_MODELS`.
@@ -140,7 +168,27 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 
 `/admin/affiliates` has one sidebar entry and its own tabs:
 
-- **Settings** — the plan and the contract (above).
+- **Overview** (`src/lib/affiliateOverview.ts`, `/api/admin/affiliate/overview`,
+  #3173) — partners per state, referred customers, commission totals per status,
+  payouts and the latest one, with shortcuts to the commissions waiting for approval
+  (`/admin/affiliates/commissions?status=PENDING`) and to the approved ones to pay.
+  The totals are the Commissions tab's own query and the latest payout is the Payouts
+  tab's first row, so the screens cannot disagree. Six aggregate queries whatever the
+  programme's size (an e2e counts them at 1 and 25 partners). While the plan, the
+  contract or the first partner is missing it shows those setup steps.
+  `affiliate.read` (OBSERVER included).
+- **Settings** — the plan and the contract (above), the referral base URL, and the
+  **public programme page's content** (#3359): `AffiliateProgramSettings.landing`,
+  written only by `saveLanding()` through `PUT /api/admin/affiliate/settings/landing`.
+  The rule is pure in `src/lib/affiliateLandingRule.ts`: copy per locale (EN/TR/DE,
+  plain text, bounded; up to 6 steps and 6 closing points), plus a contact phone, a
+  contact e-mail and the product's https sign-up URL, shared by every locale. Every
+  field is optional and the page falls back field by field (visitor's locale →
+  English → the rest), so a programme can launch in one language. Stored values are
+  compared in a fixed key order, so an unchanged save writes nothing; a change is
+  audited (`affiliate.landing.update`) with the locales and which contact fields are
+  set, never the texts. The wording is the organisation's data — the code carries
+  only generic labels.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
   a new partner (referral code: letters, digits, `-`, `_`, unique per organisation

@@ -13,6 +13,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
@@ -54,6 +56,8 @@ export default function InvitePage() {
   const locale = useLocale();
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  // The admin-seat quota (#1752) renders the upgrade prompt, not a sentence.
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   // Persistent list from the server (survives refresh), plus any freshly-minted
@@ -153,6 +157,7 @@ export default function InvitePage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<InviteData>({
     resolver: zodResolver(inviteSchema),
@@ -160,6 +165,14 @@ export default function InvitePage() {
     // a Turkish console, and its invitees read Turkish (#1720).
     defaultValues: { role: 'MENTEE', locale },
   });
+
+  // `?role=MENTOR` preselects the role — the first-run panel's "invite your
+  // mentors" step links here (#1751). Read once after mount rather than through
+  // useSearchParams, which would need a Suspense boundary around the page.
+  useEffect(() => {
+    const role = new URLSearchParams(window.location.search).get('role');
+    if (role === 'MENTOR' || role === 'MENTEE') setValue('role', role);
+  }, [setValue]);
 
   const watchedRole = watch('role');
 
@@ -172,6 +185,7 @@ export default function InvitePage() {
   const sendInvite = async (data: InviteData) => {
     setLoading(true);
     setError('');
+    setGate(null);
     setSuccess('');
 
     try {
@@ -198,6 +212,11 @@ export default function InvitePage() {
         // Keyed on `code`, so it stays right when the route gains other 409s.
         if (body.code === 'already_mentored') {
           setError(t.assignMentor.alreadyAssigned);
+          return;
+        }
+        const wall = parseGateBody(body);
+        if (wall) {
+          setGate(wall);
           return;
         }
         throw new Error(body.error || 'Failed to send invitation');
@@ -284,6 +303,7 @@ export default function InvitePage() {
               {error}
             </div>
           )}
+          {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-4" />}
 
           <form onSubmit={onSubmit} className="space-y-4">
             {/* Email-less invitations (#670): leaving this empty produces a link

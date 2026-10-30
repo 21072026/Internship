@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server';
+import { requirePermission } from '@/lib/authz';
 import { randomBytes } from 'crypto';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
 
 // Rotate one webhook's signing secret and return the new value once.
 // Rotation breaks the receiver's deployed verification code until it is
 // redeployed, so it stays a deliberate act of its own — editing a subscription
 // (PATCH /api/admin/webhooks) never touches the secret.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   const secret = randomBytes(24).toString('hex');
   // Scoped to the caller's tenant (#2357): rotating another tenant's signing

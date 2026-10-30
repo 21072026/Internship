@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Published API contracts are tested (#1611):** `/api/v1/openapi.json` now publishes the JSON Schema of every public webhook event's `data` under `x-webhooks.payloads` (`name@version`, generated from the domain-event catalogue by `src/lib/events/payloadSchema.ts`) and documents the full delivery envelope and headers. `e2e/api-v1-response-contract.spec.ts` (`@smoke`) validates every GET operation's live response against its published 200 schema in both directions (no missing required field, no undocumented field); `scripts/test/webhook-contract.test.mjs` pins every payload to a committed fixture and asserts the `X-Signature` HMAC of the delivered body. A breaking change is a new version — `docs/public-api.md` § Published contracts."
+}

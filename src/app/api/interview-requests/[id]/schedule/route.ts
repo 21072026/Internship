@@ -7,11 +7,14 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { resolveMeetingLink, meetingLinkRefusal } from '@/lib/meetingRoom';
+import { adoptProviderEvent, discardProviderEvent } from '@/lib/conferenceGeneration';
+import { meetingEnd } from '@/lib/meetingDuration';
 import { inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { formatInTimeZone, isValidTimeZone } from '@/lib/timezone';
@@ -51,7 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const role = session.user.role;
     // A COMPANY may cancel its own request (see ../cancel) but never schedules:
     // the interview is brokered by the programme (#807).
-    if (role !== 'ADMIN' && role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
+    if ('error' in gate) return gate.error;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const parsed = scheduleInterviewRequestSchema.safeParse(await request.json().catch(() => null));
@@ -87,11 +91,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       // The room: pasted link → the organiser's saved room → a room of ours,
       // as the tenant's policy says (#2007); refused under REQUIRE_EXTERNAL.
+      const title = `Interview · ${current.requisition.title} · ${current.company.name}`;
       const resolved = await resolveMeetingLink({
         pastedLink: meetLink,
         inviteeCount: 2 + (guestEmails?.length ?? 0),
         orgId: session.user.orgId,
         organizerId: session.user.id,
+        // A Meet room on the organiser's own calendar under GENERATE_PROVIDER (#2009).
+        conference: { title, start: when, end: meetingEnd(when, { durationMinutes: durationMinutes ?? null }), timeZone },
       });
       if (!resolved.ok) return meetingLinkRefusal(resolved);
 
@@ -103,7 +110,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         session.user.orgId,
       );
 
-      const title = `Interview · ${current.requisition.title} · ${current.company.name}`;
 
       // The scorecard panel (#1846), convened in the same transaction as the
       // meeting so its scheduledAt is the meeting's. Everyone on it has to be a
@@ -171,6 +177,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         });
       } catch (e) {
         if (e instanceof NotApproved) {
+          // No meeting came of it, so neither may the room made for it.
+          await discardProviderEvent(session.user.id, resolved.conference);
           return NextResponse.json({ error: 'The request changed meanwhile', code: 'not_approved' }, { status: 409 });
         }
         throw e;
@@ -200,6 +208,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // Into the calendars of whoever connected their own (#709) — organiser,
       // mentor and mentee; fire-and-forget, a third party can never fail this.
       // The panel's interviewers sit on the calendar too (#1846).
+      await adoptProviderEvent([meeting.id], resolved.conference);
       pushMeetingInBackground(meeting, [...new Set([session.user.id, relation.mentorId, current.mentee.id, ...interviewers.map((i) => i.id)])]);
 
       if (created.panelId) {

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -8,10 +7,9 @@ import { logActivity } from '@/lib/activity';
 
 // DELETE — admin removes an incorrect stage-history entry.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('pipeline.transition', { request: request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const { id } = await params;
   // StatusChange has no orgId; its tenant is its relation's. Another tenant's

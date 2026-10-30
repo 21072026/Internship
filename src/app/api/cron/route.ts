@@ -1,6 +1,5 @@
+import { sweepMentorshipRequests } from '@/lib/requestExpiry';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import {
   checkMentorInteractionReminders,
   sendMeetingReminders,
@@ -8,7 +7,7 @@ import {
   sendWeeklyMentorDigests,
   checkStageDeadlineReminders,
   checkRetentionReminders,
-  checkCompanyNeedMatches,
+  checkRequisitionMatches,
   sendWeeklyReportReminders,
   sendWeeklyMissingDocumentReminders,
   runEmailHealthCheck,
@@ -37,6 +36,7 @@ import { runSsoCertificateExpiry } from '@/lib/jobs/ssoCertificateExpiry';
 import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { enqueue } from '@/lib/jobs/queue';
 import { manualJobFor } from '@/lib/jobs/manualJobs';
+import { requirePermission } from '@/lib/authz';
 
 // The named jobs that are scoped to the CALLER's own organization (they read
 // it from the session, never from the request). Every other job — and the
@@ -48,11 +48,10 @@ const OWN_ORG_JOBS = new Set(['relation-health', 'evaluations', 'program-journey
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Running a sweep changes rows and sends mail: a write, whatever job it is.
+    const gate = await requirePermission('org.settings.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     const params = new URL(request.url).searchParams;
     const job = params.get('job');
@@ -96,6 +95,11 @@ export async function GET(request: Request) {
     // Stage service levels (#817): runnable on its own so the idempotency of
     // the overdue reminder can be exercised — and so an admin can re-run just
     // this one after fixing an SMTP problem.
+    // Mentorship-request expiry (#1775): runnable on its own so the single
+    // nudge and the guarded expiry can be exercised and re-run safely.
+    if (job === 'mentorship-requests') {
+      return NextResponse.json({ message: 'Mentorship request sweep ran', requests: await sweepMentorshipRequests() });
+    }
     if (job === 'stage-deadlines') {
       return NextResponse.json({ message: 'Stage deadline reminders ran', deadlines: await checkStageDeadlineReminders() });
     }
@@ -274,7 +278,7 @@ export async function GET(request: Request) {
       sendWeeklyMentorDigests(),
       checkStageDeadlineReminders(),
       checkRetentionReminders(),
-      checkCompanyNeedMatches(),
+      checkRequisitionMatches(),
       sendWeeklyMissingDocumentReminders(),
       expireOffers(),
       sendWeeklyReportReminders(),

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
@@ -227,6 +229,15 @@ export async function POST(request: Request) {
     // has the address. A single-world deployment gets the same 409 as before.
     if (await emailTakenInOrgWorld(email, orgId)) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+    }
+
+    // Accepting an ADMIN invitation takes an admin seat (#1752): refused when
+    // the org is already at its plan's band. ADMIN only — a MENTOR or MENTEE
+    // acceptance is the free core and is never checked or counted. The open
+    // invitation itself is not counted here (it is the seat being taken).
+    if (takesAdminSeat(role)) {
+      const seats = await enforceQuota(orgId, 'ADMIN_SEATS');
+      if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
     }
 
     // The org's password policy, then the breach screening (#1544) — the one

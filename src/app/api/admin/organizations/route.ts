@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import { seal } from '@/lib/secretBox';
 import { withoutOrgCredentials } from '@/lib/orgCredentials';
 import { logActivity } from '@/lib/activity';
 import { recordOrgWrite } from '@/lib/orgAudit';
@@ -12,7 +12,7 @@ import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingF
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
-import { validateSsoConfig, isSsoActive } from '@/lib/sso';
+import { validateSsoConfig, isSsoActive, OIDC_CLIENT_SECRET_PURPOSE } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl, sloUrl } from '@/lib/ssoSaml';
 import { certificateInfo } from '@/lib/ssoMetadata';
 import { certificateStatus } from '@/lib/ssoCertificateRule';
@@ -33,6 +33,9 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { isAccentColor } from '@/lib/accent';
 import { BRAND_ACCENT, normalizeHex, paletteIsReadable, parsePalette } from '@/lib/brandRule';
 import { invalidateBrandCache } from '@/lib/hostBrand';
+import { requirePermission } from '@/lib/authz';
+import { hardDeleteConfig } from '@/lib/orgDeletion';
+import { eligibleAt } from '@/lib/orgDeletionRule';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -59,9 +62,10 @@ function ssoCertificateSummary(pem: string | null, now: Date) {
 // vice versa; a plain tenant ADMIN sees exactly their own organisation, and
 // nothing at all when they belong to none (#1535). A tenant's OWN bill — plan,
 // active-pair meter, history — is GET /api/org/billing (#1739), not this list.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const world = await superAdminWorld(session);
   const superAdmin = world !== null;
@@ -77,7 +81,9 @@ export async function GET() {
 
   const orgs = await prisma.organization.findMany({
     where,
-    orderBy: { name: 'asc' },
+    // Archived tenants (#1582) sink to the bottom with their badge: still the
+    // operator's to export or bring back, no longer part of the working list.
+    orderBy: [{ archivedAt: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }],
     include: {
       _count: {
         select: {
@@ -114,6 +120,7 @@ export async function GET() {
   const exemptAdmins = new Map(exemptAdminRows.map((r) => [r.orgId, r._count._all]));
   const sweepable = new Map(sweepableRows.map((r) => [r.orgId, r._count._all]));
   const now = new Date();
+  const hardDelete = hardDeleteConfig();
 
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
@@ -123,6 +130,9 @@ export async function GET() {
     verticals: world ? VERTICAL_KEYS.filter((k) => orgInWorld(k, world)) : VERTICAL_KEYS,
     // The world this super admin manages (null for a tenant admin).
     world,
+    // Whether this deployment allows permanent deletion at all (#1584) — off
+    // unless TENANT_HARD_DELETE_ENABLED. Only the operator's screen reads it.
+    hardDelete: superAdmin ? hardDelete : { enabled: false, waitHours: hardDelete.waitHours },
     // Lets the admin screen hide what this account cannot use. Presentation
     // only — the checks above and below are the actual control.
     superAdmin,
@@ -157,6 +167,12 @@ export async function GET() {
           ssoLogoutUrl: o.ssoLogoutUrl,
           // Never expose the raw certificate to the list view; just whether one is set.
           ssoCertificateSet: !!o.ssoCertificate,
+          // OpenID Connect (#1926). The client secret is sealed and never leaves
+          // the server; the card learns only whether one is stored.
+          ssoClientId: o.ssoClientId,
+          ssoDiscoveryUrl: o.ssoDiscoveryUrl,
+          ssoScopes: o.ssoScopes,
+          ssoClientSecretSet: !!o.ssoClientSecretEnc,
           // The stored certificate's expiry, for the card's badge (#1933) —
           // dates and a status only, never the certificate body.
           certificate: ssoCertificateSummary(o.ssoCertificate, now),
@@ -176,6 +192,11 @@ export async function GET() {
           sessionsToEnd: sweepable.get(o.id) ?? 0,
         },
         createdAt: o.createdAt,
+        // Tenant lifecycle (#1582): set = closed (no sign-in, no mail, data kept).
+        archivedAt: o.archivedAt,
+        // Hard delete stage 1 (#1584) and when stage 2 opens.
+        deletionRequestedAt: o.deletionRequestedAt,
+        deletionEligibleAt: superAdmin ? eligibleAt(o, hardDelete.waitHours) : null,
         counts: {
           users: o._count.users,
           sources: o._count.sources,
@@ -217,11 +238,11 @@ const createSchema = z.object({
 // POST — create an organization. Creating tenants is an instance-level act, so
 // it is super-admin only (#1535).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Signed in but not an administrator: refused whatever the body carries
   // (#2065) — the wizard's extra fields add no way around this line.
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const world = await superAdminWorld(session);
   if (!world) {
     await logCrossTenantDenial(session, 'POST /api/admin/organizations', null);
@@ -303,6 +324,12 @@ const patchSchema = z.object({
   ssoCertificate: z.string().max(20000).optional(),
   // The IdP's SingleLogoutService (#1952) — part of the IdP trust, like the three above.
   ssoLogoutUrl: z.string().max(2000).optional(),
+  // OpenID Connect (#1926). `ssoClientSecret` is write-only: it arrives in the
+  // clear over TLS, is sealed before it is stored, and is never echoed back.
+  ssoClientId: z.string().max(255).optional(),
+  ssoClientSecret: z.string().max(2000).optional(),
+  ssoDiscoveryUrl: z.string().max(2000).optional(),
+  ssoScopes: z.string().max(255).optional(),
   // Enforced SSO (#1950). Separate from ssoEnabled on purpose: "our IdP works"
   // and "nothing but our IdP may work" are different promises, and only the
   // second one ends live sessions.
@@ -356,8 +383,9 @@ function isPureClear(values: (string | boolean | undefined)[]): boolean {
 // tenant ADMIN only their own. A super admin of the other world is, for this
 // org, a tenant admin of somewhere else — refused like one.
 export async function PATCH(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
@@ -365,6 +393,7 @@ export async function PATCH(request: Request) {
     id, plan, vertical, brandName, brandLogoUrl, brandColor, supportEmail,
     brandTileColor, brandAccent, brandPalette,
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
+    ssoClientId, ssoClientSecret, ssoDiscoveryUrl, ssoScopes,
   } = parsed.data;
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
@@ -480,8 +509,12 @@ export async function PATCH(request: Request) {
 
   const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
     ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined ||
-    ssoLogoutUrl !== undefined || ssoEnforced !== undefined;
-  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced]);
+    ssoLogoutUrl !== undefined || ssoEnforced !== undefined ||
+    ssoClientId !== undefined || ssoClientSecret !== undefined || ssoDiscoveryUrl !== undefined || ssoScopes !== undefined;
+  const clearsSso = isPureClear([
+    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
+    ssoClientId, ssoClientSecret, ssoDiscoveryUrl, ssoScopes,
+  ]);
   if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
   }
@@ -506,10 +539,17 @@ export async function PATCH(request: Request) {
     // Where we send a signed-out person (#1952): a tenant who could point it
     // anywhere could route every sign-out through a page of their choosing.
     [ssoLogoutUrl, existing.ssoLogoutUrl],
+    // OIDC (#1926): the client, the discovery document (which names the
+    // JWKS whose keys we trust) and the scopes are the same trust anchor.
+    [ssoClientId, existing.ssoClientId],
+    [ssoDiscoveryUrl, existing.ssoDiscoveryUrl],
+    [ssoScopes, existing.ssoScopes],
   ] as const).some(([next, current]) => {
     const value = orNull(next);
     return value !== undefined && value !== null && value !== (current ?? null);
-  });
+  // A new client secret is always a write: it is sealed, so it cannot be
+  // compared with the stored one.
+  }) || (orNull(ssoClientSecret) ?? null) !== null;
   if (setsIdpTrust && !superAdmin) {
     await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (sso trust)', id);
     return NextResponse.json(
@@ -588,6 +628,15 @@ export async function PATCH(request: Request) {
     const sep = orNull(ssoEntryPoint); if (sep !== undefined) data.ssoEntryPoint = sep;
     const sc = orNull(ssoCertificate); if (sc !== undefined) data.ssoCertificate = sc;
     const slo = orNull(ssoLogoutUrl); if (slo !== undefined) data.ssoLogoutUrl = slo;
+    const cid = orNull(ssoClientId); if (cid !== undefined) data.ssoClientId = cid;
+    const disc = orNull(ssoDiscoveryUrl); if (disc !== undefined) data.ssoDiscoveryUrl = disc;
+    const scopes = orNull(ssoScopes); if (scopes !== undefined) data.ssoScopes = scopes;
+    // Sealed before it is stored (#1926) — the plaintext never reaches the
+    // database, a log line or a response. A blank value clears it.
+    const secret = orNull(ssoClientSecret);
+    if (secret !== undefined) data.ssoClientSecretEnc = secret === null ? null : seal(secret, OIDC_CLIENT_SECRET_PURPOSE);
+    // A new discovery URL invalidates the cached IdP keys.
+    if (disc !== undefined) { data.ssoJwksCache = Prisma.DbNull; data.ssoJwksFetchedAt = null; }
 
     const effective = {
       ssoEnabled: (data.ssoEnabled as boolean | undefined) ?? existing.ssoEnabled,
@@ -596,6 +645,9 @@ export async function PATCH(request: Request) {
       ssoEntryPoint: (data.ssoEntryPoint as string | null | undefined) ?? existing.ssoEntryPoint,
       ssoCertificate: (data.ssoCertificate as string | null | undefined) ?? existing.ssoCertificate,
       ssoLogoutUrl: (data.ssoLogoutUrl as string | null | undefined) ?? existing.ssoLogoutUrl,
+      ssoClientId: 'ssoClientId' in data ? (data.ssoClientId as string | null) : existing.ssoClientId,
+      ssoClientSecretEnc: 'ssoClientSecretEnc' in data ? (data.ssoClientSecretEnc as string | null) : existing.ssoClientSecretEnc,
+      ssoDiscoveryUrl: 'ssoDiscoveryUrl' in data ? (data.ssoDiscoveryUrl as string | null) : existing.ssoDiscoveryUrl,
     };
     // The certificate is judged when this request writes one or switches SSO
     // on (#1933) — never on a switch-off or an enforcement toggle, which a
@@ -694,7 +746,8 @@ export async function PATCH(request: Request) {
     // authentication itself — warning rather than info when that is touched.
     action: 'org.updated',
     level:
-      'ssoEnabled' in data || 'ssoIssuer' in data || 'ssoEntryPoint' in data || 'ssoEnforced' in data
+      'ssoEnabled' in data || 'ssoIssuer' in data || 'ssoEntryPoint' in data || 'ssoEnforced' in data ||
+      'ssoClientId' in data || 'ssoClientSecretEnc' in data || 'ssoDiscoveryUrl' in data
         ? 'warning'
         : 'info',
     actorId: session.user.id,

@@ -1,0 +1,6 @@
+# 2026-10-29 — Provisioning quotas (#1752)
+
+- **Old issue bodies point at shapes that changed.** #1752 wanted `Company.quota` to cap placements, but #1840 had since made it the company's monthly outreach quota. #1748's `UsageEvent` ledger had been superseded by #1750's `UsageRollup` (computed metrics from their source, counters at the source). Grep the current meaning of a column before giving it a new one, and comment on the issue instead of building a second ledger.
+- **The local and CI `default` org is plan FREE** (prod backfilled it to ENTERPRISE). A new plan gate that does not fail open for the default org breaks a large part of the e2e suite and caps self-hosted AGPL installs. `enforceQuota()` exempts it explicitly.
+- **Look for existing gates that violate the free core.** The bulk invite had a `maxUsers` seat check that counted and skipped MENTEE/MENTOR rows. Bulk invite never allows ADMIN, so that whole check went.
+- **The local dev server is a flaky judge.** Every Playwright run boots a fresh `next dev`, and the cold compile pushes sign-in past the 20 s `waitForURL`. Before calling a red result a regression, re-run the single test with retries, and swap the touched files back to `origin/main` to compare on the same warm server.

@@ -16,6 +16,7 @@ import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { interviewActiveKey } from '@/lib/interviewRequests';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { capSkills } from '@/lib/skills';
+import { moveUserSkills } from '@/lib/skillLevels';
 
 export type MergeCounts = Record<string, number>;
 
@@ -240,6 +241,15 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         const moved = await tx.mentorBookingPolicy.updateMany({ where: { mentorId: duplicateId }, data: { mentorId: primaryId } });
         add(counts, 'mentorBookingPolicy', moved.count);
       }
+
+      // UserSkill @@unique([userId, skillId]) (#1815/#1822): the canonical twin
+      // of the `skills` union below. A skill only the duplicate holds moves
+      // as is; one both hold folds into the primary's row — the better-backed
+      // level wins and the duplicate's level history comes along — so a merge
+      // never loses a rating or a mentor's confirmation.
+      const skillRows = await moveUserSkills(tx, duplicateId, primaryId);
+      add(counts, 'userSkill', skillRows.moved);
+      add(counts, 'userSkill.folded', skillRows.folded);
 
       // DocumentRequirementReminder — compound unique over both user columns;
       // pure delivery-idempotency markers, colliding rows are safe to drop.
@@ -525,6 +535,8 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         ['mentorshipRequest', 'decidedById'],
         ['mentorApplication', 'decidedById'],
         ['mentorApplication', 'screenedById'],
+        ['mentorOffer', 'mentorId'],
+        ['mentorOffer', 'menteeId'],
         ['companyInquiry', 'handledById'],
         ['offer', 'createdById'],
         ['offer', 'decidedById'],

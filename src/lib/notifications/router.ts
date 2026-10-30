@@ -45,13 +45,30 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import type { Prisma } from '@prisma/client';
-import { notify as notifyInApp, type NotificationParams } from '@/lib/notify';
+import type { NotificationParams } from '@/lib/notify';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowed, isEssentialGroup } from '@/lib/emailGroups';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo } from '@/lib/shellCapabilities';
 import { chatCapableUsers, deliverChat } from '@/lib/notifications/adapters/chat';
+import { CHANNEL_ADAPTERS } from '@/lib/notifications/adapters';
+import type { SkipReason } from '@/lib/notifications/adapters/types';
+import { claimDelivery, recordSkipped, settleDelivery, type LedgerRow } from '@/lib/notifications/ledger';
+import { resolveSettingRaw } from '@/lib/settingsResolver';
+import { enqueue } from '@/lib/jobs/queue';
+import { prismaQueueStore } from '@/lib/jobs/queueStore';
+import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
+import {
+  DEFERRABLE_CHANNELS,
+  channelOffInMatrix,
+  isValidTimeZone,
+  nextOpenInstant,
+  parseBlackoutDates,
+  readChannelMap,
+  readQuietHours,
+  resolveChannels,
+  type Calendar,
+} from '@/lib/notificationChannelPrefs';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import {
   eventDef,
@@ -70,20 +87,7 @@ export { notify } from '@/lib/notify';
 export type { NotificationParams } from '@/lib/notify';
 export * from '@/lib/notifications/catalog';
 
-/** Why a delivery was not attempted. Mirrors `NotificationDelivery.skipReason`. */
-export type SkipReason =
-  | 'category_off'
-  | 'group_off'
-  | 'email_off'
-  | 'no_address'
-  | 'no_adapter'
-  | 'unknown_event'
-  | 'invalid_payload'
-  // The chat adapter's (#1939): the deployment switch is off, the person has no
-  // confirmed identity any more, or their workspace's admin disabled it.
-  | 'chat_apps_off'
-  | 'no_identity'
-  | 'workspace_disabled';
+export type { SkipReason } from '@/lib/notifications/adapters/types';
 
 /**
  * A recipient. Either a bare user id (the router reads what it needs) or a row
@@ -99,6 +103,8 @@ export interface NotifyRecipient {
   emailNotifications?: boolean | null;
   notificationPrefs?: unknown;
   orgId?: string | null;
+  /** IANA zone (#1714): the default zone of the person's quiet hours. */
+  timezone?: string | null;
 }
 
 export interface NotifyOptions {
@@ -158,158 +164,6 @@ function deliveryDedupeKey(
   return createHash('sha256').update([eventKey, userId, channel, scope].join('\u0000')).digest('hex');
 }
 
-// ── The ledger ───────────────────────────────────────────────────────────────
-
-interface LedgerRow {
-  orgId: string | null;
-  userId: string;
-  eventKey: string;
-  channel: NotificationChannel;
-  dedupeKey: string;
-}
-
-/**
- * Record a delivery that will not be attempted. Written with the same dedupe
- * key the send would have used, so a repeat of the same suppressed send does
- * not pile up rows — and so an operator reading the ledger sees one line per
- * (person, event, channel) whatever happened to it.
- */
-async function recordSkipped(row: LedgerRow, reason: SkipReason): Promise<void> {
-  try {
-    await prisma.notificationDelivery.create({
-      data: { ...row, status: 'SKIPPED', skipReason: reason },
-    });
-  } catch (e) {
-    // A duplicate here means the same suppressed send was already recorded:
-    // that is the idempotency working, not a failure worth logging loudly.
-    if (!isUniqueViolation(e)) {
-      logger.error('Failed to record skipped notification delivery', {
-        userId: row.userId,
-        eventKey: row.eventKey,
-        channel: row.channel,
-        error: String(e),
-      });
-    }
-  }
-}
-
-/**
- * Claim the right to send. Returns the row id when this call created it, and
- * `null` when an identical send already exists (or the ledger write failed —
- * see below).
- *
- * A failed claim FAILS CLOSED. If the ledger is unwritable we do not send: a
- * send whose record was lost is exactly the "did anybody actually tell them?"
- * hole this ledger exists to close, and a retry would have no way to know the
- * first attempt happened. The caller's own work has already committed either
- * way, so nothing is rolled back by declining to notify.
- */
-async function claimDelivery(row: LedgerRow): Promise<string | null> {
-  try {
-    const created = await prisma.notificationDelivery.create({ data: { ...row, status: 'QUEUED' } });
-    return created.id;
-  } catch (e) {
-    if (!isUniqueViolation(e)) {
-      logger.error('Failed to claim notification delivery', {
-        userId: row.userId,
-        eventKey: row.eventKey,
-        channel: row.channel,
-        error: String(e),
-      });
-    }
-    return null;
-  }
-}
-
-async function settleDelivery(
-  id: string,
-  status: 'SENT' | 'FAILED' | 'QUEUED' | 'SKIPPED',
-  extra?: { error?: string; templateId?: string; skipReason?: SkipReason }
-): Promise<void> {
-  try {
-    await prisma.notificationDelivery.update({
-      where: { id },
-      data: {
-        status,
-        error: extra?.error?.slice(0, 2000) ?? null,
-        templateId: extra?.templateId ?? null,
-        skipReason: extra?.skipReason ?? null,
-      },
-    });
-  } catch (e) {
-    logger.error('Failed to settle notification delivery', { id, status, error: String(e) });
-  }
-}
-
-function isUniqueViolation(e: unknown): boolean {
-  return !!e && typeof e === 'object' && (e as { code?: string }).code === 'P2002';
-}
-
-// ── Channels ─────────────────────────────────────────────────────────────────
-
-interface DeliveryContext {
-  def: NotificationEventDef;
-  recipient: Required<Pick<NotifyRecipient, 'id'>> & NotifyRecipient;
-  locale: Locale;
-  params: NotificationParams;
-  link: string;
-  orgId: string | null;
-  dedupeKey: string;
-}
-
-/**
- * The e-mail channel. It does NOT send: it enqueues, so a slow or dead SMTP
- * server can never sit inside the request that triggered the notification, and
- * a transient failure is retried by the worker instead of being lost.
- *
- * The insert is written against the `Job` table directly because the queue's
- * own `enqueue()` helper (#1671) is not in the tree yet — only the model, the
- * health counters and the dead-letter alert are. The shape is deliberately the
- * one `enqueue({ name, payload, idempotencyKey, orgId })` will take, so the day
- * that helper lands this function becomes a one-line call to it. The handler
- * that renders and sends the mail arrives with the worker; until then a row
- * here is a durable "this person is owed an e-mail", which is strictly more
- * than the nothing that was recorded before.
- *
- * WORLDS (#2590). `link` is stored RELATIVE ("/messages/…") and must stay so: it
- * is a path inside the recipient's product, not an address. Whoever renders the
- * queued mail (the worker handler this row is waiting for) must build the
- * absolute URL PER RECIPIENT from the recipient's own organization —
- * `appUrlFor(orgId)` in services/emailService.ts, the same resolver every other
- * mail uses — and never from NEXT_PUBLIC_APP_URL directly, or a marketing
- * account's notification mail opens the internship host. The row carries what
- * that needs: `userId` in the payload and `orgId` on the job itself.
- */
-async function enqueueEmail(ctx: DeliveryContext): Promise<{ ok: boolean; error?: string }> {
-  try {
-    await prisma.job.create({
-      data: {
-        name: 'notification.email',
-        payload: {
-          eventKey: ctx.def.key,
-          userId: ctx.recipient.id,
-          locale: ctx.locale,
-          params: ctx.params,
-          link: ctx.link,
-          emailGroup: ctx.def.emailGroup,
-          delivery: ctx.def.delivery,
-        } as Prisma.InputJsonValue,
-        // Prefixed so the notification namespace can never collide with another
-        // producer's key on the globally-unique column.
-        idempotencyKey: `notify:${ctx.dedupeKey}`,
-        orgId: ctx.orgId,
-      },
-    });
-    return { ok: true };
-  } catch (e) {
-    // A duplicate job for a delivery we just claimed means a previous attempt
-    // enqueued it and then failed before settling the ledger row. The mail is
-    // already owed exactly once, so this is a success, not a failure.
-    if (isUniqueViolation(e)) return { ok: true };
-    return { ok: false, error: String(e) };
-  }
-}
-
 // ── The router ───────────────────────────────────────────────────────────────
 
 const RECIPIENT_SELECT = {
@@ -320,10 +174,11 @@ const RECIPIENT_SELECT = {
   emailNotifications: true,
   notificationPrefs: true,
   orgId: true,
+  timezone: true,
 } as const;
 
 function needsHydration(r: NotifyRecipient): boolean {
-  return r.notificationPrefs === undefined || r.emailNotifications === undefined || r.role === undefined;
+  return r.notificationPrefs === undefined || r.emailNotifications === undefined || r.role === undefined || r.timezone === undefined;
 }
 
 async function hydrate(recipients: NotifyRecipient[]): Promise<Map<string, NotifyRecipient>> {
@@ -358,7 +213,7 @@ async function hydrate(recipients: NotifyRecipient[]): Promise<Map<string, Notif
  * Is this channel allowed for this recipient? The one place the preference
  * axes are combined, and it runs before anything is claimed or sent.
  */
-function channelAllowed(
+export function channelAllowed(
   def: NotificationEventDef,
   channel: NotificationChannel,
   user: NotifyRecipient
@@ -367,27 +222,122 @@ function channelAllowed(
   // twin. See MANDATORY EVENTS at the top of the file.
   if (isEssentialGroup(def.emailGroup)) return channel === 'email' && !user.email ? 'no_address' : null;
 
-  if (channel === 'inApp' || channel === 'chat') {
-    return notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)
-      ? null
-      : 'category_off';
-  }
+  // The category switch outranks everything below it: one /account toggle
+  // silences an event on every channel (#886). Then the per-category channel
+  // matrix (#1714): a channel the person switched off for this category stays
+  // off even when a caller pinned it.
+  if (!notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)) return 'category_off';
+  if (channelOffInMatrix(readChannelMap(user.notificationPrefs, NOTIFICATION_CATEGORIES), def.category, channel)) return 'channel_off';
+
+  // Push (#1715) answers to the same switches as the bell.
+  if (channel === 'inApp' || channel === 'chat' || channel === 'push') return null;
 
   if (channel === 'email') {
     if (!user.email) return 'no_address';
     if (user.emailNotifications === false) return 'email_off';
-    // Both axes, in the order a reader would expect them to apply: the coarse
-    // in-app category switch still means what it always meant (#886), and the
-    // e-mail group taxonomy (#1444) is what the footer link and the settings UI
-    // actually speak in.
-    if (!notificationCategoryAllowed({ notificationPrefs: user.notificationPrefs }, def.category)) {
-      return 'category_off';
-    }
+    // The e-mail group taxonomy (#1444) is what the footer link and the
+    // settings UI actually speak in.
     if (!emailGroupAllowed(user, def.emailGroup)) return 'group_off';
     return null;
   }
 
   return 'no_adapter';
+}
+
+// ── Quiet hours and blackout days (#1714) ───────────────────────────────────
+
+type Blackout = { dates: string[]; weekends: boolean };
+
+/** One settings read per org for a whole fan-out. */
+function blackoutMemo(): (orgId: string | null) => Promise<Blackout> {
+  const cache = new Map<string, Promise<Blackout>>();
+  return (orgId) => {
+    if (!orgId) return Promise.resolve({ dates: [], weekends: false });
+    let hit = cache.get(orgId);
+    if (!hit) {
+      hit = Promise.all([resolveSettingRaw('notificationBlackoutDates', { orgId }), resolveSettingRaw('notificationBlackoutWeekends', { orgId })])
+        .then(([dates, weekends]) => ({ dates: parseBlackoutDates(dates), weekends: weekends === 'true' }))
+        // A settings read that fails holds nothing: an outage must not silence mail.
+        .catch(() => ({ dates: [], weekends: false }));
+      cache.set(orgId, hit);
+    }
+    return hit;
+  };
+}
+
+async function calendarFor(user: NotifyRecipient, orgId: string | null, blackoutOf: (orgId: string | null) => Promise<Blackout>): Promise<Calendar> {
+  const quiet = readQuietHours(user.notificationPrefs);
+  const tz = quiet?.tz ?? (isValidTimeZone(user.timezone) ? user.timezone : 'UTC');
+  const b = await blackoutOf(orgId);
+  return { quiet, tz, blackoutDates: b.dates, blackoutWeekends: b.weekends };
+}
+
+export interface DeferredDelivery {
+  deliveryId: string;
+  channel: NotificationChannel;
+  eventKey: string;
+  userId: string;
+  orgId: string | null;
+  locale: Locale;
+  params: NotificationParams;
+  link: string;
+  dedupeKey: string;
+}
+
+/** Hold one claimed delivery until `openAt`. Keyed per delivery: held once, sent once. */
+async function deferDelivery(d: DeferredDelivery, openAt: Date): Promise<boolean> {
+  try {
+    await enqueue('notification.deferred', d, {
+      store: prismaQueueStore(),
+      orgId: d.orgId,
+      runAt: openAt,
+      idempotencyKey: `notify-deferred:${d.dedupeKey}`,
+      trigger: 'event',
+    });
+    return true;
+  } catch (e) {
+    logger.error('Failed to hold a notification for quiet hours', { eventKey: d.eventKey, error: String(e) });
+    return false;
+  }
+}
+
+/**
+ * The `notification.deferred` job (registered in src/jobs/index.ts): deliver a
+ * held delivery when its window opens. The person's preferences are read AGAIN
+ * — a channel switched off overnight stays off — and the ledger row is settled
+ * exactly like an immediate delivery. Rerun-safe: a row no longer QUEUED was
+ * settled by an earlier run and is left alone.
+ */
+export async function runDeferredDelivery(d: DeferredDelivery): Promise<'sent' | 'queued' | 'skipped' | 'failed' | 'gone'> {
+  const def = eventDef(d.eventKey as NotificationEventKey);
+  const row = await prisma.notificationDelivery.findUnique({ where: { id: d.deliveryId }, select: { status: true } });
+  if (!def || !row || row.status !== 'QUEUED') return 'gone';
+  const user = await prisma.user.findUnique({ where: { id: d.userId }, select: RECIPIENT_SELECT });
+  if (!user) {
+    await settleDelivery(d.deliveryId, 'SKIPPED', { skipReason: 'no_address' });
+    return 'skipped';
+  }
+  const skip = channelAllowed(def, d.channel, user);
+  if (skip) {
+    await settleDelivery(d.deliveryId, 'SKIPPED', { skipReason: skip });
+    return 'skipped';
+  }
+  const adapter = CHANNEL_ADAPTERS[d.channel];
+  const outcome = await adapter
+    .deliver({ deliveryId: d.deliveryId, def, userId: d.userId, orgId: d.orgId, locale: d.locale, params: d.params, link: d.link, dedupeKey: d.dedupeKey })
+    .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
+  const templateId = `notifications.events.${def.key}`;
+  if (outcome.status === 'SENT') {
+    await settleDelivery(d.deliveryId, 'SENT', { templateId });
+    return 'sent';
+  }
+  if (outcome.status === 'QUEUED') return 'queued';
+  if (outcome.status === 'SKIPPED') {
+    await settleDelivery(d.deliveryId, 'SKIPPED', { skipReason: outcome.reason });
+    return 'skipped';
+  }
+  await settleDelivery(d.deliveryId, 'FAILED', { error: outcome.error });
+  return 'failed';
 }
 
 /**
@@ -489,14 +439,22 @@ export async function notifyEvent<K extends NotificationEventKey>(
     // The recipient's vertical shapes the deep link (a MARKETING rep's record
     // is /sales/leads/<id>, #2580); one lookup per org for the whole fan-out.
     const capabilitiesOf = capabilitiesMemo();
+    const blackoutOf = blackoutMemo();
     for (const rec of normalized) {
       const user = hydrated.get(rec.id) ?? rec;
       const orgId = user.orgId ?? rec.orgId ?? opts?.orgId ?? null;
       const locale = asLocale(user.preferredLanguage);
       const link = notificationLink(asRole(user.role), def.link, linkIds, { capabilities: await capabilitiesOf(orgId) });
 
+      // The person's channel matrix (#1714) can add push to the defaults; a
+      // channel they switched off is recorded as skipped by channelAllowed. A
+      // caller that pinned channels keeps them, and essential events ignore it.
+      const base: readonly NotificationChannel[] =
+        opts?.channels || isEssentialGroup(def.emailGroup)
+          ? channels
+          : resolveChannels(readChannelMap(user.notificationPrefs, NOTIFICATION_CATEGORIES), def.category, channels);
       const recipientChannels: readonly NotificationChannel[] =
-        chatUsers.has(rec.id) && !channels.includes('chat') ? [...channels, 'chat'] : channels;
+        chatUsers.has(rec.id) && !base.includes('chat') ? [...base, 'chat'] : base;
       for (const channel of recipientChannels) {
         const row: LedgerRow = {
           orgId,
@@ -520,51 +478,50 @@ export async function notifyEvent<K extends NotificationEventKey>(
           continue;
         }
 
-        const ctx: DeliveryContext = { def, recipient: user, locale, params, link, orgId, dedupeKey: row.dedupeKey };
+        // Quiet hours and org blackout days (#1714): an interrupting channel is
+        // HELD to the next open instant, never dropped — a keyed deferred job,
+        // the ledger row QUEUED meanwhile. The bell and essential events go now.
+        if (DEFERRABLE_CHANNELS.includes(channel) && !isEssentialGroup(def.emailGroup)) {
+          const openAt = nextOpenInstant(new Date(), await calendarFor(user, orgId, blackoutOf));
+          if (openAt) {
+            const held = await deferDelivery({ deliveryId, channel, eventKey: def.key, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey }, openAt);
+            if (held) {
+              result.queued += 1;
+              await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
+            } else {
+              result.failed += 1;
+              await settleDelivery(deliveryId, 'FAILED', { error: 'could not hold for quiet hours' });
+            }
+            continue;
+          }
+        }
 
-        if (channel === 'inApp') {
-          // notify() swallows its own errors, so "it returned" is all the
-          // certainty there is here — the same certainty every existing call
-          // site has had, now at least written down.
-          await notifyInApp(rec.id, def.key, params, link);
+        // The channel's own adapter performs it (#1711, ./adapters): the router
+        // has decided and claimed; the adapter only knows how to deliver.
+        const adapter = CHANNEL_ADAPTERS[channel];
+        if (!adapter || !adapter.available()) {
+          result.skipped += 1;
+          await settleDelivery(deliveryId, 'SKIPPED', { skipReason: 'no_adapter' });
+          continue;
+        }
+        const outcome = await adapter
+          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey })
+          .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
+        const templateId = `notifications.events.${def.key}`;
+        if (outcome.status === 'SENT') {
           result.sent += 1;
-          await settleDelivery(deliveryId, 'SENT', { templateId: `notifications.events.${def.key}` });
-          continue;
+          await settleDelivery(deliveryId, 'SENT', { templateId });
+        } else if (outcome.status === 'QUEUED') {
+          // Stays QUEUED: the worker that performs it settles the row.
+          result.queued += 1;
+          await settleDelivery(deliveryId, 'QUEUED', { templateId });
+        } else if (outcome.status === 'SKIPPED') {
+          result.skipped += 1;
+          await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
+        } else {
+          result.failed += 1;
+          await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
         }
-
-        if (channel === 'email') {
-          const outcome = await enqueueEmail(ctx);
-          if (outcome.ok) {
-            result.queued += 1;
-            // Stays QUEUED: the job, not this function, decides whether the
-            // mail was actually handed to SMTP.
-            await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
-          } else {
-            result.failed += 1;
-            await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
-          }
-          continue;
-        }
-
-        if (channel === 'chat') {
-          // Its own ledger row and its own outcome: a disabled or failing
-          // workspace never touches the e-mail or in-app delivery above.
-          const outcome = await deliverChat({ userId: rec.id, orgId, eventKey: def.key, params, link, locale });
-          if (outcome.status === 'SENT') {
-            result.sent += 1;
-            await settleDelivery(deliveryId, 'SENT', { templateId: `notifications.events.${def.key}` });
-          } else if (outcome.status === 'SKIPPED') {
-            result.skipped += 1;
-            await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
-          } else {
-            result.failed += 1;
-            await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
-          }
-          continue;
-        }
-
-        result.skipped += 1;
-        await settleDelivery(deliveryId, 'SKIPPED', { skipReason: 'no_adapter' });
       }
     }
   } catch (e) {
@@ -574,3 +531,45 @@ export async function notifyEvent<K extends NotificationEventKey>(
   }
   return result;
 }
+
+/**
+ * Re-send ONE failed chat delivery (#1960, the "Retry" button of the ledger on
+ * /admin/integrations) — through the router, never straight at the platform:
+ * it claims its own ledger row (keyed on the failed attempt, so a double click
+ * is one retry) and hands the chat adapter the same sentence and link the
+ * original notification carried. The adapter writes a NEW ChatDelivery row;
+ * the failed one is never rewritten (the ledger is append-only).
+ *
+ * The params and link come from the person's in-app notification of that event
+ * — the one place they are kept — so a retry is impossible once that row is
+ * gone (`source_gone`), rather than a guess at what the card said.
+ */
+export async function retryChatDelivery(input: {
+  failedDeliveryId: string;
+  userId: string;
+  orgId: string | null;
+  eventKey: string;
+  params: NotificationParams;
+  link: string;
+  locale: Locale;
+}): Promise<{ status: 'SENT' | 'SKIPPED' | 'FAILED' | 'DUPLICATE'; error?: string }> {
+  const def = eventDef(input.eventKey as NotificationEventKey);
+  const row: LedgerRow = {
+    orgId: input.orgId,
+    userId: input.userId,
+    eventKey: input.eventKey,
+    channel: 'chat',
+    dedupeKey: deliveryDedupeKey(input.eventKey, input.userId, 'chat', `retry:${input.failedDeliveryId}`),
+  };
+  const deliveryId = await claimDelivery(row);
+  if (!deliveryId) return { status: 'DUPLICATE' };
+  const params: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(input.params ?? {})) if (typeof v === 'string' || typeof v === 'number') params[k] = v;
+  const outcome = await deliverChat({ userId: input.userId, orgId: input.orgId, eventKey: input.eventKey, params, link: input.link, locale: input.locale });
+  const templateId = def ? `notifications.events.${def.key}` : undefined;
+  if (outcome.status === 'SENT') await settleDelivery(deliveryId, 'SENT', { templateId });
+  else if (outcome.status === 'SKIPPED') await settleDelivery(deliveryId, 'SKIPPED', { skipReason: outcome.reason });
+  else await settleDelivery(deliveryId, 'FAILED', { error: outcome.error });
+  return outcome.status === 'FAILED' ? { status: 'FAILED', error: outcome.error } : { status: outcome.status };
+}
+

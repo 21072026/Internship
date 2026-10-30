@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { acknowledgeBreaches } from '@/lib/slaBreach';
@@ -13,10 +12,9 @@ import { acknowledgeBreaches } from '@/lib/slaBreach';
 const schema = z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(50) });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });

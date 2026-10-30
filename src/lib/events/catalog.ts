@@ -252,10 +252,11 @@ export const EVENT_CATALOG = [
     description: 'An acceptance took the last opening of a requisition.',
   },
   {
-    // A pairing paused, resumed, ended or reopened (#1770). Registered, not yet
-    // raised — its first producer calls emit() (a direct dispatcher call is
-    // refused by scripts/check-events.mjs). `from`/`to` are lifecycle states; `reasonCode` is set on an end
-    // only (LIFECYCLE_END_REASON_CODES), null otherwise.
+    // A pairing paused, resumed, ended or reopened (#1770). Raised by every
+    // writer of the lifecycle state through raiseLifecycleChanged()
+    // (src/lib/lifecycleEvents.ts, #1998). `from`/`to` are lifecycle states;
+    // `reasonCode` is a code on an end (LIFECYCLE_END_REASON_CODES, or a
+    // handover's admin code), null otherwise.
     name: 'mentorship.lifecycle_changed',
     version: 1,
     subjectType: 'MentorshipRelation',
@@ -304,6 +305,87 @@ export const EVENT_CATALOG = [
       .strict(),
     visibility: 'public',
     description: "A mentee's mentor changed — corrected in place, or a new pairing that carries the stage over.",
+  },
+  // The rest of the offer lifecycle (#1998), same shape as offer.accepted —
+  // ids only, never the position or compensation. Producers: PATCH
+  // /api/offers/[id] and the expiry sweep, both through raiseOfferEvent().
+  {
+    name: 'offer.sent',
+    version: 1,
+    subjectType: 'Offer',
+    subjectKey: 'offerId',
+    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    visibility: 'public',
+    description: 'An offer was sent to the candidate.',
+  },
+  {
+    name: 'offer.withdrawn',
+    version: 1,
+    subjectType: 'Offer',
+    subjectKey: 'offerId',
+    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    visibility: 'public',
+    description: 'A sent offer was withdrawn before the candidate decided.',
+  },
+  {
+    name: 'offer.expired',
+    version: 1,
+    subjectType: 'Offer',
+    subjectKey: 'offerId',
+    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    visibility: 'public',
+    description: 'A sent offer passed its expiry date without a decision.',
+  },
+  // The interview request before it is scheduled (#1998). The company asks
+  // (POST /api/interview-requests), the programme decides (POST
+  // /api/interview-requests/[id]); `.scheduled` / `.cancelled` follow above.
+  // Ids and codes only — never the company's note or the decline note.
+  {
+    name: 'interview_request.created',
+    version: 1,
+    subjectType: 'InterviewRequest',
+    subjectKey: 'requestId',
+    payload: z.object({ requestId: id, requisitionId: id, menteeId: id, companyId: id }).strict(),
+    visibility: 'public',
+    description: 'A company asked to interview a shortlisted candidate for a requisition.',
+  },
+  {
+    name: 'interview_request.approved',
+    version: 1,
+    subjectType: 'InterviewRequest',
+    subjectKey: 'requestId',
+    payload: z.object({ requestId: id, requisitionId: id, menteeId: id }).strict(),
+    visibility: 'public',
+    description: 'The programme approved an interview request; scheduling comes next.',
+  },
+  {
+    name: 'interview_request.declined',
+    version: 1,
+    subjectType: 'InterviewRequest',
+    subjectKey: 'requestId',
+    payload: z.object({ requestId: id, requisitionId: id, menteeId: id, reasonCode: z.string() }).strict(),
+    visibility: 'public',
+    description: 'The programme declined an interview request (`reasonCode` is a decline code, never the note).',
+  },
+  {
+    // One producer: POST /api/company/interests, on a genuine status change
+    // only (a note-only save raises nothing). `from` is null for a new flag.
+    name: 'company_interest.changed',
+    version: 1,
+    subjectType: 'CompanyInterest',
+    subjectKey: 'interestId',
+    payload: z
+      .object({
+        interestId: id,
+        companyId: id,
+        menteeId: id,
+        requisitionId: id.nullable(),
+        from: z.string().nullable(),
+        to: z.string(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: 'A company flagged a candidate as interesting, shortlisted or passed (`from` and `to` are interest states).',
   },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─

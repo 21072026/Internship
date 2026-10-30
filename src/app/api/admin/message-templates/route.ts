@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -15,6 +13,7 @@ import {
 } from '@/lib/messageTemplates';
 import { locales } from '@/i18n/config';
 import { normalizeMachineList } from '@/lib/machineTranslation';
+import { requirePermission } from '@/lib/authz';
 
 // Management for the org-wide canned-response pool (#1871).
 //
@@ -56,16 +55,12 @@ function serialize(row: Parameters<typeof serializeMessageTemplate>[0] & { machi
   return { ...dto, machineTranslated: normalizeMachineList(row.machineTranslated, normalizeMessageTranslations(row.translations)) };
 }
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
 // GET — the org-wide pool, most-used first.
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.messageTemplate.findMany({
@@ -79,8 +74,9 @@ export async function GET() {
 
 // POST — add an org-wide canned response. At least one language must be filled.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
@@ -126,8 +122,9 @@ export async function POST(request: Request) {
 
 // PATCH — rewrite an org-wide canned response in any/all languages.
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));
@@ -166,8 +163,9 @@ export async function PATCH(request: Request) {
 // starting a second one from zero. Messages already sent from it are unaffected
 // either way — inserting a template copies its text into the composer.
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));

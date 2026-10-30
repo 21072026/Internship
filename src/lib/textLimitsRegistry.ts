@@ -119,8 +119,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   CompanyNeed: {
     id: ID,
     companyId: ID,
-    position: { limit: 'companyNeedPosition', files: COMPANY_WRITERS },
-    period: { limit: 'companyNeedPeriod', files: COMPANY_WRITERS },
+    // No writer since #1875: open positions are Requisitions, and the table
+    // waits for its drop (the contract step). Only the deploy converter reads it.
+    position: { exempt: 'no writer since #1875 — CompanyNeed is read-only legacy data awaiting its drop; open positions are Requisitions.' },
+    period: { exempt: 'no writer since #1875 — CompanyNeed is read-only legacy data awaiting its drop; open positions are Requisitions.' },
   },
   ProjectTask: {
     id: ID,
@@ -246,6 +248,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     referenceContact: { limit: 'mentorScreeningReference', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
     referenceOutcome: { limit: 'mentorScreeningReferenceOutcome', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
   },
+  MentorOffer: {
+    id: ID,
+    orgId: ID,
+    mentorId: ID,
+    menteeId: ID,
+    message: { limit: 'mentorOfferMessage', files: ['src/app/api/mentor/offers/route.ts'] },
+  },
   CompanyInquiry: {
     id: ID,
     orgId: ID,
@@ -286,8 +295,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     stripeCustomerId: ID,
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
     publicHostToken: SERVER_SET,
-    name: { exempt: 'capped at 120 by the create schema; tenants are created by a super-admin only' },
-    slug: { exempt: 'slugified and sliced to 60 by the route before it is written' },
+    archivedById: SERVER_SET,
+    deletionRequestedById: SERVER_SET,
+    name: { exempt: 'capped at 120 by the create schema and by planRename() (#1582); written by a super-admin only' },
+    slug: { exempt: 'slugified and sliced to 60 (slugifyOrg) before it is written, on create and on rename (#1582)' },
     vertical: ENUMERATED,
     ssoProvider: ENUMERATED,
     brandName: { limit: 'orgBrandName', files: ORG_WRITERS },
@@ -301,6 +312,12 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     ssoSpKey: SERVER_SET,
     ssoSpCert: SERVER_SET,
     ssoCertificate: { exempt: '@db.Text, capped at 20000 by the route' },
+    // OpenID Connect (#1926): the route's caps equal the VarChar columns; the
+    // secret is sealed by the server before it is stored, never typed into the column.
+    ssoClientId: { exempt: 'VarChar(255), capped at 255 by the route (#1926)' },
+    ssoScopes: { exempt: 'VarChar(255), capped at 255 by the route (#1926)' },
+    ssoDiscoveryUrl: { exempt: '@db.Text, capped at 2000 by the route (#1926)' },
+    ssoClientSecretEnc: SERVER_SET,
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },
     billingCountry: ENUMERATED,

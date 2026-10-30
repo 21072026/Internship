@@ -5,10 +5,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { advanceApplicationOnInterview } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 
@@ -18,7 +20,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // Placement write (#2364).
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
+  if ('error' in gate) return gate.error;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
   const parsed = decideInterviewRequestSchema.safeParse(await request.json().catch(() => null));
@@ -76,6 +79,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return { advanced };
     });
     if (!result) return NextResponse.json({ error: 'Request already decided', code: 'already_decided' }, { status: 409 });
+    // After the commit (#1998); the decline note never leaves the programme.
+    const decided = { requestId: current.id, requisitionId: current.requisitionId, menteeId: current.menteeId };
+    const actor = { id: session.user.id, type: 'user' as const };
+    if (nextStatus === 'APPROVED') await emit('interview_request.approved', decided, { orgId, actor });
+    else await emit('interview_request.declined', { ...decided, reasonCode: declineReasonCode! }, { orgId, actor });
     if (result.advanced) {
       await logActivity({
         action: 'application.stage.set',

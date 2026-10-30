@@ -99,6 +99,9 @@ test.describe('group sessions', () => {
     expect((await (await second.get(`/api/events/${eventId}`)).json()).event.myRegistration.state).toBe('REGISTERED');
     expect((await (await c.get(`/api/events/${eventId}`)).json()).event.myRegistration.state).toBe('WAITLISTED');
     await expect.poll(() => prisma.notification.count({ where: { userId: secondId, type: 'event.promoted' } })).toBe(1);
+    // …and mailed through sendEmail() — the delivery log has the row, whatever the transport did with it.
+    const secondEmail = second === a ? emails.a : emails.b;
+    await expect.poll(() => prisma.emailLog.count({ where: { to: secondEmail, category: 'meeting-invite', subject: { contains: 'Office hour' } } })).toBe(1);
 
     // Raising the cap fills from the waitlist too.
     expect((await host.patch(`/api/events/${eventId}`, { data: { capacity: 2 } })).status()).toBe(200);

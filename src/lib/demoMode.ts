@@ -63,12 +63,18 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/admin\/webhooks/, 'would POST from the production host to any URL'],
   // Stage automation (#1704): a rule mails and notifies people on every stage move.
   [/^\/api\/admin\/automations/, 'would mail and notify people automatically on every stage move'],
+  // Nudges (#1686): an enabled rule mails people on a schedule. The dry run
+  // (POST …/preview) writes nothing and stays open.
+  [/^\/api\/admin\/nudges(?!\/[^\/]+\/preview$)/, 'would mail and notify people automatically'],
   // The key-owned twin (#2002). Unreachable today — the demo mints no API key
   // (/api/admin/api-keys above) — and listed anyway, because the reason is the
   // same and a demo key must never become the way round it.
   [/^\/api\/v1\/hooks/, 'would POST from the production host to any URL'],
   [/^\/api\/admin\/audit-drains/, 'would stream the audit trail from the production host to any URL'],
   [/^\/api\/admin\/api-keys/, 'mints a real API credential'],
+  // The COMPANY owner's self-served key (#2006): the same credential, minted by another role.
+  [/^\/api\/company\/integrations\/api-keys/, 'mints a real API credential for a company'],
+  [/^\/api\/company\/integrations\/webhooks/, 'would POST from the production host to any URL'],
   [/^\/api\/admin\/roster-feeds/, 'stores a real remote credential and fetches from the production host'],
   [/^\/api\/admin\/email-test$/, 'sends mail to an arbitrary address'],
   [/^\/api\/admin\/import$/, 'bulk-imports data from an uploaded file'],

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere } from '@/lib/tenantFilter';
@@ -12,10 +11,9 @@ import { slaCompliance } from '@/lib/slaQueue';
 const ALLOWED_DAYS = new Set([30, 90, 180, 365]);
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const asked = Number(new URL(request.url).searchParams.get('days'));
   const days = ALLOWED_DAYS.has(asked) ? asked : 90;
   return await withTenantScope(session, async () => {

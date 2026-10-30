@@ -37,6 +37,13 @@ const PUBLISHED = [
   'mentorship.lifecycle_changed',
   'application.stage_changed',
   'mentorship.transferred',
+  'offer.sent',
+  'offer.withdrawn',
+  'offer.expired',
+  'interview_request.created',
+  'interview_request.approved',
+  'interview_request.declined',
+  'company_interest.changed',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -66,6 +73,19 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['applicationStageEvents', 'application.stage_changed', { applicationId: 'a1', requisitionId: 'rq1', from: 'SHORTLISTED', to: 'INTERVIEW' }],
   ['mentorTransfer', 'mentorship.transferred', { relationId: 'r2', previousRelationId: 'r1', menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'transferred', reasonCode: 'mentor_capacity' }],
   ['mentorTransfer', 'mentorship.transferred', { relationId: 'r1', previousRelationId: null, menteeId: 'u2', fromMentorId: 'u1', toMentorId: 'u3', mode: 'corrected', reasonCode: 'wrong_assignment' }],
+  ['offerEvents (route)', 'offer.sent', { offerId: 'o1', applicationId: null, requisitionId: null }],
+  ['offerEvents (route)', 'offer.withdrawn', { offerId: 'o1', applicationId: null, requisitionId: 'rq1' }],
+  ['offerEvents (route)', 'offer.accepted', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
+  ['offerEvents (route)', 'offer.declined', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
+  ['offerEvents (expiry sweep)', 'offer.expired', { offerId: 'o1', applicationId: null, requisitionId: null }],
+  ['api/offers/[id]', 'requisition.filled', { requisitionId: 'rq1', offerId: 'o1' }],
+  ['api/interview-requests', 'interview_request.created', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', companyId: 'c1' }],
+  ['api/interview-requests/[id]', 'interview_request.approved', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2' }],
+  ['api/interview-requests/[id]', 'interview_request.declined', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', reasonCode: 'not_ready' }],
+  ['api/company/interests', 'company_interest.changed', { interestId: 'i1', companyId: 'c1', menteeId: 'u2', requisitionId: null, from: null, to: 'INTERESTED' }],
+  ['api/mentorship/[id]/lifecycle', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'PAUSED', reasonCode: null }],
+  ['lifecycleEvents (transfer)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_REASSIGNED', reasonCode: 'mentor_unavailable' }],
+  ['lifecycleEvents (win-back)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_CHURNED', reasonCode: null }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

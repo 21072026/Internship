@@ -7,6 +7,7 @@ import { suppressedLogReason } from '@/lib/emailSuppressionRule';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isOrgArchived } from '@/lib/orgArchive';
 import { directKeyFor } from '@/lib/conversations';
 import { orgIdsEntitledTo } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -19,6 +20,19 @@ import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSu
 import { markReadUrl } from '@/lib/emailActionToken';
 import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
+import {
+  LEGACY_MEETING_LEADS,
+  LEGACY_SERIES_LEADS,
+  MAX_LEAD_MINUTES,
+  dueLead,
+  isDayAheadLead,
+  leadsFor,
+  legacyLeadEnum,
+  lookaheadMinutes,
+  parseLeadList,
+  readRemindedLeads,
+  writeRemindedLeads,
+} from '@/lib/meetingReminderLeads';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -94,7 +108,7 @@ import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
-import { resolveStageEscalations } from '@/lib/stageSla';
+import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
@@ -1063,6 +1077,24 @@ export async function prepareEmail({
     return { status: 'SKIPPED' };
   }
 
+  // ── AN ARCHIVED TENANT IS NOT MAILED (#1582) ─────────────────────────────
+  // Archiving a tenant stops its mail (docs/tenant-lifecycle.md): every group,
+  // essential included — a closed tenant's people cannot sign in, so a reset
+  // or a sign-in link would only point at a refused door. The tenant is the
+  // `orgId` the sender passed, else the recipient account's. Mail with
+  // neither (a public inquiry's reply) is not a tenant's mail and passes.
+  // Fails open (isOrgArchived), like the preference read below.
+  const tenantOrgId =
+    orgId ??
+    (userId
+      ? (await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } }).catch(() => null))?.orgId ?? null
+      : null);
+  if (await isOrgArchived(tenantOrgId)) {
+    logger.info('Email not sent: tenant archived', { category });
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), 'Tenant archived', { orgId: tenantOrgId, userId });
+    return { status: 'SKIPPED' };
+  }
+
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
   // user who simply never replied (#1194) — the whole reason a batch of
@@ -1788,6 +1820,8 @@ export async function sendInvitationEmail({
 
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'invitation',
     lane,
@@ -1863,6 +1897,8 @@ export async function sendPasswordResetEmail({
 
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'password-reset',
     // Queued only on a temporary failure (#2944): a link that has expired is
@@ -1923,6 +1959,8 @@ export async function sendMagicLinkEmail({
 
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     // Essential (account_security group): a sign-in link the person just asked
     // for is never a preference someone can have opted out of.
@@ -1986,6 +2024,8 @@ export async function sendVerificationEmail({
 
   await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'verification',
     locale: resolved,
@@ -2482,6 +2522,62 @@ export async function sendMeetingCancelledEmail({
         ${scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName, resolved) : ''}
         ${reason ? `<p><strong>${esc(C.reason)}</strong> ${esc(reason)}</p>` : ''}
         ${scheduledAt ? timeZoneNote(timeZone, resolved, base) : ''}
+      </div>
+    `,
+  });
+}
+
+// Group sessions (#1856): a waitlist promotion, or the session called off.
+// Category `meeting-invite` on purpose — it is an invitation to a time, the
+// same opt-out a person already chose for meeting invitations, and it reuses
+// that category's outbound-approval and lane entries instead of adding one.
+export async function sendGroupEventEmail({
+  to,
+  fullName,
+  kind,
+  title,
+  startsAt,
+  timeZone,
+  path,
+  userId,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  kind: 'promoted' | 'cancelled';
+  title: string;
+  startsAt: Date;
+  timeZone?: string | null;
+  /** The session's in-app page for this recipient's role (eventLinkFor). */
+  path: string;
+  userId: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId ?? null);
+  const base = orgId ? brand.appUrl : appUrl();
+  const resolved = resolveLocale(locale);
+  const D = await emailDictionary(resolved, orgId);
+  const E = D.notifications.groupEventEmail;
+  const M = D.notifications.meetingInviteEmail;
+  const subject = (kind === 'promoted' ? E.promotedSubject : E.cancelledSubject).replace('{title}', title);
+  const when = formatInTimeZone(startsAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved));
+  await sendEmail({
+    to,
+    userId,
+    orgId: orgId ?? null,
+    category: 'meeting-invite',
+    locale: resolved,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(kind === 'promoted' ? E.promotedBody : E.cancelledBody)}</p>
+        <p><strong>${esc(E.when)}</strong> ${kind === 'cancelled' ? `<s>${when}</s>` : when}</p>
+        ${kind === 'promoted' ? `<p><a href="${esc(`${base}${path}`)}">${esc(E.open)}</a></p>` : ''}
+        ${timeZoneNote(timeZone, resolved, base)}
       </div>
     `,
   });
@@ -3022,6 +3118,53 @@ export async function sendMenteeAssignedEmail({
   });
 }
 
+// Mentor Offers (#1809): a mentor offered to mentor this mentee, or the one
+// reminder before the offer expires. Sent only to a mentee who opted in
+// (User.openToOffers) — the caller checks that and the opt-out chain; the
+// footer says why the mail came and where to switch it off.
+export async function sendMentorOfferEmail({
+  to,
+  menteeName,
+  mentorName,
+  message,
+  kind,
+  orgId,
+  userId,
+  locale,
+}: {
+  to: string;
+  menteeName: string;
+  mentorName: string;
+  message?: string | null;
+  kind: 'new' | 'reminder';
+  orgId?: string | null;
+  userId: string;
+  locale?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.mentorOfferEmail;
+  const fill = (t: string) => t.replace('{mentorName}', mentorName).replace('{name}', menteeName);
+  await sendEmail({
+    to,
+    userId,
+    orgId,
+    category: 'mentor-offer',
+    fromName: brand.name,
+    subject: fill(kind === 'new' ? M.newSubject : M.reminderSubject),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.heading)}
+        <p>${esc(fill(M.greeting))}</p>
+        <p>${esc(fill(kind === 'new' ? M.newBody : M.reminderBody))}</p>
+        ${kind === 'new' && message ? `<p><strong>${esc(M.messageLabel)}</strong><br>${esc(message).replace(/\n/g, '<br>')}</p>` : ''}
+        ${ctaBlock(brand, `${base}/portal`, M.cta)}
+        <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+      </div>
+    `,
+  });
+}
+
 // An admin wiring up a mentorship directly (no prior mentee request, #668) —
 // the mentee never asked, so the request-approval copy would not fit.
 export async function sendMentorAssignedEmail({
@@ -3133,7 +3276,7 @@ export async function sendRematchRequestedEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
-  const R = getDictionary(resolved).notifications.rematchRequestedEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.rematchRequestedEmail;
   await sendEmail({
     to,
     userId,
@@ -3173,7 +3316,7 @@ export async function sendRematchMentorNoticeEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
-  const R = getDictionary(resolved).notifications.rematchMentorEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.rematchMentorEmail;
   await sendEmail({
     to,
     userId,
@@ -3390,7 +3533,7 @@ export async function sendOfferSentEmail({
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const loc = resolveLocale(locale);
-  const M = getDictionary(loc).offerEmail;
+  const M = (await emailDictionary(loc, orgId)).offerEmail;
   const start = formatOfferDate(startDate, loc);
   const expires = formatOfferDate(expiresAt, loc);
   await sendEmail({
@@ -3504,7 +3647,7 @@ export async function sendOfferDecisionEmail({
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
-  const M = getDictionary(resolveLocale(locale)).offerEmail;
+  const M = (await emailDictionary(resolveLocale(locale), orgId)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
   await sendEmail({
     to,
@@ -3547,6 +3690,8 @@ export async function sendRoleChangeEmail({
   const mentor = newRole === 'MENTOR';
   await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     subject: mentor ? M.subjectMentor : M.subjectMentee,
     category: 'account',
@@ -3736,6 +3881,8 @@ export async function sendTwoFactorResetEmail({
   const M = getDictionary(resolved).twoFactorResetEmail;
   return await sendEmail({
     to,
+    // The recipient's tenant: an archived one is not mailed (#1582).
+    orgId,
     fromName: brand.name,
     category: 'account',
     locale: resolved,
@@ -4393,6 +4540,17 @@ export async function checkStageDeadlineReminders() {
   };
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
+  // One business-day rule per programme for the tick (#1638).
+  const dayRules = new Map<string, ReturnType<typeof resolveSlaDayRule>>();
+  const dayRuleOf = (rel: { orgId: string | null; cohortId: string | null }) => {
+    const key = `${rel.orgId ?? ''}|${rel.cohortId ?? ''}`;
+    let hit = dayRules.get(key);
+    if (!hit) {
+      hit = resolveSlaDayRule({ orgId: rel.orgId, cohortId: rel.cohortId });
+      dayRules.set(key, hit);
+    }
+    return hit;
+  };
 
   const candidates = await prisma.mentorshipRelation.findMany({
     // Not a paused pair (#1772): its clock is frozen (stageClockPatch), this is the second guard.
@@ -4455,6 +4613,8 @@ export async function checkStageDeadlineReminders() {
             const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
             const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
+            // Say which day mode produced the date, so a mentor questioning it can see why (#1638).
+            const dayNote = (await dayRuleOf(rel)).mode === 'business' ? `<p style="color:#6b7280;font-size:13px;">${esc(emailText.businessDays)}</p>` : '';
             await brandOf(rel.orgId).then((brand) => sendEmail({
               category: 'stage-deadline',
               userId: rel.mentorId,
@@ -4463,7 +4623,7 @@ export async function checkStageDeadlineReminders() {
               locale: rel.mentor.preferredLanguage,
               to: rel.mentor.email,
               subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
             })).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });
@@ -4736,6 +4896,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
   // organization (a Friday run reminds people of every tenant). Read before the
   // claims below, so a failed read leaves nobody claimed-but-unmailed.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(toRemind.map((relation) => relation.mentee.orgId));
   const claims = toRemind.map((relation) => ({ id: randomUUID(), relationId: relation.id, recipientId: relation.mentee.id, weekStart }));
   if (claims.length > 0) await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
@@ -4748,7 +4909,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
     remindedRelationIds.push(relation.id);
     const preferredLanguage = relation.mentee.preferredLanguage ?? undefined;
     const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-    const copy = getDictionary(locale).weeklyReports;
+    const copy = (await dictionaryOf(locale, relation.mentee.orgId)).weeklyReports;
     const formattedWeek = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(weekStart);
     if (notificationCategoryAllowed(relation.mentee, 'weeklyReports')) {
       await notify(relation.mentee.id, 'weekly_report_reminder.due', {}, '/portal');
@@ -4853,6 +5014,7 @@ export async function sendDormantCheckIns(now = new Date()) {
   // batch before the first nudge is claimed (a claim spends one of the person's
   // two-ever budget, so nothing may fail between claiming and having the link).
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(relations.map((relation) => relation.mentee.orgId));
 
   // THE CAP IS A PROMISE TO A PERSON, AND IT IS COUNTED PER PERSON (#2287).
@@ -4936,7 +5098,7 @@ export async function sendDormantCheckIns(now = new Date()) {
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
-    const copy = getDictionary(locale).dormantCheckIn;
+    const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
     // "Final" is the person's last nudge, not the relation's.
     const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
@@ -4974,9 +5136,24 @@ export const MEETING_REMINDER_WINDOW_MINUTES = 60;
 // Marking first means a mid-send failure loses a reminder rather than
 // duplicating one — the far less annoying failure mode, and it keeps the in-app
 // notification and the email behind the same single marker.
+//
+// LEAD TIMES (#1636, src/lib/meetingReminderLeads.ts): a meeting may carry its
+// own lead (`reminderLeadMinutes`, 0 = none) and a programme may set a list
+// (`meetingReminderLeadsMinutes`); with neither, the one lead is the hour above
+// and everything below behaves exactly as it always did. Each lead is claimed
+// in `remindedLeads` by one guarded update; the smallest lead also stamps
+// `reminderSentAt`, so a meeting reminded before the deploy is not reminded
+// again.
 export async function sendMeetingReminders() {
+  return withSettingsCache(sendMeetingRemindersInner);
+}
+
+async function sendMeetingRemindersInner() {
   const now = new Date();
-  const horizon = new Date(now.getTime() + MEETING_REMINDER_WINDOW_MINUTES * 60 * 1000);
+  // The furthest any lead can reach; each meeting is then judged on its own leads.
+  const horizon = new Date(now.getTime() + lookaheadMinutes([MAX_LEAD_MINUTES]) * 60 * 1000);
+  const leadsSettingOf = (orgId: string | null, programId: string | null) =>
+    settingsOrgOfRow(orgId).then((org) => resolveSettingRaw('meetingReminderLeadsMinutes', { orgId: org, programId }));
   const participantSelect = {
     id: true,
     email: true,
@@ -5002,8 +5179,11 @@ export async function sendMeetingReminders() {
     // so they never match the scheduledAt window either.
     where: {
       scheduledAt: { gt: now, lte: horizon },
-      reminderSentAt: null,
       seriesId: null,
+      // A meeting that asked for no reminder is never loaded. Spelled with an
+      // explicit NULL branch: `NOT (col = 0)` is NULL — false — for a NULL row in
+      // SQL, so `NOT: { reminderLeadMinutes: 0 }` would drop every default meeting.
+      OR: [{ reminderLeadMinutes: null }, { reminderLeadMinutes: { gt: 0 } }],
       relationId: { not: null },
       // A cancelled meeting (#1980) is not reminded about. Moving one clears
       // `reminderSentAt`, so the new time gets its own reminder from here.
@@ -5030,6 +5210,7 @@ export async function sendMeetingReminders() {
   // from their own `orgId` (one batched read for the whole tick, before any
   // meeting is claimed) rather than assumed from the first one.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
   await origins.prefetch(
     meetings.flatMap((m) => [m.relation?.mentee?.orgId, m.relation?.mentor?.orgId]),
   );
@@ -5040,10 +5221,26 @@ export async function sendMeetingReminders() {
   for (const m of meetings) {
     // Guaranteed by the query above; the guard is what tells TypeScript so.
     if (!m.relation) continue;
+    const leads = leadsFor({
+      override: m.reminderLeadMinutes,
+      configured: parseLeadList(await leadsSettingOf(m.relation.orgId, m.relation.cohortId)),
+      legacy: LEGACY_MEETING_LEADS,
+    });
+    if (leads.length === 0) continue;
+    const smallest = Math.min(...leads);
+    const sentLeads = readRemindedLeads(m.remindedLeads);
+    // A pre-#1636 claim covers the one lead that existed then.
+    if (m.reminderSentAt) sentLeads.add(smallest);
+    const minutesAway = (m.scheduledAt!.getTime() - now.getTime()) / 60000;
+    const lead = dueLead(minutesAway, leads, sentLeads);
+    if (lead === null) continue;
     // Claim it first — see the idempotency note above.
     const claim = await prisma.meeting.updateMany({
-      where: { id: m.id, reminderSentAt: null },
-      data: { reminderSentAt: new Date() },
+      where: { id: m.id, remindedLeads: m.remindedLeads, ...(lead === smallest ? { reminderSentAt: null } : {}) },
+      data: {
+        remindedLeads: writeRemindedLeads(new Set([...sentLeads, lead])),
+        ...(lead === smallest ? { reminderSentAt: new Date() } : {}),
+      },
     });
     if (claim.count === 0) continue;
     reminded++;
@@ -5080,7 +5277,7 @@ export async function sendMeetingReminders() {
       try {
         const brand = await emailBrand(user.orgId);
         const base = await origins.urlFor(user.orgId);
-        const R = getDictionary(uLocale).notifications.meetingReminderEmail;
+        const R = (await dictionaryOf(uLocale, user.orgId)).notifications.meetingReminderEmail;
         const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
         await sendEmail({
           category: 'meeting-reminder',
@@ -5092,7 +5289,7 @@ export async function sendMeetingReminders() {
           orgId: user.orgId,
           // On the queue (#2951): one reminder per participant per start time,
           // however often the tick runs, and none once the meeting has begun.
-          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt! }),
+          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt!, lead }),
           notAfter: m.scheduledAt!,
           locale: uLocale,
           subject: R.subject.replace('{title}', m.title),
@@ -5143,6 +5340,7 @@ export async function sendMeetingReminders() {
           // …and whose product this is: the organizer's world, as for the invite.
           orgId: m.relation.orgId ?? m.relation.mentor?.orgId ?? null,
           meetingId: m.id,
+          lead,
         });
         emailed++;
       } catch (e) {
@@ -5168,6 +5366,7 @@ async function sendMeetingGuestReminderEmail({
   locale,
   orgId,
   meetingId,
+  lead,
 }: {
   to: string;
   name?: string | null;
@@ -5182,11 +5381,13 @@ async function sendMeetingGuestReminderEmail({
   orgId?: string | null;
   /** The meeting, for the queued mail's natural key (#2951). */
   meetingId?: string;
+  /** The lead this reminder is for (#1636); part of its dedupe key. */
+  lead?: number;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
   const when = `${formatInTimeZone(scheduledAt, zone, undefined, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`;
-  const R = getDictionary(resolved).notifications.meetingReminderEmail;
+  const R = (await emailDictionary(resolved, orgId)).notifications.meetingReminderEmail;
   const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
   const brand = await emailBrand(orgId);
   await sendEmail({
@@ -5198,7 +5399,7 @@ async function sendMeetingGuestReminderEmail({
     // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
     // On the queue (#2951): once per guest per start time, never after it.
-    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt }) } : {}),
+    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt, lead }) } : {}),
     notAfter: scheduledAt,
     locale: resolved,
     subject: R.subject.replace('{title}', title),
@@ -5239,14 +5440,17 @@ function upcomingSeriesOccurrences(series: SeriesRule, from: Date, withinMinutes
   return ruleOccurrences(series, from, horizon).filter((when) => when > from);
 }
 
-function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
-  if (minutesAway <= 60) return 'HOUR_BEFORE';
-  if (minutesAway >= 23 * 60) return 'DAY_BEFORE';
-  return null;
+// Which lead is due is src/lib/meetingReminderLeads.ts (#1636): with nothing
+// configured the leads are [1440, 60] and the windows are exactly the old
+// DAY_BEFORE (from 23h on) and HOUR_BEFORE (≤ 60 min).
+export async function sendProjectMeetingSeriesReminders() {
+  return withSettingsCache(sendProjectMeetingSeriesRemindersInner);
 }
 
-export async function sendProjectMeetingSeriesReminders() {
+async function sendProjectMeetingSeriesRemindersInner() {
   const now = new Date();
+  const leadsSettingOf = (orgId: string | null, programId: string | null) =>
+    settingsOrgOfRow(orgId).then((org) => resolveSettingRaw('meetingReminderLeadsMinutes', { orgId: org, programId }));
   const seriesList = await prisma.meetingSeries.findMany({
     // A project's recurring call, and a standing 1:1 on a live relation (#2013).
     where: {
@@ -5264,6 +5468,7 @@ export async function sendProjectMeetingSeriesReminders() {
       relation: {
         select: {
           orgId: true,
+          cohortId: true,
           mentorId: true,
           menteeId: true,
           mentor: { select: { fullName: true } },
@@ -5280,13 +5485,33 @@ export async function sendProjectMeetingSeriesReminders() {
   // principle, but the link is still resolved per TEAM MEMBER from their own
   // `orgId` — one book for the whole tick, one query per distinct org.
   const origins = createOriginBook();
+  const dictionaryOf = emailDictionaryMemo();
 
   for (const series of seriesList) {
     const oneToOne = !series.projectId ? series.relation : null;
     if (!series.projectId && !oneToOne) continue;
 
-    const occurrences = upcomingSeriesOccurrences(series, now, SERIES_LOOKAHEAD_MINUTES);
+    // The series' lead times (#1636): its programme's (a 1:1's cohort), else its org's.
+    const leads = leadsFor({
+      configured: parseLeadList(
+        await leadsSettingOf(series.project?.orgId ?? oneToOne?.orgId ?? null, oneToOne?.cohortId ?? null),
+      ),
+      legacy: LEGACY_SERIES_LEADS,
+    });
+    if (leads.length === 0) continue;
+    const occurrences = upcomingSeriesOccurrences(series, now, Math.max(SERIES_LOOKAHEAD_MINUTES, lookaheadMinutes(leads)));
     if (occurrences.length === 0) continue;
+    // What was already sent per occurrence — rows from before #1636 carry only the enum.
+    const sentRows = await prisma.meetingSeriesReminder.findMany({
+      where: { seriesId: series.id, occurrenceAt: { in: occurrences } },
+      select: { occurrenceAt: true, lead: true, leadMinutes: true },
+    });
+    const sentFor = (when: Date) =>
+      new Set(
+        sentRows
+          .filter((r) => r.occurrenceAt.getTime() === when.getTime())
+          .map((r) => r.leadMinutes ?? (r.lead === 'DAY_BEFORE' ? 1440 : 60)),
+      );
 
     // The whole team, not just the ProjectMember rows: a mentee attached to the
     // project the legacy way (MentorshipRelation.projectId) is expected at the
@@ -5319,12 +5544,16 @@ export async function sendProjectMeetingSeriesReminders() {
     await origins.prefetch(recipients.map((r) => r.orgId));
 
     for (const when of occurrences) {
-      const lead = leadFor((when.getTime() - now.getTime()) / 60000);
-      if (!lead) continue;
+      const lead = dueLead((when.getTime() - now.getTime()) / 60000, leads, sentFor(when));
+      if (lead === null) continue;
+      const soon = !isDayAheadLead(lead);
+      // The pre-#1636 key for 1440/60, so the queue dedupes across the deploy.
+      const leadKey = legacyLeadEnum(lead) ?? `L${lead}`;
 
-      // Claim first — see the idempotency note above.
+      // Claim first — see the idempotency note above. Both unique keys guard it:
+      // (…, leadMinutes) and, for 1440/60, the old (…, lead) a pre-deploy row holds.
       try {
-        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead } });
+        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead: legacyLeadEnum(lead), leadMinutes: lead } });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue;
         throw e;
@@ -5345,7 +5574,7 @@ export async function sendProjectMeetingSeriesReminders() {
         const whenLocal = formatInTimeZone(when, user.timezone, undefined, dateLocale(uLocale));
         await notify(
           user.id,
-          lead === 'HOUR_BEFORE' ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
+          soon ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
           { title: series.title, project: projectName, when: whenLocal },
           link
         );
@@ -5355,7 +5584,7 @@ export async function sendProjectMeetingSeriesReminders() {
         try {
           const brand = await emailBrand(series.project?.orgId ?? oneToOne?.orgId ?? null);
           const base = await origins.urlFor(user.orgId);
-          const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
+          const S = (await dictionaryOf(uLocale, user.orgId)).notifications.meetingSeriesReminderEmail;
           // Two sentences, because the project name is only appended when there
           // is one — and in Turkish and German that is not a suffix you can bolt
           // on to the end of the translated sentence.
@@ -5372,11 +5601,11 @@ export async function sendProjectMeetingSeriesReminders() {
             orgId: user.orgId,
             // On the queue (#2951): one per member per occurrence and lead
             // time, and none once the occurrence has started.
-            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead }),
+            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead: leadKey }),
             notAfter: when,
             locale: uLocale,
             subject:
-              lead === 'HOUR_BEFORE'
+              soon
                 ? S.subjectSoon.replace('{title}', series.title)
                 : S.subjectTomorrow.replace('{title}', series.title).replace('{project}', projectName),
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -5658,7 +5887,7 @@ async function sendOverdueTodoMail(
   const locale = resolveLocale(u.preferredLanguage);
   const block = await overdueTodoBlock(reach, locale, u.id, undefined, false);
   if (!block) return false;
-  const A = getDictionary(locale).notifications.activityDigestEmail;
+  const A = (await emailDictionary(locale, u.orgId)).notifications.activityDigestEmail;
   await sendEmail({
     category: 'activity-digest',
     userId: u.id,
@@ -6013,25 +6242,6 @@ ${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
   return { checked: people.length, reminded };
 }
 
-// Does a consenting candidate match any of a company's CompanyNeed positions? A
-// match is a loose, case-insensitive overlap between a need's position and the
-// candidate's target position or one of their skills — deliberately generous
-// (the alert is a "worth a look" nudge, not a hard filter). Since #1821 this is
-// the CompanyNeed path only: a CompanyNeed has no skills to compare, while a
-// Requisition is matched on its canonical required skills (below).
-function candidateMatchesNeeds(
-  positions: string[],
-  cand: { targetPosition?: string | null; skills: unknown }
-): boolean {
-  const target = (cand.targetPosition || '').toLowerCase().trim();
-  const skills = (Array.isArray(cand.skills) ? cand.skills : []).map((s) => String(s).toLowerCase().trim()).filter(Boolean);
-  return positions.some((pos) => {
-    if (!pos) return false;
-    if (target && (target.includes(pos) || pos.includes(target))) return true;
-    return skills.some((sk) => sk && (pos.includes(sk) || sk.includes(pos)));
-  });
-}
-
 // The title fallback (a requisition without required skills) lives with the
 // rest of the match rule in src/lib/requisitionMatchRule.ts (#1401), shared
 // with the admin's matching-candidates list.
@@ -6057,34 +6267,32 @@ const ALERT_MIN_FIT = 40;
 // unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
 // makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
 //
-// Positions come from BOTH tables (#1387). The job used to read CompanyNeed
-// only, so a role opened through the Requisition screen — the newer of the two,
-// and the one the product is migrating to — never matched anybody: a premium
-// company could have five open requisitions and receive nothing at all.
-// CompanyNeed is NOT dead and is not being dropped here: the admin company form
-// still writes those rows (src/app/api/companies/[id]/route.ts), and the
-// CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
-// adds a source rather than replacing one; the [companyId, menteeId] dedupe key
-// means a company with the same role in both tables still alerts once.
+// Positions come from Requisition ONLY (#1875). Until then the job also read
+// the legacy CompanyNeed table (#1387 added Requisition as a second source);
+// the admin form no longer writes CompanyNeed and the deploy converts every
+// remaining row into a Requisition (backfill 0012, keyed on
+// legacyCompanyNeedId), so a converted role still alerts — through the title
+// fallback below, since a converted row has no required skills. The
+// [companyId, menteeId] dedupe key is unchanged, so nobody already alerted is
+// alerted again.
 //
 // WHO IS ENTITLED (#1733): a company whose ORG may use the feature (its plan or
 // an org grant — orgIdsEntitledTo(), the set form of entitled()), OR a company
 // with a legacy per-company CompanyEntitlement row (grandfathered, the same
 // rule hasFeature() applies).
-export async function checkCompanyNeedMatches() {
+export async function checkRequisitionMatches() {
   const entitledOrgIds = await orgIdsEntitledTo('COMPANY_NEED_MATCH_ALERTS');
   const companies = await prisma.company.findMany({
     where: {
       AND: [
         { OR: [{ orgId: { in: entitledOrgIds } }, { entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } } }] },
-        { OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }] },
+        { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } },
       ],
     },
     select: {
       id: true,
       orgId: true,
       name: true,
-      needs: { select: { position: true } },
       requisitions: {
         where: { status: ALERTABLE_REQUISITION_STATUS },
         // `openings`/`filled` so a role that is open-but-fully-staffed can be
@@ -6178,13 +6386,12 @@ export async function checkCompanyNeedMatches() {
     //     required skills were left out on purpose. Canonical ids remove that
     //     objection: "Go" is one skill, not two letters.
     //   - a Requisition without skills falls back to its title, against the
-    //     candidate's target position only; a CompanyNeed (no skills at all,
-    //     not retired here — #1359) keeps the old generous heuristic.
+    //     candidate's target position only (every row converted from the
+    //     legacy CompanyNeed table lands here, #1875).
     const openReqs = company.requisitions.filter((r) => r.filled < r.openings);
-    const needTerms = [...new Set(company.needs.map((n) => (n.position ?? '').toLowerCase().trim()).filter(Boolean))];
     // Still reachable after the OR filter above: a company can match on having
     // open requisitions and then have every one of them fully staffed.
-    if (openReqs.length === 0 && needTerms.length === 0) continue;
+    if (openReqs.length === 0) continue;
     const skillOrg = company.orgId ?? defaultId;
     const allSkillIds = openReqs.flatMap((r) => r.skills.map((x) => x.skillId));
     const edges = allSkillIds.length ? await loadSkillEdges(skillOrg, allSkillIds) : [];
@@ -6218,7 +6425,7 @@ export async function checkCompanyNeedMatches() {
         );
         if (m && m.fit.score >= ALERT_MIN_FIT && (!best || m.fit.score > best.match.fit.score)) best = { requisition: r, match: m };
       }
-      const matched = !!best || (needTerms.length > 0 && candidateMatchesNeeds(needTerms, cand));
+      const matched = !!best;
       if (!matched) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
@@ -6288,7 +6495,7 @@ export async function checkCompanyNeedMatches() {
               <p><a href="${base}${link}">${M.cta}</a></p>
             </div>`,
           })).catch((error) => {
-            console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });
+            console.error('checkRequisitionMatches email failed:', { companyId: company.id, userId: u.id, error });
           });
         }
       }

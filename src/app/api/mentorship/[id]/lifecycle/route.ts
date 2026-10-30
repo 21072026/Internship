@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { notify } from '@/lib/notify';
 import { AlreadyMentoredError, ALREADY_MENTORED_ERROR, findActiveMentorship } from '@/lib/activeMentorship';
 import {
@@ -43,12 +43,10 @@ const lifecycleSchema = z.object({
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     // Only staff move a pairing; a mentee's way out is the re-match request (#1801).
-    if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
-      return NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
 
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findFirst({
@@ -69,7 +67,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const isOwnMentor = relation?.mentorId === session.user.id;
       // Not yours = 404, the same answer as another tenant's id: a 403 would
       // confirm the pairing exists.
-      if (!relation || (session.user.role !== 'ADMIN' && !isOwnMentor)) {
+      if (!relation || (!admin && !isOwnMentor)) {
         return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
       }
 
@@ -142,6 +140,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         throw e;
       }
 
+      await raiseLifecycleChanged({ relationId: id, orgId: relation.orgId, from, to, reasonCode, actorId: session.user.id });
+
       // Both participants hear about it, by name of the other one — never the
       // reason, which is the actor's note. No echo to whoever made the move.
       const type = lifecycleNotificationType(from, to);
@@ -177,17 +177,15 @@ class LifecycleConflict extends Error {}
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
-      return NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request: _request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findFirst({
         where: withinTenant({ id }, await tenantWhere(session)),
         select: { id: true, status: true, lifecycleState: true, pausedAt: true, endReasonCode: true, mentorId: true },
       });
-      if (!relation || (session.user.role !== 'ADMIN' && relation.mentorId !== session.user.id)) {
+      if (!relation || (!admin && relation.mentorId !== session.user.id)) {
         return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
       }
       const events = await prisma.relationLifecycleEvent.findMany({

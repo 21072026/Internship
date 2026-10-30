@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { orgWorldWhere } from '@/lib/superAdminWorld';
 import { PLAN_CHANGE_STATUSES } from '@/lib/planChangeRule';
+import { requirePermission } from '@/lib/authz';
 
 // The operator queue of plan-change requests (#1743). A SUPER ADMIN reads the
 // requests of every organization of ITS OWN world (docs/worlds.md § Super
@@ -12,11 +11,11 @@ import { PLAN_CHANGE_STATUSES } from '@/lib/planChangeRule';
 // wrapped in withTenantScope: the queue spans tenants by design, and the
 // explicit world filter is what bounds it.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // A super admin is always an ADMIN; the role check comes first so a lesser
   // role never reaches the flag lookup at all.
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const world = await superAdminWorld(session);
   if (!world) {
     await logCrossTenantDenial(session, 'GET /api/admin/plan-requests', null);

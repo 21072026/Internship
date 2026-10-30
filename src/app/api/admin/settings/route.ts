@@ -1,6 +1,5 @@
+import { isValidLeadList } from '@/lib/meetingReminderLeads';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import { isGlobalSettingKey, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
 import { revertSetting, writeSetting, type SettingWriteResult } from '@/lib/settingsWrite';
@@ -23,9 +22,10 @@ import { OUTBOUND_APPROVAL_MODES, outboundApprovalApplies } from '@/lib/outbound
 // row → the code default (see src/lib/settings.ts). The org is passed
 // explicitly rather than read from the bound context, so an org-less session
 // reads the default org's values — the same org its PUT writes (#2628).
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = await settingsOrgOf(session);
   return withTenantScope(session, async () => {
     const resolved = await resolveSettings({ orgId });
@@ -58,6 +58,8 @@ async function logSettingChange(
 
 const schema = z.object({
   reminderDays: z.string().regex(/^\d{1,3}$/).optional(),
+  // Meeting reminder lead times (#1636): '' = the built-in defaults.
+  meetingReminderLeadsMinutes: z.string().max(40).refine(isValidLeadList, 'invalid lead list').optional(),
   supportEmail: z.string().email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
@@ -164,7 +166,22 @@ const schema = z.object({
   evaluationInterimStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
   evaluationInterimDays: z.string().regex(/^\d{1,3}$/).optional(),
   evaluationFinalStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
+  // Notification blackout days (#1714, docs/notification-channels.md): real
+  // calendar dates only, comma separated; the router holds mail and push
+  // raised on them to the next open day. `''` clears the list.
+  notificationBlackoutDates: z
+    .string()
+    .max(1100)
+    .refine((v) => v.trim() === '' || v.split(/[\s,;]+/).filter(Boolean).every(isCalendarDate), { message: 'YYYY-MM-DD, comma separated' })
+    .optional(),
+  notificationBlackoutWeekends: z.enum(['true', 'false']).optional(),
 });
+
+function isCalendarDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
 
 // Keys that only exist in a vertical with the sales surface (pipeline, no
 // mentorship): the sales target and leaderboard, and the marketing import's
@@ -185,8 +202,9 @@ const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps', '
 // definition; they are written to the global row, and only by a super admin. A
 // tenant admin posting one gets 403 and nothing in the request is written.
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

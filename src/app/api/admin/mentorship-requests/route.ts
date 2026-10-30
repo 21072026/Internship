@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
+import { getLocale } from '@/i18n/server';
 import { prisma } from '@/lib/prisma';
 import { decideMentorshipRequest } from '@/lib/mentorshipDecision';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
+import { requirePermission } from '@/lib/authz';
 
 // Admin queue for mentee mentorship requests (#590): list PENDING requests,
 // approve (pick a mentor → MentorshipRelation) or reject. The mentee is
@@ -24,17 +25,19 @@ import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
 const REMATCH_STATS_DAYS = 90;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Mentorship requests only exist in a vertical with mentors (#2351): closed,
   // reads included, for every other one.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
   const statusParam = new URL(request.url).searchParams.get('status');
-  const status = statusParam === 'APPROVED' || statusParam === 'REJECTED' ? statusParam : 'PENDING';
+  const status =
+    statusParam === 'APPROVED' || statusParam === 'REJECTED' || statusParam === 'CANCELLED' || statusParam === 'EXPIRED'
+      ? statusParam
+      : 'PENDING';
   const since = new Date(Date.now() - REMATCH_STATS_DAYS * 24 * 60 * 60 * 1000);
   // Hand-written tenant filter (#2542): withTenantScope() is dormant while
   // MT_ENFORCE_ISOLATION is off. A request belongs to its mentee's org; the
@@ -56,6 +59,9 @@ export async function GET(request: Request) {
         preferredLanguages: true,
         preferredMentor: { select: { id: true, fullName: true } },
         createdAt: true,
+        // The countdown (#1775) and, for a withdrawn request, why.
+        expiresAt: true,
+        cancelReason: true,
         mentee: { select: { id: true, fullName: true, email: true, university: true, skills: true } },
         // Re-match payload — admins only, see the header comment.
         replacesRelationId: true,
@@ -108,17 +114,22 @@ export async function GET(request: Request) {
 
 const decideSchema = z.object({
   requestId: z.string().min(1),
-  action: z.enum(['approve', 'reject']),
+  action: z.enum(['approve', 'reject', 'cancel']),
   mentorId: z.string().min(1).optional(),
+  // The audit record (#1789): the suggestion batch the admin was shown (the
+  // server reads its rows) and the admin's own note on why this mentor.
+  suggestionBatchId: z.string().min(1).max(64).optional(),
+  decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
+  // Required for 'cancel' (#1775) — checked in decideMentorshipRequest.
+  reason: z.string().max(500).optional(),
 });
 
 // PUT — decide a request. Approving requires a mentorId and creates the
 // MentorshipRelation (unless the mentee got one in the meantime).
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('relation.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Mentorship requests only exist in a vertical with mentors (#2351): closed,
   // reads included, for every other one.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
@@ -127,7 +138,7 @@ export async function PUT(request: Request) {
   return await withTenantScope(session, async () => {
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const { requestId, action, mentorId } = parsed.data;
+  const { requestId, action, mentorId, suggestionBatchId, decisionNote, reason } = parsed.data;
 
   // The request and the chosen mentor must both be in the caller's tenant; a
   // foreign id reads as not found, never as "exists" (#2542).
@@ -151,6 +162,10 @@ export async function PUT(request: Request) {
     requestId,
     action,
     mentorId,
+    suggestionBatchId,
+    decisionNote,
+    locale: await getLocale(),
+    reason,
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
     request,

@@ -196,9 +196,12 @@ test('a partner invitation stays behind affiliate.write and dies with a suspensi
   const token = live[0];
 
   // The generic board does not resend it (it would hand the live link to any admin tier).
+  // An OBSERVER holds no `org.invite` (#1571): refused before the invitation is even read.
   const observer = await context(playwright, baseURL);
   expect((await signInViaApi(observer, observerEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
-  const single = await observer.post(`/api/invite/${token.id}`, { headers: host });
+  expect((await observer.post(`/api/invite/${token.id}`, { headers: host })).status()).toBe(403);
+  // A full admin reaches it and is told where a partner invitation is resent.
+  const single = await admin.post(`/api/invite/${token.id}`, { headers: host });
   expect(single.status()).toBe(409);
   expect((await single.json()).code).toBe('partner_invitation');
   const bulk = await admin.post('/api/admin/invitations/bulk', { headers: host, data: { ids: [token.id], action: 'resend' } });

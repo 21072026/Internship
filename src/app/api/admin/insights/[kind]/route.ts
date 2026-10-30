@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -31,9 +30,9 @@ function kindOf(raw: string): InsightKind | null {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ kind: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const kind = kindOf((await params).kind);
   if (!kind) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
@@ -53,9 +52,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ kind: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const kind = kindOf((await params).kind);
   if (!kind) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

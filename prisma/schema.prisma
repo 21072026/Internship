@@ -65,6 +65,9 @@ enum ConferencingPolicy {
   BUILTIN
   PREFER_PERSONAL
   REQUIRE_EXTERNAL
+  // A Google Meet room created on the organiser's own connected calendar
+  // (#2009, src/lib/conferenceGeneration.ts); PREFER_PERSONAL without one.
+  GENERATE_PROVIDER
 }
 
 enum InteractionType {
@@ -97,15 +100,15 @@ enum PipelineStatus {
 // enforces isolation yet, so behaviour is unchanged. Enforcement (query
 // filtering, per-org uniqueness) lands in a later, guarded slice.
 model Organization {
-  id               String   @id @default(cuid())
-  name             String
-  slug             String   @unique
+  id                 String    @id @default(cuid())
+  name               String
+  slug               String    @unique
   // Per-tenant plan tier (#547). Limits per plan live in src/lib/orgPlans.ts
   // (client-safe catalogue), not the DB. New tenants start on FREE; the
   // backfilled legacy "default" org is grandfathered to ENTERPRISE (unlimited)
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
-  plan             OrgPlan  @default(FREE)
+  plan               OrgPlan   @default(FREE)
   // Which PRODUCT this tenant is (#2350, epic #2348). coreCRM is one core with
   // several verticals: INTERNSHIP is the mentorship/placement product this repo
   // started as, MARKETING the second one. It is a property of the TENANT, not of
@@ -120,16 +123,16 @@ model Organization {
   //
   // Literal default, so `db push` fills existing rows itself (#2298 only bites
   // client-side defaults and required columns without one).
-  vertical         String   @default("INTERNSHIP")
+  vertical           String    @default("INTERNSHIP")
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,
   // the #543 enforcement slice); until then they are managed but not applied to
   // the live single-tenant UI.
-  brandName        String?
-  brandLogoUrl     String?  @db.Text
-  brandColor       String?
-  supportEmail     String?
+  brandName          String?
+  brandLogoUrl       String?   @db.Text
+  brandColor         String?
+  supportEmail       String?
   // Per-organization brand (#2922, docs/white-label.md). The rule is pure in
   // src/lib/brandRule.ts: a field left null falls back to the vertical's
   // default on its own, and a row with none of them set IS the default. All
@@ -140,25 +143,25 @@ model Organization {
   //                    (super admin only; generated from brandColor when unset)
   //   brandMarkVersion the current generated icon set (BrandAsset.version);
   //                    null = the vertical's static files under public/
-  brandTileColor   String?
-  brandAccent      String?
-  brandPalette     String?  @db.Text
-  brandMarkVersion String?
+  brandTileColor     String?
+  brandAccent        String?
+  brandPalette       String?   @db.Text
+  brandMarkVersion   String?
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
   // library — see docs/sso-saml.md; this stores/validates the config and gates
   // the (documented, not-yet-wired) auth code path.
-  ssoEnabled       Boolean  @default(false)
-  ssoProvider      String? // 'saml' | 'oidc'
-  ssoIssuer        String? // IdP entity ID / issuer
-  ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
-  ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  ssoEnabled         Boolean   @default(false)
+  ssoProvider        String? // 'saml' | 'oidc'
+  ssoIssuer          String? // IdP entity ID / issuer
+  ssoEntryPoint      String?   @db.Text // IdP SSO sign-in URL
+  ssoCertificate     String?   @db.Text // IdP x509 signing certificate (PEM)
   // The certificate-expiry warning already mailed (#1933, src/lib/ssoCertificateRule.ts):
   // the SHA-256 fingerprint it was about and the mark (30 or 7 days). Keyed to the
   // fingerprint so a rotated certificate starts afresh and a redeploy never re-sends.
-  ssoCertWarnFp    String?  @db.VarChar(100)
-  ssoCertWarnStage Int?
+  ssoCertWarnFp      String?   @db.VarChar(100)
+  ssoCertWarnStage   Int?
   // Enforced SSO (#1950): when true, NO password-derived path may mint a
   // session for this tenant's users — sign-in, remember-me silent re-auth,
   // password reset/SET_INITIAL, invitation registration and password change all
@@ -168,31 +171,43 @@ model Organization {
   // ADMIN (anti-lockout), and enforcement only *applies* while SSO is still
   // active — a plan downgrade or a broken config falls back to password login
   // rather than locking the tenant out of its own data. See docs/sso-saml.md.
-  ssoEnforced      Boolean  @default(false)
+  ssoEnforced        Boolean   @default(false)
   // IdP role mapping (#1940): when true, a RETURNING SSO user's role is
   // re-resolved from their claims on every login (logged at warning level,
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
-  ssoSyncRole      Boolean  @default(false)
+  ssoSyncRole        Boolean   @default(false)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
   // sealed with secretBox (purpose 'sso-sp-signing-key'), the self-signed
   // public certificate published in the SP metadata.
-  ssoLogoutUrl     String?  @db.Text
-  ssoSpKey         String?  @db.Text
-  ssoSpCert        String?  @db.Text
+  ssoLogoutUrl       String?   @db.Text
+  ssoSpKey           String?   @db.Text
+  ssoSpCert          String?   @db.Text
+  // OpenID Connect (#1926; the flow is #1929, docs/sso-oidc.md). Used only when
+  // ssoProvider = 'oidc'; ssoIssuer is the OIDC `iss`. The client secret is
+  // SEALED (secretBox purpose 'sso-oidc-client-secret') and is a credential:
+  // ORG_CREDENTIAL_FIELDS keeps it out of every response. Scopes default to
+  // `openid email profile` when null. The JWKS cache spares a login one
+  // network hop; it is refreshed on a TTL and on an unknown `kid`.
+  ssoClientId        String?   @db.VarChar(255)
+  ssoClientSecretEnc String?   @db.Text
+  ssoDiscoveryUrl    String?   @db.Text
+  ssoScopes          String?   @db.VarChar(255)
+  ssoJwksCache       Json?
+  ssoJwksFetchedAt   DateTime?
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
   // yet — `stripeCustomerId` is the column the later checkout task fills, kept
   // unique so one customer can never be attached to two tenants.
-  stripeCustomerId String?  @unique
-  billingEmail     String?
-  vatId            String?
+  stripeCustomerId   String?   @unique
+  billingEmail       String?
+  vatId              String?
   // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
   // never inferred from an IP or a locale.
-  billingCountry   String?
+  billingCountry     String?
   // The public hostname whose sessionless forms write into THIS tenant (#2569):
   // the marketing landing's demo form on one of the marketing hosts
   // (MARKETING_HOSTS) lands in the org whose `publicHost` is exactly that host
@@ -202,9 +217,9 @@ model Organization {
   // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
   // one host can never name two tenants. Resolution + trust reasoning:
   // src/lib/publicHostOrg.ts. Nullable, so `db push` is additive (#2298).
-  publicHost       String?  @unique
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  publicHost         String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Ownership of `publicHost` as a TENANT's own domain (#1661). The mapping
   // above is an operator's word; a domain a tenant brings itself is proven with
@@ -220,6 +235,19 @@ model Organization {
   // and giving it an orgId re-keys the table (a drop-and-recreate under
   // `db push`). Literal default, so `db push` fills existing rows itself.
   conferencingPolicy ConferencingPolicy @default(BUILTIN)
+
+  // Tenant lifecycle (#1582, docs/tenant-lifecycle.md). Set = archived: no
+  // sign-in on any door, no mail to its people, gone from operational lists,
+  // every row kept. Cleared = live again. Written only by
+  // src/lib/orgLifecycle.ts (super admin). Nullable — additive (#2298).
+  archivedAt            DateTime?
+  archivedById          String?
+  // Hard delete, stage 1 (#1584): when — and by whom — permanent deletion was
+  // requested. Execution waits TENANT_HARD_DELETE_WAIT_HOURS after this, needs
+  // the deployment switch TENANT_HARD_DELETE_ENABLED (off by default) and is
+  // cleared by unarchiving. Rule: src/lib/orgDeletionRule.ts. Nullable — additive.
+  deletionRequestedAt   DateTime?
+  deletionRequestedById String?
 
   users                   User[]
   sources                 Source[]
@@ -239,6 +267,7 @@ model Organization {
   skillEdges              SkillEdge[]
   unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
+  mentorOffers            MentorOffer[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
   documentReviews         DocumentReview[]
@@ -265,6 +294,7 @@ model Organization {
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
   offers                  Offer[]
+  offerTemplates          OfferTemplate[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
   applications            Application[]
@@ -273,6 +303,9 @@ model Organization {
   matchFeedback           MatchFeedback[]
   matchRuleSets           MatchRuleSet[]
   matchRules              MatchRule[]
+  matchDecisions          MatchDecision[]
+  matchRounds             MatchRound[]
+  matchProposals          MatchProposal[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -296,6 +329,7 @@ model Organization {
   nudgeRules              NudgeRule[]
   nudgeSends              NudgeSend[]
   automationRules         AutomationRule[]
+  holidayCalendars        HolidayCalendar[]
   automationRuns          AutomationRun[]
   auditDrains             AuditDrain[]
   externalConnections     ExternalConnection[]
@@ -322,6 +356,8 @@ model Organization {
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
   requisitionFits         RequisitionFit[]
+
+  @@index([archivedAt])
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -790,6 +826,10 @@ model User {
   // limit (mentorCapacity alone). Never applies to an admin assigning them;
   // judged by getMentorAvailability(context: 'self_select').
   selfMatchLimit          Int?
+  // A MENTEE's opt-in to being offered mentorship by a mentor (#1809). Off by
+  // default: a mentee who has not switched it on is never listed to a mentor,
+  // never offerable and never mailed by the Mentor Offers feature.
+  openToOffers            Boolean       @default(false)
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.
@@ -942,6 +982,7 @@ model User {
   contributorTermsAcceptances       ContributorTermsAcceptance[]
   mentoringAgreementAcceptances     MentoringAgreementAcceptance[]
   googleCalendar                    GoogleCalendarConnection?
+  calendarConnections               CalendarConnection[]
   companyInterests                  CompanyInterest[]              @relation("CompanyInterestMentee")
   // Company → candidate message requests (#1840); removed with the person.
   candidateOutreach                 CandidateOutreach[]            @relation("CandidateOutreachMentee")
@@ -951,6 +992,8 @@ model User {
   preferredInRequests               MentorshipRequest[]            @relation("PreferredMentorRequests")
   decidedMentorApplications         MentorApplication[]            @relation("DecidedMentorApplications")
   screenedMentorApplications        MentorApplication[]            @relation("ScreenedMentorApplications")
+  mentorOffersSent                  MentorOffer[]                  @relation("MentorOffersSent")
+  mentorOffersReceived              MentorOffer[]                  @relation("MentorOffersReceived")
   handledCompanyInquiries           CompanyInquiry[]               @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]                @relation("SupportRequester")
   supportReports                    SupportReport[]                @relation("SupportReportAuthor")
@@ -1033,6 +1076,8 @@ model User {
   stageSlaOverrides StageSla[] @relation("StageSlaMentor")
 
   requisitionFits RequisitionFit[] @relation("RequisitionFitMentee")
+
+  cancelledMentorshipRequests MentorshipRequest[] @relation("CancelledMentorshipRequests")
 
   @@unique([email, orgId])
   @@index([role])
@@ -2129,6 +2174,11 @@ model Company {
   externalProfiles   ExternalProfileLink[]
   adminScopeGrants   AdminScopeGrant[]
 
+  // API keys a COMPANY owner minted for their own data (#2006).
+  apiKeys  ApiKey[]
+  // Webhooks a COMPANY owner registered for their own hiring events (#2006).
+  webhooks Webhook[]
+
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
@@ -2372,6 +2422,10 @@ enum MentorshipRequestStatus {
   PENDING
   APPROVED
   REJECTED
+  // #1775: an admin withdrew it with a reason (`cancelReason`), or nobody
+  // answered within 14 days (`expiresAt`). Both free the mentee to ask again.
+  CANCELLED
+  EXPIRED
 }
 
 model MentorshipRequest {
@@ -2397,10 +2451,21 @@ model MentorshipRequest {
   rematchNote        String?                 @db.Text
   decidedById        String?
   decidedAt          DateTime?
+  // Request expiry (#1775). The rule — 14 days to an answer, ONE nudge on day 7
+  // — is pure in src/lib/requestExpiryRule.ts; src/lib/requestExpiry.ts is the
+  // only writer of the sweep's state. NULL `expiresAt` (requests from before the
+  // column) reads as createdAt + 14 days.
+  expiresAt          DateTime?
+  nudgeSentAt        DateTime?
+  // Who withdrew a pending request and why (admin only, `action: 'cancel'`).
+  // The reason is shown to the mentee — it is the one thing they are owed.
+  cancelledById      String?
+  cancelReason       String?                 @db.Text
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
   mentee           User                @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  cancelledBy      User?               @relation("CancelledMentorshipRequests", fields: [cancelledById], references: [id], onDelete: SetNull)
   decidedBy        User?               @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
   // SetNull: a mentor leaving must not take pending requests with them — the
   // preference simply disappears while the request survives.
@@ -2413,6 +2478,7 @@ model MentorshipRequest {
   @@index([menteeId])
   @@index([preferredMentorId])
   @@index([replacesRelationId])
+  @@index([status, expiresAt])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
@@ -2652,45 +2718,52 @@ model ContactPermission {
   // Nullable like Company's own orgId. Registered in TENANT_MODELS; every
   // sessionless writer (the DOI click, an inquiry placed by the form, the
   // import) passes orgId itself — src/lib/contactPermission.ts.
-  orgId       String?
-  org         Organization?           @relation(fields: [orgId], references: [id])
-  id          String                  @id @default(cuid())
+  orgId           String?
+  org             Organization?           @relation(fields: [orgId], references: [id])
+  id              String                  @id @default(cuid())
   // Cascade: erasing the account erases its permission rows (#2559). The
   // opt-out stays provable where it matters — on the enquiry row, which keeps
   // its own `marketingOptOutAt` for as long as enquiries are retained.
-  companyId   String
-  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  channel     ContactChannel
-  basis       ContactPermissionBasis  @default(NONE)
-  source      ContactPermissionSource
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  channel         ContactChannel
+  basis           ContactPermissionBasis  @default(NONE)
+  source          ContactPermissionSource
   // The address (EMAIL) the basis was established for. A permission is for an
   // address, not for whatever `contactEmail` says later: if the contact
   // changes, the old confirmation does not cover the new person.
-  address     String?                 @db.VarChar(320)
+  address         String?                 @db.VarChar(320)
   // Evidence of a DOI: the opt-in wording version and language shown, when the
   // box was ticked and when the link was confirmed. No IP address (data
   // minimisation — the demo form promises none; the signed link bound to the
   // address plus the two timestamps is the proof).
-  textVersion String?
-  textLocale  String?                 @db.VarChar(5)
-  requestedAt DateTime?
-  confirmedAt DateTime?
+  textVersion     String?
+  textLocale      String?                 @db.VarChar(5)
+  requestedAt     DateTime?
+  confirmedAt     DateTime?
   // The enquiry the evidence came from. No foreign key: enquiries have their
   // own retention, and the copy above is what must survive them.
-  inquiryId   String?
+  inquiryId       String?
   // EXISTING_CUSTOMER_7_3 / manual changes: who and why. Plain id, no FK — the
   // ActivityLog carries the actor too.
-  grantedById String?
-  reason      String?                 @db.Text
+  grantedById     String?
+  reason          String?                 @db.Text
   // Revocation (opt-out link, or an admin). The basis is kept so the history
   // still says what was revoked; an effective permission needs this NULL.
-  revokedAt   DateTime?
-  revokedVia  String?                 @db.VarChar(16)
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  revokedAt       DateTime?
+  revokedVia      String?                 @db.VarChar(16)
+  // When the person this proof is about was erased (#2098): the account
+  // erasure and forgetCompanyContact() stamp it, a new basis written for the
+  // company clears it. From then on the row is kept ONLY as UWG § 7 evidence,
+  // and the `contactPermissionProof` retention entry deletes it three years
+  // after the end of that calendar year (src/lib/erasureRetentionRule.ts).
+  subjectErasedAt DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
   @@unique([companyId, channel])
   @@index([orgId, channel, basis])
+  @@index([subjectErasedAt])
 }
 
 // The per-recipient cap on confirmation mails (#2577, #2569 § 9): at most ONE
@@ -2913,6 +2986,17 @@ model Offer {
   createdBy            User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
   decidedById          String?
   decidedBy            User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  // The offer letter (#1857). `letterSnapshot` is the exact rendered markdown
+  // FROZEN when the offer is sent (a later template edit never changes what
+  // was sent), in `letterLocale`. It contains compensation, so it rides the
+  // canSeeCompensation rule (src/lib/offers.ts, OFFER_LETTER_FIELDS) — never
+  // SELECTed for COMPANY. Accepting stamps `decidedAt` (already the time)
+  // plus the IP and user agent: a click-to-accept record, NOT a qualified
+  // electronic signature. Both are ADMIN-only reads.
+  letterSnapshot       String?            @db.Text
+  letterLocale         String?            @db.VarChar(5)
+  acceptedIp           String?            @db.VarChar(64)
+  acceptedUserAgent    String?            @db.VarChar(512)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -2921,6 +3005,25 @@ model Offer {
   @@index([orgId, currency])
   // The /api/v1 keyset (#1990).
   @@index([updatedAt, id])
+}
+
+// An org's offer letter template per locale (#1857). An org with no row gets
+// the built-in letter (src/lib/offerLetterTemplates.ts) — "define nothing,
+// keep the built-in". The editor writes one row per locale (`isDefault`);
+// `name` keeps room for several named templates later.
+model OfferTemplate {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name         String       @db.VarChar(100)
+  locale       String       @db.VarChar(5)
+  bodyMarkdown String       @db.Text
+  isDefault    Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([orgId, locale, name])
+  @@index([orgId, locale, isDefault])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -3133,6 +3236,11 @@ model Webhook {
   apiKeyId            String?
   apiKey              ApiKey?           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
   source              String?           @db.VarChar(20)
+  // Set when a COMPANY owner registered the hook for their own data (#2006):
+  // fan-out then delivers only the company-scoped events whose subject belongs
+  // to this company (src/lib/companyWebhookScope.ts). Null = an org-wide hook.
+  companyId           String?
+  company             Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
   // `consecutiveFailures` and `failingSince` describe the current failure
   // streak (reset by any 2xx); past 20 failures or 72h without a success the
@@ -3148,6 +3256,7 @@ model Webhook {
 
   @@index([orgId, active])
   @@index([apiKeyId])
+  @@index([companyId])
 }
 
 // One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
@@ -3222,6 +3331,35 @@ model DomainEvent {
   @@index([subjectType, subjectId, createdAt])
   // The retention sweep's cross-tenant range (pruneDomainEvents).
   @@index([createdAt])
+}
+
+// A tenant's holiday calendar for business-day stage SLAs (#1638). Entered by
+// hand or pasted (`YYYY-MM-DD, label` per line) — no third-party holiday API.
+// Chosen per org or per programme through the `slaHolidayCalendarId` setting;
+// only read when `slaDayMode = 'business'`. docs/business-day-slas.md.
+model HolidayCalendar {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String       @db.VarChar(120)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  holidays  Holiday[]
+
+  @@index([orgId])
+}
+
+// One non-working date of a calendar, a LOCAL calendar day (no time, no zone):
+// the SLA judges it in the scope's `slaTimeZone`. Reached through its calendar,
+// which carries the org — deliberately not a tenant model of its own.
+model Holiday {
+  id         String          @id @default(cuid())
+  calendarId String
+  date       DateTime        @db.Date
+  label      String          @db.VarChar(120)
+  calendar   HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
 }
 
 // A stage automation rule (#1703): "when a relation enters/leaves stage X and
@@ -3390,6 +3528,12 @@ model ApiKey {
   // recorded owner, and a deleted admin must not take the key's history away.
   createdById     String?
   createdBy       User?               @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  // Set when a COMPANY owner minted the key for their own data (#2006): the
+  // door then admits it only on routes that filter by this company, and its
+  // scopes never exceed the company ceiling (src/lib/companyApiKeyRule.ts).
+  // Null = an org-wide key an ADMIN minted. Additive and nullable.
+  companyId       String?
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Null means "never expires" — allowed, but flagged in the admin UI.
   expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
@@ -3409,6 +3553,7 @@ model ApiKey {
 
   @@index([orgId])
   @@index([createdById])
+  @@index([companyId])
 }
 
 // Requests per API key per quota period (#2010) — the only counter model the
@@ -3935,6 +4080,7 @@ model Cohort {
   adminScopeGrants AdminScopeGrant[]
   settings         Setting[]
   stageSlas        StageSla[]
+  matchRounds      MatchRound[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -4847,6 +4993,14 @@ model Meeting {
   rsvpToken           String        @unique
   createdById         String
   reminderSentAt      DateTime?
+  // Reminder lead times (#1636, src/lib/meetingReminderLeads.ts). NULL = the
+  // programme's `meetingReminderLeadsMinutes` (or the one-hour default); 0 =
+  // no reminder for this meeting; N = one reminder N minutes ahead.
+  reminderLeadMinutes Int?
+  // The leads already sent for the current start time ("1440,60"), claimed by
+  // one guarded update before anything is sent; cleared with reminderSentAt
+  // when the meeting moves.
+  remindedLeads       String?       @db.VarChar(64)
   createdAt           DateTime      @default(now())
   // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
   updatedAt           DateTime      @default(now()) @updatedAt
@@ -4888,6 +5042,7 @@ model Meeting {
   interaction      InteractionLog?
   notes            PersonalNote[]
   googleEvents     GoogleCalendarEventLink[]
+  calendarEvents   CalendarEventLink[]
   guests           MeetingGuest[]
   feedback         MeetingFeedback[]
   attendance       MeetingAttendance[]
@@ -5131,6 +5286,7 @@ model MeetingSeries {
   attendance    MeetingAttendance[]
   // The one recurring Google event per connected member (#2654).
   calendarLinks GoogleCalendarEventLink[]
+  providerLinks CalendarEventLink[]
 
   @@index([projectId])
   @@index([relationId])
@@ -5147,15 +5303,22 @@ enum MeetingReminderLead {
 }
 
 model MeetingSeriesReminder {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   seriesId     String
   occurrenceAt DateTime
-  lead         MeetingReminderLead
-  sentAt       DateTime            @default(now())
+  // The pre-#1636 enum, still written for the 1440/60 leads so a row written
+  // now collides with one written before the deploy (no double reminder across
+  // the transition); NULL for any other lead. Never re-typed in place: an
+  // enum → Int change under `db push --accept-data-loss` drops the column.
+  lead         MeetingReminderLead?
+  // The lead in minutes (#1636) — the real key from now on. NULL on old rows.
+  leadMinutes  Int?
+  sentAt       DateTime             @default(now())
 
   series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([seriesId, occurrenceAt, lead])
+  @@unique([seriesId, occurrenceAt, leadMinutes])
 }
 
 // "This occurrence is over" for a series occurrence that has no Meeting row —
@@ -6727,6 +6890,81 @@ model GoogleCalendarEventLink {
   @@index([connectionId])
 }
 
+/// Which calendar service a connection talks to (#1989).
+enum CalendarProviderKind {
+  GOOGLE
+  MICROSOFT
+}
+
+/// One person's consent to mirror meetings into ONE provider's calendar (#1989).
+///
+/// EXPAND phase of a provider-neutral connection layer: this replaces
+/// GoogleCalendarConnection, which stays in the schema, untouched and no longer
+/// written, until a separate contract PR drops it after production counts match
+/// (prisma/backfill-calendar-connections.mjs copies it across once). Renaming
+/// the old model would have been a drop-and-recreate under `db push
+/// --accept-data-loss` and destroyed every stored consent.
+///
+/// The key is (userId, provider): a person may hold a Google AND a Microsoft
+/// connection at once; the old `userId @unique` allowed one calendar per person.
+///
+/// No `orgId`, deliberately: like MeetingGuest this hangs off a scoped parent
+/// (the User) and is never listed across people, so it is not in TENANT_MODELS
+/// (src/lib/orgContext.ts) and gets no automatic tenant protection — every
+/// reader looks a row up by its own userId, on purpose.
+model CalendarConnection {
+  id       String               @id @default(cuid())
+  userId   String
+  provider CalendarProviderKind
+
+  /// The account that granted consent — shown back to the person so they can
+  /// tell WHICH calendar this is before they trust it or disconnect it.
+  accountEmail String
+  /// 'primary' unless the operator points it elsewhere.
+  calendarId   String @default("primary")
+  /// What the provider actually granted.
+  scope        String @db.Text
+
+  /// Sealed with lib/secretBox under the PROVIDER's own purpose string; never
+  /// written in the clear.
+  accessTokenEnc  String   @db.Text
+  refreshTokenEnc String?  @db.Text
+  expiresAt       DateTime
+
+  lastSyncAt DateTime?
+  lastError  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events CalendarEventLink[]
+
+  @@unique([userId, provider])
+  @@index([provider])
+}
+
+/// Which provider event a meeting (or a recurring series) became, on one
+/// connection's calendar (#1989) — the provider-neutral successor of
+/// GoogleCalendarEventLink, with the same shape: exactly one of `meetingId` /
+/// `seriesId` is set, one row per (meeting OR series) × connection.
+model CalendarEventLink {
+  id              String   @id @default(cuid())
+  meetingId       String?
+  seriesId        String?
+  connectionId    String
+  externalEventId String
+  pushedAt        DateTime @default(now())
+
+  meeting    Meeting?           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  series     MeetingSeries?     @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  connection CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, connectionId])
+  @@unique([seriesId, connectionId])
+  @@index([connectionId])
+}
+
 /// What happened to one mentor suggestion (#2040).
 /// SHOWN is written the moment the suggestion is returned; ACCEPTED/DISMISSED
 /// overwrite it when the admin acts. There is deliberately no "IGNORED": a row
@@ -6812,6 +7050,130 @@ model MatchFeedback {
 /// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
 /// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
 /// rule named — never a silent drop.
+enum MatchRoundStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  DISCARDED
+}
+
+enum MatchProposalState {
+  DRAFT
+  LOCKED
+  DISCARDED
+  PUBLISHED
+}
+
+/// A bulk matching round over an intake (#1793, story #1791): the staging area
+/// where proposed pairings wait before any of them becomes a relation.
+/// DRAFT → REVIEW → PUBLISHED, or DISCARDED until published. PUBLISHED is
+/// terminal: never re-run, re-published, edited or discarded. The lifecycle
+/// rules are pure in src/lib/matching/round.ts. Nothing here creates a
+/// relation — only the publish path (#1796) does.
+model MatchRound {
+  id             String           @id @default(cuid())
+  orgId          String?
+  cohortId       String?
+  name           String           @db.VarChar(120)
+  status         MatchRoundStatus @default(DRAFT)
+  ruleSetId      String?
+  ruleSetVersion Int?
+  createdById    String
+  createdAt      DateTime         @default(now())
+  publishedById  String?
+  publishedAt    DateTime?
+  /// Counts written by the cohort pass (#1794): proposed, unmatched, mentors used, at capacity…
+  stats          Json             @default("{}")
+
+  org       Organization?   @relation(fields: [orgId], references: [id])
+  cohort    Cohort?         @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  proposals MatchProposal[]
+
+  @@index([orgId, status])
+  @@index([cohortId])
+}
+
+/// One mentee's proposed pairing inside a MatchRound (#1793). An UNMATCHED
+/// mentee still gets a row (mentorId null, `unmatchedReason` set) — that row is
+/// the diagnostic, not an absence. One proposal per mentee per round. Carries
+/// its own orgId and is in TENANT_MODELS: it names participants directly, so it
+/// is scoped on its own rather than through its round.
+model MatchProposal {
+  id              String             @id @default(cuid())
+  orgId           String?
+  roundId         String
+  menteeId        String
+  mentorId        String?
+  score           Int?
+  breakdown       Json               @default("[]")
+  blockedBy       Json               @default("[]")
+  rank            Int?
+  /// The next few candidates with their scores, so a swap needs no re-run.
+  alternatives    Json               @default("[]")
+  state           MatchProposalState @default(DRAFT)
+  unmatchedReason String?            @db.VarChar(64)
+  /// Set on publish.
+  relationId      String?
+  note            String?            @db.Text
+  updatedById     String?
+  updatedAt       DateTime           @updatedAt
+
+  org   Organization? @relation(fields: [orgId], references: [id])
+  round MatchRound    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, menteeId])
+  @@index([roundId, state])
+}
+
+/// Where a pairing was decided (#1789). The human step, named.
+enum MatchDecisionSource {
+  ADMIN_DIRECT
+  REQUEST_APPROVAL
+  MENTOR_ACCEPT
+  BULK_ROUND
+  MENTEE_PREFERENCE
+}
+
+/// The auditable record of one pairing (#1789): who was paired, on what score,
+/// by which rule set, whether the human overrode the ranking, and why. One row
+/// per pairing, written by `recordMatchDecision()` (src/lib/matching/decision.ts)
+/// and nothing else. `breakdown` is a FROZEN copy of the rule contributions at
+/// decision time — editing or archiving the rule set later never rewrites it,
+/// which is why the score is copied here instead of recomputed on read.
+/// `overrodeSuggestion` is computed server-side from the suggestion batch the
+/// client was shown (MatchFeedback rows), never taken from the client. Ids are
+/// bare (no FK) on purpose: the audit row must outlive the relation, the people
+/// and the rule set it names.
+model MatchDecision {
+  id                 String              @id @default(cuid())
+  orgId              String?
+  relationId         String?
+  menteeId           String
+  mentorId           String
+  requestId          String?
+  /// #1791's bulk round, once it exists.
+  roundId            String?
+  source             MatchDecisionSource
+  score              Int?
+  breakdown          Json                @default("[]")
+  blockedBy          Json                @default("[]")
+  ruleSetId          String?
+  ruleSetVersion     Int?
+  /// Where the chosen mentor sat in the shown ranking; null = not scored/shown.
+  suggestedRank      Int?
+  overrodeSuggestion Boolean             @default(false)
+  /// The coordinator's own note — "why this mentor". Stored here and nowhere else.
+  note               String?             @db.Text
+  decidedById        String
+  decidedAt          DateTime            @default(now())
+
+  org Organization? @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, decidedAt])
+  @@index([relationId])
+  @@index([menteeId])
+}
+
 enum MatchRuleKind {
   WEIGHTED
   HARD_REQUIRE
@@ -7286,6 +7648,21 @@ model OrgEntitlement {
 /// missed slot from one already handled. System-level, no `orgId` — a schedule
 /// is the deployment's, not a tenant's. Advanced only by one conditional write
 /// (`src/lib/jobs/scheduleStateStore.ts`), so it never moves backwards.
+/// One health sample of THIS deployment, written every 5 minutes by the
+/// `status.sample` job (#1604, src/lib/statusSample.ts) — the history behind
+/// the public /status page. Deployment-wide on purpose (no orgId): the web app,
+/// its database, its mail relay and its job queue are shared by every tenant.
+/// A missing slot is the signal: a sample can only be written when the app, its
+/// database and its scheduler are all running, so a gap is downtime.
+model StatusSample {
+  /// The slot start, floored to 5 minutes (UTC). Unique: a rerun of the same
+  /// slot overwrites instead of double-counting.
+  at   DateTime @id
+  /// 'ok' | 'degraded' — src/lib/statusRule.ts decides.
+  mail String   @db.VarChar(16)
+  jobs String   @db.VarChar(16)
+}
+
 model ScheduleState {
   /// The schedule key — `QueueSchedule.key`.
   name             String    @id @db.VarChar(64)
@@ -8500,6 +8877,11 @@ model AffiliateProgramSettings {
   // When the current plan version took effect. Payments RECORDED before it never
   // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
   planEffectiveAt DateTime?
+  // The re-evaluation of every partner after a plan change (#3170): the admin's
+  // progress report and the queued job's checkpoint, for the plan version it names
+  // (src/lib/affiliatePlanResyncRule.ts). Ids and counters only. Null before the
+  // first plan change.
+  planResync      Json?
   // The base URL a partner's referral link is built on (src/lib/affiliateReferralRule.ts):
   // https, the partner's code set as ?ref=. Null: the portal shows the code alone.
   referralUrl     String?      @db.VarChar(500)
@@ -8530,6 +8912,12 @@ model AffiliatePartner {
   // IBAN and account holder, sealed by src/lib/secretBox.ts. ADMIN reads them for
   // the manual transfer; the partner sees the last four characters.
   payoutDetailsCipher String?                       @db.Text
+  // When the partner's ACCOUNT was erased (#2098). The payout details outlive
+  // it for the bookkeeping duty only; the `affiliatePayoutDetails` retention
+  // entry clears them ten years after the end of the calendar year of the last
+  // of: this stamp, the end of the partnership, the last payout
+  // (src/lib/erasureRetentionRule.ts).
+  accountErasedAt     DateTime?
   createdAt           DateTime                      @default(now())
   updatedAt           DateTime                      @updatedAt
   customers           AffiliateCustomer[]
@@ -8706,6 +9094,9 @@ model ChatIdentity {
   userId          String
   /// Slack U…, Teams AAD object id.
   externalUserId  String    @db.VarChar(128)
+  /// The member's name in the workspace, shown to the person on their own
+  /// account page ("Connected as …") so they can tell it is them (#1937).
+  displayName     String?   @db.VarChar(191)
   /// Opened lazily on the first DM and cached; Teams also needs a conversation
   /// reference before the bot may message proactively.
   dmChannelId     String?   @db.VarChar(128)
@@ -8746,5 +9137,44 @@ model ChatDelivery {
   workspace ChatWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+  @@index([orgId])
+}
+
+// A mentor volunteering to mentor an unmatched mentee (#1809, "Mentor Offers").
+// Only a mentee who opted in (User.openToOffers) can receive one; the quota
+// (3 pending, 5 per rolling 7 days) and every refusal live in the pure
+// src/lib/mentorOfferRule.ts, the writes in src/lib/mentorOffers.ts.
+// Accepting goes through the shared decideMentorshipRequest() path, so the
+// pairing gets the same plan gate, notifications and one-active-mentor guard
+// as any other. `message` is erased with either party.
+enum MentorOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  WITHDRAWN
+}
+
+model MentorOffer {
+  id         String            @id @default(cuid())
+  orgId      String?
+  org        Organization?     @relation(fields: [orgId], references: [id])
+  mentorId   String
+  menteeId   String
+  message    String?           @db.Text
+  status     MentorOfferStatus @default(PENDING)
+  // 14 days after creation; the daily sweep flips a PENDING offer past it to EXPIRED.
+  expiresAt  DateTime
+  // Set when the one reminder before expiry went out — never a second one.
+  remindedAt DateTime?
+  decidedAt  DateTime?
+  createdAt  DateTime          @default(now())
+
+  mentor User @relation("MentorOffersSent", fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee User @relation("MentorOffersReceived", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@index([mentorId, status])
+  @@index([menteeId, status])
+  @@index([status, expiresAt])
   @@index([orgId])
 }

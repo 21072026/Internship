@@ -50,8 +50,8 @@ const MENTEES = [
 ];
 
 const COMPANIES = [
-  { name: 'Demo Yazılım A.Ş.', industry: 'Software', size: '50-100', needs: [{ position: 'Frontend Developer', count: 2, period: '2026 Summer' }, { position: 'Backend Developer', count: 1, period: '2026 Summer' }] },
-  { name: 'Demo Data GmbH', industry: 'Data & Analytics', size: '10-50', needs: [{ position: 'Data Engineer', count: 1, period: '2026 Fall' }] },
+  { name: 'Demo Yazılım A.Ş.', industry: 'Software', size: '50-100' },
+  { name: 'Demo Data GmbH', industry: 'Data & Analytics', size: '10-50' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -266,13 +266,14 @@ async function main() {
     }));
   }
 
-  // Companies (+ needs + one read-only company login each)
+  // Companies (+ one read-only company login each). Open positions are the
+  // requisitions seeded below — nothing writes CompanyNeed since #1875.
   const companies = [];
   for (const c of COMPANIES) {
     let company = await prisma.company.findFirst({ where: { name: c.name } });
     if (!company) {
       company = await prisma.company.create({
-        data: { name: c.name, industry: c.industry, size: c.size, needs: { create: c.needs } },
+        data: { name: c.name, industry: c.industry, size: c.size },
       });
       console.log(`created company: ${c.name}`);
     }
@@ -414,6 +415,14 @@ async function main() {
   await assignDefaultOrg(prisma, defaultOrg.id);
   console.log('backfilled default org onto demo rows');
   await grantAiPack(defaultOrg.id, 'internship');
+  // The developer portal's sandbox key (#1992) reads /api/v1, which is the
+  // INTEGRATIONS_API feature: without the grant every sandbox call answers 403
+  // feature_locked. Same shape and idempotency as the AI pack above.
+  await prisma.orgEntitlement.upsert({
+    where: { orgId_feature: { orgId: defaultOrg.id, feature: 'INTEGRATIONS_API' } },
+    create: { orgId: defaultOrg.id, feature: 'INTEGRATIONS_API', note: 'Demo tenant (internship): API access so the /developers sandbox key reaches the demo data (#1992).' },
+    update: {},
+  });
 
   // ---------------------------------------------------------------------------
   // Development / oversight half (#2062): weekly reports, to-dos, mentor

@@ -49,6 +49,18 @@ async function as(playwright: RequestFactory, baseURL: string | undefined, email
   return ctx;
 }
 
+/** Waits for the queued re-evaluation of plan version `v` to finish; its final state. */
+async function resyncOf(ctx: APIRequestContext, v: number) {
+  let state: { v: number; status: string } | null = null;
+  await expect
+    .poll(async () => {
+      state = (await (await ctx.get('/api/admin/affiliate/settings', { headers: host })).json()).planResync;
+      return state && state.v === v ? state.status : null;
+    }, { timeout: 60_000, intervals: [500, 1_000, 2_000] })
+    .toMatch(/^(DONE|INCOMPLETE)$/);
+  return state;
+}
+
 test.beforeAll(async () => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   orgId = (await prisma.organization.create({ data: { name: `Acme Sales ${stamp}`, slug: `aff-admin-${stamp}`, vertical: 'MARKETING' } })).id;
@@ -98,7 +110,7 @@ test('read for every admin tier, write for the organisation admin only', { tag: 
   expect((await rep.get('/api/admin/affiliate/settings', { headers: host })).status()).toBe(403);
   // A PROGRAM_ADMIN's reach is its cohort/company grants; affiliate data is neither (docs).
   const prog = await as(playwright, baseURL, emails[3]);
-  for (const path of ['settings', 'partners', 'payments', 'commissions', 'payouts']) {
+  for (const path of ['overview', 'settings', 'partners', 'payments', 'commissions', 'payouts']) {
     expect((await prog.get(`/api/admin/affiliate/${path}`, { headers: host })).status(), path).toBe(403);
   }
 });
@@ -114,13 +126,16 @@ test('a plan is validated, versioned only on a real change, and re-evaluates par
 
   const first = await put(PLAN);
   expect(first.status()).toBe(200);
-  expect(await first.json()).toMatchObject({ changed: true, planVersion: 1, partnersResynced: 1 });
+  expect(await first.json()).toMatchObject({ changed: true, planVersion: 1, resync: { v: 1 } });
+  // The partners are re-evaluated by a queued job (#3170); the settings report it.
+  expect(await resyncOf(owner, 1)).toMatchObject({ status: 'DONE', total: 1, done: 1, failed: 0 });
   expect(await (await put(PLAN)).json()).toMatchObject({ changed: false, planVersion: 1 });
 
   // A payment under v1, then a richer v2: the existing commission is frozen (drift), never changed.
   await recordAffiliatePayment({ orgId, partnerId, customerExternalRef: 'c-1', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-01T10:00:00Z'), externalPaymentRef: 'inv-1', source: 'MANUAL' });
   const second = await put({ ...PLAN, tiers: [{ upToMinor: 1_000, commissionMinor: 450 }] });
-  expect(await second.json()).toMatchObject({ changed: true, planVersion: 2, partnersResynced: 1, drift: 1 });
+  expect(await second.json()).toMatchObject({ changed: true, planVersion: 2 });
+  expect(await resyncOf(owner, 2)).toMatchObject({ status: 'DONE', done: 1, drift: 1 });
   const commission = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId } });
   expect([commission.amountMinor, commission.planVersion]).toEqual([300, 1]);
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.plan.update' } })).toBe(2);
@@ -134,6 +149,36 @@ test('the contract is published through the API', { tag: '@smoke' }, async ({ pl
   expect(await (await put({ de: 'Synthetische Bedingungen', en: 'Synthetic terms' })).json()).toEqual({ changed: false, version: 1 });
   const s = await (await owner.get('/api/admin/affiliate/settings', { headers: host })).json();
   expect(s).toMatchObject({ contractVersion: 1, contract: { en: 'Synthetic terms', de: 'Synthetische Bedingungen' } });
+});
+
+test('the public page content is validated, stored and audited (#3359)', async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const put = (ctx: APIRequestContext, data: unknown) => ctx.put('/api/admin/affiliate/settings/landing', { headers: host, data });
+
+  expect((await put(observer, { landing: {} })).status()).toBe(403);
+  expect((await put(owner, {})).status()).toBe(400);
+  const bad = await put(owner, { landing: { copy: { fr: {} }, phone: 'call me', productSignupUrl: 'http://app.example/' } });
+  expect(bad.status()).toBe(400);
+  expect((await bad.json()).issues.map((i: { field: string }) => i.field).sort()).toEqual(['copy.fr', 'phone', 'productSignupUrl']);
+
+  const landing = {
+    copy: {
+      de: { heroTitle: 'Partner werden', steps: [{ title: 'Registrieren', text: 'In Sekunden.' }], bullets: ['Jederzeit kündbar'] },
+      en: { heroTitle: 'Become a partner' },
+    },
+    phone: '+49 30 1234567',
+    email: 'partners@acme.example',
+    productSignupUrl: 'https://app.acme.example/register',
+  };
+  const saved = await put(owner, { landing });
+  expect(saved.status()).toBe(200);
+  expect((await saved.json()).changed).toBe(true);
+  // The same content in another key order is not a change.
+  expect((await (await put(owner, { landing: { productSignupUrl: landing.productSignupUrl, email: landing.email, phone: landing.phone, copy: { en: landing.copy.en, de: landing.copy.de } } })).json()).changed).toBe(false);
+  const s = await (await observer.get('/api/admin/affiliate/settings', { headers: host })).json();
+  expect(s.landing).toMatchObject({ copy: { de: { heroTitle: 'Partner werden' } }, phone: '+49 30 1234567', email: 'partners@acme.example' });
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.landing.update' } })).toBe(1);
 });
 
 test('partners: create, codes unique, state changes under the lock, IBAN reveal audited', { tag: '@smoke' }, async ({ playwright, baseURL }) => {

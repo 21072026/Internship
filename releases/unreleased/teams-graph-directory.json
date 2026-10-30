@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Teams \"Find people\" (#3327):** with `TEAMS_GRAPH_DIRECTORY_ENABLED=1`, the Teams client's `listMembers()` reads the workspace tenant's directory through Microsoft Graph — a client-credentials token at `<TEAMS_LOGIN_BASE>/<tenant>/oauth2/v2.0/token`, then `GET <GRAPH_API_BASE>/v1.0/users` paged (≤ 10 pages, `@odata.nextLink` only on the Graph host); enabled users with a tenant-managed `mail` become proposals through the same #1937 rule (verified, active account of the same org; no user created). Without the flag Teams stays `not_supported`. `ChatPlatformClient.listMembers()` now also takes the workspace `externalId`; the e2e stub (`botframework-mock.mjs`) serves the token and paged users.",
+  "notes": {
+    "en": ["Organisations using Microsoft Teams can now find their people automatically too: each person still confirms their own link."],
+    "tr": ["Microsoft Teams kullanan organizasyonlar da artık kişilerini otomatik bulabiliyor; her kişi kendi bağlantısını yine kendisi onaylıyor."],
+    "de": ["Organisationen mit Microsoft Teams können ihre Personen jetzt ebenfalls automatisch finden: Jede Person bestätigt ihre Verknüpfung weiterhin selbst."]
+  }
+}

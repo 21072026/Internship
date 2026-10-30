@@ -112,6 +112,8 @@ const VERIFY_EXEMPT = [
   // The double opt-in's two buttons (#2577), exact paths in both files.
   '/api/contact-permission/confirm',
   '/api/contact-permission/opt-out',
+  // CSP violation reports (#1552): sent by the browser itself, exact path.
+  '/api/csp-report',
 ];
 
 /**
@@ -356,6 +358,25 @@ function inlineHelpers(body, symbols, rounds = 2) {
 
 const ROLE_LITERALS = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'];
 
+// The permission catalogue (#1569/#1571), read from the rule file itself so the
+// explorer can name what each operation asks for without a second list. A
+// permission name only ever appears in a route as an argument to
+// requirePermission() / requireRoleOrPermission() / can() (or a local helper
+// that forwards it), so every catalogue literal in the handler's resolved text
+// is one it asks. Indicative, like x-roles: the route file is the authority.
+const PERMISSION_NAMES = (() => {
+  const rule = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'authzRule.ts'), 'utf8');
+  const block = rule.slice(rule.indexOf('export const PERMISSIONS = ['), rule.indexOf('] as const;'));
+  return new Set([...block.matchAll(/'([a-z_]+(?:\.[a-z_]+)+)'/g)].map((m) => m[1]));
+})();
+
+/** The catalogue permissions a handler's resolved source names, sorted. */
+function permissionsIn(text) {
+  const found = new Set();
+  for (const m of text.matchAll(/'([a-z_]+(?:\.[a-z_]+)+)'/g)) if (PERMISSION_NAMES.has(m[1])) found.add(m[1]);
+  return [...found].sort();
+}
+
 /**
  * Every `if (...)` in a chunk of handler text, paired with whether its FIRST
  * statement is a 401/403 rejection.
@@ -467,7 +488,7 @@ function classifyAuth(text, ctx = {}) {
   const notes = [];
 
   // requirePermission() (src/lib/authz.ts, #1569) reads the session itself.
-  const hasSession = /\b(?:getServerSession|requirePermission)\s*\(/.test(text);
+  const hasSession = /\b(?:getServerSession|requirePermission|requireRoleOrPermission)\s*\(/.test(text);
 
   // Identifiers that hold the session role.
   const anchors = ['session\\s*[?.]*\\s*\\.\\s*user\\s*[?.]*\\s*\\.\\s*role'];
@@ -625,6 +646,12 @@ function classifyAuth(text, ctx = {}) {
   // requirePermission(): every permission it grants needs an admin tier, which
   // only an ADMIN holds (src/lib/authzRule.ts, adminTierFor).
   if (/\b(?:requireAdmin[A-Za-z]*|adminSession|requirePermission)\s*\(/.test(text)) allow.add('ADMIN');
+  // requireRoleOrPermission(['MENTOR', …], …) (#1571): ADMIN through the
+  // permission rule, plus exactly the roles its first argument lists.
+  for (const m of text.matchAll(/\brequireRoleOrPermission\s*\(\s*\[([^\]]*)\]/g)) {
+    allow.add('ADMIN');
+    for (const r of ROLE_LITERALS) if (new RegExp(`['"]${r}['"]`).test(m[1])) allow.add(r);
+  }
 
   for (const r of deny) {
     allow.delete(r);
@@ -1193,7 +1220,13 @@ function buildSpec(repoRoot) {
       const authLine = auth.classes
         .map((c) => (c === 'role-session' ? AUTH_PROSE[c] + auth.roles.join(', ') + '.' : AUTH_PROSE[c]))
         .join(' ');
-      const parts = [description, `**Access** - ${authLine}`, ...auth.notes];
+      const permissions = permissionsIn(resolved);
+      const parts = [
+        description,
+        `**Access** - ${authLine}`,
+        ...(permissions.length ? [`**Permission** - ${permissions.map((p) => '`' + p + '`').join(', ')} (src/lib/authzRule.ts).`] : []),
+        ...auth.notes,
+      ];
       if (WRITE_VERBS.has(handler.method) && !verifyExempt(urlPath)) {
         parts.push('A signed-in user who has not verified their email address gets 403 on this write - enforced in middleware, before the handler runs.');
       }
@@ -1230,6 +1263,7 @@ function buildSpec(repoRoot) {
       op['x-auth'] = auth.classes[0];
       if (auth.classes.length > 1) op['x-auth-alternatives'] = auth.classes.slice(1);
       if (auth.roles.length) op['x-roles'] = auth.roles;
+      if (permissions.length) op['x-permission'] = permissions;
       if (auth.denied.length) op['x-roles-denied'] = auth.denied;
       // Roles that BYPASS a non-role guard rather than being required by it.
       if (auth.escapes.length) op['x-role-escape'] = auth.escapes;

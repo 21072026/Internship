@@ -6,9 +6,11 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { openPositionsInclude } from '@/lib/openPositions';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logViewActivity } from '@/lib/activity';
+import { requirePermission } from '@/lib/authz';
 
 // Tenant (#2542): every handler here looks the company up with
 // `withinTenant({ id }, await tenantWhere(session))`, so another tenant's company is a
@@ -29,16 +31,10 @@ const updateCompanySchema = z.object({
   // in by an ADMIN on /admin/companies/[id] (#2560). `null` or a blank string
   // clears it. 191 = the column's VARCHAR width.
   externalId: z.string().trim().max(191).nullable().optional(),
-  needs: z
-    .array(
-      z.object({
-        id: z.string().optional(),
-        position: z.string().min(1).max(TEXT_LIMITS.companyNeedPosition),
-        count: z.number().int().min(1),
-        period: z.string().min(1).max(TEXT_LIMITS.companyNeedPeriod),
-      })
-    )
-    .optional(),
+  // No `needs` any more (#1875). This PUT used to delete every CompanyNeed of
+  // the company and recreate them — new ids on every save, so each edit handed
+  // the deploy's converter a fresh set of rows to turn into requisitions. Open
+  // positions are Requisitions now; a legacy `needs` key is stripped by zod.
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -76,7 +72,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const company = await prisma.company.findFirst({
       where: andScope(scope, withinTenant({ id }, await tenantWhere(session))),
       include: {
-        needs: true,
+        requisitions: openPositionsInclude,
         mentorships: {
           where: relationScope,
           include: {
@@ -126,11 +122,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('company.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const body = await request.json();
@@ -143,7 +137,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
-    const { needs, contactEmail, externalId: rawExternalId, ...companyData } = parsed.data;
+    const { contactEmail, externalId: rawExternalId, ...companyData } = parsed.data;
     // Blank means "no external id", never an empty-string id that every other
     // blank would then collide with.
     const externalId = rawExternalId === undefined ? undefined : rawExternalId || null;
@@ -182,12 +176,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
     }
 
-    const company = await prisma.$transaction(async (tx) => {
-      if (needs !== undefined) {
-        await tx.companyNeed.deleteMany({ where: { companyId: id } });
-      }
-
-      return tx.company.update({
+    const company = await prisma.company.update({
         where: { id },
         data: {
           ...companyData,
@@ -196,13 +185,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           // detail page sends nothing else — must not wipe the address.
           ...(contactEmail !== undefined && { contactEmail: contactEmail || null }),
           ...(externalId !== undefined && { externalId }),
-          ...(needs !== undefined && {
-            needs: { create: needs.map(({ id: _id, ...n }) => n) },
-          }),
         },
-        include: { needs: true },
+        include: { requisitions: openPositionsInclude },
       });
-    });
 
     return NextResponse.json({ company });
     });
@@ -215,11 +200,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('company.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const inTenant = await prisma.company.findFirst({

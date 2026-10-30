@@ -3,7 +3,9 @@
 // same in-app notification + email for a given transition.
 
 import { prisma } from '@/lib/prisma';
+import { raiseOfferEvent } from '@/lib/offerEvents';
 import { notify } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendOfferSentEmail, sendOfferDecisionEmail } from '@/services/emailService';
 
@@ -36,7 +38,9 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
   });
   if (!offer) return;
   const mentee = offer.relation.mentee;
-  await notify(mentee.id, 'offer_sent.new', { position: offer.position }, '/portal');
+  // In-app + push through the router (#1715): an offer is the moment the
+  // programme exists for, so it may buzz a closed app. The mail stays below.
+  await notifyEvent(mentee, 'offer_sent.new', { position: offer.position }, { channels: ['inApp', 'push'] });
   // 'offer' is pipeline_updates. The `emailAllowed(mentee, 'mentorship')`
   // conjunct that used to stand here reads a key mapping to
   // mentorship_lifecycle, so it dropped offer letters that both preference
@@ -120,7 +124,7 @@ export async function expireOffers(): Promise<{ checked: number; expired: number
   const now = new Date();
   const due = await prisma.offer.findMany({
     where: { status: 'SENT', expiresAt: { lt: now } },
-    select: { id: true, orgId: true },
+    select: { id: true, orgId: true, requisitionId: true, relation: { select: { menteeId: true } } },
   });
 
   let expired = 0;
@@ -136,6 +140,9 @@ export async function expireOffers(): Promise<{ checked: number; expired: number
     // (#2012) — otherwise it would never reach that tenant's drain.
     await prisma.auditLog.create({ data: { actorId: 'system', action: 'offer.expire', targetId: o.id, orgId: o.orgId ?? null } });
     await notifyOfferDecided(o.id, 'EXPIRED');
+    // The cron path is a writer too (#1998): without this an integrator would
+    // see SENT offers that never end.
+    await raiseOfferEvent('offer.expired', { id: o.id, orgId: o.orgId, requisitionId: o.requisitionId, menteeId: o.relation.menteeId }, { id: null, type: 'system' });
   }
 
   return { checked: due.length, expired };
