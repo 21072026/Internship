@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -27,15 +26,13 @@ const JS_FILTER_SCAN_CAP = 2000;
 // consent removes the card immediately. The select below is a strict
 // allowlist: email/phone/whatsapp are never read, so they can never leak.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Fail-closed role gate (#831): only the roles that are explicitly part of
   // the mentee↔mentor matching flow may browse the directory. COMPANY and
   // SOURCE (and anything added later) get 403 — they have their own,
   // separately-consented surfaces (e.g. the talent pool).
-  if (!['MENTEE', 'MENTOR', 'ADMIN'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireRoleOrPermission(['MENTEE', 'MENTOR'], 'user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The directory belongs to the `mentorship` module, like its page (/mentors).
   const denied = await requireCapability(resolveOrgId(session), 'mentorship');
   if (denied) return denied;

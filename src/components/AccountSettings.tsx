@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
 import { ChatConnectionsCard } from '@/components/ChatConnectionsCard';
+import { NotificationChannelMatrix } from '@/components/NotificationChannelMatrix';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, defaultAccentFor, isAccentColor, resolveAccent } from '@/lib/accent';
@@ -1424,6 +1425,10 @@ export function AccountSettings() {
             ))}
           </div>
         </div>
+
+        {/* Where and when (#1714): its own endpoint, which merges — see the
+            component's header. */}
+        <NotificationChannelMatrix />
 
         {browserNotifSupported && (
           <div className="mt-4 pt-4 border-t border-gray-100">

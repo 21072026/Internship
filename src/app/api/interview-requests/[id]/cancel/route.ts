@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
 import { notify, notifyIfAllowed } from '@/lib/notify';
@@ -26,7 +27,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const role = session.user.role;
-    if (role !== 'ADMIN' && role !== 'MENTOR' && role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['MENTOR', 'COMPANY'], 'company.write', { request });
+    if ('error' in gate) return gate.error;
     if (role === 'COMPANY' && !session.user.companyId) {
       return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
     }

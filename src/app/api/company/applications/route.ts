@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { isApplicationStage, isDispositionCode } from '@/lib/applications';
 
 const PAGE_MAX = 200;
@@ -22,7 +23,8 @@ export async function GET(request: Request) {
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
   const role = session.user.role;
-  if (role !== 'COMPANY' && role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['COMPANY'], 'company.read', { request });
+  if ('error' in gate) return gate.error;
   if (role === 'COMPANY' && !session.user.companyId) {
     return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
   }

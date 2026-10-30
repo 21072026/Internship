@@ -32,6 +32,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const cap = await requireCapability(session.user.orgId, 'placements');
   if (cap) return cap;
   const role = session.user.role;
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.read', undefined, session));
 
   return withTenantScope(session, async () => {
     const offer = await prisma.offer.findFirst({
@@ -48,11 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     const isOwnMenteeOffer = role === 'MENTEE' && offer.relation.menteeId === session.user.id;
-    // A DRAFT is admin-internal staging (the same rule as GET /api/offers/[id]),
-    // asked through the permission layer (#1571), never the role string.
-    const actor = await actorFromSession(session);
-    const mayPreviewDraft = !!actor && (await can(actor, 'program.read', { orgId: offer.orgId ?? actor.orgId }));
-    if (!canSeeCompensation({ role, isOwnMenteeOffer }) || (!mayPreviewDraft && offer.status === 'DRAFT')) {
+    if (!canSeeCompensation({ role, isOwnMenteeOffer }) || (!isAdmin && offer.status === 'DRAFT')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

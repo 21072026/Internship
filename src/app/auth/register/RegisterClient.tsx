@@ -128,6 +128,9 @@ function RegisterForm() {
       if (!res.ok) {
         // A refused password comes back as a code (#1544) and is shown in the
         // user's language; anything else keeps the server's sentence.
+        // The org has no free admin seat (#1752): the invitee is not the buyer —
+        // a neutral sentence, never the plan or a price.
+        if (body.code === 'plan_limit_reached') throw new Error(t.auth.adminSeatUnavailable);
         throw new Error(passwordRefusalText(body, pw.policy, t.passwordPolicy) ?? body.error ?? 'Registration failed');
       }
 

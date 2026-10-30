@@ -163,7 +163,22 @@ const schema = z.object({
   evaluationInterimStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
   evaluationInterimDays: z.string().regex(/^\d{1,3}$/).optional(),
   evaluationFinalStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
+  // Notification blackout days (#1714, docs/notification-channels.md): real
+  // calendar dates only, comma separated; the router holds mail and push
+  // raised on them to the next open day. `''` clears the list.
+  notificationBlackoutDates: z
+    .string()
+    .max(1100)
+    .refine((v) => v.trim() === '' || v.split(/[\s,;]+/).filter(Boolean).every(isCalendarDate), { message: 'YYYY-MM-DD, comma separated' })
+    .optional(),
+  notificationBlackoutWeekends: z.enum(['true', 'false']).optional(),
 });
+
+function isCalendarDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
 
 // Keys that only exist in a vertical with the sales surface (pipeline, no
 // mentorship): the sales target and leaderboard, and the marketing import's

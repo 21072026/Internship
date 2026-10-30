@@ -9,16 +9,19 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { syncRequisitionSkills } from '@/lib/skillsResolve';
 import { andScope, logScopeDenial, scopeForRole } from '@/lib/authzScope';
+import { requireRoleOrPermission, type Permission } from '@/lib/authz';
 import {
   REQUISITION_LIMITS, REQUISITION_STATUSES, closedAtForStatus, normalizeSkills,
   protectedFields, requisitionInputSchema, validateRequisitionOwner,
 } from '@/lib/requisitions';
 
-function authScope(session: Session | null) {
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'COMPANY') {
-    return { error: NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 }) };
-  }
+async function authScope(
+  request: Request,
+  permission: Permission,
+): Promise<{ error: NextResponse } | { session: Session; orgId: string }> {
+  const gate = await requireRoleOrPermission(['COMPANY'], permission, { request });
+  if ('error' in gate) return gate;
+  const { session } = gate;
   const orgId = resolveOrgId(session);
   if (!orgId) return { error: NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 }) };
   if (session.user.role === 'COMPANY' && !session.user.companyId) {
@@ -28,7 +31,7 @@ function authScope(session: Session | null) {
 }
 
 export async function GET(request: Request) {
-  const scope = authScope(await getServerSession(authOptions));
+  const scope = await authScope(request, 'company.read');
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const params = new URL(request.url).searchParams;
@@ -90,7 +93,7 @@ export async function POST(request: Request) {
   // same module reporting itself present on one route and absent on another.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  const scope = authScope(session);
+  const scope = await authScope(request, 'company.write');
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);

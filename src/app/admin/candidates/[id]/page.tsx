@@ -31,6 +31,7 @@ import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { CandidateHiringPanel } from '@/components/CandidateHiringPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
+import { MatchDecisionPanel } from '@/components/admin/MatchDecisionPanel';
 import { ReferrerPicker } from '@/components/ReferrerPicker';
 import { TagEditor } from '@/components/TagEditor';
 import { encodeReferrer, referrerLabel } from '@/lib/referrer';
@@ -623,6 +624,8 @@ export default function AdminMenteeDetailPage() {
         {/* The merged history (#1702) sits directly under the relation card: the
             stage-history list above stays, this adds everything around it. */}
         {rel && <RelationTimeline relationId={rel.id} />}
+        {/* The pairing's audit record (#1789); draws nothing for a reader without audit.read. */}
+        {rel && <MatchDecisionPanel relationId={rel.id} />}
         {rel && (
           <OfferManagementPanel
             relationId={rel.id}

@@ -111,6 +111,13 @@ for (const { urlPath, method, op } of operations) {
   if (!ADMIN_OK.has(op['x-auth']) && !shared) {
     problems.push(`${method.toUpperCase()} ${urlPath}: classified "${op['x-auth']}" - an /api/admin/ endpoint that does not resolve to an ADMIN guard is either a real authorization hole or a guard shape the analyser cannot follow. Both need a human.`);
   }
+  // And it names the permission it asks (#1571): every /api/admin operation goes
+  // through requirePermission() / requireRoleOrPermission() with a catalogue
+  // name, so an admin tier (OBSERVER, PROGRAM_ADMIN) is judged by the rule in
+  // src/lib/authzRule.ts. One with no x-permission is back on the role string.
+  if (!op['x-permission'] || !op['x-permission'].length) {
+    problems.push(`${method.toUpperCase()} ${urlPath}: names no permission - an /api/admin/ handler authorizes through requirePermission('<permission>') (src/lib/authz.ts, #1571), not the role`);
+  }
 }
 
 // 6 - the sanitiser, verified on its own output rather than trusted.
@@ -252,5 +259,5 @@ const authSummary = Object.entries(stats.byAuth)
   .join(' ');
 console.log(
   `openapi OK - ${operations.length} operations over ${Object.keys(spec.paths).length} paths from ${stats.files} route files; ` +
-    `all operationIds unique, no /api/admin endpoint unguarded, no redacted text leaked, output deterministic (${authSummary})`,
+    `all operationIds unique, no /api/admin endpoint unguarded or without a permission, no redacted text leaked, output deterministic (${authSummary})`,
 );

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { DEFAULT_TERMS_KEY, acceptTerms, acceptanceHistory, getActiveTerms, hasAcceptedContributorTerms } from '@/lib/contributorTerms';
 import { prisma } from '@/lib/prisma';
 import { isProjectMember } from '@/lib/projectTeam';
@@ -71,8 +72,12 @@ export async function POST(request: Request) {
     if (!project.contributorTermsRequired) {
       return NextResponse.json({ error: 'This project does not require contributor terms' }, { status: 409 });
     }
-    if (session.user.role !== 'ADMIN' && !(await isProjectMember(parsed.data.projectId, session.user.id))) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!(await isProjectMember(parsed.data.projectId, session.user.id))) {
+      // A non-member passes only as an admin — the permission layer's answer (#1571).
+      const actor = await actorFromSession(session);
+      if (!actor || !(await can(actor, 'program.write', undefined, session))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
     key = project.contributorTermsKey ?? DEFAULT_TERMS_KEY;
   }
