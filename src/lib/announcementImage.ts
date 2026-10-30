@@ -96,3 +96,14 @@ export async function announcementImagePreview(file: File): Promise<{ file: File
   }
   return { file: clean, url };
 }
+
+/**
+ * The image's description from a multipart form (#3388): trimmed, and empty
+ * means "decorative" (null). Length is checked by the route against
+ * TEXT_LIMITS.imageAltText, so an over-long value is a 400, not a cut.
+ */
+export function imageAltField(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}

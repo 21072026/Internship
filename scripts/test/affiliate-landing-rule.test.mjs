@@ -142,3 +142,25 @@ test('a visitor reads their locale field by field, then English, then the rest',
   assert.equal(landingCopyFor(landing, 'xx').heroTitle, 'Become a partner');
   assert.deepEqual(landingCopyFor(EMPTY_LANDING, 'de'), {});
 });
+
+test('the public table follows the plan: sorted bands, then the open top band', async () => {
+  const { commissionTableRows, maxOneOffCommission } = await import('../../src/lib/affiliateLandingRule.ts');
+  const plan = {
+    currency: 'EUR',
+    tiers: [
+      { upToMinor: 5_000, commissionMinor: 1_000 },
+      { upToMinor: 2_000, commissionMinor: 500 },
+    ],
+    topCommissionMinor: 1_500,
+    percentBps: 0,
+    switchAtCustomer: null,
+    windowMonths: null,
+  };
+  assert.deepEqual(commissionTableRows(plan), [
+    { overMinor: null, upToMinor: 2_000, commissionMinor: 500 },
+    { overMinor: 2_000, upToMinor: 5_000, commissionMinor: 1_000 },
+    { overMinor: 5_000, upToMinor: null, commissionMinor: 1_500 },
+  ]);
+  assert.equal(maxOneOffCommission(plan), 1_500);
+  assert.deepEqual(commissionTableRows({ ...plan, tiers: [] }), [{ overMinor: null, upToMinor: null, commissionMinor: 1_500 }]);
+});

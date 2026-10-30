@@ -4,6 +4,7 @@ import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
@@ -291,7 +292,7 @@ export async function POST(request: Request) {
       const partnerId = invitedPartnerId;
       try {
         user = await prisma.$transaction(async (tx) => {
-          const created = await tx.user.create(userData);
+          const created = await createUser(tx, userData, { source: selfRegistered ? 'register' : 'invite' });
           await linkPartnerAccount(tx, { orgId, partnerId, userId: created.id });
           return created;
         });
@@ -302,7 +303,7 @@ export async function POST(request: Request) {
         throw e;
       }
     } else {
-      user = await prisma.user.create(userData);
+      user = await createUser(prisma, userData, { source: selfRegistered ? 'register' : 'invite' });
     }
 
     // Record which privacy-notice version was accepted, so consent is auditable

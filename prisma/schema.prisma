@@ -177,6 +177,11 @@ model Organization {
   // old -> new). Off by default: a locally elevated user must not be demoted by
   // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
   ssoSyncRole            Boolean   @default(false)
+  // SSO directory sync (#1943, docs/sso-saml.md § Directory sync): when true,
+  // the IdP is the record of truth for the mapped profile fields and wins a
+  // disagreement on every sign-in. Off = it only fills empty fields, so a user
+  // who corrected their own city keeps it. The mappings are SsoAttributeMapping.
+  ssoAuthoritative       Boolean   @default(false)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
@@ -358,6 +363,7 @@ model Organization {
   chatWorkspaces          ChatWorkspace[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
+  ssoAttributeMappings    SsoAttributeMapping[]
   ssoAuthRequests         SsoAuthRequest[]
   agendaTemplates         AgendaTemplate[]
   safeguardingFlags       SafeguardingFlag[]
@@ -953,6 +959,13 @@ model User {
   accentColor             String?
   // Last successful sign-in; powers "X days since login" in activity reports.
   lastLoginAt             DateTime?
+  // SSO directory sync (#1943): when the IdP last refreshed this profile, the
+  // last refresh problem as a short code (never a value — `photo_blocked`,
+  // `rejected:department`), and sha256 of the photo claim the stored avatar came
+  // from, so an unchanged photo is not downloaded again on every sign-in.
+  ssoLastSyncedAt         DateTime?
+  ssoSyncError            String?       @db.VarChar(191)
+  ssoPhotoUrlHash         String?       @db.Char(64)
   // Last time the user was seen active (page-view heartbeat, consent-gated).
   lastSeenAt              DateTime?
   // The HR system's own identifier for this person, when a roster feed carries
@@ -1770,6 +1783,12 @@ model AnnouncementImage {
   contentType    String
   size           Int
   data           Bytes
+  // What the image shows, in the author's words (EN 301 549 11.8.2, #3388): the
+  // admin form asks for it and the feed, the archive and the mail render it as
+  // alt text. Null = decorative (alt=""), which is also every image uploaded
+  // before the prompt existed. Configuration copy written for everyone, deleted
+  // with the announcement.
+  altText        String?  @db.VarChar(500)
   uploadedAt     DateTime @default(now())
 
   announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
@@ -1883,6 +1902,10 @@ model NewsletterImage {
   contentType  String
   size         Int
   data         Bytes
+  // The hero image's description (EN 301 549 11.8.2, #3388), rendered as its
+  // alt text in the mail and the archive. Null = decorative (alt=""). Issue
+  // copy written for everyone, deleted with the newsletter.
+  altText      String?  @db.VarChar(500)
   uploadedAt   DateTime @default(now())
 
   newsletter Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
@@ -5639,6 +5662,22 @@ model SsoClaimMapping {
   createdAt  DateTime     @default(now())
 
   @@unique([orgId, claim, matchValue])
+  @@index([orgId])
+}
+
+// SSO directory sync (#1943): "the IdP claim `claim` refreshes `target` on
+// every sign-in". `target` is an allowlisted profile field, `photo`, or
+// `attr:<OrgAttribute.key>` — the vocabulary and the rules are
+// src/lib/ssoDirectorySyncRule.ts. One claim per target.
+model SsoAttributeMapping {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  claim     String       @db.VarChar(191)
+  target    String       @db.VarChar(80)
+  createdAt DateTime     @default(now())
+
+  @@unique([orgId, target])
   @@index([orgId])
 }
 

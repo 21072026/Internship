@@ -13,6 +13,8 @@
 import { prisma } from '@/lib/prisma';
 import { affiliateRowScope } from '@/lib/affiliateContractRule';
 import { COMMISSION_STATUSES, listCommissions, type CommissionStatus } from '@/lib/affiliateCommissions';
+import { parseCommissionPlan } from '@/lib/affiliateCommissionRule';
+import { planTermsView } from '@/lib/affiliatePlanTerms';
 import { listPayouts } from '@/lib/affiliatePayouts';
 import { referralLink } from '@/lib/affiliateReferralRule';
 import type { GatedPartner } from '@/lib/affiliateContract';
@@ -52,6 +54,27 @@ export async function partnerSummary(partner: GatedPartner) {
     link: referralLink(settings?.referralUrl, partner.code),
     customers,
     totals,
+  };
+}
+
+/**
+ * The organisation's current commission plan, read-only (#3349). The org is the
+ * signed-in partner's own (from the session, never the request), so a partner reads
+ * its own programme's plan and nobody else's. The plan holds only terms the partner
+ * is meant to know; `plan` is null while none is saved (or a stored one no longer parses).
+ */
+export async function partnerPlanTerms(partner: GatedPartner) {
+  const scope = scopeOf(partner);
+  const settings = await prisma.affiliateProgramSettings.findUnique({
+    where: { orgId: scope.orgId },
+    select: { plan: true, planVersion: true, planEffectiveAt: true },
+  });
+  const parsed = settings?.plan ? parseCommissionPlan(settings.plan) : null;
+  if (!settings || !parsed?.ok) return { terms: null, planVersion: 0, effectiveAt: null };
+  return {
+    terms: planTermsView(parsed.plan),
+    planVersion: settings.planVersion,
+    effectiveAt: settings.planEffectiveAt?.toISOString() ?? null,
   };
 }
 

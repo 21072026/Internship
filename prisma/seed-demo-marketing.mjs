@@ -134,6 +134,43 @@ export const MARKETING_DEMO_AFFILIATE_PLAN = {
   afterNotice: 'RUN_OUT',
 };
 
+/**
+ * SYNTHETIC copy for the public programme page (/partner, #3360), so a topic
+ * environment shows the page instead of a 404. Example hosts only; a real
+ * organisation writes its own on /admin/affiliates/settings.
+ */
+export const MARKETING_DEMO_AFFILIATE_LANDING = {
+  copy: {
+    en: {
+      heroTitle: 'Become a demo partner and earn from referrals',
+      heroSubtitle: 'Sample text for a test environment.',
+      intro: 'This page shows how a partner programme presents itself. Every text here is sample data.',
+      steps: [
+        { title: 'Apply', text: 'Fill in the short form.' },
+        { title: 'Get your code', text: 'Your link appears in the partner portal.' },
+        { title: 'Share', text: 'Send it to people who need the product.' },
+        { title: 'Earn', text: 'A commission for every paying customer.' },
+      ],
+      contactText: 'Write or call us any time.',
+      ctaText: 'Free to join, no risk.',
+      bullets: ['No automatic renewal', 'Cancel any time'],
+    },
+    tr: {
+      heroTitle: 'Demo partner olun, tavsiyelerinizden kazanın',
+      heroSubtitle: 'Test ortamı için örnek metin.',
+      intro: 'Bu sayfa bir partner programının kendini nasıl tanıttığını gösterir. Buradaki her metin örnek veridir.',
+    },
+    de: {
+      heroTitle: 'Demo-Partner werden und von Empfehlungen profitieren',
+      heroSubtitle: 'Beispieltext für eine Testumgebung.',
+      intro: 'Diese Seite zeigt, wie sich ein Partnerprogramm vorstellt. Jeder Text hier ist Beispieldaten.',
+    },
+  },
+  phone: '+49 30 0000000',
+  email: 'partners@demo.example.com',
+  productSignupUrl: 'https://app.demo.example.com/register',
+};
+
 export const MARKETING_DEMO_AFFILIATE_CONTRACT = {
   en: 'Demo partner terms. This is sample text for a test environment, not a real agreement.',
   tr: 'Demo partner koşulları. Bu, test ortamı için örnek bir metindir, gerçek bir sözleşme değildir.',
@@ -390,6 +427,7 @@ export async function seedMarketingDemo({ prisma, passwordHash, domain, log = co
       planVersion: 1,
       planEffectiveAt: new Date(),
       contract: MARKETING_DEMO_AFFILIATE_CONTRACT,
+      landing: MARKETING_DEMO_AFFILIATE_LANDING,
       contractVersion: 1,
     },
   });

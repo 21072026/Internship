@@ -79,7 +79,7 @@ export async function GET(request: Request) {
         translations: true,
         link: true,
         createdAt: true,
-        image: { select: { id: true } },
+        image: { select: { id: true, altText: true } },
       },
     }),
   ]);
@@ -96,6 +96,7 @@ export async function GET(request: Request) {
       // message as if it had been meant for them.
       languageFallback: isAnnouncementFallback({ translations }, me.preferredLanguage),
       imageUrl: image ? announcementImageUrl(a.id) : null,
+      imageAlt: image?.altText ?? null,
     })),
     total,
     page,

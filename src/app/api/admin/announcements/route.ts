@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { imageAltField } from '@/lib/announcementImage';
 import { normalizeMachineList } from '@/lib/machineTranslation';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
@@ -77,10 +78,10 @@ function safeJson(value: FormDataEntryValue | null): unknown {
  * by API clients and several e2e specs) or as multipart/form-data when the admin
  * attaches an image. Normalised here so the handler below sees one shape.
  */
-async function readBody(request: Request): Promise<{ fields: unknown; image: File | null }> {
+async function readBody(request: Request): Promise<{ fields: unknown; image: File | null; imageAlt: string | null }> {
   try {
     if (!(request.headers.get('content-type') || '').includes('multipart/form-data')) {
-      return { fields: await request.json(), image: null };
+      return { fields: await request.json(), image: null, imageAlt: null };
     }
     const form = await request.formData();
     const image = form.get('image');
@@ -99,10 +100,11 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         ...(form.get('scheduledAt') ? { scheduledAt: form.get('scheduledAt') } : {}),
       },
       image: image instanceof File && image.size > 0 ? image : null,
+      imageAlt: imageAltField(form.get('imageAlt')),
     };
   } catch {
     // An unparseable body should be the 400 below, not an unhandled 500.
-    return { fields: null, image: null };
+    return { fields: null, image: null, imageAlt: null };
   }
 }
 
@@ -139,7 +141,7 @@ async function handleGet(request: Request) {
       take: pageSize,
       // `select: { id: true }` on the relation, never the blob — an `include`
       // would drag every attached image's bytes into the history response.
-      include: { image: { select: { id: true } } },
+      include: { image: { select: { id: true, altText: true } } },
     }),
   ]);
 
@@ -179,6 +181,7 @@ async function handleGet(request: Request) {
       machineTranslated: normalizeMachineList(a.machineTranslated, normalizeAnnouncementTranslations(a.translations)),
       sentByName: senderName.get(a.sentById) ?? null,
       imageUrl: image ? announcementImageUrl(a.id) : null,
+      imageAlt: image?.altText ?? null,
     })),
     total,
     page,
@@ -200,7 +203,10 @@ async function handlePost(request: Request) {
   const { session } = gate;
 
   return await withTenantScope(session, async () => {
-  const { fields, image } = await readBody(request);
+  const { fields, image, imageAlt } = await readBody(request);
+  if (imageAlt && imageAlt.length > TEXT_LIMITS.imageAltText) {
+    return NextResponse.json({ error: 'Validation failed', code: 'too_long' }, { status: 400 });
+  }
   const parsed = schema.safeParse(fields);
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const { link, email } = parsed.data;
@@ -282,7 +288,7 @@ async function handlePost(request: Request) {
       ...(audience ? { audience, targeted: true } : {}),
       ...(scheduledAt ? { scheduledAt, status: 'SCHEDULED' as const, emailRequested: !!email } : {}),
       ...(imageData && image
-        ? { image: { create: { contentType: image.type, size: image.size, data: imageData } } }
+        ? { image: { create: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt } } }
         : {}),
     },
   });
@@ -307,7 +313,7 @@ async function handlePost(request: Request) {
     announcement: { id: announcement.id, text, translations, link: link || null },
     users,
     mailRecipients,
-    image: imageData && image ? { data: imageData, contentType: image.type } : null,
+    image: imageData && image ? { data: imageData, contentType: image.type, altText: imageAlt } : null,
   });
 
   if (emailed > 0) {

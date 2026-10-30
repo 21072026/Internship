@@ -5,10 +5,11 @@
 // /auth/sso/complete. There is deliberately no second session-minting path:
 // every rule provisionSsoUser and the `sso` provider enforce applies to both.
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { provisionSsoUser } from '@/lib/ssoProvisioning';
+import { syncSsoPhoto, syncSsoProfile } from '@/lib/ssoDirectorySync';
 import { mappableRolesFor, resolveRole, type SsoClaims } from '@/lib/ssoRoleMapping';
 import { verticalCapabilities } from '@/lib/verticals';
 import { worldOfOrg } from '@/lib/userWorld';
@@ -62,7 +63,7 @@ export const ssoFail = (reason: string, origin: string = ssoBase()) =>
  * address cannot be provisioned into this tenant.
  */
 export async function completeSsoSignIn(
-  org: { id: string; vertical: string; ssoSyncRole: boolean },
+  org: { id: string; vertical: string; ssoSyncRole: boolean; ssoAuthoritative: boolean },
   identity: { email: string; fullName: string | null; claims: SsoClaims },
   origin: string,
 ): Promise<{ response: NextResponse; userId: string | null }> {
@@ -77,6 +78,7 @@ export async function completeSsoSignIn(
     });
     const role = resolveRole(mappings, identity.claims, mappableRolesFor(verticalCapabilities(org.vertical)));
     const { user } = await provisionSsoUser({ orgId: org.id, email: identity.email, fullName: identity.fullName, role, syncRole: org.ssoSyncRole });
+    await refreshFromDirectory(user.id, org, identity.claims);
     // A short-lived single-use grant the `sso` provider will consume.
     const token = crypto.randomBytes(32).toString('hex');
     await prisma.ssoLoginGrant.create({
@@ -87,5 +89,21 @@ export async function completeSsoSignIn(
     // e.g. the email already belongs to a different tenant.
     console.error('SSO provisioning failed:', e);
     return { response: ssoFail('sso_conflict', origin), userId: null };
+  }
+}
+
+// The directory sync (#1943): the profile fields now, so the first page after
+// sign-in already shows them; the photo after the response, because a slow
+// photo host must not hold up a sign-in. Neither may fail the sign-in — a
+// refusal is recorded on the user (ssoSyncError) and in the activity log.
+async function refreshFromDirectory(userId: string, org: { id: string; ssoAuthoritative: boolean }, claims: SsoClaims) {
+  try {
+    const synced = await syncSsoProfile(userId, org, claims);
+    const photo = synced?.photo;
+    if (photo) {
+      after(() => syncSsoPhoto(userId, org, photo).catch((e) => console.error('SSO photo sync failed:', e)));
+    }
+  } catch (e) {
+    console.error('SSO directory sync failed:', e);
   }
 }
