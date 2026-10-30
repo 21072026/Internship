@@ -614,6 +614,8 @@ export type DedupeInput =
   | { kind: 'digest'; digest: string; userId: string; day: string }
   | { kind: 'newsletter'; newsletterId: string; recipient: string }
   | { kind: 'ops'; alert: string; at: Date }
+  // The ending-soon nudge (#1786): one per participant per agreed end date.
+  | { kind: 'relation-ending'; relationId: string; userId: string; endDay: string }
   | { kind: 'fallback'; category?: string | null; to: string; subject: string; ref?: string | null; at: Date };
 
 /**
@@ -659,6 +661,8 @@ export function dedupeKeyFor(input: DedupeInput): string {
       return `nl:${part(input.newsletterId)}:${recipientHash(input.recipient).slice(0, 32)}`;
     case 'ops':
       return `ops:${part(input.alert)}:${input.at.toISOString().slice(0, 13)}`;
+    case 'relation-ending':
+      return `rend:${part(input.relationId)}:${part(input.userId)}:${part(input.endDay)}`;
     case 'fallback': {
       const bucket = input.ref ? `ref:${input.ref}` : `min:${input.at.toISOString().slice(0, 16)}`;
       const digest = createHash('sha256')
