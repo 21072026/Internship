@@ -80,3 +80,19 @@ required answer is missing.
 An admin reads a person's answers on `/admin/candidates/[id]` and `/admin/mentors/[id]`
 (`FormAnswersPanel`, fed by `GET /api/admin/users/[id]/form-answers` — `user.read`, the caller's
 tenant only, another tenant's user is 404). Options are shown as their labels, never their stored values.
+
+## Public forms (#1803)
+
+The per-mentor apply link (`/apply/[mentorId]`) and the become-a-mentor form (`/apply-as-mentor`) ask
+the org's `REGISTRATION` questions for MENTEE resp. MENTOR. There is no session, so the org comes from
+the link: `GET /api/forms/public?for=apply&mentorId=…` (the mentor's org) or `?for=mentor-application`
+(the default org) — questions only, listed with its reason in `scripts/route-auth-baseline.json`. The
+host posts the answers inside its own request (`formAnswers: [{ definitionId, answers }]`), and
+`checkPublicAnswers()` (`src/lib/forms/publicAnswers.ts`) validates every live form — required
+questions included — **before** anything is created (`400 invalid_answers`).
+
+- `/api/apply` creates the account on the spot and writes the answers onto it (`writeStagedAnswers`).
+- `/api/mentor-applications` stages them on `MentorApplication.formAnswers`; they are carried onto the
+  mentor account by `carryMentorApplicationAnswers()` — when an approval promotes an existing account,
+  or when the invitation it sent is registered — and then cleared from the application. The erasure
+  sweep clears the column too.
