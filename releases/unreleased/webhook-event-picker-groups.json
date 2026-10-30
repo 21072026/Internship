@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Webhook event picker grouped by family (#1998, 9/n):** the admin integrations screen (new and edit forms) groups the subscribable events under Applications & pipeline, Mentorships, Progress & activity, Meetings, Interviews and Hiring & offers instead of one wall of checkboxes. The family is decided by `webhookEventFamily()` (`src/lib/webhookEventFamilies.ts`, pure); a browserless spec fails if a public event falls into \"other\". EN/TR/DE labels, MARKETING overlay for the mentorship family.",
+  "notes": {
+    "en": ["The webhook event list on the integrations screen is now grouped by topic."],
+    "tr": ["Entegrasyonlar ekranındaki webhook olay listesi artık konuya göre gruplanıyor."],
+    "de": ["Die Webhook-Ereignisliste auf der Integrationsseite ist jetzt nach Themen gruppiert."]
+  }
+}

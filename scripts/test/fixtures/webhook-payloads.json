@@ -684,5 +684,138 @@
       "to"
     ],
     "additionalProperties": false
+  },
+  "weekly_report.submitted@1": {
+    "type": "object",
+    "properties": {
+      "reportId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "weekStart": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "resubmission": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "reportId",
+      "relationId",
+      "weekStart",
+      "resubmission"
+    ],
+    "additionalProperties": false
+  },
+  "document.uploaded@1": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "ownerId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "type": {
+        "type": "string"
+      },
+      "requirementId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "version": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "generated": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "documentId",
+      "ownerId",
+      "type",
+      "requirementId",
+      "version",
+      "generated"
+    ],
+    "additionalProperties": false
+  },
+  "goal.completed@1": {
+    "type": "object",
+    "properties": {
+      "goalId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "relationId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "goalId",
+      "relationId"
+    ],
+    "additionalProperties": false
+  },
+  "meeting.attendance_recorded@1": {
+    "type": "object",
+    "properties": {
+      "attendanceId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "meetingId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "seriesId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "relationId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "userId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "state": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "attendanceId",
+      "meetingId",
+      "seriesId",
+      "relationId",
+      "userId",
+      "state"
+    ],
+    "additionalProperties": false
   }
 }

@@ -1728,8 +1728,37 @@ model Announcement {
   orgId String?
   org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  // Targeting and scheduling (#1721). All additive with defaults, so every row
+  // written before them reads as "everyone, already sent" with no backfill.
+  //
+  // `audience` holds CRITERIA, never a recipient list — roles, programmes,
+  // pipeline stages, companies, tags — parsed by src/lib/announcementAudience.ts
+  // and resolved against the tenant's people AT SEND TIME (someone who joins a
+  // programme between scheduling and sending is included). Null = everyone.
+  audience       Json?
+  // Mirrors `audience != null`, as a plain column the reader feed can filter on
+  // (a JSON-null predicate is not portable): a targeted announcement appears in
+  // the feed only of the people it was delivered to.
+  targeted       Boolean            @default(false)
+  // When a SCHEDULED announcement goes out; null for one sent on submit.
+  scheduledAt    DateTime?
+  status         AnnouncementStatus @default(SENT)
+  // A scheduled send remembers whether the admin also asked for e-mail.
+  emailRequested Boolean            @default(false)
+
   @@index([createdAt])
   @@index([orgId])
+}
+
+// An announcement's lifecycle (#1721). SENT is the default so every existing
+// row is a sent one. SCHEDULED → SENDING is the dispatch job's claim (one
+// guarded updateMany), SENDING → SENT when the fan-out settles. CANCELED is an
+// admin's cancel of a SCHEDULED one before its time — kept as a record.
+enum AnnouncementStatus {
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELED
 }
 
 // An image attached to a broadcast announcement, stored in the database (same

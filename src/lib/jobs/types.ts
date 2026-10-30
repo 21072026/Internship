@@ -170,6 +170,11 @@ export interface JobPayloadMap {
   /// router.ts, keyed `notify:<dedupeKey>`); rendered by renderNotificationEmail()
   /// — the same renderer the template editor's preview uses — and handed to
   /// sendEmail(). The job's own `orgId` is the recipient's org.
+  /// One SCHEDULED announcement whose time has come (#1721). Enqueued by
+  /// POST /api/admin/announcements with runAt = scheduledAt, keyed
+  /// `announcement:<id>`; dispatchScheduledAnnouncement() claims the row
+  /// SCHEDULED → SENDING, so a rerun or a prior cancel sends nothing.
+  'announcement.send': { announcementId: string };
   'notification.email': {
     eventKey: string;
     userId: string;

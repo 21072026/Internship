@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { utcWeekStart } from '@/lib/week';
@@ -75,6 +76,9 @@ export async function POST(request: Request) {
           submittedAt: parsed.data.status === 'SUBMITTED' ? new Date() : null,
         },
       });
+      if (report.status === 'SUBMITTED') {
+        await emit('weekly_report.submitted', { reportId: report.id, relationId: relation.id, weekStart: report.weekStart.toISOString(), resubmission: false }, { orgId, actor: { id: session.user.id, type: 'user' } });
+      }
       return NextResponse.json({ report }, { status: 201 });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

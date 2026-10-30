@@ -6,15 +6,10 @@ import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
-import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
-import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { stageTrialWindow } from '@/lib/trialWindow';
@@ -30,7 +25,7 @@ import { refuseForeignTargets } from '@/lib/relationTargets';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { agreementStatusesFor, agreementStatusWhere, getActiveAgreement } from '@/lib/mentoringAgreement';
 import { isAgreementStatus } from '@/lib/mentoringAgreementRule';
-import { recordMatchDecision } from '@/lib/matching/decision';
+import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate';
 import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
 import { getLocale } from '@/i18n/server';
 
@@ -326,31 +321,21 @@ export async function POST(request: Request) {
     // a transaction open across two SMTP sends.
     let relation;
     try {
-      relation = await prisma.$transaction(async (tx) => {
-        const active = await findActiveMentorship(tx, menteeId);
-        if (active) throw new AlreadyMentoredError(menteeId, active.id);
-        return tx.mentorshipRelation.create({
-          data: {
-            mentorId,
-            menteeId,
-            orgId: mentee.orgId,
-            pipelineStatus,
-            ...trialWindow,
-            companyId: companyId || null,
-            projectId: projectId || null,
-            startDate: start,
-            kind,
-            // A placement enters the funnel when it starts; coaching never does (#1503).
-            funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
-          },
-          include: {
-            mentor: { select: { id: true, fullName: true, email: true } },
-            mentee: { select: { id: true, fullName: true, email: true } },
-            company: { select: { id: true, name: true } },
-            project: { select: { id: true, name: true } },
-          },
-        });
-      });
+      relation = await prisma.$transaction((tx) =>
+        createGuardedRelation(tx, {
+          mentorId,
+          menteeId,
+          orgId: mentee.orgId,
+          pipelineStatus,
+          ...trialWindow,
+          companyId: companyId || null,
+          projectId: projectId || null,
+          startDate: start,
+          kind,
+          // A placement enters the funnel when it starts; coaching never does (#1503).
+          funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
+        }),
+      );
     } catch (e) {
       if (e instanceof AlreadyMentoredError) {
         return NextResponse.json(await alreadyMentoredBody(prisma, e.existingRelationId), { status: 409 });
@@ -358,72 +343,21 @@ export async function POST(request: Request) {
       throw e;
     }
 
-    await emit('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
-
-    // The per-pairing audit record (#1789). Never throws: the pairing above is
-    // committed, and a failed audit write is logged, not returned.
-    await recordMatchDecision({
-      orgId: relation.orgId,
-      relationId: relation.id,
-      menteeId,
-      mentorId,
-      source: 'ADMIN_DIRECT',
-      decidedById: session.user.id,
-      suggestionBatchId: suggestionBatchId ?? null,
-      note: decisionNote ?? null,
-      locale: await getLocale(),
+    // Webhook, decision record, both sides' notices and mails — the shared
+    // post-commit half (#1796), the same one a published round runs.
+    await announceNewRelation({
+      relation,
+      mentor,
+      mentee,
+      companyId: companyId || null,
+      actor: { id: session.user.id, orgId: session.user.orgId ?? null },
+      decision: {
+        source: 'ADMIN_DIRECT',
+        suggestionBatchId: suggestionBatchId ?? null,
+        note: decisionNote ?? null,
+        locale: await getLocale(),
+      },
     });
-
-    // A direct admin assignment used to be completely silent — neither side heard
-    // about it until they happened to log in (#668). In-app is unconditional,
-    // email honors the `mentorship` opt-out and never fails the assignment.
-    await notify(mentee.id, 'mentorship_request.mentorAssigned', { mentorName: mentor.fullName }, '/portal');
-    await notify(mentor.id, 'mentorship_request.menteeAssigned', { menteeName: mentee.fullName }, '/mentor');
-    // The kickoff prompt (#1792): each side is asked to read the agreement.
-    // A prompt only — nothing waits on the answer.
-    if ((await shellCapabilities(relation.orgId)).includes('mentorship')) {
-      await notify(mentee.id, 'agreement.review', {}, '/portal');
-      await notify(mentor.id, 'agreement.review', {}, `/mentor/mentees/${relation.id}`);
-    }
-
-    // Both halves of the pair are notified, so both `userId`s matter and they are
-    // not interchangeable: the "you have a mentor" mail is addressed to the
-    // mentee and the "you have a new mentee" mail to the mentor. Swapping them
-    // would hand each person an unsubscribe token for the other's account.
-    if (
-      mentee.email &&
-      emailAllowed(mentee, 'mentorship') &&
-      emailGroupAllowedForCategory(mentee, 'mentor-assigned')
-    ) {
-      try {
-        await sendMentorAssignedEmail({
-          to: mentee.email,
-          menteeName: mentee.fullName,
-          mentorName: mentor.fullName,
-          orgId: mentee.orgId,
-          userId: mentee.id,
-        });
-      } catch (e) {
-        console.error('Mentor assignment email failed:', e);
-      }
-    }
-    if (
-      mentor.email &&
-      emailAllowed(mentor, 'mentorship') &&
-      emailGroupAllowedForCategory(mentor, 'mentee-assigned')
-    ) {
-      try {
-        await sendMenteeAssignedEmail({
-          to: mentor.email,
-          mentorName: mentor.fullName,
-          menteeName: mentee.fullName,
-          orgId: mentor.orgId,
-          userId: mentor.id,
-        });
-      } catch (e) {
-        console.error('Mentee assignment email failed:', e);
-      }
-    }
 
     return NextResponse.json({ relation, warnings }, { status: 201 });
     });

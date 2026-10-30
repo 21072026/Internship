@@ -34,7 +34,8 @@
  *
  * Every mentee gets a proposal. An unplaced one gets `mentorId: null` and one
  * reason from `UNMATCHED_REASONS`, decided in this order: nobody in scope at
- * all; every mentor blocked by a hard rule (named in `blockedBy`; when the only
+ * all; every mentor blocked by a hard rule (named in `blockedBy`, the rule that
+ * eliminated the most mentors first; when the only
  * rule is the capacity one, that is `all_at_capacity`); every unblocked mentor
  * under `minScore`; else the candidates' headroom ran out in the walk.
  */
@@ -92,6 +93,8 @@ export interface PassStats {
   mentorsUsed: number;
   /** Mentors with a capacity whose headroom the round used up (or had none to start with). */
   mentorsAtCapacity: number;
+  /** Per hard rule, how many (mentee × mentor) pairs it blocked — the board's "too tight" signal. */
+  blockedPairsByRule: Record<string, number>;
   minScore: number;
 }
 
@@ -137,6 +140,7 @@ export function runAssignment<M extends MatchMentor>(input: PassInput<M>): PassR
   const perMentee: Scored[][] = [];
   const candidates: { mentee: number; mentor: number; score: number }[] = [];
   let scoredPairs = 0;
+  const blockedPairsByRule: Record<string, number> = {};
   mentees.forEach((mentee, ei) => {
     const ctx = input.ctxFor(mentee);
     const list: Scored[] = [];
@@ -144,6 +148,7 @@ export function runAssignment<M extends MatchMentor>(input: PassInput<M>): PassR
       if (mentor.id === mentee.id) return;
       const match = scoreMatch(mentee, mentor, input.ruleSet, ctx);
       scoredPairs++;
+      for (const rule of match.blockedBy) blockedPairsByRule[rule] = (blockedPairsByRule[rule] ?? 0) + 1;
       list.push({ mentor: mi, score: match.score, blockedBy: match.blockedBy });
       if (match.blockedBy.length === 0 && match.score >= minScore) candidates.push({ mentee: ei, mentor: mi, score: match.score });
     });
@@ -218,6 +223,7 @@ export function runAssignment<M extends MatchMentor>(input: PassInput<M>): PassR
       unmatched,
       mentorsUsed: used.size,
       mentorsAtCapacity: headroom.filter((h) => h !== null && h <= 0).length,
+      blockedPairsByRule: Object.fromEntries(Object.entries(blockedPairsByRule).sort(([a], [b]) => byCode(a, b))),
       minScore,
     },
   };
@@ -231,7 +237,10 @@ export function unmatchedReasonFor(
   if (list.length === 0) return { reason: 'no_mentors_in_scope', blockedBy: [] };
   const unblocked = list.filter((s) => s.blockedBy.length === 0);
   if (unblocked.length === 0) {
-    const rules = [...new Set(list.flatMap((s) => s.blockedBy))].sort(byCode);
+    // Most-eliminating rule first: `blockedBy[0]` is the one to loosen.
+    const counts = new Map<string, number>();
+    for (const s of list) for (const r of s.blockedBy) counts.set(r, (counts.get(r) ?? 0) + 1);
+    const rules = [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || byCode(a, b));
     return { reason: rules.length === 1 && rules[0] === CAPACITY_RULE ? 'all_at_capacity' : 'no_eligible_mentor', blockedBy: rules };
   }
   if (!unblocked.some((s) => s.score >= minScore)) return { reason: 'below_threshold', blockedBy: [] };

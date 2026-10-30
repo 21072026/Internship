@@ -106,9 +106,13 @@ export async function GET() {
         orgId ? prisma.evaluationTemplate.count({ where: { orgId, active: true } }) : Promise.resolve(0),
         prisma.user.count({ where: orgScoped({ role: 'MENTOR' as const }, orgId) }),
         prisma.user.count({ where: orgScoped({ role: 'MENTEE' as const }, orgId) }),
-        prisma.company.count(),
-        prisma.mentorshipRelation.count(),
-        prisma.interactionLog.count(),
+        // Scoped like the user counts above. Unscoped, a new organisation's
+        // admin saw "Add a company", "Assign the first mentorship" and "Log the
+        // first conversation" ticked off by OTHER tenants' rows. InteractionLog
+        // has no orgId of its own; it is reached through its relation.
+        prisma.company.count({ where: orgScoped({}, orgId) }),
+        prisma.mentorshipRelation.count({ where: orgScoped({}, orgId) }),
+        prisma.interactionLog.count({ where: orgId ? { relation: { orgId } } : {} }),
       ]);
       return NextResponse.json({
         role,
