@@ -19,6 +19,7 @@ import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { selfServeSignupEnabled, SIGNUP_ORG_RATE_LIMIT } from '@/lib/selfServeSignup';
 import { withRequestScope } from '@/lib/requestContext';
+import { createUser } from '@/lib/userCreate';
 
 // Self-serve tenant signup (#1749, story #1747): one unauthenticated POST that
 // turns a form into a working tenant — an INTERNSHIP organization (Community =
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
           email,
           create: async (tx, organization) => {
             const now = new Date();
-            const user = await tx.user.create({
+            const user = await createUser(tx, {
               data: {
                 email,
                 password: hashedPassword,
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
                 preferredLanguage: d.locale ?? null,
               },
               select: { id: true, email: true },
-            });
+            }, { source: 'signup' });
             await tx.userConsent.create({
               data: { userId: user.id, type: 'PRIVACY_POLICY', version: d.privacyVersion ?? PRIVACY_POLICY_VERSION, grantedAt: now },
             });

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
         // row's report line, never the chunk's or the file's.
         try {
           password ??= bcrypt.hash(randomBytes(18).toString('hex'), 10);
-          await prisma.user.create({
+          await createUser(prisma, {
             data: {
               ...p.value.data,
               password: await password,
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
               // the tenant's counts/isolation, like every other create path (#678).
               orgId,
             },
-          });
+          }, { source: 'import', actorId: session.user.id });
           out.push(result);
         } catch (error) {
           // Another request took the address between the check and the write.
