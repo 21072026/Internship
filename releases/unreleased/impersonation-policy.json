@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Per-organization impersonation policy (#1586):** `Organization.impersonationPolicy` (`full` default | `read_only` | `off`, rule in `src/lib/impersonationPolicyRule.ts`), judged on the TARGET user's org. `off`: `POST /api/admin/impersonate` → 403 `impersonation_off`, no grant/audit/notice. `read_only`: the START grant carries `ImpersonationGrant.readOnly`, the JWT `impersonationReadOnly`, and `src/middleware.ts` refuses every API write from that session centrally (403 `impersonation_read_only`) — before the general allowlist; only `/api/impersonate/stop`, `/api/auth/*` and `/api/csp-report` pass. The banner shows \"Read-only\". Set on `/admin/organizations` / `PATCH /api/admin/organizations/[id]/impersonation-policy` (org's own ADMIN or a super admin of its world, audited). Docs `docs/impersonation-policy.md`; tests `scripts/test/impersonation-policy.test.mjs`, `e2e/impersonation-governance.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Organizations can now decide whether admins may sign in as their users: allowed, read-only (look but change nothing), or off."],
+    "tr": ["Kurumlar artık yöneticilerin kendi kullanıcıları olarak giriş yapıp yapamayacağına karar verebiliyor: izinli, salt okunur (bak ama değiştirme) veya kapalı."],
+    "de": ["Organisationen können jetzt festlegen, ob Admins sich als ihre Nutzer*innen anmelden dürfen: erlaubt, nur lesend (ansehen, nichts ändern) oder aus."]
+  }
+}
