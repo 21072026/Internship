@@ -6,7 +6,7 @@
 // one, after a mentor was corrected in place, must not keep anyone in); the
 // whitelists hold.
 import { test, expect } from '@playwright/test';
-import { currentMemberIds, isParticipantRole, isRelationType, pairSeats, DEFAULT_RELATION_TYPE } from '@/lib/relationShapes';
+import { checkGroupMembers, currentMemberIds, isParticipantRole, isRelationType, pairSeats, DEFAULT_RELATION_TYPE, GROUP_MAX_MENTEES } from '@/lib/relationShapes';
 
 const pair = { mentorId: 'mentor', menteeId: 'mentee' };
 const seat = (userId: string, over: Partial<{ role: string; isPrimaryPair: boolean; leftAt: Date | null }> = {}) => ({
@@ -36,4 +36,13 @@ test('the whitelists', { tag: '@smoke' }, () => {
   expect(isRelationType('one_to_one')).toBe(false);
   expect(isParticipantRole('FACILITATOR')).toBe(true);
   expect(isParticipantRole('ADMIN')).toBe(false);
+});
+
+test('a group is one mentor and 2…25 distinct mentees, the mentor not among them', { tag: '@smoke' }, () => {
+  expect(checkGroupMembers('m', ['a', 'b'])).toBeNull();
+  expect(checkGroupMembers('m', ['a'])).toBe('too_few');
+  expect(checkGroupMembers('m', ['a', 'a'])).toBe('duplicate');
+  expect(checkGroupMembers('m', ['a', 'm'])).toBe('self');
+  expect(checkGroupMembers('m', Array.from({ length: GROUP_MAX_MENTEES + 1 }, (_, i) => `x${i}`))).toBe('too_many');
+  expect(checkGroupMembers('m', Array.from({ length: GROUP_MAX_MENTEES }, (_, i) => `x${i}`))).toBeNull();
 });
