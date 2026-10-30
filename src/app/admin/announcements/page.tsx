@@ -22,6 +22,9 @@ import {
   announcementImagePreview,
 } from '@/lib/announcementImage';
 import { locales, type Locale } from '@/i18n/config';
+import { AnnouncementAudiencePicker } from '@/components/admin/AnnouncementAudiencePicker';
+import type { Audience } from '@/lib/announcementAudience';
+import { formatDateTime } from '@/lib/relativeTime';
 import {
   BroadcastQuotaLine,
   useBroadcastQuota,
@@ -47,6 +50,12 @@ interface AnnouncementRecord {
   recipientCount: number;
   emailedCount: number;
   createdAt: string;
+  // Targeting, scheduling and read tracking (#1721).
+  audience: Audience | null;
+  status: 'SCHEDULED' | 'SENDING' | 'SENT' | 'CANCELED';
+  scheduledAt: string | null;
+  delivered: number;
+  read: number;
 }
 
 export default function AdminAnnouncementsPage() {
@@ -61,6 +70,9 @@ export default function AdminAnnouncementsPage() {
   const [tab, setTab] = useState<Locale>(locale);
   const [link, setLink] = useState('');
   const [email, setEmail] = useState(false);
+  // Who it is for and when (#1721): criteria, never a list of people.
+  const [audience, setAudience] = useState<Audience>({});
+  const [scheduleAt, setScheduleAt] = useState('');
   const [image, setImage] = useState<{ file: File; url: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -163,6 +175,9 @@ export default function AdminAnnouncementsPage() {
       if (machine.length) body.append('machineTranslated', JSON.stringify(machine));
       if (link) body.append('link', link);
       body.append('email', String(email));
+      if (Object.keys(audience).length > 0) body.append('audience', JSON.stringify(audience));
+      // datetime-local is the admin's own wall clock; toISOString() carries it as an instant.
+      if (scheduleAt) body.append('scheduledAt', new Date(scheduleAt).toISOString());
       if (image) body.append('image', image.file);
 
       const res = await fetch('/api/admin/announcements', { method: 'POST', body });
@@ -178,16 +193,29 @@ export default function AdminAnnouncementsPage() {
         }
         throw new Error(data.error ?? t.common.error);
       }
-      setBodies({}); setMachine([]); setLink(''); setEmail(false); clearImage();
-      // How many mails wait on the queue and roughly for how long (#2951).
-      const queuedLine = mailQueueNoticeText(data.mailQueue, t.mailQueue);
-      setResult([t.announcements.sent.replace('{n}', String(data.recipients)), queuedLine].filter(Boolean).join(' '));
+      setBodies({}); setMachine([]); setLink(''); setEmail(false); clearImage(); setAudience({}); setScheduleAt('');
+      if (data.scheduled) {
+        setResult(t.announcements.scheduledResult.replace('{when}', formatDateTime(data.scheduledAt, locale)));
+      } else {
+        // How many mails wait on the queue and roughly for how long (#2951).
+        const queuedLine = mailQueueNoticeText(data.mailQueue, t.mailQueue);
+        setResult([t.announcements.sent.replace('{n}', String(data.recipients)), queuedLine].filter(Boolean).join(' '));
+      }
       await Promise.all([fetchHistory(), refreshQuota()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     } finally {
       setSending(false);
     }
+  };
+
+  const cancelScheduled = async (id: string) => {
+    setError(null);
+    setResult(null);
+    const res = await fetch(`/api/admin/announcements/${id}/cancel`, { method: 'POST' });
+    if (res.ok) setResult(t.announcements.canceled);
+    else setError(t.common.error);
+    await fetchHistory();
   };
 
   const startEdit = (a: AnnouncementRecord) => {
@@ -395,6 +423,21 @@ export default function AdminAnnouncementsPage() {
               )}
             </div>
 
+            <AnnouncementAudiencePicker value={audience} onChange={setAudience} />
+
+            <div>
+              <label htmlFor="announcement-schedule" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{t.announcements.schedule}</label>
+              <input
+                id="announcement-schedule"
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800"
+                data-testid="announcement-schedule"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.announcements.scheduleHint}</p>
+            </div>
+
             <div className="space-y-1">
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
@@ -497,10 +540,39 @@ export default function AdminAnnouncementsPage() {
                     </a>
                   )}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-xs text-gray-500">
-                    <RelativeTime date={a.createdAt} />
+                    {a.status === 'SCHEDULED' && a.scheduledAt ? (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-800" data-testid={`announcement-status-${a.id}`}>
+                        {t.announcements.statusScheduled.replace('{when}', formatDateTime(a.scheduledAt, locale))}
+                      </span>
+                    ) : a.status === 'CANCELED' ? (
+                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700" data-testid={`announcement-status-${a.id}`}>{t.announcements.statusCanceled}</span>
+                    ) : a.status === 'SENDING' ? (
+                      <span data-testid={`announcement-status-${a.id}`}>{t.announcements.statusSending}</span>
+                    ) : (
+                      <RelativeTime date={a.createdAt} />
+                    )}
+                    {a.audience && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">{t.announcements.audienceTargeted}</span>}
                     {a.sentByName && <span>{t.announcements.sentBy.replace('{name}', a.sentByName)}</span>}
-                    <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>
+                    {a.status === 'SENT' && <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>}
                     {a.emailedCount > 0 && <span>{t.announcements.emailedCount.replace('{n}', String(a.emailedCount))}</span>}
+                    {a.status === 'SENT' && a.delivered > 0 && (
+                      <span data-testid={`announcement-read-${a.id}`}>
+                        {t.announcements.readStats
+                          .replace('{r}', String(a.read))
+                          .replace('{d}', String(a.delivered))
+                          .replace('{p}', String(Math.round((a.read / a.delivered) * 100)))}
+                      </span>
+                    )}
+                    {a.status === 'SCHEDULED' && (
+                      <button
+                        type="button"
+                        data-testid={`announcement-cancel-${a.id}`}
+                        onClick={() => cancelScheduled(a.id)}
+                        className="rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                      >
+                        {t.announcements.cancelSchedule}
+                      </button>
+                    )}
                     {editId !== a.id && (
                       <span className="ml-auto flex items-center gap-1">
                         <button
