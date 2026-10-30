@@ -86,6 +86,8 @@ interface RelationDetail {
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
+  /** The pair's agreed next steps, written when it ended (#1795). */
+  closurePlan?: string | null;
   mentor: { fullName: string };
   mentee: {
     id: string;
@@ -441,6 +443,12 @@ export default function MenteeDetailPage() {
           showHistory
           onChanged={fetchRelation}
         />
+        {relation.closurePlan && (
+          <div className="mt-4 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="closure-plan">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t.closure.archivedPlan}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{relation.closurePlan}</p>
+          </div>
+        )}
       </Card>
 
       {/* The pair's meeting rhythm (#2014). */}

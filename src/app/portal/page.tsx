@@ -73,6 +73,8 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         // What the pair agreed to (#1784), read-only for the mentee.
         expectedEndDate: true,
         expectedMeetingIntervalWeeks: true,
+        // The pair's agreed next steps (#1795), on the archived record.
+        closurePlan: true,
       },
     }),
     // Has the mentee ever decided on company visibility (#527)? A row means
@@ -263,6 +265,12 @@ export default async function PortalDashboard({
               </p>
             )}
             {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
+            {isArchived && relation.closurePlan && (
+              <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700" data-testid="closure-plan">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t.closure.archivedPlan}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{relation.closurePlan}</p>
+              </div>
+            )}
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}
