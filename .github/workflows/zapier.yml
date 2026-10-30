@@ -1,0 +1,45 @@
+name: Zapier app
+
+# The Zapier app in apps/zapier (#2004). Its own workflow with a path filter:
+# nothing here is a required check, so a PR that does not touch the app is not
+# left waiting on it (contrast e2e.yml, #2719).
+#
+#   checks — `zapier-platform validate` (the platform's own schema check, no
+#            login needed with --without-style) and the offline tests (`npm
+#            test`, every request answered by nock: no key, no environment).
+#            No secrets, so it runs on forks.
+#
+# Pushing or promoting a version to Zapier is deliberately NOT here: it needs a
+# deploy key for the maintainer's Zapier account and is a release decision,
+# documented in docs/zapier.md.
+on:
+  pull_request:
+    paths:
+      - 'apps/zapier/**'
+      - '.github/workflows/zapier.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/zapier/**'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: apps/zapier
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/zapier/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run validate
+      - run: npm test

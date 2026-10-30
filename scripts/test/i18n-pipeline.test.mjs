@@ -126,3 +126,58 @@ test('quoteLiteral keeps the quote style and round-trips through the parser', ()
     assert.equal(init.text, v);
   }
 });
+
+const SAMPLE_WITH_MAP = `${SAMPLE}
+export const dictionaries: Record<Locale, Dict> = { en, de };
+`;
+
+test('--create builds a new locale block from a complete file, in the English shape', async () => {
+  const { addLocaleToConfig } = await import('../i18n-dict-lib.mjs');
+  const doc = buildExport(SAMPLE_WITH_MAP, 'fr');
+  for (const row of Object.values(doc.strings)) {
+    row.target = `fr:${row.source}`;
+    delete row.status;
+  }
+  // Without --create it is still refused.
+  assert.throws(() => applyImport(SAMPLE_WITH_MAP, doc), /--create/);
+  const res = applyImport(SAMPLE_WITH_MAP, doc, { create: true });
+  assert.equal(res.created, 'fr');
+  assert.match(res.text, /export const dictionaries: Record<Locale, Dict> = \{ en, de, fr \};/);
+  const all = readDictionary(res.text);
+  assert.deepEqual([...all.get('fr').entries.keys()], [...all.get('en').entries.keys()]);
+  assert.equal(all.get('fr').entries.get('nav.hello').value, 'fr:Hello {name}');
+  assert.equal(all.get('fr').entries.get('nav["dotted.key"]').value, "fr:It's here");
+  // The blocks before it are untouched.
+  assert.ok(res.text.startsWith(SAMPLE));
+  const sf = ts.createSourceFile('x.ts', res.text, ts.ScriptTarget.Latest, true);
+  assert.equal(sf.parseDiagnostics.length, 0);
+
+  const config = "export const locales = ['en', 'tr', 'de'] as const;\nexport type Locale = (typeof locales)[number];\n";
+  const next = addLocaleToConfig(config, 'fr');
+  assert.match(next, /export const locales = \['en', 'tr', 'de', 'fr'\] as const;/);
+  assert.equal(addLocaleToConfig(next, 'fr'), next, 'adding twice is a no-op');
+});
+
+test('--create refuses an incomplete, unreviewed or malformed new locale', () => {
+  const partial = buildExport(SAMPLE_WITH_MAP, 'fr');
+  partial.strings['nav.home'] = { source: 'Home', target: 'Accueil' };
+  assert.throws(() => applyImport(SAMPLE_WITH_MAP, partial, { create: true }), /still MISSING/);
+
+  const mt = buildExport(SAMPLE_WITH_MAP, 'fr');
+  for (const row of Object.values(mt.strings)) Object.assign(row, { target: row.source, status: 'MT' });
+  assert.throws(() => applyImport(SAMPLE_WITH_MAP, mt, { create: true }), /not reviewed/);
+
+  const bad = buildExport(SAMPLE_WITH_MAP, 'FR-x');
+  for (const row of Object.values(bad.strings)) Object.assign(row, { target: row.source, status: undefined });
+  assert.throws(() => applyImport(SAMPLE_WITH_MAP, bad, { create: true }), /two-letter/);
+});
+
+test('check:locale-list counts hand-written lists, not quotations of them', async () => {
+  const { countLocaleLists } = await import('../check-locale-list.mjs');
+  assert.equal(countLocaleLists("const L = ['en', 'tr', 'de'] as const;"), 1);
+  assert.equal(countLocaleLists('type X = "en" | "tr" | "de";'), 1);
+  assert.equal(countLocaleLists("z.enum(['en','tr','de',])"), 1);
+  assert.equal(countLocaleLists("// the codes are 'en' | 'tr' | 'de'\n/* ['en', 'tr', 'de'] */"), 0);
+  assert.equal(countLocaleLists("z.enum(locales)"), 0);
+  assert.equal(countLocaleLists("const url = 'https://x.example'; const l = ['en', 'tr', 'de'];"), 1);
+});

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
-import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
+import { getThreadIfAllowed, threadRecipients } from '@/lib/messaging';
 import {
   getConversationIfAllowed,
   otherConversationParticipants,
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     // The others only — never the sender's own tabs, which would otherwise show
     // them their own indicator.
     const recipients = (
-      rel ? [otherParticipant(rel, session.user.id)] : await otherConversationParticipants(conversation!, session.user.id)
+      rel ? await threadRecipients(rel, session.user.id) : await otherConversationParticipants(conversation!, session.user.id)
     ).filter((id): id is string => Boolean(id) && id !== session.user.id);
 
     publishRealtime(recipients, {

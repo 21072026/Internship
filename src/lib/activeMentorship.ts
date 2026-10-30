@@ -18,8 +18,10 @@ import type { Prisma } from '@prisma/client';
 //   6. POST /api/mentor/mentees              — mentor-created mentee
 //   7. src/lib/mergeUsers.ts                 — duplicate-account merge
 //   8. src/lib/mentorTransfer.ts             — admin mentor transfer (#2289)
+//   9. POST /api/admin/relations/group       — forming a GROUP (#1804)
+//  10. POST /api/admin/relations/[id]/participants — seating a group mentee
 //
-// scripts/import-csv.mjs is the ninth and the one seam: tsconfig excludes
+// scripts/import-csv.mjs is the one further seam: tsconfig excludes
 // `scripts/`, so a .mjs file cannot import this TS module. It carries the same
 // filter inline with a comment pointing here.
 //
@@ -68,13 +70,25 @@ export async function findActiveMentorship(
 ): Promise<ActiveMentorship | null> {
   return db.mentorshipRelation.findFirst({
     where: {
-      menteeId,
+      // A mentee is mentored either as the relation's primary mentee or from a
+      // seat in a GROUP (#1804) — both count, so a group's mentee cannot also
+      // hold a one-to-one, nor sit in two groups at once.
+      OR: [{ menteeId }, { participants: { some: menteeSeatWhere(menteeId) } }],
       status: 'ACTIVE',
       ...(opts?.exceptRelationId ? { id: { not: opts.exceptRelationId } } : {}),
     },
     orderBy: { startDate: 'asc' },
     select: { id: true, mentorId: true, startDate: true },
   });
+}
+
+/**
+ * A MENTEE seat beyond the primary pair that nobody has left (#1804). The
+ * primary pair's mirror seat is excluded: the `menteeId` scalar already
+ * answers for it, and a stale mirror must never count.
+ */
+export function menteeSeatWhere(menteeId: string): Prisma.RelationParticipantWhereInput {
+  return { userId: menteeId, role: 'MENTEE', leftAt: null, isPrimaryPair: false };
 }
 
 /**
