@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Generated Meet and Teams rooms (#2009):** a new org conferencing policy, `GENERATE_PROVIDER`. A timed meeting whose organizer has a connected calendar gets a real room on that calendar: Google Meet (`conferenceData.createRequest`) or Microsoft Teams (`isOnlineMeeting` + `teamsForBusiness`), through the new `CalendarSyncProvider.createConference`. The room becomes the meeting's single link. The request waits for Google at most 4 s (`GENERATE_TIMEOUT_MS`). On a timeout or error the meeting falls back to the saved personal room, then the built-in room, and the reason is recorded on the connection. The generated event is adopted as the calendar mirror, so no second event is created. The policy applies to `POST /api/meetings`, interview scheduling and meeting-request acceptance. Zoom is deferred by decision (`docs/conferencing.md`).",
+  "notes": {
+    "en": ["Organizations can now have a real Google Meet or Microsoft Teams room created automatically for each scheduled meeting, on the organizer's own connected calendar."],
+    "tr": ["Kurumlar artık planlanan her toplantı için, düzenleyenin kendi bağlı takviminde otomatik olarak gerçek bir Google Meet veya Microsoft Teams odası oluşturabilir."],
+    "de": ["Organisationen können jetzt für jedes geplante Meeting automatisch einen echten Google-Meet- oder Microsoft-Teams-Raum im verbundenen Kalender der organisierenden Person erstellen lassen."]
+  }
+}
