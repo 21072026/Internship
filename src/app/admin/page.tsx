@@ -17,6 +17,7 @@ import { clipSkillLabel } from '@/lib/skills';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getPlan } from '@/lib/plans';
 import { FirstRunPanel } from '@/components/FirstRunPanel';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 // Bound to the caller's org (#2356): this is a server component, so its Prisma
 // reads do not pass through an API route's `withTenantScope` — without binding
@@ -268,6 +269,8 @@ export default async function AdminDashboard() {
                   )}
                 </div>
                 <StatusBadge status={rel.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={rel} hideLive />
               </div>
             ))}
           </div>

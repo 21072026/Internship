@@ -20,6 +20,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
 import { mentorWorkload as mentorWorkloadRows } from '@/lib/analyticsReports';
 import { relationProgramWhere, type ProgramFilter } from '@/lib/programFilterRule';
+import { countsAsPlacement, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 export async function loadAdminAnalytics(
   session: Session,
@@ -72,7 +73,14 @@ export async function loadAdminAnalytics(
   const meetingWhere = { scheduledAt: inRange, ...(filtered ? relationInScope : meetingInTenant(tenant)) };
 
   const [byStage, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({ ...relWhere }, tenant), _count: { _all: true } }),
+    // The funnel is the PLACEMENT funnel (#1504): a COACHING relation's stage
+    // means nothing here. Grouped by attribution too, so the hire count below
+    // can leave out the hires that are not ours without a second query.
+    prisma.mentorshipRelation.groupBy({
+      by: ['pipelineStatus', 'employmentAttribution'],
+      where: withinTenant({ ...relWhere, ...PLACEMENT_RELATION_WHERE }, tenant),
+      _count: { _all: true },
+    }),
     prisma.interactionLog.count({ where: interactionWhere }),
     prisma.meeting.count({ where: meetingWhere }),
     prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
@@ -122,7 +130,8 @@ export async function loadAdminAnalytics(
     .sort((a, b) => b.interns - a.interns)
     .slice(0, 10);
 
-  const funnel = Object.fromEntries(byStage.map((s) => [s.pipelineStatus, s._count._all]));
+  const funnel: Record<string, number> = {};
+  for (const s of byStage) funnel[s.pipelineStatus] = (funnel[s.pipelineStatus] ?? 0) + s._count._all;
 
   // What "hired" means here is the TENANT's own finished stage set (#1882) —
   // this route used to compare against the literals `HIRED_660`/`EMPLOYED_700`,
@@ -161,7 +170,12 @@ export async function loadAdminAnalytics(
   const rsvpAcceptanceRate = rsvpResponded ? Math.round(((rsvp.ACCEPTED || 0) / rsvpResponded) * 100) : null;
 
   const totalRelations = byStage.reduce((n, s) => n + s._count._all, 0);
-  const hiredCount = outcome.finished.reduce((n, key) => n + (funnel[key] || 0), 0);
+  // Ours only (#1504): a SELF_FOUND / ALREADY_EMPLOYED hire is an honest
+  // outcome, not a placement. With no attribution stated anywhere this is
+  // exactly the old sum.
+  const hiredCount = byStage
+    .filter((s) => countsAsPlacement({ pipelineStatus: s.pipelineStatus, employmentAttribution: s.employmentAttribution }, outcome.finished))
+    .reduce((n, s) => n + s._count._all, 0);
   const conversionToHired = totalRelations ? Math.round((hiredCount / totalRelations) * 100) : 0;
 
   return {

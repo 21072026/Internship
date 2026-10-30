@@ -28,6 +28,7 @@ export const USER_CREATE_SOURCES = [
   'signup',
   'apply',
   'sso',
+  'social',
   'admin',
   'mentor',
   'source',
