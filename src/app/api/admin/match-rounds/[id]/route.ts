@@ -7,6 +7,8 @@ import { withRequestScope } from '@/lib/requestContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 import { canTransitionRound, isRoundEditable, ROUND_NAME_MAX, type RoundStatus } from '@/lib/matching/round';
+import { mentorPoolWhere } from '@/lib/matching/pool';
+import { COHORT_PASS_MAX_MENTORS } from '@/lib/matching/assign';
 
 // One bulk matching round (#1793). GET reads it with its proposals; PATCH
 // renames it or moves it DRAFT ⇄ REVIEW; DELETE discards it. Every write is a
@@ -38,15 +40,36 @@ export async function GET(request: Request, { params }: Ctx) {
     const { session } = gate;
     const { id } = await params;
     return withTenantScope(session, async () => {
+      const tenant = await tenantWhere(session);
       const round = await prisma.matchRound.findFirst({
-        where: withinTenant({ id }, await tenantWhere(session)),
+        where: withinTenant({ id }, tenant),
         include: {
           cohort: { select: { id: true, name: true } },
           proposals: { orderBy: [{ state: 'asc' }, { score: 'desc' }] },
         },
       });
       if (!round) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      return NextResponse.json({ round });
+      // The board shows names, not ids (#1796): every person a proposal or an
+      // alternative names, plus the accepting mentor pool for the swap search.
+      // Tenant-scoped like everything else here.
+      const ids = new Set<string>();
+      for (const p of round.proposals) {
+        ids.add(p.menteeId);
+        if (p.mentorId) ids.add(p.mentorId);
+        if (Array.isArray(p.alternatives)) {
+          for (const a of p.alternatives) if (a && typeof a === 'object' && 'mentorId' in a && typeof a.mentorId === 'string') ids.add(a.mentorId);
+        }
+      }
+      const [named, pool] = await Promise.all([
+        ids.size ? prisma.user.findMany({ where: withinTenant({ id: { in: [...ids] } }, tenant), select: { id: true, fullName: true } }) : Promise.resolve([]),
+        prisma.user.findMany({
+          where: { AND: [mentorPoolWhere(tenant), { OR: [{ acceptingMentees: null }, { acceptingMentees: true }] }] },
+          select: { id: true, fullName: true },
+          orderBy: { fullName: 'asc' },
+          take: COHORT_PASS_MAX_MENTORS,
+        }),
+      ]);
+      return NextResponse.json({ round, people: Object.fromEntries(named.map((u) => [u.id, u.fullName])), pool });
     });
   });
 }

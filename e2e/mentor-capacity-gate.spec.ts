@@ -114,7 +114,8 @@ test('mentor accepts an application: relation starts, applicant notified; declin
       .toBe('APPROVED');
     const rel = await prisma.mentorshipRelation.findFirst({ where: { mentorId: mentor.id, menteeId: acceptUser.id, status: 'ACTIVE' } });
     expect(rel).not.toBeNull();
-    expect(await prisma.notification.count({ where: { userId: acceptUser.id, type: 'mentorship_request.approved' } })).toBe(1);
+    // The note is written by the notification router after the decision lands.
+    await expect.poll(() => prisma.notification.count({ where: { userId: acceptUser.id, type: 'mentorship_request.approved' } })).toBe(1);
     // No echo: the deciding mentor gets no "mentee assigned to you" note about themself.
     expect(await prisma.notification.count({ where: { userId: mentor.id, type: 'mentorship_request.menteeAssigned' } })).toBe(0);
 
@@ -122,7 +123,8 @@ test('mentor accepts an application: relation starts, applicant notified; declin
     await expect
       .poll(async () => (await prisma.mentorshipRequest.findUniqueOrThrow({ where: { id: rejectReq.id } })).status)
       .toBe('REJECTED');
-    expect(await prisma.notification.count({ where: { userId: rejectUser.id, type: 'mentorship_request.rejected' } })).toBe(1);
+    // The note is written by the notification router after the decision lands.
+    await expect.poll(() => prisma.notification.count({ where: { userId: rejectUser.id, type: 'mentorship_request.rejected' } })).toBe(1);
     expect(await prisma.mentorshipRelation.findFirst({ where: { menteeId: rejectUser.id } })).toBeNull();
 
     // Server-side authorization: another mentor cannot decide requests that

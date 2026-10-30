@@ -23,6 +23,8 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Tenant isolation** | One tenant cannot read another's rows, against a server that really has `MT_ENFORCE_ISOLATION=true` | `e2e/isolation/*.spec.ts` (the `isolation` Playwright project) | its own job in `e2e-full.yml` (**4× a day**) + `npm run test:e2e:isolation` locally |
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
+| **Authenticated load (k6, demo only)** | Sign-in cost, the signed-in screens (`/portal`, `/mentor`, `/messages`, `/admin/board`), message + interaction writes | `k6/authenticated-load.js` | **nightly cron**, 01:20 UTC (`k6-auth-load.yml`) + on demand |
+| **SSE load (k6, demo only)** | N concurrent realtime streams: setup time (TTFB), `ready` rate, server heartbeat drift | `k6/sse-load.js` | same workflow, after the authenticated run |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) except the `webhook` event subscriber and the admin test ping — producers raise events through `emit()` (#1697) — and no hand-written `activityLog`/`auditLog` create may use a catalogue event name | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 | **Forbidden terms** | No name from a secret term list on the visible surface: added lines, new file names, commit messages and authors, branch name, PR title and body; the whole tree on `main` | `scripts/check-forbidden-terms.mjs` | `forbidden-terms.yml`: blocking on every PR and on every push to `main`, blocking tree scan on `main` + daily ([below](#forbidden-terms-guard-2919)) |
@@ -437,6 +439,32 @@ A k6 script in this repo points at a **live, shared environment**, so:
   `/api/public/stats` (60 / 10 min) and `/api/v1/*` (120 / min) are excluded on purpose. A 429
   in a report means the mix drifted, not that the app is unhealthy.
 
+These rules bind `k6/nightly-load.js`, which targets production. The two **demo-only**
+scenarios below are the deliberate exception to the first two rules and nothing else.
+
+### The demo-only scenarios: authenticated, write and SSE load (#1612)
+
+`k6/authenticated-load.js` and `k6/sse-load.js` sign in and write, so they may only ever
+target the public demo (its own database, published credentials, wiped at 02:00 and 14:00 UTC —
+[`docs/DEMO.md`](DEMO.md)). `k6/lib/demoTarget.js` holds the guard: `setup()` throws for any
+host that is not `demo.interncrm.com` (a local dev server only with `K6_ALLOW_LOCAL=1`), so the
+run aborts before any VU starts — `BASE_URL=https://preview.interncrm.com k6 run
+k6/authenticated-load.js` exits 107 without a request.
+
+| Scenario | Phases (tag `ep`) | Notes |
+|---|---|---|
+| `authenticated-load.js` | `auth` (12 sign-ins in `setup()`, one per demo account), read (`portal`, `messages_page`, `mentor_home`, `relations_api`, `admin_board`), write (`message_post`, `interaction_post`) | `POST /api/messages` is limited to 60/min per IP, so its write runs at a **fixed arrival rate of 30/min** — half the bucket. Peak read VUs default 10, clamped to 30. Summary: `k6-auth-summary.json` |
+| `sse-load.js` | `auth`, `sse_stream`; custom `sse_ready` (Rate), `sse_heartbeat_drift_ms` (Trend), `sse_heartbeat_intervals` (Counter) | Holds `K6_SSE_CONNECTIONS` (default 24, ≤ 6 per account × 12 accounts) streams for `K6_SSE_HOLD_SECONDS` (default 130). The stream route accepts `?maxSeconds=` (5 s…30 min, can only shorten) so k6 can read the whole body, and stamps each heartbeat `: ping <epoch ms>` so drift is measured from the server's own clock. Its aggregate `http_req_duration` is the hold time by construction — read `http_req_waiting{ep:sse_stream}` for setup time. Summary: `k6-sse-summary.json` |
+
+Smoke (`K6_SMOKE=1 K6_PEAK_VUS=3`) runs each in about a minute. Against a local `npm run dev`
+(`npm run seed:demo` first, `K6_ALLOW_LOCAL=1`) the scripts work end to end but the latency
+budgets mean nothing — dev compiles on first hit.
+
+`.github/workflows/k6-auth-load.yml` runs both at 01:20 UTC (clear of the 23:40 anonymous run
+and before the 02:00 demo reset that wipes the written rows), one after the other, with their
+own artifacts; red opens the `k6-auth-load` `ci-alert` issue and sends a best-effort mail per
+summary through `scripts/k6-report-email.mjs`.
+
 ### The nightly cron and the alert
 
 [`.github/workflows/k6-load.yml`](../.github/workflows/k6-load.yml) runs the scenario at
@@ -653,6 +681,7 @@ depends on SMTP:
 |---|---|---|---|
 | `e2e-full.yml` | `e2e-full` | commit sha | the next green run |
 | `k6-load.yml` | `k6-load` | UTC day | the next green night |
+| `k6-auth-load.yml` | `k6-auth-load` | UTC day | the next green night |
 | `stress.yml` | `stress` | UTC day | the next green run |
 | `backup-verify.yml` | `backup-verify` | UTC day | the next green check |
 | `mysql-watchdog.yml` | `mysql-watchdog` | UTC day (it runs every 10 min) | the next green check |
@@ -915,6 +944,36 @@ It is a floor: classes assembled outside a `className` attribute are invisible t
 contrast is the axe scan's and `check:contrast`'s job. Screenshot baselines (#1614, part 2) are the
 net for everything else.
 
+## Visual regression (#1614)
+
+`e2e/visual-regression.spec.ts` compares the core screens — landing, `/auth/signin`, `/admin`,
+`/admin/board`, `/messages`, `/mentor`, `/portal` — in **EN/TR/DE × light/dark** (42 PNGs) with
+`toHaveScreenshot()` (`maxDiffPixelRatio: 0.01`). It runs in the scheduled full suite, **not** the
+`@smoke` gate.
+
+**Determinism is built in, not hoped for:** a fixed 1280×800 viewport and a viewport-sized capture
+(a full-page height follows the data), animations/transitions/caret off, its own organisation with
+fixed display names, and masks over `<time>`, the account menu (it prints the e-mail), avatars and
+the notification badge. A screen that diffs on unchanged code needs another mask, never a looser
+threshold.
+
+**Baselines come only from the CI image.** Font rasterisation differs between a laptop and the
+GitHub runner, so a PNG made locally fails in CI on every run. To create or update them:
+
+1. Run **Visual baselines (generate)** (`.github/workflows/visual-baselines.yml`, `workflow_dispatch`,
+   optional `ref`). It builds the app exactly like `e2e-full.yml`, writes the baselines with
+   `--update-snapshots`, then **compares twice against what it just wrote** — a diff there means a
+   missing mask, and nothing is pushed.
+2. It pushes `e2e/visual-regression.spec.ts-snapshots/` to `bot/visual-baselines-<run id>` (also
+   uploaded as an artifact).
+3. Open a PR from that branch. **A baseline update is reviewed like code**: look at every changed
+   PNG, and merge only the pixels the change under review was meant to move.
+
+Until a baseline directory is committed the spec **skips itself**, so the full suite cannot go red
+on a missing PNG. Locally, `VISUAL_BASELINE_UPDATE=1 npx playwright test e2e/visual-regression.spec.ts
+--update-snapshots` is fine for checking that the spec runs and is stable — just never commit those
+PNGs.
+
 ## Forbidden-terms guard (#2919)
 
 Some names must not appear on the visible surface of this repository. That covers
@@ -972,7 +1031,6 @@ To run it locally, put the list in the environment and choose a mode:
 ## Ideas for further test types
 
 - ~~**Contract / API tests**~~ — built in #1611: see [`docs/public-api.md` § Published contracts](public-api.md#published-contracts-1611).
-- **Visual regression** (Playwright screenshots) to catch unintended UI drift.
 - **Dependency/SCA scanning** (`npm audit`, Dependabot) on a schedule.
-- **Load-with-auth** scenarios — both load tests are anonymous-GET-only by design. The
-  natural home is the demo environment (its own DB, publishable credentials), not prod.
+- ~~**Load-with-auth** scenarios~~ — built in #1612 against the demo environment: see
+  [§ The demo-only scenarios](#the-demo-only-scenarios-authenticated-write-and-sse-load-1612).

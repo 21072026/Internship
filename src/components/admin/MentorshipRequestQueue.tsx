@@ -1,5 +1,6 @@
 'use client';
 
+import { daysUntilExpiry } from '@/lib/requestExpiryRule';
 import { useCallback, useEffect, useState } from 'react';
 import { Inbox, Repeat2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -25,6 +26,8 @@ interface RequestRow {
   preferredLanguages?: unknown; // JSON column — guarded with Array.isArray
   preferredMentor?: { id: string; fullName: string } | null;
   createdAt: string;
+  /** #1775 — the countdown on the row. */
+  expiresAt?: string | null;
   mentee: { id: string; fullName: string; email: string; university?: string | null; skills: string[] };
   // Re-match (#1801). Set when this request asks to REPLACE a live pairing.
   // `rematchReason`/`rematchNote` reach this component and nowhere else: the
@@ -93,6 +96,9 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
   // reported availability.status is at_capacity/not_accepting — same gate as
   // the direct-assignment flows, reusing their ConfirmDialog copy.
   const [pendingApprove, setPendingApprove] = useState<{ requestId: string; status: 'at_capacity' | 'not_accepting' } | null>(null);
+  // Cancellation with a reason (#1775): the row whose reason box is open.
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const load = useCallback(() => {
     fetch('/api/admin/mentorship-requests')
@@ -125,7 +131,7 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
   // response's `warnings` (#942) are accepted defensively and otherwise
   // ignored: the confirmation already happened client-side before this ran,
   // so a second dialog off the same warning would just be a duplicate.
-  const decide = async (requestId: string, action: 'approve' | 'reject') => {
+  const decide = async (requestId: string, action: 'approve' | 'reject' | 'cancel', reason?: string) => {
     setBusy(requestId);
     setErr('');
     try {
@@ -135,16 +141,19 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
         body: JSON.stringify({
           requestId,
           action,
-          mentorId: choices[requestId] || undefined,
+          mentorId: action === 'approve' ? choices[requestId] || undefined : undefined,
           // For the audit record of an approval (#1789): the suggestion batch
           // shown for this request, if any, and the admin's note.
           ...(action === 'approve'
             ? { suggestionBatchId: suggested[requestId]?.batchId ?? undefined, decisionNote: notes[requestId]?.trim() || undefined }
             : {}),
+          // A cancellation's reason (#1775).
+          ...(action === 'cancel' ? { reason } : {}),
         }),
       });
       if (res.ok) {
         load();
+        if (action === 'cancel') { setCancelling(null); setCancelReason(''); }
         if (action === 'approve') onApproved();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -287,7 +296,7 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
             ? (r.preferredLanguages as unknown[]).map((l) => String(l))
             : [];
           return (
-          <div key={r.id} data-testid={`request-${r.id}`} className="py-3 flex flex-col lg:flex-row lg:items-center gap-3">
+          <div key={r.id} data-testid={`request-${r.id}`} className="py-3 flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {r.replacesRelationId && (
@@ -428,7 +437,35 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
               <Button size="sm" variant="outline" loading={busy === r.id} onClick={() => decide(r.id, 'reject')}>
                 {q.reject}
               </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setCancelling(r.id); setCancelReason(''); }} data-testid={`request-cancel-${r.id}`}>
+                {q.cancel}
+              </Button>
+              <span className="text-xs text-gray-600 dark:text-gray-400" data-testid={`request-expires-${r.id}`}>
+                {(() => {
+                  const left = daysUntilExpiry({ createdAt: new Date(r.createdAt), expiresAt: r.expiresAt ? new Date(r.expiresAt) : null }, new Date());
+                  return left > 0 ? q.expiresIn.replace('{n}', String(left)) : q.expiresToday;
+                })()}
+              </span>
             </div>
+            {cancelling === r.id && (
+              <div className="basis-full mt-2 flex flex-col gap-2" data-testid={`request-cancel-form-${r.id}`}>
+                <label className="text-xs text-gray-600 dark:text-gray-400" htmlFor={`cancel-reason-${r.id}`}>{q.cancelReasonLabel}</label>
+                <textarea
+                  id={`cancel-reason-${r.id}`}
+                  value={cancelReason}
+                  maxLength={500}
+                  rows={2}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2.5 py-1.5 text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" variant="danger" disabled={!cancelReason.trim()} loading={busy === r.id} onClick={() => decide(r.id, 'cancel', cancelReason.trim())} data-testid={`request-cancel-confirm-${r.id}`}>
+                    {q.cancelConfirm}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setCancelling(null)}>{q.cancelBack}</Button>
+                </div>
+              </div>
+            )}
           </div>
           );
         })}

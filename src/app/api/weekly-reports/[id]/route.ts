@@ -4,6 +4,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { canReadWeeklyReports } from '@/lib/weeklyReports';
@@ -68,6 +69,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           ...(parsed.data.status ? { status: 'SUBMITTED' as const, submittedAt: report.submittedAt ?? new Date(), mentorComment: null, reviewedById: null, reviewedAt: null } : {}),
         },
       });
+      // Handed in (#1998): from DRAFT, or again after changes were requested.
+      if (parsed.data.status) {
+        await emit(
+          'weekly_report.submitted',
+          { reportId: report.id, relationId: report.relationId, weekStart: reportUpdate.weekStart.toISOString(), resubmission: report.status === 'CHANGES_REQUESTED' },
+          { orgId: reportUpdate.orgId, actor: { id: session.user.id, type: 'user' } },
+        );
+      }
       return NextResponse.json({ report: reportUpdate });
     }
 

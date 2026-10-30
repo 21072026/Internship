@@ -252,6 +252,12 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship_request.newGeneric', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.rejected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Request expiry (#1775, src/lib/requestExpiry.ts): ONE nudge to whoever holds
+  // the request on day 7, the mentee told on expiry, and an admin's cancellation
+  // with its reason. In-app, like every other step of the request lifecycle.
+  { key: 'mentorship_request.nudge', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
+  { key: 'mentorship_request.expired', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'mentorship_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reason'] },
   { key: 'mentorship_request.mentorAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentorship_request.menteeAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName'] },
   // Mentor Offers (#1809). The mentee's two (the offer, the one reminder) are

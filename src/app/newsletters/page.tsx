@@ -37,6 +37,8 @@ interface Issue {
   mentorNote: string | null;
   languageFallback?: boolean;
   imageUrl: string | null;
+  /** The hero image's description (#3388); null = decorative. */
+  imageAlt?: string | null;
 }
 
 const PAGE_SIZE = 10;
@@ -124,7 +126,7 @@ export default function NewslettersPage() {
             <Card key={issue.id} className="overflow-hidden">
               {issue.imageUrl && (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={issue.imageUrl} alt="" className="h-40 w-full object-cover" />
+                <img src={issue.imageUrl} alt={issue.imageAlt ?? ''} className="h-40 w-full object-cover" />
               )}
               <div className="p-5">
                 <p className="text-xs text-gray-400">

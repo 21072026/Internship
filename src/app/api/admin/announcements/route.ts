@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
+import { imageAltField } from '@/lib/announcementImage';
 import { normalizeMachineList } from '@/lib/machineTranslation';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
-import { recordOptOuts } from '@/services/emailService';
-import { mailAnnouncement } from '@/lib/announcementMail';
 import { mailQueueNotice } from '@/lib/mailOutbox';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
+import { enqueue } from '@/lib/jobs/queue';
+import { isValidAudienceInput, parseAudience } from '@/lib/announcementAudience';
+import { announcementMailRecipients, announcementRecipients, deliverAnnouncement } from '@/lib/announcementSend';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -23,7 +23,6 @@ import {
 import {
   normalizeAnnouncementTranslations,
   canonicalAnnouncementText,
-  resolveAnnouncementText,
 } from '@/lib/announcementText';
 import { requirePermission } from '@/lib/authz';
 
@@ -44,7 +43,17 @@ const schema = z.object({
   machineTranslated: z.array(z.string()).max(3).optional(),
   link: z.string().max(TEXT_LIMITS.announcementLink).optional(),
   email: z.boolean().optional(),
+  // Targeting (#1721): CRITERIA, resolved server-side at send time — there is
+  // deliberately no field for a list of recipients. Absent = everyone.
+  audience: z.unknown().optional(),
+  // A future ISO instant to send at instead of now (#1721).
+  scheduledAt: z.string().max(40).optional(),
 });
+
+// A schedule must be at least this far ahead; anything sooner is sent now.
+const MIN_SCHEDULE_LEAD_MS = 60_000;
+// …and at most this far: a forgotten schedule a year out is a surprise, not a plan.
+const MAX_SCHEDULE_LEAD_MS = 366 * 24 * 60 * 60 * 1000;
 
 
 const IMAGE_ERROR: Record<string, string> = {
@@ -69,10 +78,10 @@ function safeJson(value: FormDataEntryValue | null): unknown {
  * by API clients and several e2e specs) or as multipart/form-data when the admin
  * attaches an image. Normalised here so the handler below sees one shape.
  */
-async function readBody(request: Request): Promise<{ fields: unknown; image: File | null }> {
+async function readBody(request: Request): Promise<{ fields: unknown; image: File | null; imageAlt: string | null }> {
   try {
     if (!(request.headers.get('content-type') || '').includes('multipart/form-data')) {
-      return { fields: await request.json(), image: null };
+      return { fields: await request.json(), image: null, imageAlt: null };
     }
     const form = await request.formData();
     const image = form.get('image');
@@ -87,12 +96,15 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         ...(form.get('machineTranslated') ? { machineTranslated: safeJson(form.get('machineTranslated')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('email') === null ? {} : { email: form.get('email') === 'true' }),
+        ...(form.get('audience') ? { audience: safeJson(form.get('audience')) } : {}),
+        ...(form.get('scheduledAt') ? { scheduledAt: form.get('scheduledAt') } : {}),
       },
       image: image instanceof File && image.size > 0 ? image : null,
+      imageAlt: imageAltField(form.get('imageAlt')),
     };
   } catch {
     // An unparseable body should be the 400 below, not an unhandled 500.
-    return { fields: null, image: null };
+    return { fields: null, image: null, imageAlt: null };
   }
 }
 
@@ -129,7 +141,7 @@ async function handleGet(request: Request) {
       take: pageSize,
       // `select: { id: true }` on the relation, never the blob — an `include`
       // would drag every attached image's bytes into the history response.
-      include: { image: { select: { id: true } } },
+      include: { image: { select: { id: true, altText: true } } },
     }),
   ]);
 
@@ -137,15 +149,39 @@ async function handleGet(request: Request) {
   const senders = await prisma.user.findMany({ where: { id: { in: senderIds } }, select: { id: true, fullName: true } });
   const senderName = new Map(senders.map((s) => [s.id, s.fullName]));
 
+  // Read tracking (#1721): an aggregate over the bell rows each broadcast
+  // already wrote (`Notification.read`, keyed by announcementId) — no new
+  // mechanism. Delivered = rows written; read = rows the reader opened.
+  const ids = announcements.map((a) => a.id);
+  const counts = ids.length
+    ? await prisma.notification.groupBy({
+        by: ['announcementId', 'read'],
+        where: { announcementId: { in: ids } },
+        _count: { _all: true },
+      })
+    : [];
+  const stats = new Map<string, { delivered: number; read: number }>();
+  for (const c of counts) {
+    if (!c.announcementId) continue;
+    const s = stats.get(c.announcementId) ?? { delivered: 0, read: 0 };
+    s.delivered += c._count._all;
+    if (c.read) s.read += c._count._all;
+    stats.set(c.announcementId, s);
+  }
+
   return NextResponse.json({
     announcements: announcements.map(({ image, ...a }) => ({
       ...a,
+      audience: parseAudience(a.audience),
+      delivered: stats.get(a.id)?.delivered ?? 0,
+      read: stats.get(a.id)?.read ?? 0,
       // Normalized rather than passed through raw: the edit form binds one box
       // per language and should never be handed an unexpected key (#1163).
       translations: normalizeAnnouncementTranslations(a.translations),
       machineTranslated: normalizeMachineList(a.machineTranslated, normalizeAnnouncementTranslations(a.translations)),
       sentByName: senderName.get(a.sentById) ?? null,
       imageUrl: image ? announcementImageUrl(a.id) : null,
+      imageAlt: image?.altText ?? null,
     })),
     total,
     page,
@@ -154,8 +190,9 @@ async function handleGet(request: Request) {
   });
 }
 
-// POST — broadcast an announcement to every active user as an in-app
-// notification, optionally also by email (respecting each user's opt-out).
+// POST — broadcast an announcement to its audience (everyone by default; the
+// criteria of #1721 otherwise) as an in-app notification, optionally also by
+// email (respecting each user's opt-out) — now, or at `scheduledAt`.
 export async function POST(request: Request) {
   return withRequestScope(request, () => handlePost(request));
 }
@@ -166,7 +203,10 @@ async function handlePost(request: Request) {
   const { session } = gate;
 
   return await withTenantScope(session, async () => {
-  const { fields, image } = await readBody(request);
+  const { fields, image, imageAlt } = await readBody(request);
+  if (imageAlt && imageAlt.length > TEXT_LIMITS.imageAltText) {
+    return NextResponse.json({ error: 'Validation failed', code: 'too_long' }, { status: 400 });
+  }
   const parsed = schema.safeParse(fields);
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const { link, email } = parsed.data;
@@ -190,43 +230,43 @@ async function handlePost(request: Request) {
     imageData = Buffer.from(await image.arrayBuffer());
   }
 
-  // The audience is the SENDING TENANT's people, by hand (#2542, #2590). This
-  // used to be every active user of the database — harmless with one product,
-  // and with two it is a broadcast that crosses the wall: a marketing admin's
-  // announcement in every internship user's bell and inbox, and — because one
-  // person can hold an account in each world under the same address — twice in
-  // the inbox of anyone who has both. The middleware does not scope while
-  // MT_ENFORCE_ISOLATION is off, so the filter is explicit; it is also the same
-  // set the quota below is measured against, so the number checked and the
-  // number mailed cannot disagree. A no-op for a single-tenant deployment.
-  const users = await prisma.user.findMany({
-    where: withinTenant({ isActive: true }, await tenantWhere(session)),
-    select: { id: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
-  });
+  if (!isValidAudienceInput(parsed.data.audience)) {
+    return NextResponse.json({ error: 'Validation failed', details: { formErrors: ['audience'] } }, { status: 400 });
+  }
+  const audience = parseAudience(parsed.data.audience);
+  let scheduledAt: Date | null = null;
+  if (parsed.data.scheduledAt) {
+    const when = new Date(parsed.data.scheduledAt);
+    const lead = when.getTime() - Date.now();
+    if (Number.isNaN(when.getTime()) || lead > MAX_SCHEDULE_LEAD_MS) {
+      return NextResponse.json({ error: 'Validation failed', details: { formErrors: ['scheduledAt'] } }, { status: 400 });
+    }
+    if (lead >= MIN_SCHEDULE_LEAD_MS) scheduledAt = when;
+  }
 
-  // Who would actually be MAILED — computed here, before anything is written,
-  // because that count is what the broadcast quota is measured against and a
-  // refusal must not leave an Announcement row (or a bell full of
-  // notifications) behind for a broadcast that never went out (#1754).
-  //
-  // The two conjuncts are the very same filter the send loop below applies, so
-  // the number the quota checks and the number of mails that leave cannot
-  // disagree.
-  const mailRecipients = email
-    ? users.filter((u) => u.email && emailAllowed(u, 'announcements') && emailGroupAllowedForCategory(u, 'announcement'))
-    : [];
+  // The audience is the SENDING TENANT's people, by hand (#2542, #2590) —
+  // narrowed by the announcement's criteria (#1721), resolved here on the
+  // server. The middleware does not scope while MT_ENFORCE_ISOLATION is off, so
+  // the tenant filter is explicit; it is also the set the quota below is
+  // measured against, so the number checked and the number mailed agree.
+  const tenant = await tenantWhere(session);
+  const users = await announcementRecipients(tenant, audience);
 
-  // Only the e-mail half is metered. An announcement sent without the box
-  // ticked is in-app only — a bell notification costs the sending domain
-  // nothing — so it is never counted and never refused.
+  // Who would actually be MAILED — computed before anything is written, because
+  // that count is what the broadcast quota is measured against and a refusal
+  // must not leave an Announcement row behind (#1754). For a scheduled send it
+  // is an estimate checked now and checked again when it goes out.
+  const mailRecipients = email ? announcementMailRecipients(users) : [];
+
+  // Only the e-mail half is metered (an in-app announcement costs the sending
+  // domain nothing).
   if (mailRecipients.length > 0) {
     const quota = await checkBroadcastQuota({
       orgId: resolveOrgId(session),
       requested: mailRecipients.length,
     });
     if (!quota.allowed) {
-      // Refused WHOLE, before the first message: a half-delivered blast is
-      // worse than a refusal, and the admin gets the figures to act on.
+      // Refused WHOLE, before the first message.
       return NextResponse.json(broadcastQuotaError(quota), { status: 403 });
     }
   }
@@ -234,8 +274,7 @@ async function handlePost(request: Request) {
   // The Announcement row is written BEFORE the fan-out, so every notification it
   // produces can carry its id (#1162) — that link is what lets a later edit
   // correct the copy already sitting in everyone's bell, and a delete take those
-  // rows with it. `emailedCount` is the one thing not knowable yet; it is filled
-  // in once the sending below settles.
+  // rows with it.
   const announcement = await prisma.announcement.create({
     data: {
       text,
@@ -243,61 +282,39 @@ async function handlePost(request: Request) {
       machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
       link: link || null,
       sentById: session.user.id,
-      // The sending tenant (#2357), so a later reader/query is scoped to its own
-      // org. resolveOrgId is already computed above for the broadcast quota.
+      // The sending tenant (#2357).
       orgId: resolveOrgId(session),
-      recipientCount: users.length,
+      recipientCount: scheduledAt ? 0 : users.length,
+      ...(audience ? { audience, targeted: true } : {}),
+      ...(scheduledAt ? { scheduledAt, status: 'SCHEDULED' as const, emailRequested: !!email } : {}),
       ...(imageData && image
-        ? { image: { create: { contentType: image.type, size: image.size, data: imageData } } }
+        ? { image: { create: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt } } }
         : {}),
     },
   });
 
-  // Bulk-create the in-app notifications in one statement. Each row carries the
-  // body in ITS OWN reader's language: a notification is a per-user record, so
-  // resolving once per recipient here is both cheaper and more honest than
-  // storing one language and re-resolving at read time.
-  await prisma.notification.createMany({
-    data: users.map((u) => ({
-      userId: u.id,
-      type: 'announcement',
-      text: resolveAnnouncementText({ text, translations }, u.preferredLanguage),
-      link: link || null,
-      announcementId: announcement.id,
-    })),
-  });
-
-  let emailed = 0;
-  // Of `emailed`, the mails waiting on the mail queue (#2951).
-  let queued = 0;
-  // Waiting in the outbox for an operator (#2960) — not emailed yet.
-  let held = 0;
-  // The people the broadcast honoured an opt-out for (#2054): one SKIPPED
-  // EmailLog row each, from the preference row this handler already loaded —
-  // one batched insert, no extra read — so "show me this person's opt-out was
-  // honoured on this announcement" has an answer.
-  let skipped = 0;
-  if (email) {
-    const toMail = new Set(mailRecipients.map((u) => u.id));
-    skipped = await recordOptOuts(
-      users.filter((u) => u.email && !toMail.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)', orgId: u.orgId })),
-    );
-
-    // A bounded fan-out (#2951) — see src/lib/announcementMail.ts. The
-    // list the quota was checked against, not a second filter over `users`:
-    // two copies of "who gets mailed" is how a metered count and a delivered
-    // count start disagreeing.
-    const mailed = await mailAnnouncement({
-      recipients: mailRecipients,
-      text,
-      translations,
-      link: link || null,
-      image: imageData && image ? { data: imageData, contentType: image.type } : null,
+  if (scheduledAt) {
+    // On the job queue, not a cron (#1721): one job per announcement, due at its
+    // time. Cancel or delete before then and the job finds nothing to claim.
+    await enqueue('announcement.send', { announcementId: announcement.id }, {
+      runAt: scheduledAt,
+      idempotencyKey: `announcement:${announcement.id}`,
+      orgId: announcement.orgId,
+      trigger: 'manual',
     });
-    emailed = mailed.emailed;
-    queued = mailed.queued;
-    held = mailed.held;
+    await logActivity({ action: 'announcement.scheduled', actorId: session.user.id, actorEmail: session.user.email ?? null, detail: scheduledAt.toISOString() });
+    return NextResponse.json(
+      { scheduled: true, scheduledAt: scheduledAt.toISOString(), estimate: { recipients: users.length, emailable: mailRecipients.length } },
+      { status: 201 },
+    );
   }
+
+  const { emailed, queued, held, skipped } = await deliverAnnouncement({
+    announcement: { id: announcement.id, text, translations, link: link || null },
+    users,
+    mailRecipients,
+    image: imageData && image ? { data: imageData, contentType: image.type, altText: imageAlt } : null,
+  });
 
   if (emailed > 0) {
     await prisma.announcement.update({ where: { id: announcement.id }, data: { emailedCount: emailed } });

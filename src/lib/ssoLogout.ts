@@ -36,5 +36,7 @@ export function spInitiatedSloApplies(
   org: (SsoActivation & { ssoLogoutUrl: string | null }) | null,
   user: { ssoExempt: boolean },
 ): boolean {
-  return !!org && isSsoActive(org) && !!org.ssoLogoutUrl?.trim() && !user.ssoExempt;
+  // SAML only: an OIDC tenant (#1929) has no SAML SLO, and a logout URL left
+  // over from an earlier SAML config must not send it one.
+  return !!org && org.ssoProvider === 'saml' && isSsoActive(org) && !!org.ssoLogoutUrl?.trim() && !user.ssoExempt;
 }

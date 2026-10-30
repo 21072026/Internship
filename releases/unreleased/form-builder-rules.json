@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Form builder rules (#1802, slice 1):** `src/lib/forms/builderRule.ts` (pure, client-safe) — `missingLocales()` (a live field's label, every option label and any help text in EN/TR/DE), `proxyWarnings()` (key or label pointing at a protected characteristic — age, ethnicity, religion, disability, gender, marital status, nationality — in EN/TR/DE; whole words unless a term is a `*` prefix, so `agenda` and `alternative` stay quiet) and `diffFields()` (added / removed / changed props against the live version, for the publish confirmation). `publishFormDefinition()` now refuses a draft with an untranslated live field: `400 missing_locales` with `{ fields: [{ key, locales }] }`. Unit-tested in `e2e/form-builder-rule.unit.spec.ts`; `e2e/form-definitions.spec.ts` asserts the refusal."
+}

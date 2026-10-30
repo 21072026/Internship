@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     where: withinTenant({ id }, await tenantWhere(session)),
     select: {
       id: true, status: true, audience: true, content: true,
-      image: { select: { contentType: true, data: true } },
+      image: { select: { contentType: true, data: true, altText: true } },
     },
   });
   if (!issue) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -91,6 +91,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       role: me.role,
       preferredLanguage: me.preferredLanguage,
       imageSrc: issue.image ? `cid:${NEWSLETTER_IMAGE_CID}` : null,
+      imageAlt: issue.image?.altText ?? null,
       // No unsubscribe link: it is a test copy, not a subscription, and a
       // working unsubscribe here would let an admin silence themselves by
       // reflex while checking their own formatting.

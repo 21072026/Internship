@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
@@ -96,6 +97,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // re-saving an already-done goal (title edit etc.) stays silent. `goal` is
   // the pre-update row, so this compares against the old status. A PRIVATE
   // goal has no other side to tell.
+  // On the bus too (#1998), under the same rule: a genuine completion of a
+  // goal somebody else may read.
+  if (status === 'DONE' && goal.status !== 'DONE' && updated.visibility !== 'PRIVATE') {
+    await emit('goal.completed', { goalId: updated.id, relationId: updated.relationId }, { actor: { id: session.user.id, type: 'user' } });
+  }
   if (status === 'DONE' && goal.status !== 'DONE' && updated.visibility !== 'PRIVATE') {
     const rel = goal.relation;
     const recipientId = session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;

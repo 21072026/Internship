@@ -387,6 +387,85 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: 'A company flagged a candidate as interesting, shortlisted or passed (`from` and `to` are interest states).',
   },
+  // The rest of the relationship's life (#1998). Ids, states and dates only —
+  // never the report text, the mentor's comment, the file, the goal's title
+  // or an attendance note.
+  {
+    // Two producers, one rule: the mentee hands a report in on creation or
+    // after changes were requested (POST /api/weekly-reports, PATCH …/[id]).
+    name: 'weekly_report.submitted',
+    version: 1,
+    subjectType: 'WeeklyReport',
+    subjectKey: 'reportId',
+    payload: z.object({ reportId: id, relationId: id, weekStart: isoInstant, resubmission: z.boolean() }).strict(),
+    visibility: 'public',
+    description: 'A mentee handed in a weekly report (`resubmission` after the mentor asked for changes).',
+  },
+  {
+    // Two producers: an upload (POST /api/documents) and a generated
+    // certificate (POST /api/mentorship/[id]/certificate).
+    name: 'document.uploaded',
+    version: 1,
+    subjectType: 'Document',
+    subjectKey: 'documentId',
+    payload: z
+      .object({
+        documentId: id,
+        ownerId: id.nullable(),
+        type: z.string(),
+        requirementId: id.nullable(),
+        version: z.number().int().positive(),
+        generated: z.boolean(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: 'A document was added to a person’s file — uploaded, or generated as a certificate.',
+  },
+  {
+    // One producer: PATCH /api/goals/[id], on a genuine OPEN → DONE move. A
+    // PRIVATE goal (#1858) raises nothing: it is its author's alone.
+    name: 'goal.completed',
+    version: 1,
+    subjectType: 'Goal',
+    subjectKey: 'goalId',
+    payload: z.object({ goalId: id, relationId: id }).strict(),
+    visibility: 'public',
+    description: 'A shared goal of a mentorship was marked done.',
+  },
+  {
+    // The one module that writes attendance (src/lib/meetingAttendance.ts):
+    // recorded by a participant or an admin, or derived as LATE_CANCEL from a
+    // late cancellation. One event per person whose record was written.
+    name: 'meeting.attendance_recorded',
+    version: 1,
+    subjectType: 'MeetingAttendance',
+    subjectKey: 'attendanceId',
+    payload: z
+      .object({
+        attendanceId: id,
+        meetingId: id.nullable(),
+        seriesId: id.nullable(),
+        relationId: id.nullable(),
+        userId: id,
+        state: z.string(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: 'Attendance for one person at a meeting was recorded (`state`: attended, no-show, late cancel …).',
+  },
+  {
+    // One producer by construction: createUser() (src/lib/userCreate.ts), the
+    // one writer of a User row (#1998) — every path that makes an account goes
+    // through it, inside its caller's transaction when there is one. `source`
+    // names the path (USER_CREATE_SOURCES). Never the name or the address.
+    name: 'user.created',
+    version: 1,
+    subjectType: 'User',
+    subjectKey: 'userId',
+    payload: z.object({ userId: id, role: z.string(), source: z.string() }).strict(),
+    visibility: 'public',
+    description: 'An account was created (`source`: register, invite, admin, import, sso, api …).',
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from

@@ -10,3 +10,9 @@
 - A spec that signs in on a MARKETING host needs `MARKETING_HOSTS`, which only the
   Playwright-started web server sets: a hand-started `npm run dev` with
   `reuseExistingServer` makes those specs time out at sign-in.
+- **An e2e spec cannot import server code that uses `@/lib/prisma` at runtime** — the
+  Playwright process does not resolve the `@/` alias for it (`Cannot find module
+  '@/lib/prisma'`). Drive the behaviour through a real route and poll its effect
+  (`expect.poll` over `Job` rows the worker enqueues) instead.
+- To tell "mine" from "already red on main", run the same checks in a throwaway
+  `git worktree add <dir> origin/main` with `node_modules` symlinked in — no second install.

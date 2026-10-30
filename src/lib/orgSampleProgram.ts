@@ -20,6 +20,7 @@ import type { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { defaultPipelineStages } from '@/lib/pipeline';
 import { verticalHasCapability } from '@/lib/verticals';
 import { stageTrialWindow } from '@/lib/trialWindow';
@@ -66,19 +67,19 @@ export async function createSampleProgram(tx: Tx, orgId: string, now = new Date(
 
   const mentorIds: string[] = [];
   for (const [i, name] of MENTORS.entries()) {
-    const u = await tx.user.create({
+    const u = await createUser(tx, {
       data: { orgId, email: sampleEmail('mentor', i + 1, orgId), fullName: `${name} (sample)`, role: 'MENTOR', password, mentorOnboardingSeenAt: now, sampleData: true },
       select: { id: true },
-    });
+    }, { source: 'sample' });
     mentorIds.push(u.id);
     created++;
   }
   const relationIds: string[] = [];
   for (const [i, name] of MENTEES.entries()) {
-    const mentee = await tx.user.create({
+    const mentee = await createUser(tx, {
       data: { orgId, email: sampleEmail('mentee', i + 1, orgId), fullName: `${name} (sample)`, role: 'MENTEE', password, sampleData: true },
       select: { id: true },
-    });
+    }, { source: 'sample' });
     const pipelineStatus = stageAt(STAGE_POSITIONS[i]);
     const startDate = new Date(now.getTime() - (60 - i * 10) * DAY);
     const rel = await tx.mentorshipRelation.create({

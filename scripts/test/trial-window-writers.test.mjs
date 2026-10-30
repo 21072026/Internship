@@ -66,7 +66,10 @@ const EXEMPT = {
     'Writes only the dormancy stamps (dormantSince, nudge counters); `pipelineStatus` is read to find first-stage records, never written.',
 };
 
-const WRITE_CALL = /\bmentorshipRelation\s*\.\s*(?:create|createMany|update|updateMany|upsert)\s*\(/;
+// `createGuardedRelation(tx, data)` (src/lib/relationCreate.ts, #1796) is the
+// shared create: its CALLERS build the data block, so a call to it is a write
+// in the caller's file — that is where the stage key and the stamp must be.
+const WRITE_CALL = /\bmentorshipRelation\s*\.\s*(?:create|createMany|update|updateMany|upsert)\s*\(|\bcreateGuardedRelation\s*\(/;
 // `pipelineStatus` as an object key or shorthand — but not `pipelineStatus: true`
 // (a select) and not a member access (`relation.pipelineStatus`).
 const STATUS_KEY = /(?<![.\w])pipelineStatus\s*(?::(?!\s*(?:true|false)\b)|,|\})/;
@@ -138,6 +141,7 @@ test('the known stage writers are recognised, and every one of them stamps', () 
   for (const file of [
     'src/app/api/mentorship/[id]/route.ts',
     'src/app/api/mentorship/route.ts',
+    'src/app/api/admin/match-rounds/[id]/publish/route.ts',
     'src/app/api/mentor/mentees/route.ts',
     'src/app/api/register/route.ts',
     'src/app/api/status-changes/route.ts',
@@ -172,6 +176,11 @@ test('a new stage writer that does not stamp is caught', () => {
     export async function POST() {
       await prisma.mentorshipRelation.update({ where: { id }, data: { pipelineStatus: to } });
     }`;
+  assert.deepEqual(classify(src), { writes: true, stamps: false });
+});
+
+test('a data block handed to the shared create is a write in the caller', () => {
+  const src = `await createGuardedRelation(tx, { mentorId, menteeId, pipelineStatus, startDate });`;
   assert.deepEqual(classify(src), { writes: true, stamps: false });
 });
 

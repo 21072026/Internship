@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const { slug } = await params;
   const org = await prisma.organization.findUnique({
     where: { slug },
-    select: { id: true, slug: true, ssoSpKey: true, ssoSpCert: true },
+    select: { id: true, slug: true, ssoSpKey: true, ssoSpCert: true, ssoSignRequests: true },
   });
   if (!org) return new NextResponse('Not found', { status: 404 });
 
@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   // conditional write, ever (src/lib/ssoSpKey.ts), behind the rate limit above.
   const { certificatePem } = await ensureSpSigningKey(org);
 
-  return new NextResponse(spMetadataXml(slug, certificatePem), {
+  return new NextResponse(spMetadataXml(slug, certificatePem, { authnRequestsSigned: org.ssoSignRequests }), {
     headers: {
       'Content-Type': 'application/samlmetadata+xml; charset=utf-8',
       'Cache-Control': 'public, max-age=300',

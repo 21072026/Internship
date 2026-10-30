@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Mentor Offers on #1775's request clock (#1809):** an offer's 14 days are now `REQUEST_TTL_DAYS`, the offer sweep runs inside the morning `requests.expirySweep` job (its own `mentorOffers.sweep` schedule is gone; the handler stays registered for rows queued before), and \"the mentee has a request waiting\" is #1775's rule — new pure `livePendingRequestWhere()` in `src/lib/requestExpiryRule.ts`, the SQL twin of `isLivePending()` — so a PENDING request past its expiry no longer blocks an offer before the sweep has marked it EXPIRED. The request an accepted offer creates now carries `expiresAt`."
+}
