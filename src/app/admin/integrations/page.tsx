@@ -26,6 +26,9 @@ interface Hook {
   // Auto-disabled by the delivery job after a failure streak (#1695).
   disabledAt?: string | null;
   disabledReason?: string | null;
+  // A company's or a source's self-served hook (#2006); both null = org-wide.
+  company?: { id: string; name: string } | null;
+  ownerSource?: { id: string; name: string } | null;
 }
 interface Key {
   id: string;
@@ -36,6 +39,9 @@ interface Key {
   lastUsedAt: string | null;
   createdAt: string;
   createdBy: { name: string | null; email: string } | null;
+  // A company's or a source's self-served key (#2006); both null = org-wide.
+  company?: { id: string; name: string } | null;
+  source?: { id: string; name: string } | null;
   status: ApiKeyStatus;
   quotaPeriod: 'day' | 'month' | null;
   quotaLimit: number | null;
@@ -313,6 +319,11 @@ export default function IntegrationsPage() {
                         )}
                       </p>
                       <p className="text-xs text-gray-400">{h.events.join(', ')}</p>
+                      {(h.company || h.ownerSource) && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`webhook-scope-owner-${h.id}`}>
+                          {h.company ? `${t.integrations.ownedByCompany}: ${h.company.name}` : `${t.integrations.ownedBySource}: ${h.ownerSource?.name}`}
+                        </p>
+                      )}
                       {h.disabledAt && (
                         <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-red-700 dark:text-red-300" data-testid={`webhook-disabled-${h.id}`}>
                           <span>
@@ -446,6 +457,11 @@ export default function IntegrationsPage() {
                     <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-owner-${k.id}`}>
                       {t.integrations.keyOwner}: {k.createdBy?.name || k.createdBy?.email || t.integrations.keyOwnerUnknown}
                     </p>
+                    {(k.company || k.source) && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-scope-owner-${k.id}`}>
+                        {k.company ? `${t.integrations.ownedByCompany}: ${k.company.name}` : `${t.integrations.ownedBySource}: ${k.source?.name}`}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-expiry-${k.id}`}>
                       {k.expiresAt ? `${t.integrations.keyExpires}: ${formatDate(k.expiresAt, locale)}` : t.integrations.keyNoExpiry}
                     </p>
