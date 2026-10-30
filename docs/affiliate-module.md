@@ -275,12 +275,15 @@ exactly as they are.
   as the page); without one the form is closed (503) before the body is read.
   `AffiliateApplication` is a tenant model and the writer
   (`src/lib/affiliateApplications.ts`) passes the org on every create and WHERE.
-- **Anti-spam** as on the company-inquiry form: 3/hour per IP, a honeypot, a
-  minimum render-to-submit time, plus at most one PENDING application and three
-  rows per address and org per day. Every accepted body answers the same 200 —
-  the sender never learns whether an address is known.
-- **After the write:** the org's active admins get an in-app notice
-  (`affiliate_application.new`) and the applicant an acknowledgement in the
+- **Anti-spam** as on the company-inquiry form: 3/hour per IP for a valid body
+  (30/hour for anything), a honeypot, a minimum render-to-submit time, plus at
+  most one PENDING application and three rows per address and org per day,
+  checked and written under the organisation lock. Every accepted body answers
+  the same 200 in the same time — the notice and the mail run after the response
+  (`after()`) — so the sender never learns whether an address is known.
+- **After the write:** the org's active admins who may read the programme
+  (`affiliate.read`; a PROGRAM_ADMIN without a grant is not told) get an in-app
+  notice (`affiliate_application.new`) and the applicant an acknowledgement in the
   form's language (`affiliate-application-received`, `inbound_requests` group,
   exempt from outbound approval as the person's own action).
 - **The decision** (#3362), on the **Applications** tab of `/admin/affiliates`

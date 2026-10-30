@@ -50,7 +50,9 @@ export default async function PartnerProgrammePage() {
 
   const percentLine =
     plan.percentBps > 0 && plan.switchAtCustomer !== null
-      ? interpolate(L.percentRow, {
+      ? // The switch customer's own first payment earns per `boundaryCustomer`
+        // (src/lib/affiliateCommissionRule.ts): a band from the table, or the percent.
+        interpolate(plan.boundaryCustomer === 'TIER' ? L.percentRowTierBoundary : L.percentRow, {
           n: String(plan.switchAtCustomer),
           p: (plan.percentBps / 100).toLocaleString(locale),
           window: plan.windowMonths !== null ? interpolate(L.percentWindow, { m: String(plan.windowMonths) }) : '',

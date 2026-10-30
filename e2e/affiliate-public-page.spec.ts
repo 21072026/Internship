@@ -94,6 +94,12 @@ test('the marketing host shows the org’s copy, a table from its plan and every
   await expect(rows.nth(0)).toContainText('50');
   await expect(rows.nth(2)).toContainText('150');
   await expect(page.getByTestId('partner-percent')).toContainText('3');
+  // The plan's boundary customer earns the percent (PERCENT): no "still earns its one-off commission" clause.
+  await expect(page.getByTestId('partner-percent')).not.toContainText('one-off');
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: { ...PLAN, boundaryCustomer: 'TIER' } } });
+  await page.reload();
+  await expect(page.getByTestId('partner-percent')).toContainText('one-off commission from the table');
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: PLAN } });
 
   await expect(page.getByTestId('partner-apply')).toHaveAttribute('href', '/partner/apply');
   await expect(page.getByTestId('partner-cta-apply')).toHaveAttribute('href', '/partner/apply');
