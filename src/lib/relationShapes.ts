@@ -54,3 +54,18 @@ export function pairSeats(relation: { mentorId: string; menteeId: string }): { u
     { userId: relation.menteeId, role: 'MENTEE', isPrimaryPair: true },
   ];
 }
+
+export type GroupMembersRefusal = 'too_few' | 'too_many' | 'duplicate' | 'self';
+
+/**
+ * The shape check of a new GROUP, before any database question: one mentor
+ * and 2…GROUP_MAX_MENTEES distinct mentees, the mentor not among them. A group
+ * of one is a one-to-one and goes through POST /api/mentorship.
+ */
+export function checkGroupMembers(mentorId: string, menteeIds: readonly string[]): GroupMembersRefusal | null {
+  if (new Set(menteeIds).size !== menteeIds.length) return 'duplicate';
+  if (menteeIds.includes(mentorId)) return 'self';
+  if (menteeIds.length < 2) return 'too_few';
+  if (menteeIds.length > GROUP_MAX_MENTEES) return 'too_many';
+  return null;
+}

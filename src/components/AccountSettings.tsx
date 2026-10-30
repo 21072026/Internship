@@ -26,6 +26,7 @@ import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@
 import { durationSince, formatDateTime } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { fillTemplate } from '@/components/ui/fillTemplate';
+import { SocialIdentitiesSection } from '@/components/SocialIdentitiesSection';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { currentPushEndpoint, pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
@@ -1099,6 +1100,9 @@ export function AccountSettings() {
             </ul>
           )}
         </div>
+
+        {/* Social sign-in identities (#1962). */}
+        <SocialIdentitiesSection />
 
         <Button variant="outline" loading={signOutBusy} onClick={signOutAll}>{t.account.signOutAll}</Button>
       </Card>
