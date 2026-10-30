@@ -14,6 +14,7 @@ import { MATCH_DIMENSIONS, SOFT_ONLY_DIMENSIONS, type MatchRuleKind } from '@/li
 import { normalizedWeights, type SimulatedMentee, type SimulationSummary } from '@/lib/matching/simulate';
 import type { MatchRuleDraft } from '@/lib/matching/ruleSetSchema';
 import { localized } from '@/components/forms/FormFieldInput';
+import { humanizeCustomKey } from '@/components/matching/useCustomFieldLabels';
 import type { LocalizedText } from '@/lib/forms/schema';
 
 // /admin/matching (#1783): the org's matching rule sets — weights, hard rules,
@@ -50,8 +51,13 @@ export default function MatchingRulesPage() {
   const customOf = (d: string) => (d.startsWith('customField:') ? customFields.find((f) => `customField:${f.key}` === d) : undefined);
   const dimLabel = (d: string) => {
     const c = customOf(d);
-    return c ? `${L.customField}: ${localized(c.labels, locale) || c.key}` : (dims[d] ?? d);
+    if (c) return `${L.customField}: ${localized(c.labels, locale) || c.key}`;
+    return d.startsWith('customField:') ? `${L.customField}: ${humanizeCustomKey(d)}` : (dims[d] ?? d);
   };
+  // A rule over a question that is no longer matchable (archived, switched off,
+  // the form retired): it scores nothing and the save refuses it, so the editor
+  // says so and offers to remove it rather than failing with a bare error.
+  const orphaned = (d: string) => d.startsWith('customField:') && !customOf(d);
 
   const [sets, setSets] = useState<RuleSet[]>([]);
   const [builtIn, setBuiltIn] = useState<MatchRuleDraft[]>([]);
@@ -123,7 +129,8 @@ export default function MatchingRulesPage() {
         body: JSON.stringify({ ...(draft.id ? { id: draft.id } : {}), ...body(draft), ...(makeDefault ? { isDefault: true } : {}) }),
       });
       if (!res.ok) {
-        setMsg(t.common.error);
+        const e = await res.json().catch(() => ({}));
+        setMsg(e.code === 'not_matchable_field' ? L.orphanedSaveRefused : t.common.error);
         return;
       }
       const d = await res.json();
@@ -225,6 +232,20 @@ export default function MatchingRulesPage() {
 
               <p className="mt-5 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{L.rules}</p>
               {draft.rules.length === 0 && <p className="text-sm text-gray-500">{L.noRulesYet}</p>}
+              {draft.rules.some((r) => orphaned(r.dimension)) && (
+                <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-800" data-testid="matching-orphaned-rules">
+                  <span>{L.orphanedRules.replace('{n}', String(draft.rules.filter((r) => orphaned(r.dimension)).length))}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDraft({ ...draft, rules: draft.rules.filter((r) => !orphaned(r.dimension)) })}
+                    data-testid="matching-remove-orphaned"
+                  >
+                    {L.removeOrphaned}
+                  </Button>
+                </div>
+              )}
               <ul className="space-y-2" data-testid="matching-rules">
                 {draft.rules.map((r, i) => (
                   <li key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 p-2.5 dark:border-gray-700" data-testid={`matching-rule-${i}`}>
@@ -245,7 +266,11 @@ export default function MatchingRulesPage() {
                       {customFields.map((f) => (
                         <option key={f.key} value={`customField:${f.key}`}>{dimLabel(`customField:${f.key}`)}</option>
                       ))}
+                      {orphaned(r.dimension) && <option value={r.dimension}>{dimLabel(r.dimension)}</option>}
                     </select>
+                    {orphaned(r.dimension) && (
+                      <span className="text-xs font-medium text-amber-700" data-testid={`matching-rule-orphaned-${i}`}>{L.orphanedRule}</span>
+                    )}
                     <select
                       aria-label={L.kind}
                       value={r.kind}

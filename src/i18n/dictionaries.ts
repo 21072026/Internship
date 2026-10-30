@@ -453,6 +453,10 @@ const en = {
   adminMatching: {
     customField: 'Question',
     tolerance: 'Tolerance',
+    orphanedRule: 'No longer matchable',
+    orphanedRules: '{n} rule(s) use a question that is no longer matchable. They score nothing, and the rule set cannot be saved until they are removed.',
+    removeOrphaned: 'Remove these rules',
+    orphanedSaveRefused: 'A rule uses a question that is no longer matchable — remove it, then save.',
     title: 'Matching rules',
     intro: 'Decide what makes a good mentor match and which rules are non-negotiable. Try a draft on real mentees before you save it — a simulation never assigns anybody.',
     builtIn: 'No rule set is the default: suggestions use the built-in rules (shared skills, mentor capacity).',
@@ -491,6 +495,7 @@ const en = {
     truncated: 'Only the first 200 mentees were simulated.',
   },
   matchScore: {
+    customField: 'Question',
     title: 'Match score',
     // The visible figure. Turkish writes the sign first (%78) and German puts a
     // space before it — hardcoding "{pct}%" in JSX left the one number a
@@ -11929,6 +11934,10 @@ const tr: Dict = {
   adminMatching: {
     customField: 'Soru',
     tolerance: 'Tolerans',
+    orphanedRule: 'Artık eşleştirmeye açık değil',
+    orphanedRules: '{n} kural artık eşleştirmeye açık olmayan bir soruyu kullanıyor. Puana katkıları yok ve bunlar kaldırılmadan kural seti kaydedilemez.',
+    removeOrphaned: 'Bu kuralları kaldır',
+    orphanedSaveRefused: 'Bir kural artık eşleştirmeye açık olmayan bir soruyu kullanıyor — kaldırıp yeniden kaydedin.',
     title: 'Eşleştirme kuralları',
     intro: 'İyi bir mentör eşleşmesini neyin belirlediğine ve hangi kuralların pazarlıksız olduğuna karar ver. Bir taslağı kaydetmeden önce gerçek mentee\'ler üzerinde dene — simülasyon kimseyi atamaz.',
     builtIn: 'Varsayılan kural seti yok: öneriler yerleşik kuralları kullanıyor (ortak beceriler, mentör kapasitesi).',
@@ -11967,6 +11976,7 @@ const tr: Dict = {
     truncated: 'Yalnızca ilk 200 mentee simüle edildi.',
   },
   matchScore: {
+    customField: 'Soru',
     title: 'Eşleşme skoru',
     percent: '%{n}',
     srScore: 'Kural karşılama: %{n}',
@@ -23174,6 +23184,10 @@ const de: Dict = {
   adminMatching: {
     customField: 'Frage',
     tolerance: 'Toleranz',
+    orphanedRule: 'Nicht mehr für das Matching freigegeben',
+    orphanedRules: '{n} Regel(n) verwenden eine Frage, die nicht mehr für das Matching freigegeben ist. Sie zählen nicht, und der Regelsatz kann erst nach dem Entfernen gespeichert werden.',
+    removeOrphaned: 'Diese Regeln entfernen',
+    orphanedSaveRefused: 'Eine Regel verwendet eine Frage, die nicht mehr für das Matching freigegeben ist – entfernen Sie sie und speichern Sie erneut.',
     title: 'Matching-Regeln',
     intro: 'Lege fest, was ein gutes Mentor-Matching ausmacht und welche Regeln nicht verhandelbar sind. Teste einen Entwurf an echten Mentees, bevor du ihn speicherst — eine Simulation ordnet niemanden zu.',
     builtIn: 'Kein Regelset ist Standard: Vorschläge nutzen die eingebauten Regeln (gemeinsame Skills, Mentor-Kapazität).',
@@ -23212,6 +23226,7 @@ const de: Dict = {
     truncated: 'Nur die ersten 200 Mentees wurden simuliert.',
   },
   matchScore: {
+    customField: 'Frage',
     title: 'Match-Score',
     percent: '{n} %',
     srScore: '{n} % Regelerfüllung',

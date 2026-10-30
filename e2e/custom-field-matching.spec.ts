@@ -88,6 +88,24 @@ test('a matchable custom field, answered and weighted, changes the ranking', asy
     await gotoSettled(page, '/admin/matching');
     await page.getByTestId(`matching-set-${ruleSet.id}`).click();
     await expect(page.getByTestId('matching-rule-dimension-0').locator('option:checked')).toHaveText('Question: Industry');
+    // The dry-run breakdown names the question by its label, not its key.
+    await page.getByTestId('matching-simulate').click();
+    await expect(page.getByTestId('matching-sim-result')).toContainText('Question: Industry', { timeout: 30_000 });
+    await expect(page.getByTestId('matching-sim-result')).not.toContainText('customField:');
+
+    // The question stops being matchable: the saved set says so plainly and
+    // offers to drop the rule, after which it saves again.
+    await prisma.formField.updateMany({ where: { definitionId: form.id, key: 'industry' }, data: { matchable: false } });
+    await gotoSettled(page, '/admin/matching');
+    await page.getByTestId(`matching-set-${ruleSet.id}`).click();
+    await expect(page.getByTestId('matching-orphaned-rules')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('matching-rule-orphaned-0')).toBeVisible();
+    await page.getByTestId('matching-save').click();
+    await expect(page.getByText(/no longer matchable — remove it/)).toBeVisible();
+    await page.getByTestId('matching-remove-orphaned').click();
+    await expect(page.getByTestId('matching-orphaned-rules')).toHaveCount(0);
+    await page.getByTestId('matching-save').click();
+    await expect.poll(async () => (await prisma.matchRuleSet.findUniqueOrThrow({ where: { id: ruleSet.id }, include: { rules: true } })).rules.length).toBe(0);
   } finally {
     await prisma.matchRuleSet.deleteMany({ where: { orgId: org.id } });
     await prisma.formDefinition.deleteMany({ where: { orgId: org.id } });
