@@ -313,3 +313,41 @@ export function landingCopyFor(landing: Landing, locale: string): LandingCopy {
   }
   return out;
 }
+
+/** The part of a commission plan the public table shows (structural, so this file stays dependency-free). */
+export interface PublicPlanShape {
+  currency: string;
+  tiers: { upToMinor: number; commissionMinor: number }[];
+  topCommissionMinor: number;
+  percentBps: number;
+  switchAtCustomer: number | null;
+  windowMonths: number | null;
+}
+
+/**
+ * One row of the public commission table: the customer's first payment
+ * (`overMinor` < payment ≤ `upToMinor`; null = open-ended) and the one-off
+ * commission it earns. Derived from the plan on every render, never typed by
+ * hand, so the page cannot disagree with what the engine pays.
+ */
+export interface CommissionTableRow {
+  overMinor: number | null;
+  upToMinor: number | null;
+  commissionMinor: number;
+}
+
+export function commissionTableRows(plan: PublicPlanShape): CommissionTableRow[] {
+  const tiers = [...plan.tiers].sort((a, b) => a.upToMinor - b.upToMinor);
+  const rows: CommissionTableRow[] = tiers.map((t, i) => ({
+    overMinor: i === 0 ? null : tiers[i - 1].upToMinor,
+    upToMinor: t.upToMinor,
+    commissionMinor: t.commissionMinor,
+  }));
+  rows.push({ overMinor: tiers.length > 0 ? tiers[tiers.length - 1].upToMinor : null, upToMinor: null, commissionMinor: plan.topCommissionMinor });
+  return rows;
+}
+
+/** The highest one-off commission the table offers ("up to …"). */
+export function maxOneOffCommission(plan: PublicPlanShape): number {
+  return Math.max(plan.topCommissionMinor, ...plan.tiers.map((t) => t.commissionMinor));
+}

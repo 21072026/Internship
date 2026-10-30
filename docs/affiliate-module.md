@@ -235,6 +235,28 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   an optional bank reference; the commissions become PAID with `payoutId` and
   `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
 
+## The public programme page
+
+`/partner` (#3360) is the first page someone who wants to become a partner sees:
+signed out, on the marketing host. The organisation is the one an operator mapped
+the host to (`resolvePublicInquiryTarget`, `src/lib/publicHostOrg.ts` — the same
+resolver and trust note as the public company-inquiry form: the page only shows
+what that org chose to publish). It exists only for a MARKETING org with the
+`affiliate` capability, a valid plan and some copy; anything less is a 404, which
+is also why it is not in `PUBLIC_ROUTES`.
+
+Order: hero (apply · partner portal · the product's sign-up page), introduction,
+commission table, steps, a call button, the closing call to action (apply ·
+e-mail) and this host's imprint, privacy and terms. The words are the org's
+landing copy (above), with generic dictionary fallbacks (`affiliateLanding`).
+The table is **built from the plan on every render** (`commissionTableRows()`),
+never typed, so the page cannot promise what the engine does not pay; the
+percent phase is one sentence that says what the engine does — from the first
+payment of customer no. N on, every customer's payment earns the rate, each
+within its own window. Colours and mark follow the host's brand.
+`src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
+pins it.
+
 ## Security
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner
