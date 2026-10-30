@@ -11060,6 +11060,8 @@ const en = {
   },
   dynamicFields: {
     heading: 'Additional questions',
+    answersFailed: 'Your answers could not be saved. Please check them and try again.',
+    noAnswers: 'No answers yet.',
     saveFailed: 'Your profile was saved, but your answers to the additional questions could not be saved. Please try again.',
   },
   surveyRespond: {
@@ -22206,6 +22208,8 @@ const tr: Dict = {
   },
   dynamicFields: {
     heading: 'Ek sorular',
+    answersFailed: 'Cevaplarınız kaydedilemedi. Lütfen kontrol edip tekrar deneyin.',
+    noAnswers: 'Henüz cevap yok.',
     saveFailed: 'Profiliniz kaydedildi, ancak ek sorulara verdiğiniz cevaplar kaydedilemedi. Lütfen tekrar deneyin.',
   },
   surveyRespond: {
@@ -33344,6 +33348,8 @@ const de: Dict = {
   },
   dynamicFields: {
     heading: 'Zusätzliche Fragen',
+    answersFailed: 'Ihre Antworten konnten nicht gespeichert werden. Bitte prüfen Sie sie und versuchen Sie es erneut.',
+    noAnswers: 'Noch keine Antworten.',
     saveFailed: 'Ihr Profil wurde gespeichert, Ihre Antworten auf die zusätzlichen Fragen jedoch nicht. Bitte versuchen Sie es erneut.',
   },
   surveyRespond: {

@@ -68,3 +68,15 @@ Either side unanswered is *not applicable* (the same 0 for every mentor).
   `GET /api/admin/matching/rule-sets`), and a save naming any other key — free text, an archived
   field, another org's question — is `400 not_matchable_field`. A non-matchable key never even
   loads answers, so a simulated draft cannot read free text either.
+
+## Every signed-in surface (#1803)
+
+`DynamicFields` is mounted on each surface with its own `surface`: `PROFILE` (`ProfileForm`),
+`ONBOARDING` (the mentee wizard's last step, the mentor wizard's capacity step) and
+`MENTORSHIP_REQUEST` (`MentorshipRequestPanel`, saved before the request is posted so the matcher
+reads them for it). Each host checks the questions first with `validate()` and saves nothing when a
+required answer is missing.
+
+An admin reads a person's answers on `/admin/candidates/[id]` and `/admin/mentors/[id]`
+(`FormAnswersPanel`, fed by `GET /api/admin/users/[id]/form-answers` — `user.read`, the caller's
+tenant only, another tenant's user is 404). Options are shown as their labels, never their stored values.
