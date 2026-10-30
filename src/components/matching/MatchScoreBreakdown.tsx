@@ -46,6 +46,7 @@ import {
   type MatchTier,
 } from '@/lib/matching/presentation';
 import type { MatchBreakdownEntry, MatchScore } from '@/lib/matching/types';
+import { humanizeCustomKey, useCustomFieldLabels } from '@/components/matching/useCustomFieldLabels';
 
 export interface MatchScoreBreakdownProps extends MatchScore {
   /** One-line form for a list row. Full form (ring + rules) is the default. */
@@ -81,8 +82,13 @@ export function MatchScoreBreakdown({
   const violationNames = m.violations as Record<string, string>;
   const kindNames = m.kinds as Record<string, string>;
 
+  // An admin-defined question (#1803) reads as "Question: <its label>".
+  const custom = useCustomFieldLabels([...breakdown.map((e) => e.dimension), ...blockedBy].some((d) => d.startsWith('customField:')));
   /** Unknown dimensions fall back to their raw key rather than vanishing. */
-  const dimLabel = (dimension: string) => dimensionNames[dimension] ?? dimension;
+  const dimLabel = (dimension: string) =>
+    dimension.startsWith('customField:')
+      ? `${m.customField}: ${custom[dimension] ?? humanizeCustomKey(dimension)}`
+      : (dimensionNames[dimension] ?? dimension);
 
   /**
    * Why a rule blocked. A registry newer than this bundle gets the generic
