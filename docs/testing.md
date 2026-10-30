@@ -915,6 +915,36 @@ It is a floor: classes assembled outside a `className` attribute are invisible t
 contrast is the axe scan's and `check:contrast`'s job. Screenshot baselines (#1614, part 2) are the
 net for everything else.
 
+## Visual regression (#1614)
+
+`e2e/visual-regression.spec.ts` compares the core screens — landing, `/auth/signin`, `/admin`,
+`/admin/board`, `/messages`, `/mentor`, `/portal` — in **EN/TR/DE × light/dark** (42 PNGs) with
+`toHaveScreenshot()` (`maxDiffPixelRatio: 0.01`). It runs in the scheduled full suite, **not** the
+`@smoke` gate.
+
+**Determinism is built in, not hoped for:** a fixed 1280×800 viewport and a viewport-sized capture
+(a full-page height follows the data), animations/transitions/caret off, its own organisation with
+fixed display names, and masks over `<time>`, the account menu (it prints the e-mail), avatars and
+the notification badge. A screen that diffs on unchanged code needs another mask, never a looser
+threshold.
+
+**Baselines come only from the CI image.** Font rasterisation differs between a laptop and the
+GitHub runner, so a PNG made locally fails in CI on every run. To create or update them:
+
+1. Run **Visual baselines (generate)** (`.github/workflows/visual-baselines.yml`, `workflow_dispatch`,
+   optional `ref`). It builds the app exactly like `e2e-full.yml`, writes the baselines with
+   `--update-snapshots`, then **compares twice against what it just wrote** — a diff there means a
+   missing mask, and nothing is pushed.
+2. It pushes `e2e/visual-regression.spec.ts-snapshots/` to `bot/visual-baselines-<run id>` (also
+   uploaded as an artifact).
+3. Open a PR from that branch. **A baseline update is reviewed like code**: look at every changed
+   PNG, and merge only the pixels the change under review was meant to move.
+
+Until a baseline directory is committed the spec **skips itself**, so the full suite cannot go red
+on a missing PNG. Locally, `VISUAL_BASELINE_UPDATE=1 npx playwright test e2e/visual-regression.spec.ts
+--update-snapshots` is fine for checking that the spec runs and is stable — just never commit those
+PNGs.
+
 ## Forbidden-terms guard (#2919)
 
 Some names must not appear on the visible surface of this repository. That covers
@@ -972,7 +1002,6 @@ To run it locally, put the list in the environment and choose a mode:
 ## Ideas for further test types
 
 - ~~**Contract / API tests**~~ — built in #1611: see [`docs/public-api.md` § Published contracts](public-api.md#published-contracts-1611).
-- **Visual regression** (Playwright screenshots) to catch unintended UI drift.
 - **Dependency/SCA scanning** (`npm audit`, Dependabot) on a schedule.
 - **Load-with-auth** scenarios — both load tests are anonymous-GET-only by design. The
   natural home is the demo environment (its own DB, publishable credentials), not prod.

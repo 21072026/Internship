@@ -70,20 +70,13 @@ function RegisterForm() {
   // The invitation decides the account's org, and the org decides the policy.
   const pw = usePasswordPolicy(inviteToken);
   const registerSchema = useMemo(() => registerSchemaFor(pw.policy, t.passwordPolicy), [pw.policy, t.passwordPolicy]);
-  useEffect(() => {
-    if (!inviteToken) return;
-    setShowToken(true);
-    fetch('/api/invite/opened', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: inviteToken }),
-    }).catch(() => {});
-  }, [inviteToken]);
 
   const {
     register,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
@@ -92,6 +85,23 @@ function RegisterForm() {
     },
   });
   const passwordValue = watch('password') ?? '';
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    setShowToken(true);
+    fetch('/api/invite/opened', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { email?: string } | null) => {
+        // WCAG 3.3.7: the invitation already knows the address — pre-fill it
+        // (still editable) unless the person has started typing their own.
+        if (d?.email && !getValues('email')) setValue('email', d.email, { shouldValidate: false });
+      })
+      .catch(() => {});
+  }, [inviteToken, getValues, setValue]);
 
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);

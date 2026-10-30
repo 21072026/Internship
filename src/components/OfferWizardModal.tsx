@@ -246,7 +246,13 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, co
             <Select
               label={t.offers.wizard.requisitionId}
               value={fields.requisitionId}
-              onChange={(e) => set({ requisitionId: e.target.value })}
+              onChange={(e) => {
+                const requisitionId = e.target.value;
+                // WCAG 3.3.7: the requisition already names the role — carry
+                // its title into an empty position instead of asking twice.
+                const title = requisitions.find((item) => item.id === requisitionId)?.title;
+                set(title && !fields.position.trim() ? { requisitionId, position: title } : { requisitionId });
+              }}
               disabled={!companyId || requisitionsLoading}
               hint={requisitionsLoading ? t.offers.wizard.requisitionLoading : undefined}
               error={requisitionsError ? t.offers.wizard.requisitionLoadError : undefined}

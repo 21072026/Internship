@@ -13,6 +13,7 @@ import { meetingLinkRefusal, resolveMeetingLink } from '@/lib/meetingRoom';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { adoptProviderEvent, discardProviderEvent } from '@/lib/conferenceGeneration';
 import { pushMeetingInBackground, pushableSelect } from '@/lib/googleCalendarSync';
 import { meetingEnd } from '@/lib/meetingDuration';
 import { bookWithoutConflict, conflictBody } from '@/lib/busyWindows';
@@ -121,9 +122,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // meeting is structurally a 1:1 call: one mentor, one mentee. The room is
   // the MENTOR's — their saved personal room applies under a tenant policy
   // that wants one (#2007), whether the mentor or an admin clicked accept.
-  const resolved = await resolveMeetingLink({ inviteeCount: 1, orgId: session.user.orgId, organizerId: rel.mentorId });
-  if (!resolved.ok) return meetingLinkRefusal(resolved);
-  const link = resolved.link;
   // The wall clock behind `proposedAt` was typed by the *requester* (see
   // POST /api/meeting-requests), so theirs is the zone this time was agreed on —
   // not the mentor's, even though the mentor is the one confirming it (#1210).
@@ -139,6 +137,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const policy = await loadBookingPolicy(prisma, rel.mentorId);
   const durationMinutes = policy?.defaultSlotMinutes ?? null;
   const end = meetingEnd(req.proposedAt, { durationMinutes });
+  // The room, now that the slot is known: under GENERATE_PROVIDER (#2009) a
+  // Meet room on the MENTOR's own connected calendar.
+  const resolved = await resolveMeetingLink({
+    inviteeCount: 1,
+    orgId: session.user.orgId,
+    organizerId: rel.mentorId,
+    conference: { title: req.topic, start: req.proposedAt, end, timeZone: requester?.timezone ?? null },
+  });
+  if (!resolved.ok) return meetingLinkRefusal(resolved);
+  const link = resolved.link;
   const booked = await bookWithoutConflict(
     {
       viewer: session.user,
@@ -161,8 +169,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         select: pushableSelect,
       }),
   );
-  if (!booked.ok) return NextResponse.json(booked.conflict ? conflictBody(booked.conflict) : policyBody(booked.refused), { status: 409 });
+  if (!booked.ok) {
+    await discardProviderEvent(rel.mentorId, resolved.conference);
+    return NextResponse.json(booked.conflict ? conflictBody(booked.conflict) : policyBody(booked.refused), { status: 409 });
+  }
   const meeting = booked.result;
+  await adoptProviderEvent([meeting.id], resolved.conference);
   // Mirror it into both participants' own calendars (#1986) — the accepted
   // request used to be the one scheduling path that never reached a calendar.
   // Fire-and-forget: a third party's API may not make accepting fail or hang.

@@ -14,9 +14,11 @@ import { interpolate } from '@/lib/notificationText';
 import { parseReferralUrl, referralLink, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
 import { resyncInFlight, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { LandingSettings } from './LandingSettings';
+import type { Landing } from '@/lib/affiliateLandingRule';
 
-// The programme's settings (docs/affiliate-module.md, #3116): the commission plan
-// and the partner contract. The server is the judge (parseCommissionPlan,
+// The programme's settings (docs/affiliate-module.md, #3116): the commission plan,
+// the referral address, the public page's content (#3359) and the partner contract. The server is the judge (parseCommissionPlan,
 // saveContract); this form converts what a person types — "19,99", "15" % — into
 // minor units and basis points, and marks the fields the server names.
 
@@ -41,6 +43,8 @@ interface Settings {
   contract: Record<string, string>;
   contractVersion: number;
   referralUrl: string | null;
+  /** The public programme page's content (#3359). */
+  landing: Landing;
   currencies: string[];
   canWrite: boolean;
 }
@@ -356,6 +360,8 @@ export default function AffiliateSettingsPage() {
           )}
         </fieldset>
       </Card>
+
+      <LandingSettings initial={settings.landing} readOnly={readOnly} localeLabel={localeLabel} />
 
       <Card>
         <CardHeader>

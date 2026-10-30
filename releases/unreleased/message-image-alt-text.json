@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Alt text for message images (EN 301 549 11.8.2 / Section 508 504.3, #2864):** `MessageAttachment.altText` (nullable `VarChar(500)`, `TEXT_LIMITS.imageAltText`) — the composer shows a \"Describe this image\" field under every attached image (`PendingAttachmentList` `onAltChange`), `POST /api/messages` pairs one `altText` field per `file` (over 500 → 400 `too_long`), and the thread renders it as the image's `alt` and button name (filename as fallback). Erased with the attachment rows. Announcement/newsletter images follow in #3388; VPAT 11.8.2, 504.2, 504.3 updated.",
+  "notes": {
+    "en": ["When you attach an image to a message you can now describe it, so people using a screen reader know what it shows."],
+    "tr": ["Bir mesaja resim eklediğinizde artık onu tanımlayabilirsiniz; ekran okuyucu kullananlar resimde ne olduğunu öğrenir."],
+    "de": ["Wenn Sie einer Nachricht ein Bild anhängen, können Sie es jetzt beschreiben – so erfahren Menschen mit Screenreader, was es zeigt."]
+  }
+}

@@ -302,7 +302,9 @@ test('an invitation of the other world is refused on this host like an unknown t
   expect(onDefault.status()).toBe(400);
   expect(await onDefault.json()).toEqual(unknownBody);
   // Opening the link here does not mark it as opened for its admin either.
-  await request.post('/api/invite/opened', { headers: freshIp('worlds-reg-cross-o'), data: { token: mktToken } });
+  const crossOpened = await request.post('/api/invite/opened', { headers: freshIp('worlds-reg-cross-o'), data: { token: mktToken } });
+  // …and does not hand the other world's invitee address back (#2864 pre-fill).
+  expect(await crossOpened.json()).toEqual({ ok: true });
   const mktRow = await prisma.invitationToken.findUnique({ where: { token: mktToken } });
   expect(mktRow?.used).toBe(false);
   expect(mktRow?.openedAt ?? null).toBeNull();
