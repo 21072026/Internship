@@ -4975,6 +4975,14 @@ model Meeting {
   rsvpToken           String        @unique
   createdById         String
   reminderSentAt      DateTime?
+  // Reminder lead times (#1636, src/lib/meetingReminderLeads.ts). NULL = the
+  // programme's `meetingReminderLeadsMinutes` (or the one-hour default); 0 =
+  // no reminder for this meeting; N = one reminder N minutes ahead.
+  reminderLeadMinutes Int?
+  // The leads already sent for the current start time ("1440,60"), claimed by
+  // one guarded update before anything is sent; cleared with reminderSentAt
+  // when the meeting moves.
+  remindedLeads       String?       @db.VarChar(64)
   createdAt           DateTime      @default(now())
   // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
   updatedAt           DateTime      @default(now()) @updatedAt
@@ -5277,15 +5285,22 @@ enum MeetingReminderLead {
 }
 
 model MeetingSeriesReminder {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   seriesId     String
   occurrenceAt DateTime
-  lead         MeetingReminderLead
-  sentAt       DateTime            @default(now())
+  // The pre-#1636 enum, still written for the 1440/60 leads so a row written
+  // now collides with one written before the deploy (no double reminder across
+  // the transition); NULL for any other lead. Never re-typed in place: an
+  // enum → Int change under `db push --accept-data-loss` drops the column.
+  lead         MeetingReminderLead?
+  // The lead in minutes (#1636) — the real key from now on. NULL on old rows.
+  leadMinutes  Int?
+  sentAt       DateTime             @default(now())
 
   series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([seriesId, occurrenceAt, lead])
+  @@unique([seriesId, occurrenceAt, leadMinutes])
 }
 
 // "This occurrence is over" for a series occurrence that has no Meeting row —

@@ -12,6 +12,7 @@ import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
 import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
+import { reminderLeadField } from '@/lib/meetingReminderLeadField';
 import { conflictBody, findConflictFor, lockParticipants, recordForcedBooking, EXTERNAL_PAD_MS, type ExternalBusy } from '@/lib/busyWindows';
 import { providerBusy } from '@/lib/calendarFreeBusy';
 import type { BusyWindow } from '@/lib/busyWindowsRule';
@@ -58,6 +59,9 @@ const patchSchema = z
     meetLink: z.string().url().optional().or(z.literal('')),
     // A new length (#1984); the mirror is re-pushed with the new end.
     durationMinutes: durationMinutesField,
+    // Reminder lead (#1636): null = the programme default, 0 = no reminder,
+    // N = one reminder N minutes ahead (src/lib/meetingReminderLeads.ts).
+    reminderLeadMinutes: reminderLeadField,
     // The only status this route writes. Un-cancelling is deliberately not a
     // verb: the invitees were told it is off, so "on again" is a new meeting.
     status: z.literal('CANCELLED').optional(),
@@ -187,8 +191,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
-  const { scheduledAt, timeZone, title, meetLink, durationMinutes, status, cancelReason, scope, force } = parsed.data;
-  if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && !status) {
+  const { scheduledAt, timeZone, title, meetLink, durationMinutes, reminderLeadMinutes, status, cancelReason, scope, force } = parsed.data;
+  if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && reminderLeadMinutes === undefined && !status) {
     return NextResponse.json({ error: 'Validation failed', details: { body: 'Nothing to change' } }, { status: 400 });
   }
 
@@ -330,6 +334,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
                     // Or the reminder for the new time never fires: the cron claims
                     // a meeting by stamping this, and only ever looks at nulls.
                     reminderSentAt: null,
+                    // …and every lead of the old time (#1636).
+                    remindedLeads: null,
                     // An answer given to the old time is not an answer to this one.
                     // The mentee said yes to Tuesday 10:00, not to Thursday 15:00.
                     rsvp: 'PENDING' as const,
@@ -338,6 +344,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               ...(title !== undefined ? { title } : {}),
               ...(meetLink !== undefined ? { meetLink: meetLink || null } : {}),
               ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+              ...(reminderLeadMinutes !== undefined ? { reminderLeadMinutes } : {}),
               ...(when && zone ? { timeZone: zone } : {}),
             },
             select: targetSelect,
