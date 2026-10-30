@@ -131,6 +131,22 @@ opens its transaction with `stageTransaction(fn, options)` instead of
 `application.stage_changed` per noted move is raised. A rejected transaction
 raises nothing; a move noted outside the wrapper throws outside production.
 
+**Or emit through the transaction itself** (`emitInTransaction(tx, …)`, `emit.ts`):
+the `DomainEvent` row and its `event.deliver` jobs are written by `tx`, so they
+commit with it or not at all. Use it where the producer already holds the
+transaction and the post-commit note would be one more wrapper — the first user
+is `createUser()` below.
+
+### `user.created`: one writer for User rows
+
+`createUser(db, args, { source, actorId })` (`src/lib/userCreate.ts`) is the only
+`prisma.user.create` in the tree (`npm run check:user-create`, CI). It is a
+writer, not a gate: each caller still does its own world/e-mail check
+(`emailTakenInWorld`, `docs/worlds.md`) before it calls it. It raises
+`user.created` `{ userId, role, source }` — ids and a closed `source` vocabulary
+(`USER_CREATE_SOURCES`), never the address or the name — with `emit()` on the
+global client and `emitInTransaction()` on a transaction client.
+
 ## Configuration diffs: `src/lib/events/diff.ts` (#1699)
 
 `redactedDiff(before, after, spec)` is the **only** before/after diff in the

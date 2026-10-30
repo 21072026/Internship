@@ -16,7 +16,8 @@
 //   reminders.stageDeadline      — `deadlineReminderSentAt` + mail dedupeKey.
 //   reminders.retentionReconsent — `retentionReminderSentAt`.
 //   matching.needMatchAlerts     — createMany(skipDuplicates) on the alert rows.
-//   requests.expirySweep         — guarded updateMany on PENDING / nudgeSentAt null (#1775).
+//   requests.expirySweep         — guarded updateMany on PENDING / nudgeSentAt null (#1775),
+//                                  and the Mentor Offers sweep on PENDING / remindedAt null (#1809).
 import { registerJob } from '@/lib/jobs/registry';
 import { dormancySweepHandler } from './dormancyChain';
 import { counters, SWEEP_OPTS } from './summary';
@@ -45,9 +46,17 @@ export function registerReminderJobs(): void {
   registerJob('reminders.mentorInteraction', async () => counters(await checkMentorInteractionReminders()), SWEEP_OPTS);
   registerJob('reminders.stageDeadline', async () => counters(await checkStageDeadlineReminders()), SWEEP_OPTS);
   registerJob('reminders.retentionReconsent', async () => counters(await checkRetentionReminders()), SWEEP_OPTS);
-  registerJob('requests.expirySweep', async () => counters(await sweepMentorshipRequests()), SWEEP_OPTS);
+  // Both directions of an unanswered ask in one morning job (#1775 + #1809).
+  // Each half is a guarded sweep of its own, so a rerun — or one half throwing
+  // after the other committed — repeats nothing: requests claim on
+  // status/nudgeSentAt, offers on status/remindedAt.
+  registerJob('requests.expirySweep', async () => {
+    const requests = await sweepMentorshipRequests();
+    const offers = await sweepMentorOffers();
+    return counters({ ...requests, offersExpired: offers.expired, offersReminded: offers.reminded });
+  }, SWEEP_OPTS);
   registerJob('matching.needMatchAlerts', async () => counters(await checkRequisitionMatches()), SWEEP_OPTS);
-  // A rerun expires nothing new and reminds nobody twice: the reminder is claimed
-  // by a conditional update on `remindedAt: null` (src/lib/mentorOffers.ts).
+  // No schedule of its own any more — the offers ride requests.expirySweep. Kept
+  // registered so a row queued before that change still has a handler to run.
   registerJob('mentorOffers.sweep', async () => counters(await sweepMentorOffers()), SWEEP_OPTS);
 }

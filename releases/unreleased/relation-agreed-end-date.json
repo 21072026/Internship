@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Agreed end date and rhythm per pairing (#1784, story #1782):** `MentorshipRelation` gains `expectedEndDate` (when the pairing is meant to end — not `completedAt`, not the stage clock `stageDeadline`), `durationExtendedCount` and the ending-soon stamp `endingSoonNotifiedAt` (both for #1786). The rhythm reuses the existing `expectedMeetingIntervalWeeks` (#2014) instead of a second cadence column. Every match-time path accepts or applies them: `POST /api/mentorship`, the admin queue and the mentor's own accept through `decideMentorshipRequest()` and `POST /api/mentor/mentees` accept `expectedEndDate` / `durationMonths` / `expectedMeetingIntervalWeeks`; a published match round (#1796) applies its programme's defaults; what is left out comes from the new programme → org → global settings `relationDefaultDurationMonths` / `relationDefaultCadenceWeeks` ('' = none, so nothing changes until an admin sets one). A pairing that joins a programme fills only its still-empty agreement from the programme's defaults. `PUT /api/mentorship/[id]` takes `expectedEndDate`; an edit re-arms the nudge and never counts as an extension. Rules pure in `src/lib/relationSchedule.ts` (unit-tested); shown on the admin assignment form, the relation's rhythm panel (mentor + admin, editable) and read-only on the mentee portal.",
+  "notes": {
+    "en": ["A pairing can now carry an agreed end date and meeting rhythm — set when it is created (or from your programme's defaults) and shown to the mentee on their portal."],
+    "tr": ["Bir eşleştirme artık üzerinde anlaşılan bir bitiş tarihi ve görüşme ritmi taşıyabiliyor — oluşturulurken (ya da programın varsayılanlarından) belirleniyor ve mentee'ye kendi portalında gösteriliyor."],
+    "de": ["Eine Paarung kann jetzt ein vereinbartes Enddatum und einen Treffrhythmus haben – beim Anlegen festgelegt (oder aus den Standards des Programms) und dem Mentee in seinem Portal angezeigt."]
+  }
+}

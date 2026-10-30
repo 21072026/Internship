@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { withApiKey } from '@/lib/apiKey';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const created = await prisma.user.create({
+      const created = await createUser(prisma, {
         data: {
           email: body.email,
           fullName: body.fullName,
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
           orgId: key.orgId,
         },
         select: candidateSelect,
-      });
+      }, { source: 'api' });
       return writeOk(apiOk(serializeCandidate(created), undefined, undefined, { status: 201 }), {
         action: 'api.candidate.create',
         targetType: 'user',

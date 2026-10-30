@@ -21,6 +21,8 @@ import { Prisma } from '@prisma/client';
 import { ENDED_REMATCHED, effectiveLifecycleState } from '@/lib/relationLifecycle';
 import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { recordMatchDecision } from '@/lib/matching/decision';
+import { scheduleCreateData, type RelationScheduleInput } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -59,6 +61,8 @@ export async function decideMentorshipRequest(opts: {
   // their note. Both optional; the record is written either way.
   suggestionBatchId?: string;
   decisionNote?: string;
+  // What the pair agrees to (#1784); the org's defaults fill what is left out.
+  schedule?: RelationScheduleInput;
   locale?: string;
 }): Promise<DecisionResult> {
   const { requestId, action, mentorId, actorId, actorEmail, restrictToPreferredMentorId, request, reason } = opts;
@@ -219,6 +223,9 @@ export async function decideMentorshipRequest(opts: {
     // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
     // the create (#2551); for every other start stage this is `{}`, no query.
     const trialWindow = await stageTrialWindow({ orgId: gate.orgId, toStage: pipelineStatus, enteredAt: new Date() });
+    // The agreed duration and rhythm (#1784), counted from today — the start
+    // the new relation gets by default.
+    const schedule = scheduleCreateData(opts.schedule ?? {}, new Date(), await relationScheduleDefaults(gate.orgId));
 
     // Interactive form (was an array `$transaction`) so the ACTIVE-mentor guard
     // sits INSIDE the transaction that writes (#419) — the pre-flight above ran
@@ -238,7 +245,7 @@ export async function decideMentorshipRequest(opts: {
           throw new AlreadyMentoredError(req.menteeId, active.id);
         }
         const created = await tx.mentorshipRelation.create({
-          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow },
+          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow, ...schedule },
         });
         // `status: 'PENDING'` in the where is the real serializer for THIS
         // request: the UPDATE takes the row lock MySQL grants anyway, so two

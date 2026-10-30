@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -41,6 +43,9 @@ const createRelationSchema = z.object({
   // their note on why this mentor — stored on the decision row only.
   suggestionBatchId: z.string().min(1).max(64).optional(),
   decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
+  // What the pair agrees to (#1784): an end day or a duration, and a meeting
+  // interval. Optional; the programme → org defaults fill what is left out.
+  ...relationScheduleFields,
 });
 
 export async function GET(request: Request) {
@@ -227,7 +232,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind, suggestionBatchId, decisionNote } = parsed.data;
+    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind, suggestionBatchId, decisionNote, expectedEndDate, durationMonths, expectedMeetingIntervalWeeks } = parsed.data;
     if (rawKind !== undefined && !isRelationKind(rawKind)) {
       return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
     }
@@ -311,6 +316,13 @@ export async function POST(request: Request) {
     // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
     // the create (#2551); for every other start stage this is `{}`, no query.
     const trialWindow = await stageTrialWindow({ orgId: mentee.orgId, toStage: pipelineStatus, enteredAt: new Date() });
+    // The agreed duration and rhythm (#1784): what the admin chose, else the
+    // org's defaults. A direct assignment carries no programme yet.
+    const schedule = scheduleCreateData(
+      { expectedEndDate, durationMonths, expectedMeetingIntervalWeeks },
+      start,
+      await relationScheduleDefaults(mentee.orgId),
+    );
 
     // The guard and the write, adjacent and atomic (#419). The pre-flight above
     // ran before the plan gate, the availability count and resolveStartStage —
@@ -331,6 +343,7 @@ export async function POST(request: Request) {
           companyId: companyId || null,
           projectId: projectId || null,
           startDate: start,
+          ...schedule,
           kind,
           // A placement enters the funnel when it starts; coaching never does (#1503).
           funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
