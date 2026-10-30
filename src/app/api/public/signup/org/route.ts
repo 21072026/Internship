@@ -69,119 +69,121 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
-async function handlePOST(request: Request) {
-  if (!selfServeSignupEnabled()) {
-    return NextResponse.json({ error: 'Self-serve signup is not enabled', code: 'not_enabled' }, { status: 503 });
-  }
-  const limited = enforceRateLimit(request, 'signup-org', SIGNUP_ORG_RATE_LIMIT);
-  if (limited) return limited;
+export async function POST(request: Request) {
+  return withRequestScope(request, async () => {
+    if (!selfServeSignupEnabled()) {
+      return NextResponse.json({ error: 'Self-serve signup is not enabled', code: 'not_enabled' }, { status: 503 });
+    }
+    const limited = enforceRateLimit(request, 'signup-org', SIGNUP_ORG_RATE_LIMIT);
+    if (limited) return limited;
 
-  const parsed = signupSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
-  }
-  if ((await hostVertical()) !== DEFAULT_VERTICAL) {
-    return NextResponse.json(
-      { error: 'Registration on this product is by invitation only', code: 'invitation_required' },
-      { status: 403 },
-    );
-  }
+    const parsed = signupSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    }
+    if ((await hostVertical()) !== DEFAULT_VERTICAL) {
+      return NextResponse.json(
+        { error: 'Registration on this product is by invitation only', code: 'invitation_required' },
+        { status: 403 },
+      );
+    }
 
-  const d = parsed.data;
-  const vertical = DEFAULT_VERTICAL;
-  const email = d.email.toLowerCase();
-  const locale = d.locale ?? defaultLocale;
+    const d = parsed.data;
+    const vertical = DEFAULT_VERTICAL;
+    const email = d.email.toLowerCase();
+    const locale = d.locale ?? defaultLocale;
 
-  // provisionOrganization() asks the same question again; asking first keeps
-  // the bcrypt and the breach lookup off the refused path.
-  if (await emailTakenInWorld(email, vertical)) {
-    return NextResponse.json(UNAVAILABLE, { status: 409 });
-  }
-  // The new org has no settings of its own yet, so the deployment default
-  // policy (the org-less read of the chain) is the one it will start with.
-  const verdict = await checkPassword(d.password, null);
-  if (!verdict.ok) return passwordRefusal(verdict);
-  const hashedPassword = await bcrypt.hash(d.password, 12);
-
-  const base = slugifyOrg(d.slug || d.orgName) || 'org';
-  let slug = base;
-  const timezone = isValidTimeZone(d.timezone) ? d.timezone : null;
-  // The rollback proof (#1749): e2e/signup-org.spec.ts makes the LAST step in
-  // the transaction throw and asserts nothing survived. Same test-only switch
-  // as the throwing error routes (#1602) — unset on every deployment.
-  const forceFailure = process.env.E2E_ERROR_ROUTES === '1' && request.headers.get('x-e2e-fail-signup') === '1';
-
-  for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
-    if (attempt > 0 || !(await orgSlugAvailable(slug))) slug = withSuffix(base);
-    const result = await provisionOrganization({
-      name: d.orgName,
-      slug,
-      vertical,
-      plan: 'FREE',
-      starterPack: true,
-      sampleProgram: false,
-      locale,
-      request,
-      firstAdminAccount: {
-        email,
-        create: async (tx, organization) => {
-          const now = new Date();
-          const user = await tx.user.create({
-            data: {
-              email,
-              password: hashedPassword,
-              fullName: d.fullName,
-              role: 'ADMIN',
-              skills: [],
-              orgId: organization.id,
-              // Inactive and unverified: the verification link admits it.
-              emailVerified: false,
-              isActive: false,
-              pendingApproval: false,
-              consentAt: now,
-              timezone,
-              preferredLanguage: d.locale ?? null,
-            },
-            select: { id: true, email: true },
-          });
-          await tx.userConsent.create({
-            data: { userId: user.id, type: 'PRIVACY_POLICY', version: d.privacyVersion ?? PRIVACY_POLICY_VERSION, grantedAt: now },
-          });
-          await getOrCreateSubscription(organization.id, tx);
-          if (forceFailure) throw new Error('e2e: forced self-serve signup failure');
-          return user;
-        },
-      },
-    });
-    if (!result.ok) {
-      if (result.refusal.code === 'slug_taken') continue;
-      // email_taken_in_world (a race with another signup) or a slug that could
-      // not be derived: the same answer as a taken address, by design.
+    // provisionOrganization() asks the same question again; asking first keeps
+    // the bcrypt and the breach lookup off the refused path.
+    if (await emailTakenInWorld(email, vertical)) {
       return NextResponse.json(UNAVAILABLE, { status: 409 });
     }
+    // The new org has no settings of its own yet, so the deployment default
+    // policy (the org-less read of the chain) is the one it will start with.
+    const verdict = await checkPassword(d.password, null);
+    if (!verdict.ok) return passwordRefusal(verdict);
+    const hashedPassword = await bcrypt.hash(d.password, 12);
 
-    const { organization, account } = result.value;
-    if (account) {
-      try {
-        const token = await createEmailVerificationToken(account.id);
-        await sendVerificationEmail({ to: account.email, token, fullName: d.fullName, orgId: organization.id, locale: d.locale ?? null });
-      } catch (e) {
-        // The account exists and the sign-in page offers a resend
-        // (EMAIL_NOT_VERIFIED), so a mail hiccup is not a failed signup.
-        logger.error('signup_org.verification_mail_failed', { orgId: organization.id, error: e instanceof Error ? e.name : 'unknown' });
+    const base = slugifyOrg(d.slug || d.orgName) || 'org';
+    let slug = base;
+    const timezone = isValidTimeZone(d.timezone) ? d.timezone : null;
+    // The rollback proof (#1749): e2e/signup-org.spec.ts makes the LAST step in
+    // the transaction throw and asserts nothing survived. Same test-only switch
+    // as the throwing error routes (#1602) — unset on every deployment.
+    const forceFailure = process.env.E2E_ERROR_ROUTES === '1' && request.headers.get('x-e2e-fail-signup') === '1';
+
+    for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
+      if (attempt > 0 || !(await orgSlugAvailable(slug))) slug = withSuffix(base);
+      const result = await provisionOrganization({
+        name: d.orgName,
+        slug,
+        vertical,
+        plan: 'FREE',
+        starterPack: true,
+        sampleProgram: false,
+        locale,
+        request,
+        firstAdminAccount: {
+          email,
+          create: async (tx, organization) => {
+            const now = new Date();
+            const user = await tx.user.create({
+              data: {
+                email,
+                password: hashedPassword,
+                fullName: d.fullName,
+                role: 'ADMIN',
+                skills: [],
+                orgId: organization.id,
+                // Inactive and unverified: the verification link admits it.
+                emailVerified: false,
+                isActive: false,
+                pendingApproval: false,
+                consentAt: now,
+                timezone,
+                preferredLanguage: d.locale ?? null,
+              },
+              select: { id: true, email: true },
+            });
+            await tx.userConsent.create({
+              data: { userId: user.id, type: 'PRIVACY_POLICY', version: d.privacyVersion ?? PRIVACY_POLICY_VERSION, grantedAt: now },
+            });
+            await getOrCreateSubscription(organization.id, tx);
+            if (forceFailure) throw new Error('e2e: forced self-serve signup failure');
+            return user;
+          },
+        },
+      });
+      if (!result.ok) {
+        if (result.refusal.code === 'slug_taken') continue;
+        // email_taken_in_world (a race with another signup) or a slug that could
+        // not be derived: the same answer as a taken address, by design.
+        return NextResponse.json(UNAVAILABLE, { status: 409 });
       }
+
+      const { organization, account } = result.value;
+      if (account) {
+        try {
+          const token = await createEmailVerificationToken(account.id);
+          await sendVerificationEmail({ to: account.email, token, fullName: d.fullName, orgId: organization.id, locale: d.locale ?? null });
+        } catch (e) {
+          // The account exists and the sign-in page offers a resend
+          // (EMAIL_NOT_VERIFIED), so a mail hiccup is not a failed signup.
+          logger.error('signup_org.verification_mail_failed', { orgId: organization.id, error: e instanceof Error ? e.name : 'unknown' });
+        }
+      }
+      await logActivity({
+        action: 'org.self_signup',
+        actorId: account?.id ?? null,
+        targetType: 'organization',
+        targetId: organization.id,
+        detail: organization.slug,
+      });
+      await notifyOperator(organization);
+      return NextResponse.json({ ok: true, orgSlug: organization.slug }, { status: 201 });
     }
-    await logActivity({
-      action: 'org.self_signup',
-      actorId: account?.id ?? null,
-      targetType: 'organization',
-      targetId: organization.id,
-      detail: organization.slug,
-    });
-    await notifyOperator(organization);
-    return NextResponse.json({ ok: true, orgSlug: organization.slug }, { status: 201 });
-  }
-  return NextResponse.json(UNAVAILABLE, { status: 409 });
+    return NextResponse.json(UNAVAILABLE, { status: 409 });
+  });
 }
 
 // A real signup is never invisible to the operator: one line to the operator
@@ -204,9 +206,4 @@ async function notifyOperator(organization: { id: string; name: string; slug: st
   } catch (e) {
     logger.error('signup_org.operator_notice_failed', { orgId: organization.id, error: e instanceof Error ? e.name : 'unknown' });
   }
-}
-
-// Every line this route logs carries its request id (#1601).
-export async function POST(request: Request) {
-  return withRequestScope(request, () => handlePOST(request));
 }

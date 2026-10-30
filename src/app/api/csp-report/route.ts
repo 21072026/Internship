@@ -14,32 +14,29 @@ import { withRequestScope } from '@/lib/requestContext';
 
 const MAX_BODY = 64 * 1024;
 
-async function handlePOST(request: Request) {
-  const limited = enforceRateLimit(request, 'csp-report', { limit: 60, windowMs: 10 * 60 * 1000 });
-  if (limited) return limited;
-
-  const declared = Number(request.headers.get('content-length') ?? 0);
-  if (declared > MAX_BODY) return new NextResponse(null, { status: 413 });
-  const text = (await request.text()).slice(0, MAX_BODY);
-
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    return new NextResponse(null, { status: 400 });
-  }
-
-  const seen = new Set<string>();
-  for (const v of parseCspReports(payload)) {
-    const key = `${v.directive}|${v.blocked}|${v.source}|${v.line}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    logger.warning('csp.violation', { ...v });
-  }
-  return new NextResponse(null, { status: 204 });
-}
-
-// Every line this route logs carries its request id (#1601).
 export async function POST(request: Request) {
-  return withRequestScope(request, () => handlePOST(request));
+  return withRequestScope(request, async () => {
+    const limited = enforceRateLimit(request, 'csp-report', { limit: 60, windowMs: 10 * 60 * 1000 });
+    if (limited) return limited;
+
+    const declared = Number(request.headers.get('content-length') ?? 0);
+    if (declared > MAX_BODY) return new NextResponse(null, { status: 413 });
+    const text = (await request.text()).slice(0, MAX_BODY);
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      return new NextResponse(null, { status: 400 });
+    }
+
+    const seen = new Set<string>();
+    for (const v of parseCspReports(payload)) {
+      const key = `${v.directive}|${v.blocked}|${v.source}|${v.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      logger.warning('csp.violation', { ...v });
+    }
+    return new NextResponse(null, { status: 204 });
+  });
 }

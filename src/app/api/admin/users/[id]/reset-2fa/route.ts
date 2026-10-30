@@ -39,174 +39,171 @@ import { withRequestScope } from '@/lib/requestContext';
 // A user inside the tenant's `require2fa` scope is then held at /security-setup
 // until they re-enrol (src/lib/twoFactorPolicy.ts). That is the point, not a
 // side effect.
-async function handlePOST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requirePermission('user.reset_password', { request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, async () => {
+    const gate = await requirePermission('user.reset_password', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
-  return await withTenantScope(session, async () => {
-    const { id } = await params;
-    // The caller's capability, read from the database on this request. Scoped
-    // to the same tenant as everything else in this block, so a super-admin
-    // impersonating a tenant is not a special case here either.
-    const actor = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { id: true, role: true, isActive: true },
-    });
-    // Same tenant only (#2542): another tenant's account is a 404, flag or no flag.
-    const user = await prisma.user.findFirst({
-      where: withinTenant({ id }, await tenantWhere(session)),
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        orgId: true,
-        preferredLanguage: true,
-        twoFactorEnabled: true,
-      },
-    });
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const decision = evaluateTwoFactorReset(
-      actor
-        ? { ...actor, isImpersonating: !!session.user.impersonatorId }
-        : null,
-      { id: user.id, role: user.role },
-    );
-    if (!decision.ok) {
-      // A refusal is exactly the row an auditor asks for, so it is recorded
-      // rather than only returned — an attempt to reset a peer admin's factor
-      // is a fact about the actor, not a validation error.
-      await logActivity({
-        action: 'admin.reset_2fa_denied',
-        level: 'warning',
-        actorId: session.user.id,
-        actorEmail: session.user.email ?? null,
-        targetType: 'user',
-        targetId: user.id,
-        detail: decision.code,
-        request,
+    return await withTenantScope(session, async () => {
+      const { id } = await params;
+      // The caller's capability, read from the database on this request. Scoped
+      // to the same tenant as everything else in this block, so a super-admin
+      // impersonating a tenant is not a special case here either.
+      const actor = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true, role: true, isActive: true },
       });
-      return NextResponse.json(
-        { error: decision.error, code: decision.code },
-        { status: decision.status },
-      );
-    }
-
-    const actorName = session.user.name || session.user.email || 'an administrator';
-
-    // One transaction for the parts that must not half-apply: a cleared secret
-    // with surviving recovery codes, a cleared factor with live sessions, or a
-    // reset with no audit trail is worse than no reset at all.
-    //
-    // The audit rows are written INSIDE it, with `tx`, which is where this route
-    // deliberately differs from its neighbours (they call `logActivity()` after
-    // the fact, and that helper swallows its own failures so that logging can
-    // never break the request it describes). For an account-takeover primitive
-    // the trade runs the other way round: if the row naming who did this to whom
-    // cannot be written, the reset does not happen either.
-    const deletedCodes = await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          twoFactorEnabled: false,
-          twoFactorSecret: null,
-          // The replay guard (#865) is meaningless without a secret, and a
-          // stale high-water mark would reject the first codes of the NEXT
-          // enrolment until the clock caught up.
-          lastTotpStep: null,
-          sessionsValidFrom: new Date(),
+      // Same tenant only (#2542): another tenant's account is a 404, flag or no flag.
+      const user = await prisma.user.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          orgId: true,
+          preferredLanguage: true,
+          twoFactorEnabled: true,
         },
-        select: { id: true },
       });
-
-      // Recovery codes (#1542) ship in a sibling PR, so the model may or may
-      // not exist in the client this build was generated from. Resolved at
-      // runtime rather than skipped, because the merge order of the two PRs
-      // must not decide whether stale codes survive a reset — a surviving code
-      // is a second key to the door we just re-locked. Once #1542 has landed
-      // this collapses to a plain `tx.twoFactorRecoveryCode.deleteMany(...)`.
-      const codes = (tx as unknown as {
-        twoFactorRecoveryCode?: {
-          deleteMany: (args: { where: { userId: string } }) => Promise<{ count: number }>;
-        };
-      }).twoFactorRecoveryCode;
-      let deleted = 0;
-      if (codes) {
-        deleted = (await codes.deleteMany({ where: { userId: user.id } })).count;
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
 
-      const detail = `was ${user.twoFactorEnabled ? 'enabled' : 'not enabled'}; ${deleted} recovery code(s) deleted`;
-      await tx.auditLog.create({
-        data: {
-          actorId: session.user.id,
-          action: 'ADMIN_RESET_2FA',
-          targetId: user.id,
-          orgId: resolveOrgId(session),
-          detail,
-        },
-      });
-      await tx.activityLog.create({
-        data: {
-          // The tenant the entry belongs to — the reset user's, which is the
-          // admin's own (the lookup above is tenant-scoped).
-          ...(user.orgId ? { orgId: user.orgId } : {}),
-          action: 'admin.reset_2fa',
-          level: 'WARNING',
+      const decision = evaluateTwoFactorReset(
+        actor
+          ? { ...actor, isImpersonating: !!session.user.impersonatorId }
+          : null,
+        { id: user.id, role: user.role },
+      );
+      if (!decision.ok) {
+        // A refusal is exactly the row an auditor asks for, so it is recorded
+        // rather than only returned — an attempt to reset a peer admin's factor
+        // is a fact about the actor, not a validation error.
+        await logActivity({
+          action: 'admin.reset_2fa_denied',
+          level: 'warning',
           actorId: session.user.id,
           actorEmail: session.user.email ?? null,
           targetType: 'user',
           targetId: user.id,
-          detail,
-          // Same origin columns `logActivity()` records (#881): actor + action
-          // alone cannot answer "was this really that admin?".
-          ip: clientIp(request),
-          userAgent: (request.headers.get('user-agent') || '').slice(0, 512) || null,
-        },
+          detail: decision.code,
+          request,
+        });
+        return NextResponse.json(
+          { error: decision.error, code: decision.code },
+          { status: decision.status },
+        );
+      }
+
+      const actorName = session.user.name || session.user.email || 'an administrator';
+
+      // One transaction for the parts that must not half-apply: a cleared secret
+      // with surviving recovery codes, a cleared factor with live sessions, or a
+      // reset with no audit trail is worse than no reset at all.
+      //
+      // The audit rows are written INSIDE it, with `tx`, which is where this route
+      // deliberately differs from its neighbours (they call `logActivity()` after
+      // the fact, and that helper swallows its own failures so that logging can
+      // never break the request it describes). For an account-takeover primitive
+      // the trade runs the other way round: if the row naming who did this to whom
+      // cannot be written, the reset does not happen either.
+      const deletedCodes = await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            twoFactorEnabled: false,
+            twoFactorSecret: null,
+            // The replay guard (#865) is meaningless without a secret, and a
+            // stale high-water mark would reject the first codes of the NEXT
+            // enrolment until the clock caught up.
+            lastTotpStep: null,
+            sessionsValidFrom: new Date(),
+          },
+          select: { id: true },
+        });
+
+        // Recovery codes (#1542) ship in a sibling PR, so the model may or may
+        // not exist in the client this build was generated from. Resolved at
+        // runtime rather than skipped, because the merge order of the two PRs
+        // must not decide whether stale codes survive a reset — a surviving code
+        // is a second key to the door we just re-locked. Once #1542 has landed
+        // this collapses to a plain `tx.twoFactorRecoveryCode.deleteMany(...)`.
+        const codes = (tx as unknown as {
+          twoFactorRecoveryCode?: {
+            deleteMany: (args: { where: { userId: string } }) => Promise<{ count: number }>;
+          };
+        }).twoFactorRecoveryCode;
+        let deleted = 0;
+        if (codes) {
+          deleted = (await codes.deleteMany({ where: { userId: user.id } })).count;
+        }
+
+        const detail = `was ${user.twoFactorEnabled ? 'enabled' : 'not enabled'}; ${deleted} recovery code(s) deleted`;
+        await tx.auditLog.create({
+          data: {
+            actorId: session.user.id,
+            action: 'ADMIN_RESET_2FA',
+            targetId: user.id,
+            orgId: resolveOrgId(session),
+            detail,
+          },
+        });
+        await tx.activityLog.create({
+          data: {
+            // The tenant the entry belongs to — the reset user's, which is the
+            // admin's own (the lookup above is tenant-scoped).
+            ...(user.orgId ? { orgId: user.orgId } : {}),
+            action: 'admin.reset_2fa',
+            level: 'WARNING',
+            actorId: session.user.id,
+            actorEmail: session.user.email ?? null,
+            targetType: 'user',
+            targetId: user.id,
+            detail,
+            // Same origin columns `logActivity()` records (#881): actor + action
+            // alone cannot answer "was this really that admin?".
+            ip: clientIp(request),
+            userAgent: (request.headers.get('user-agent') || '').slice(0, 512) || null,
+          },
+        });
+        return deleted;
       });
-      return deleted;
-    });
 
-    // HARD RULE (docs/remember-me.md): anything that stamps `sessionsValidFrom`
-    // must also revoke the trusted devices, or the remembered browser signs
-    // itself straight back in — with the factor now gone.
-    await revokeAllTrustedDevices(user.id);
+      // HARD RULE (docs/remember-me.md): anything that stamps `sessionsValidFrom`
+      // must also revoke the trusted devices, or the remembered browser signs
+      // itself straight back in — with the factor now gone.
+      await revokeAllTrustedDevices(user.id);
 
-    // The structured-log mirror the helper would have produced; the row itself
-    // is already committed above.
-    logger.warning('admin.reset_2fa', {
-      actorId: session.user.id,
-      targetType: 'user',
-      targetId: user.id,
-      detail: `${deletedCodes} recovery code(s) deleted`,
-    });
-
-    // Transparency, mirroring impersonation and admin password reset — with the
-    // actor named, because "who did this" is the whole question the owner has.
-    await notify(user.id, 'security.twoFactorReset', { admin: actorName });
-    try {
-      // #1720: the mail is written in the language the ACCOUNT chose, not the
-      // admin's. Best effort — a dead SMTP queue must not leave the person
-      // locked out because the notice could not go out.
-      await sendTwoFactorResetEmail({
-        to: user.email,
-        fullName: user.fullName,
-        adminName: actorName,
-        locale: user.preferredLanguage,
-        orgId: user.orgId,
+      // The structured-log mirror the helper would have produced; the row itself
+      // is already committed above.
+      logger.warning('admin.reset_2fa', {
+        actorId: session.user.id,
+        targetType: 'user',
+        targetId: user.id,
+        detail: `${deletedCodes} recovery code(s) deleted`,
       });
-    } catch (e) {
-      console.error('2FA reset notice email failed:', e);
-    }
 
-    return NextResponse.json({ ok: true, deletedRecoveryCodes: deletedCodes });
+      // Transparency, mirroring impersonation and admin password reset — with the
+      // actor named, because "who did this" is the whole question the owner has.
+      await notify(user.id, 'security.twoFactorReset', { admin: actorName });
+      try {
+        // #1720: the mail is written in the language the ACCOUNT chose, not the
+        // admin's. Best effort — a dead SMTP queue must not leave the person
+        // locked out because the notice could not go out.
+        await sendTwoFactorResetEmail({
+          to: user.email,
+          fullName: user.fullName,
+          adminName: actorName,
+          locale: user.preferredLanguage,
+          orgId: user.orgId,
+        });
+      } catch (e) {
+        console.error('2FA reset notice email failed:', e);
+      }
+
+      return NextResponse.json({ ok: true, deletedRecoveryCodes: deletedCodes });
+    });
   });
-}
-
-// Every line this route logs carries its request id (#1601).
-export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  return withRequestScope(request, () => handlePOST(request, ctx));
 }

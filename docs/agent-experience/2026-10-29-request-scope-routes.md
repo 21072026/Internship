@@ -9,3 +9,12 @@
   level down into `handleX` keeps it green; the anonymous-route baseline is unaffected.
 - A first `next dev` compile of several heavy routes outlasts a 10-minute foreground Bash call;
   run multi-spec e2e batches in the background from the start.
+- **Correction:** the rename-and-wrap shape (`handleGET` + a thin exported `GET`) breaks two
+  static guards — `check:capability-writers` wants every gated write *inside* an exported
+  handler, and `signup-org`'s source tests read the exported handler's own body. Wrap
+  **inline** instead: `export async function GET(request, …) { return withRequestScope(request,
+  async () => { …body… }); }`. Rename a `_request` parameter to `request` and its uses.
+- A dev server you start yourself is reused by Playwright **without** the webServer `env:` block
+  (`SELF_SERVE_SIGNUP`, mock ports, `TRUSTED_PROXY_COUNT`…), so many specs fail for the wrong
+  reason. For a real run: `npm run build`, then `CI=1 npx playwright test …` and let it start
+  `npm run start` itself.
