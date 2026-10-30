@@ -29,6 +29,8 @@ export async function GET(request: Request) {
       consecutiveFailures: true, lastSuccessAt: true, disabledAt: true, disabledReason: true,
       // A company's self-served hook (#2006): the admin sees whose it is.
       company: { select: { id: true, name: true } },
+      // …or a source's (`ownerSource`; `source` is the hook's origin column).
+      ownerSource: { select: { id: true, name: true } },
     },
   });
   return NextResponse.json({ webhooks, eventTypes: WEBHOOK_EVENTS });

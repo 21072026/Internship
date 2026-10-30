@@ -381,6 +381,7 @@ const en = {
     subtitle: 'Connect your own systems to the candidates your organisation referred. A key reads only your referred candidates and always expires.',
     scopeCandidates: 'Your referred candidates (read)',
     notAssigned: 'Your account is not linked to a referring organisation yet.',
+    hooksSubtitle: 'We send a signed request to your URL when something happens to a candidate you referred: a new account, a mentor assigned, a stage or status change.',
   },
   companyIntegrations: {
     navLink: 'API keys',
@@ -11630,6 +11631,7 @@ const tr: Dict = {
     subtitle: 'Kendi sistemlerinizi kurumunuzun yönlendirdiği adaylara bağlayın. Bir anahtar yalnızca sizin yönlendirdiğiniz adayları okur ve her zaman bir son kullanma tarihi vardır.',
     scopeCandidates: 'Yönlendirdiğiniz adaylar (okuma)',
     notAssigned: 'Hesabınız henüz yönlendiren bir kuruma bağlı değil.',
+    hooksSubtitle: 'Yönlendirdiğiniz bir adayla ilgili bir şey olduğunda URL’nize imzalı bir istek gönderiyoruz: yeni hesap, mentor ataması, aşama ya da durum değişikliği.',
   },
   companyIntegrations: {
     navLink: 'API anahtarları',
@@ -22647,6 +22649,7 @@ const de: Dict = {
     subtitle: 'Verbinden Sie Ihre eigenen Systeme mit den Kandidat:innen, die Ihre Organisation vermittelt hat. Ein Schlüssel liest nur Ihre vermittelten Kandidat:innen und läuft immer ab.',
     scopeCandidates: 'Ihre vermittelten Kandidat:innen (lesen)',
     notAssigned: 'Ihr Konto ist noch keiner vermittelnden Organisation zugeordnet.',
+    hooksSubtitle: 'Wir senden eine signierte Anfrage an Ihre URL, wenn sich bei einer von Ihnen vermittelten Person etwas ändert: neues Konto, Mentor:in zugewiesen, Phasen- oder Statuswechsel.',
   },
   companyIntegrations: {
     navLink: 'API-Schlüssel',
