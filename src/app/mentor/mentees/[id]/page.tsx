@@ -55,6 +55,7 @@ import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 interface InteractionLog {
   id: string;
@@ -87,6 +88,7 @@ interface RelationDetail {
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
+  endReasonCode?: string | null;
   /** The pair's agreed next steps, written when it ended (#1795). */
   closurePlan?: string | null;
   mentor: { fullName: string };
@@ -392,6 +394,8 @@ export default function MenteeDetailPage() {
           <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
             <div className="flex items-center gap-2">
               <StatusBadge status={relation.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={relation} hideLive />
               <RelationHealthBadge health={health[relation.id]} testId="relation-health" />
               <StageClockChip
                 testId="stage-clock-detail"

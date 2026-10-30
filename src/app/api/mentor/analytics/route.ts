@@ -9,6 +9,7 @@ import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { countsAsPlacement, isPlacementRelation } from '@/lib/placement';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -60,6 +61,8 @@ export async function GET(request: Request) {
           id: true,
           status: true,
           pipelineStatus: true,
+          kind: true,
+          employmentAttribution: true,
           startDate: true,
           mentee: { select: { id: true, fullName: true } },
           // Real moves only (#2264). Filtering here rather than at each reader
@@ -86,9 +89,11 @@ export async function GET(request: Request) {
     );
     const interactions = interactionsByRelation.reduce((n, g) => n + g._count._all, 0);
 
-    // Pipeline funnel: count mentees per stage (all relations, not just active).
+    // Pipeline funnel: count mentees per stage (all relations, not just active)
+    // — PLACEMENT relations only (#1504): a COACHING pair's stage means nothing here.
     const funnel: Record<string, number> = {};
     for (const r of relations) {
+      if (!isPlacementRelation(r.kind)) continue;
       funnel[r.pipelineStatus] = (funnel[r.pipelineStatus] ?? 0) + 1;
     }
 
@@ -105,8 +110,11 @@ export async function GET(request: Request) {
 
     const totalRelations = relations.length;
     const activeRelations = relations.filter((r) => r.status === 'ACTIVE').length;
-    const hired = relations.filter((r) => finished.has(r.pipelineStatus)).length;
-    const conversionToHired = totalRelations > 0 ? Math.round((hired / totalRelations) * 100) : 0;
+    // The placement rate (#1504): ours over the PLACEMENT relations only. The
+    // mentor's workload numbers above still count every pairing.
+    const placementRelations = relations.filter((r) => isPlacementRelation(r.kind)).length;
+    const hired = relations.filter((r) => countsAsPlacement(r, finished)).length;
+    const conversionToHired = placementRelations > 0 ? Math.round((hired / placementRelations) * 100) : 0;
 
     // Goal summary across all mentees. OPEN/total are current state; "done" is
     // an event, so it is also reported for the window.
@@ -134,7 +142,7 @@ export async function GET(request: Request) {
 
     // Average days to hired for completed mentees.
     let avgDaysToHired: number | null = null;
-    const hiredRelations = relations.filter((r) => finished.has(r.pipelineStatus));
+    const hiredRelations = relations.filter((r) => countsAsPlacement(r, finished));
     if (hiredRelations.length > 0) {
       const durations = hiredRelations
         .map((r) => {
