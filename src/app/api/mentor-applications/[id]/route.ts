@@ -22,6 +22,7 @@ import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { missingRequired, parseChecklist, parseRequired, type ScreeningItem } from '@/lib/mentorScreeningRule';
+import { carryMentorApplicationAnswers } from '@/lib/forms/publicAnswers';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -304,6 +305,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const user = result.user;
       // Dual-write the canonical twin of the (possibly just copied) list (#1818).
       await syncUserSkills(user.id, user.orgId, Array.isArray(user.skills) ? (user.skills as string[]) : []);
+      // The answers staged on the application (#1803) now have an account.
+      await carryMentorApplicationAnswers(user);
       if (user.email && emailAllowed(user, 'mentorship')) {
         void sendMentorApplicationApprovedEmail({
           to: user.email,

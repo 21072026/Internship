@@ -203,6 +203,8 @@ export interface JobPayloadMap {
     link: string;
     dedupeKey: string;
     sealedEmail?: string;
+    /** The chat card (#1942), carried so a held reminder keeps its join button. */
+    card?: { subjectKey: string; actionUrl: string | null; supersede: boolean } | null;
   };
 }
 

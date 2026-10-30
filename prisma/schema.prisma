@@ -378,6 +378,7 @@ model Organization {
   // The affiliate module (docs/affiliate-module.md, MARKETING only).
   affiliateSettings       AffiliateProgramSettings?
   affiliatePartners       AffiliatePartner[]
+  affiliateApplications   AffiliateApplication[]
   affiliateCustomers      AffiliateCustomer[]
   affiliatePayments       AffiliatePayment[]
   affiliateCommissions    AffiliateCommission[]
@@ -3018,6 +3019,11 @@ model MentorApplication {
   referenceContact   String?   @db.VarChar(191)
   referenceOutcome   String?   @db.Text
   screenedById       String?
+  // Answers to the org's REGISTRATION questions for mentors (#1803), staged
+  // here because no account exists yet: [{ definitionId, answers }], each
+  // validated at submit with validateResponse(). Copied onto the account when
+  // it is created or promoted (carryMentorApplicationAnswers), then cleared.
+  formAnswers        Json?
 
   decidedBy  User? @relation("DecidedMentorApplications", fields: [decidedById], references: [id])
   screenedBy User? @relation("ScreenedMentorApplications", fields: [screenedById], references: [id])
@@ -9089,6 +9095,50 @@ enum AffiliatePayoutMethod {
   BANK_TRANSFER
 }
 
+enum AffiliateApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A request to become a partner, from the public form on the marketing host
+// (docs/affiliate-module.md, #3361). Nobody gets an account from it: an admin
+// decides (#3362) and an approval goes through the ordinary partner invitation.
+// Personal data from an unauthenticated form, so it is short-lived: the
+// `affiliateApplication` retention entry deletes it (src/lib/retentionEntries.ts).
+model AffiliateApplication {
+  id                 String                     @id @default(cuid())
+  orgId              String
+  org                Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  firstName          String                     @db.VarChar(80)
+  lastName           String                     @db.VarChar(80)
+  // Lower-cased; one PENDING application per address and org (enforced by the writer).
+  email              String                     @db.VarChar(191)
+  company            String?                    @db.VarChar(160)
+  phone              String?                    @db.VarChar(40)
+  // A code from AFFILIATE_HEARD_FROM (src/lib/affiliateApplicationRule.ts).
+  heardFrom          String                     @db.VarChar(32)
+  heardFromOther     String?                    @db.VarChar(200)
+  // The language the form was shown in: the acknowledgement and the decision are written in it.
+  locale             String?                    @db.VarChar(5)
+  // The consent record: when, and which privacy text — set by the server, never the body.
+  consentAt          DateTime
+  consentTextVersion String                     @db.VarChar(32)
+  status             AffiliateApplicationStatus @default(PENDING)
+  decidedAt          DateTime?
+  decidedById        String?
+  // A code from the rejection list (#3362); free text never reaches this row.
+  decisionCode       String?                    @db.VarChar(32)
+  // The partner an approval created (#3362).
+  partnerId          String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@index([orgId, status, createdAt])
+  @@index([orgId, email])
+  @@index([createdAt])
+}
+
 model AffiliateProgramSettings {
   id              String       @id @default(cuid())
   orgId           String       @unique
@@ -9358,12 +9408,21 @@ model ChatDelivery {
   externalMessageId String?            @db.VarChar(128)
   status            ChatDeliveryStatus
   error             String?            @db.Text
+  /// What the card is about (#1942), e.g. `meeting:<batchKey|id>` — so a
+  /// reschedule or cancel card can rewrite the earlier cards instead of
+  /// posting one that contradicts them. Null for cards about nothing in
+  /// particular.
+  subjectKey        String?            @db.VarChar(64)
+  /// Set when a later card rewrote this one in place (chat.update / a Bot
+  /// Framework activity update); a superseded card is never rewritten again.
+  supersededAt      DateTime?
   createdAt         DateTime           @default(now())
 
   workspace ChatWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
   @@index([orgId])
+  @@index([identityId, subjectKey])
 }
 
 // A mentor volunteering to mentor an unmatched mentee (#1809, "Mentor Offers").

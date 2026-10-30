@@ -88,7 +88,8 @@ export { notify } from '@/lib/notify';
 export type { NotificationParams } from '@/lib/notify';
 export * from '@/lib/notifications/catalog';
 
-export type { SkipReason } from '@/lib/notifications/adapters/types';
+export type { SkipReason, ChatCard } from '@/lib/notifications/adapters/types';
+import type { ChatCard } from '@/lib/notifications/adapters/types';
 
 /**
  * A recipient. Either a bare user id (the router reads what it needs) or a row
@@ -121,6 +122,11 @@ export interface NotifyOptions {
   dedupeKey?: string;
   /** Tenant to stamp when the recipient's own row carries none. */
   orgId?: string | null;
+  /**
+   * The chat card's subject, link button and supersede intent (#1942). Read by
+   * the chat adapter only; the bell and the mail are unchanged by it.
+   */
+  chatCard?: ChatCard | null;
   /** The push body — a new message's text, truncated by the push adapter (#1715). */
   preview?: string | null;
   /**
@@ -292,6 +298,7 @@ export interface DeferredDelivery {
   dedupeKey: string;
   /** A pre-rendered mail (#1711), sealed — the queue row never holds it clear. */
   sealedEmail?: string;
+  card?: ChatCard | null;
 }
 
 /** Hold one claimed delivery until `openAt`. Keyed per delivery: held once, sent once. */
@@ -334,7 +341,7 @@ export async function runDeferredDelivery(d: DeferredDelivery): Promise<'sent' |
   }
   const adapter = CHANNEL_ADAPTERS[d.channel];
   const outcome = await adapter
-    .deliver({ deliveryId: d.deliveryId, def, userId: d.userId, orgId: d.orgId, locale: d.locale, params: d.params, link: d.link, dedupeKey: d.dedupeKey, email: d.sealedEmail ? openEmail(d.sealedEmail) : null })
+    .deliver({ deliveryId: d.deliveryId, def, userId: d.userId, orgId: d.orgId, locale: d.locale, params: d.params, link: d.link, dedupeKey: d.dedupeKey, card: d.card ?? null, email: d.sealedEmail ? openEmail(d.sealedEmail) : null })
     .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
   const templateId = `notifications.events.${def.key}`;
   if (outcome.status === 'SENT') {
@@ -496,7 +503,7 @@ export async function notifyEvent<K extends NotificationEventKey>(
         if (DEFERRABLE_CHANNELS.includes(channel) && !isEssentialGroup(def.emailGroup)) {
           const openAt = nextOpenInstant(new Date(), await calendarFor(user, orgId, blackoutOf));
           if (openAt) {
-            const held = await deferDelivery({ deliveryId, channel, eventKey: def.key, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, ...(channel === 'email' && opts?.email ? { sealedEmail: sealEmail(opts.email) } : {}) }, openAt);
+            const held = await deferDelivery({ deliveryId, channel, eventKey: def.key, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, card: opts?.chatCard ?? null, ...(channel === 'email' && opts?.email ? { sealedEmail: sealEmail(opts.email) } : {}) }, openAt);
             if (held) {
               result.queued += 1;
               await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
@@ -517,7 +524,7 @@ export async function notifyEvent<K extends NotificationEventKey>(
           continue;
         }
         const outcome = await adapter
-          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, preview: opts?.preview ?? null, email: opts?.email ?? null })
+          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, card: opts?.chatCard ?? null, preview: opts?.preview ?? null, email: opts?.email ?? null })
           .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
         const templateId = `notifications.events.${def.key}`;
         if (outcome.status === 'SENT') {
