@@ -17,6 +17,7 @@ import { SavedViews } from '@/components/SavedViews';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 import {
   EMPTY_MENTEE_FILTERS,
   MENTEE_STATUS_FILTERS,
@@ -29,6 +30,9 @@ import {
 interface MentorshipRelation {
   id: string;
   status: string;
+  // Where the pairing stands (#1774).
+  lifecycleState?: string | null;
+  endReasonCode?: string | null;
   startDate: string;
   // The stage clock (#1724) — same two fields the board card reads.
   pipelineStatus: string;
@@ -303,6 +307,8 @@ export default function MenteesPage() {
                 </div>
                 <div className="flex flex-shrink-0 flex-col items-end gap-1">
                   <StatusBadge status={rel.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={rel} hideLive />
                   <StageClockChip
                     testId={`stage-clock-${rel.id}`}
                     daysInStage={rel.daysInStage}

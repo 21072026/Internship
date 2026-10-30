@@ -19,6 +19,7 @@ import { daysInStage } from '@/lib/stageClock';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { PortalCertificateCard } from '@/components/PortalCertificateCard';
 import { JourneyView } from '@/components/JourneyView';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 // ACTIVE, else the latest COMPLETED one shown as an archive (#1408).
 async function getMenteeRelation(menteeId: string) {
@@ -115,6 +116,8 @@ export default async function PortalJourneyPage() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <StatusBadge status={relation.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={relation} hideLive />
               {/* "Completed" is the moment it ended, so it reads as a distance;
                   "Since" is the mentorship's start date and stays a date. */}
               <span className="text-xs text-gray-400">

@@ -1453,6 +1453,8 @@ const en = {
   // mentee's own first-person reasons live in `rematchRequest.reasons`, and the
   // two lists are not interchangeable even where the codes overlap.
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Ended (other)',
     actions: 'Pairing state',
     pause: 'Pause',
     resume: 'Resume',
@@ -13002,6 +13004,8 @@ const tr: Dict = {
   // birinci tekil gerekçeleri `rematchRequest.reasons` içinde yaşar ve kodlar
   // örtüşse bile iki liste birbirinin yerine kullanılmaz.
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Diğer biçimde sona erdi',
     actions: 'Eşleşme durumu',
     pause: 'Duraklat',
     resume: 'Devam ettir',
@@ -24343,6 +24347,8 @@ const de: Dict = {
   // ADMINISTRATION — die Ich-Begründungen der Mentees stehen in
   // `rematchRequest.reasons`; die beiden Listen sind nicht austauschbar.
   relationLifecycle: {
+    // The /admin/mentorship filter (#1774): every ending that is not a completion.
+    endedFilter: 'Anders beendet',
     actions: 'Status der Zusammenarbeit',
     pause: 'Pausieren',
     resume: 'Fortsetzen',

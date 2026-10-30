@@ -74,6 +74,18 @@ export async function GET(request: Request) {
     return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    // The lifecycle filter (#1774): PAUSED, a real COMPLETED, or ENDED — every
+    // other ending (early, re-matched, reassigned, won back). Separate from
+    // `status`, whose ACTIVE/COMPLETED meaning many callers rely on.
+    const lifecycle = searchParams.get('lifecycle');
+    const lifecycleWhere: Prisma.MentorshipRelationWhereInput | undefined =
+      lifecycle === 'PAUSED'
+        ? { status: 'ACTIVE', lifecycleState: 'PAUSED' }
+        : lifecycle === 'COMPLETED'
+          ? { status: 'COMPLETED', OR: [{ lifecycleState: 'COMPLETED' }, { lifecycleState: null }] }
+          : lifecycle === 'ENDED'
+            ? { status: 'COMPLETED', lifecycleState: { notIn: ['COMPLETED', 'ACTIVE', 'PAUSED'] } }
+            : undefined;
     const search = searchParams.get('search');
     // The mentoring agreement column and filter (#1792) — ADMIN only, and only
     // in a vertical with pairs. A report, never a gate on the relation.
@@ -112,6 +124,7 @@ export async function GET(request: Request) {
       // Unvalidated on purpose, exactly as before: an unknown value is a Prisma
       // error, not a silently wider list.
       status ? { status: status as Prisma.MentorshipRelationWhereInput['status'] } : undefined,
+      lifecycleWhere,
       search
         ? {
             OR: [
