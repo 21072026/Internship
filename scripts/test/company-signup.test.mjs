@@ -43,12 +43,13 @@ test('the domain proof matches the joined TXT chunks exactly', () => {
 });
 
 test('the onboarding checklist is derived from facts and completes only when every item is done', () => {
-  const facts = { logoUrl: 'https://acme.example/logo.png', description: 'Robots', industry: 'Robotics', size: '50', requisitionCount: 1, verificationStatus: 'VERIFIED' };
+  const facts = { logoUrl: 'https://acme.example/logo.png', description: 'Robots', industry: 'Robotics', size: '50', requisitionCount: 1, seatCount: 2, verificationStatus: 'VERIFIED' };
   const all = onboardingChecklist(facts);
   assert.deepEqual(Object.keys(all).sort(), [...ONBOARDING_ITEMS].sort());
   assert.equal(onboardingComplete(all), true);
   assert.equal(onboardingChecklist({ ...facts, description: '  ' }).profile, false);
   assert.equal(onboardingChecklist({ ...facts, requisitionCount: 0 }).requisition, false);
+  assert.equal(onboardingChecklist({ ...facts, seatCount: 1 }).teammate, false);
   const pending = onboardingChecklist({ ...facts, verificationStatus: 'PENDING' });
   assert.equal(pending.verified, false);
   assert.equal(onboardingComplete(pending), false);

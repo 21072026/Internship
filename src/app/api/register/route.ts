@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ensureCompanyMembership } from '@/lib/companyTeam';
 import { enforceQuota } from '@/lib/quota';
 import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -122,6 +123,9 @@ export async function POST(request: Request) {
     // `User.companyId` — and the invitee has no way to supply it, so it rides on
     // the invitation from the moment the conversion minted it.
     let invitedCompanyId: string | null = null;
+    // The seat a teammate invitation carries (#1870); null for a company's first login.
+    let invitedSeatRole: string | null = null;
+    let invitedSeatBy: string | null = null;
     // The affiliate partner an invited AFFILIATE account is linked to (#3117).
     let invitedPartnerId: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
@@ -180,6 +184,8 @@ export async function POST(request: Request) {
       invitedOrgId = invitation.orgId;
       invitationLocale = isLocale(invitation.locale) ? invitation.locale : null;
       invitedCompanyId = invitation.companyId;
+      invitedSeatRole = invitation.role === 'COMPANY' ? invitation.companySeatRole : null;
+      invitedSeatBy = invitation.invitedById;
       // A COMPANY invitation without a company that still exists cannot make a
       // usable account: every company-side screen reads `User.companyId`, and
       // `User.companyId` has a foreign key — so a pointer to a company an admin
@@ -305,6 +311,11 @@ export async function POST(request: Request) {
       }
     } else {
       user = await createUser(prisma, userData, { source: selfRegistered ? 'register' : 'invite' });
+    }
+    // A COMPANY login gets its seat at the company (#1870): the role the
+    // teammate invitation named, or OWNER for the company's first login.
+    if (user.role === 'COMPANY' && invitedCompanyId && orgId) {
+      await ensureCompanyMembership({ orgId, companyId: invitedCompanyId, userId: user.id, seatRole: invitedSeatRole, invitedById: invitedSeatRole ? invitedSeatBy : null });
     }
     // A mentor arriving through an approved application's invitation brings the
     // answers they gave on it (#1803). Nothing to do for anyone else.

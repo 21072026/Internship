@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { Prisma } from '@prisma/client';
@@ -76,6 +77,9 @@ export async function POST(request: Request) {
   if (capGate) return capGate;
   if (session.user.role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
+  // Seats (#1870): the route refuses, never a hidden button.
+  const seatGate = await requireCompanySeat(session, 'interview.request');
+  if (seatGate) return seatGate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
   const parsed = createInterviewRequestSchema.safeParse(await request.json().catch(() => null));

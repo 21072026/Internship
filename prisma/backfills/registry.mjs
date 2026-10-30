@@ -162,4 +162,9 @@ export const BACKFILLS = [
     optional: true,
     why: 'Copies into new tables only; a failure leaves the old Google tables intact and is visible in the ledger, and the code reads the new tables, so a failed copy shows as "not connected" (reconnect repairs it) rather than a broken deploy.',
   },
+  // Company team seats (#1870): one OWNER membership per existing COMPANY
+  // login — the flat permission set every login already had. Only ever adds
+  // rows (skipDuplicates), so a re-run reports created=0. AFTER the push: it
+  // writes the CompanyMembership table the push creates.
+  { id: '0037-company-memberships', script: 'scripts/backfill-company-memberships.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
 ];
