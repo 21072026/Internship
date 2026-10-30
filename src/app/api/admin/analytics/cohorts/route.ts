@@ -3,11 +3,14 @@ import { requirePermission } from '@/lib/authz';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
-import { cohortComparison } from '@/lib/analyticsReports';
+import { programComparison } from '@/lib/programComparison';
 import { getLocale } from '@/i18n/server';
-import { tenantWhere } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 
+// DEPRECATED ALIAS (#1652): the comparison moved to ../programs, keyed on
+// programme; this path answers the same payload (with its old `cohorts` key)
+// for one release, then goes.
+//
 // GET — premium cohort comparison (Faz 2, #538). Side-by-side pipeline
 // conversion, time-to-hire and engagement per cohort. Gated by the
 // org's ADVANCED_ANALYTICS entitlement — its plan or a grant (#1740). Off by
@@ -39,22 +42,5 @@ export async function GET(request: Request) {
   // caller's own cookie/User row, exactly as the other locale-aware routes do.
   const locale = await getLocale();
 
-  return await withTenantScope(session, async () => {
-    // The caller's tenant, by hand (leak audit WP3): with MT_ENFORCE_ISOLATION
-    // off this listed every org's cohorts and their conversion numbers. The
-    // numbers themselves are src/lib/analyticsReports.ts's, shared with the
-    // report registry and the scheduled subscriptions (#1905).
-    const { rows, outcome } = await cohortComparison({ stageOrgId: callerOrgId, tenant: await tenantWhere(session), locale });
-
-    // Echoed so the table can NAME the stage it counted (#1882) instead of
-    // printing a universal "Hired" over a column that means something else in
-    // this tenant. `finishedLabelIsCustom` is false for a tenant that never
-    // renamed the stage — the screen then keeps its own translated word and a
-    // default-catalogue tenant sees byte-identical text.
-    return NextResponse.json({
-      cohorts: rows,
-      finishedLabel: outcome.finishedLabel,
-      finishedLabelIsCustom: outcome.finishedLabelIsCustom,
-    });
-  });
+  return await withTenantScope(session, async () => NextResponse.json(await programComparison(session, locale)));
 }
