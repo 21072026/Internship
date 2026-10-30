@@ -132,6 +132,8 @@ export async function partnerCommissions(partner: GatedPartner, opts: { status?:
     rows: result.rows.map((r) => ({
       id: r.id,
       kind: r.kind,
+      // 0 = a commission imported from a previous system (no plan computed it).
+      planVersion: r.planVersion,
       amountMinor: r.amountMinor,
       currency: r.currency,
       status: r.status,
