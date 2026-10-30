@@ -729,6 +729,7 @@ const en = {
     anyPayment: 'Any amount',
     percentRow: 'From the first payment of your customer no. {n} on, every payment of your customers earns {p} %{window}.',
     percentWindow: ' (for {m} months from each customer’s first payment)',
+    percentRowTierBoundary: 'From customer no. {n} on: that customer’s first payment still earns its one-off commission from the table, and every later payment of your customers earns {p} %{window}.',
     tableCtaLabel: 'Get your referral code',
     stepsTitle: 'How it works',
     contactTitle: 'Questions? We are here for you.',
@@ -901,6 +902,7 @@ const en = {
       code_taken: 'This referral code is already used by another partner.',
       already_decided: 'Someone has already decided on this application.',
       invalid_reason: 'Please choose a reason.',
+      email_is_partner: 'This address is already a partner’s contact. Decline the application as a duplicate.',
     },
   },
   affiliatePartners: {
@@ -11682,6 +11684,7 @@ const tr: Dict = {
     anyPayment: 'Her tutar',
     percentRow: '{n}. müşterinizin ilk ödemesinden itibaren müşterilerinizin her ödemesi %{p} kazandırır{window}.',
     percentWindow: ' (her müşterinin ilk ödemesinden itibaren {m} ay)',
+    percentRowTierBoundary: '{n}. müşterinizden itibaren: o müşterinin ilk ödemesi yine tablodaki tek seferlik komisyonu kazandırır, sonraki her ödemesi ise müşterilerinizin diğer ödemeleri gibi %{p} kazandırır{window}.',
     tableCtaLabel: 'Referans kodunuzu alın',
     stepsTitle: 'Nasıl çalışır',
     contactTitle: 'Sorunuz mu var? Buradayız.',
@@ -11854,6 +11857,7 @@ const tr: Dict = {
       code_taken: 'Bu referans kodunu başka bir partner kullanıyor.',
       already_decided: 'Bu başvuru hakkında başka biri zaten karar verdi.',
       invalid_reason: 'Lütfen bir gerekçe seçin.',
+      email_is_partner: 'Bu adres zaten bir partnerin iletişim adresi. Başvuruyu mükerrer olarak reddedin.',
     },
   },
   affiliatePartners: {
@@ -22424,6 +22428,7 @@ const de: Dict = {
     anyPayment: 'Jeder Betrag',
     percentRow: 'Ab der ersten Zahlung Ihres {n}. Kunden bringt jede Zahlung Ihrer Kunden {p} %{window}.',
     percentWindow: ' (jeweils {m} Monate ab der ersten Zahlung des Kunden)',
+    percentRowTierBoundary: 'Ab Ihrem {n}. Kunden: Dessen erste Zahlung bringt weiterhin die einmalige Provision aus der Tabelle, und jede spätere Zahlung Ihrer Kunden bringt {p} %{window}.',
     tableCtaLabel: 'Empfehlungscode holen',
     stepsTitle: 'So funktioniert es',
     contactTitle: 'Noch Fragen? Wir sind für Sie da.',
@@ -22596,6 +22601,7 @@ const de: Dict = {
       code_taken: 'Dieser Empfehlungscode wird bereits von einem anderen Partner verwendet.',
       already_decided: 'Über diese Bewerbung wurde bereits entschieden.',
       invalid_reason: 'Bitte wählen Sie einen Grund.',
+      email_is_partner: 'Diese Adresse ist bereits Kontaktadresse eines Partners. Lehnen Sie die Bewerbung als Duplikat ab.',
     },
   },
   affiliatePartners: {

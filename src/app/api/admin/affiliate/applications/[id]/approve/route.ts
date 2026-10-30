@@ -6,7 +6,7 @@ import { ApplicationReviewError, approveApplication } from '@/lib/affiliateAppli
 // POST { code } — approves a partner application (#3362): creates the partner
 // with that referral code and sends the ordinary partner invitation.
 // `affiliate.write`. Another org's id is 404; a decided one 409.
-const STATUS: Record<ApplicationReviewError['code'], number> = { not_found: 404, already_decided: 409, invalid_code: 400, code_taken: 409 };
+const STATUS: Record<ApplicationReviewError['code'], number> = { not_found: 404, already_decided: 409, invalid_code: 400, code_taken: 409, email_is_partner: 409 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePermission('affiliate.write', { request });

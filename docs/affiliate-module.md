@@ -306,12 +306,15 @@ exactly as they are.
   as the page); without one the form is closed (503) before the body is read.
   `AffiliateApplication` is a tenant model and the writer
   (`src/lib/affiliateApplications.ts`) passes the org on every create and WHERE.
-- **Anti-spam** as on the company-inquiry form: 3/hour per IP, a honeypot, a
-  minimum render-to-submit time, plus at most one PENDING application and three
-  rows per address and org per day. Every accepted body answers the same 200 —
-  the sender never learns whether an address is known.
-- **After the write:** the org's active admins get an in-app notice
-  (`affiliate_application.new`) and the applicant an acknowledgement in the
+- **Anti-spam** as on the company-inquiry form: 3/hour per IP for a valid body
+  (30/hour for anything), a honeypot, a minimum render-to-submit time, plus at
+  most one PENDING application and three rows per address and org per day,
+  checked and written under the organisation lock. Every accepted body answers
+  the same 200 in the same time — the notice and the mail run after the response
+  (`after()`) — so the sender never learns whether an address is known.
+- **After the write:** the org's active admins who may read the programme
+  (`affiliate.read`; a PROGRAM_ADMIN without a grant is not told) get an in-app
+  notice (`affiliate_application.new`) and the applicant an acknowledgement in the
   form's language (`affiliate-application-received`, `inbound_requests` group,
   exempt from outbound approval as the person's own action).
 - **The decision** (#3362), on the **Applications** tab of `/admin/affiliates`
@@ -321,7 +324,10 @@ exactly as they are.
   `already_decided`. **Approve** takes a referral code (the form suggests one
   from the name, `suggestPartnerCode()`), creates the partner in the same
   transaction under the organisation lock `createPartner()` and the migration
-  share (a taken code is 409 `code_taken` and leaves the application pending),
+  share, through `createPartnerLocked()` — the same row and `affiliate.partner.create`
+  audit line as a partner added by hand (a taken code is 409 `code_taken`; an
+  address that is already a partner's contact is 409 `email_is_partner`, to be
+  declined as a duplicate; both leave the application pending),
   then calls the ordinary `invitePartner()` — there is no second way to an
   account. If the invitation cannot be sent the approval stands and the admin is
   told why. **Decline** takes a code from `APPLICATION_REJECTION_CODES`; only the
