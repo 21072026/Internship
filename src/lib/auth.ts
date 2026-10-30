@@ -555,6 +555,8 @@ export const authOptions: NextAuthOptions = {
           adminLevel: user.adminLevel,
           impersonatorId: isStart ? grant.adminId : undefined,
           impersonatorName: isStart ? admin?.fullName ?? 'Admin' : undefined,
+          // The target org's read_only policy (#1586), fixed at the start.
+          impersonationReadOnly: isStart ? grant.readOnly : undefined,
         };
       },
     }),
@@ -768,9 +770,11 @@ export const authOptions: NextAuthOptions = {
         token.adminLevel = (user as unknown as { adminLevel?: string | null }).adminLevel ?? null;
         // Set when starting impersonation, absent on a normal/stop sign-in —
         // so this also clears it when returning to the original account.
-        const u = user as unknown as { impersonatorId?: string; impersonatorName?: string };
+        const u = user as unknown as { impersonatorId?: string; impersonatorName?: string; impersonationReadOnly?: boolean };
         token.impersonatorId = u.impersonatorId ?? null;
         token.impersonatorName = u.impersonatorName ?? null;
+        // Read by middleware (#1586): every write from this session is refused.
+        token.impersonationReadOnly = !!u.impersonatorId && u.impersonationReadOnly === true;
         // Cap impersonation sessions; after this they auto-revert to the admin.
         token.impersonationExpiresAt = u.impersonatorId ? Date.now() + IMPERSONATION_SESSION_MAX_MS : null;
         // Millisecond mint time for "sign out of all devices" — finer than the
@@ -806,6 +810,7 @@ export const authOptions: NextAuthOptions = {
         token.impersonatorId = null;
         token.impersonatorName = null;
         token.impersonationExpiresAt = null;
+        token.impersonationReadOnly = false;
       }
       // On a client-side session update() (e.g. after changing email/profile),
       // re-read the user so the token — and thus the UI that reads the session,
@@ -876,6 +881,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string;
         session.user.emailVerified = token.emailVerified as boolean;
         session.user.impersonatorId = (token.impersonatorId as string) ?? null;
+        session.user.impersonationReadOnly = token.impersonationReadOnly === true;
         session.user.impersonatorName = (token.impersonatorName as string) ?? null;
         session.user.companyId = (token.companyId as string) ?? null;
         session.user.orgId = (token.orgId as string) ?? null;
@@ -938,6 +944,8 @@ declare module 'next-auth' {
       emailVerified?: boolean;
       impersonatorId?: string | null;
       impersonatorName?: string | null;
+      /** A read-only impersonation (#1586): the banner says so, middleware refuses writes. */
+      impersonationReadOnly?: boolean;
       companyId?: string | null;
       orgId?: string | null;
       // User.adminLevel (#1567) for the UI; authorization reads it live.

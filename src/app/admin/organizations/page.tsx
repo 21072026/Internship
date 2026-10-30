@@ -17,6 +17,7 @@ import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPl
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { ImpersonationPolicyCard } from '@/components/admin/ImpersonationPolicyCard';
 import { SsoAttributeMappings } from '@/components/admin/SsoAttributeMappings';
 import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
@@ -1082,6 +1083,8 @@ export default function AdminOrganizationsPage() {
           />
         </div>
       )}
+
+      {orgs.length > 0 && <ImpersonationPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
       {superAdmin && inviteOrg && (
         <div id="invite-admin-anchor">

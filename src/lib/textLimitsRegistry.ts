@@ -302,6 +302,8 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Organization: {
     // OPEN | RULES, checked by isEligibilityMode() before any write (#1945).
     eligibilityMode: ENUMERATED,
+    // full | read_only | off, checked by isImpersonationPolicy() before any write (#1586).
+    impersonationPolicy: ENUMERATED,
     id: ID,
     stripeCustomerId: ID,
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
