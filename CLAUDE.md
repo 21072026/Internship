@@ -342,6 +342,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   both ways. `npm run check:i18n -- --leaks[=locale]` lists the offending keys. E-mail copy
   goes through `emailDictionary(locale, orgId)` (`src/i18n/emailDictionary.ts`), never a bare
   `getDictionary()`, so the recipient org's vertical reaches the mail.
+- **The locale list is written once** (`src/i18n/config.ts`; [`docs/i18n.md`](docs/i18n.md), #2082):
+  read `locales` / `Locale` / `isLocale()` from there, never spell out `['en', 'tr', 'de']` or
+  `'en' | 'tr' | 'de'` — a hand copy (a `z.enum` on a route above all) silently refuses the next
+  language. `npm run check:locale-list` (CI) fails on a new copy; the older ones are pinned in
+  `scripts/locale-list-baseline.json` (only shrinks, `-- --shrink`). Translators work through
+  `npm run i18n:export` / `i18n:import` (a new locale: `--create`), never in `dictionaries.ts`.
 - **The browser gets the dictionary per segment** (#2987): the root layout ships only
   `SHELL_NAMESPACES`; every top-level directory of `src/app` (route groups too) mounts
   `<I18nScope scope="<dir>">` (`src/i18n/scope.tsx`) around its WHOLE layout, and the root page
