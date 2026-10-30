@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**SOURCE outcome panel (#1914):** `GET /api/source/outcomes?from=&to=` (role SOURCE, `sourcing` capability, scoped server-side to the caller's own `sourceId` — a SOURCE login without one gets 403, never an unscoped read) and `/source/outcomes` (nav + a link from the portal): referred / in progress / placed counts, the tenant's resolved stage distribution, a censoring-aware median time to placement (unplaced referrals excluded), a monthly trend and the source's own referral rows with an XLSX export. \"Placed\" is the tenant's finished stage set (`outcomeStageKeys`, #1882); the conversion and the programme comparison are withheld below `DEFAULT_MIN_COHORT` (#1903). Placing companies are not named — no disclosure rule exists for that. Arithmetic is pure in `src/lib/sourceOutcomesRule.ts` (`scripts/test/source-outcomes.test.mjs`); isolation and the 403 path pinned by `e2e/source-outcomes.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Referring institutions now get an Outcomes page: how many of the candidates they referred are in progress or placed, where they stand, how long placement took, month by month — with an Excel export of their own referrals."],
+    "tr": ["Aday yönlendiren kurumlar artık bir Sonuçlar sayfasına sahip: yönlendirdikleri adaylardan kaçı süreçte, kaçı yerleşti, nerede duruyorlar ve yerleşme ne kadar sürdü — aylara göre, kendi yönlendirmelerinin Excel dışa aktarımıyla."],
+    "de": ["Vermittelnde Einrichtungen haben jetzt eine Ergebnisseite: wie viele der von ihnen vermittelten Kandidat:innen in Bearbeitung oder platziert sind, wo sie stehen und wie lange die Platzierung dauerte – Monat für Monat, mit Excel-Export der eigenen Vermittlungen."]
+  }
+}
