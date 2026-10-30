@@ -18,8 +18,10 @@ import type { Prisma } from '@prisma/client';
 //   6. POST /api/mentor/mentees              — mentor-created mentee
 //   7. src/lib/mergeUsers.ts                 — duplicate-account merge
 //   8. src/lib/mentorTransfer.ts             — admin mentor transfer (#2289)
+//   9. POST /api/admin/relations/group       — forming a GROUP (#1804)
+//  10. POST /api/admin/relations/[id]/participants — seating a group mentee
 //
-// scripts/import-csv.mjs is the ninth and the one seam: tsconfig excludes
+// scripts/import-csv.mjs is the one further seam: tsconfig excludes
 // `scripts/`, so a .mjs file cannot import this TS module. It carries the same
 // filter inline with a comment pointing here.
 //
