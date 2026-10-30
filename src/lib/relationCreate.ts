@@ -29,6 +29,7 @@ import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/ema
 import { findActiveMentorship, AlreadyMentoredError } from '@/lib/activeMentorship';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { recordMatchDecision, type MatchDecisionInput } from '@/lib/matching/decision';
+import { writePairSeats } from '@/lib/relationParticipants';
 
 export const NEW_RELATION_INCLUDE = {
   mentor: { select: { id: true, fullName: true, email: true } },
@@ -44,7 +45,10 @@ export async function createGuardedRelation(
 ) {
   const active = await findActiveMentorship(tx, data.menteeId);
   if (active) throw new AlreadyMentoredError(data.menteeId, active.id);
-  return tx.mentorshipRelation.create({ data, include: NEW_RELATION_INCLUDE });
+  const relation = await tx.mentorshipRelation.create({ data, include: NEW_RELATION_INCLUDE });
+  // The pair's mirror seats (#1804), in the same transaction.
+  await writePairSeats(tx, relation);
+  return relation;
 }
 
 type Person = Pick<User, 'id' | 'fullName' | 'email' | 'orgId'> & Parameters<typeof emailAllowed>[0] & Parameters<typeof emailGroupAllowedForCategory>[0];

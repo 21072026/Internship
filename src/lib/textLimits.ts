@@ -197,6 +197,8 @@ export const TEXT_LIMITS = {
   agendaItemText: 2000,
   /** SessionNote.body — @db.Text (#1847); the pair's shared minutes */
   sessionNoteBody: 10000,
+  /** Kudo.reason — @db.Text (#1868); a written thank-you */
+  kudoReason: 1000,
   /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
   agendaSummary: 500,
   /** AgendaTemplateItem.guidance — @db.Text (#1843) */
@@ -251,8 +253,12 @@ export const TEXT_LIMITS = {
   userEmail: 191,
   /** User.phone — VARCHAR(191); capped like `companyContactPhone` (a number, not a paste) */
   userPhone: 40,
-  /** User.benchedReason — VARCHAR(500): the admin's reason for a bench (#1778) */
-  benchReason: 500,
+  /**
+   * User.benchedReason — VARCHAR(500): the admin's reason for a bench (#1778).
+   * A line, not a paste: kept under the 250-character bar every single-line
+   * reason here meets (e2e/text-limits-columns.unit.spec.ts).
+   */
+  benchReason: 240,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Kudos (#1868): a written, attributed thank-you inside a mentorship — `Kudo` model (no numeric column by design), `GET/POST /api/kudos` with the rule in `src/lib/kudosRule.ts` (only the other side of the pair, or an admin, may send; pair + admins read), trilingual reason presets, a `KudosPanel` on the mentor's mentee page and `/portal/goals`, received thank-yous on `/account`, and a `kudo.received` notification under the `mentorship` preference. Covered by account erasure, `sanitize-db` and user merge.",
+  "notes": {
+    "en": ["Mentors and mentees can now send each other a written thank-you — signed, private to the pair, no points."],
+    "tr": ["Mentör ve mentee artık birbirlerine yazılı bir teşekkür gönderebilir — imzalı, yalnızca ikisine özel, puan yok."],
+    "de": ["Mentoren und Mentees können sich jetzt gegenseitig ein schriftliches Dankeschön schicken — unterschrieben, nur für die beiden, ohne Punkte."]
+  }
+}

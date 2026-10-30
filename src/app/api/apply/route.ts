@@ -22,6 +22,7 @@ import { syncUserSkills } from '@/lib/skillsResolve';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { requireCapability } from '@/lib/capabilityGate';
 import { isEligible } from '@/lib/eligibility';
+import { checkPublicAnswers, publicAnswersSchema, writeStagedAnswers } from '@/lib/forms/publicAnswers';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -76,6 +77,8 @@ const schema = z.object({
   // A list from the current form, a comma-joined string from an older cached
   // bundle or a hand-rolled POST. Both are split by `capSkills` (#2314).
   skills: z.union([z.string(), z.array(z.string())]).optional(),
+  // Answers to the org's REGISTRATION questions for mentees (#1803).
+  formAnswers: publicAnswersSchema,
 });
 
 // POST — public application: creates a mentee linked to the mentor, emails the
@@ -137,6 +140,13 @@ export async function POST(request: Request) {
     );
   }
 
+  // The org's own questions (#1803), checked with the shared validator BEFORE
+  // the account exists — a refused answer leaves nothing behind.
+  const answers = await checkPublicAnswers(mentor.orgId, 'MENTEE', parsed.data.formAnswers);
+  if (!answers.ok) {
+    return NextResponse.json({ error: 'invalid_answers', code: 'invalid_answers', errors: answers.errors }, { status: 400 });
+  }
+
   const gate = await checkActiveRelationLimit(mentor.orgId);
   if (!gate.allowed) {
     await notifyAdminsHeldByPlan(mentor.orgId, 'plan_limit.application_held', gate.limit);
@@ -166,6 +176,8 @@ export async function POST(request: Request) {
   }, { source: 'apply' });
   // Dual-write the canonical twin of the skill list (#1818).
   await syncUserSkills(mentee.id, mentee.orgId, Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []);
+  // The account exists now: the answers checked above go straight onto it.
+  await writeStagedAnswers(mentee.id, answers.staged);
 
   // The application is now a PENDING request the mentor accepts or declines
   // (#1188) — it used to create the ACTIVE relation on the spot, which is

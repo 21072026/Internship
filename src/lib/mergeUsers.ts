@@ -59,6 +59,7 @@ const RELATION_CHILDREN = [
   'mentorQuestion',
   'meetingRequest',
   'relationNote',
+  'kudo',
   'goal',
   'interactionLog',
   'meeting',
@@ -99,6 +100,17 @@ async function mergeRelations(tx: Tx, survivorId: string, loserId: string, count
         await delegate.update({ where: { id: row.id }, data: { relationId: survivorId } });
         add(counts, `relation.${model}`, 1);
       }
+    }
+  }
+  // Group seats beyond the pair (#1804) move with the relation; a person
+  // already seated on the survivor keeps that seat. Mirror seats of the pair
+  // are not moved — they grant nothing and the survivor has its own.
+  for (const seat of await tx.relationParticipant.findMany({ where: { relationId: loserId, isPrimaryPair: false } })) {
+    const taken = await tx.relationParticipant.findUnique({ where: { relationId_userId: { relationId: survivorId, userId: seat.userId } }, select: { id: true } });
+    if (taken) await tx.relationParticipant.delete({ where: { id: seat.id } });
+    else {
+      await tx.relationParticipant.update({ where: { id: seat.id }, data: { relationId: survivorId } });
+      add(counts, 'relation.relationParticipant', 1);
     }
   }
   await tx.mentorshipRelation.delete({ where: { id: loserId } });
@@ -247,6 +259,18 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
       // as is; one both hold folds into the primary's row — the better-backed
       // level wins and the duplicate's level history comes along — so a merge
       // never loses a rating or a mentor's confirmation.
+      // RelationParticipant @@unique([relationId, userId]) (#1804): the
+      // duplicate's seats become the primary's; where the primary already sits
+      // in that relation (or is its pair), the duplicate's seat is redundant.
+      for (const seat of await tx.relationParticipant.findMany({ where: { userId: duplicateId } })) {
+        const taken = await tx.relationParticipant.findUnique({ where: { relationId_userId: { relationId: seat.relationId, userId: primaryId } }, select: { id: true } });
+        if (taken) await tx.relationParticipant.delete({ where: { id: seat.id } });
+        else {
+          await tx.relationParticipant.update({ where: { id: seat.id }, data: { userId: primaryId } });
+          add(counts, 'relationParticipant', 1);
+        }
+      }
+
       const skillRows = await moveUserSkills(tx, duplicateId, primaryId);
       add(counts, 'userSkill', skillRows.moved);
       add(counts, 'userSkill.folded', skillRows.folded);
@@ -550,6 +574,8 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         ['aiArtifact', 'subjectUserId'],
         ['availabilityException', 'mentorId'],
         ['relationNote', 'authorId'],
+        ['kudo', 'senderId'],
+        ['kudo', 'recipientId'],
         ['statusChange', 'changedById'],
         ['invitationToken', 'invitedById'],
         ['weeklyReport', 'reviewedById'],

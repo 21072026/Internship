@@ -1,5 +1,6 @@
 import type { ChatMember, ChatPlatformClient, ChatTarget } from '@/lib/chat/client';
 import { ChatClientError } from '@/lib/chat/client/errors';
+import { teamsActivity } from '@/lib/chat/card';
 
 // Microsoft Teams through the Bot Framework connector, behind the
 // ChatPlatformClient port. The bot authenticates with its OWN credentials
@@ -61,7 +62,28 @@ export function teamsReference(ref: unknown): { serviceUrl: string; conversation
 }
 
 export const teamsClient: ChatPlatformClient = {
-  async postMessage({ target, text }) {
+  async updateMessage({ target, externalMessageId, text, action }) {
+    const ref = teamsReference(target.conversationRef);
+    if (!ref) throw new ChatClientError('no_conversation_ref');
+    const token = await botToken();
+    let res: Response;
+    try {
+      res = await fetch(
+        `${ref.serviceUrl}/v3/conversations/${encodeURIComponent(ref.conversationId)}/activities/${encodeURIComponent(externalMessageId)}`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          // `attachments: []` when there is no action, so the old button goes away.
+          body: JSON.stringify({ id: externalMessageId, ...teamsActivity(text, action ?? null) }),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        },
+      );
+    } catch {
+      throw new ChatClientError('network_error');
+    }
+    if (!res.ok) throw new ChatClientError(`http_${res.status}`);
+  },
+  async postMessage({ target, text, action }) {
     const ref = teamsReference(target.conversationRef);
     if (!ref) throw new ChatClientError('no_conversation_ref');
     const token = await botToken();
@@ -70,7 +92,7 @@ export const teamsClient: ChatPlatformClient = {
       res = await fetch(`${ref.serviceUrl}/v3/conversations/${encodeURIComponent(ref.conversationId)}/activities`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'message', text, textFormat: 'plain' }),
+        body: JSON.stringify(teamsActivity(text, action ?? null)),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {

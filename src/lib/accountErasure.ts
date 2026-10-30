@@ -238,6 +238,8 @@ async function mentorApplicationOps(userId: string): Promise<Prisma.PrismaPromis
         referenceName: null,
         referenceContact: null,
         referenceOutcome: null,
+        // Answers to the org's own questions, staged until an account exists (#1803).
+        formAnswers: Prisma.DbNull,
       },
     }),
   ];
@@ -541,6 +543,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // mentor's private note is — body and every kept revision.
     prisma.sessionNote.updateMany({ where: asSubject, data: { body: '' } }),
     prisma.sessionNoteRevision.updateMany({ where: { note: asSubject }, data: { body: '' } }),
+    // A thank-you (#1868) is prose about its recipient written by its sender:
+    // the words go either way, the dated row stays.
+    prisma.kudo.updateMany({ where: { OR: [{ senderId: userId }, { recipientId: userId }] }, data: { reason: '' } }),
     prisma.personalNote.updateMany({
       where: { OR: [{ meeting: asSubject }, { meeting: directMeeting }] },
       data: { body: '' },

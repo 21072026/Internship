@@ -11,6 +11,7 @@ import { roleHome } from '@/lib/roleHome';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { UserEraseForm } from '@/components/UserEraseForm';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
+import { AdminRolesPanel } from '@/components/admin/AdminRolesPanel';
 import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -350,6 +351,8 @@ export default function AdminUsersPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.usersAdmin.title}</h1>
         <p className="text-gray-500 mt-1">{t.usersAdmin.subtitle}</p>
       </div>
+
+      <AdminRolesPanel />
 
       <div className="inline-flex items-center gap-1 mb-4 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
         {(['ACTIVE', 'BENCHED', 'ARCHIVED'] as const).map((s) => (

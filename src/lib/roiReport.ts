@@ -13,8 +13,8 @@
 //   window therefore reads as the whole year's spend — the screen says so.
 //
 //   Placements — a relation is placed in the window when its Placement row's
-//   `placedAt` falls in it, or, for a relation with no Placement row yet (the
-//   ledger is #1765's and is not stamped automatically today), when it FIRST
+//   `placedAt` falls in it and it is not reversed, or, for a relation with no
+//   Placement row (hires from before the #1765 stamp existed), when it FIRST
 //   entered the tenant's resolved finished stage (#1882 `outcomeStageKeys`)
 //   inside the window. "First" so a relation that bounced out and back in is
 //   one hire, not two, and a hire from last year that is touched again this
@@ -79,10 +79,10 @@ export async function loadRoiReport(tenant: TenantWhere, settingsOrgId: string, 
   const costs = q.currency ? allCosts.filter((c) => normaliseCurrency(c.currency) === q.currency) : allCosts;
 
   const outcome = await outcomeStageKeys(settingsOrgId, locale);
-  const [ledger, entries] = await Promise.all([
+  const [ledgerRows, entries] = await Promise.all([
     prisma.placement.findMany({
       where: withinTenant({ placedAt: { gte: from, lt: toExclusive }, relation: relationScope }, tenant),
-      select: { relationId: true, valueMinor: true, valueCurrency: true, feeMinor: true, feeCurrency: true },
+      select: { relationId: true, valueMinor: true, valueCurrency: true, feeMinor: true, feeCurrency: true, reversedAt: true },
     }),
     outcome.finished.length === 0
       ? Promise.resolve([] as { relationId: string }[])
@@ -92,7 +92,11 @@ export async function loadRoiReport(tenant: TenantWhere, settingsOrgId: string, 
           distinct: ['relationId'],
         }),
   ]);
-  const ledgerIds = new Set(ledger.map((p) => p.relationId));
+  // A reversed placement (#1765) is a hire that was undone: it is not counted,
+  // and — being ledgered — its relation is not counted from the stage trail
+  // either.
+  const ledger = ledgerRows.filter((p) => !p.reversedAt);
+  const ledgerIds = new Set(ledgerRows.map((p) => p.relationId));
   const candidates = entries.map((e) => e.relationId).filter((id) => !ledgerIds.has(id));
   // Keep only relations whose FIRST entry into the finished stage is in the window.
   const earlier = candidates.length
