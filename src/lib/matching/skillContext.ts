@@ -34,3 +34,34 @@ export async function skillGraphFor(
   const labels = orgId && ids.length ? await skillLabels(orgId, ids, locale) : new Map<string, string>();
   return { edges, label: (id: string) => labels.get(id) ?? id };
 }
+
+/**
+ * The cohort pass's version of `skillGraphFor` (#1794): ONE edge query and
+ * ONE label query for the whole intake, then each mentee gets only the edges
+ * that touch their own skills — exactly the edges `skillGraphFor` would have
+ * loaded for them alone, so a pair scores the same here as in a suggestion
+ * list, without a query per mentee.
+ */
+export async function skillGraphsFor(
+  orgId: string | null | undefined,
+  menteeSkillIds: ReadonlyMap<string, readonly string[]>,
+  locale: string,
+): Promise<(menteeId: string) => ScoreContext['skillGraph']> {
+  const all = [...new Set([...menteeSkillIds.values()].flat())];
+  if (all.length === 0) return () => undefined;
+  // Sorted: an equal-weight neighbour is picked by edge order, and a round
+  // must not depend on the order MySQL happened to return rows in.
+  const key = (e: { fromSkillId: string; toSkillId: string }) => `${e.fromSkillId}\u0000${e.toSkillId}`;
+  const edges = (orgId ? await loadSkillEdges(orgId, all) : []).sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  const ids = [...new Set([...all, ...edges.flatMap((e) => [e.fromSkillId, e.toSkillId])])];
+  const labels = orgId ? await skillLabels(orgId, ids, locale) : new Map<string, string>();
+  const label = (id: string) => labels.get(id) ?? id;
+  const cache = new Map<string, ScoreContext['skillGraph']>();
+  return (menteeId) => {
+    if (cache.has(menteeId)) return cache.get(menteeId);
+    const own = new Set(menteeSkillIds.get(menteeId) ?? []);
+    const graph = own.size === 0 ? undefined : { edges: edges.filter((e) => own.has(e.fromSkillId) || own.has(e.toSkillId)), label };
+    cache.set(menteeId, graph);
+    return graph;
+  };
+}

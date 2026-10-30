@@ -1077,6 +1077,8 @@ model User {
 
   requisitionFits RequisitionFit[] @relation("RequisitionFitMentee")
 
+  cancelledMentorshipRequests MentorshipRequest[] @relation("CancelledMentorshipRequests")
+
   @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
@@ -2179,10 +2181,12 @@ model Company {
   externalProfiles   ExternalProfileLink[]
   adminScopeGrants   AdminScopeGrant[]
 
-  // Org-scoped, not global — see the `vatId` comment above.
   // API keys a COMPANY owner minted for their own data (#2006).
-  apiKeys ApiKey[]
+  apiKeys  ApiKey[]
+  // Webhooks a COMPANY owner registered for their own hiring events (#2006).
+  webhooks Webhook[]
 
+  // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
   // Tenant-leading, like every other lookup index in TENANT_MODELS: under
   // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
@@ -2425,6 +2429,10 @@ enum MentorshipRequestStatus {
   PENDING
   APPROVED
   REJECTED
+  // #1775: an admin withdrew it with a reason (`cancelReason`), or nobody
+  // answered within 14 days (`expiresAt`). Both free the mentee to ask again.
+  CANCELLED
+  EXPIRED
 }
 
 model MentorshipRequest {
@@ -2450,10 +2458,21 @@ model MentorshipRequest {
   rematchNote        String?                 @db.Text
   decidedById        String?
   decidedAt          DateTime?
+  // Request expiry (#1775). The rule — 14 days to an answer, ONE nudge on day 7
+  // — is pure in src/lib/requestExpiryRule.ts; src/lib/requestExpiry.ts is the
+  // only writer of the sweep's state. NULL `expiresAt` (requests from before the
+  // column) reads as createdAt + 14 days.
+  expiresAt          DateTime?
+  nudgeSentAt        DateTime?
+  // Who withdrew a pending request and why (admin only, `action: 'cancel'`).
+  // The reason is shown to the mentee — it is the one thing they are owed.
+  cancelledById      String?
+  cancelReason       String?                 @db.Text
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
   mentee           User                @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  cancelledBy      User?               @relation("CancelledMentorshipRequests", fields: [cancelledById], references: [id], onDelete: SetNull)
   decidedBy        User?               @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
   // SetNull: a mentor leaving must not take pending requests with them — the
   // preference simply disappears while the request survives.
@@ -2466,6 +2485,7 @@ model MentorshipRequest {
   @@index([menteeId])
   @@index([preferredMentorId])
   @@index([replacesRelationId])
+  @@index([status, expiresAt])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
@@ -3223,6 +3243,11 @@ model Webhook {
   apiKeyId            String?
   apiKey              ApiKey?           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
   source              String?           @db.VarChar(20)
+  // Set when a COMPANY owner registered the hook for their own data (#2006):
+  // fan-out then delivers only the company-scoped events whose subject belongs
+  // to this company (src/lib/companyWebhookScope.ts). Null = an org-wide hook.
+  companyId           String?
+  company             Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Delivery health (#1695), written only by src/lib/webhookDelivery.ts.
   // `consecutiveFailures` and `failingSince` describe the current failure
   // streak (reset by any 2xx); past 20 failures or 72h without a success the
@@ -3238,6 +3263,7 @@ model Webhook {
 
   @@index([orgId, active])
   @@index([apiKeyId])
+  @@index([companyId])
 }
 
 // One row per webhook delivery ATTEMPT (#1695): a receiver that answers 500
@@ -4974,6 +5000,14 @@ model Meeting {
   rsvpToken           String        @unique
   createdById         String
   reminderSentAt      DateTime?
+  // Reminder lead times (#1636, src/lib/meetingReminderLeads.ts). NULL = the
+  // programme's `meetingReminderLeadsMinutes` (or the one-hour default); 0 =
+  // no reminder for this meeting; N = one reminder N minutes ahead.
+  reminderLeadMinutes Int?
+  // The leads already sent for the current start time ("1440,60"), claimed by
+  // one guarded update before anything is sent; cleared with reminderSentAt
+  // when the meeting moves.
+  remindedLeads       String?       @db.VarChar(64)
   createdAt           DateTime      @default(now())
   // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
   updatedAt           DateTime      @default(now()) @updatedAt
@@ -5276,15 +5310,22 @@ enum MeetingReminderLead {
 }
 
 model MeetingSeriesReminder {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   seriesId     String
   occurrenceAt DateTime
-  lead         MeetingReminderLead
-  sentAt       DateTime            @default(now())
+  // The pre-#1636 enum, still written for the 1440/60 leads so a row written
+  // now collides with one written before the deploy (no double reminder across
+  // the transition); NULL for any other lead. Never re-typed in place: an
+  // enum → Int change under `db push --accept-data-loss` drops the column.
+  lead         MeetingReminderLead?
+  // The lead in minutes (#1636) — the real key from now on. NULL on old rows.
+  leadMinutes  Int?
+  sentAt       DateTime             @default(now())
 
   series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([seriesId, occurrenceAt, lead])
+  @@unique([seriesId, occurrenceAt, leadMinutes])
 }
 
 // "This occurrence is over" for a series occurrence that has no Meeting row —

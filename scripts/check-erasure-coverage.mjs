@@ -58,6 +58,7 @@ const DECISIONS = new Map([
   ['SupportReport.description', ERASED],
   ['MentorshipRequest.message', ERASED],
   ['MentorshipRequest.rematchNote', ERASED],
+  ['MentorshipRequest.cancelReason', ERASED],
   ['CompanyInquiry.message', ERASED],
   ['CompanyInquiry.note', ERASED],
   ['MentorApplication.experience', ERASED],
