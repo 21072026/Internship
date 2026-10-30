@@ -1,3 +1,4 @@
+import { isValidLeadList } from '@/lib/meetingReminderLeads';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isGlobalSettingKey, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
@@ -57,6 +58,8 @@ async function logSettingChange(
 
 const schema = z.object({
   reminderDays: z.string().regex(/^\d{1,3}$/).optional(),
+  // Meeting reminder lead times (#1636): '' = the built-in defaults.
+  meetingReminderLeadsMinutes: z.string().max(40).refine(isValidLeadList, 'invalid lead list').optional(),
   supportEmail: z.string().email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),

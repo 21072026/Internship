@@ -321,6 +321,10 @@ export const SETTING_DEFAULTS = {
   lateCancelHours: '24',
   // Business-day stage SLAs (#1638, docs/business-day-slas.md). `calendar` is
   // what every installation did before, so nothing moves until an admin opts in.
+  // Meeting reminder lead times in minutes (#1636), e.g. '1440,60'. '' = the
+  // built-in defaults (one hour before a meeting; a day and an hour before a
+  // series occurrence), i.e. exactly what every installation did before.
+  meetingReminderLeadsMinutes: '',
   slaDayMode: 'calendar',
   // JS weekdays (0 = Sunday), comma-separated. Monday–Friday.
   slaWorkingDays: '1,2,3,4,5',
@@ -471,6 +475,7 @@ export const SETTING_SCHEMA = {
   salesLeaderboardForReps: { type: 'boolean', scopes: O },
   outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
   lateCancelHours: { type: 'number', scopes: P },
+  meetingReminderLeadsMinutes: { type: 'string', scopes: P },
   slaDayMode: { type: 'enum', values: ['calendar', 'business'], scopes: P },
   slaWorkingDays: { type: 'string', scopes: P },
   slaHolidayCalendarId: { type: 'string', scopes: P },
