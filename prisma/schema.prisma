@@ -2417,6 +2417,10 @@ model SupportAttachment {
   contentType String
   size        Int
   data        Bytes
+  // What an image shows, in the sender's words (EN 301 549 11.8.2, #3407): the
+  // support composers ask for it and the thread renders it as alt text (the
+  // filename stands in when there is none). Deleted with the attachment rows.
+  altText     String?  @db.VarChar(500)
   createdAt   DateTime @default(now())
 
   message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -4456,6 +4460,11 @@ model MentorshipRelation {
   // The ending-soon nudge's idempotency stamp (#1786), in the shape of
   // `deadlineReminderSentAt`: one nudge per end date; extending clears it.
   endingSoonNotifiedAt       DateTime?
+  // The pair's agreed next steps, in their own words, written when the
+  // pairing ends (#1795) — "keep in touch quarterly", "intro to the hiring
+  // manager made". Shown to both sides on the archived record. Prose about the
+  // pairing: scrubbed on the mentee's erasure (accountErasure.ts).
+  closurePlan                String?          @db.Text
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])

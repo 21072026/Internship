@@ -14,7 +14,7 @@ export function SupportAttachmentList({ attachments }: { attachments: SupportAtt
   const urlFor = (id: string) => `/api/support/attachments/${id}`;
   const images = attachments
     .filter((a) => a.contentType.startsWith('image/'))
-    .map((a) => ({ src: urlFor(a.id), filename: a.filename }));
+    .map((a) => ({ src: urlFor(a.id), filename: a.filename, alt: a.altText ?? undefined }));
 
   return (
     <div className="mt-2 grid gap-2">
@@ -37,14 +37,14 @@ export function SupportAttachmentList({ attachments }: { attachments: SupportAtt
           <button
             key={attachment.id}
             type="button"
-            aria-label={t.imageViewer.view.replace('{name}', attachment.filename)}
+            aria-label={t.imageViewer.view.replace('{name}', attachment.altText || attachment.filename)}
             data-testid="support-image-attachment"
             onClick={() => lightbox.open(images, images.findIndex((i) => i.src === url))}
             className={frameClass}
           >
             {/* The authenticated attachment route cannot be used with Next Image optimization. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={attachment.filename} className="max-h-48 w-full object-contain bg-black/5" />
+            <img src={url} alt={attachment.altText || attachment.filename} className="max-h-48 w-full object-contain bg-black/5" />
             {meta}
           </button>
         ) : (

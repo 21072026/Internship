@@ -436,6 +436,14 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Account mails (#3399): invitation, password reset and e-mail verification.
+  // They are NEVER published through notifyEvent() — each has its own sender in
+  // emailService.ts, because the mail carries a one-time token. They are here
+  // so the template editor can change their wording; the token link itself is
+  // drawn by renderNotificationEmail() and is not a merge tag.
+  { key: 'account.invitation', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['role'] },
+  { key: 'account.passwordReset', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'account.verification', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 ] as const satisfies readonly NotificationEventDef[];
 
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number]['key'];

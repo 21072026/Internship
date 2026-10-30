@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Matchable admin-defined questions feed matching (#1803): a `customField:<key>` dimension family (exact / overlap / closeness with tolerance), answers loaded in bulk for the whole pass (`src/lib/matching/customAnswers.ts`), offered in the rule editor and refused at the save unless the field is matchable in the org (`not_matchable_field`).",
+  "notes": {
+    "en": ["Matching rules can now weigh your own questions — for example \"target industry\" — just like skills or language."],
+    "tr": ["Eşleştirme kuralları artık kendi sorularınıza da — örneğin \"hedef sektör\" — beceri ya da dil gibi ağırlık verebiliyor."],
+    "de": ["Matching-Regeln können jetzt Ihre eigenen Fragen gewichten – etwa „Zielbranche“ – genau wie Fähigkeiten oder Sprache."]
+  }
+}

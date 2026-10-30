@@ -7,10 +7,14 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import type { MatchMentee, MatchMentor } from './dimensions';
 import { selfSelectedCounts } from '@/lib/selfMatchSeats';
 import { normalizeThemes } from './semantic';
+import { withCustomAnswers, type CustomAnswerDb } from './customAnswers';
+
+// The custom-field answers ride along in bulk — one query per side, never per pair (#1803).
+const answerDb = prisma as unknown as CustomAnswerDb;
 
 export type PoolMentor = MatchMentor & { fullName: string };
 export type PoolMentee = MatchMentee & { fullName: string };
@@ -56,7 +60,11 @@ export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]>
   });
   // Seats only matter for a mentor who set a limit (#1808).
   const seats = await selfSelectedCounts(rows.filter((r) => r.selfMatchLimit != null).map((r) => r.id));
-  return rows.map(({ _count, ...m }) => ({ ...withThemes(m), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 }));
+  return withCustomAnswers(
+    answerDb,
+    tenant,
+    rows.map(({ _count, ...m }) => ({ ...withThemes(m), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 })),
+  );
 }
 
 /**
@@ -70,7 +78,7 @@ export async function loadMentees(tenant: TenantWhere, ids: readonly string[]): 
     where: withinTenant({ id: { in: [...ids] }, role: 'MENTEE' as const }, tenant),
     select: { ...personSelect, menteeRelations: { select: { mentorId: true } } },
   });
-  return rows.map(({ menteeRelations, ...m }) => ({ ...withThemes(m), pastMentorIds: menteeRelations.map((r) => r.mentorId) }));
+  return withCustomAnswers(answerDb, tenant, rows.map(({ menteeRelations, ...m }) => ({ ...withThemes(m), pastMentorIds: menteeRelations.map((r) => r.mentorId) })));
 }
 
 /**
@@ -84,7 +92,7 @@ export async function loadPairForScoring(
   mentorId: string,
 ): Promise<{ mentee: PoolMentee; mentor: PoolMentor } | null> {
   const [mentee, mentor] = await Promise.all([
-    prisma.user.findUnique({ where: { id: menteeId }, select: { ...personSelect, menteeRelations: { select: { mentorId: true } } } }),
+    prisma.user.findUnique({ where: { id: menteeId }, select: { ...personSelect, orgId: true, menteeRelations: { select: { mentorId: true } } } }),
     prisma.user.findUnique({
       where: { id: mentorId },
       select: {
@@ -100,8 +108,11 @@ export async function loadPairForScoring(
   const { menteeRelations, ...me } = mentee;
   const { _count, ...mo } = mentor;
   const seats = mo.selfMatchLimit != null ? await selfSelectedCounts([mo.id]) : new Map<string, number>();
-  return {
-    mentee: { ...withThemes(me), pastMentorIds: menteeRelations.map((r) => r.mentorId) },
-    mentor: { ...withThemes(mo), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 },
-  };
+  // The caller already vetted the pair; the questions are the mentee's org's.
+  const tenant: TenantWhere = mentee.orgId ? await orgWhere(mentee.orgId) : {};
+  const [withAnswersMentee, withAnswersMentor] = await withCustomAnswers(answerDb, tenant, [
+    { ...withThemes(me), pastMentorIds: menteeRelations.map((r) => r.mentorId) } as PoolMentee,
+    { ...withThemes(mo), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 } as PoolMentee & PoolMentor,
+  ]);
+  return { mentee: withAnswersMentee, mentor: withAnswersMentor as PoolMentor };
 }
