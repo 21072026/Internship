@@ -13,6 +13,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { worldOfOrg } from '@/lib/userWorld';
 import { benchmarkOrgKey, orgInWorldWhere } from '@/lib/analyticsScope';
 import { benchmarkFigures, MIN_OTHER_PROGRAMS, MIN_RELATIONS, type BenchmarkAgg } from '@/lib/benchmarkPool';
+import { isOurHire, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // The anonymity floors (MIN_RELATIONS, MIN_OTHER_PROGRAMS) and the arithmetic
 // live in src/lib/benchmarkPool.ts, pure and unit-tested.
@@ -70,9 +71,11 @@ export async function GET(request: Request) {
     const fallbackOrgId = await defaultOrgId();
     const myOrgId = resolveOrgId(session) ?? fallbackOrgId;
     const world = await worldOfOrg(myOrgId);
+    // Placement relations only, and by attribution (#1504): a COACHING pair is
+    // in neither side of the rate, and a hire that is not ours is no placement.
     const grouped = await prisma.mentorshipRelation.groupBy({
-      by: ['orgId', 'pipelineStatus'],
-      where: orgInWorldWhere(world),
+      by: ['orgId', 'pipelineStatus', 'employmentAttribution'],
+      where: { AND: [orgInWorldWhere(world), PLACEMENT_RELATION_WHERE] },
       _count: { _all: true },
     });
 
@@ -141,7 +144,7 @@ export async function GET(request: Request) {
       // org's stage set — the one it is the backfill's row of.
       const outcome = outcomeFor(key);
       a.total += n;
-      if (outcome.finished.includes(g.pipelineStatus)) a.hired += n;
+      if (outcome.finished.includes(g.pipelineStatus) && isOurHire(g.employmentAttribution)) a.hired += n;
       if (outcome.offPath.includes(g.pipelineStatus)) a.dropped += n;
       byOrg.set(key, a);
     }

@@ -151,6 +151,8 @@ const DECISIONS = new Map([
   // ── Not about a person ──────────────────────────────────────────────────────
   ['Organization.brandLogoUrl', CONFIG],
   ['Organization.brandPalette', CONFIG],
+  // The tenant's public welcome page (#1664): the organization's own copy, not a person's.
+  ['Organization.welcomeBody', CONFIG],
   ['Organization.ssoEntryPoint', CONFIG],
   ['Organization.ssoCertificate', CONFIG],
   ['Organization.ssoLogoutUrl', CONFIG],

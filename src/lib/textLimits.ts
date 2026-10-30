@@ -233,6 +233,13 @@ export const TEXT_LIMITS = {
    * room for spacing without letting a paragraph reach the parser.
    */
   orgBrandPalette: 200,
+  /** Organization.welcomeTitle — VARCHAR(120) (#1664): a headline, not a paragraph */
+  orgWelcomeTitle: 120,
+  /**
+   * Organization.welcomeBody — @db.Text (#1664). A few short paragraphs on a
+   * public page; 2 000 is generous for that and far inside the TEXT column.
+   */
+  orgWelcomeBody: 2000,
   /** Organization.ssoIssuer — VARCHAR(191) */
   orgSsoIssuer: 191,
   /**
