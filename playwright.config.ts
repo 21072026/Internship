@@ -428,6 +428,10 @@ export default defineConfig({
           SLACK_CLIENT_ID: 'e2e-slack-client',
           SLACK_CLIENT_SECRET: 'e2e-slack-secret',
           SLACK_SIGNING_SECRET: 'e2e-slack-signing-secret',
+          // The chat interaction endpoint (#1948) may post its reply to a
+          // loopback response_url (the spec's own sink) instead of hooks.slack.com.
+          // Test-only switch.
+          CHAT_RESPONSE_URL_ALLOW_INSECURE_STUB: '1',
           SLACK_API_BASE: `http://127.0.0.1:${E2E_SLACK_MOCK_PORT}`,
           SLACK_OAUTH_AUTHORIZE_URL: `http://127.0.0.1:${E2E_SLACK_MOCK_PORT}/oauth/v2/authorize`,
           TEAMS_APP_ID: 'e2e-teams-app',

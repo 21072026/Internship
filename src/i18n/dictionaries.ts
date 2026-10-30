@@ -6746,6 +6746,14 @@ const en = {
     cancelEvent: 'Cancel session',
     cancelConfirm: 'Cancel this session? Everyone registered or waiting is told.',
   },
+  chatInteraction: {
+    unlinked: 'Link your chat account first — open your account page and confirm the connection:',
+    unavailable: 'This button is no longer available.',
+    failed: 'Something went wrong. Please try again in the app.',
+    upcomingHeader: 'Your next meetings:',
+    upcomingLine: '{title} — {when}',
+    upcomingNone: 'You have no upcoming meetings.',
+  },
   calendar: {
     title: 'Calendar',
     subtitle: 'Your meetings and stage deadlines at a glance',
@@ -17752,6 +17760,14 @@ const tr: Dict = {
     cancelEvent: 'Oturumu iptal et',
     cancelConfirm: 'Bu oturum iptal edilsin mi? Kayıtlı ve bekleyen herkese haber verilir.',
   },
+  chatInteraction: {
+    unlinked: 'Önce sohbet hesabını bağla — hesap sayfanı açıp bağlantıyı onayla:',
+    unavailable: 'Bu düğme artık kullanılamıyor.',
+    failed: 'Bir şeyler ters gitti. Lütfen uygulamadan tekrar dene.',
+    upcomingHeader: 'Sıradaki toplantıların:',
+    upcomingLine: '{title} — {when}',
+    upcomingNone: 'Yaklaşan bir toplantın yok.',
+  },
   calendar: {
     title: 'Takvim',
     subtitle: 'Toplantıların ve aşama son tarihlerin tek bakışta',
@@ -28676,6 +28692,14 @@ const de: Dict = {
     publish: 'Veröffentlichen',
     cancelEvent: 'Sitzung absagen',
     cancelConfirm: 'Diese Sitzung absagen? Alle Angemeldeten und Wartenden werden benachrichtigt.',
+  },
+  chatInteraction: {
+    unlinked: 'Verknüpfe zuerst dein Chat-Konto – öffne deine Kontoseite und bestätige die Verbindung:',
+    unavailable: 'Diese Schaltfläche ist nicht mehr verfügbar.',
+    failed: 'Etwas ist schiefgelaufen. Bitte versuche es in der App erneut.',
+    upcomingHeader: 'Deine nächsten Meetings:',
+    upcomingLine: '{title} – {when}',
+    upcomingNone: 'Du hast keine anstehenden Meetings.',
   },
   calendar: {
     title: 'Kalender',

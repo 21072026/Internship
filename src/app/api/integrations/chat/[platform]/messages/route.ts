@@ -4,6 +4,8 @@ import { platformFromSlug } from '@/lib/chat/config';
 import { verifyBotFrameworkRequest } from '@/lib/chat/botFrameworkAuth';
 import { markChatWorkspaceRemovedByPlatform } from '@/lib/chat/workspaces';
 import { withRequestScope } from '@/lib/requestContext';
+import { isTeamsInteraction } from '@/lib/chat/interactions';
+import { teamsVerifiedInteraction } from '@/lib/chat/interactions/http';
 
 // POST — the Teams bot's messaging endpoint (#3322). The Bot Framework posts
 // every activity here, authenticated by its signed JWT, never by a session
@@ -44,6 +46,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
       logger.warning('teams activity refused', { reason: auth.reason });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // A Universal Action (a card button, #1948) goes to the one dispatcher.
+    if (isTeamsInteraction(activity)) return teamsVerifiedInteraction(activity);
 
     if (activity.type === 'installationUpdate' && activity.action === 'remove') {
       const tenant = activity.channelData?.tenant?.id ?? activity.conversation?.tenantId;
