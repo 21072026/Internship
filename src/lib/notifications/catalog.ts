@@ -267,6 +267,11 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentor_offer.reminder', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentor_offer.accepted', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   { key: 'mentor_offer.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  // The agreed end of a pairing (#1786, src/lib/relationEndingSweep.ts): ONE
+  // ending-soon notice per end date to both sides, and the extension. The
+  // ending-soon mail goes inline under the 'relation-ending' category.
+  { key: 'mentorship.ending_soon', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name', 'date'] },
+  { key: 'mentorship.extended', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name', 'date'] },
   { key: 'mentorship.connected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['name'] },
   { key: 'application.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'interaction.logged', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },

@@ -18,6 +18,7 @@
 //   matching.needMatchAlerts     — createMany(skipDuplicates) on the alert rows.
 //   requests.expirySweep         — guarded updateMany on PENDING / nudgeSentAt null (#1775),
 //                                  and the Mentor Offers sweep on PENDING / remindedAt null (#1809).
+//   reminders.relationEnding     — claims `endingSoonNotifiedAt` before telling anyone (#1786).
 import { registerJob } from '@/lib/jobs/registry';
 import { dormancySweepHandler } from './dormancyChain';
 import { counters, SWEEP_OPTS } from './summary';
@@ -25,6 +26,7 @@ import { enqueue } from '@/lib/jobs/queue';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { sweepMentorOffers } from '@/lib/mentorOffers';
 import { sweepMentorshipRequests } from '@/lib/requestExpiry';
+import { sweepEndingSoonRelations } from '@/lib/relationEndingSweep';
 import {
   checkRequisitionMatches,
   checkMentorInteractionReminders,
@@ -46,6 +48,7 @@ export function registerReminderJobs(): void {
   registerJob('reminders.mentorInteraction', async () => counters(await checkMentorInteractionReminders()), SWEEP_OPTS);
   registerJob('reminders.stageDeadline', async () => counters(await checkStageDeadlineReminders()), SWEEP_OPTS);
   registerJob('reminders.retentionReconsent', async () => counters(await checkRetentionReminders()), SWEEP_OPTS);
+  registerJob('reminders.relationEnding', async () => counters(await sweepEndingSoonRelations()), SWEEP_OPTS);
   // Both directions of an unanswered ask in one morning job (#1775 + #1809).
   // Each half is a guarded sweep of its own, so a rerun — or one half throwing
   // after the other committed — repeats nothing: requests claim on

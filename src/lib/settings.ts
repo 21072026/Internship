@@ -329,6 +329,9 @@ export const SETTING_DEFAULTS = {
   // bootcamp and a 12-month programme of one tenant each carry their own.
   relationDefaultDurationMonths: '',
   relationDefaultCadenceWeeks: '',
+  // Days before the agreed end date that both participants get the ONE
+  // ending-soon nudge (#1786, src/lib/relationEnding.ts).
+  relationEndingLeadDays: '14',
   // Business-day stage SLAs (#1638, docs/business-day-slas.md). `calendar` is
   // what every installation did before, so nothing moves until an admin opts in.
   slaDayMode: 'calendar',
@@ -484,6 +487,7 @@ export const SETTING_SCHEMA = {
   meetingReminderLeadsMinutes: { type: 'string', scopes: P },
   relationDefaultDurationMonths: { type: 'number', nullable: true, scopes: P },
   relationDefaultCadenceWeeks: { type: 'number', nullable: true, scopes: P },
+  relationEndingLeadDays: { type: 'number', scopes: P },
   slaDayMode: { type: 'enum', values: ['calendar', 'business'], scopes: P },
   slaWorkingDays: { type: 'string', scopes: P },
   slaHolidayCalendarId: { type: 'string', scopes: P },
