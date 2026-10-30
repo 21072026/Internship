@@ -94,3 +94,27 @@ preview in a fully sandboxed iframe, save, "send me a test" and reset. Routes:
   programme) applies again. Every write is an ActivityLog row.
 - `preview` and `test` take a `.strict()` body: a `to` is refused. The test goes to the
   session's own address under the `test` category.
+
+## Account mails (#3399)
+
+The invitation, the password reset and the e-mail verification are catalogue
+events too (`account.invitation` · `account.passwordReset` ·
+`account.verification`, group `account_security`, channel `email` only), so
+the editor lists them like any other event. They are never published through
+`notifyEvent()`: each keeps its sender in `emailService.ts`, because the mail
+carries a one-time token. The sender builds the absolute link and hands it to
+`renderNotificationEmail({ actionUrl })`.
+
+- **The link is never a merge tag.** The renderer always draws it as the button
+  and the "copy this link" line, with the CTA label and the expiry note from the
+  code's copy. A template replaces subject, heading and body only, so no
+  template can remove the link or point it elsewhere.
+- **No template, no change.** With no stored row (or a row that would fall
+  back) the mail is the bespoke one it always was, read through
+  `emailDictionary(locale, orgId)`.
+- **SET_INITIAL** ("activate your account") rides the reset sender but passes
+  `bespokeOnly`: a reset template does not say "activate".
+- The preview and the test send have no token, so they show a dead sample link
+  of the same shape (`…/auth/verify?token=preview`).
+- Merge tags: `{{role}}` (the invitee's-language label, "a mentor") and
+  `{{name}}` (the account's full name), plus the brand tags.

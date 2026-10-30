@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Admin tier & scope assignment (#1579):** an \"Admin tiers\" panel on `/admin/users` and `/api/admin/roles` (GET/PATCH tier/POST grant/DELETE grant) behind the new `admin.grant` permission (ORG_ADMIN only, through `requirePermission()` — no second authorization path). Guards are pure in `src/lib/adminTierRule.ts` and applied by the one writer `src/lib/adminTiers.ts`: no self-change, never above one's own tier, scope grants only for PROGRAM_ADMIN and only the org's own cohorts/companies, and the org's last ACTIVE ORG_ADMIN cannot be demoted, deactivated (`PATCH /api/users/[id]`) or delete their account (`DELETE /api/account`, now tier-aware). A tier change stamps `sessionsValidFrom` and revokes trusted devices, writes `AuditLog` `ADMIN_LEVEL_CHANGE` and notifies the target (`admin_tier.changed`); grants write `ADMIN_SCOPE_GRANT`/`ADMIN_SCOPE_REVOKE`. `AdminNav` hides write-only links (automations, nudges) from tiers that cannot open them — cosmetic, the 403 is the control. Tests: `scripts/test/admin-tier-rule.test.mjs`, `e2e/admin-tiers.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Admins can now see and set each admin's tier — org admin, programme admin or observer — and grant programme admins their cohorts and companies, with a guard that always keeps one org admin."],
+    "tr": ["Yöneticiler artık her yöneticinin kademesini — kurum yöneticisi, program yöneticisi veya gözlemci — görüp ayarlayabiliyor ve program yöneticilerine kohort ile şirket atayabiliyor; her zaman bir kurum yöneticisinin kalmasını sağlayan bir koruma var."],
+    "de": ["Admins können jetzt die Stufe jedes Admins – Org-Admin, Programm-Admin oder Beobachter – sehen und festlegen und Programm-Admins Kohorten und Unternehmen zuweisen; ein Schutz sorgt dafür, dass immer ein Org-Admin bleibt."]
+  }
+}

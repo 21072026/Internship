@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MatchScoreBreakdown } from '@/components/matching/MatchScoreBreakdown';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import { MATCH_DIMENSIONS, SOFT_ONLY_DIMENSIONS, type MatchRuleKind } from '@/lib/matching/types';
 import { normalizedWeights, type SimulatedMentee, type SimulationSummary } from '@/lib/matching/simulate';
 import type { MatchRuleDraft } from '@/lib/matching/ruleSetSchema';
+import { localized } from '@/components/forms/FormFieldInput';
+import type { LocalizedText } from '@/lib/forms/schema';
 
 // /admin/matching (#1783): the org's matching rule sets — weights, hard rules,
 // per-dimension settings — and a dry run of the draft on screen. Nothing on
@@ -42,6 +44,14 @@ export default function MatchingRulesPage() {
   const L = t.adminMatching;
   const dims = t.matchScore.dimensions as Record<string, string>;
   const kinds = t.matchScore.kinds as Record<string, string>;
+  const locale = useLocale();
+  // The org's matchable admin-defined questions (#1803), offered next to the built-ins.
+  const [customFields, setCustomFields] = useState<{ key: string; type: string; labels: LocalizedText }[]>([]);
+  const customOf = (d: string) => (d.startsWith('customField:') ? customFields.find((f) => `customField:${f.key}` === d) : undefined);
+  const dimLabel = (d: string) => {
+    const c = customOf(d);
+    return c ? `${L.customField}: ${localized(c.labels, locale) || c.key}` : (dims[d] ?? d);
+  };
 
   const [sets, setSets] = useState<RuleSet[]>([]);
   const [builtIn, setBuiltIn] = useState<MatchRuleDraft[]>([]);
@@ -59,6 +69,7 @@ export default function MatchingRulesPage() {
     if (!res.ok) return;
     const d = await res.json();
     setSets(d.ruleSets ?? []);
+    setCustomFields(Array.isArray(d.customFields) ? d.customFields : []);
     setBuiltIn((d.builtIn?.rules ?? []).map((r: MatchRuleDraft) => ({ ...r, config: { ...(r.config ?? {}) } })));
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -219,6 +230,7 @@ export default function MatchingRulesPage() {
                   <li key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 p-2.5 dark:border-gray-700" data-testid={`matching-rule-${i}`}>
                     <select
                       aria-label={L.dimension}
+                      data-testid={`matching-rule-dimension-${i}`}
                       value={r.dimension}
                       onChange={(e) => {
                         const dimension = e.target.value as MatchRuleDraft['dimension'];
@@ -229,6 +241,9 @@ export default function MatchingRulesPage() {
                     >
                       {MATCH_DIMENSIONS.map((d) => (
                         <option key={d} value={d}>{dims[d] ?? d}</option>
+                      ))}
+                      {customFields.map((f) => (
+                        <option key={f.key} value={`customField:${f.key}`}>{dimLabel(`customField:${f.key}`)}</option>
                       ))}
                     </select>
                     <select
@@ -270,6 +285,21 @@ export default function MatchingRulesPage() {
                           placeholder="3"
                           onChange={(e) => patchConfig(i, 'maxHours', e.target.value === '' ? undefined : Number(e.target.value))}
                           className="w-16 rounded border border-gray-300 px-1.5 py-0.5 dark:border-gray-700 dark:bg-gray-800"
+                        />
+                      </label>
+                    )}
+                    {(customOf(r.dimension)?.type === 'NUMBER' || customOf(r.dimension)?.type === 'SCALE') && (
+                      <label className="flex items-center gap-1 text-xs text-gray-600">
+                        {L.tolerance}
+                        <input
+                          type="number"
+                          min={0}
+                          max={1000}
+                          value={typeof r.config.tolerance === 'number' ? r.config.tolerance : ''}
+                          placeholder="0"
+                          onChange={(e) => patchConfig(i, 'tolerance', e.target.value === '' ? undefined : Number(e.target.value))}
+                          className="w-16 rounded border border-gray-300 px-1.5 py-0.5 dark:border-gray-700 dark:bg-gray-800"
+                          data-testid={`matching-rule-tolerance-${i}`}
                         />
                       </label>
                     )}
@@ -376,7 +406,7 @@ export default function MatchingRulesPage() {
                     {sim.summary.mostEliminating && (
                       <li data-testid="matching-sim-most-eliminating">
                         {L.mostEliminating
-                          .replace('{rule}', dims[sim.summary.mostEliminating.dimension] ?? sim.summary.mostEliminating.dimension)
+                          .replace('{rule}', dimLabel(sim.summary.mostEliminating.dimension))
                           .replace('{n}', String(sim.summary.mostEliminating.count))}
                       </li>
                     )}
@@ -389,7 +419,7 @@ export default function MatchingRulesPage() {
                         <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{m.fullName}</p>
                         {m.top.length === 0 ? (
                           <p className="text-xs text-red-700">
-                            {L.noneEligible.replace('{rule}', m.mostEliminating ? (dims[m.mostEliminating.dimension] ?? m.mostEliminating.dimension) : '—')}
+                            {L.noneEligible.replace('{rule}', m.mostEliminating ? dimLabel(m.mostEliminating.dimension) : '—')}
                           </p>
                         ) : (
                           <ol className="mt-1 space-y-0.5">

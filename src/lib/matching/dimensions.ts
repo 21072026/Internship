@@ -44,6 +44,12 @@ export interface MatchPerson {
    * not applicable and adds the same 0 to everybody.
    */
   themes?: readonly string[];
+  /**
+   * Answers to the org's MATCHABLE admin-defined questions (#1803), field key
+   * → value, loaded in bulk by ./customAnswers.ts. Read only by the
+   * `customField:<key>` family.
+   */
+  customAnswers?: Readonly<Record<string, unknown>>;
 }
 
 export interface MatchMentee extends MatchPerson {
@@ -216,6 +222,45 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
   },
 };
 
+/** The prefix of the admin-defined family: `customField:<fieldKey>` (#1803). */
+export const CUSTOM_FIELD_PREFIX = 'customField:';
+const CUSTOM_KEY_RE = /^customField:[a-z][a-z0-9_]{0,79}$/;
+
+/** Is `key` a well-formed `customField:<fieldKey>` dimension? */
+export function isCustomFieldDimension(key: string): boolean {
+  return CUSTOM_KEY_RE.test(key);
+}
+
+/**
+ * One admin-defined question compared between the two people who both
+ * answered it. The answer's own shape picks the comparison — the write side
+ * (validateResponse) guarantees a key's answers share one type:
+ *   · a string or a boolean (SELECT, BOOLEAN) — exact match;
+ *   · a list (MULTI_SELECT) — shared options over the MENTEE's list;
+ *   · a number (NUMBER, SCALE) — closeness: matched within config.tolerance
+ *     (default 0), ratio falling linearly to 0 at tolerance + 1 apart.
+ * Either side unanswered = not applicable, the same 0 for every mentor.
+ */
+export function customFieldDimension(fieldKey: string, mentee: MatchMentee, mentor: MatchMentor, config: DimensionConfig): DimensionResult {
+  const a = mentee.customAnswers?.[fieldKey];
+  const b = mentor.customAnswers?.[fieldKey];
+  const empty = (v: unknown) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+  if (empty(a) || empty(b)) return notApplicable('not answered');
+  if (typeof a === 'number' && typeof b === 'number') {
+    const diff = Math.abs(a - b);
+    const tolerance = Math.max(0, num(config.tolerance, 0));
+    return { matched: diff <= tolerance, ratio: clamp01(1 - diff / (tolerance + 1)), detail: [`${a} / ${b}`] };
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    const want = (Array.isArray(a) ? a : [a]).map(String);
+    const have = new Set((Array.isArray(b) ? b : [b]).map(String));
+    const shared = want.filter((v) => have.has(v));
+    return { matched: shared.length > 0, ratio: clamp01(shared.length / want.length), detail: shared };
+  }
+  const same = String(a) === String(b);
+  return { matched: same, ratio: same ? 1 : 0, detail: same ? [String(a)] : [] };
+}
+
 export function isKnownDimension(key: string): key is MatchDimension {
   return (MATCH_DIMENSIONS as readonly string[]).includes(key);
 }
@@ -228,6 +273,7 @@ export function evaluateDimension(
   config: DimensionConfig,
   ctx: ScoreContext
 ): DimensionResult {
+  if (isCustomFieldDimension(key)) return customFieldDimension(key.slice(CUSTOM_FIELD_PREFIX.length), mentee, mentor, config);
   if (!isKnownDimension(key)) return { matched: false, ratio: 0, detail: ['unknown dimension'] };
   return DIMENSIONS[key](mentee, mentor, config, ctx);
 }

@@ -13,6 +13,8 @@ export interface SupportAttachmentMeta {
   filename: string;
   contentType: string;
   size: number;
+  /** The sender's description of an image (#3407); null on older rows. */
+  altText?: string | null;
 }
 
 function startsWith(bytes: Uint8Array, signature: number[]) {
@@ -25,6 +27,8 @@ export type SupportFileValidationError = 'unsupported' | 'tooLarge' | 'unreadabl
 export interface PendingSupportAttachment {
   file: File;
   url: string;
+  /** What an image shows, sent as its alt text (#3407). */
+  alt?: string;
 }
 
 /** The `support.attachment*` dictionary entries used to report rejected files. */

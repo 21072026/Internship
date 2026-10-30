@@ -815,6 +815,27 @@ async function anonymizeOrphanApplicants(ctx: RetentionContext) {
   };
 }
 
+async function pruneAffiliateApplications(ctx: RetentionContext) {
+  // The whole row goes, whatever its state: an approved application's person is
+  // a partner by then (the AffiliatePartner row is the record), a rejected or
+  // forgotten one is a stranger's name and address from a public form.
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.affiliateApplication.findMany({
+          where: { createdAt: { lt: ctx.cutoff } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => (await prisma.affiliateApplication.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 async function pruneSupportReports(ctx: RetentionContext) {
   // The whole report goes: its screenshot, attachments and replay are
   // SupportReportFile rows that cascade with it (they live in the database —
@@ -1143,6 +1164,14 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets a year rather than one of the short windows above (only companyUsage, a hygiene window for the same reason, is longer).',
     run: pruneTrialReminders,
+  },
+  {
+    key: 'affiliateApplication',
+    // No setting: part of the partner application's design (#3361).
+    defaultDays: 180,
+    reason:
+      'A partner application is a stranger\'s name, address and optional phone number from a public form, kept only so an admin can decide on it. Six months covers a slow decision and a question about it afterwards; by then an approved applicant is a partner (that row is the record) and a rejected or forgotten one is nobody we should still hold.',
+    run: pruneAffiliateApplications,
   },
   {
     key: 'supportReport',

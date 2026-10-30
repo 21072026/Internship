@@ -214,6 +214,7 @@ test('a security or account event is mandatory on every channel', () => {
     'security.twoFactorReset',
     'role_changed.toMentor',
     'role_changed.toMentee',
+    'admin_tier.changed',
     'retention.confirm',
   ];
   for (const key of mustBeEssential) {

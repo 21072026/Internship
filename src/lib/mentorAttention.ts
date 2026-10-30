@@ -13,6 +13,7 @@ import { isNextActionOverdue } from '@/lib/nextActionRule';
 import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 import { isCancellationPending } from '@/lib/contractEndRule';
 import { activeRelationWhere } from '@/lib/relationLifecycle';
+import { notBenched } from '@/lib/participantState';
 import { loadPairMeetings } from '@/lib/meetingCadenceData';
 import { relationCadence } from '@/lib/meetingCadence';
 import { cadenceStatus } from '@/lib/relationEnding';
@@ -84,7 +85,8 @@ export async function getAttentionItems(
   const reminderDaysFor = reminderDaysReader();
   const now = Date.now();
   // Not a paused pair (#1772): nothing on a pause is late, so nothing belongs in the queue.
-  const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, ...activeRelationWhere() };
+  // Nor a mentee on the bench (#1778): their pairing stands, but it is not work for this list.
+  const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, ...activeRelationWhere(), mentee: notBenched() };
 
   const relations = await prisma.mentorshipRelation.findMany({
     where: options.relationWhere ? { AND: [ownerWhere, options.relationWhere] } : ownerWhere,

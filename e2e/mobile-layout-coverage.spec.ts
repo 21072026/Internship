@@ -130,6 +130,9 @@ const SETUP: Route[] = [
     // Mentoring agreements (#1790) — in the sidebar without an entry here,
     // which turned this gate red on main.
     '/admin/agreements',
+    // Admin-built intake and feedback forms — in the sidebar without an entry
+    // here, the same miss as the agreements line above.
+    '/admin/forms',
     '/admin/sources',
     '/admin/invite'
   ),

@@ -19,6 +19,7 @@ import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
 import { resolveRequestVertical } from '@/i18n/server';
 import { verticalHasCapability } from '@/lib/verticals';
 import type { Prisma } from '@prisma/client';
+import { checkPublicAnswers, publicAnswersSchema } from '@/lib/forms/publicAnswers';
 
 // Public "become a mentor" applications (#904): anyone can apply without an
 // account; an admin reviews the queue (#905/#933). Deliberately does NOT
@@ -45,6 +46,8 @@ const applySchema = z.object({
   // passes validation — a 400 here would tip bots off.
   website: z.string().max(500).optional(),
   renderedAt: z.number().int().optional(),
+  // Answers to the org's REGISTRATION questions for mentors (#1803), staged on the row.
+  formAnswers: publicAnswersSchema,
 });
 
 // POST — public application to become a mentor.
@@ -112,6 +115,12 @@ export async function POST(request: Request) {
   // filed in the default org (the INTERNSHIP world — see the account check
   // above). The admin list below and the fan-out read this same org.
   const orgId = await defaultOrgId();
+  // The org's own questions (#1803): no account exists yet, so the checked
+  // answers are staged on the application and carried over when one does.
+  const answers = await checkPublicAnswers(orgId, 'MENTOR', parsed.data.formAnswers);
+  if (!answers.ok) {
+    return NextResponse.json({ error: 'invalid_answers', code: 'invalid_answers', errors: answers.errors }, { status: 400 });
+  }
   await prisma.mentorApplication.create({
     data: {
       orgId,
@@ -127,6 +136,7 @@ export async function POST(request: Request) {
       linkedinUrl: linkedinUrl || null,
       locale: locale || null,
       consentAt: new Date(),
+      ...(answers.staged.length > 0 ? { formAnswers: answers.staged as Prisma.InputJsonValue } : {}),
     },
   });
 

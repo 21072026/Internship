@@ -65,6 +65,7 @@ test('propose → confirm → deliver → revoke → no longer delivered', { tag
       posts.push(target.id);
       return { externalMessageId: `m${posts.length}` };
     },
+    async updateMessage() {},
     async openDm({ externalUserId }) {
       return { id: `D-${externalUserId}` };
     },

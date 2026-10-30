@@ -6,6 +6,7 @@ import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { COMPANY_NOT_VERIFIED, publishRefused } from '@/lib/companyVerification';
+import { raiseRequisitionStatus } from '@/lib/requisitionEvents';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { syncRequisitionSkills } from '@/lib/skillsResolve';
@@ -134,6 +135,7 @@ export async function POST(request: Request) {
     });
     // Dual-write the canonical twin of the required skills (#1818).
     await syncRequisitionSkills(requisition.id, scope.orgId, skills);
+    await raiseRequisitionStatus(prisma, { requisitionId: requisition.id, orgId: scope.orgId, from: null, to: requisition.status }, scope.session.user.id);
     return NextResponse.json({ requisition }, { status: 201 });
   });
 }

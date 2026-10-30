@@ -50,3 +50,49 @@ form is published, so the host form is unchanged. Mounted today: `ProfileForm` (
 | `PUT /api/forms/responses` | `{ definitionId, answers }`, `.strict()` — a body naming a `userId` is a 400; the person is always the session. A form the caller is not asked (another org's, a draft, another audience) is 404. Validated by `saveFormResponses()` with `validateResponse()`. A key sent empty (`null`, `''`, `[]`) clears that answer across every version of the form; a key left out is untouched. |
 
 Selection lives in `src/lib/forms/active.ts` (`activeForms`, `publicForm`, `ownAnswers`).
+
+## Matching on answers (#1803)
+
+A field with `matchable = true` (only SELECT, MULTI_SELECT, BOOLEAN, NUMBER, SCALE — `canBeMatchable()`)
+becomes the matching dimension `customField:<fieldKey>` (`customFieldDimension()` in
+`src/lib/matching/dimensions.ts`). The answer's shape picks the comparison: exact for a string or a
+boolean, shared options over the mentee's list for a MULTI_SELECT, closeness for a number —
+matched within `config.tolerance` (default 0), the ratio falling to 0 at `tolerance + 1` apart.
+Either side unanswered is *not applicable* (the same 0 for every mentor).
+
+- **Bulk only.** `src/lib/matching/customAnswers.ts` loads the org's matchable keys and every answer
+  of the people in a pass in two queries; `loadMentorPool` / `loadMentees` / `loadPairForScoring`
+  attach them as `customAnswers`. The unit test (`e2e/custom-field-matching.unit.spec.ts`) pins it:
+  a 200 × 40 pass is two queries per side, and scoring the pairs touches no database.
+- **Only matchable questions.** The rule editor lists them (`customFields` on
+  `GET /api/admin/matching/rule-sets`), and a save naming any other key — free text, an archived
+  field, another org's question — is `400 not_matchable_field`. A non-matchable key never even
+  loads answers, so a simulated draft cannot read free text either.
+
+## Every signed-in surface (#1803)
+
+`DynamicFields` is mounted on each surface with its own `surface`: `PROFILE` (`ProfileForm`),
+`ONBOARDING` (the mentee wizard's last step, the mentor wizard's capacity step) and
+`MENTORSHIP_REQUEST` (`MentorshipRequestPanel`, saved before the request is posted so the matcher
+reads them for it). Each host checks the questions first with `validate()` and saves nothing when a
+required answer is missing.
+
+An admin reads a person's answers on `/admin/candidates/[id]` and `/admin/mentors/[id]`
+(`FormAnswersPanel`, fed by `GET /api/admin/users/[id]/form-answers` — `user.read`, the caller's
+tenant only, another tenant's user is 404). Options are shown as their labels, never their stored values.
+
+## Public forms (#1803)
+
+The per-mentor apply link (`/apply/[mentorId]`) and the become-a-mentor form (`/apply-as-mentor`) ask
+the org's `REGISTRATION` questions for MENTEE resp. MENTOR. There is no session, so the org comes from
+the link: `GET /api/forms/public?for=apply&mentorId=…` (the mentor's org) or `?for=mentor-application`
+(the default org) — questions only, listed with its reason in `scripts/route-auth-baseline.json`. The
+host posts the answers inside its own request (`formAnswers: [{ definitionId, answers }]`), and
+`checkPublicAnswers()` (`src/lib/forms/publicAnswers.ts`) validates every live form — required
+questions included — **before** anything is created (`400 invalid_answers`).
+
+- `/api/apply` creates the account on the spot and writes the answers onto it (`writeStagedAnswers`).
+- `/api/mentor-applications` stages them on `MentorApplication.formAnswers`; they are carried onto the
+  mentor account by `carryMentorApplicationAnswers()` — when an approval promotes an existing account,
+  or when the invitation it sent is registered — and then cleared from the application. The erasure
+  sweep clears the column too.
