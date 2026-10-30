@@ -1,0 +1,4 @@
+node_modules/
+# `zapier-platform build` / `push` artefacts.
+build/
+*.zip
