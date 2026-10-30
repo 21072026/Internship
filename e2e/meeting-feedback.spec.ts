@@ -89,9 +89,12 @@ test.describe('meeting feedback', () => {
       if (i >= 2) expect(m.feedbackAskedAt, `meeting ${i}`).not.toBeNull();
     }
     const mails = () => prisma.emailLog.count({ where: { to: { in: mentees }, category: 'meeting-feedback' } });
+    // The ask now leaves through the router's e-mail job (#1711), which the
+    // worker drains every few seconds — so it is polled, not read at once.
+    await expect.poll(mails, { timeout: 30_000 }).toBe(4);
     const first = await mails();
-    expect(first).toBe(4);
     await page.request.get('/api/cron?job=meeting-logs');
+    await page.waitForTimeout(3_000);
     expect(await mails()).toBe(first);
     expect(await prisma.emailLog.count({ where: { to: guest, category: 'meeting-feedback' } })).toBe(0);
   });

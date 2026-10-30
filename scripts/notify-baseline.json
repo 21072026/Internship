@@ -40,16 +40,12 @@
   },
   "pending": {
     "src/app/api/admin/newsletters/[id]/send/route.ts": 1,
-    "src/app/api/mentor/email/route.ts": 1,
     "src/app/api/messages/route.ts": 1,
     "src/app/api/public/signup/org/route.ts": 1,
     "src/lib/announcementMail.ts": 1,
     "src/lib/announcementSend.ts": 1,
-    "src/lib/jobs/relationHealthSweep.ts": 1,
     "src/lib/jobs/reportSubscriptions.ts": 1,
-    "src/lib/meetingFeedback.ts": 1,
     "src/lib/messagePush.ts": 1,
-    "src/lib/outcomeComms.server.ts": 1,
     "src/lib/surveyCampaigns.ts": 1,
     "src/lib/surveyReminders.ts": 1,
     "src/services/emailService.ts": 60

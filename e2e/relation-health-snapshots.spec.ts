@@ -68,8 +68,10 @@ test.describe('relationship-health snapshots', () => {
     expect(snap?.band).toBe('AT_RISK');
     expect(snap?.reasons).toEqual(expect.arrayContaining(['inactive', 'overdue', 'no_open_goal']));
     expect(snap?.alertedAt).not.toBeNull();
+    // The digest leaves through the router's e-mail job (#1711), drained by
+    // the worker every few seconds — polled, not read at once.
+    await expect.poll(async () => (await digests()).length, { timeout: 30_000 }).toBe(1);
     const mails = await digests();
-    expect(mails).toHaveLength(1);
     expect(mails[0].subject).toMatch(/^1 relationship\(s\) need attention — /);
 
     // A second run the same day: still one row, no second mail.
