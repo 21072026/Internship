@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Account erasure reaches the matching notes (#3378):** anonymising a person now nulls `MatchProposal.note` and `MatchDecision.note` on every proposal/decision where they are the mentee or the mentor; the rows, states and scores stay. `check:erasure-coverage` marks both `ERASED` (it was red on main since #3344), and `e2e/erasure-free-text.spec.ts` asserts it."
+}

@@ -603,6 +603,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.candidateOutreach.updateMany({ where: { menteeId: userId }, data: { firstMessage: null } }),
     prisma.matchFeedback.updateMany({ where: { menteeId: userId }, data: { reasonNote: null } }),
     prisma.placement.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    //   - the matching round's proposal note and the recorded match decision's
+    //     "why this mentor" (#1793): prose about a pairing, so it goes when
+    //     either side of the pair is erased; the proposal and decision rows,
+    //     their state and scores stay.
+    prisma.matchProposal.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
+    prisma.matchDecision.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
     //   - the session agenda of their relation (required column → emptied).
     prisma.sessionAgendaItem.updateMany({ where: { agenda: asSubject }, data: { text: '' } }),
   ];
