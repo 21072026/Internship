@@ -87,6 +87,7 @@ export const KEPT_FIELDS: Readonly<Record<string, string>> = Object.freeze({
   'ExternalProfileLink.emailHash': 'match key for an upstream record',
   'RosterFeed.credentialEnvVar': 'the NAME of an environment variable, never its value',
   'RosterRun.fileHash': 'digest of an imported file',
+  'User.ssoPhotoUrlHash': 'digest of the IdP photo claim, so an unchanged photo is not re-downloaded',
   'ChatWorkspace.tokenExpiresAt': 'a timestamp',
 });
 

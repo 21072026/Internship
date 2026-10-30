@@ -117,7 +117,7 @@ export const SAML_MODES = [
  * thing about it is wrong; everything else stays valid, so a rejection is
  * attributable.
  */
-export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', inResponseTo, groups = [] }) {
+export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', inResponseTo, groups = [], attributes = {} }) {
   const now = new Date();
   const skewSafe = 60_000; // comfortably past node-saml's 5s accepted clock skew
   const expired = mode === 'expired';
@@ -160,6 +160,14 @@ export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', 
         groups.map((g) => `<saml:AttributeValue>${xmlEscape(g)}</saml:AttributeValue>`).join('') +
         `</saml:Attribute>`
       : '') +
+    // Free-form directory attributes (#1943): `{ department: 'Eng', thumbnailPhoto: '<base64>' }`,
+    // an array value being a multi-valued attribute.
+    Object.entries(attributes)
+      .map(([n, v]) =>
+        `<saml:Attribute Name="${xmlEscape(n)}" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">` +
+        (Array.isArray(v) ? v : [v]).map((x) => `<saml:AttributeValue>${xmlEscape(String(x))}</saml:AttributeValue>`).join('') +
+        `</saml:Attribute>`)
+      .join('') +
     `</saml:AttributeStatement>` +
     `</saml:Assertion>`;
 
@@ -487,6 +495,7 @@ const server = createServer(async (req, res) => {
         mode: body.mode || 'ok',
         inResponseTo,
         groups: Array.isArray(body.groups) ? body.groups.filter((g) => typeof g === 'string') : [],
+        attributes: body.attributes && typeof body.attributes === 'object' ? body.attributes : {},
       }),
     });
   }
