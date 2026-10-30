@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Group mentoring relations, admin surface (#1804):** `POST /api/admin/relations/group` forms a GROUP — one mentor, 2…25 mentees, ONE relation: the first mentee is the scalar pair (shared create path), the others are `RelationParticipant` seats, every mentee asked the one-active-mentor question (#419) inside one transaction, so a single refusal rolls the whole group back. `GET/POST/DELETE /api/admin/relations/[id]/participants` lists members (left seats kept as history), seats a mentee, co-mentor or facilitator in a GROUP (a one-to-one answers `409 not_group`), and lets a seat go with `leftAt`; the pair answers `409 primary_pair` (it changes through the mentor transfer). Bench, eligibility and the plan cap apply as for a direct assignment; a group counts once. `/admin/mentorship` gets a \"Form a group\" dialog, a Group chip and a members panel.",
+  "notes": {
+    "en": ["Admins can now form mentoring groups — one mentor with several mentees — and add or remove members later."],
+    "tr": ["Yöneticiler artık mentorluk grupları kurabilir — bir mentor ve birden çok mentee — ve sonradan üye ekleyip çıkarabilir."],
+    "de": ["Admins können jetzt Mentoring-Gruppen bilden – ein Mentor mit mehreren Mentees – und später Mitglieder hinzufügen oder entfernen."]
+  }
+}

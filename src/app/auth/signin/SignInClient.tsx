@@ -1,6 +1,7 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
 import type { TenantSso } from '@/lib/ssoDiscovery';
+import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 
 import { useState, useEffect, useRef } from 'react';
 import { signIn, useSession } from 'next-auth/react';
@@ -40,7 +41,7 @@ export interface DemoQuickLogin {
   password: string;
 }
 
-export function SignInClient({ demo, tenantSso = null }: { demo: DemoQuickLogin | null; tenantSso?: TenantSso | null }) {
+export function SignInClient({ demo, tenantSso = null, social = [] }: { demo: DemoQuickLogin | null; tenantSso?: TenantSso | null; social?: { id: string; label: string }[] }) {
   const t = useT();
   const vertical = useVertical();
   const productName = useProductName();
@@ -105,7 +106,10 @@ export function SignInClient({ demo, tenantSso = null }: { demo: DemoQuickLogin 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     // An SSO sign-in held by programme eligibility (#1945) lands here too.
-    if (params.get('pending') || params.get('error') === 'sso_pending_approval') setNotice(t.auth.pendingApproval);
+    const err = params.get('error') ?? '';
+    if (params.get('pending') || err === 'sso_pending_approval' || err === 'social_pending_approval') setNotice(t.auth.pendingApproval);
+    // Social sign-in refusals (#1962): what happened, never which account exists.
+    else if (err.startsWith('social_')) setError((t.auth.socialErrors as Record<string, string>)[err.slice(7)] ?? t.auth.socialErrors.failed);
     else if (params.get('verify')) setNotice(t.auth.verifyEmailSent);
     else if (params.get('registered')) setNotice(t.auth.registeredNotice);
   }, [t]);
@@ -402,6 +406,8 @@ export function SignInClient({ demo, tenantSso = null }: { demo: DemoQuickLogin 
               {t.auth.signIn}
             </Button>
           </form>
+
+          <SocialSignInButtons providers={social} />
 
           <p className="text-center text-sm mt-4">
             <Link href="/auth/forgot" className="text-blue-600 hover:underline">
