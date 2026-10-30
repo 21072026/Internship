@@ -27,9 +27,15 @@ export interface PublicProgramme {
   plan: CommissionPlan;
 }
 
-/** The programme this request's host publishes, or null (render a 404). */
-export async function publicProgrammeForRequest(): Promise<PublicProgramme | null> {
-  const target = await resolvePublicInquiryTarget(requestHostHeader(await headers()));
+/**
+ * The org whose partner programme this host serves — MARKETING, `affiliate`
+ * capability, a valid plan — with its settings row, or null. Shared by the page
+ * and the public application route (#3361), which reads the host from the request.
+ */
+export async function affiliateProgrammeForHost(
+  hostHeader: string | null | undefined,
+): Promise<{ orgId: string; plan: CommissionPlan; landing: unknown } | null> {
+  const target = await resolvePublicInquiryTarget(hostHeader);
   if (!target.open || target.vertical !== 'MARKETING' || !target.orgId) return null;
   const orgId = target.orgId;
   if (!(await shellCapabilities(orgId)).includes('affiliate')) return null;
@@ -37,7 +43,14 @@ export async function publicProgrammeForRequest(): Promise<PublicProgramme | nul
   const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true, landing: true } });
   if (!settings?.plan) return null;
   const plan = parseCommissionPlan(settings.plan);
-  const landing = readStoredLanding(settings.landing);
-  if (!plan.ok || !landingHasContent(landing)) return null;
-  return { orgId, landing, plan: plan.plan };
+  return plan.ok ? { orgId, plan: plan.plan, landing: settings.landing } : null;
+}
+
+/** The programme this request's host publishes, or null (render a 404). */
+export async function publicProgrammeForRequest(): Promise<PublicProgramme | null> {
+  const programme = await affiliateProgrammeForHost(requestHostHeader(await headers()));
+  if (!programme) return null;
+  const landing = readStoredLanding(programme.landing);
+  if (!landingHasContent(landing)) return null;
+  return { orgId: programme.orgId, landing, plan: programme.plan };
 }

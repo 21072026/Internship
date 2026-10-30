@@ -29,6 +29,7 @@ import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isOrgEnforcingSso, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
 import { PartnerInviteError, linkPartnerAccount } from '@/lib/affiliateInvite';
 import type { Prisma } from '@prisma/client';
+import { carryMentorApplicationAnswers } from '@/lib/forms/publicAnswers';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -305,6 +306,9 @@ export async function POST(request: Request) {
     } else {
       user = await createUser(prisma, userData, { source: selfRegistered ? 'register' : 'invite' });
     }
+    // A mentor arriving through an approved application's invitation brings the
+    // answers they gave on it (#1803). Nothing to do for anyone else.
+    if (user.role === 'MENTOR') await carryMentorApplicationAnswers(user);
 
     // Record which privacy-notice version was accepted, so consent is auditable
     // and re-consent can be requested when the notice changes (GDPR Art. 7).

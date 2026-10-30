@@ -257,6 +257,39 @@ within its own window. Colours and mark follow the host's brand.
 `src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
 pins it.
 
+## Partner applications
+
+The "become a partner" buttons of `/partner` open `/partner/apply` (#3361): a
+public form, no password, no username — **nobody gets an account from it**. An
+admin decides (#3362) and an approval goes through the ordinary partner
+invitation, so the contract gate and every rule of the partner's account stay
+exactly as they are.
+
+- **Fields** (rule pure in `src/lib/affiliateApplicationRule.ts`, unit-tested):
+  first and last name, e-mail (lower-cased), optional company and phone, "how did
+  you hear about us?" (`AFFILIATE_HEARD_FROM`; `other` needs its text) and the
+  privacy consent, required and checked on the server. The row stores when and
+  which privacy text (`consentAt`, `consentTextVersion`), never an IP.
+- **Where it lands:** `POST /api/partner/apply` is sessionless. The org is the one
+  whose programme this host serves (`affiliateProgrammeForHost()`, the same rule
+  as the page); without one the form is closed (503) before the body is read.
+  `AffiliateApplication` is a tenant model and the writer
+  (`src/lib/affiliateApplications.ts`) passes the org on every create and WHERE.
+- **Anti-spam** as on the company-inquiry form: 3/hour per IP for a valid body
+  (30/hour for anything), a honeypot, a minimum render-to-submit time, plus at
+  most one PENDING application and three rows per address and org per day,
+  checked and written under the organisation lock. Every accepted body answers
+  the same 200 in the same time — the notice and the mail run after the response
+  (`after()`) — so the sender never learns whether an address is known.
+- **After the write:** the org's active admins who may read the programme
+  (`affiliate.read`; a PROGRAM_ADMIN without a grant is not told) get an in-app
+  notice (`affiliate_application.new`) and the applicant an acknowledgement in the
+  form's language (`affiliate-application-received`, `inbound_requests` group,
+  exempt from outbound approval as the person's own action).
+- **Retention:** the `affiliateApplication` entry deletes rows after 180 days,
+  whatever their state (`src/lib/retentionEntries.ts`,
+  `docs/pii-access-lifecycle.md`).
+
 ## Security
 
 - `AFFILIATE` is covered by the 2FA policy (`TWO_FACTOR_ROLES`) and the partner
