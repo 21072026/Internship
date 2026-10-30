@@ -251,9 +251,15 @@ export async function saveFormResponses(
     if (err) errors[f.key] = err;
   }
   if (Object.keys(errors).length > 0) throw new FormWriteError('invalid_answers', 400, { errors });
-  await prisma.$transaction(
-    active
-      .filter((f) => answers[f.key] !== undefined && answers[f.key] !== null)
+  // A key sent EMPTY (null, '', []) clears that answer — across every version
+  // of the form, or latestFormAnswers() would resurface an older one. A key
+  // left out of `answers` is not touched. A required field never gets here
+  // empty: validateResponse() refused it above.
+  const empty = (v: unknown) => v === null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0);
+  const cleared = active.filter((f) => f.key in answers && empty(answers[f.key])).map((f) => f.key);
+  await prisma.$transaction([
+    ...active
+      .filter((f) => answers[f.key] !== undefined && !empty(answers[f.key]))
       .map((f) =>
         prisma.formResponse.upsert({
           where: { userId_definitionId_fieldKey: { userId, definitionId: definition.id, fieldKey: f.key } },
@@ -261,7 +267,10 @@ export async function saveFormResponses(
           update: { value: answers[f.key] as Prisma.InputJsonValue },
         }),
       ),
-  );
+    ...(cleared.length > 0
+      ? [prisma.formResponse.deleteMany({ where: { userId, fieldKey: { in: cleared }, definition: { orgId: definition.orgId, key: definition.key } } })]
+      : []),
+  ]);
 }
 
 /**

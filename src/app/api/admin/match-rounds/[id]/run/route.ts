@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: Ctx) {
       const tenant = await tenantWhere(session);
       const round = await prisma.matchRound.findFirst({
         where: withinTenant({ id }, tenant),
-        select: { id: true, status: true, orgId: true, createdAt: true },
+        select: { id: true, status: true, orgId: true, cohortId: true, createdAt: true },
       });
       if (!round) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       if (round.status !== 'DRAFT') {
@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
       const orgId = round.orgId ?? resolveOrgId(session) ?? null;
       const outcome = await runCohortPass(
-        cohortPassLoaders({ tenant, orgId, locale: await getLocale(), menteeIds: parsed.data.menteeIds }),
+        cohortPassLoaders({ tenant, orgId, locale: await getLocale(), menteeIds: parsed.data.menteeIds, programId: round.cohortId }),
         // The round's own instant, so a re-run on the same data is identical.
         { now: round.createdAt, minScore: parsed.data.minScore },
       );

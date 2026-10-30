@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Message push through the notification router (#1715):** `message.new`, `message.newGeneric` and `message.newByEmail` now list `push` and their two send sites (`POST /api/messages`, inbound e-mail replies) call `notifyEvent(..., { channels: ['push'], preview, dedupeKey: 'message:<id>' })` instead of the retired `sendNewMessagePush()`. Every message push is a `NotificationDelivery` row — a muted category or the channel matrix is a recorded `SKIPPED`, a phone-less recipient `no_device`, a retried POST deduped — and quiet hours hold it (title only, so no message text sits in the queue). The push adapter keeps the 140-char preview and collapses every `thread` event per thread; `notificationLink()` gains a `conversationId` link id (`/messages/c/<id>`). The /account channel matrix now shows push as on for Messages, which is what has always happened."
+}

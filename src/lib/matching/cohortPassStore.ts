@@ -7,7 +7,8 @@
  * names them. A mentee who already has an active mentor is never proposed one
  * (one active mentor per mentee, #419), even when named. A cohort has no
  * membership of its own before a relation exists, so the round's cohort is
- * where the published pairs will land (#1796), not a filter here.
+ * where the published pairs will land (#1796), not a membership filter here —
+ * but its eligibility rules are (#1945): an ineligible mentee is not in scope.
  */
 
 import { prisma } from '@/lib/prisma';
@@ -16,17 +17,22 @@ import { loadMentees, loadMentorPool, mentorPoolWhere, type PoolMentee, type Poo
 import { resolveRuleSet } from './ruleSet';
 import { skillGraphsFor, skillIdsByUser } from './skillContext';
 import type { CohortPassLoaders } from './cohortPass';
+import { eligibleUserIds } from '@/lib/eligibility';
 
 export function cohortPassLoaders(opts: {
   tenant: TenantWhere;
   orgId: string | null;
   locale: string;
   menteeIds?: readonly string[];
+  /** The round's programme (#1945): only mentees eligible for it are proposed. */
+  programId?: string | null;
 }): CohortPassLoaders<PoolMentee, PoolMentor> {
   const { tenant, orgId, locale } = opts;
   return {
+    // Eligibility (#1945) filters BEFORE scoring, so a round never proposes
+    // someone who could not be enrolled — the same evaluator the routes ask.
     menteeIds: async (limit) =>
-      (
+      eligibleUserIds(orgId, opts.programId ?? null, (
         await prisma.user.findMany({
           where: withinTenant(
             {
@@ -41,7 +47,7 @@ export function cohortPassLoaders(opts: {
           orderBy: { id: 'asc' },
           take: limit,
         })
-      ).map((r) => r.id),
+      ).map((r) => r.id)),
     mentorCount: () => prisma.user.count({ where: mentorPoolWhere(tenant) }),
     mentees: (ids) => loadMentees(tenant, ids),
     mentors: () => loadMentorPool(tenant),

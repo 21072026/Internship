@@ -30,6 +30,7 @@ import { isAgreementStatus } from '@/lib/mentoringAgreementRule';
 import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate';
 import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
 import { getLocale } from '@/i18n/server';
+import { isEligible } from '@/lib/eligibility';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -267,6 +268,18 @@ export async function POST(request: Request) {
 
     if (mentorId === menteeId) {
       return NextResponse.json({ error: 'A user cannot mentor themselves' }, { status: 400 });
+    }
+
+    // Programme eligibility (#1945): in RULES mode only an ALLOW rule admits
+    // the mentee. A direct assignment carries no programme, so the
+    // organisation's own rules decide. The refusal names the deciding rule —
+    // this route is ADMIN-only, and the admin is the one who can fix it.
+    const eligibility = await isEligible({ id: menteeId, orgId: mentee.orgId });
+    if (!eligibility.ok) {
+      return NextResponse.json(
+        { error: 'This mentee is not eligible for the programme', code: 'not_eligible', reason: eligibility.reason, ruleId: eligibility.ruleId ?? null },
+        { status: 403 },
+      );
     }
 
     // Cheap pre-flight for the common case; the real guard is re-run inside the
