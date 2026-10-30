@@ -57,6 +57,8 @@ export function RelationLifecycleControls({
   const [action, setAction] = useState<Action | null>(null);
   const [reasonCode, setReasonCode] = useState('');
   const [note, setNote] = useState('');
+  // The pair's agreed next steps (#1795) — read by both sides afterwards.
+  const [plan, setPlan] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [events, setEvents] = useState<LifecycleEvent[] | null>(null);
@@ -75,6 +77,7 @@ export function RelationLifecycleControls({
   const open = (next: Action) => {
     setReasonCode('');
     setNote('');
+    setPlan('');
     setError('');
     setAction(next);
   };
@@ -121,7 +124,8 @@ export function RelationLifecycleControls({
       // reason — the server refuses it all the same.
       if (!isLifecycleEndReasonCode(reasonCode)) return setError(L.reasonRequired);
       if (reasonCode === REASON_NOTE_REQUIRED_FOR && !trimmed) return setError(L.noteRequired);
-      await post(endStateForReason(reasonCode), { reasonCode, ...(trimmed ? { reasonNote: trimmed } : {}) });
+      const closurePlan = plan.trim();
+      await post(endStateForReason(reasonCode), { reasonCode, ...(trimmed ? { reasonNote: trimmed } : {}), ...(closurePlan ? { closurePlan } : {}) });
     } else if (action === 'pause') {
       await post('PAUSED', trimmed ? { reasonNote: trimmed } : {});
     } else if (action === 'reopen') {
@@ -222,6 +226,24 @@ export function RelationLifecycleControls({
                   value={reasonCode}
                   onChange={(e) => setReasonCode(e.target.value)}
                 />
+              )}
+              {action === 'end' && (
+                <div>
+                  <label htmlFor={`lifecycle-plan-${relationId}`} className="block text-sm font-medium text-gray-700 mb-1">
+                    {t.closure.plan}
+                  </label>
+                  <textarea
+                    id={`lifecycle-plan-${relationId}`}
+                    data-testid="lifecycle-closure-plan"
+                    rows={3}
+                    maxLength={2000}
+                    value={plan}
+                    onChange={(e) => setPlan(e.target.value)}
+                    placeholder={t.closure.planPlaceholder}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">{t.closure.planHint}</p>
+                </div>
               )}
               <div>
                 <label htmlFor={`lifecycle-note-${relationId}`} className="block text-sm font-medium text-gray-700 mb-1">
