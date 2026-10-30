@@ -10868,6 +10868,10 @@ const en = {
     packNps: 'Net Promoter Score (last 90 days)',
     packNote: 'Only answers given with consent to reporting are counted. Groups with fewer than {n} known answers show their knowledge rate only.',
   },
+  dynamicFields: {
+    heading: 'Additional questions',
+    saveFailed: 'Your profile was saved, but your answers to the additional questions could not be saved. Please try again.',
+  },
   surveyRespond: {
     progress: 'Question {n} of {total}',
     next: 'Next',
@@ -21822,6 +21826,10 @@ const tr: Dict = {
     packNps: 'Net Tavsiye Skoru (son 90 gün)',
     packNote: 'Yalnızca rapora izin verilerek verilen cevaplar sayılır. {n} bilinen cevaptan az olan gruplarda yalnızca bilinme oranı gösterilir.',
   },
+  dynamicFields: {
+    heading: 'Ek sorular',
+    saveFailed: 'Profiliniz kaydedildi, ancak ek sorulara verdiğiniz cevaplar kaydedilemedi. Lütfen tekrar deneyin.',
+  },
   surveyRespond: {
     progress: 'Soru {n} / {total}',
     next: 'İleri',
@@ -32767,6 +32775,10 @@ const de: Dict = {
     packPeriod: 'Begleitungen abgeschlossen {from} – {to}',
     packNps: 'Net Promoter Score (letzte 90 Tage)',
     packNote: 'Gezählt werden nur Antworten mit Zustimmung zur Berichterstattung. Gruppen mit weniger als {n} bekannten Antworten zeigen nur ihre Kenntnisquote.',
+  },
+  dynamicFields: {
+    heading: 'Zusätzliche Fragen',
+    saveFailed: 'Ihr Profil wurde gespeichert, Ihre Antworten auf die zusätzlichen Fragen jedoch nicht. Bitte versuchen Sie es erneut.',
   },
   surveyRespond: {
     progress: 'Frage {n} von {total}',
