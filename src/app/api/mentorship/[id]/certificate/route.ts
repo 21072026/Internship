@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -132,6 +133,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       targetId: doc.id,
       detail: docTitle,
     });
+    // The second writer of a Document (#1998): a generated certificate.
+    await emit(
+      'document.uploaded',
+      { documentId: doc.id, ownerId: relation.menteeId, type: 'CERTIFICATE', requirementId: null, version: (prior?.version ?? 0) + 1, generated: true },
+      { actor: { id: session.user.id, type: 'user' } },
+    );
 
     return NextResponse.json({ document: doc }, { status: 201 });
   });

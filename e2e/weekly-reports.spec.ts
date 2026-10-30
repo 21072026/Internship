@@ -119,6 +119,10 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect((await menteePage.request.patch(`/api/weekly-reports/${report.id}`, { data: { summary: 'Built and tested the onboarding flow', status: 'SUBMITTED' } })).status()).toBe(200);
     // A resubmission after changes were requested keeps the FIRST hand-in time.
     await expect.poll(async () => prisma.weeklyReport.findUnique({ where: { id: report.id }, select: { mentorComment: true, reviewedById: true, reviewedAt: true, submittedAt: true } })).toEqual({ mentorComment: null, reviewedById: null, reviewedAt: null, submittedAt: firstSubmittedAt });
+    // The bus (#1998): the first hand-in and the resubmission, nothing for drafts or reviews.
+    const handIns = await prisma.domainEvent.findMany({ where: { name: 'weekly_report.submitted', subjectId: report.id }, orderBy: { createdAt: 'asc' } });
+    expect(handIns.map((e) => (e.payload as { resubmission: boolean }).resubmission)).toEqual([false, true]);
+    expect(JSON.stringify(handIns.map((e) => e.payload))).not.toContain('onboarding flow');
     const notificationCount = await prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'weekly_report_review.' } } });
     const concurrent = await Promise.all([
       mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'APPROVED', mentorComment: 'Looks good.' } }),

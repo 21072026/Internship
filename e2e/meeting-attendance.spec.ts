@@ -65,6 +65,10 @@ test.describe('meeting attendance', () => {
     expect((await (await record('NO_SHOW')).json()).result).toMatchObject({ saved: 2 });
     expect((await (await record('NO_SHOW')).json()).result).toMatchObject({ saved: 2 }); // a correction, not a second row
     expect(await prisma.meetingAttendance.count({ where: { meetingId: meetingIds[0] } })).toBe(2);
+    // The bus (#1998): one event per person per write (two writes × two people).
+    const recorded = await prisma.domainEvent.findMany({ where: { name: 'meeting.attendance_recorded', payload: { path: '$.meetingId', equals: meetingIds[0] } } });
+    expect(recorded).toHaveLength(4);
+    expect(recorded.filter((e) => (e.payload as { userId: string; state: string }).userId === menteeIds[0]).every((e) => (e.payload as { state: string }).state === 'NO_SHOW')).toBe(true);
     // Exactly one neutral note to the absent mentee — and none to anyone else.
     expect(await prisma.notification.count({ where: { userId: menteeIds[0], type: 'meeting.noShow' } })).toBe(1);
     expect(await prisma.notification.count({ where: { userId: mentorId, type: 'meeting.noShow' } })).toBe(0);
@@ -103,6 +107,9 @@ test.describe('meeting attendance', () => {
       { userId: mentorId, state: 'LATE_CANCEL', recordedById: mentorId },
     ]);
     expect(await prisma.meetingAttendance.count({ where: { meetingId: later } })).toBe(0);
+    // The derived LATE_CANCEL is announced like a recorded one (#1998).
+    const late = await prisma.domainEvent.findMany({ where: { name: 'meeting.attendance_recorded', payload: { path: '$.meetingId', equals: soon } } });
+    expect(late.map((e) => e.payload)).toEqual([expect.objectContaining({ userId: mentorId, state: 'LATE_CANCEL' })]);
   });
 
   test('a recurring occurrence records on its own key, and deleting a meeting keeps its attendance', async ({ page }) => {
