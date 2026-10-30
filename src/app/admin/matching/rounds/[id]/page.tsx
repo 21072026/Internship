@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MatchScoreBreakdown } from '@/components/matching/MatchScoreBreakdown';
 import { useT } from '@/i18n/client';
+import { resultCountMessage, useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import type { MatchScore } from '@/lib/matching/types';
 import type { RoundDiagnostics } from '@/lib/matching/roundDiagnostics';
 
@@ -123,6 +124,12 @@ export default function MatchRoundBoardPage() {
     return list.filter((p) => p.state === filter);
   }, [round, filter]);
   const lockedCount = (round?.proposals ?? []).filter((p) => p.state === 'LOCKED').length;
+  const searchHits = useMemo(
+    () => (search.trim() ? pool.filter((m) => m.fullName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 10) : []),
+    [pool, search],
+  );
+  // The mentor search speaks its result count, like every filter box (VPAT 4.1.3).
+  useFilterAnnouncement(search.trim() !== '' ? resultCountMessage(t.a11y, searchHits.length) : null);
 
   const act = (action: Action, ids: string[]) =>
     call(`/api/admin/match-rounds/${id}/proposals`, { method: 'PATCH', body: JSON.stringify({ action, ids }) }, (b) => {
@@ -139,9 +146,6 @@ export default function MatchRoundBoardPage() {
   if (!round) return null;
   const stats = round.stats ?? {};
   const unmatchedTotal = Object.values(stats.unmatched ?? {}).reduce((a, n) => a + (n ?? 0), 0);
-  const searchHits = search.trim()
-    ? pool.filter((m) => m.fullName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 10)
-    : [];
 
   return (
     <div className="space-y-6">
