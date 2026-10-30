@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**First-run checklist counts only your organisation (fix):** `GET /api/onboarding` counted companies, mentorships and interaction logs across every tenant, so a brand-new organisation's admin saw \"Add a company\", \"Assign the first mentorship\" and \"Log the first conversation\" already ticked off by other tenants' rows. The three counts are now scoped like the user counts beside them (`InteractionLog` through its relation). Regression test in `e2e/onboarding-checklist.spec.ts`.",
+  "notes": {
+    "en": ["A new organisation's \"Get started\" list no longer shows steps as done before you have done them."],
+    "tr": ["Yeni bir kuruluşun \"Başlarken\" listesi, adımları siz yapmadan tamamlanmış göstermiyor."],
+    "de": ["Die „Erste Schritte“-Liste einer neuen Organisation zeigt Schritte nicht mehr als erledigt, bevor Sie sie erledigt haben."]
+  }
+}
