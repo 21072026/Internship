@@ -69,14 +69,19 @@ export interface EmitterDeps {
   logger: EmitterLogger;
 }
 
+// Plain fields, not TypeScript parameter properties: the operator CLIs load
+// this file through Node's --experimental-strip-types, which refuses them.
 export class InvalidDomainEventError extends Error {
-  constructor(
-    readonly eventName: string,
-    readonly reason: 'unknown_event' | 'invalid_payload',
-    readonly issues: string[] = [],
-  ) {
+  readonly eventName: string;
+  readonly reason: 'unknown_event' | 'invalid_payload';
+  readonly issues: string[];
+
+  constructor(eventName: string, reason: 'unknown_event' | 'invalid_payload', issues: string[] = []) {
     super(`emit(${eventName}): ${reason}${issues.length ? ` — ${issues.join('; ')}` : ''}`);
     this.name = 'InvalidDomainEventError';
+    this.eventName = eventName;
+    this.reason = reason;
+    this.issues = issues;
   }
 }
 
