@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import type { ChannelAdapter } from './types';
+import type { ChannelAdapter, ChatCard } from './types';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/i18n/dictionaries';
 import type { Locale } from '@/i18n/config';
@@ -77,6 +77,8 @@ export async function deliverChat(input: {
   params: Record<string, string | number>;
   link: string;
   locale: Locale;
+  /** Subject, link button and supersede intent (#1942). */
+  card?: ChatCard | null;
 }): Promise<ChatOutcome> {
   if (!isChatAppsEnabled()) return { status: 'SKIPPED', reason: 'chat_apps_off' };
   try {
@@ -94,6 +96,7 @@ export async function deliverChat(input: {
     if (!identity) return { status: 'SKIPPED', reason: 'no_identity' };
     const ws = identity.workspace;
 
+    const subjectKey = input.card?.subjectKey?.slice(0, 64) ?? null;
     const record = (status: 'SENT' | 'FAILED' | 'SKIPPED', target: string, extra: { error?: string; externalMessageId?: string | null } = {}) =>
       prisma.chatDelivery.create({
         data: {
@@ -105,6 +108,7 @@ export async function deliverChat(input: {
           status,
           error: extra.error ?? null,
           externalMessageId: extra.externalMessageId ?? null,
+          subjectKey,
         },
         select: { id: true },
       });
@@ -134,7 +138,36 @@ export async function deliverChat(input: {
       const target = await resolveTarget(identity, client, token);
       targetId = target.id;
       const text = await cardText(input.eventKey, input.params, input.link, input.locale, input.orgId ?? ws.orgId);
-      const sent = await client.postMessage({ token, target, text });
+      const action = input.card?.actionUrl
+        ? { label: getDictionary(input.locale).chatCard.join, url: input.card.actionUrl }
+        : null;
+
+      // SUPERSEDE (#1942): a reschedule or a cancel rewrites this person's live
+      // cards about the same subject in place, so no earlier card is left
+      // saying "join" at the old time. Each rewritten card is marked, and the
+      // update is one more ledger row pointing at the same platform message.
+      if (input.card?.supersede && subjectKey) {
+        const live = await prisma.chatDelivery.findMany({
+          where: { identityId: identity.id, subjectKey, status: 'SENT', supersededAt: null, externalMessageId: { not: null } },
+          select: { id: true, externalMessageId: true },
+          orderBy: { createdAt: 'asc' },
+          take: 20,
+        });
+        if (live.length > 0) {
+          let last: string | null = null;
+          for (const card of live) {
+            await client.updateMessage({ token, target, externalMessageId: card.externalMessageId as string, text, action });
+            await prisma.chatDelivery.updateMany({ where: { id: card.id, supersededAt: null }, data: { supersededAt: new Date() } });
+            last = card.externalMessageId;
+          }
+          const row = await record('SENT', targetId, { externalMessageId: last });
+          await prisma.chatWorkspace.update({ where: { id: ws.id }, data: { lastDeliveryAt: new Date(), lastError: null } });
+          return { status: 'SENT', deliveryId: row.id };
+        }
+        // Nothing to rewrite (the earlier card was never sent): post this one.
+      }
+
+      const sent = await client.postMessage({ token, target, text, action });
       const row = await record('SENT', targetId, { externalMessageId: sent.externalMessageId?.slice(0, 128) ?? null });
       await prisma.chatWorkspace.update({ where: { id: ws.id }, data: { lastDeliveryAt: new Date(), lastError: null } });
       return { status: 'SENT', deliveryId: row.id };
@@ -155,7 +188,7 @@ export const chatAdapter: ChannelAdapter = {
   id: 'chat',
   available: () => true,
   deliver: async (d) => {
-    const outcome = await deliverChat({ userId: d.userId, orgId: d.orgId, eventKey: d.def.key, params: d.params, link: d.link, locale: d.locale });
+    const outcome = await deliverChat({ userId: d.userId, orgId: d.orgId, eventKey: d.def.key, params: d.params, link: d.link, locale: d.locale, card: d.card ?? null });
     if (outcome.status === 'SENT') return { status: 'SENT' };
     return outcome.status === 'SKIPPED' ? { status: 'SKIPPED', reason: outcome.reason } : { status: 'FAILED', error: outcome.error };
   },

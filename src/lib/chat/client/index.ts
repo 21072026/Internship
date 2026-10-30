@@ -13,8 +13,10 @@ import { teamsClient } from '@/lib/chat/client/teams';
 // token, never a response body.
 
 import { ChatClientError } from '@/lib/chat/client/errors';
+import type { CardAction } from '@/lib/chat/card';
 
 export { ChatClientError };
+export type { CardAction };
 
 export interface ChatTarget {
   /** DM or channel id (Slack D…/C…, Teams conversation id). */
@@ -24,8 +26,13 @@ export interface ChatTarget {
 }
 
 export interface ChatPlatformClient {
-  /** Post a plain-text card; returns the platform's message id. */
-  postMessage(input: { token: string; target: ChatTarget; text: string }): Promise<{ externalMessageId: string | null }>;
+  /** Post a card — the sentence, and an optional link button (#1942); returns the platform's message id. */
+  postMessage(input: { token: string; target: ChatTarget; text: string; action?: CardAction | null }): Promise<{ externalMessageId: string | null }>;
+  /**
+   * Rewrite a card the bot posted earlier, in place (#1942): Slack chat.update,
+   * a Bot Framework activity update. No `action` removes the button.
+   */
+  updateMessage(input: { token: string; target: ChatTarget; externalMessageId: string; text: string; action?: CardAction | null }): Promise<void>;
   /** Open (or find) the bot's DM with a member; returns the target to cache. */
   openDm(input: { token: string; externalUserId: string; conversationRef?: unknown }): Promise<ChatTarget>;
   /** Revoke the installation's token on the platform's side (the real uninstall). */
@@ -55,10 +62,13 @@ let overrides: Partial<Record<ChatPlatform, ChatPlatformClient>> = {};
  * refuse, so the spec can prove a failed revoke is recorded and still removes
  * our copy.
  */
+let stubSeq = 0;
 const STUB_CLIENT: ChatPlatformClient = {
   async postMessage() {
-    return { externalMessageId: 'stub-message' };
+    // Distinct per card, so a spec can see WHICH card a later update rewrote.
+    return { externalMessageId: `stub-message-${++stubSeq}` };
   },
+  async updateMessage() {},
   async openDm({ externalUserId }) {
     return { id: `stub-dm-${externalUserId}` };
   },
