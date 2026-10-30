@@ -81,6 +81,9 @@ async function seedSsoOrg(
     certificate?: string | null;
     /** Organization.vertical — a MARKETING org's sign-in lives on the marketing host (#2590). */
     vertical?: string;
+    /** SAML hardening switches (#1955). */
+    signRequests?: boolean;
+    requireInResponseTo?: boolean;
   } = {}
 ) {
   const slug = `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
@@ -97,6 +100,8 @@ async function seedSsoOrg(
       plan: 'ENTERPRISE',
       ssoEnabled: true,
       ...(opts.vertical ? { vertical: opts.vertical } : {}),
+      ...(opts.signRequests ? { ssoSignRequests: true } : {}),
+      ...(opts.requireInResponseTo ? { ssoRequireInResponseTo: true } : {}),
       ssoProvider: provider,
       ssoIssuer: provider === 'saml' ? idp.samlIssuer : idp.oidcIssuer,
       ssoEntryPoint: provider === 'saml' ? (query.toString() ? `${base}?${query}` : base) : null,
@@ -419,6 +424,136 @@ test('SAML: concurrent redemptions of one grant mint exactly one session (#2548)
     expect(grants[0].used).toBe(true);
   } finally {
     await Promise.all(contexts.map((ctx) => ctx.close()));
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+
+// --- SAML protocol hardening (#1955) -----------------------------------------
+
+/** Browser round trip for a tenant; resolves to the session email or the error URL. */
+async function samlBrowserLogin(page: import('@playwright/test').Page, slug: string) {
+  await page.goto('/auth/sso');
+  await page.getByTestId('sso-slug-input').fill(slug);
+  await page.getByTestId('sso-continue').click();
+}
+
+test('SAML: the SP metadata publishes our certificate for signing AND encryption, and AuthnRequestsSigned follows the switch', { tag: '@smoke' }, async ({ request }) => {
+  const off = await seedSsoOrg('sso-md-off');
+  const on = await seedSsoOrg('sso-md-on', { signRequests: true });
+  try {
+    const mdOff = await (await request.get(`/api/auth/sso/${off.slug}/metadata`)).text();
+    expect(mdOff).toContain('AuthnRequestsSigned="false"');
+    expect(mdOff).toMatch(/<md:KeyDescriptor use="signing">[\s\S]*X509Certificate>[A-Za-z0-9+/=]{200,}</);
+    expect(mdOff).toMatch(/<md:KeyDescriptor use="encryption">[\s\S]*X509Certificate>[A-Za-z0-9+/=]{200,}</);
+    const mdOn = await (await request.get(`/api/auth/sso/${on.slug}/metadata`)).text();
+    expect(mdOn).toContain('AuthnRequestsSigned="true"');
+    // The private half never leaves the server.
+    expect(mdOn).not.toMatch(/PRIVATE KEY/);
+  } finally {
+    await dropSsoOrg(off.org.id, []);
+    await dropSsoOrg(on.org.id, []);
+  }
+});
+
+test('SAML: with signed requests on, the IdP verifies our AuthnRequest signature against the published certificate', { tag: '@smoke' }, async ({ page, request }) => {
+  const email = uniqueEmail('sso-signed').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-signed', { signRequests: true, mode: 'require-signed', email, name: 'Signed Request' });
+  try {
+    await samlBrowserLogin(page, slug);
+    await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).toBe(email);
+    const last = await (await request.get(`${MOCK}/saml/authn/last`)).json();
+    expect(last.signed).toBe(true);
+    expect(last.verified).toBe(true);
+    expect(last.sigAlg).toBe('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256');
+  } finally {
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+test('SAML: with signed requests off, nothing is signed — an IdP that demands it refuses (the switch, not a default)', async ({ request }) => {
+  const { org, slug } = await seedSsoOrg('sso-unsigned-req', { mode: 'require-signed' });
+  try {
+    const login = await request.get(`/api/auth/sso/${slug}/login`, { maxRedirects: 0 });
+    const idp = await request.get(login.headers()['location'], { maxRedirects: 0 });
+    expect(idp.status()).toBe(400);
+    const last = await (await request.get(`${MOCK}/saml/authn/last`)).json();
+    expect(last.signed).toBe(false);
+  } finally {
+    await dropSsoOrg(org.id, []);
+  }
+});
+
+test('SAML: an assertion encrypted to our published certificate is decrypted and accepted', { tag: '@smoke' }, async ({ page }) => {
+  const email = uniqueEmail('sso-encrypted').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-enc', { mode: 'encrypted', email, name: 'Encrypted Assertion' });
+  try {
+    await samlBrowserLogin(page, slug);
+    await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).toBe(email);
+    expect(await prisma.user.count({ where: { email, orgId: org.id } })).toBe(1);
+  } finally {
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+test('SAML: a response naming a request we never sent is refused (InResponseTo)', { tag: '@smoke' }, async ({ page }) => {
+  const email = uniqueEmail('sso-foreign-irt').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-firt', { mode: 'foreign-in-response-to', email });
+  try {
+    await samlBrowserLogin(page, slug);
+    await page.waitForURL(/\/auth\/signin\?error=sso_failed/, { timeout: 30_000 });
+    expect(await prisma.user.count({ where: { email } })).toBe(0);
+  } finally {
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+test('SAML: a response is single use — the same response posted twice is refused the second time', { tag: '@smoke' }, async ({ request }) => {
+  const email = uniqueEmail('sso-irt-replay').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-irt-replay');
+  try {
+    const SAMLResponse = await mintAssertion(request, { samlRequest: await captureAuthnRequest(request, slug), mode: 'ok', email, name: 'Replay' });
+    const first = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse }, maxRedirects: 0 });
+    expect(first.headers()['location']).toContain('/auth/sso/complete?token=');
+    const second = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse }, maxRedirects: 0 });
+    expect(second.headers()['location']).toContain('/auth/signin?error=sso_failed');
+  } finally {
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
+test('SAML: IdP-initiated (no InResponseTo) works under ifPresent and is refused under the opt-in always', { tag: '@smoke' }, async ({ page, browser }) => {
+  const email = uniqueEmail('sso-idpinit').toLowerCase();
+  const strictEmail = uniqueEmail('sso-idpinit-strict').toLowerCase();
+  const lax = await seedSsoOrg('sso-idpinit', { mode: 'no-in-response-to', email });
+  const strict = await seedSsoOrg('sso-idpinit-strict', { mode: 'no-in-response-to', email: strictEmail, requireInResponseTo: true });
+  const ctx = await browser.newContext();
+  try {
+    await samlBrowserLogin(page, lax.slug);
+    await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).toBe(email);
+
+    const strictPage = await ctx.newPage();
+    await samlBrowserLogin(strictPage, strict.slug);
+    await strictPage.waitForURL(/\/auth\/signin\?error=sso_failed/, { timeout: 30_000 });
+    expect(await prisma.user.count({ where: { email: strictEmail } })).toBe(0);
+  } finally {
+    await ctx.close();
+    await dropSsoOrg(lax.org.id, [email]);
+    await dropSsoOrg(strict.org.id, [strictEmail]);
+  }
+});
+
+test('SAML: two IdP certificates are trusted at once, so a key rotation is not an outage', { tag: '@smoke' }, async ({ request }) => {
+  const email = uniqueEmail('sso-rotation').toLowerCase();
+  // Current + next: the stub's "rogue" key stands in for the IdP's new key.
+  const { org, slug } = await seedSsoOrg('sso-rot', { certificate: `${idp.samlCertificate}\n${idp.rogueCertificate}` });
+  try {
+    for (const mode of ['ok', 'wrong-key'] as const) {
+      const SAMLResponse = await mintAssertion(request, { samlRequest: await captureAuthnRequest(request, slug), mode, email, name: 'Rotation' });
+      const res = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse }, maxRedirects: 0 });
+      expect(res.headers()['location'], `${mode}: signed by a key in the trusted list`).toContain('/auth/sso/complete?token=');
+    }
+  } finally {
     await dropSsoOrg(org.id, [email]);
   }
 });

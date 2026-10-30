@@ -121,7 +121,8 @@ test('an address with an account is sent to the account erasure, and a non-admin
     const refused = await repPage.request.post('/api/admin/company-contacts/forget', {
       data: { email: s.contact, confirmEmail: s.contact, adminPassword: PW },
     });
-    expect(refused.status()).toBe(401);
+    // Signed in but not an admin: the permission layer (#1571) answers 403.
+    expect(refused.status()).toBe(403);
     expect((await prisma.companyInquiry.findUniqueOrThrow({ where: { id: s.own.inquiry.id } })).email).toBe(s.contact);
   } finally {
     await repCtx.close();

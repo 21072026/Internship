@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, uniqueEmail } from './helpers/db';
-import { gotoSettled } from './helpers/auth';
+import { gotoSettled, submitSignInForm } from './helpers/auth';
 
 // #1401 — the admin's requisition detail: who fits the role (the one match
 // rule, consenting pool only) and an admin-managed shortlist that is the
@@ -16,11 +16,12 @@ const emails = {
 };
 const ids: Record<string, string> = {};
 
+// Switches users mid-test, so it goes through submitSignInForm(): a bare
+// clearCookies() + goto('/auth/signin') lost the race with the outgoing page's
+// /api/auth/session read, which re-issued the previous user's cookie and left
+// no form to fill (e2e-full, 2026-10-29 — see e2e/helpers/auth.ts).
 async function login(page: Page, email: string) {
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+  await submitSignInForm(page, email, password);
   await page.waitForURL((url) => !url.pathname.startsWith('/auth/signin'));
 }
 

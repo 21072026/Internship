@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
-import { samlForOrg, mapSamlProfile } from '@/lib/ssoSaml';
+import { mapSamlProfile } from '@/lib/ssoSaml';
+import { samlLoginForOrg } from '@/lib/ssoSamlLogin';
 import { extractClaims, type SsoClaims } from '@/lib/ssoRoleMapping';
 import { completeSsoSignIn, landingOrigin, ssoFail as fail } from '@/lib/ssoCompletion';
 
@@ -36,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   let fullName: string | null;
   let claims: SsoClaims;
   try {
-    const saml = samlForOrg(slug, org);
+    const saml = await samlLoginForOrg(slug, org);
     const { profile } = await saml.validatePostResponseAsync({ SAMLResponse, RelayState });
     const identity = mapSamlProfile(profile as Record<string, unknown> | null);
     email = identity.email;

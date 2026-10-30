@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setDefaultOrgSetting } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, gotoSettled } from './helpers/auth';
 import { freshIp } from './helpers/rateLimit';
 import { E2E_HIBP_MOCK_PORT } from '../playwright.config';
 
@@ -171,7 +171,9 @@ test('an admin changes the policy on /admin/settings; a minimum under the floor 
     expect(policy.rules).toContain('symbol');
 
     // The controls render the stored values.
-    await page.goto('/admin/settings');
+    // gotoSettled: /admin/settings streams its Suspense copy, and a bare goto
+    // let the testid resolve to both copies (strict-mode violation, e2e-full).
+    await gotoSettled(page, '/admin/settings');
     await expect(page.getByTestId('password-min-length')).toHaveValue('10');
     await expect(page.getByTestId('password-require-symbol')).toBeChecked();
     await expect(page.getByTestId('password-require-digit')).not.toBeChecked();

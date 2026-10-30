@@ -53,6 +53,10 @@ interface Organization {
     ssoScopes: string | null;
     ssoClientSecretSet: boolean;
     oidcRedirectUri: string;
+    // SAML hardening (#1955).
+    ssoSignRequests: boolean;
+    ssoRequireInResponseTo: boolean;
+    spCertificateSet: boolean;
     certificate: CertificateSummary;
     active: boolean;
     spEntityId: string;
@@ -529,6 +533,8 @@ export default function AdminOrganizationsPage() {
   const [ssoClientSecret, setSsoClientSecret] = useState('');
   const [ssoDiscoveryUrl, setSsoDiscoveryUrl] = useState('');
   const [ssoScopes, setSsoScopes] = useState('');
+  const [ssoSignRequests, setSsoSignRequests] = useState(false);
+  const [ssoRequireInResponseTo, setSsoRequireInResponseTo] = useState(false);
   const [ssoMsg, setSsoMsg] = useState<string | null>(null);
 
   const selectSsoOrg = (id: string) => {
@@ -545,6 +551,8 @@ export default function AdminOrganizationsPage() {
     setSsoClientSecret(''); // write-only, like the certificate
     setSsoDiscoveryUrl(o?.sso.ssoDiscoveryUrl ?? '');
     setSsoScopes(o?.sso.ssoScopes ?? '');
+    setSsoSignRequests(o?.sso.ssoSignRequests ?? false);
+    setSsoRequireInResponseTo(o?.sso.ssoRequireInResponseTo ?? false);
   };
 
   const saveSso = async (e: React.FormEvent) => {
@@ -559,6 +567,12 @@ export default function AdminOrganizationsPage() {
       if (ssoCertificate.trim()) body.ssoCertificate = ssoCertificate;
       // OIDC (#1929): the client and discovery fields travel with the form;
       // the secret, like the certificate, only when one was typed.
+      // SAML hardening (#1955): only for a SAML tenant, and only when changed.
+      if (ssoProvider === 'saml') {
+        const o = orgs.find((x) => x.id === ssoOrgId);
+        if (ssoSignRequests !== (o?.sso.ssoSignRequests ?? false)) body.ssoSignRequests = ssoSignRequests;
+        if (ssoRequireInResponseTo !== (o?.sso.ssoRequireInResponseTo ?? false)) body.ssoRequireInResponseTo = ssoRequireInResponseTo;
+      }
       if (ssoProvider === 'oidc') {
         Object.assign(body, { ssoClientId, ssoDiscoveryUrl, ssoScopes });
         if (ssoClientSecret.trim()) body.ssoClientSecret = ssoClientSecret;
@@ -984,6 +998,24 @@ export default function AdminOrganizationsPage() {
                   />
                   <p className="text-xs text-gray-400 mt-1">{t.organizations.ssoCertHint}</p>
                 </div>
+                )}
+                {ssoProvider === 'saml' && (
+                  <div className="space-y-2" data-testid="sso-saml-hardening">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" data-testid="sso-sign-requests" disabled={ssoLocked} checked={ssoSignRequests} onChange={(e) => setSsoSignRequests(e.target.checked)} />
+                      <span>
+                        {t.organizations.ssoSignRequests}
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">{t.organizations.ssoSignRequestsWarn}</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" data-testid="sso-require-in-response-to" disabled={ssoLocked} checked={ssoRequireInResponseTo} onChange={(e) => setSsoRequireInResponseTo(e.target.checked)} />
+                      <span>
+                        {t.organizations.ssoRequireInResponseTo}
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">{t.organizations.ssoRequireInResponseToWarn}</span>
+                      </span>
+                    </label>
+                  </div>
                 )}
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" data-testid="sso-enabled" disabled={ssoLocked} checked={ssoEnabled} onChange={(e) => setSsoEnabled(e.target.checked)} />
