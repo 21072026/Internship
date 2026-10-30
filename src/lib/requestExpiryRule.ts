@@ -59,3 +59,16 @@ export function expiryAction(req: ExpiringRequest, now: Date): 'expire' | 'nudge
 export function daysUntilExpiry(req: Pick<ExpiringRequest, 'createdAt' | 'expiresAt'>, now: Date): number {
   return Math.max(0, Math.ceil((effectiveExpiry(req).getTime() - now.getTime()) / DAY));
 }
+
+/**
+ * The SQL twin of `isLivePending()` — a `MentorshipRequest` filter matching the
+ * requests that still block the mentee at `now`. A NULL `expiresAt` reads as
+ * `createdAt + REQUEST_TTL_DAYS`, exactly as `effectiveExpiry()` does. Plain
+ * object, no Prisma import, so this file stays pure.
+ */
+export function livePendingRequestWhere(now: Date) {
+  return {
+    status: 'PENDING' as const,
+    OR: [{ expiresAt: { gt: now } }, { expiresAt: null, createdAt: { gt: new Date(now.getTime() - REQUEST_TTL_DAYS * DAY) } }],
+  };
+}
