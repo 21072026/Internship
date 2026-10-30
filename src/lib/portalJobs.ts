@@ -1,7 +1,7 @@
 // The mentee-facing job board (#1830): which requisitions a mentee may see and
 // what of them leaves the server. One rule for the list and the detail read.
 //
-// VISIBLE = OPEN and a seat still free (filled < openings, a column comparison
+// VISIBLE = OPEN, its company verified (#1865), and a seat still free (filled < openings, a column comparison
 // in the WHERE so counts and pages stay right — the talent-pool discipline),
 // in the caller's org. Everything else — DRAFT, ON_HOLD, FILLED, CANCELLED, a
 // full role, another org's role — is simply absent: the detail answers 404.
@@ -10,6 +10,7 @@
 // legacy CompanyNeed link, never the fill bookkeeping beyond openings/filled.
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { VERIFIED_COMPANY_WHERE } from '@/lib/companyVerification';
 
 export const PORTAL_JOB_SELECT = {
   id: true,
@@ -24,8 +25,11 @@ export const PORTAL_JOB_SELECT = {
   company: { select: { id: true, name: true, logoUrl: true } },
 } satisfies Prisma.RequisitionSelect;
 
+// …and its company is VERIFIED (#1865): a self-signed-up employer reaches no
+// candidate until it is cleared. In the WHERE, like the seat rule, so the
+// board's total and its pages never count a role nobody may see.
 export function visibleJobsWhere(orgId: string): Prisma.RequisitionWhereInput {
-  return { orgId, status: 'OPEN', filled: { lt: prisma.requisition.fields.openings } };
+  return { orgId, status: 'OPEN', filled: { lt: prisma.requisition.fields.openings }, ...VERIFIED_COMPANY_WHERE };
 }
 
 /** Requisition ids whose required skills mention `skill` (case-insensitive) — the JSON array matched in SQL, inside the visible set. */

@@ -177,6 +177,8 @@ const DECISIONS = new Map([
   ['PostCampaign.letterBody', BUSINESS],
   ['PostCampaignRecipient.addressBlock', "a company's postal address on a sent letter campaign"],
   ['ProgramCost.note', BUSINESS],
+  // Why an admin rejected or suspended an employer account (#1865) — a decision about the company, not about a person.
+  ['Company.rejectionReason', BUSINESS],
   ['OrgEntitlement.note', BUSINESS],
   ['PlanChangeRequest.reason', BUSINESS],
   ['PlanChangeRequest.note', BUSINESS],

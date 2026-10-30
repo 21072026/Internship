@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { COMPANY_NOT_VERIFIED, publishRefused } from '@/lib/companyVerification';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { syncRequisitionSkills } from '@/lib/skillsResolve';
@@ -108,8 +109,12 @@ export async function POST(request: Request) {
     if (scope.session.user.role === 'COMPANY' && data.companyId && data.companyId !== companyId) {
       return NextResponse.json({ error: 'Cannot create for another company', fields: ['companyId'], code: 'protected_fields' }, { status: 403 });
     }
-    const company = await prisma.company.findFirst({ where: { id: companyId, orgId: scope.orgId }, select: { id: true } });
+    const company = await prisma.company.findFirst({ where: { id: companyId, orgId: scope.orgId }, select: { id: true, verificationStatus: true } });
     if (!company) return NextResponse.json({ error: 'Company not found', code: 'company_not_found' }, { status: 404 });
+    // An unverified employer may draft, never publish (#1865).
+    if (publishRefused({ companyStatus: company.verificationStatus, nextRequisitionStatus: data.status })) {
+      return NextResponse.json({ error: 'The company is not verified yet', code: COMPANY_NOT_VERIFIED }, { status: 403 });
+    }
     if (data.ownerId && !(await validateRequisitionOwner(data.ownerId, scope.orgId, companyId))) {
       return NextResponse.json({ error: 'Owner must be an active company user in the same organization and company', code: 'invalid_owner' }, { status: 400 });
     }

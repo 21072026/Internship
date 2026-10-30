@@ -4,6 +4,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { COMPANY_NOT_VERIFIED, publishRefused } from '@/lib/companyVerification';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { closedAtForStatus, normalizeSkills, protectedFields, requisitionPatchSchema } from '@/lib/requisitions';
@@ -68,6 +69,14 @@ export async function PATCH(request: Request, { params }: Context) {
         where: { id, orgId: scope.orgId, ...(scope.session.user.role === 'COMPANY' ? { companyId: scope.session.user.companyId! } : {}) },
       });
       if (!current) return NextResponse.json({ error: 'Requisition not found', code: 'not_found' }, { status: 404 });
+      // Publishing is what an unverified employer may not do (#1865); every
+      // other edit of a draft stays open to it.
+      if (parsed.data.status === 'OPEN') {
+        const company = await tx.company.findUnique({ where: { id: current.companyId }, select: { verificationStatus: true } });
+        if (publishRefused({ companyStatus: company?.verificationStatus, nextRequisitionStatus: 'OPEN' })) {
+          return NextResponse.json({ error: 'The company is not verified yet', code: COMPANY_NOT_VERIFIED }, { status: 403 });
+        }
+      }
       const openings = parsed.data.openings ?? current.openings;
       const filled = parsed.data.filled ?? current.filled;
       if (filled > openings) return NextResponse.json({ error: 'Filled cannot exceed openings', code: 'filled_exceeds_openings' }, { status: 409 });

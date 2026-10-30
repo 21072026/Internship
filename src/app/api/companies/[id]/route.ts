@@ -10,7 +10,8 @@ import { openPositionsInclude } from '@/lib/openPositions';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logViewActivity } from '@/lib/activity';
-import { requirePermission } from '@/lib/authz';
+import { requirePermission, requireRoleOrPermission } from '@/lib/authz';
+import { companySelfEditRefusedFields } from '@/lib/companyVerification';
 
 // Tenant (#2542): every handler here looks the company up with
 // `withinTenant({ id }, await tenantWhere(session))`, so another tenant's company is a
@@ -122,12 +123,27 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const gate = await requirePermission('company.write', { request });
+    // A COMPANY user may edit its OWN company's profile (#1865) — six fields,
+    // nothing else; every other role needs `company.write`.
+    const gate = await requireRoleOrPermission(['COMPANY'], 'company.write', { request });
     if ('error' in gate) return gate.error;
     const { session } = gate;
 
     return await withTenantScope(session, async () => {
     const body = await request.json();
+    if (!gate.admin) {
+      // Another company's id answers like a missing one: 404, never a 403
+      // that would confirm it exists.
+      if (!session.user.companyId || session.user.companyId !== id) {
+        return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+      }
+      // Named and refused, never silently stripped: quota, name, externalId,
+      // orgId and verificationStatus are the programme's to set.
+      const refused = companySelfEditRefusedFields(body);
+      if (refused.length) {
+        return NextResponse.json({ error: 'These company fields cannot be changed', fields: refused, code: 'protected_fields' }, { status: 403 });
+      }
+    }
     const parsed = updateCompanySchema.safeParse(body);
 
     if (!parsed.success) {

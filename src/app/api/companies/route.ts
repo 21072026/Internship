@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isCompanyVerificationStatus } from '@/lib/companyVerification';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -137,6 +138,13 @@ export async function GET(request: Request) {
     const sourceFilter: Prisma.CompanyWhereInput | undefined =
       searchParams.get('source') === 'klaviyo' ? { externalProfiles: { some: { provider: 'klaviyo' } } } : undefined;
 
+    // The employer verification queue (#1865): `?verification=PENDING` is the
+    // admin's review list. Any other value is no filter, never an error.
+    const verification = searchParams.get('verification');
+    const verificationFilter: Prisma.CompanyWhereInput | undefined = isCompanyVerificationStatus(verification)
+      ? { verificationStatus: verification }
+      : undefined;
+
     // The same two columns the client-side `filter()` used to match on, so the
     // move to the server is not also a change of what "search" means.
     const searchFilter = search
@@ -163,6 +171,7 @@ export async function GET(request: Request) {
         permissionFilter,
         ownerFilter,
         sourceFilter,
+        verificationFilter,
       );
       const include = {
         // Open positions come from Requisition only (#1875).

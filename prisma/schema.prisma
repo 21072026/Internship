@@ -2127,16 +2127,16 @@ model DocumentReview {
 }
 
 model Company {
-  orgId           String?
-  org             Organization? @relation(fields: [orgId], references: [id])
-  id              String        @id @default(cuid())
+  orgId              String?
+  org                Organization? @relation(fields: [orgId], references: [id])
+  id                 String        @id @default(cuid())
   // A row of the starter pack's sample programme (#2066): synthetic, labelled,
   // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
-  sampleData      Boolean       @default(false)
-  name            String
+  sampleData         Boolean       @default(false)
+  name               String
   // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
-  description     String?       @db.Text
-  contactEmail    String?
+  description        String?       @db.Text
+  contactEmail       String?
   // The primary contact on the account (#2407) — "who do we call", beside the
   // address column that already existed. Three plain columns rather than a
   // `CompanyContact` table on purpose: there is no Contact model here, a
@@ -2158,12 +2158,12 @@ model Company {
   // through the tenant boundary (docs/tenant-isolation.md): two tenants may each
   // hold the same merchant, and one would then be unable to save its own row.
   // Were uniqueness ever wanted here it could only be `@@unique([orgId, ...])`.
-  contactName     String?
-  contactPhone    String?
+  contactName        String?
+  contactPhone       String?
   // The primary contact's role at the account ("Geschäftsführer"). The three
   // contact columns plus this one ARE the primary contact; CompanyContact holds
   // everyone else (#2442, docs/company-contacts.md).
-  contactPosition String?
+  contactPosition    String?
   // VAT identification number (#2405). The account's strongest identity across
   // systems, and therefore the account import's FIRST matching key; the fallback
   // is normalized name + country (docs/marketing-import.md).
@@ -2173,16 +2173,16 @@ model Company {
   // accounts that carry no VAT number are unconstrained — which is every row the
   // internship product has today, and why this can be added to a populated
   // table at all.
-  vatId           String?
+  vatId              String?
   // ISO-3166-1 alpha-2, upper case. The other half of the fallback match key:
   // `address` is free text and cannot answer "which country is this account
   // in", so two merchants of the same name in two countries were one row.
-  country         String?       @db.VarChar(2)
-  industry        String?
-  logoUrl         String?
-  size            String?
-  address         String?
-  quota           Int?
+  country            String?       @db.VarChar(2)
+  industry           String?
+  logoUrl            String?
+  size               String?
+  address            String?
+  quota              Int?
   // The account's id in the source system the tenant's feeds key on (#2446) —
   // an opaque string the upstream source system assigned, never interpreted
   // here. Nullable and unbackfilled: a company typed in by hand, or
@@ -2204,15 +2204,15 @@ model Company {
   // The index below is what that lookup reads ("which company of THIS org is
   // external id X?"). Contracts: docs/usage-feed.md and
   // docs/integrations/account-events.md.
-  externalId      String?       @db.VarChar(191)
+  externalId         String?       @db.VarChar(191)
   // The account's plan in the upstream product (#2846), as the account-event
   // feed last reported it (`plan`, docs/integrations/account-events.md):
   // lower-cased, null = never reported. `productPlanAt` is the `occurred_at`
   // of the event that wrote it, so an older event arriving late never puts a
   // stale plan back. Read by the `free_quota_exceeded` signal
   // (src/lib/usageRule.ts); it gates nothing and is never billing.
-  productPlan     String?       @db.VarChar(40)
-  productPlanAt   DateTime?
+  productPlan        String?       @db.VarChar(40)
+  productPlanAt      DateTime?
   // The slug of the registered integration source (`IntegrationSource.slug`)
   // whose account event CREATED this row (#2959), stamped in the same insert by
   // the account-event writer (src/lib/accountEventIngest.ts). NULL for every
@@ -2222,9 +2222,28 @@ model Company {
   // (prisma/wipe-integration-source.mjs) needs: `IntegrationEvent.companyId`
   // is also set by an event that merely moved an existing account. Nullable
   // and unbackfilled: only events ingested after it exists carry it.
-  createdBySource String?       @db.VarChar(40)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdBySource    String?       @db.VarChar(40)
+  // Employer verification (#1865, docs/company-verification.md):
+  // PENDING | VERIFIED | REJECTED | SUSPENDED. A company that is not VERIFIED
+  // reaches no candidate — the job board's WHERE (src/lib/portalJobs.ts), the
+  // publish of an OPEN requisition and the company→candidate channel all
+  // refuse it. The rule is pure in src/lib/companyVerification.ts.
+  //
+  // DEFAULT IS `VERIFIED`, on purpose: every company that exists today was
+  // created by an admin and must stay visible on deploy. Only the public
+  // self-signup path writes PENDING. A PENDING default would blank every
+  // existing board overnight.
+  verificationStatus String        @default("VERIFIED") @db.VarChar(16)
+  verifiedAt         DateTime?
+  // Plain id: the admin who decided (or NULL for an automatic domain proof).
+  verifiedById       String?
+  // The work e-mail domain a self-signup registered with — what a domain
+  // proof is checked against. NULL for an admin-created company.
+  signupDomain       String?       @db.VarChar(191)
+  // Why an admin rejected or suspended the company; shown to the company.
+  rejectionReason    String?       @db.Text
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
