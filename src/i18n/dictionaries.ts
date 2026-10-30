@@ -376,6 +376,12 @@ const en = {
     lockedTitle: 'Talent pool is a premium feature',
     lockedBody: 'Ask your administrator to enable talent-pool search for your company.',
   },
+  sourceIntegrations: {
+    navLink: 'API keys',
+    subtitle: 'Connect your own systems to the candidates your organisation referred. A key reads only your referred candidates and always expires.',
+    scopeCandidates: 'Your referred candidates (read)',
+    notAssigned: 'Your account is not linked to a referring organisation yet.',
+  },
   companyIntegrations: {
     navLink: 'API keys',
     title: 'API keys',
@@ -11619,6 +11625,12 @@ const tr: Dict = {
     lockedTitle: 'Yetenek havuzu premium bir özelliktir',
     lockedBody: 'Şirketiniz için yetenek havuzu aramasını etkinleştirmesi için yöneticinizle görüşün.',
   },
+  sourceIntegrations: {
+    navLink: 'API anahtarları',
+    subtitle: 'Kendi sistemlerinizi kurumunuzun yönlendirdiği adaylara bağlayın. Bir anahtar yalnızca sizin yönlendirdiğiniz adayları okur ve her zaman bir son kullanma tarihi vardır.',
+    scopeCandidates: 'Yönlendirdiğiniz adaylar (okuma)',
+    notAssigned: 'Hesabınız henüz yönlendiren bir kuruma bağlı değil.',
+  },
   companyIntegrations: {
     navLink: 'API anahtarları',
     title: 'API anahtarları',
@@ -22629,6 +22641,12 @@ const de: Dict = {
     viewProfile: 'Profil ansehen',
     lockedTitle: 'Der Talentpool ist eine Premium-Funktion',
     lockedBody: 'Bitte deinen Administrator, die Talentpool-Suche für dein Unternehmen zu aktivieren.',
+  },
+  sourceIntegrations: {
+    navLink: 'API-Schlüssel',
+    subtitle: 'Verbinden Sie Ihre eigenen Systeme mit den Kandidat:innen, die Ihre Organisation vermittelt hat. Ein Schlüssel liest nur Ihre vermittelten Kandidat:innen und läuft immer ab.',
+    scopeCandidates: 'Ihre vermittelten Kandidat:innen (lesen)',
+    notAssigned: 'Ihr Konto ist noch keiner vermittelnden Organisation zugeordnet.',
   },
   companyIntegrations: {
     navLink: 'API-Schlüssel',

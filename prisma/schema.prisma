@@ -1348,7 +1348,8 @@ model Source {
   contactEmail String?
   createdAt    DateTime      @default(now())
 
-  users User[]
+  users   User[]
+  apiKeys ApiKey[]
 
   @@unique([orgId, name])
   @@index([name])
@@ -3616,6 +3617,11 @@ model ApiKey {
   // Null = an org-wide key an ADMIN minted. Additive and nullable.
   companyId       String?
   company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Set when a SOURCE owner minted the key for the candidates they referred
+  // (#2006), the same three rules as `companyId` (src/lib/sourceApiKeyRule.ts).
+  // Null = not a source key. Additive and nullable.
+  sourceId        String?
+  source          Source?             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   // Null means "never expires" — allowed, but flagged in the admin UI.
   expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
@@ -3636,6 +3642,7 @@ model ApiKey {
   @@index([orgId])
   @@index([createdById])
   @@index([companyId])
+  @@index([sourceId])
 }
 
 // Requests per API key per quota period (#2010) — the only counter model the
