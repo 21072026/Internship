@@ -16,6 +16,9 @@ const BY_NAME: Record<string, WebhookEventFamily> = {
   'application.stage_changed': 'hiring',
   'interaction.logged': 'activity',
   'evaluation.added': 'activity',
+  // A new account (#3405) — most often a candidate entering the funnel, so it
+  // sits with the pipeline's own arrival event.
+  'user.created': 'pipeline',
 };
 
 const BY_PREFIX: Record<string, WebhookEventFamily> = {

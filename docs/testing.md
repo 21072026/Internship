@@ -209,7 +209,27 @@ const { diffRoster } = await import('../../src/lib/rosterIngest.ts');
 The imports have to be **dynamic** and come after `register()`: a static import is hoisted
 above it and would resolve before the hook is installed.
 
-Anything that needs a rendered page, a session cookie or a Prisma query stays in `e2e/`
+### A module that queries Prisma (#1598)
+
+`src/lib/prisma.ts` reuses `globalThis.prisma` when one is already there, so a test can seat
+the in-memory client from `scripts/test/fake-prisma.mjs` **before** its first dynamic import
+and every `prisma.<model>.<op>()` in the module graph is routed to it. No database and no
+engine, and no per-module mocking either: each call is recorded in `calls`, answered by
+`handlers['model.op']` when the test set one, and otherwise by a neutral default (an empty
+list, `null`, `0`, `{ count: 0 }`). `$use` is recorded too, so a Prisma middleware can be
+called directly. `dormant-first-contact`, `plan-gate`, `entitlements` and `org-context` are
+the worked examples.
+
+```js
+const db = installFakePrisma();
+const { foo } = await import('../../src/lib/foo.ts');
+db.handlers['message.findMany'] = () => [{ relationId: 'r', createdAt: new Date() }];
+```
+
+What it cannot prove is the SQL: a `where` the database would reject passes here. Assert the
+shape of the arguments the module sends (`db.calls`), and leave query correctness to `e2e/`.
+
+Anything that needs a rendered page, a session cookie or a real query stays in `e2e/`
 under Playwright. The one awkward case is the `e2e/*.unit.spec.ts` files (about 70 at
 the time of writing — count them, don't trust this sentence): they are pure, but they were
 written against Playwright's resolver for the `@/` alias, so they run in the browser suite

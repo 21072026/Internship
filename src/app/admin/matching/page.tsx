@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MatchScoreBreakdown } from '@/components/matching/MatchScoreBreakdown';
 import { useT } from '@/i18n/client';
-import { MATCH_DIMENSIONS, type MatchRuleKind } from '@/lib/matching/types';
+import { MATCH_DIMENSIONS, SOFT_ONLY_DIMENSIONS, type MatchRuleKind } from '@/lib/matching/types';
 import { normalizedWeights, type SimulatedMentee, type SimulationSummary } from '@/lib/matching/simulate';
 import type { MatchRuleDraft } from '@/lib/matching/ruleSetSchema';
 
@@ -220,7 +220,11 @@ export default function MatchingRulesPage() {
                     <select
                       aria-label={L.dimension}
                       value={r.dimension}
-                      onChange={(e) => patchRule(i, { dimension: e.target.value as MatchRuleDraft['dimension'], config: {} })}
+                      onChange={(e) => {
+                        const dimension = e.target.value as MatchRuleDraft['dimension'];
+                        // A soft-only rule (#2038) is always weighted.
+                        patchRule(i, SOFT_ONLY_DIMENSIONS.includes(dimension) ? { dimension, config: {}, kind: 'WEIGHTED' } : { dimension, config: {} });
+                      }}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
                     >
                       {MATCH_DIMENSIONS.map((d) => (
@@ -231,6 +235,7 @@ export default function MatchingRulesPage() {
                       aria-label={L.kind}
                       value={r.kind}
                       onChange={(e) => patchRule(i, { kind: e.target.value as MatchRuleKind })}
+                      disabled={SOFT_ONLY_DIMENSIONS.includes(r.dimension)}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
                       data-testid={`matching-rule-kind-${i}`}
                     >

@@ -33,6 +33,8 @@ export const API_ERROR_TYPES = [
   'not_found',
   // A COMPANY owner's key on a route that is not narrowed to its company (#2006).
   'company_key_not_allowed',
+  // A SOURCE owner's key on a route that is not narrowed to its source (#2006).
+  'source_key_not_allowed',
   // Writes (#1994, src/lib/api/v1Write.ts).
   'idempotency_key_reused',
   'idempotency_in_progress',

@@ -182,6 +182,11 @@ model Organization {
   // disagreement on every sign-in. Off = it only fills empty fields, so a user
   // who corrected their own city keeps it. The mappings are SsoAttributeMapping.
   ssoAuthoritative       Boolean   @default(false)
+  // Programme eligibility (#1945, docs/program-eligibility.md): OPEN (default —
+  // nobody is gated) or RULES (ineligible by default; only an ALLOW rule of
+  // ProgramEligibilityRule admits). Gates admission to the organisation: SSO
+  // JIT, the public apply form, a direct assignment.
+  eligibilityMode        String    @default("OPEN") @db.VarChar(8)
   // SAML Single Logout (#1952, docs/sso-saml.md § Single Logout). The IdP's
   // SingleLogoutService (part of the IdP trust: a super admin sets it, #1575),
   // and OUR per-org SP signing key — generated on first use, the private half
@@ -325,6 +330,7 @@ model Organization {
   matchDecisions          MatchDecision[]
   matchRounds             MatchRound[]
   matchProposals          MatchProposal[]
+  profileDigests          ProfileDigest[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -364,6 +370,7 @@ model Organization {
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   ssoAttributeMappings    SsoAttributeMapping[]
+  eligibilityRules        ProgramEligibilityRule[]
   ssoAuthRequests         SsoAuthRequest[]
   agendaTemplates         AgendaTemplate[]
   safeguardingFlags       SafeguardingFlag[]
@@ -991,6 +998,7 @@ model User {
   // Canonical skills (#1815). `skills` above stays the free-text JSON until a
   // separate contract PR retires it; this is the joinable twin.
   skillRows                         UserSkill[]
+  profileDigest                     ProfileDigest?
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -1340,7 +1348,8 @@ model Source {
   contactEmail String?
   createdAt    DateTime      @default(now())
 
-  users User[]
+  users   User[]
+  apiKeys ApiKey[]
 
   @@unique([orgId, name])
   @@index([name])
@@ -3608,6 +3617,11 @@ model ApiKey {
   // Null = an org-wide key an ADMIN minted. Additive and nullable.
   companyId       String?
   company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Set when a SOURCE owner minted the key for the candidates they referred
+  // (#2006), the same three rules as `companyId` (src/lib/sourceApiKeyRule.ts).
+  // Null = not a source key. Additive and nullable.
+  sourceId        String?
+  source          Source?             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   // Null means "never expires" — allowed, but flagged in the admin UI.
   expiresAt       DateTime?
   // Set by the soft revoke; the row itself stays forever.
@@ -3628,6 +3642,7 @@ model ApiKey {
   @@index([orgId])
   @@index([createdById])
   @@index([companyId])
+  @@index([sourceId])
 }
 
 // Requests per API key per quota period (#2010) — the only counter model the
@@ -4140,12 +4155,15 @@ model AvailabilityException {
 
 // A cohort groups mentees/internships by intake period for comparison.
 model Cohort {
-  orgId     String?
-  org       Organization? @relation(fields: [orgId], references: [id])
-  id        String        @id @default(cuid())
-  name      String
-  term      String?
-  createdAt DateTime      @default(now())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id])
+  id              String        @id @default(cuid())
+  name            String
+  term            String?
+  createdAt       DateTime      @default(now())
+  // Programme eligibility (#1945): OPEN (default) or RULES. The programme is
+  // gated when it OR its organisation is in RULES mode.
+  eligibilityMode String        @default("OPEN") @db.VarChar(8)
 
   relations        MentorshipRelation[]
   programCosts     ProgramCost[]
@@ -4155,6 +4173,34 @@ model Cohort {
   settings         Setting[]
   stageSlas        StageSla[]
   matchRounds      MatchRound[]
+  eligibilityRules ProgramEligibilityRule[]
+}
+
+// Programme eligibility (#1945, docs/program-eligibility.md): "a person whose
+// `attribute` <operator> `value` is ALLOWED / DENIED". `programId` null is an
+// organisation-wide rule that applies to every programme too. The vocabularies
+// (effect, attribute, operator) and THE evaluator — priority first, DENY beats
+// ALLOW at equal priority — are src/lib/eligibilityRule.ts.
+model ProgramEligibilityRule {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  programId   String?
+  program     Cohort?      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  // ALLOW | DENY
+  effect      String       @db.VarChar(8)
+  // A User column (department, city, …) or attr:<OrgAttribute.key>.
+  attribute   String       @db.VarChar(80)
+  // EQUALS | IN | NOT_IN | GTE | LTE | EXISTS
+  operator    String       @db.VarChar(16)
+  value       Json
+  priority    Int          @default(0)
+  active      Boolean      @default(true)
+  createdById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([orgId, programId, priority])
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -7251,6 +7297,30 @@ model MatchProposal {
 
   @@unique([roundId, menteeId])
   @@index([roundId, state])
+}
+
+/// A person's profile in themes (#2038): a short normalised paragraph and a
+/// bounded list of theme tokens, generated once by AI from the person's own
+/// free text and cached here, so the `semanticAffinity` match rule compares
+/// cached tokens and a matching query never calls a provider. `sourceHash`
+/// is the hash of the text it was made from — regenerated only when that
+/// text changes. Its subject can read it and ask for a regeneration.
+model ProfileDigest {
+  id         String   @id @default(cuid())
+  orgId      String?
+  userId     String   @unique
+  digest     String   @db.Text
+  /// A bounded list of normalised theme tokens (src/lib/matching/semantic.ts).
+  themes     Json     @default("[]")
+  sourceHash String   @db.VarChar(64)
+  model      String?  @db.VarChar(100)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org  Organization? @relation(fields: [orgId], references: [id])
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
 }
 
 /// Where a pairing was decided (#1789). The human step, named.

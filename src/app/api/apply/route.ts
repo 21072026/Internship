@@ -21,6 +21,7 @@ import { capSkills } from '@/lib/skills';
 import { syncUserSkills } from '@/lib/skillsResolve';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { requireCapability } from '@/lib/capabilityGate';
+import { isEligible } from '@/lib/eligibility';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -124,6 +125,18 @@ export async function POST(request: Request) {
   // call. The commercial half goes to the org's admins as a notification.
   // e2e/upgrade-prompt.spec.ts fails if a plan name or a price ever reaches
   // this response body.
+  // Programme eligibility (#1945), judged on what the applicant typed, BEFORE
+  // an account exists: in RULES mode an application nobody's rule admits is
+  // refused, not filed. The applicant is told it is not open to them — never
+  // which rule, which is the organisation's business.
+  const eligibility = await isEligible({ orgId: mentor.orgId, profile: { city: city || null, department: department || null, university: university || null } });
+  if (!eligibility.ok) {
+    return NextResponse.json(
+      { error: 'This programme is not open to your profile', code: 'not_eligible' },
+      { status: 403 },
+    );
+  }
+
   const gate = await checkActiveRelationLimit(mentor.orgId);
   if (!gate.allowed) {
     await notifyAdminsHeldByPlan(mentor.orgId, 'plan_limit.application_held', gate.limit);
