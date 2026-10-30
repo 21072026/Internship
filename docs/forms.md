@@ -50,3 +50,21 @@ form is published, so the host form is unchanged. Mounted today: `ProfileForm` (
 | `PUT /api/forms/responses` | `{ definitionId, answers }`, `.strict()` — a body naming a `userId` is a 400; the person is always the session. A form the caller is not asked (another org's, a draft, another audience) is 404. Validated by `saveFormResponses()` with `validateResponse()`. A key sent empty (`null`, `''`, `[]`) clears that answer across every version of the form; a key left out is untouched. |
 
 Selection lives in `src/lib/forms/active.ts` (`activeForms`, `publicForm`, `ownAnswers`).
+
+## Matching on answers (#1803)
+
+A field with `matchable = true` (only SELECT, MULTI_SELECT, BOOLEAN, NUMBER, SCALE — `canBeMatchable()`)
+becomes the matching dimension `customField:<fieldKey>` (`customFieldDimension()` in
+`src/lib/matching/dimensions.ts`). The answer's shape picks the comparison: exact for a string or a
+boolean, shared options over the mentee's list for a MULTI_SELECT, closeness for a number —
+matched within `config.tolerance` (default 0), the ratio falling to 0 at `tolerance + 1` apart.
+Either side unanswered is *not applicable* (the same 0 for every mentor).
+
+- **Bulk only.** `src/lib/matching/customAnswers.ts` loads the org's matchable keys and every answer
+  of the people in a pass in two queries; `loadMentorPool` / `loadMentees` / `loadPairForScoring`
+  attach them as `customAnswers`. The unit test (`e2e/custom-field-matching.unit.spec.ts`) pins it:
+  a 200 × 40 pass is two queries per side, and scoring the pairs touches no database.
+- **Only matchable questions.** The rule editor lists them (`customFields` on
+  `GET /api/admin/matching/rule-sets`), and a save naming any other key — free text, an archived
+  field, another org's question — is `400 not_matchable_field`. A non-matchable key never even
+  loads answers, so a simulated draft cannot read free text either.
