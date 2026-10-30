@@ -11,6 +11,8 @@ import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 export interface PendingMessageAttachment {
   file: File;
   url: string;
+  /** What an image shows, in the sender's words — sent as its alt text (#2864). */
+  alt?: string;
 }
 
 export function MessageBubble({ mine, senderLabel, children }: {
@@ -30,10 +32,16 @@ export function MessageBubble({ mine, senderLabel, children }: {
   );
 }
 
-export function PendingAttachmentList({ attachments, onRemove, removeLabel }: {
+export function PendingAttachmentList({ attachments, onRemove, removeLabel, onAltChange }: {
   attachments: PendingMessageAttachment[];
   onRemove: (index: number) => void;
   removeLabel: string;
+  /**
+   * When given, every image gets a "Describe this image" field — the authoring
+   * prompt of EN 301 549 11.8.2 / Section 508 504.3 (#2864). Only the composers
+   * that store the text pass it.
+   */
+  onAltChange?: (index: number, alt: string) => void;
 }) {
   const t = useT();
   const lightbox = useImageLightbox();
@@ -67,6 +75,20 @@ export function PendingAttachmentList({ attachments, onRemove, removeLabel }: {
           <button type="button" onClick={() => onRemove(index)} aria-label={`${removeLabel}: ${attachment.file.name}`} data-testid="pending-attachment-remove" className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 text-gray-400 hover:text-red-600 shadow-sm">
             <X className="h-3.5 w-3.5" />
           </button>
+          {onAltChange && attachment.file.type.startsWith('image/') && (
+            <label className="mt-1 block w-48 text-xs text-gray-600 dark:text-gray-300">
+              {t.imageViewer.altLabel}
+              <input
+                type="text"
+                value={attachment.alt ?? ''}
+                maxLength={TEXT_LIMITS.imageAltText}
+                onChange={(e) => onAltChange(index, e.target.value)}
+                data-testid="pending-attachment-alt"
+                className="mt-0.5 block w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+              <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{t.imageViewer.altHint}</span>
+            </label>
+          )}
         </div>
       ))}
       <ImageLightbox {...lightbox.lightboxProps} />

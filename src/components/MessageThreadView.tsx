@@ -38,6 +38,8 @@ interface Attachment {
   filename: string;
   contentType: string;
   size: number;
+  /** The sender's description of an image (#2864); null on older attachments. */
+  altText?: string | null;
 }
 interface Msg {
   id: string;
@@ -155,7 +157,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         .filter((m) => !m.deleted)
         .flatMap((m) => m.attachments)
         .filter((a) => a.contentType.startsWith('image/'))
-        .map((a) => ({ src: `/api/messages/attachments/${a.id}`, filename: a.filename })),
+        .map((a) => ({ src: `/api/messages/attachments/${a.id}`, filename: a.filename, alt: a.altText ?? undefined })),
     [messages]
   );
   const endRef = useRef<HTMLDivElement>(null);
@@ -540,7 +542,11 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         const fd = new FormData();
         fd.append(target.kind === 'relation' ? 'relationId' : 'conversationId', target.id);
         fd.append('body', body);
-        attachments.forEach((a) => fd.append('file', a.file));
+        // One altText per file, same order — the route pairs them (#2864).
+        attachments.forEach((a) => {
+          fd.append('file', a.file);
+          fd.append('altText', a.alt ?? '');
+        });
         res = await fetch('/api/messages', { method: 'POST', body: fd });
       } else {
         res = await fetch('/api/messages', {
@@ -817,12 +823,12 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                               key={a.id}
                               type="button"
                               onClick={() => lightbox.open(galleryImages, galleryImages.findIndex((g) => g.src === `/api/messages/attachments/${a.id}`))}
-                              aria-label={t.imageViewer.view.replace('{name}', a.filename)}
+                              aria-label={t.imageViewer.view.replace('{name}', a.altText || a.filename)}
                               data-testid="message-image-attachment"
                               className="mt-1.5 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={`/api/messages/attachments/${a.id}`} alt={a.filename} className="max-h-48 rounded-lg" />
+                              <img src={`/api/messages/attachments/${a.id}`} alt={a.altText || a.filename} className="max-h-48 rounded-lg" />
                             </button>
                           ) : (
                             <a
@@ -1064,7 +1070,12 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
           )}
         </div>
       )}
-      <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
+      <PendingAttachmentList
+        attachments={attachments}
+        onRemove={removeAttachment}
+        removeLabel={t.common.delete}
+        onAltChange={(idx, alt) => setAttachments((prev) => prev.map((a, i) => (i === idx ? { ...a, alt } : a)))}
+      />
       {aiDraft !== null && body === aiDraft && (
         <p className="mb-1 inline-flex items-center gap-1 text-xs text-violet-700" data-testid="ai-draft-badge">
           ✨ {t.messages.ai.draftBadge}
