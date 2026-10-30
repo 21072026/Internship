@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+import { adminTierFor, type AdminTier, type ScopeGrant } from '@/lib/authzRule';
 
 /**
  * Fail-closed data scoping (#814 / #831 / #849).
@@ -37,6 +38,14 @@ export interface ScopeUser {
    * never as "every tenant" (the tenantFilter.ts rule).
    */
   orgId?: string | null;
+  /**
+   * An ADMIN's tier and scope grants (#1577) — filled in LIVE by
+   * `scopeForRole` (never trusted from the session), read by the ADMIN
+   * builders below. A missing tier on an ADMIN reads as ORG_ADMIN, the rule of
+   * `adminTierFor()`.
+   */
+  adminLevel?: string | null;
+  grants?: readonly ScopeGrant[];
 }
 
 /** The `where` shape each scoped resource expects. */
@@ -67,6 +76,34 @@ export async function sourceIdForUser(userId: string): Promise<string | null> {
 }
 
 /**
+ * Program-scoped delegated admin (#1577, docs/role-access-matrix.md § Program
+ * scope). WHICH of the tenant's rows an ADMIN reads depends on its tier:
+ *   ORG_ADMIN and OBSERVER — the whole tenant (OBSERVER reads everything and
+ *     writes nothing; its grants are not read, authzRule.ts);
+ *   PROGRAM_ADMIN — only what its AdminScopeGrant rows name: a cohort, a
+ *     company, or both (a grant naming both narrows to both). ZERO grants is
+ *     NO_MATCH, never `{}` — fail-closed, like every builder here.
+ * A relation with no cohort is outside every cohort grant, deliberately: it is
+ * why assigning a cohort matters.
+ */
+const NOT_AN_ADMIN = '__not_an_admin__';
+
+function adminTier(u: ScopeUser): AdminTier | null {
+  return adminTierFor('ADMIN', u.adminLevel ?? null);
+}
+
+function grantRelationTerms(u: ScopeUser): Prisma.MentorshipRelationWhereInput[] {
+  return (u.grants ?? [])
+    .filter((g) => g.orgId === u.orgId && (g.cohortId || g.companyId))
+    .map((g) => ({ ...(g.cohortId ? { cohortId: g.cohortId } : {}), ...(g.companyId ? { companyId: g.companyId } : {}) }));
+}
+
+function programRelationScope(u: ScopeUser): Prisma.MentorshipRelationWhereInput {
+  const terms = grantRelationTerms(u);
+  return terms.length ? { OR: terms } : { id: NO_MATCH };
+}
+
+/**
  * One builder per role, per resource. They say WHICH rows of the tenant a role
  * may read; `{}` means "the whole tenant" (ADMIN). They never say which tenant:
  * that is added once, at the root, by `scopeForRole`. A missing key means "no
@@ -76,9 +113,14 @@ const BUILDERS: {
   [K in ScopedResource]: Partial<Record<string, (user: ScopeUser) => Promise<ScopeMap[K]>>>;
 } = {
   relation: {
-    // Admins see the whole tenant by design — the TENANT, not the database:
-    // `scopeForRole` adds the org conjunct (#2542 follow-up).
-    ADMIN: async () => ({}),
+    // An ORG_ADMIN / OBSERVER sees the whole tenant — the TENANT, not the
+    // database: `scopeForRole` adds the org conjunct (#2542 follow-up). A
+    // PROGRAM_ADMIN sees its granted cohorts / companies only (#1577).
+    ADMIN: async (u) => {
+      const tier = adminTier(u);
+      if (tier === 'PROGRAM_ADMIN') return programRelationScope(u);
+      return tier ? {} : { id: NO_MATCH };
+    },
     // Both sides, for both roles (#1141): the same person can mentor one relation
     // and be mentored in another, and either way the relation is their own. This
     // widens reads only — every caller of `scopeForRole` is a GET — and only ever
@@ -92,7 +134,15 @@ const BUILDERS: {
     SOURCE: async (u) => ({ mentee: { sourceId: (await sourceIdForUser(u.id)) ?? NO_MATCH } }),
   },
   project: {
-    ADMIN: async () => ({}),
+    // A PROGRAM_ADMIN: the projects of the relations it may read (#1577).
+    ADMIN: async (u) => {
+      const tier = adminTier(u);
+      if (tier === 'PROGRAM_ADMIN') {
+        const rel = programRelationScope(u);
+        return 'id' in rel ? { id: NO_MATCH } : { relations: { some: rel } };
+      }
+      return tier ? {} : { id: NO_MATCH };
+    },
     // Mentors see projects they own OR are members of (#617/#619).
     MENTOR: async (u) => ({
       OR: [{ ownerUserId: u.id }, { members: { some: { userId: u.id } } }],
@@ -141,8 +191,21 @@ const BUILDERS: {
   company: {
     // Admins see the whole tenant by design — `{}` here, and `scopeForRole`
     // adds WHICH tenant (a MARKETING admin read the INTERNSHIP account book
-    // through every caller that forgot its own `tenantWhere`).
-    ADMIN: async () => ({}),
+    // through every caller that forgot its own `tenantWhere`). A PROGRAM_ADMIN
+    // (#1577): a granted company, or a company reached through a relation of
+    // a granted cohort.
+    ADMIN: async (u) => {
+      const tier = adminTier(u);
+      if (tier === 'PROGRAM_ADMIN') {
+        const terms: Prisma.CompanyWhereInput[] = [];
+        for (const g of (u.grants ?? []).filter((x) => x.orgId === u.orgId)) {
+          if (g.companyId) terms.push({ id: g.companyId });
+          else if (g.cohortId) terms.push({ mentorships: { some: { cohortId: g.cohortId } } });
+        }
+        return terms.length ? { OR: terms } : { id: NO_MATCH };
+      }
+      return tier ? {} : { id: NO_MATCH };
+    },
     // Companies reachable through a relation the mentor is personally named
     // in — both sides, mirroring the `relation` builder above (#1141): the same
     // person can mentor one relation and be mentored in another, and a company
@@ -165,7 +228,20 @@ export async function scopeForRole<K extends ScopedResource>(
   user: ScopeUser,
   resource: K
 ): Promise<ScopeMap[K] | null> {
-  const scope = await roleScope(user, resource);
+  // An ADMIN's tier and grants, read LIVE (#1577) — the session's copy is
+  // presentation only, and a tier change must narrow the very next request.
+  const orgId = user.orgId || (await defaultOrgId());
+  let scoped: ScopeUser = user;
+  if (user.role === 'ADMIN') {
+    const [row, grants] = await Promise.all([
+      prisma.user.findUnique({ where: { id: user.id }, select: { role: true, adminLevel: true } }),
+      prisma.adminScopeGrant.findMany({ where: { userId: user.id, orgId }, select: { orgId: true, cohortId: true, companyId: true } }),
+    ]);
+    // A row that is no longer an ADMIN (or is gone) reads as an unknown tier —
+    // NO_MATCH — rather than as the empty column's ORG_ADMIN.
+    scoped = { ...user, orgId, adminLevel: row?.role === 'ADMIN' ? row.adminLevel : NOT_AN_ADMIN, grants };
+  }
+  const scope = await roleScope(scoped, resource);
   if (!scope) return null;
   // The tenant, at the root (#2542 follow-up). The ADMIN builders used to be
   // the whole answer — `{}`, "admins see the whole tenant" — which with
@@ -174,7 +250,7 @@ export async function scopeForRole<K extends ScopedResource>(
   // mentee e-mails. Adding the org here, once, covers every caller and every
   // role; a caller that also ANDs `tenantWhere(session)` gets the same filter
   // twice, which is harmless.
-  return scopeInTenant(scope, await orgWhere(user.orgId || (await defaultOrgId())));
+  return scopeInTenant(scope, await orgWhere(orgId));
 }
 
 /**

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Program-scoped delegated admin, reads + relation writes (#1577, slice 1):** `scopeForRole()` now loads an ADMIN's tier and `AdminScopeGrant` rows live and narrows the `relation` / `project` / `company` builders — ORG_ADMIN and OBSERVER keep the tenant, a PROGRAM_ADMIN reads only its granted cohorts/companies, zero grants is `NO_MATCH`; every existing caller (`/api/mentorship`, `/api/projects`, `/api/companies`, `/api/interactions`, `/api/requisitions`, the board) narrows with it. `/api/mentorship/[id]` GET/PUT pass the relation as the subject (`relationSubject()` in `authzRule.ts`) to the one permission rule, and a PUT that moves cohort/company is checked after the move too (`403 outside_scope`). Cohort-less relations are outside every program scope, by decision (`docs/role-access-matrix.md` § Program scope). Pinned by `scripts/test/authz-scope-program-admin.test.mjs` and `e2e/program-scoped-admin.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["A program admin now sees and edits only the pairings of the cohorts they were given — nothing else in the organisation."],
+    "tr": ["Program yöneticisi artık yalnızca kendisine verilen dönemlerin eşleşmelerini görüp düzenleyebiliyor — kurumun geri kalanını değil."],
+    "de": ["Programm-Admins sehen und bearbeiten jetzt nur noch die Tandems der ihnen zugewiesenen Kohorten – nichts sonst in der Organisation."]
+  }
+}
