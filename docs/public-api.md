@@ -166,7 +166,20 @@ key carries `ApiKey.companyId` and three rules hold for it:
   `apikey.revoked` at `warning`, like the admin path.
 
 Today's company-scoped routes: `/requisitions`, `/offers`, `/interview-requests`
-(list and item) and `/me`. SOURCE owners are a later slice of #2006.
+(list and item) and `/me`.
+
+### Source-owned keys (`src/lib/sourceApiKeyRule.ts`)
+
+A SOURCE owner (a referring institution) gets the same surface with the same
+three rules, over the candidates it referred:
+`POST/GET/DELETE /api/source/integrations/api-keys` and the `/source/integrations`
+page (the shared `OwnerApiKeys` screen). The key carries `ApiKey.sourceId`; the
+ceiling is `SOURCE_KEY_SCOPE_CEILING` (`candidates:read`); a route opts in with
+`{ sourceScoped: true }` and filters with `sourceOnly(key)` (`User.sourceId`);
+anything else answers `403 source_key_not_allowed`. Which source is the caller's
+is `ownSource()` (`src/lib/sourceIntegrations.ts`, through `sourceIdForUser`), and a
+SOURCE account without one gets `403 source_not_assigned`. Source-scoped routes:
+`GET /candidates` (list and item) and `/me`. Source-owned webhooks are the next slice.
 
 ### Company-owned webhooks (`src/lib/companyWebhookRule.ts`, `companyWebhookScope.ts`)
 

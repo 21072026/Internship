@@ -57,6 +57,18 @@ A higher-priority `ALLOW` is therefore how you write an exception to a `DENY`.
 | Matching | Match rounds drop ineligible mentees before scoring (the round's cohort). `mentor-suggest` answers `403 not_eligible`. |
 | Invitation registration | **Exempt.** An invitation is the exception mechanism. |
 
+### Decisions (maintainer, 2026-10-30)
+
+- **An invitation exempts registration, not assignment.** An invited person
+  always registers. But `POST /api/mentorship` still judges them like anyone
+  else, so the rule set stays strict. To enrol an invited person whom no rule
+  admits, the admin adds an `ALLOW` exception: a higher-priority rule matching
+  that person, for example on `attr:<key>`.
+- **Mentees only.** Mentors are not judged. Extending the rules to mentors
+  (with an `appliesTo` target) is #3423.
+- **Matching filters but does not weigh.** Using org attributes as a score
+  dimension is #3424.
+
 Judgement happens after the directory sync, so the department the IdP just
 wrote is the one the rule reads.
 
