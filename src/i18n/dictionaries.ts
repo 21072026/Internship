@@ -2096,6 +2096,23 @@ const en = {
     noMeetingYet: 'No meeting held yet.',
   },
 
+  relationSchedule: {
+    duration: 'Duration',
+    cadence: 'Meeting rhythm',
+    useDefault: 'Programme default',
+    months: '{n} months',
+    everyWeek: 'every week',
+    everyWeeks: 'every {n} weeks',
+    endsOn: 'Ends {date}',
+    meets: 'meets {rhythm}',
+    endDate: 'Planned end:',
+    noEndDate: 'No end date agreed',
+    extendedTimes: 'Extended {n}×',
+    settingsDuration: 'Default pairing duration (months)',
+    settingsCadence: 'Default meeting rhythm (weeks)',
+    settingsHint: 'Used when a new pairing is created without a choice of its own. Empty = none.',
+  },
+
   meetingAttendance: {
     title: 'Meeting attendance',
     subtitle: 'Whether pairs actually meet, and on the rhythm they agreed — from the meetings held and the attendance recorded.',
@@ -13032,6 +13049,23 @@ const tr: Dict = {
     noMeetingYet: 'Henüz görüşme yapılmadı.',
   },
 
+  relationSchedule: {
+    duration: 'Süre',
+    cadence: 'Görüşme ritmi',
+    useDefault: 'Program varsayılanı',
+    months: '{n} ay',
+    everyWeek: 'her hafta',
+    everyWeeks: '{n} haftada bir',
+    endsOn: 'Bitiş: {date}',
+    meets: 'görüşme: {rhythm}',
+    endDate: 'Planlanan bitiş:',
+    noEndDate: 'Bitiş tarihi belirlenmedi',
+    extendedTimes: '{n} kez uzatıldı',
+    settingsDuration: 'Varsayılan eşleştirme süresi (ay)',
+    settingsCadence: 'Varsayılan görüşme ritmi (hafta)',
+    settingsHint: 'Yeni bir eşleştirme kendi seçimi olmadan oluşturulduğunda kullanılır. Boş = yok.',
+  },
+
   meetingAttendance: {
     title: 'Görüşmelere katılım',
     subtitle: 'Çiftlerin gerçekten görüşüp görüşmediği ve anlaştıkları sıklıkta mı görüştükleri — yapılan görüşmelerden ve kaydedilen katılımdan.',
@@ -23781,6 +23815,23 @@ const de: Dict = {
     noPromise: 'Noch kein Rhythmus vereinbart',
     lastMet: 'Zuletzt getroffen am {date} (vor {n} Tagen).',
     noMeetingYet: 'Noch kein Treffen.',
+  },
+
+  relationSchedule: {
+    duration: 'Dauer',
+    cadence: 'Treffrhythmus',
+    useDefault: 'Programmstandard',
+    months: '{n} Monate',
+    everyWeek: 'jede Woche',
+    everyWeeks: 'alle {n} Wochen',
+    endsOn: 'Endet am {date}',
+    meets: 'Treffen {rhythm}',
+    endDate: 'Geplantes Ende:',
+    noEndDate: 'Kein Enddatum vereinbart',
+    extendedTimes: '{n}× verlängert',
+    settingsDuration: 'Standarddauer einer Paarung (Monate)',
+    settingsCadence: 'Standard-Treffrhythmus (Wochen)',
+    settingsHint: 'Gilt, wenn eine neue Paarung ohne eigene Wahl angelegt wird. Leer = keiner.',
   },
 
   meetingAttendance: {
