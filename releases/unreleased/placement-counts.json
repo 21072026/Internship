@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Placement numbers count only PLACEMENT relations whose hire is ours (#1504): coaching pairs leave the funnel and both sides of every placement rate, and SELF_FOUND / ALREADY_EMPLOYED hires are not placements — one rule in `src/lib/placement.ts`, read by admin analytics, cohort/programme comparison, benchmark, source conversion and mentor analytics. Data with no kind or attribution set reads exactly as before.",
+  "notes": {
+    "en": ["Placement rates now leave out coaching pairs and hires the person found on their own."],
+    "tr": ["Yerleştirme oranları artık koçluk eşleşmelerini ve kişinin kendi bulduğu işleri saymıyor."],
+    "de": ["Vermittlungsquoten lassen jetzt Coaching-Paare und selbst gefundene Stellen außen vor."]
+  }
+}
