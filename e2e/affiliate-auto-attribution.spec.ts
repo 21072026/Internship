@@ -184,8 +184,15 @@ test('referral link → account_created → partner sees the customer → paymen
   expect((await post(request, envelope({ external_id: ext, event_type: 'trial_started' }))).status()).toBe(200);
   const second = await post(request, envelope({ external_id: ext, event_type: 'trial_started', referral_code: `second-${STAMP}` }));
   expect(second.status()).toBe(200);
-  const dry = await postBatch(request, { dry_run: true, events: [envelope({ referral_code: CODE })] });
+  const dryEvent = envelope({ referral_code: CODE });
+  const dry = await postBatch(request, { dry_run: true, events: [dryEvent] });
   expect(dry.status()).toBe(200);
+  // The dry run really judged the event (it would apply), and wrote nothing.
+  const dryBody = await dry.json();
+  expect(dryBody.dry_run).toBe(true);
+  expect(dryBody.results[0].outcome).toBe('applied');
+  expect(await linksOf(dryEvent.external_id as string)).toHaveLength(0);
+  expect(await prisma.company.count({ where: { orgId: orgA, externalId: dryEvent.external_id as string } })).toBe(0);
   const after = await linksOf(ext);
   expect(after).toHaveLength(1);
   expect(after[0].partnerId).toBe(partnerId); // first link wins
@@ -222,4 +229,24 @@ test('another org\'s code, an unknown code, or a suspended / terminated partner 
   }
   expect(await prisma.affiliateCustomer.count({ where: { orgId: { in: [orgA, orgB] } } })).toBe(before);
   expect(await prisma.affiliateCustomer.count({ where: { orgId: orgB } })).toBe(0);
+});
+
+test('a terminated partner still links while its notice period runs; a 100-character code fits the envelope', { tag: '@smoke' }, async ({ request }) => {
+  const notice = await prisma.affiliatePartner.create({
+    data: { orgId: orgA, code: `in-notice-${STAMP}`, displayName: 'Notice Partner', status: 'TERMINATED', noticeEffectiveAt: new Date(Date.now() + 30 * DAY) },
+    select: { id: true },
+  });
+  const ext = extId();
+  expect((await post(request, envelope({ external_id: ext, referral_code: `in-notice-${STAMP}` }))).status()).toBe(200);
+  const rows = await linksOf(ext);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].partnerId).toBe(notice.id);
+
+  const longCode = `L${'x'.repeat(99)}`;
+  const longId = (await prisma.affiliatePartner.create({ data: { orgId: orgA, code: longCode, displayName: 'Long Code Partner' } })).id;
+  const extLong = extId();
+  const ok = await post(request, envelope({ external_id: extLong, referral_code: longCode }));
+  expect(ok.status()).toBe(200);
+  expect((await linksOf(extLong))[0]?.partnerId).toBe(longId);
+  expect((await post(request, envelope({ referral_code: `${longCode}y` }))).status()).toBe(400);
 });

@@ -5,6 +5,7 @@
 // never slips in. No field of the envelope is ever a marketing permission
 // (#2577): a new account gets the machine NONE row and nothing else.
 import { z } from 'zod';
+import { PARTNER_CODE_MAX } from '@/lib/affiliateAttributionRule';
 import { normalizePlanKey } from '@/lib/usageRule';
 import {
   ACCOUNT_ACQUISITION_SOURCES,
@@ -49,7 +50,7 @@ export const accountEventSchema = z.object({
   // Accepted and validated, not stored: nothing reads a decision window yet.
   decision_ends_at: nullableIsoDate,
   acquisition_source: z.enum(ACCOUNT_ACQUISITION_SOURCES).nullable().optional(),
-  referral_code: shortText(64),
+  referral_code: shortText(PARTNER_CODE_MAX),
   // The account's plan in the source product (#2846): stored on the account as
   // `productPlan`, `free` feeds the free-quota upsell signal. Any key the
   // source uses is accepted; a malformed one is refused, never guessed at.

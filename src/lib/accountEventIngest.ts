@@ -561,21 +561,15 @@ async function attributeToAffiliate(ctx: Ctx): Promise<void> {
   if (!code || !externalRef) return;
   const partner = await db.affiliatePartner.findFirst({
     where: { orgId, code },
-    select: { id: true, status: true },
+    select: { id: true, status: true, noticeEffectiveAt: true },
   });
   const existing = await db.affiliateCustomer.findFirst({
     where: { orgId, externalRef },
     select: { partnerId: true },
   });
-  const plan = planAffiliateAttribution({ referralCode: code, externalId: event.external_id, partner, existing });
+  const plan = planAffiliateAttribution({ referralCode: code, externalId: event.external_id, partner, existing, eventAt: ctx.at ?? ctx.now });
   if (plan.kind === 'kept_first') {
-    await note(ctx, {
-      action: 'integration.affiliate_kept_first',
-      orgId,
-      targetType: 'AffiliateCustomer',
-      targetId: externalRef,
-      detail: `${ctx.source.slug}: ${event.event_type}: the customer stays with partner ${plan.keptPartnerId}; the code named partner ${plan.offeredPartnerId} (first link wins)`,
-    });
+    await keptFirstNote(ctx, externalRef, plan.keptPartnerId, plan.offeredPartnerId);
     return;
   }
   if (plan.kind !== 'link') return;
@@ -583,13 +577,31 @@ async function attributeToAffiliate(ctx: Ctx): Promise<void> {
     data: [{ orgId, partnerId: plan.partnerId, externalRef: plan.externalRef, ...(ctx.at ? { createdAt: ctx.at } : {}) }],
     skipDuplicates: true,
   });
-  if (created.count === 0) return;
+  if (created.count === 0) {
+    // Lost a race to a concurrent event: if it linked ANOTHER partner, the
+    // documented first-link-wins line is still owed.
+    const winner = await db.affiliateCustomer.findFirst({ where: { orgId, externalRef: plan.externalRef }, select: { partnerId: true } });
+    if (winner && winner.partnerId !== plan.partnerId) {
+      await keptFirstNote(ctx, plan.externalRef, winner.partnerId, plan.partnerId);
+    }
+    return;
+  }
   await note(ctx, {
     action: 'integration.affiliate_linked',
     orgId,
     targetType: 'AffiliatePartner',
     targetId: plan.partnerId,
     detail: `${ctx.source.slug}: ${event.event_type}: customer ${plan.externalRef} linked to partner ${plan.partnerId}`,
+  });
+}
+
+async function keptFirstNote(ctx: Ctx, externalRef: string, keptPartnerId: string, offeredPartnerId: string): Promise<void> {
+  await note(ctx, {
+    action: 'integration.affiliate_kept_first',
+    orgId: ctx.orgId,
+    targetType: 'AffiliateCustomer',
+    targetId: externalRef,
+    detail: `${ctx.source.slug}: ${ctx.event.event_type}: the customer stays with partner ${keptPartnerId}; the code named partner ${offeredPartnerId} (first link wins)`,
   });
 }
 

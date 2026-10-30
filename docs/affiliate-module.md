@@ -345,11 +345,14 @@ with `referral_code: "<code>"`, and the ingest links the customer:
 - The row is `AffiliateCustomer { orgId, partnerId, externalRef = the event's external_id }`
   (stored lower-cased by the envelope; an id longer than 120 characters cannot be a
   customer reference and links nothing).
-- **Only an `ACTIVE` partner gets a new link.** Suspended and terminated partners
-  never do (a link is permanent; a returning partner has a new record and code).
+- **Only a partner that can still bring a new customer gets a link**, by the payment
+  writer's own test: `ACTIVE` does, `SUSPENDED` never, `TERMINATED` only while the
+  event's time (`occurred_at` on a replay) is before `noticeEffectiveAt` (a terminated
+  partner with no date is refused: a link is permanent).
 - **First link wins.** An existing customer row is never re-pointed. A later event
   naming another active partner leaves an `integration.affiliate_kept_first` activity
-  line (partner ids only) and changes nothing. The same partner again is a no-op, so
+  line (partner ids only) and changes nothing — also when two events race: the loser
+  re-reads the row and writes that line. The same partner again is a no-op, so
   a repeated or later event of the same account writes no second row.
 - **An unknown code writes nothing here**; the `affiliate:<code>` lead source the
   ingest already writes stays the only trace.

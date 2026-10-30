@@ -14,10 +14,16 @@
 //      leave a line, and the link is never re-pointed.
 //   3. No partner of the org has that code: nothing (the lead source the
 //      ingest already writes is the only trace).
-//   4. Only an ACTIVE partner gets a new link. A suspended or terminated one
-//      never does (the payment writer would refuse the same partner anyway,
-//      and a link is permanent).
+//   4. Only a partner that could still bring a NEW customer gets a link, by the
+//      same test as the payment writer (src/lib/affiliatePaymentWriter.ts):
+//      ACTIVE does; SUSPENDED never does; TERMINATED does only while the event
+//      is dated BEFORE the termination's `noticeEffectiveAt` (the notice period
+//      still brings customers). A terminated partner with no effective date is
+//      refused here: the link is permanent, so the conservative answer wins.
 import { MAX_REF_LENGTH } from './affiliateCommissionSync';
+
+/** The longest partner code: AffiliatePartner.code is VarChar(100), PARTNER_CODE_RE allows 1 + 99. */
+export const PARTNER_CODE_MAX = 100;
 
 export type AffiliatePartnerState = 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
 
@@ -27,7 +33,9 @@ export interface AttributionInput {
   /** The event's `external_id` (already trimmed and lower-cased by the envelope). */
   externalId: string;
   /** The org's partner whose code matches, or null. */
-  partner: { id: string; status: AffiliatePartnerState } | null;
+  partner: { id: string; status: AffiliatePartnerState; noticeEffectiveAt?: Date | null } | null;
+  /** When the event happened (`occurred_at` on a replay, else now): judged against a termination date. */
+  eventAt: Date;
   /** The org's existing customer row for the external id, or null. */
   existing: { partnerId: string } | null;
 }
@@ -51,6 +59,12 @@ export function customerRefFor(externalId: string): string | null {
   return ref.length > 0 && ref.length <= MAX_REF_LENGTH ? ref : null;
 }
 
+function mayLink(partner: NonNullable<AttributionInput['partner']>, eventAt: Date): boolean {
+  if (partner.status === 'ACTIVE') return true;
+  if (partner.status !== 'TERMINATED' || !partner.noticeEffectiveAt) return false;
+  return eventAt.getTime() < partner.noticeEffectiveAt.getTime();
+}
+
 export function planAffiliateAttribution(input: AttributionInput): AttributionPlan {
   if (!referralCodeKey(input.referralCode)) return { kind: 'none', reason: 'no_code' };
   const externalRef = customerRefFor(input.externalId);
@@ -61,12 +75,12 @@ export function planAffiliateAttribution(input: AttributionInput): AttributionPl
     if (partner && partner.id === existing.partnerId) return { kind: 'already_linked', partnerId: existing.partnerId };
     // Only a code that WOULD have linked is worth a line; an unknown or
     // inactive one attempts nothing.
-    if (partner && partner.status === 'ACTIVE') {
+    if (partner && mayLink(partner, input.eventAt)) {
       return { kind: 'kept_first', keptPartnerId: existing.partnerId, offeredPartnerId: partner.id };
     }
     return { kind: 'none', reason: partner ? 'partner_inactive' : 'no_partner' };
   }
   if (!partner) return { kind: 'none', reason: 'no_partner' };
-  if (partner.status !== 'ACTIVE') return { kind: 'none', reason: 'partner_inactive' };
+  if (!mayLink(partner, input.eventAt)) return { kind: 'none', reason: 'partner_inactive' };
   return { kind: 'link', partnerId: partner.id, externalRef };
 }
