@@ -87,6 +87,7 @@
     "check:hardcoded-strings": "node scripts/check-hardcoded-strings.mjs",
     "check:dark-mode": "node scripts/check-dark-mode.mjs",
     "check:events": "node scripts/check-events.mjs",
+    "check:user-create": "node scripts/check-user-create.mjs",
     "check:k6": "node scripts/check-k6.mjs",
     "check:e2e-rate-limits": "node scripts/check-e2e-rate-limits.mjs",
     "check:openapi": "node scripts/check-openapi.mjs",

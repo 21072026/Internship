@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**One writer for User rows + `user.created` (#1998):** `createUser(db, args, { source, actorId })` in `src/lib/userCreate.ts` is now the only `user.create` (16 paths moved: register/invite, signup, apply, SSO, admin/company/source users, mentor/source mentees, admin import, v1 candidates, v1 imports, roster feed, marketing import, migration, sample programme); `npm run check:user-create` (CI) fails on a new one. Each create raises the public `user.created` v1 `{ userId, role, source }` — no address, no name. Inside a transaction it uses the new `emitInTransaction(tx, …)`, which writes the DomainEvent row and its `event.deliver` jobs through `tx`, so a rolled-back create raises nothing (pinned in `e2e/signup-org.spec.ts`). `prismaQueueStore()` takes an optional client."
+}

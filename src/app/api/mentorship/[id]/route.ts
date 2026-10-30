@@ -5,6 +5,8 @@ import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { parseEndDate, relationScheduleFields, scheduleOnProgrammeJoin } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 import { withTenantScope } from '@/lib/orgContext';
 import { getLocale } from '@/i18n/server';
@@ -42,6 +44,10 @@ const updateRelationSchema = z.object({
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
+  // When the pairing is meant to end (#1784), a calendar day; null clears it.
+  // An edit is a correction, never an extension: durationExtendedCount moves
+  // only through POST /api/mentorship/[id]/extend.
+  expectedEndDate: relationScheduleFields.expectedEndDate,
   // What the relation is for (#1503): PLACEMENT | COACHING. ADMIN only, and a
   // whitelist (src/lib/placementKind.ts), never z.enum.
   kind: z.string().max(16).optional(),
@@ -221,7 +227,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const {
         stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote,
-        kind, employmentAttribution, ...rest
+        kind, employmentAttribution, expectedEndDate, ...rest
       } = parsed.data;
 
       // Kind (#1503): reclassifying a relation moves it in or out of every
@@ -309,6 +315,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (entered !== undefined) data.funnelEnteredAt = entered;
       }
       if (employmentAttribution !== undefined) data.employmentAttribution = employmentAttribution;
+      if (expectedEndDate !== undefined) {
+        const end = expectedEndDate === null ? null : parseEndDate(expectedEndDate);
+        if ((end?.getTime() ?? null) !== (relation.expectedEndDate?.getTime() ?? null)) {
+          data.expectedEndDate = end;
+          // A new end date gets its own single ending-soon nudge (#1786).
+          data.endingSoonNotifiedAt = null;
+        }
+      }
+      // Joining a programme (#1784): what the pair has not agreed yet comes
+      // from the programme's defaults — never over an agreement already made.
+      if (retargeted.includes('cohortId') && rest.cohortId) {
+        Object.assign(
+          data,
+          scheduleOnProgrammeJoin(
+            relation,
+            { expectedEndDate, expectedMeetingIntervalWeeks: rest.expectedMeetingIntervalWeeks },
+            await relationScheduleDefaults(relation.orgId, rest.cohortId),
+          ),
+        );
+      }
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
         // A fresh deadline (or cleared) re-arms the overdue reminder.

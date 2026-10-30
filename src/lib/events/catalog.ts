@@ -453,6 +453,19 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: 'Attendance for one person at a meeting was recorded (`state`: attended, no-show, late cancel …).',
   },
+  {
+    // One producer by construction: createUser() (src/lib/userCreate.ts), the
+    // one writer of a User row (#1998) — every path that makes an account goes
+    // through it, inside its caller's transaction when there is one. `source`
+    // names the path (USER_CREATE_SOURCES). Never the name or the address.
+    name: 'user.created',
+    version: 1,
+    subjectType: 'User',
+    subjectKey: 'userId',
+    payload: z.object({ userId: id, role: z.string(), source: z.string() }).strict(),
+    visibility: 'public',
+    description: 'An account was created (`source`: register, invite, admin, import, sso, api …).',
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from
