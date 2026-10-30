@@ -490,7 +490,7 @@ jobs:
         # Node 22 exhausts its default ~2 GiB heap during Next.js type checking;
         # 4 GiB stopped being enough on 2026-10-30.
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=7168
 
   # The demo seed is the only data most people ever see: the public demo, every
   # per-PR topic environment, and every new contributor's local box. When a
