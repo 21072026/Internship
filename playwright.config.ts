@@ -457,6 +457,10 @@ export default defineConfig({
           KLAVIYO_ALLOW_INSECURE_STUB: '1',
           // Roster feeds (#1967) against the local HR-export stub above.
           ROSTER_FEED_ALLOW_INSECURE_STUB: '1',
+          // OIDC SSO (#1929) against the stub IdP above, which speaks plain
+          // http on loopback: lets exactly 127.0.0.1/localhost past the SSRF
+          // guard for discovery, JWKS and token. Test-only switch.
+          SSO_ALLOW_INSECURE_STUB: '1',
           // The marketing hosts this server serves: the default list FIRST
           // (unchanged, so it stays the primary marketing host every link and
           // spec already uses) plus one host of the suite's own (#2922), which

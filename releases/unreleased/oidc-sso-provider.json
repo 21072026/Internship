@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**OpenID Connect SSO (#1929):** `provider: oidc` is a working sign-in path. The login route builds an authorization-code request with PKCE (S256), `state` and `nonce`, kept in a single-use `SsoAuthRequest` row (10-minute expiry, swept nightly, tenant-registered) and bound to the starting browser by an `HttpOnly` cookie; `GET /api/auth/sso/[slug]/callback` spends the row with a conditional update, exchanges the code and verifies the ID token with `jose` against the IdP's JWKS (asymmetric algorithms only, `iss`, `aud`/`azp`, `exp`, `nonce`; a JWKS refetch on an unknown `kid`), then ends in the same provisioning and single-use `SsoLoginGrant` as SAML (`src/lib/ssoCompletion.ts`, now shared by the ACS). Discovery, JWKS and token fetches go through the SSRF guard (`SSO_ALLOW_INSECURE_STUB=1` is the e2e stub's switch). #1537's refusal is lifted, the admin card gains the OIDC fields and the redirect URI to register, \"Test connection\" fetches discovery + JWKS, and SAML Single Logout no longer fires for an OIDC tenant. `jose` becomes a direct dependency (it was already in the lockfile).",
+  "notes": {
+    "en": ["Organisations can now sign in with OpenID Connect (Microsoft Entra ID, Google Workspace, Okta) as well as SAML."],
+    "tr": ["Kurumlar artık SAML'in yanı sıra OpenID Connect ile (Microsoft Entra ID, Google Workspace, Okta) de giriş yapabiliyor."],
+    "de": ["Organisationen können sich jetzt neben SAML auch per OpenID Connect anmelden (Microsoft Entra ID, Google Workspace, Okta)."]
+  }
+}
