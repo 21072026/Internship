@@ -171,3 +171,40 @@ test('bank details are entered in the portal and shown masked', { tag: '@smoke' 
   await expect(page.getByTestId('affiliate-payout-current')).not.toContainText('370400440532');
   await expect(page.getByTestId('affiliate-iban')).toHaveValue('');
 });
+
+// #3348: the partner can see why a commission has its amount — the kind and the plan version.
+test('the commissions table shows the kind and plan version, but no version for an imported row', async ({ page }) => {
+  // An imported row (plan version 0) of the same partner: the kind shows, the version does not.
+  const customer = await prisma.affiliateCustomer.create({ data: { orgId, partnerId: ids.mine, externalRef: 'CUST-OLD' } });
+  const receivedAt = new Date('2026-01-05T00:00:00Z');
+  const payment = await prisma.affiliatePayment.create({
+    data: { orgId, customerId: customer.id, amountMinor: 5_000, currency: 'EUR', receivedAt, externalPaymentRef: 'CUST-OLD-INV-SECRET', source: 'IMPORT' },
+  });
+  await prisma.affiliateCommission.create({
+    data: {
+      orgId,
+      partnerId: ids.mine,
+      customerId: customer.id,
+      paymentId: payment.id,
+      kind: 'IMPORTED',
+      amountMinor: 1_000,
+      currency: 'EUR',
+      accruedAt: receivedAt,
+      dueAt: new Date('2026-02-01T00:00:00Z'),
+      planVersion: 0,
+      status: 'PENDING',
+    },
+  });
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+  await gotoSettled(page, '/affiliate/commissions');
+  const table = page.getByTestId('affiliate-commissions-table');
+  const rows = table.locator('tbody tr');
+  await expect(rows.filter({ hasText: 'CUST-MINE' }).getByTestId('affiliate-commission-kind')).toContainText(/\((v|s)1\)/);
+  const imported = rows.filter({ hasText: 'CUST-OLD' }).getByTestId('affiliate-commission-kind');
+  await expect(imported).toBeVisible();
+  await expect(imported).not.toContainText(/\((v|s)\d+\)/);
+  await expect(table).not.toContainText('CUST-THEIRS');
+  await expect(page.locator('body')).not.toContainText('INV-SECRET');
+});
