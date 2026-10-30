@@ -330,6 +330,31 @@ test.describe('notification router', () => {
     }
   });
 
+  test('a new-message push goes through the router: one ledger row per message, the thread link, muted is SKIPPED (#1715)', async () => {
+    const email = uniqueEmail('notify-msg-push');
+    const user = await seedUser(email, PW, 'MENTEE', 'Notify Msg Push');
+    try {
+      const opts = { channels: ['push'] as const, preview: 'see you at 3', dedupeKey: `message:m-${user.id}` };
+      const r = await notifyEvent(user.id, 'message.new', { from: 'Aylin', conversationId: 'conv_1' }, opts);
+      expect(r).toMatchObject({ skipped: 1 });
+      // A retried POST of the same message never buzzes twice.
+      expect(await notifyEvent(user.id, 'message.new', { from: 'Aylin', conversationId: 'conv_1' }, opts)).toMatchObject({ deduped: 1 });
+      const ledger = await ledgerFor(user.id);
+      expect(ledger).toHaveLength(1);
+      expect(ledger[0]).toMatchObject({ channel: 'push', eventKey: 'message.new', status: 'SKIPPED', skipReason: 'no_device' });
+      // The push channel writes no bell row: the message route writes its own.
+      expect(await prisma.notification.count({ where: { userId: user.id } })).toBe(0);
+
+      // The Messages switch silences the push with a recorded reason.
+      await prisma.notificationDelivery.deleteMany({ where: { userId: user.id } });
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { messages: false } } });
+      await notifyEvent(user.id, 'message.newByEmail', { relationId: 'rel_1' }, { ...opts, dedupeKey: `message:e-${user.id}` });
+      expect((await ledgerFor(user.id))[0]).toMatchObject({ channel: 'push', status: 'SKIPPED', skipReason: 'category_off' });
+    } finally {
+      await cleanup(email);
+    }
+  });
+
   test('a non-message event produces a push delivery record: no device is SKIPPED, a muted category is SKIPPED (#1715)', async () => {
     const email = uniqueEmail('notify-push');
     const user = await seedUser(email, PW, 'MENTEE', 'Notify Push');

@@ -574,6 +574,8 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    // The pair's agreed next steps (#1795): prose about the pairing whose subject they are.
+    prisma.mentorshipRelation.updateMany({ where: { menteeId: userId }, data: { closurePlan: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
     // The fit sentence (#2042) is prose about the candidate; the score, the
     // breakdown and the rule-set version stay — they are the explainability record.
@@ -723,6 +725,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // The canonical twin of `skills`/`skillLevels` below (#1818/#1822): the
     // rows carry the levels, and their history goes with them by cascade.
     prisma.userSkill.deleteMany({ where: { userId } }),
+    // Their profile digest (#2038): a summary written about them, from their
+    // own words. A hard delete cascades it.
+    prisma.profileDigest.deleteMany({ where: { userId } }),
     // Every free-text surface outside the User row — see scrubFreeTextOps. This
     // is the half that used to be missing: the row claimed to be anonymous
     // while the person's messages, their support thread and the notes written

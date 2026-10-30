@@ -264,14 +264,23 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput): Promise<R
       ) {
         throw new AffiliateWriteError('partner_terminated');
       }
-      const customerId =
-        current?.id ??
-        (
-          await tx.affiliateCustomer.create({
-            data: { orgId: input.orgId, partnerId: partner.id, externalRef: input.customerExternalRef },
-            select: { id: true },
-          })
-        ).id;
+      let customerId = current?.id;
+      if (!customerId) {
+        // INSERT IGNORE, then read back: the account-event ingest (#3354) links
+        // customers without this partner lock, so it can land between the read
+        // above and this insert. A unique-key throw would be misreported as
+        // `customer_of_another_partner`; reading the row decides honestly.
+        await tx.affiliateCustomer.createMany({
+          data: [{ orgId: input.orgId, partnerId: partner.id, externalRef: input.customerExternalRef }],
+          skipDuplicates: true,
+        });
+        const row = await tx.affiliateCustomer.findUniqueOrThrow({
+          where: { orgId_externalRef: { orgId: input.orgId, externalRef: input.customerExternalRef } },
+          select: { id: true, partnerId: true },
+        });
+        if (row.partnerId !== partner.id) throw new AffiliateWriteError('customer_of_another_partner');
+        customerId = row.id;
+      }
 
       const payment = await tx.affiliatePayment.create({
         data: {

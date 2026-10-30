@@ -1,0 +1,59 @@
+{
+  "_doc": [
+    "Raw sends (sendEmail / sendPushToUser / prisma.notification.create) outside src/lib/notifications/ still waiting to move behind notifyEvent() (#1711).",
+    "Checked by scripts/check-notify.mjs (npm run check:notify). pending only shrinks: lower or delete an entry with  npm run check:notify -- --shrink  after migrating a site; never add one.",
+    "allowed: a raw send that stays by decision — { count, reason }."
+  ],
+  "allowed": {
+    "src/app/api/admin/email-test/route.ts": {
+      "count": 1,
+      "reason": "The admin's explicit test mail to an address they typed — a transport check, not a notification."
+    },
+    "src/app/api/admin/notification-templates/test/route.ts": {
+      "count": 1,
+      "reason": "Template preview sent to the admin themselves under the `test` category — a rendering check, not a notification."
+    },
+    "src/lib/jobs/dlqAlert.ts": {
+      "count": 1,
+      "reason": "Operator alert to ALERT_EMAIL_TO — an address from the server env, not a person with a User row, preferences or a catalogue event."
+    },
+    "src/lib/mailOpsAlert.ts": {
+      "count": 1,
+      "reason": "Operator alert to ALERT_EMAIL_TO — an address from the server env, not a person with a User row, preferences or a catalogue event."
+    },
+    "src/lib/newsletterDispatch.ts": {
+      "count": 2,
+      "reason": "Newsletter dispatch is a separate bulk product with its own consent model, NewsletterSend ledger and List-Unsubscribe pair (docs/newsletter.md) — deliberately not routed (#1711)."
+    },
+    "src/lib/notify.ts": {
+      "count": 1,
+      "reason": "The in-app transport itself: adapters/inApp.ts delivers through notify(), so its one bell-row write is the channel, not a bypass."
+    },
+    "src/lib/rosterAlert.ts": {
+      "count": 2,
+      "reason": "Roster-feed failure alert to ALERT_EMAIL_TO and the tenant supportEmail — configured addresses, not User rows; no catalogue event applies."
+    },
+    "src/lib/securityNotices.ts": {
+      "count": 1,
+      "reason": "Security notices send their mail inline under the essential account_security category: the notice needs the device, local time and \"not you?\" block the event template cannot carry (docs/security-notices.md). The in-app half already goes through notifyEvent()."
+    }
+  },
+  "pending": {
+    "src/app/api/admin/newsletters/[id]/send/route.ts": 1,
+    "src/app/api/apply/route.ts": 1,
+    "src/app/api/mentor/email/route.ts": 1,
+    "src/app/api/messages/route.ts": 1,
+    "src/app/api/public/signup/org/route.ts": 1,
+    "src/lib/announcementMail.ts": 1,
+    "src/lib/announcementSend.ts": 1,
+    "src/lib/evaluationDue.ts": 1,
+    "src/lib/jobs/relationHealthSweep.ts": 1,
+    "src/lib/jobs/reportSubscriptions.ts": 1,
+    "src/lib/meetingFeedback.ts": 1,
+    "src/lib/messagePush.ts": 1,
+    "src/lib/outcomeComms.server.ts": 1,
+    "src/lib/surveyCampaigns.ts": 1,
+    "src/lib/surveyReminders.ts": 1,
+    "src/services/emailService.ts": 60
+  }
+}

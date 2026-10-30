@@ -19,10 +19,10 @@ import {
 } from '@/lib/conversations';
 import { markThreadRead } from '@/lib/threadRead';
 import { publishRealtime } from '@/lib/realtimeBus';
-import { sendNewMessagePush } from '@/lib/messagePush';
+import { notifyEvent } from '@/lib/notifications/router';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
-import { replyAddress } from '@/lib/replyToken';
+import { conversationReplyAddress, replyAddress } from '@/lib/replyToken';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail, appUrlFor } from '@/services/emailService';
 import { getOrgBranding } from '@/lib/orgBranding';
@@ -399,14 +399,24 @@ async function handlePost(request: Request) {
     // recipient inside the loop would add that latency N times to a group
     // chat's POST. Still awaited before responding, so a slow push service
     // cannot log after the response is gone; never able to fail the send,
-    // because sendNewMessagePush swallows everything.
+    // because notifyEvent() never throws. Through the router (#1715): the push
+    // is a ledger row (a muted category or the matrix is a recorded SKIPPED,
+    // a phone-less recipient is `no_device`), keyed on the message id so a
+    // retried POST never buzzes twice.
     // Whoever muted this thread (#1609) is not interrupted by it at all: no
     // push, no e-mail mirror, no bell. The realtime publish above still went to
     // them — it only refreshes a tab that already has the thread open.
     const muted = await mutedParticipants(threadConversationId, recipients);
+    // The same thread link the bell row carries (`link` above), built by the router.
+    const threadIds = threadConversationId ? { conversationId: threadConversationId } : { relationId: rel!.id };
+    const pushOpts = { channels: ['push'] as const, preview: body, dedupeKey: `message:${message.id}` };
     const pushes = recipients
       .filter((recipient) => !muted.has(recipient))
-      .map((recipient) => sendNewMessagePush(recipient, { senderName, link, preview: body }));
+      .map((recipient) =>
+        senderName
+          ? notifyEvent(recipient, 'message.new', { from: senderName, ...threadIds }, pushOpts)
+          : notifyEvent(recipient, 'message.newGeneric', { ...threadIds }, pushOpts),
+      );
 
 
     for (const recipient of recipients) {
@@ -461,8 +471,14 @@ async function handlePost(request: Request) {
               `<a href="${markReadUrl(replyRelationId, recipient, origin)}" style="color:#6b7280;">Mark this conversation as read</a>`
             }</p>`
           : '';
-        // Only invite a reply by e-mail when a reply address exists (#2217).
-        const replyTo = replyRelationId ? replyAddress(replyRelationId, recipient) : undefined;
+        // Only invite a reply by e-mail when a reply address exists (#2217). A
+        // thread with no mentorship behind it (a project group chat, a project
+        // DM) is answered through a conversation-scoped token (#1713).
+        const replyTo = replyRelationId
+          ? replyAddress(replyRelationId, recipient)
+          : threadConversationId
+            ? conversationReplyAddress(threadConversationId, recipient)
+            : undefined;
         sendEmail({
           to: rcpt.email,
           category: 'message',
@@ -477,8 +493,6 @@ async function handlePost(request: Request) {
           fromName: brand?.name,
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>${replyTo ? 'Reply to this email or open the conversation in the app.' : 'Open the conversation in the app to reply.'}</p>${actions}`,
-          // Project DMs with no mentorship behind them get the same notification
-          // without a Reply-To (see replyRelationId above).
           ...(replyTo ? { replyTo } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),

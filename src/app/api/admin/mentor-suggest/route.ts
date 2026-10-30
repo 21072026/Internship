@@ -15,6 +15,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { hashInput } from '@/lib/ai/artifacts';
 import { skillOverlap } from '@/lib/skillTaxonomyRule';
 import { loadMentees, loadMentorPool } from '@/lib/matching/pool';
+import { isEligible } from '@/lib/eligibility';
 import { resolveRuleSet } from '@/lib/matching/ruleSet';
 import { suggestMentors } from '@/lib/matching/suggest';
 import { skillGraphFor, skillIdsByUser } from '@/lib/matching/skillContext';
@@ -100,6 +101,16 @@ export async function POST(request: Request) {
     },
   });
   if (!mentee || mentee.role !== 'MENTEE') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Programme eligibility (#1945): no suggestion list for a mentee who could
+  // not be enrolled — the same answer POST /api/mentorship would give.
+  const eligibility = await isEligible({ id: mentee.id, orgId: resolveOrgId(session) });
+  if (!eligibility.ok) {
+    return NextResponse.json(
+      { error: 'This mentee is not eligible for the programme', code: 'not_eligible', reason: eligibility.reason, ruleId: eligibility.ruleId ?? null },
+      { status: 403 },
+    );
+  }
 
   // One id for this whole call. The client echoes it back with the outcome, so
   // an accept/dismiss lands on exactly the suggestions that were on screen.

@@ -1,5 +1,6 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
+import type { TenantSso } from '@/lib/ssoDiscovery';
 
 import { useState, useEffect, useRef } from 'react';
 import { signIn, useSession } from 'next-auth/react';
@@ -39,7 +40,7 @@ export interface DemoQuickLogin {
   password: string;
 }
 
-export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
+export function SignInClient({ demo, tenantSso = null }: { demo: DemoQuickLogin | null; tenantSso?: TenantSso | null }) {
   const t = useT();
   const vertical = useVertical();
   const productName = useProductName();
@@ -103,7 +104,8 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   // Surface a post-registration notice (pending approval / verify email).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pending')) setNotice(t.auth.pendingApproval);
+    // An SSO sign-in held by programme eligibility (#1945) lands here too.
+    if (params.get('pending') || params.get('error') === 'sso_pending_approval') setNotice(t.auth.pendingApproval);
     else if (params.get('verify')) setNotice(t.auth.verifyEmailSent);
     else if (params.get('registered')) setNotice(t.auth.registeredNotice);
   }, [t]);
@@ -322,6 +324,30 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
                   {t.auth.ssoRequiredCta}
                 </Link>
               )}
+            </div>
+          )}
+
+          {tenantSso && (
+            <div className="mb-6" data-testid="tenant-sso">
+              {/* A plain link, not a client navigation: the login route answers
+                  with a redirect to the tenant's IdP (#1665). */}
+              <a
+                href={`/api/auth/sso/${encodeURIComponent(tenantSso.slug)}/login`}
+                data-testid="tenant-sso-continue"
+                className="flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                {t.auth.ssoTenantContinue.replace('{name}', tenantSso.name)}
+              </a>
+              {tenantSso.enforced && (
+                <p className="mt-2 text-xs text-gray-600 dark:text-gray-300" data-testid="tenant-sso-enforced">
+                  {t.auth.ssoTenantEnforced}
+                </p>
+              )}
+              <div className="mt-6 flex items-center gap-3 text-xs text-gray-400" aria-hidden="true">
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                {t.auth.ssoTenantOr}
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+              </div>
             </div>
           )}
 

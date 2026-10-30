@@ -15,6 +15,7 @@ type LinkIds = {
   relationId?: string;
   menteeId?: string;
   projectId?: string;
+  conversationId?: string;
 };
 
 const ROOTS: Record<NotificationRole, string> = {
@@ -57,7 +58,11 @@ export function notificationLink(
   if (kind === 'dashboard') return root;
   if (kind === 'support') return '/messages/support';
   if (kind === 'project') return projectId ? `/projects/${projectId}` : root;
-  if (kind === 'thread') return relationId ? `/messages/${relationId}` : root;
+  if (kind === 'thread') {
+    const conversationId = validId(ids.conversationId);
+    if (conversationId) return `/messages/c/${conversationId}`;
+    return relationId ? `/messages/${relationId}` : root;
+  }
 
   if (kind === 'relation' || kind === 'mentee') {
     if (role === 'MENTOR') return relationId ? `/mentor/mentees/${relationId}` : root;

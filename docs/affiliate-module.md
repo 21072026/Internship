@@ -18,7 +18,7 @@ per organisation, and every number in tests and examples here is synthetic.
 | 1 | Where it runs | A module of the CRM, gated by the `affiliate` capability (MARKETING vertical). Every row carries `orgId`. |
 | 2 | Commission rules | **A per-organisation commission plan (data)**, evaluated by one pure engine. The engine has no defaults that mirror a real contract. |
 | 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. |
-| 4 | Attribution | An ADMIN links a customer (the customer's id on the product side, opaque here) to a partner by hand. Automatic attribution through the `affiliate:<code>` lead source (`src/lib/leadSourceName.ts`) is a later step. |
+| 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
@@ -370,6 +370,49 @@ the check.
   partner API (2FA policy, impersonation refusal, sealed, audited, announced); the
   stored IBAN is shown masked and never read back into the form.
 
+## Automatic attribution (#3354)
+
+A partner's link is `<base URL>?ref=<code>` (`src/lib/affiliateReferralRule.ts`). The
+customer's site sends the visitor on to the product's sign-up with the same `ref`;
+that redirect is the source system's business. When the sign-up completes, the source
+system reports the account through the [account-event feed](integrations/account-events.md)
+with `referral_code: "<code>"`, and the ingest links the customer:
+
+- The partner is the org's `AffiliatePartner` whose `code` equals the trimmed
+  `referral_code` — **in the event's own organisation only** (the API key's org; the
+  lookup is explicit on `orgId`, the ingest being sessionless). A code of another
+  org's partner matches nothing.
+- The row is `AffiliateCustomer { orgId, partnerId, externalRef = the event's external_id }`
+  (stored lower-cased by the envelope; an id longer than 120 characters cannot be a
+  customer reference and links nothing).
+- **Only a partner that can still bring a new customer gets a link**, by the payment
+  writer's own test: `ACTIVE` does, `SUSPENDED` never, `TERMINATED` only while the
+  event's time (`occurred_at` on a replay) is before `noticeEffectiveAt` (a terminated
+  partner with no date is refused: a link is permanent).
+- **First link wins.** An existing customer row is never re-pointed. A later event
+  naming another active partner leaves an `integration.affiliate_kept_first` activity
+  line (partner ids only) and changes nothing — also when two events race: the loser
+  re-reads the row and writes that line. The same partner again is a no-op, so
+  a repeated or later event of the same account writes no second row.
+- **An unknown code writes nothing here**; the `affiliate:<code>` lead source the
+  ingest already writes stays the only trace.
+- The decision is the pure `planAffiliateAttribution()`
+  (`src/lib/affiliateAttributionRule.ts`, `scripts/test/affiliate-attribution-rule.test.mjs`);
+  `attributeToAffiliate()` in `src/lib/accountEventIngest.ts` reads, asks and writes
+  through the ingest's own handle, so a batch dry run (rolled back) links nobody. The
+  insert is `INSERT IGNORE` on the `(orgId, externalRef)` unique key, so two racing
+  copies of one event cannot throw or double-link. A linked customer is written for any
+  event type that carries the code, not only `account_created`; a historic event dates
+  the row at `occurred_at` and counts into the replay line (`affiliate_linked`).
+- **The later payment needs no partner.** The manual entry form's partner field is
+  optional: the writer finds the customer by `customerExternalRef` and takes its
+  partner. An admin who does pick a different partner gets `customer_of_another_partner`.
+- Migrated partner codes must equal the previous system's `ref` values (#3118), or
+  links in circulation attach to no partner.
+
+Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke: the four-step flow, repeat
+and dry run, another org's code, suspended/terminated partners).
+
 ## Migration from a previous system
 
 An admin screen (`/admin/affiliates/migration`, `affiliate.write`) — not a script on
@@ -429,5 +472,5 @@ run only after a clean dry run of exactly the files it checked.
 | 7 | Migration screen with reconciliation. |
 | 8 | Release fragment, `features.ts`, `@smoke` security specs, review, PR. |
 
-Out of scope for this milestone: automatic payment import, automatic attribution,
+Out of scope for this milestone: automatic payment import,
 automatic bank transfer, multi-level partners, click analytics.

@@ -10,7 +10,7 @@ import { InteractionSummary } from '@/components/InteractionSummary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Plus, Trash2, ExternalLink, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Pencil, ExternalLink, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { referrerLabel } from '@/lib/referrer';
@@ -86,6 +86,8 @@ interface RelationDetail {
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
+  /** The pair's agreed next steps, written when it ended (#1795). */
+  closurePlan?: string | null;
   mentor: { fullName: string };
   mentee: {
     id: string;
@@ -143,6 +145,9 @@ export default function MenteeDetailPage() {
   const [formError, setFormError] = useState('');
   const [savingStage, setSavingStage] = useState(false);
   const [stageError, setStageError] = useState('');
+  // The log being edited (#1356), or null while the form adds a new one. One
+  // form for both, so an edit offers exactly the fields a new log has.
+  const [editing, setEditing] = useState<InteractionLog | null>(null);
   const [deleteInteractionId, setDeleteInteractionId] = useState<string | null>(null);
   const [deletingInteraction, setDeletingInteraction] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'reports'>('overview');
@@ -175,7 +180,72 @@ export default function MenteeDetailPage() {
     fetchRelation();
   }, [fetchRelation]);
 
+  const emptyForm = { date: '', subject: '', notes: '', type: 'Meeting' };
+
+  const openNewLog = () => {
+    setEditing(null);
+    setFormData(emptyForm);
+    setFormError('');
+    setShowForm((open) => !open || editing !== null);
+  };
+
+  const startEditInteraction = (interaction: InteractionLog) => {
+    setEditing(interaction);
+    setFormData({
+      // The date input takes YYYY-MM-DD; a log is stored at midnight UTC.
+      date: interaction.date.slice(0, 10),
+      subject: interaction.subject ?? '',
+      notes: interaction.notes,
+      type: interaction.type,
+    });
+    setFollowUpDate('');
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditing(null);
+    setFormData(emptyForm);
+  };
+
+  // PUT only what changed (#1356): re-sending an untouched date would move a
+  // log that carries a time of day back to midnight.
+  const handleSaveEdit = async (original: InteractionLog) => {
+    if (!formData.date || !formData.notes) {
+      setFormError(t.mentor.dateAndNotesRequired);
+      return;
+    }
+    const changes: Record<string, string> = {};
+    if (formData.date !== original.date.slice(0, 10)) changes.date = formData.date;
+    if (formData.type !== original.type) changes.type = formData.type;
+    if (formData.subject !== (original.subject ?? '')) changes.subject = formData.subject;
+    if (formData.notes !== original.notes) changes.notes = formData.notes;
+    if (Object.keys(changes).length === 0) {
+      closeForm();
+      return;
+    }
+    setSubmitting(true);
+    setFormError('');
+    try {
+      const res = await fetch(`/api/interactions/${original.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes),
+      });
+      if (!res.ok) throw new Error(apiErrorMessage(res, t.common, t.common.error));
+      await fetchRelation().catch(() => {});
+      closeForm();
+      toast(t.mentor.interactionUpdated);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleAddInteraction = async () => {
+    if (editing) return handleSaveEdit(editing);
     if (!formData.date || !formData.notes) {
       setFormError(t.mentor.dateAndNotesRequired);
       return;
@@ -208,8 +278,7 @@ export default function MenteeDetailPage() {
       }
       setFollowUpDate('');
       await fetchRelation();
-      setShowForm(false);
-      setFormData({ date: '', subject: '', notes: '', type: 'Meeting' });
+      closeForm();
       toast(t.mentor.interactionLogged);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed');
@@ -374,6 +443,12 @@ export default function MenteeDetailPage() {
           showHistory
           onChanged={fetchRelation}
         />
+        {relation.closurePlan && (
+          <div className="mt-4 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="closure-plan">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t.closure.archivedPlan}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{relation.closurePlan}</p>
+          </div>
+        )}
       </Card>
 
       {/* The pair's meeting rhythm (#2014). */}
@@ -549,7 +624,7 @@ export default function MenteeDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{t.mentor.interactionLog} ({relation.interactions.length})</CardTitle>
-                <Button size="sm" onClick={() => setShowForm(!showForm)}>
+                <Button size="sm" onClick={openNewLog}>
                   <Plus className="h-4 w-4" />
                   {t.mentor.addLog}
                 </Button>
@@ -559,7 +634,8 @@ export default function MenteeDetailPage() {
             {relation.interactions.length > 0 && <InteractionSummary relationId={relation.id} />}
 
             {showForm && (
-              <div data-testid="interaction-log-form" className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">
+              <div data-testid="interaction-log-form" data-mode={editing ? 'edit' : 'add'} className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">
+                {editing && <p className="text-sm font-medium text-gray-700">{t.mentor.editLog}</p>}
                 {formError && (
                   <p className="text-sm text-red-600">{formError}</p>
                 )}
@@ -597,16 +673,20 @@ export default function MenteeDetailPage() {
                     showCounter
                   />
                 </div>
-                <Input
-                  label={t.followUp.alsoUpdate}
-                  type="date"
-                  data-testid="interaction-log-follow-up"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                />
+                {/* The follow-up shortcut belongs to logging a new contact, not to
+                    correcting an old one. */}
+                {!editing && (
+                  <Input
+                    label={t.followUp.alsoUpdate}
+                    type="date"
+                    data-testid="interaction-log-follow-up"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                  />
+                )}
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={handleAddInteraction} loading={submitting}>{t.mentor.save}</Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>{t.mentor.cancel}</Button>
+                  <Button size="sm" onClick={handleAddInteraction} loading={submitting} data-testid="interaction-log-save">{t.mentor.save}</Button>
+                  <Button size="sm" variant="outline" onClick={closeForm}>{t.mentor.cancel}</Button>
                 </div>
               </div>
             )}
@@ -640,6 +720,14 @@ export default function MenteeDetailPage() {
                       {formatDate(interaction.date, locale)}
                     </p>
                   </div>
+                  <button
+                    onClick={() => startEditInteraction(interaction)}
+                    aria-label={t.common.edit}
+                    data-testid={`interaction-edit-${interaction.id}`}
+                    className="text-gray-300 hover:text-blue-600 transition-colors flex-shrink-0"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
                   <button
                     onClick={() => handleDeleteInteraction(interaction.id)}
                     aria-label={t.common.delete}

@@ -458,6 +458,11 @@ marketing names redirect there, and their apex now serves **mail only**.
   (preferences, then the ledger claim, `ledger.ts`) and the adapter only delivers. A new
   channel is an adapter plus one registry line, never a router edit. The e-mail adapter only
   enqueues the keyed `notification.email` job; its consumer is `emailJob.ts` (#1719).
+  `npm run check:notify` (CI) fails on a raw `sendEmail(` / `sendPushToUser(` /
+  `prisma.notification.create` outside `src/lib/notifications/`; the sites not moved yet are pinned
+  in `scripts/notify-baseline.json` (only shrinks, `-- --shrink`), and the ones that stay by
+  decision (newsletter dispatch, security notices, operator alerts, admin test mails) sit in its
+  `allowed` block with their reason.
 - **Channel matrix and quiet hours are router rules** ([`docs/notification-channels.md`](docs/notification-channels.md),
   #1714): `notificationPrefs.channels` (sparse per-category `inApp`/`email`/`push` overrides) and
   `notificationPrefs.quietHours` are read only through `src/lib/notificationChannelPrefs.ts` and

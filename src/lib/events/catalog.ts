@@ -466,6 +466,27 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: 'An account was created (`source`: register, invite, admin, import, sso, api …).',
   },
+  {
+    // The daily sweep (src/lib/relationEndingSweep.ts), once per agreed end
+    // date (#1786). `expectedEndDate` is a calendar day.
+    name: 'mentorship.ending_soon',
+    version: 1,
+    subjectType: 'MentorshipRelation',
+    subjectKey: 'relationId',
+    payload: z.object({ relationId: id, expectedEndDate: z.string() }).strict(),
+    visibility: 'public',
+    description: 'A mentorship is within its reminder window before the agreed end date (`expectedEndDate`, YYYY-MM-DD).',
+  },
+  {
+    // The one writer of an extension, src/lib/relationExtend.ts (#1786).
+    name: 'mentorship.extended',
+    version: 1,
+    subjectType: 'MentorshipRelation',
+    subjectKey: 'relationId',
+    payload: z.object({ relationId: id, expectedEndDate: z.string(), extendedCount: z.number().int() }).strict(),
+    visibility: 'public',
+    description: 'A mentorship\'s agreed end date was moved later (`expectedEndDate`, YYYY-MM-DD; `extendedCount` extensions so far).',
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from

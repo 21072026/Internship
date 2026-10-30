@@ -141,3 +141,75 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// Conversation-scoped tokens (#1713): a project group chat has no mentorship
+// behind it, so its notification mail carries `c=<conversationId>~<userId>`.
+const makeConversationToken = (conversationId: string, userId: string) =>
+  `c=${conversationId}~${userId}.${sign(`c=${conversationId}~${userId}`)}`;
+
+test('a reply to a project group-chat mail lands in that conversation; a removed member is refused (#1713)', async ({ request }) => {
+  const ownerEmail = uniqueEmail('inb-grp-owner');
+  const memberEmail = uniqueEmail('inb-grp-member');
+  const owner = await seedUser(ownerEmail, 'x', 'MENTOR', 'Grp Owner');
+  const member = await seedUser(memberEmail, 'x', 'MENTEE', 'Grp Member');
+  const orgId = (await prisma.user.findUniqueOrThrow({ where: { id: owner.id }, select: { orgId: true } })).orgId;
+  const project = await prisma.project.create({
+    data: {
+      orgId,
+      name: `Inbound Group ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: owner.id,
+      members: { create: [{ userId: owner.id, role: 'OWNER' }, { userId: member.id, role: 'MENTEE' }] },
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: { type: 'GROUP', projectId: project.id, participants: { create: [{ userId: owner.id }, { userId: member.id }] } },
+  });
+  const token = makeConversationToken(conversation.id, member.id);
+  try {
+    // Answered from another address: attributed through the token's recipient,
+    // quoted history stripped, written once even when delivered twice.
+    const messageId = `<grp-${conversation.id}@mail.example>`;
+    for (const attempt of [1, 2]) {
+      const res = await request.post('/api/inbound-email', {
+        headers: authed,
+        data: { to: `reply+${token}@crm.ersah.in`, from: 'personal@mail.example', text: 'On it!\n\nOn Mon someone wrote:\n> earlier', messageId },
+      });
+      expect(res.status()).toBe(200);
+      expect((await res.json()).created).toBe(attempt === 1);
+    }
+    const rows = await prisma.message.findMany({ where: { conversationId: conversation.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ senderId: member.id, body: 'On it!', channel: 'EMAIL', relationId: null });
+    await expect
+      .poll(async () => prisma.notification.count({ where: { userId: owner.id, type: 'message.newByEmail' } }))
+      .toBeGreaterThan(0);
+
+    // A conversation token whose signature does not match is rejected.
+    const forged = await request.post('/api/inbound-email', {
+      headers: authed,
+      data: { to: `reply+c=${conversation.id}~${owner.id}.deadbeefdeadbeefdeadbeefdeadbeef@crm.ersah.in`, from: ownerEmail, text: 'x' },
+    });
+    expect(forged.status()).toBe(400);
+
+    // Removed from the project since the mail went out: the token still verifies,
+    // but the right to post is re-checked at write time → 403, nothing written.
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id, userId: member.id } });
+    const removed = await request.post('/api/inbound-email', {
+      headers: authed,
+      data: { to: `reply+${token}@crm.ersah.in`, from: memberEmail, text: 'Still here?', messageId: `<grp-removed-${conversation.id}@mail.example>` },
+    });
+    expect(removed.status()).toBe(403);
+    expect(await prisma.message.count({ where: { conversationId: conversation.id } })).toBe(1);
+  } finally {
+    await prisma.message.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [owner.id, member.id] } } });
+    await prisma.notificationDelivery.deleteMany({ where: { userId: { in: [owner.id, member.id] } } });
+    await prisma.conversationParticipant.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.conversation.deleteMany({ where: { id: conversation.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    await prisma.project.deleteMany({ where: { id: project.id } });
+    await cleanupByEmail(memberEmail);
+    await cleanupByEmail(ownerEmail);
+  }
+});

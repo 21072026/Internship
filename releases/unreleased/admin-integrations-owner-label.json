@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Admin oversight of self-served credentials (#2006):** the admin integrations screen labels every API key and webhook a COMPANY or SOURCE owner minted with whose it is (`api-key-scope-owner-*`, `webhook-scope-owner-*`), next to who issued it; org-wide credentials carry no label. Pinned by `e2e/admin-integrations-owner.spec.ts`.",
+  "notes": {
+    "en": ["Admins can now see on the Integrations screen which company or referring organisation a self-created API key or webhook belongs to."],
+    "tr": ["Yöneticiler artık Entegrasyonlar ekranında, kendi oluşturulmuş bir API anahtarının veya webhook'un hangi şirkete ya da yönlendiren kuruma ait olduğunu görebiliyor."],
+    "de": ["Admins sehen jetzt unter Integrationen, zu welchem Unternehmen oder welcher vermittelnden Organisation ein selbst erstellter API-Schlüssel oder Webhook gehört."]
+  }
+}
